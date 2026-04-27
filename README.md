@@ -1,116 +1,111 @@
-# QualiOF — Starter pack
+# QualiOF
 
-Logiciel de gestion d'organisme de formation Qualiopi-friendly, conçu pour résoudre proprement le cas **personne physique × auto-entreprise × salarié**.
+CRM Qualiopi local-first pour Start Academy. Remplace SmartOF, gère nativement le cas EI / multi-casquettes (Pascal BIANCO), connecté à Qualiopi Gen pour la génération de docs IA.
 
-> **Statut :** dossier de bootstrap. Le code applicatif sera généré par Claude Code à partir de `docs/MVP-SPEC.md`.
+> **Statut** : palier 1 (fondations) en cours. Voir `docs/PROGRESS.md`.
 
 ---
 
-## 🍎 Prérequis Mac
+## 🍎 Prérequis
 
 ```bash
-# Vérifier ce qui est installé
-docker --version          # Docker Desktop (ou OrbStack, plus léger)
+# Vérifier
 node --version            # 20+
-pnpm --version            # 9+
-python3 --version         # 3.11+ (pour palier 3 uniquement)
-ollama --version          # optionnel, recommandé en natif sur Apple Silicon
+pnpm --version            # 10+
+docker --version          # OrbStack (recommandé sur Apple Silicon)
+ollama --version          # natif via brew
 ```
 
 Si quelque chose manque :
 
 ```bash
-brew install --cask docker          # ou orbstack (plus rapide sur M-series)
-brew install node                    # ou via fnm/nvm
-npm install -g pnpm                  # gestionnaire de paquets
-brew install python@3.11
-brew install ollama                  # natif > containerisé sur Mac M-series
+brew install --cask orbstack          # Docker plus léger sur M-series
+brew install node@20
+npm install -g pnpm@latest
+brew install ollama                    # natif > containerisé sur Apple Silicon
 ```
+
+Pour l'IA, on a besoin d'au moins ces 3 modèles déjà téléchargés :
+- `mistral-small:24b` (rapide) → `ollama pull mistral-small:24b`
+- `qwen3:30b-a3b` (raisonnement) → `ollama pull qwen3:30b-a3b`
+- `nomic-embed-text:latest` (embeddings) → `ollama pull nomic-embed-text`
 
 ---
 
-## 🚀 Démarrage en 3 minutes
+## 🚀 Démarrage
 
 ```bash
-# 1. Copier les variables d'env
+# 1. Variables d'env
 cp .env.example .env
+# Génère un AUTH_SECRET valide :
+echo "AUTH_SECRET=\"$(openssl rand -hex 32)\"" >> .env.local
 
-# 2. Lancer les services Docker (Postgres, Redis, MinIO, Gotenberg)
+# 2. Lance les services Docker
 make up
 
-# 3. (Optionnel) Lancer Ollama natif et puller le modèle
-ollama serve &
-ollama pull llama3.1:8b
+# 3. Installe les deps + génère le client Prisma
+pnpm install
+pnpm --filter @qualiof/db db:generate
+
+# 4. Première migration + seed initial
+pnpm --filter @qualiof/db db:migrate
+pnpm --filter @qualiof/db db:seed
+
+# 5. Importe les données SmartOF (apprenants, entreprises, formateurs, produits)
+pnpm --filter @qualiof/db import:smartof
+
+# 6. Lance le front Next.js
+pnpm --filter @qualiof/web dev
 ```
 
-À ce stade tu as :
-
-| Service | URL | Identifiants |
-|---------|-----|--------------|
-| Postgres | `localhost:5432` | `qualiof` / `qualiof_dev` |
-| Redis | `localhost:6379` | – |
-| MinIO console | http://localhost:9001 | `qualiof` / `qualiof_dev_minio` |
-| Gotenberg | http://localhost:3001 | – |
-| Ollama | http://localhost:11434 | – |
-
-**Rien d'autre ne tourne encore.** L'app Next.js, le doc-engine Python et les workers BullMQ vont être générés par Claude Code étape par étape.
+Tu accèdes à :
+- **App** : http://localhost:3000 (login : `admin@startacademy.fr` / `admin`)
+- **MinIO** : http://localhost:9001 (qualiof / qualiof_dev_minio)
+- **Postgres** : localhost:5432 (qualiof / qualiof_dev)
+- **Prisma Studio** : `pnpm --filter @qualiof/db db:studio`
 
 ---
 
-## 📋 Étapes suivantes
-
-1. **Ouvre Claude Code** dans ce dossier (`claude` dans le terminal)
-2. Démarre une nouvelle session avec ce prompt initial :
-
-   > *Lis `docs/MVP-SPEC.md` et attaque le **palier 1**. Pose-moi une question avant de commencer si quelque chose n'est pas clair, sinon c'est parti.*
-
-3. Laisse Claude Code faire le palier 1 (~3-4 jours de travail itératif)
-4. Quand le palier 1 est validé, demande le palier 2, puis le palier 3
-
-À chaque fin de palier, le fichier `docs/PROGRESS.md` sera mis à jour automatiquement, et tu pourras tester via `make dev`.
-
----
-
-## 🗺️ Carte des fichiers
+## 📂 Structure du mono-repo
 
 ```
-qualiof-starter/
-├── README.md                # tu es ici
-├── Makefile                 # commandes raccourcies (make up, make dev, etc.)
-├── .env.example             # template variables d'env
-├── docker-compose.yml       # Postgres + Redis + MinIO + Gotenberg
-└── docs/
-    ├── MVP-SPEC.md          # 👉 LE fichier à donner à Claude Code
-    └── VISION.md            # cible long terme (lot 2, 3, ...)
+qualiof/
+├── apps/
+│   └── web/                  # Next.js 14 + tRPC + Lucia (palier 1+)
+├── packages/
+│   ├── db/                   # Prisma schema (32 modèles) + seed + importeur SmartOF
+│   └── shared/               # Zod schemas, helpers (Luhn, normalize, codes), constantes
+├── docs/
+│   ├── MVP-SPEC.md           # Spec MVP originale
+│   ├── VISION.md             # Roadmap long terme
+│   └── PROGRESS.md           # Avancement par palier
+├── docker-compose.yml        # Postgres + Redis + MinIO + Gotenberg
+├── Makefile
+├── package.json              # workspace racine
+├── pnpm-workspace.yaml
+└── turbo.json
 ```
 
 ---
 
-## 🎯 Scope MVP rappelé
+## 📋 Roadmap (4 paliers de 1 semaine)
 
-**Dans le MVP (4 semaines) :**
-- Auth multi-user + 4 rôles
-- Apprenants / organisations / formateurs avec gestion native du cas EI
-- Sessions + émargement
-- Génération auto de 6 documents Qualiopi (convention, programme, convocation, émargement, attestation, certificat)
-- Branchement HTTP sur ton outil questionnaires existant
-- Import CSV depuis Airtable + SmartOF
+- **Palier 1** — Fondations + import SmartOF ✅ (en cours)
+  - Mono-repo, schéma Prisma 32 modèles, importeur Excel, login Lucia, sidebar, dashboard
+- **Palier 2** — CRUD complet + cas EI + adapter Qualiopi Gen
+  - `<PersonOrOrgPicker>`, `<LegalLinkEditor>`, wizard sessions, test Playwright Pascal BIANCO
+- **Palier 3** — Doc-engine + 6 templates + AGEFICE pré-rempli
+  - FastAPI Python + docxtpl + pypdf, mapping AGEFICE 54 champs
+- **Palier 4** — Bouton magique fin-de-formation + IA locale
+  - BullMQ closure worker, Ollama adapter, idempotence, zip download
 
-**Reporté au lot 2 :**
-- PDF AGEFICE
-- Facturation complète + numérotation continue
-- BPF Cerfa 10443
-- Workflows Kanban + automatisations
-- Signature électronique Yousign
-- 32 indicateurs Qualiopi en feu tricolore
+Détails : `docs/PROGRESS.md`.
 
 ---
 
-## 🆘 Si quelque chose merde
+## 🔌 Intégrations
 
-```bash
-make logs        # voir les logs Docker
-make down        # tout arrêter
-make clean       # tout arrêter + supprimer les volumes (RESET COMPLET, données perdues)
-make up          # relancer
-```
+- **Qualiopi Gen** (Supabase cloud) : 9 Edge Functions IA pédagogiques (`generate-analyse-besoin`, `-qcm`, `-grille`, `-deroule`, `-competencies`). Le CRM les appelle via HTTPS.
+- **Ollama** (local) : provider IA par défaut pour assistant rédaction, recherche sémantique apprenants, complétion fiches.
+- **MinIO** (local) : tous les PDFs (conventions, AGEFICE, docs pédagogiques).
+- **Anthropic Claude** : fallback optionnel si une clé API est fournie.
