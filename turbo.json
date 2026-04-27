@@ -1,0 +1,55 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "S3_BUCKET_DOCS",
+    "S3_BUCKET_TEMPLATES",
+    "GOTENBERG_URL",
+    "DOC_ENGINE_URL",
+    "AI_PROVIDER",
+    "OLLAMA_URL",
+    "OLLAMA_MODEL_FAST",
+    "OLLAMA_MODEL_REASONING",
+    "OLLAMA_MODEL_EMBED",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL",
+    "QUALIOPI_GEN_URL",
+    "QUALIOPI_GEN_TOKEN",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
+    "AUTH_SECRET",
+    "SESSION_LIFETIME",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_APP_NAME",
+    "TENANT_DEFAULT_NAME",
+    "TENANT_DEFAULT_NUM_DA",
+    "TENANT_DEFAULT_SIRET",
+    "LOG_LEVEL"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "db:generate": {
+      "cache": false
+    }
+  }
+}

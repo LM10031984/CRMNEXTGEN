@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qualiof_postgres
+    environment:
+      POSTGRES_USER: qualiof
+      POSTGRES_PASSWORD: qualiof_dev
+      POSTGRES_DB: qualiof
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qualiof"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: qualiof_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: qualiof_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: qualiof
+      MINIO_ROOT_PASSWORD: qualiof_dev_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: qualiof_gotenberg
+    ports:
+      - "3001:3000"
+    command:
+      - "gotenberg"
+      - "--api-timeout=60s"
+      - "--log-level=info"
+    restart: unless-stopped
+
+  # ⚠️ Ollama containerisé n'a PAS accès au GPU Metal sur Mac Apple Silicon.
+  # Recommandation : installer Ollama natif (`brew install ollama`) et commenter ce service.
+  # On le garde en option pour les machines Linux ou en CI.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: qualiof_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - full   # ne démarre PAS par défaut. Utiliser : `docker compose --profile full up -d`
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  ollama_data:

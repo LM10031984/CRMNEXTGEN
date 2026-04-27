@@ -1,0 +1,27 @@
+{
+  "name": "qualiof",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "db:migrate": "pnpm --filter @qualiof/db prisma migrate dev",
+    "db:seed": "pnpm --filter @qualiof/db prisma db seed",
+    "db:studio": "pnpm --filter @qualiof/db prisma studio",
+    "db:reset": "pnpm --filter @qualiof/db prisma migrate reset",
+    "import:smartof": "pnpm --filter @qualiof/web exec tsx scripts/import-smartof.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2"
+  }
+}
