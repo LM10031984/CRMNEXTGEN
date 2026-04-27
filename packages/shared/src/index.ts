@@ -1,3 +1,3 @@
-export * from './helpers/index.js';
-export * from './constants/index.js';
-export * from './schemas/index.js';
+export * from './helpers/index';
+export * from './constants/index';
+export * from './schemas/index';

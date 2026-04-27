@@ -20,6 +20,7 @@
 
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 
 // Charge .env depuis la racine du mono-repo (deux niveaux au-dessus de packages/db)
@@ -66,8 +67,14 @@ interface SmartRow {
   [key: string]: string | number | boolean | undefined | null;
 }
 
+function loadWorkbook(filePath: string): XLSX.WorkBook {
+  // SheetJS via CDN restreint readFile : on passe par fs.readFileSync + XLSX.read.
+  const buf = fs.readFileSync(filePath);
+  return XLSX.read(buf, { type: 'buffer', cellDates: true });
+}
+
 function readSheet(filePath: string, sheetName?: string): SmartRow[] {
-  const wb = XLSX.readFile(filePath, { cellDates: true });
+  const wb = loadWorkbook(filePath);
   const target = sheetName ?? wb.SheetNames[0]!;
   const sheet = wb.Sheets[target];
   if (!sheet) throw new Error(`Feuille introuvable : ${target} dans ${filePath}`);
@@ -75,7 +82,7 @@ function readSheet(filePath: string, sheetName?: string): SmartRow[] {
 }
 
 function readSheetByIndex(filePath: string, idx: number): SmartRow[] {
-  const wb = XLSX.readFile(filePath, { cellDates: true });
+  const wb = loadWorkbook(filePath);
   const name = wb.SheetNames[idx];
   if (!name) throw new Error(`Feuille index ${idx} introuvable dans ${filePath}`);
   return XLSX.utils.sheet_to_json<SmartRow>(wb.Sheets[name]!, { defval: null, raw: false });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LegalForm } from '@qualiof/db';
-import { addressSchema } from './address.js';
-import { isValidSiret } from '../helpers/siret.js';
+import { addressSchema } from './address';
+import { isValidSiret } from '../helpers/siret';
 
 export const organizationSchema = z.object({
   legalName: z.string().min(1, 'Raison sociale requise'),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeName, normalizeEmail, organizationLooksLikePerson, personDedupKey } from '../normalize.js';
+import { normalizeName, normalizeEmail, organizationLooksLikePerson, personDedupKey } from '../normalize';
 
 describe('normalizeName', () => {
   it('normalise les accents', () => {

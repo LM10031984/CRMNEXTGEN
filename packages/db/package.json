@@ -9,13 +9,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset",
-    "import:smartof": "tsx scripts/import-smartof.ts",
+    "db:generate": "dotenv -e ../../.env -- prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:push": "dotenv -e ../../.env -- prisma db push",
+    "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "db:studio": "dotenv -e ../../.env -- prisma studio",
+    "db:reset": "dotenv -e ../../.env -- prisma migrate reset",
+    "import:smartof": "dotenv -e ../../.env -- tsx scripts/import-smartof.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -29,7 +29,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "@types/node": "^22.10.0",
-    "argon2": "^0.41.1"
+    "argon2": "^0.41.1",
+    "dotenv-cli": "^7.4.2"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

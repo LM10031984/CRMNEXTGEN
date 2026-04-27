@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addressSchema } from './address.js';
+import { addressSchema } from './address';
 
 export const personSchema = z.object({
   civility: z.string().optional().nullable(),

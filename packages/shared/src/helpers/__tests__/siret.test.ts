@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidSiret, isValidSiren, sirenFromSiret, cleanSiret } from '../siret.js';
+import { isValidSiret, isValidSiren, sirenFromSiret, cleanSiret } from '../siret';
 
 describe('SIRET', () => {
   it('valide un SIRET correct', () => {
