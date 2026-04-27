@@ -1,0 +1,975 @@
+// QualiOF — Prisma schema (MVP enrichi)
+// Stack figée : PostgreSQL 16 + Prisma 5
+// Convention : enums en MAJUSCULES, tables en PascalCase, champs en camelCase
+// Référence : files/MVP-SPEC.md §4 + plan complémentaire (paliers + Airtable Refonte)
+// Le modèle reprend la richesse de la base Airtable "BDD Start Academy Refonte" pour
+// couvrir : pilotage CA, planning formateurs, pipeline leads, factures, workflow OPCO,
+// référentiel Qualiopi par indicateur, RGPD (données sensibles séparées).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto, uuid_ossp(map: "uuid-ossp"), pg_trgm, unaccent]
+}
+
+// =====================================================
+// === Tenant & Auth (Lucia v3)
+// =====================================================
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  siret     String?
+  numDA     String?
+  rcs       String?
+  address   Json?
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  FORMATEUR
+  COMMERCIAL
+  COMPTABLE
+  LECTEUR
+}
+
+model User {
+  id           String        @id @default(uuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String        @unique
+  hashedPwd    String
+  firstName    String
+  lastName     String
+  role         UserRole      @default(LECTEUR)
+  authSessions AuthSession[]
+  auditLogs    AuditLog[]
+  leadsOwned   Lead[]
+  tasksOwned   Task[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([tenantId])
+}
+
+model AuthSession {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+// =====================================================
+// === CŒUR : résolution du cas EI / multi-casquettes
+// =====================================================
+
+model Person {
+  id                     String                @id @default(uuid())
+  tenantId               String
+  civility               String?
+  firstName              String
+  lastName               String
+  birthName              String?
+  birthDate              DateTime?
+  email                  String?
+  phone                  String?
+  personalAddress        Json?
+  educationLevel         String?
+  diplomas               String? // texte libre depuis Airtable.Diplômes / SmartOF
+  professionalExperience String? // "1-3 ans", "4 ans", "10 ans", "Plus de 10 ans"
+  professionalStatus     String? // "Agent commercial", "Conseiller commercial", etc.
+  bpfDefaultStatus       String?
+  rgpdConsentAt          DateTime?
+  requiresCleanup        Boolean               @default(false)
+  cleanupNotes           String?
+  archived               Boolean               @default(false)
+  // Relations
+  legalLinks             LegalLink[]
+  participations         SessionParticipant[]
+  trainerSessions        SessionTrainer[]
+  attendances            Attendance[]
+  trainerAvailabilities  TrainerAvailability[]
+  sensitiveData          SensitiveData?
+  contactRoles           Contact[] // un Person peut être référencé comme Contact d'organisations
+  leadsAsPerson          Lead[]                @relation("LeadPerson")
+  comments               InternalComment[]
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@index([tenantId, lastName, firstName])
+  @@index([tenantId, email])
+}
+
+// 1:1 Person — données sensibles RGPD séparées (n° SS, pièce d'identité)
+// Reprend le concept de la table Airtable "DONNÉES_SENSIBLES"
+model SensitiveData {
+  id               String    @id @default(uuid())
+  personId         String    @unique
+  person           Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  socialSecurityNb String?
+  idDocumentUrl    String? // pièce d'identité scannée (MinIO)
+  idDocumentType   String? // "CNI", "Passeport", "Titre séjour"
+  verifiedAt       DateTime?
+  verifiedByUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Organization {
+  id                      String               @id @default(uuid())
+  tenantId                String
+  legalName               String
+  legalForm               LegalForm
+  siren                   String?
+  siret                   String?
+  naf                     String?
+  vatNumber               String?
+  address                 Json?
+  phone                   String?
+  email                   String?
+  emailBilling            String? // adresse email facturation (souvent ≠ email général)
+  phoneBilling            String?
+  opcoCode                String? // ex : "AGEFICE", "ATLAS", "OPCO_EP", "CPF"
+  opcoCatalogId           String?
+  opcoCatalog             OpcoCatalog?         @relation(fields: [opcoCatalogId], references: [id])
+  network                 String? // "Orpi", "Century 21", "Keller Williams", indé
+  brandName               String? // enseigne / nom commercial
+  representative          String?
+  activityDescription     String?
+  rcs                     String?
+  type                    String? // "Client", "Partenaire", "Sous-traitant"
+  archived                Boolean              @default(false)
+  requiresCleanup         Boolean              @default(false)
+  cleanupNotes            String?
+  // Relations
+  legalLinks              LegalLink[]
+  sponsoredParticipations SessionParticipant[]
+  billingProfiles         BillingProfile[]
+  ageficeProfile          AgeficeProfile?
+  contacts                Contact[]
+  leadsAsOrg              Lead[]               @relation("LeadOrg")
+  invoices                Invoice[]
+  comments                InternalComment[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  @@index([tenantId, legalName])
+  @@index([tenantId, siren])
+  @@index([tenantId, siret])
+}
+
+enum LegalForm {
+  SAS
+  SARL
+  SASU
+  EURL
+  SA
+  EI
+  EIRL
+  AUTO_ENTREPRENEUR
+  ASSOCIATION
+  PARTICULIER
+  AUTRE
+}
+
+enum LinkRole {
+  DIRIGEANT
+  SALARIE
+  EI_SELF
+  ALTERNANT
+  STAGIAIRE
+  CONTACT
+  FINANCEUR_CONTACT
+  FORMATEUR
+}
+
+model LegalLink {
+  id             String       @id @default(uuid())
+  personId       String
+  person         Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           LinkRole
+  function       String?
+  startDate      DateTime?
+  endDate        DateTime?
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@unique([personId, organizationId, role])
+  @@index([organizationId])
+}
+
+// Contact rattaché à une Organization (= "Contacts_rattachés" dans Airtable Structures)
+// Différent d'un Person apprenant : ici c'est juste un interlocuteur dans l'entreprise.
+// Souvent c'est un dirigeant RH, un responsable formation, un comptable.
+model Contact {
+  id               String       @id @default(uuid())
+  tenantId         String
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  personId         String? // si lié à un Person existant (ex : le contact est aussi apprenant)
+  person           Person?      @relation(fields: [personId], references: [id])
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  function         String?
+  isBillingContact Boolean      @default(false)
+  isPrimary        Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model BillingProfile {
+  id             String               @id @default(uuid())
+  tenantId       String
+  organizationId String?
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  invoiceName    String
+  address        Json
+  legalMentions  String?
+  paymentMethod  String?
+  participants   SessionParticipant[]
+  invoices       Invoice[]
+  createdAt      DateTime             @default(now())
+
+  @@index([tenantId])
+}
+
+// =====================================================
+// === Catalogue de formation
+// =====================================================
+
+enum Modality {
+  PRESENTIEL
+  DISTANCIEL
+  MIXTE
+  ELEARNING
+}
+
+model TrainingProduct {
+  id                 String            @id @default(uuid())
+  tenantId           String
+  code               String
+  title              String
+  durationHours      Int
+  modality           Modality
+  prerequisites      String?
+  targetAudience     String?
+  objectives         Json // string[]
+  programMd          String
+  pedagogicalMethods String?
+  evaluationMethods  String?
+  accessibility      String?
+  trainerProfile     String?
+  pedagogicalSupport String?
+  accessConditions   String?
+  priceHT            Decimal           @default(0) @db.Decimal(10, 2)
+  vatRate            Decimal           @default(0) @db.Decimal(5, 2)
+  groupFlatPrice     Decimal?          @db.Decimal(10, 2) // Tarif_forfait_groupe
+  theme              String? // "Acquisition", "Stratégie", "Management", "IA", etc.
+  version            Int               @default(1)
+  isActive           Boolean           @default(true)
+  excludedFromBpf    Boolean           @default(false)
+  bpfSpecialty       String?
+  bpfCategory        String?
+  bpfLevel           String?
+  capacityMin        Int               @default(1)
+  capacityMax        Int               @default(12)
+  modules            TrainingModule[]
+  trainingSessions   TrainingSession[]
+  leads              Lead[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+model TrainingModule {
+  id                        String          @id @default(uuid())
+  productId                 String
+  product                   TrainingProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order                     Int
+  title                     String
+  contentMd                 String
+  durationMin               Int
+  presentielIndividualHours Int?
+  presentielCollectifHours  Int?
+  distancielSyncHours       Int?
+  distancielAsyncHours      Int?
+
+  @@index([productId, order])
+}
+
+// =====================================================
+// === Sessions
+// =====================================================
+
+enum SessionStatus {
+  DRAFT
+  PLANNED
+  OPEN // "Ouverte" dans Airtable, prête à recevoir des inscrits
+  VALIDATED
+  IN_PROGRESS
+  COMPLETED // "Terminée"
+  CANCELLED
+}
+
+model TrainingSession {
+  id                    String               @id @default(uuid())
+  tenantId              String
+  productId             String
+  product               TrainingProduct      @relation(fields: [productId], references: [id])
+  code                  String               @unique
+  name                  String? // Nom session = "Cycle complet de prospection (87h) - 21/10/2024 -"
+  status                SessionStatus        @default(DRAFT)
+  startDate             DateTime
+  endDate               DateTime
+  locationId            String?
+  location              Location?            @relation(fields: [locationId], references: [id])
+  modality              Modality
+  capacityMin           Int                  @default(1)
+  capacityMax           Int                  @default(12)
+  language              String               @default("fr")
+  internalNotes         String?
+  // Tarification spécifique session (sinon hérite produit)
+  pricePerLearner       Decimal?             @db.Decimal(10, 2)
+  // Suivi commercial
+  preEnrollmentsFromMls Int                  @default(0) // NB_pre_inscription Airtable
+  // Relations
+  participants          SessionParticipant[]
+  trainers              SessionTrainer[]
+  slots                 SessionSlot[]
+  documents             Document[]
+  pedagogicalAssets     PedagogicalAsset[]
+  leads                 Lead[]
+  tasks                 Task[]
+  comments              InternalComment[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, startDate])
+}
+
+model Location {
+  id       String            @id @default(uuid())
+  tenantId String
+  name     String
+  address  Json
+  capacity Int?
+  sessions TrainingSession[]
+}
+
+model SessionTrainer {
+  id        String          @id @default(uuid())
+  sessionId String
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person          @relation(fields: [personId], references: [id])
+  role      String
+  dailyRate Decimal?        @db.Decimal(10, 2)
+
+  @@unique([sessionId, personId])
+}
+
+model SessionSlot {
+  id          String          @id @default(uuid())
+  sessionId   String
+  session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  date        DateTime
+  startTime   String
+  endTime     String
+  halfDay     String // "morning" | "afternoon" | "full"
+  attendances Attendance[]
+
+  @@index([sessionId, date])
+}
+
+// Disponibilités déclarées par les formateurs (= "Disponibilites_formateurs" Airtable)
+// Sert au planning et à la suggestion automatique de créneaux.
+model TrainerAvailability {
+  id        String   @id @default(uuid())
+  tenantId  String
+  trainerId String
+  trainer   Person   @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String   @default("available") // "available" | "busy" | "tentative"
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, trainerId, startsAt])
+}
+
+// =====================================================
+// === Inscriptions (table riche, alignée sur Airtable Refonte)
+// =====================================================
+
+enum EnrollmentStatus {
+  PRE_ENROLLED
+  CONFIRMED
+  ATTENDED
+  CANCELLED
+  NO_SHOW
+}
+
+enum FinancingMode {
+  OPCO
+  CPF
+  ENTREPRISE // l'entreprise paye directement
+  AUTOFINANCEMENT // l'apprenant paye lui-même
+  POLE_EMPLOI
+  AUTRE
+}
+
+enum FinancingStatus {
+  NOT_STARTED
+  REQUESTED // dossier déposé
+  PRE_APPROVED // pré-accord OPCO reçu
+  APPROVED // dossier validé
+  REJECTED
+  REIMBURSED // remboursement reçu
+}
+
+enum BillingType {
+  STRUCTURE // facturation à l'entreprise
+  PERSONNE // facturation au particulier
+  OPCO_DIRECT // tiers payeur OPCO
+  CPF // financement CPF
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WRITE_OFF
+}
+
+model SessionParticipant {
+  id               String          @id @default(uuid())
+  sessionId        String
+  session          TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  personId         String
+  person           Person          @relation(fields: [personId], references: [id])
+  // 👇 LE point de pivot. C'est CETTE org qui paye et qui apparaît sur la convention.
+  sponsorOrgId     String
+  sponsorOrg       Organization    @relation(fields: [sponsorOrgId], references: [id])
+  billingProfileId String?
+  billingProfile   BillingProfile? @relation(fields: [billingProfileId], references: [id])
+
+  // Tarification
+  priceHT         Decimal @default(0) @db.Decimal(10, 2)
+  amountCollected Decimal @default(0) @db.Decimal(10, 2)
+  amountRemaining Decimal @default(0) @db.Decimal(10, 2)
+
+  // Statuts
+  enrollmentStatus EnrollmentStatus @default(PRE_ENROLLED)
+  bpfStatus        String?
+  participantType  String? // "Salarié", "Dirigeant", "EI"
+  payerOrgId       String? // si différent du sponsorOrg (rare mais possible)
+  payerContactId   String? // contact destinataire de la facturation
+
+  // Workflow financement
+  financingMode         FinancingMode?
+  financingStatus       FinancingStatus @default(NOT_STARTED)
+  financingRefNumber    String? // référence dossier OPCO
+  financingRequestDate  DateTime?
+  financingApprovalDate DateTime?
+
+  // Workflow facturation
+  billingType   BillingType?
+  paymentStatus PaymentStatus @default(PENDING)
+
+  // Checklist Qualiopi (booleans calqués sur Airtable Inscriptions)
+  conventionSigned         Boolean @default(false)
+  programmeDelivered       Boolean @default(false)
+  certificateDelivered     Boolean @default(false)
+  pedagogicalSupportsGiven Boolean @default(false)
+  attendanceSheetCollected Boolean @default(false)
+  assiduitySheetCollected  Boolean @default(false)
+  evaluationCollected      Boolean @default(false)
+  satisfactionCollected    Boolean @default(false)
+  closingDocsSent          Boolean @default(false)
+  invoiceSent              Boolean @default(false)
+  paymentReceived          Boolean @default(false)
+  opcoPreApproved          Boolean @default(false)
+  opcoApproved             Boolean @default(false)
+  opcoReimbursed           Boolean @default(false)
+
+  // Erreur de cohérence détectée (= "Erreur_payeur" dans Airtable)
+  payerErrorMessage String?
+  internalNotes     String?
+
+  // Relations
+  invoices      Invoice[]
+  comments      InternalComment[]
+  tasks         Task[]
+  agreementDocs Document[] // les documents Qualiopi rattachés à cette inscription
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, personId])
+  @@index([sponsorOrgId])
+  @@index([financingStatus])
+  @@index([paymentStatus])
+}
+
+model Attendance {
+  id           String      @id @default(uuid())
+  slotId       String
+  slot         SessionSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  personId     String
+  person       Person      @relation(fields: [personId], references: [id])
+  signatureUrl String?
+  signedAt     DateTime?
+  ip           String?
+  qrToken      String?     @unique
+
+  @@unique([slotId, personId])
+}
+
+// =====================================================
+// === Pipeline commercial : Leads
+// =====================================================
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATION
+  WON // converti en SessionParticipant
+  LOST
+  ON_HOLD
+  TO_FOLLOWUP // "A relancer"
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Lead {
+  id                  String            @id @default(uuid())
+  tenantId            String
+  source              String? // "Formulaire", "Linkedin", "Salon", "Recommandation", etc.
+  status              LeadStatus        @default(NEW)
+  priority            LeadPriority      @default(MEDIUM)
+  // Identité du prospect (peut être Person existant OU saisie libre)
+  personId            String?
+  person              Person?           @relation("LeadPerson", fields: [personId], references: [id])
+  organizationId      String?
+  organization        Organization?     @relation("LeadOrg", fields: [organizationId], references: [id])
+  firstName           String?
+  lastName            String?
+  email               String?
+  phone               String?
+  // Intérêt
+  interestedProductId String?
+  interestedProduct   TrainingProduct?  @relation(fields: [interestedProductId], references: [id])
+  desiredSessionId    String?
+  desiredSession      TrainingSession?  @relation(fields: [desiredSessionId], references: [id])
+  // Suivi commercial
+  ownerUserId         String?
+  owner               User?             @relation(fields: [ownerUserId], references: [id])
+  lastActionAt        DateTime?
+  lastAction          String?
+  nextActionAt        DateTime?
+  nextAction          String?
+  reminderTemplate    String? // "Formule_relance" Airtable
+  validatedAt         DateTime?
+  notes               String?
+  // Relations
+  actions             LeadAction[]
+  tasks               Task[]
+  comments            InternalComment[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, ownerUserId])
+}
+
+model LeadAction {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type       String // "call" | "email" | "meeting" | "note"
+  subject    String
+  body       String?
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([leadId, occurredAt])
+}
+
+// =====================================================
+// === Facturation
+// =====================================================
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+  CREDIT_NOTE
+}
+
+model Invoice {
+  id               String              @id @default(uuid())
+  tenantId         String
+  number           String              @unique // numérotation continue (FAC-NNNNNN)
+  status           InvoiceStatus       @default(DRAFT)
+  // Liens métier
+  participantId    String?
+  participant      SessionParticipant? @relation(fields: [participantId], references: [id])
+  payerOrgId       String?
+  payerOrg         Organization?       @relation(fields: [payerOrgId], references: [id])
+  payerContactId   String? // optionnel : un Contact spécifique
+  billingProfileId String?
+  billingProfile   BillingProfile?     @relation(fields: [billingProfileId], references: [id])
+  // Montants
+  amountHT         Decimal             @default(0) @db.Decimal(10, 2)
+  vatRate          Decimal             @default(0) @db.Decimal(5, 2)
+  amountTTC        Decimal             @default(0) @db.Decimal(10, 2)
+  amountPaid       Decimal             @default(0) @db.Decimal(10, 2)
+  // Dates
+  issueDate        DateTime?
+  dueDate          DateTime?
+  paidAt           DateTime?
+  // PDF
+  pdfUrl           String?
+  hashSha256       String?
+  // Notes
+  notes            String?
+  // Paiements
+  payments         InvoicePayment[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, issueDate])
+}
+
+model InvoicePayment {
+  id         String   @id @default(uuid())
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  method     String // "virement" | "cheque" | "cb" | "prelevement" | "especes"
+  amount     Decimal  @db.Decimal(10, 2)
+  receivedAt DateTime
+  reference  String?
+  notes      String?
+  createdAt  DateTime @default(now())
+}
+
+// =====================================================
+// === Documents (Qualiopi)
+// =====================================================
+
+enum DocType {
+  CONVENTION
+  PROGRAMME
+  CONVOCATION
+  EMARGEMENT
+  ASSIDUITE
+  ATTESTATION_FIN
+  CERTIFICAT_REALISATION
+  AGEFICE
+  EVALUATION_ACQUIS
+  SATISFACTION
+  SUPPORT_PEDAGOGIQUE
+  PRE_ACCORD_OPCO
+  VALIDATION_OPCO
+  FACTURE
+  CUSTOM
+}
+
+// Référentiel des types de documents Qualiopi (issu de la table Airtable Documents_Qualiopi)
+// Ne stocke pas les fichiers — c'est une métadonnée éditoriale qui mappe DocType à un indicateur Qualiopi.
+model QualiopiDocCatalog {
+  id                String   @id @default(uuid())
+  type              DocType  @unique
+  name              String // "Convention de formation"
+  phase             String // "Pré-formation" | "Formation" | "Post-formation" | "Administratif"
+  qualiopiIndicator String? // "Indicateur 7", "Indicateur 30", "Légal Art. L6353-1"
+  isMandatory       Boolean  @default(true)
+  description       String?
+  recommendedDelay  String?
+  responsible       String? // "OF", "Apprenant", "OPCO", "Formateur"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model DocumentTemplate {
+  id        String     @id @default(uuid())
+  tenantId  String
+  type      DocType
+  name      String
+  fileUrl   String
+  format    String // "docx" | "pdf"
+  variables Json
+  version   Int        @default(1)
+  documents Document[]
+}
+
+model Document {
+  id            String              @id @default(uuid())
+  tenantId      String
+  templateId    String?
+  template      DocumentTemplate?   @relation(fields: [templateId], references: [id])
+  type          DocType
+  entityType    String // "session" | "participant" | "invoice"
+  entityId      String
+  pdfUrl        String
+  hashSha256    String
+  status        String              @default("generated")
+  sessionId     String?
+  session       TrainingSession?    @relation(fields: [sessionId], references: [id])
+  participantId String?
+  participant   SessionParticipant? @relation(fields: [participantId], references: [id])
+  createdAt     DateTime            @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, type])
+}
+
+// =====================================================
+// === Email
+// =====================================================
+
+model EmailTemplate {
+  id        String @id @default(uuid())
+  tenantId  String
+  code      String @unique
+  subject   String
+  bodyMjml  String
+  variables Json
+}
+
+model EmailMessage {
+  id            String    @id @default(uuid())
+  tenantId      String
+  templateId    String?
+  fromEmail     String
+  toEmails      Json
+  subject       String
+  bodyHtml      String
+  status        String // "queued" | "sent" | "bounced"
+  sentAt        DateTime?
+  relatedEntity String?
+  createdAt     DateTime  @default(now())
+}
+
+// =====================================================
+// === Référentiel OPCO
+// =====================================================
+
+enum OpcoStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+// Calqué sur la table Airtable "Opco" : référentiel partagé pour ne pas répéter
+// les délais / plafonds / docs requis sur chaque Organization.
+model OpcoCatalog {
+  id                   String         @id @default(uuid())
+  code                 String         @unique // "AGEFICE", "OPCO_EP", "ATLAS", "CPF", etc.
+  name                 String
+  type                 String // "FAF", "OPCO", "Autre"
+  website              String?
+  contactEmail         String?
+  contactPhone         String?
+  contactAddress       String?
+  averageDelayDays     Int?
+  maxAmountPerTraining Decimal?       @db.Decimal(10, 2)
+  yearlyCapPerPerson   Decimal?       @db.Decimal(10, 2)
+  conditions           String?
+  requiredDocs         Json? // string[]
+  adminContact         String?
+  status               OpcoStatus     @default(ACTIVE)
+  internalNotes        String?
+  organizations        Organization[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+// =====================================================
+// === Tâches & commentaires (utilitaires CRM)
+// =====================================================
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Tâches Kanban polymorphes (peuvent être attachées à une session, un lead, une inscription, etc.)
+model Task {
+  id            String              @id @default(uuid())
+  tenantId      String
+  title         String
+  description   String?
+  status        TaskStatus          @default(TODO)
+  priority      TaskPriority        @default(MEDIUM)
+  ownerUserId   String?
+  owner         User?               @relation(fields: [ownerUserId], references: [id])
+  dueDate       DateTime?
+  // Polymorphisme léger
+  sessionId     String?
+  session       TrainingSession?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  leadId        String?
+  lead          Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  participantId String?
+  participant   SessionParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([tenantId, status, dueDate])
+}
+
+// Commentaires internes polymorphes (fil de discussion sur entité)
+model InternalComment {
+  id             String              @id @default(uuid())
+  tenantId       String
+  authorUserId   String?
+  body           String
+  // Polymorphisme léger
+  sessionId      String?
+  session        TrainingSession?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  leadId         String?
+  lead           Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  personId       String?
+  person         Person?             @relation(fields: [personId], references: [id], onDelete: SetNull)
+  organizationId String?
+  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  participantId  String?
+  participant    SessionParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// =====================================================
+// === Audit
+// =====================================================
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String
+  diff      Json
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, entity, entityId])
+  @@index([tenantId, createdAt])
+}
+
+// =====================================================
+// === [Plan additions] — extensions IA / AGEFICE / sync
+// =====================================================
+
+model AgeficeProfile {
+  id                 String       @id @default(uuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  paName             String? // "AGEFICE 06"
+  paNumber           String?
+  paContact          String?
+  paAddress          Json?
+  paFields           Json // 54 champs PDF AGEFICE pré-remplis
+  pdfTemplateVersion String       @default("2023-2024")
+  updatedAt          DateTime     @updatedAt
+  createdAt          DateTime     @default(now())
+}
+
+enum PedagogicalKind {
+  ANALYSE_BESOIN
+  QCM
+  GRILLE_OBS
+  COMPETENCES
+  DEROULE
+}
+
+model PedagogicalAsset {
+  id            String          @id @default(uuid())
+  tenantId      String
+  kind          PedagogicalKind
+  sessionId     String
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participantId String?
+  rawJson       Json
+  pdfUrl        String?
+  hashSha256    String?
+  generatedAt   DateTime        @default(now())
+
+  @@unique([sessionId, participantId, kind])
+  @@index([tenantId, kind])
+}
+
+model AIGenerationJob {
+  id        String   @id @default(uuid())
+  tenantId  String
+  provider  String
+  model     String
+  inputHash String
+  status    String
+  retries   Int      @default(0)
+  latencyMs Int?
+  errorMsg  String?
+  refTable  String
+  refId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([refTable, refId])
+}
+
+model ExternalIdentity {
+  id         String   @id @default(uuid())
+  tenantId   String
+  entityType String
+  entityId   String
+  source     String // "smartof" | "qualiopi-gen" | "airtable"
+  externalId String
+  createdAt  DateTime @default(now())
+
+  @@unique([source, externalId])
+  @@index([tenantId, entityType, entityId])
+}
