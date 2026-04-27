@@ -21,6 +21,7 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "@qualiof/shared": "workspace:*",
+    "dotenv": "^16.4.7",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

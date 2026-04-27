@@ -12,6 +12,11 @@
  *  - le référentiel des documents Qualiopi par indicateur
  */
 
+import { config as loadEnv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import * as path from 'node:path';
+loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
+
 import { PrismaClient, UserRole, OpcoStatus, DocType } from '@prisma/client';
 import argon2 from 'argon2';
 

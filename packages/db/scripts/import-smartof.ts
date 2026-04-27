@@ -20,6 +20,11 @@
 
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
+import { config as loadEnv } from 'dotenv';
+
+// Charge .env depuis la racine du mono-repo (deux niveaux au-dessus de packages/db)
+loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
+
 import * as XLSX from 'xlsx';
 import {
   PrismaClient,
