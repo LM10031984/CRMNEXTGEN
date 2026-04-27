@@ -15,10 +15,13 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "import:smartof": "tsx scripts/import-smartof.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "@qualiof/shared": "workspace:*",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "prisma": "^5.22.0",
