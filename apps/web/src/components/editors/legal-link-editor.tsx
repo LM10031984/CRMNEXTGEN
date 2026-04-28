@@ -14,6 +14,7 @@ const ROLE_OPTIONS = [
   { value: 'DIRIGEANT', label: 'Dirigeant' },
   { value: 'SALARIE', label: 'Salarié' },
   { value: 'EI_SELF', label: 'Auto-entrepreneur (EI)' },
+  { value: 'AGENT_COMMERCIAL', label: 'Agent commercial' },
   { value: 'ALTERNANT', label: 'Alternant' },
   { value: 'STAGIAIRE', label: 'Stagiaire' },
   { value: 'CONTACT', label: 'Contact' },

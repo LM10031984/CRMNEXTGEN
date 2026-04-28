@@ -12,6 +12,7 @@ const ROLE_LABEL: Record<string, string> = {
   DIRIGEANT: 'Dirigeant',
   SALARIE: 'Salarié',
   EI_SELF: 'Auto-entrepreneur (EI)',
+  AGENT_COMMERCIAL: 'Agent commercial',
   ALTERNANT: 'Alternant',
   STAGIAIRE: 'Stagiaire',
   CONTACT: 'Contact',

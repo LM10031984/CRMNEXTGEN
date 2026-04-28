@@ -73,6 +73,38 @@ function parseEuro(s: string | null): number {
   return parseFloat(String(s).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
 }
 
+/**
+ * Parse une date robuste : Date object (xlsx cellDates), Excel serial number,
+ * ou string FR "DD/MM/YYYY" / "D/M/YY". Renvoie null si non parseable.
+ */
+function parseSmartOFDate(v: unknown): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === 'number') {
+    // Excel serial : 25569 = 1970-01-01
+    const ms = (v - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    // "DD/MM/YYYY" ou "D/M/YY"
+    const fr = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (fr) {
+      const day = parseInt(fr[1], 10);
+      const month = parseInt(fr[2], 10);
+      let year = parseInt(fr[3], 10);
+      if (year < 100) year += 2000;
+      const d = new Date(Date.UTC(year, month - 1, day));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    // ISO ou autre format que Date sait parser
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 function mapStatus(s: string): SessionStatus {
   const norm = (s || '').toLowerCase();
   if (norm.includes('annulée')) return SessionStatus.CANCELLED;
@@ -339,8 +371,8 @@ async function main() {
   for (const row of rows) {
     const sesId = String(row.ID);
     const status = mapStatus(row.Statut);
-    const startDate = row['Date de début'] ? new Date(row['Date de début']) : new Date();
-    const endDate = row['Date de fin'] ? new Date(row['Date de fin']) : startDate;
+    const startDate = parseSmartOFDate(row['Date de début']) ?? new Date();
+    const endDate = parseSmartOFDate(row['Date de fin']) ?? startDate;
     const totalHT = parseEuro(row['Budget Total']);
 
     // --- Produit ---
