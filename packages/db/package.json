@@ -17,6 +17,8 @@
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset",
     "import:smartof": "dotenv -e ../../.env -- tsx scripts/import-smartof.ts",
     "import:smartof-sessions": "dotenv -e ../../.env -- tsx scripts/import-smartof-sessions.ts",
+    "import:agefice-pa": "dotenv -e ../../.env -- tsx scripts/import-agefice-pa.ts",
+    "import:airtable": "dotenv -e ../../.env -- tsx scripts/import-airtable.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

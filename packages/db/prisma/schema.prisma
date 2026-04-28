@@ -184,6 +184,7 @@ enum LinkRole {
   DIRIGEANT
   SALARIE
   EI_SELF
+  AGENT_COMMERCIAL // pattern récurrent immobilier : indépendant rattaché à une enseigne (C21, Magrey, Orpi…)
   ALTERNANT
   STAGIAIRE
   CONTACT
@@ -905,17 +906,46 @@ model AuditLog {
 // =====================================================
 
 model AgeficeProfile {
-  id                 String       @id @default(uuid())
-  organizationId     String       @unique
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(uuid())
+  organizationId     String              @unique
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // PA AGEFICE rattaché — privilégier la FK vers le référentiel AgeficePointAccueil ;
+  // les champs paName/paNumber/paContact/paAddress sont conservés pour compatibilité
+  // avec les imports SmartOF (saisie texte libre) et pour override manuel rare.
+  pointAccueilId     String?
+  pointAccueil       AgeficePointAccueil? @relation(fields: [pointAccueilId], references: [id])
+  pointAccueilLockedManually Boolean      @default(false) // true = ne pas réécrire au prochain import
   paName             String? // "AGEFICE 06"
   paNumber           String?
   paContact          String?
   paAddress          Json?
   paFields           Json // 54 champs PDF AGEFICE pré-remplis
-  pdfTemplateVersion String       @default("2023-2024")
-  updatedAt          DateTime     @updatedAt
-  createdAt          DateTime     @default(now())
+  pdfTemplateVersion String              @default("2023-2024")
+  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime            @default(now())
+}
+
+// Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
+model AgeficePointAccueil {
+  id             String           @id @default(uuid())
+  name           String           // "CCI Nice Côte d'Azur"
+  address1       String?
+  address2       String?
+  postalCode     String           // "06000" (string padding 5)
+  city           String           // "NICE"
+  department     String           // "06" — calculé depuis postalCode (2 chars, 3 pour DOM-TOM 97X/98X)
+  departmentName String?
+  phone          String?          // "04 93 13 75 00"
+  email          String?
+  website        String?
+  source         String           @default("agefice.fr-2025") // versioning du référentiel
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  profiles       AgeficeProfile[]
+
+  @@unique([postalCode, name]) // clé naturelle pour upsert idempotent
+  @@index([department])
+  @@index([city])
 }
 
 enum PedagogicalKind {

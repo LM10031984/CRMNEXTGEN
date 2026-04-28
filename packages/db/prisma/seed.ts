@@ -118,6 +118,31 @@ async function seedOpcoCatalog() {
       ],
       status: OpcoStatus.ACTIVE,
     },
+    {
+      code: 'FI-FPL',
+      name: 'FI-FPL (Fonds Interprofessionnel de Formation des Professionnels Libéraux)',
+      type: 'FAF',
+      website: 'https://www.fifpl.fr',
+      averageDelayDays: 45,
+      yearlyCapPerPerson: 1200,
+      conditions: 'Fonds d\'assurance formation pour les professions libérales non-réglementées (architectes, géomètres-experts, conseils en immobilier libéraux non-affiliés AGEFICE…).',
+      requiredDocs: [
+        'Demande de prise en charge en ligne sur fifpl.fr',
+        'Convention/Programme de formation',
+        'Attestation de paiement à l\'URSSAF (CFP)',
+        'Certificat de réalisation',
+      ],
+      status: OpcoStatus.ACTIVE,
+    },
+    {
+      code: 'OPCOMMERCE',
+      name: 'OPCO Commerce',
+      type: 'OPCO',
+      website: 'https://www.lopcommerce.com',
+      averageDelayDays: 45,
+      conditions: 'OPCO des entreprises du commerce — couvre certaines agences immobilières et leurs salariés.',
+      status: OpcoStatus.ACTIVE,
+    },
   ];
 
   for (const opco of opcos) {

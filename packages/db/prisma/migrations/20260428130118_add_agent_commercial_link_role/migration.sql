@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "LinkRole" ADD VALUE 'AGENT_COMMERCIAL';

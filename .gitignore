@@ -32,6 +32,11 @@ Thumbs.db
 # Prisma
 packages/db/prisma/migrations/dev.db*
 
+# Données sensibles RGPD — snapshots de production (apprenants, SIRET, n° SS, etc.)
+# Caches locaux d'imports, jamais versionnés même en repo privé.
+packages/db/airtable-snapshot/
+*.xlsx
+
 # Tests
 coverage/
 playwright-report/
