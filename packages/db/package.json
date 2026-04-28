@@ -16,6 +16,7 @@
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset",
     "import:smartof": "dotenv -e ../../.env -- tsx scripts/import-smartof.ts",
+    "import:smartof-sessions": "dotenv -e ../../.env -- tsx scripts/import-smartof-sessions.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
