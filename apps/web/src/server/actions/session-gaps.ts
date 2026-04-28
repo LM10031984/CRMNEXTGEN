@@ -18,8 +18,10 @@ import { prisma } from '@qualiof/db';
 import { normalizeName } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 
+// Quand Next tourne, cwd = apps/web/. Le fichier est dans <repo-root>/../ donc 3 niveaux au-dessus.
 const EXCEL_PATH = path.resolve(
   process.cwd(),
+  '..',
   '..',
   '..',
   'Export des sessions SmartOF - 28_04_2026.xlsx',
