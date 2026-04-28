@@ -6,6 +6,7 @@ import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { LegalLinkEditor } from '@/components/editors/legal-link-editor';
 
 const ROLE_LABEL: Record<string, string> = {
   DIRIGEANT: 'Dirigeant',
@@ -97,7 +98,7 @@ export default async function ApprenantDetailPage({ params }: { params: Promise<
             </dl>
           </section>
 
-          {/* Liens juridiques */}
+          {/* Liens juridiques (éditeur interactif) */}
           <section className="rounded-2xl border border-border bg-white p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
@@ -107,49 +108,7 @@ export default async function ApprenantDetailPage({ params }: { params: Promise<
                 <Badge variant="primary">Cas multi-casquettes</Badge>
               )}
             </div>
-            {person.legalLinks.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">
-                Aucune organisation rattachée à cet apprenant.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {person.legalLinks.map((link) => (
-                  <li
-                    key={link.id}
-                    className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <Briefcase className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/app/organisations/${link.organization.id}`}
-                          className="font-medium text-foreground hover:text-primary transition-colors"
-                        >
-                          {link.organization.legalName}
-                        </Link>
-                        <Badge variant={link.role === 'EI_SELF' ? 'primary' : 'muted'}>
-                          {ROLE_LABEL[link.role] ?? link.role}
-                        </Badge>
-                        {link.isPrimary && <Badge variant="info">Principal</Badge>}
-                        {link.organization.opcoCode && (
-                          <Badge variant="default">OPCO {link.organization.opcoCode}</Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
-                        {link.organization.siret && (
-                          <span>SIRET {link.organization.siret}</span>
-                        )}
-                        {link.function && <span>· {link.function}</span>}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-4 text-xs text-muted-foreground">
-              💡 L'éditeur de liens (palier 2.2) permettra d'ajouter des liens, marquer le principal,
-              et inscrire l'apprenant à une session selon une casquette précise.
-            </p>
+            <LegalLinkEditor personId={person.id} links={person.legalLinks} />
           </section>
         </div>
 

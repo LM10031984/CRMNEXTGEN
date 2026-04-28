@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
   DRAFT: { label: 'Brouillon', variant: 'muted' },
@@ -79,15 +80,22 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <section className="rounded-2xl border border-border bg-white overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-border">
+            <div className="flex items-center justify-between p-5 border-b border-border gap-3">
               <h2 className="font-semibold inline-flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" /> Inscrits ({session.participants.length})
               </h2>
-              {eiCount > 0 && (
-                <Badge variant="primary">
-                  {eiCount} en EI / Auto-entrepreneur
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {eiCount > 0 && (
+                  <Badge variant="primary">
+                    {eiCount} en EI / Auto-entrepreneur
+                  </Badge>
+                )}
+                <AddParticipantDialog
+                  sessionId={session.id}
+                  defaultPrice={Number(session.pricePerLearner ?? 0)}
+                  excludePersonIds={session.participants.map((p) => p.personId)}
+                />
+              </div>
             </div>
             {session.participants.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
