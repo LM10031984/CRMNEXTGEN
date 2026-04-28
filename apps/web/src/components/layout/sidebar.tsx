@@ -14,6 +14,7 @@ import {
   Settings,
   LayoutDashboard,
   ListChecks,
+  Landmark,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +46,12 @@ const NAV: NavSection[] = [
     items: [
       { label: 'Produits de formation', href: '/app/produits', icon: BookOpen },
       { label: 'Modèles de documents', href: '/app/templates', icon: FileText },
+    ],
+  },
+  {
+    title: 'Référentiels',
+    items: [
+      { label: 'Financeurs', href: '/app/financeurs', icon: Landmark },
     ],
   },
   {
