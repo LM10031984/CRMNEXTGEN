@@ -82,7 +82,7 @@ export default async function FormateursPage() {
             return (
               <Link
                 key={t.id}
-                href={`/app/apprenants/${t.id}`}
+                href={`/app/formateurs/${t.id}`}
                 className="rounded-2xl border border-border bg-white p-5 hover:border-primary/40 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3 mb-3">
