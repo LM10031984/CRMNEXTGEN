@@ -8,6 +8,9 @@
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 
+// SOLO_FORMS exported via /lib/legal-forms.ts (sync, can be imported anywhere).
+// Ce fichier 'use server' ne peut exposer QUE des fonctions async.
+
 export interface PersonSearchResult {
   id: string;
   firstName: string;
@@ -26,8 +29,6 @@ export interface PersonSearchResult {
     };
   }>;
 }
-
-const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
 export async function searchPersons(query: string, limit = 12): Promise<PersonSearchResult[]> {
   const { user } = await validateRequest();
@@ -94,8 +95,4 @@ export async function getPersonWithLinks(personId: string): Promise<PersonSearch
       },
     },
   }) as Promise<PersonSearchResult | null>;
-}
-
-export function isSoloForm(legalForm: string): boolean {
-  return SOLO_FORMS.includes(legalForm);
 }

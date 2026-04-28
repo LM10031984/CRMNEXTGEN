@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Calendar, Users, Euro, AlertTriangle } from 'lucide-react';
+import { Plus, Calendar, Users, Euro, AlertTriangle, Sparkles } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -95,14 +95,22 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         title="Sessions de formation"
         subtitle={`${allCount} sessions importées depuis SmartOF (${eiCount} avec ≥1 inscription EI)`}
         actions={
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors opacity-60 cursor-not-allowed"
-            title="Wizard création — disponible au palier 2.3"
-          >
-            <Plus className="h-4 w-4" /> Nouvelle session
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/app/sessions/rattrapage"
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100 transition-colors"
+            >
+              <Sparkles className="h-4 w-4" /> Rattraper les inscriptions
+            </Link>
+            <button
+              type="button"
+              disabled
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors opacity-60 cursor-not-allowed"
+              title="Wizard création — disponible au palier 2.3"
+            >
+              <Plus className="h-4 w-4" /> Nouvelle session
+            </button>
+          </div>
         }
       />
 
