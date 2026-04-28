@@ -239,7 +239,7 @@ async function importStructures(
       stats.structures.created++;
       // ExternalIdentity
       await prisma.externalIdentity.create({
-        data: { entityType: 'Organization', entityId: created.id, source: 'airtable', externalId: s.id },
+        data: { tenantId, entityType: 'Organization', entityId: created.id, source: 'airtable', externalId: s.id },
       });
       stats.externalIdentities.created++;
     } else {
@@ -353,7 +353,7 @@ async function importApprenants(
       });
       if (!ei) {
         await prisma.externalIdentity.create({
-          data: { entityType: 'Person', entityId: person.id, source: 'airtable', externalId: a.id },
+          data: { tenantId, entityType: 'Person', entityId: person.id, source: 'airtable', externalId: a.id },
         });
         stats.externalIdentities.created++;
       }

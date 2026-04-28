@@ -19,6 +19,7 @@
     "import:smartof-sessions": "dotenv -e ../../.env -- tsx scripts/import-smartof-sessions.ts",
     "import:agefice-pa": "dotenv -e ../../.env -- tsx scripts/import-agefice-pa.ts",
     "import:airtable": "dotenv -e ../../.env -- tsx scripts/import-airtable.ts",
+    "import:treso": "dotenv -e ../../.env -- tsx scripts/import-treso-agefice.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
