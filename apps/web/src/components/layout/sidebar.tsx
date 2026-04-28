@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Landmark,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +60,7 @@ const NAV: NavSection[] = [
     items: [
       { label: 'Sessions', href: '/app/sessions', icon: Calendar },
       { label: 'Inscriptions', href: '/app/inscriptions', icon: ListChecks },
+      { label: 'Dossiers OPCO', href: '/app/dossiers-opco', icon: ClipboardCheck },
       { label: 'Factures', href: '/app/factures', icon: Receipt },
       { label: 'Leads', href: '/app/leads', icon: Megaphone },
     ],
