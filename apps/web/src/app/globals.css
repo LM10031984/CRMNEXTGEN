@@ -5,6 +5,8 @@
 :root {
   --primary: #00527A;
   --primary-hover: #004161;
+  /* Force le rendu clair, ignore le dark-mode système macOS */
+  color-scheme: light only;
 }
 
 html, body {

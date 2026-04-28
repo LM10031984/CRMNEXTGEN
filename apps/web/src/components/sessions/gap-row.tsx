@@ -39,8 +39,8 @@ export function GapRow({ gap }: { gap: SessionGap }) {
             {gap.registeredCount}/{gap.expectedCount} inscrits
           </div>
         </div>
-        <Badge variant="warning">
-          {gap.missing.length - resolved.size} à compléter
+        <Badge variant="warning" className="shrink-0">
+          {Math.max(0, gap.missing.length - resolved.size)} à compléter
         </Badge>
         <Link
           href={`/app/sessions/${gap.sessionId}`}
@@ -203,13 +203,13 @@ function MissingRow({ sessionId, rawName, candidates, defaultPrice, done, onReso
                     <span className="font-medium">{c.firstName} {c.lastName.toUpperCase()}</span>
                     {c.email && <span className="text-xs text-muted-foreground ml-2">{c.email}</span>}
                   </span>
-                  {c.legalLinks.length === 0 && <Badge variant="warning">pas d'org</Badge>}
+                  {c.legalLinks.length === 0 && <Badge variant="warning" className="shrink-0">pas d'org</Badge>}
                   {c.legalLinks.length === 1 && (
-                    <Badge variant={SOLO_FORMS.includes(c.legalLinks[0]!.organization.legalForm) ? 'primary' : 'muted'}>
-                      {c.legalLinks[0]!.organization.legalName.substring(0, 30)}
+                    <Badge variant={SOLO_FORMS.includes(c.legalLinks[0]!.organization.legalForm) ? 'primary' : 'muted'} className="shrink-0 max-w-[200px] truncate">
+                      {c.legalLinks[0]!.organization.legalName.substring(0, 28)}
                     </Badge>
                   )}
-                  {c.legalLinks.length >= 2 && <Badge variant="primary">multi-casquettes</Badge>}
+                  {c.legalLinks.length >= 2 && <Badge variant="primary" className="shrink-0">multi</Badge>}
                 </button>
               );
             })
