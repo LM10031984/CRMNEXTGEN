@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
+import { validateRequest } from '@/lib/auth';
 import { uploadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
 
@@ -120,7 +121,11 @@ export async function submitPreEnrollmentForm(
  * Utile depuis la page admin si la 1ère extraction a échoué ou pour reprocesser.
  */
 export async function retriggerExtraction(preEnrollmentId: string): Promise<{ ok: boolean; error?: string }> {
-  const pe = await prisma.preEnrollment.findUnique({ where: { id: preEnrollmentId } });
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+  const pe = await prisma.preEnrollment.findFirst({
+    where: { id: preEnrollmentId, tenantId: user.tenantId },
+  });
   if (!pe) return { ok: false, error: 'Pré-inscription introuvable' };
   // Lancement non bloquant
   Promise.resolve().then(() =>
