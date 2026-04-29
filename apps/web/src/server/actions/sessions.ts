@@ -17,7 +17,14 @@ export async function addParticipant(input: {
   personId: string;
   sponsorOrgId: string;
   priceHT?: number;
-}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  /**
+   * Rôle explicite si on doit créer un LegalLink manquant.
+   * Si non fourni ET aucun LegalLink existant entre cet apprenant et cette org,
+   * l'inscription est REFUSÉE (au lieu de créer un SALARIE silencieux qui pourrissait
+   * les données — recommandation audit).
+   */
+  legalLinkRole?: LinkRole;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string; needsLegalLinkRole?: boolean }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
 
@@ -31,16 +38,24 @@ export async function addParticipant(input: {
     return { ok: false, error: 'Session, apprenant ou organisation introuvable.' };
   }
 
-  // Vérifie que le LegalLink existe (sinon le crée par défaut comme SALARIE)
+  // Le LegalLink Person→Org doit exister avant l'inscription. Sinon refus
+  // explicite (au lieu d'un SALARIE par défaut qui était faux dans 95% des cas immo).
   const link = await prisma.legalLink.findFirst({
     where: { personId: input.personId, organizationId: input.sponsorOrgId },
   });
   if (!link) {
+    if (!input.legalLinkRole) {
+      return {
+        ok: false,
+        error: `Aucun lien juridique entre cet apprenant et l'organisation "${sponsor.legalName}". Précise le rôle (EI_SELF, AGENT_COMMERCIAL, SALARIE, DIRIGEANT…) avant l'inscription.`,
+        needsLegalLinkRole: true,
+      };
+    }
     await prisma.legalLink.create({
       data: {
         personId: input.personId,
         organizationId: input.sponsorOrgId,
-        role: LinkRole.SALARIE,
+        role: input.legalLinkRole,
       },
     });
   }
