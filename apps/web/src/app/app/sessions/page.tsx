@@ -102,14 +102,12 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
             >
               <Sparkles className="h-4 w-4" /> Rattraper les inscriptions
             </Link>
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors opacity-60 cursor-not-allowed"
-              title="Wizard création — disponible au palier 2.3"
+            <Link
+              href="/app/sessions/nouvelle"
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
             >
               <Plus className="h-4 w-4" /> Nouvelle session
-            </button>
+            </Link>
           </div>
         }
       />
