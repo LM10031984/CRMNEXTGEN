@@ -97,6 +97,82 @@ export async function removeParticipant(participantId: string): Promise<{ ok: bo
   return { ok: true };
 }
 
+/**
+ * Édite les champs courants d'une inscription : prix HT, statut, sponsorOrg.
+ * Permet de corriger les valeurs aberrantes héritées des imports legacy
+ * (ex: Marco DAS NEVES priceHT=315.43 au lieu de 315) sans passer par SQL.
+ */
+export async function updateParticipant(input: {
+  participantId: string;
+  priceHT?: number;
+  enrollmentStatus?: keyof typeof EnrollmentStatus;
+  sponsorOrgId?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const part = await prisma.sessionParticipant.findUnique({
+    where: { id: input.participantId },
+    include: { session: { select: { tenantId: true, id: true } } },
+  });
+  if (!part || part.session.tenantId !== user.tenantId) {
+    return { ok: false, error: 'Inscription introuvable.' };
+  }
+
+  const data: Prisma.SessionParticipantUpdateInput = {};
+  if (input.priceHT !== undefined) {
+    if (input.priceHT < 0) return { ok: false, error: 'Le prix HT ne peut pas être négatif.' };
+    data.priceHT = new Prisma.Decimal(input.priceHT);
+  }
+  if (input.enrollmentStatus) data.enrollmentStatus = EnrollmentStatus[input.enrollmentStatus];
+  if (input.sponsorOrgId) {
+    const sponsor = await prisma.organization.findFirst({
+      where: { id: input.sponsorOrgId, tenantId: user.tenantId },
+    });
+    if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
+    data.sponsorOrg = { connect: { id: input.sponsorOrgId } };
+  }
+
+  if (Object.keys(data).length === 0) return { ok: true };
+
+  await prisma.sessionParticipant.update({
+    where: { id: input.participantId },
+    data,
+  });
+  revalidatePath(`/app/sessions/${part.session.id}`);
+  return { ok: true };
+}
+
+/**
+ * Supprime une session et toutes ses dépendances (participants, formateurs,
+ * documents). Refuse si des factures émises sont rattachées (intégrité légale).
+ */
+export async function deleteSession(sessionId: string): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  // Refuse si des factures émises sont rattachées à cette session
+  const invoiceCount = await prisma.invoice.count({
+    where: { sessionId, status: { not: 'DRAFT' } },
+  });
+  if (invoiceCount > 0) {
+    return {
+      ok: false,
+      error: `Impossible de supprimer : ${invoiceCount} facture(s) émise(s) sur cette session. Avoirs requis avant suppression.`,
+    };
+  }
+
+  await prisma.trainingSession.delete({ where: { id: sessionId } });
+  revalidatePath('/app/sessions');
+  return { ok: true };
+}
+
 // ---------- Création d'une session ----------
 
 export async function createSession(input: {

@@ -7,8 +7,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { GenerateProgrammeButton } from '@/components/sessions/generate-programme-button';
 import { GenerateAgeficeButton } from '@/components/sessions/generate-agefice-button';
-import { CreateInvoiceButton } from '@/components/invoices/create-invoice-button';
+import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
+import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
+import { DeleteSessionButton } from '@/components/sessions/delete-session-button';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
   DRAFT: { label: 'Brouillon', variant: 'muted' },
@@ -49,12 +51,19 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link
-        href="/app/sessions"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour aux sessions
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/app/sessions"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Retour aux sessions
+        </Link>
+        <DeleteSessionButton
+          sessionId={session.id}
+          sessionCode={session.code}
+          participantCount={session.participants.length}
+        />
+      </div>
 
       <PageHeader
         title={session.name ?? '(session sans nom)'}
@@ -105,57 +114,94 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 Aucun apprenant inscrit. Probablement non matché à l'import (homonymie ou nom tronqué dans l'export Excel).
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {session.participants.map((p) => {
-                  const isEi = SOLO_FORMS.includes(p.sponsorOrg.legalForm);
-                  return (
-                    <li key={p.id} className="p-4 hover:bg-muted/30 transition-colors">
-                      <div className="flex items-start gap-3">
-                        <div className="h-9 w-9 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center font-semibold text-xs shrink-0">
-                          {p.person.firstName.charAt(0)}{p.person.lastName.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <Link
-                            href={`/app/apprenants/${p.person.id}`}
-                            className="font-medium hover:text-primary transition-colors"
-                          >
-                            {p.person.firstName} {p.person.lastName.toUpperCase()}
-                          </Link>
-                          <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
+              <div className="divide-y divide-border">
+                {(() => {
+                  // Groupement par sponsorOrg : 1 facture = 1 sponsor (EI = 1 ligne, SARL = N salariés)
+                  const groups = new Map<string, { sponsor: typeof session.participants[number]['sponsorOrg']; participants: typeof session.participants }>();
+                  for (const p of session.participants) {
+                    const k = p.sponsorOrg.id;
+                    if (!groups.has(k)) groups.set(k, { sponsor: p.sponsorOrg, participants: [] });
+                    groups.get(k)!.participants.push(p);
+                  }
+                  return Array.from(groups.values()).map((g) => {
+                    const isEi = SOLO_FORMS.includes(g.sponsor.legalForm);
+                    const totalHT = g.participants.reduce((s, p) => s + Number(p.priceHT), 0);
+                    const allInvoiced = g.participants.every((p) => p.invoiceSent);
+                    return (
+                      <div key={g.sponsor.id} className="p-4 hover:bg-muted/30 transition-colors">
+                        {/* Header sponsor */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                          <div className="text-xs text-muted-foreground inline-flex items-center gap-2">
                             <Briefcase className="h-3 w-3" />
-                            <span className="text-muted-foreground">Sponsor :</span>
+                            <span>Sponsor :</span>
                             <Link
-                              href={`/app/organisations/${p.sponsorOrg.id}`}
+                              href={`/app/organisations/${g.sponsor.id}`}
                               className="text-foreground font-medium hover:text-primary"
                             >
-                              {p.sponsorOrg.legalName}
+                              {g.sponsor.legalName}
                             </Link>
                             <Badge variant={isEi ? 'primary' : 'muted'}>
-                              {isEi ? 'EI / Auto-entr.' : p.sponsorOrg.legalForm}
+                              {isEi ? 'EI / Auto-entr.' : g.sponsor.legalForm}
                             </Badge>
-                            {p.sponsorOrg.opcoCode && (
-                              <Badge variant="info">OPCO {p.sponsorOrg.opcoCode}</Badge>
+                            {g.sponsor.opcoCode && <Badge variant="info">OPCO {g.sponsor.opcoCode}</Badge>}
+                            {g.participants.length > 1 && (
+                              <Badge variant="warning">{g.participants.length} salariés groupés</Badge>
                             )}
                           </div>
+                          <div className="inline-flex items-center gap-3">
+                            <span className="text-sm font-medium tabular-nums">{totalHT.toFixed(2)} € HT</span>
+                            <CreateSponsorInvoiceButton
+                              sessionId={session.id}
+                              sponsorOrgId={g.sponsor.id}
+                              sponsorName={g.sponsor.legalName}
+                              participantCount={g.participants.length}
+                              totalHT={totalHT}
+                              allInvoiced={allInvoiced}
+                            />
+                          </div>
                         </div>
-                        <div className="text-right text-sm shrink-0">
-                          {Number(p.priceHT) > 0 && (
-                            <div className="font-medium tabular-nums">{Number(p.priceHT).toFixed(0)} €</div>
-                          )}
-                          <div className="text-xs text-muted-foreground">{p.enrollmentStatus}</div>
-                        </div>
+
+                        {/* Lignes participants du groupe */}
+                        <ul className="space-y-2">
+                          {g.participants.map((p) => (
+                            <li key={p.id} className="flex items-start gap-3 ml-2">
+                              <div className="h-7 w-7 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center font-semibold text-[10px] shrink-0">
+                                {p.person.firstName.charAt(0)}
+                                {p.person.lastName.charAt(0)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <Link
+                                  href={`/app/apprenants/${p.person.id}`}
+                                  className="text-sm font-medium hover:text-primary transition-colors"
+                                >
+                                  {p.person.firstName} {p.person.lastName.toUpperCase()}
+                                </Link>
+                                <div className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-2">
+                                  <span className="tabular-nums">{Number(p.priceHT).toFixed(2)} €</span>
+                                  <span>·</span>
+                                  <span>{p.enrollmentStatus}</span>
+                                  {p.invoiceSent && <Badge variant="success">Facturé</Badge>}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                <GenerateProgrammeButton participantId={p.id} />
+                                {(isEi || g.sponsor.opcoCode === 'AGEFICE') && (
+                                  <GenerateAgeficeButton participantId={p.id} />
+                                )}
+                                <EditParticipantButton
+                                  participantId={p.id}
+                                  currentPriceHT={Number(p.priceHT)}
+                                  currentStatus={p.enrollmentStatus}
+                                />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 ml-12">
-                        <GenerateProgrammeButton participantId={p.id} />
-                        {(isEi || p.sponsorOrg.opcoCode === 'AGEFICE') && (
-                          <GenerateAgeficeButton participantId={p.id} />
-                        )}
-                        <CreateInvoiceButton participantId={p.id} alreadyInvoiced={p.invoiceSent} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                    );
+                  });
+                })()}
+              </div>
             )}
           </section>
         </div>

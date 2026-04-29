@@ -42,6 +42,9 @@ export interface InvoiceData {
   paymentMethod: string;
   paymentIban: string | null;
   paymentBic: string | null;
+  // Si présent : facture multi-participants (groupage par sponsorOrg pour les
+  // salariés d'une SARL). Une ligne par participant avec son montant HT.
+  lines?: { label: string; amountHT: number }[];
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -150,6 +153,23 @@ ${STYLES}
     </tr>
   </thead>
   <tbody>
+    ${
+      d.lines && d.lines.length > 0
+        ? d.lines
+            .map(
+              (line, idx) => `
+    <tr>
+      <td class="designation">
+        ${idx === 0 ? `<strong>${escapeHtml(d.formationTitre)}</strong><div class="sub">Action de formation professionnelle continue (Qualiopi)</div>` : ''}
+        <div class="sub">Apprenant : ${escapeHtml(line.label)}</div>
+      </td>
+      <td class="right">1</td>
+      <td class="right">${fmtEUR.format(line.amountHT)}</td>
+      <td class="right"><strong>${fmtEUR.format(line.amountHT)}</strong></td>
+    </tr>`,
+            )
+            .join('')
+        : `
     <tr>
       <td class="designation">
         <strong>${escapeHtml(d.formationTitre)}</strong>
@@ -159,7 +179,8 @@ ${STYLES}
       <td class="right">1</td>
       <td class="right">${fmtEUR.format(d.amountHT)}</td>
       <td class="right"><strong>${fmtEUR.format(d.amountHT)}</strong></td>
-    </tr>
+    </tr>`
+    }
   </tbody>
 </table>
 

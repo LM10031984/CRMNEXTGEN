@@ -164,6 +164,159 @@ export async function createInvoiceFromParticipant(
   return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
 }
 
+/**
+ * Crée UNE facture groupée pour TOUS les participants d'une session payés
+ * par un même sponsor (typiquement les salariés d'une SARL employeur sur la
+ * même session). 1 PDF avec N lignes au lieu de N factures distinctes.
+ *
+ * Pour les EI/AE, le résultat sera identique à createInvoiceFromParticipant
+ * (1 sponsor = 1 personne = 1 ligne).
+ */
+export async function createInvoiceForSponsorGroup(input: {
+  sessionId: string;
+  sponsorOrgId: string;
+  vatRate?: number;
+  dueDateDays?: number;
+  notes?: string;
+}): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    include: {
+      product: true,
+      participants: {
+        where: { sponsorOrgId: input.sponsorOrgId, invoiceSent: false },
+        include: { person: true },
+        orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
+      },
+    },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable' };
+  if (session.participants.length === 0) {
+    return { ok: false, error: 'Aucun participant non facturé pour ce sponsor sur cette session.' };
+  }
+
+  const sponsor = await prisma.organization.findFirst({
+    where: { id: input.sponsorOrgId, tenantId: user.tenantId },
+  });
+  if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
+
+  const vatRate = input.vatRate ?? 0;
+  const dueDays = input.dueDateDays ?? 30;
+  const totalHT = session.participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
+  const totalTTC = Math.round(totalHT * (1 + vatRate / 100) * 100) / 100;
+
+  const participantIds = session.participants.map((p) => p.id);
+
+  const invoice = await prisma.$transaction(async (tx) => {
+    const number = await nextInvoiceNumber(tx, user.tenantId);
+    return tx.invoice.create({
+      data: {
+        tenantId: user.tenantId,
+        number,
+        status: 'ISSUED',
+        // Si 1 seul participant, on remplit aussi participantId pour compatibilité
+        participantId: participantIds.length === 1 ? participantIds[0] : null,
+        participantIds: participantIds as Prisma.InputJsonValue,
+        sessionId: session.id,
+        payerOrgId: sponsor.id,
+        amountHT: new Prisma.Decimal(totalHT),
+        vatRate: new Prisma.Decimal(vatRate),
+        amountTTC: new Prisma.Decimal(totalTTC),
+        amountPaid: new Prisma.Decimal(0),
+        issueDate: new Date(),
+        dueDate: new Date(Date.now() + dueDays * 86400000),
+        notes: input.notes ?? null,
+      },
+    });
+  });
+
+  // Génération PDF multi-lignes
+  const sponsorAddr = (sponsor.address ?? null) as null | { street?: string; postalCode?: string; city?: string };
+  const lines = session.participants.map((p) => ({
+    label: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+    amountHT: Number(p.priceHT),
+  }));
+
+  const data: InvoiceData = {
+    number: invoice.number,
+    issueDate: invoice.issueDate ?? new Date(),
+    dueDate: invoice.dueDate ?? new Date(),
+    status: invoice.status,
+    ofName: OF.name,
+    ofSiret: OF.siret,
+    ofRnq: OF.rnq,
+    ofAddress: OF.address,
+    ofPhone: OF.phone,
+    ofEmail: OF.email,
+    ofTvaIntra: OF.tvaIntra,
+    payerName: sponsor.legalName,
+    payerSiret: sponsor.siret,
+    payerAddress: sponsorAddr?.street ?? null,
+    payerCp: sponsorAddr?.postalCode ?? null,
+    payerVille: sponsorAddr?.city ?? null,
+    payerEmail: sponsor.email ?? sponsor.emailBilling,
+    apprenantNom: lines.length === 1 ? session.participants[0]!.person.lastName : '',
+    apprenantPrenom: lines.length === 1 ? session.participants[0]!.person.firstName : '',
+    formationTitre: session.product.title,
+    formationCode: session.code,
+    formationDateDebut: session.startDate,
+    formationDateFin: session.endDate,
+    formationDureeHeures: session.product.durationHours,
+    amountHT: totalHT,
+    vatRate,
+    amountTTC: totalTTC,
+    notes: input.notes ?? null,
+    paymentMethod: 'Virement bancaire',
+    paymentIban: OF.iban,
+    paymentBic: OF.bic,
+    lines: lines.length > 1 ? lines : undefined,
+  };
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), `${invoice.number}.html`);
+  } catch (e: any) {
+    return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
+  }
+
+  const hash = createHash('sha256').update(pdfBuffer).digest('hex');
+  const key = `factures/${invoice.number}-${hash.slice(0, 8)}.pdf`;
+  await uploadFile(DOCS_BUCKET, key, pdfBuffer, 'application/pdf');
+
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: { pdfUrl: key, hashSha256: hash },
+  });
+
+  const doc = await prisma.document.create({
+    data: {
+      tenantId: user.tenantId,
+      type: 'FACTURE',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      pdfUrl: key,
+      hashSha256: hash,
+      sessionId: session.id,
+      participantId: participantIds[0] ?? null,
+    },
+  });
+
+  // Marque tous les participants concernés comme facturés
+  await prisma.sessionParticipant.updateMany({
+    where: { id: { in: participantIds } },
+    data: { invoiceSent: true },
+  });
+
+  revalidatePath('/app/factures');
+  revalidatePath('/app/dossiers-opco');
+  revalidatePath(`/app/sessions/${session.id}`);
+
+  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+}
+
 export async function recordInvoicePayment(input: {
   invoiceId: string;
   amount: number;

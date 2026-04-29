@@ -644,6 +644,8 @@ model Invoice {
   // Liens métier
   participantId    String?
   participant      SessionParticipant? @relation(fields: [participantId], references: [id])
+  participantIds   Json?               // si facture multi-participants groupée par sponsor (salariés d'une SARL)
+  sessionId        String?             // session dont sont issus les participants (pour facture groupée)
   payerOrgId       String?
   payerOrg         Organization?       @relation(fields: [payerOrgId], references: [id])
   payerContactId   String? // optionnel : un Contact spécifique

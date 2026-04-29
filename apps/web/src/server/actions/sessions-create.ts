@@ -72,9 +72,17 @@ export async function listTrainers(): Promise<
 > {
   const { user } = await validateRequest();
   if (!user) return [];
-  // Les formateurs = Persons qui ont au moins un LegalLink role=FORMATEUR ou
-  // simplement les Persons marquées comme formateurs. Pour MVP : on cherche
-  // ceux qui ont legalLinks role=FORMATEUR OU ceux ayant déjà animé une session.
+
+  // Aligne la définition "qui est un formateur" avec celle de la page
+  // /app/formateurs : LegalLink role=FORMATEUR OU ExternalIdentity
+  // entityType=Person.Trainer (créé à l'import des formateurs SmartOF)
+  // OU déjà animé au moins une session.
+  const externalIds = await prisma.externalIdentity.findMany({
+    where: { tenantId: user.tenantId, entityType: 'Person.Trainer' },
+    select: { entityId: true },
+  });
+  const trainerIdsFromExternal = externalIds.map((e) => e.entityId);
+
   return prisma.person.findMany({
     where: {
       tenantId: user.tenantId,
@@ -82,11 +90,12 @@ export async function listTrainers(): Promise<
       OR: [
         { legalLinks: { some: { role: 'FORMATEUR' } } },
         { trainerSessions: { some: {} } },
+        { id: { in: trainerIdsFromExternal } },
       ],
     },
     orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     select: { id: true, firstName: true, lastName: true, email: true },
-    take: 30,
+    take: 50,
   });
 }
 

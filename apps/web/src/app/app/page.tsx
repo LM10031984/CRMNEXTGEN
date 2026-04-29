@@ -85,12 +85,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <CaCard icon={TrendingUp} label="CA prévu" value={stats.ca.total} accent="primary" />
-          <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" />
-          <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} />
-          <CaCard icon={Banknote} label="Facturé" value={stats.ca.invoiced} />
-          <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" />
-          <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} />
+          <CaCard icon={TrendingUp} label="CA prévu" value={stats.ca.total} accent="primary" href={`/app/inscriptions${year ? `?year=${year}` : ''}`} />
+          <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" href={`/app/sessions?status=signed${year ? `&year=${year}` : ''}`} />
+          <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} href="/app/sessions?upcoming=1" />
+          <CaCard icon={Banknote} label="Facturé" value={stats.ca.invoiced} href="/app/factures" />
+          <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" href="/app/factures?status=collected" />
+          <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} href="/app/factures?status=remaining" />
         </div>
       </section>
 
@@ -240,12 +240,14 @@ function CaCard({
   value,
   hint,
   accent,
+  href,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   hint?: string;
   accent?: 'primary' | 'success' | 'warning' | 'default';
+  href?: string;
 }) {
   const cls =
     accent === 'primary'
@@ -263,15 +265,26 @@ function CaCard({
         : accent === 'warning'
           ? 'text-amber-700'
           : 'text-muted-foreground';
-  return (
-    <div className={`rounded-xl border p-4 ${cls}`}>
+  const inner = (
+    <>
       <div className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wide opacity-80 mb-2 ${iconCls}`}>
         <Icon className="h-3 w-3" /> {label}
       </div>
       <div className="text-lg font-semibold tabular-nums">{fmtEUR.format(value)}</div>
       {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href as any}
+        className={`rounded-xl border p-4 ${cls} block hover:shadow-sm hover:scale-[1.01] transition-all cursor-pointer`}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={`rounded-xl border p-4 ${cls}`}>{inner}</div>;
 }
 
 function PerfCard({
