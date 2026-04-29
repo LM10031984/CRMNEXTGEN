@@ -11,6 +11,11 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     typedRoutes: true,
+    serverActions: {
+      // Upload public pré-inscription : CNI/RIB/CFP scannés peuvent peser 3-8 Mo.
+      // Le serveur autorise 10 Mo / fichier × 3 fichiers + champs déclaratifs.
+      bodySizeLimit: '40mb',
+    },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
 };
