@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { GenerateProgrammeButton } from '@/components/sessions/generate-programme-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
@@ -141,6 +142,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                           )}
                           <div className="text-xs text-muted-foreground">{p.enrollmentStatus}</div>
                         </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 ml-12">
+                        <GenerateProgrammeButton participantId={p.id} />
                       </div>
                     </li>
                   );

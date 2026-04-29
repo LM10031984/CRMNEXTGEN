@@ -11,6 +11,7 @@ const ACCESS_KEY = process.env.S3_ACCESS_KEY ?? 'qualiof';
 const SECRET_KEY = process.env.S3_SECRET_KEY ?? 'qualiof_dev_minio';
 
 export const PREENROLLMENT_BUCKET = 'preinscriptions';
+export const DOCS_BUCKET = process.env.S3_BUCKET_DOCS ?? 'qualiof-docs';
 
 let _client: S3Client | null = null;
 
