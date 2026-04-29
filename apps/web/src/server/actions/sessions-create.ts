@@ -168,7 +168,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
         data: {
           sessionId: created.id,
           personId: trainerPersonId,
-          isLead: input.trainerPersonIds[0] === trainerPersonId,
+          role: input.trainerPersonIds[0] === trainerPersonId ? 'LEAD' : 'CO',
         },
       });
     }

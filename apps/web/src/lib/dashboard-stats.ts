@@ -317,7 +317,7 @@ export async function getDashboardStats(
 
     // Pipeline
     prisma.lead.count({
-      where: { tenantId, status: { in: ['NEW', 'CONTACTED', 'TO_FOLLOWUP', 'RDV', 'HOT'] } },
+      where: { tenantId, status: { in: ['NEW', 'CONTACTED', 'TO_FOLLOWUP', 'QUALIFIED', 'PROPOSAL_SENT', 'NEGOTIATION'] } },
     }),
     prisma.preEnrollment.count({
       where: { tenantId, status: { in: ['SUBMITTED', 'EXTRACTING', 'EXTRACTED'] } },

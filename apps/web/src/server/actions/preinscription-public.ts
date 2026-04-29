@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { uploadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
+import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
 
 interface SubmitInput {
   token: string;
@@ -102,5 +103,32 @@ export async function submitPreEnrollmentForm(
   });
 
   revalidatePath('/app/preinscriptions');
+
+  // Déclenche l'extraction IA en background (fire-and-forget)
+  // L'utilisateur reçoit la confirmation immédiatement, l'IA tourne en parallèle.
+  Promise.resolve().then(() =>
+    extractPreEnrollmentDocuments(pe.id).catch((err) => {
+      console.error('Extraction IA échouée pour', pe.id, err);
+    }),
+  );
+
+  return { ok: true };
+}
+
+/**
+ * Server action manuelle : relancer l'extraction IA pour une pré-inscription.
+ * Utile depuis la page admin si la 1ère extraction a échoué ou pour reprocesser.
+ */
+export async function retriggerExtraction(preEnrollmentId: string): Promise<{ ok: boolean; error?: string }> {
+  const pe = await prisma.preEnrollment.findUnique({ where: { id: preEnrollmentId } });
+  if (!pe) return { ok: false, error: 'Pré-inscription introuvable' };
+  // Lancement non bloquant
+  Promise.resolve().then(() =>
+    extractPreEnrollmentDocuments(preEnrollmentId).catch((err) => {
+      console.error('Re-extraction échouée', err);
+    }),
+  );
+  revalidatePath('/app/preinscriptions');
+  revalidatePath(`/app/preinscriptions/${preEnrollmentId}`);
   return { ok: true };
 }

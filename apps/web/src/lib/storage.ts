@@ -65,9 +65,10 @@ export async function uploadFile(
 export async function downloadFile(bucket: string, key: string): Promise<Buffer> {
   const r = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!r.Body) throw new Error('Fichier vide ou introuvable');
-  // @ts-expect-error - sdk renvoie un stream Node ou un Web stream selon environnement
   const chunks: Uint8Array[] = [];
-  // @ts-expect-error
-  for await (const chunk of r.Body) chunks.push(chunk as Uint8Array);
+  // sdk renvoie un stream Node ou un Web stream selon environnement
+  for await (const chunk of r.Body as unknown as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
   return Buffer.concat(chunks);
 }
