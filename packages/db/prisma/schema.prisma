@@ -1005,6 +1005,8 @@ model AgeficePointAccueil {
   phone          String?          // "04 93 13 75 00"
   email          String?
   website        String?
+  contactName    String?          // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
+  numberPta      String?          // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
   source         String           @default("agefice.fr-2025") // versioning du référentiel
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
