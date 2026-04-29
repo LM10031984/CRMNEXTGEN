@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { GenerateProgrammeButton } from '@/components/sessions/generate-programme-button';
 import { GenerateAgeficeButton } from '@/components/sessions/generate-agefice-button';
+import { CreateInvoiceButton } from '@/components/invoices/create-invoice-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
@@ -149,6 +150,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                         {(isEi || p.sponsorOrg.opcoCode === 'AGEFICE') && (
                           <GenerateAgeficeButton participantId={p.id} />
                         )}
+                        <CreateInvoiceButton participantId={p.id} alreadyInvoiced={p.invoiceSent} />
                       </div>
                     </li>
                   );

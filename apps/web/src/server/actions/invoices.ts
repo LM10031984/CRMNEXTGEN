@@ -1,0 +1,222 @@
+'use server';
+
+import { createHash } from 'node:crypto';
+import { revalidatePath } from 'next/cache';
+import { prisma, Prisma } from '@qualiof/db';
+import { validateRequest } from '@/lib/auth';
+import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
+import { renderHtmlToPdf } from '@/lib/pdf-render';
+import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
+
+const OF = {
+  name: process.env.OF_NAME ?? 'Start Academy',
+  siret: process.env.OF_SIRET ?? '00000000000000',
+  rnq: process.env.OF_RNQ ?? '— RNQ à compléter —',
+  address: process.env.OF_ADDRESS ?? '— Adresse à compléter —',
+  phone: process.env.OF_PHONE ?? '04 00 00 00 00',
+  email: process.env.OF_EMAIL ?? 'contact@start-academy.fr',
+  tvaIntra: process.env.OF_TVA_INTRA ?? null,
+  iban: process.env.OF_IBAN ?? null,
+  bic: process.env.OF_BIC ?? null,
+};
+
+/**
+ * Génère le prochain numéro FAC-NNNNNN en transaction (lock optimiste).
+ * Pas de "trou" possible : on prend le max puis +1.
+ */
+async function nextInvoiceNumber(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
+  const last = await tx.invoice.findFirst({
+    where: { tenantId, number: { startsWith: 'FAC-' } },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
+  const n = last ? parseInt(last.number.replace('FAC-', ''), 10) || 0 : 0;
+  return `FAC-${String(n + 1).padStart(6, '0')}`;
+}
+
+interface CreateInvoiceInput {
+  participantId: string;
+  vatRate?: number; // défaut 0 (exonération formation pro)
+  dueDateDays?: number; // défaut 30j
+  notes?: string;
+}
+
+export async function createInvoiceFromParticipant(
+  input: CreateInvoiceInput,
+): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const participant = await prisma.sessionParticipant.findFirst({
+    where: { id: input.participantId, session: { tenantId: user.tenantId } },
+    include: {
+      person: true,
+      sponsorOrg: true,
+      session: { include: { product: true } },
+    },
+  });
+  if (!participant) return { ok: false, error: 'Inscription introuvable' };
+
+  const session = participant.session;
+  const product = session.product;
+  const vatRate = input.vatRate ?? 0;
+  const dueDays = input.dueDateDays ?? 30;
+  const amountHT = Number(participant.priceHT);
+  const amountTTC = Math.round(amountHT * (1 + vatRate / 100) * 100) / 100;
+
+  // Création atomique : numéro + invoice
+  const invoice = await prisma.$transaction(async (tx) => {
+    const number = await nextInvoiceNumber(tx, user.tenantId);
+    return tx.invoice.create({
+      data: {
+        tenantId: user.tenantId,
+        number,
+        status: 'ISSUED',
+        participantId: participant.id,
+        payerOrgId: participant.sponsorOrg.id,
+        amountHT: new Prisma.Decimal(amountHT),
+        vatRate: new Prisma.Decimal(vatRate),
+        amountTTC: new Prisma.Decimal(amountTTC),
+        amountPaid: new Prisma.Decimal(0),
+        issueDate: new Date(),
+        dueDate: new Date(Date.now() + dueDays * 86400000),
+        notes: input.notes ?? null,
+      },
+    });
+  });
+
+  // Génération PDF
+  const sponsorAddr = (participant.sponsorOrg.address ?? null) as null | { street?: string; postalCode?: string; city?: string };
+  const data: InvoiceData = {
+    number: invoice.number,
+    issueDate: invoice.issueDate ?? new Date(),
+    dueDate: invoice.dueDate ?? new Date(),
+    status: invoice.status,
+    ofName: OF.name,
+    ofSiret: OF.siret,
+    ofRnq: OF.rnq,
+    ofAddress: OF.address,
+    ofPhone: OF.phone,
+    ofEmail: OF.email,
+    ofTvaIntra: OF.tvaIntra,
+    payerName: participant.sponsorOrg.legalName,
+    payerSiret: participant.sponsorOrg.siret,
+    payerAddress: sponsorAddr?.street ?? null,
+    payerCp: sponsorAddr?.postalCode ?? null,
+    payerVille: sponsorAddr?.city ?? null,
+    payerEmail: participant.sponsorOrg.email ?? participant.sponsorOrg.emailBilling,
+    apprenantNom: participant.person.lastName,
+    apprenantPrenom: participant.person.firstName,
+    formationTitre: product.title,
+    formationCode: session.code,
+    formationDateDebut: session.startDate,
+    formationDateFin: session.endDate,
+    formationDureeHeures: product.durationHours,
+    amountHT,
+    vatRate,
+    amountTTC,
+    notes: input.notes ?? null,
+    paymentMethod: 'Virement bancaire',
+    paymentIban: OF.iban,
+    paymentBic: OF.bic,
+  };
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), `${invoice.number}.html`);
+  } catch (e: any) {
+    return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
+  }
+
+  const hash = createHash('sha256').update(pdfBuffer).digest('hex');
+  const key = `factures/${invoice.number}-${hash.slice(0, 8)}.pdf`;
+  await uploadFile(DOCS_BUCKET, key, pdfBuffer, 'application/pdf');
+
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: { pdfUrl: key, hashSha256: hash },
+  });
+
+  // Crée aussi un Document type=FACTURE pour la cohérence
+  const doc = await prisma.document.create({
+    data: {
+      tenantId: user.tenantId,
+      type: 'FACTURE',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      pdfUrl: key,
+      hashSha256: hash,
+      sessionId: session.id,
+      participantId: participant.id,
+    },
+  });
+
+  // Marque l'inscription comme facturée
+  await prisma.sessionParticipant.update({
+    where: { id: participant.id },
+    data: { invoiceSent: true },
+  });
+
+  revalidatePath('/app/factures');
+  revalidatePath('/app/dossiers-opco');
+  revalidatePath(`/app/sessions/${session.id}`);
+
+  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+}
+
+export async function recordInvoicePayment(input: {
+  invoiceId: string;
+  amount: number;
+  method: string;
+  receivedAt: string; // ISO
+  reference?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: input.invoiceId, tenantId: user.tenantId },
+    include: { participant: true },
+  });
+  if (!invoice) return { ok: false, error: 'Facture introuvable' };
+
+  const newPaid = Number(invoice.amountPaid) + input.amount;
+  const fullyPaid = newPaid >= Number(invoice.amountTTC);
+
+  await prisma.$transaction([
+    prisma.invoicePayment.create({
+      data: {
+        invoiceId: invoice.id,
+        amount: new Prisma.Decimal(input.amount),
+        method: input.method,
+        receivedAt: new Date(input.receivedAt),
+        reference: input.reference ?? null,
+      },
+    }),
+    prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        amountPaid: new Prisma.Decimal(newPaid),
+        status: fullyPaid ? 'PAID' : 'PARTIAL',
+        paidAt: fullyPaid ? new Date() : invoice.paidAt,
+      },
+    }),
+    ...(fullyPaid && invoice.participantId
+      ? [
+          prisma.sessionParticipant.update({
+            where: { id: invoice.participantId },
+            data: {
+              paymentReceived: true,
+              amountCollected: new Prisma.Decimal(invoice.participant!.priceHT),
+              amountRemaining: new Prisma.Decimal(0),
+            },
+          }),
+        ]
+      : []),
+  ]);
+
+  revalidatePath('/app/factures');
+  revalidatePath(`/app/factures/${invoice.id}`);
+  revalidatePath('/app/dossiers-opco');
+  return { ok: true };
+}
