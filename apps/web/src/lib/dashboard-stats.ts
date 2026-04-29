@@ -118,6 +118,14 @@ export async function getDashboardStats(
   const participantSessionFilter: Prisma.TrainingSessionWhereInput = { tenantId };
   if (year !== null) participantSessionFilter.startDate = yearRange(year);
 
+  // Fragment SQL réutilisable pour filtrer les sessions par année dans les
+  // requêtes raw. Prisma exige `Prisma.sql\`...\`` (et non un tagged template
+  // direct) pour bien aplatir les paramètres des fragments imbriqués.
+  const yearSqlFilter =
+    year !== null
+      ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}`
+      : Prisma.empty;
+
   const [
     persons,
     orgs,
@@ -178,15 +186,15 @@ export async function getDashboardStats(
       },
     }),
     // Heures formées : durée produit × nb participants
-    prisma.$queryRaw<Array<{ totalHours: number | null }>>`
+    prisma.$queryRaw<Array<{ totalHours: number | null }>>(Prisma.sql`
       SELECT COALESCE(SUM(pr."durationHours" * (
         SELECT COUNT(*) FROM "SessionParticipant" sp WHERE sp."sessionId" = s.id
       ))::float8, 0) AS "totalHours"
       FROM "TrainingSession" s
       JOIN "TrainingProduct" pr ON pr.id = s."productId"
       WHERE s."tenantId" = ${tenantId}
-      ${year !== null ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}` : Prisma.empty}
-    `,
+      ${yearSqlFilter}
+    `),
 
     // CA
     prisma.sessionParticipant.aggregate({
@@ -228,7 +236,7 @@ export async function getDashboardStats(
     }),
 
     // CA par mois (raw SQL pour groupement)
-    prisma.$queryRaw<Array<{ month: Date; nb: bigint; revenue: number | null; collected: number | null }>>`
+    prisma.$queryRaw<Array<{ month: Date; nb: bigint; revenue: number | null; collected: number | null }>>(Prisma.sql`
       SELECT date_trunc('month', s."startDate") AS month,
              count(distinct s.id)::bigint AS nb,
              coalesce(sum(p."priceHT")::float8, 0) AS revenue,
@@ -236,41 +244,41 @@ export async function getDashboardStats(
       FROM "TrainingSession" s
       LEFT JOIN "SessionParticipant" p ON p."sessionId" = s.id
       WHERE s."tenantId" = ${tenantId}
-      ${year !== null ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}` : Prisma.empty}
+      ${yearSqlFilter}
       GROUP BY date_trunc('month', s."startDate")
       ORDER BY month ASC
-    `,
+    `),
 
     // Top 5 sessions rentables
-    prisma.$queryRaw<Array<{ id: string; code: string; name: string | null; startDate: Date; nbParticipants: bigint; revenue: number }>>`
+    prisma.$queryRaw<Array<{ id: string; code: string; name: string | null; startDate: Date; nbParticipants: bigint; revenue: number }>>(Prisma.sql`
       SELECT s.id, s.code, s.name, s."startDate",
              count(p.id)::bigint AS "nbParticipants",
              coalesce(sum(p."priceHT")::float8, 0) AS revenue
       FROM "TrainingSession" s
       LEFT JOIN "SessionParticipant" p ON p."sessionId" = s.id
       WHERE s."tenantId" = ${tenantId}
-      ${year !== null ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}` : Prisma.empty}
+      ${yearSqlFilter}
       GROUP BY s.id, s.code, s.name, s."startDate"
       ORDER BY revenue DESC
       LIMIT 5
-    `,
+    `),
 
     // Top 5 commanditaires
-    prisma.$queryRaw<Array<{ orgId: string; legalName: string; sessions: bigint; revenue: number }>>`
+    prisma.$queryRaw<Array<{ orgId: string; legalName: string; sessions: bigint; revenue: number }>>(Prisma.sql`
       SELECT o.id AS "orgId", o."legalName", count(distinct p."sessionId")::bigint AS sessions,
              coalesce(sum(p."priceHT")::float8, 0) AS revenue
       FROM "Organization" o
       JOIN "SessionParticipant" p ON p."sponsorOrgId" = o.id
       JOIN "TrainingSession" s ON s.id = p."sessionId"
       WHERE o."tenantId" = ${tenantId}
-      ${year !== null ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}` : Prisma.empty}
+      ${yearSqlFilter}
       GROUP BY o.id, o."legalName"
       ORDER BY revenue DESC
       LIMIT 5
-    `,
+    `),
 
     // Top 5 produits
-    prisma.$queryRaw<Array<{ productId: string; title: string; sessions: bigint; participants: bigint; revenue: number }>>`
+    prisma.$queryRaw<Array<{ productId: string; title: string; sessions: bigint; participants: bigint; revenue: number }>>(Prisma.sql`
       SELECT pr.id AS "productId", pr.title,
              count(distinct s.id)::bigint AS sessions,
              count(p.id)::bigint AS participants,
@@ -279,11 +287,11 @@ export async function getDashboardStats(
       JOIN "TrainingSession" s ON s."productId" = pr.id
       LEFT JOIN "SessionParticipant" p ON p."sessionId" = s.id
       WHERE pr."tenantId" = ${tenantId}
-      ${year !== null ? Prisma.sql`AND s."startDate" >= ${yearRange(year).gte} AND s."startDate" < ${yearRange(year).lt}` : Prisma.empty}
+      ${yearSqlFilter}
       GROUP BY pr.id, pr.title
       ORDER BY revenue DESC
       LIMIT 5
-    `,
+    `),
 
     // Sessions récentes
     prisma.trainingSession.findMany({
