@@ -16,6 +16,7 @@ import {
   ListChecks,
   Landmark,
   ClipboardCheck,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +60,7 @@ const NAV: NavSection[] = [
     title: 'Activité',
     items: [
       { label: 'Sessions', href: '/app/sessions', icon: Calendar },
+      { label: 'Pré-inscriptions', href: '/app/preinscriptions', icon: Inbox },
       { label: 'Inscriptions', href: '/app/inscriptions', icon: ListChecks },
       { label: 'Dossiers OPCO', href: '/app/dossiers-opco', icon: ClipboardCheck },
       { label: 'Factures', href: '/app/factures', icon: Receipt },

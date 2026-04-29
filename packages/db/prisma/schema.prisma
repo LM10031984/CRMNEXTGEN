@@ -356,6 +356,7 @@ model TrainingSession {
   documents             Document[]
   pedagogicalAssets     PedagogicalAsset[]
   leads                 Lead[]
+  preEnrollments        PreEnrollment[]
   tasks                 Task[]
   comments              InternalComment[]
   createdAt             DateTime             @default(now())
@@ -923,6 +924,72 @@ model AgeficeProfile {
   pdfTemplateVersion String              @default("2023-2024")
   updatedAt          DateTime            @updatedAt
   createdAt          DateTime            @default(now())
+}
+
+// Pré-inscription publique : un contact reçoit un lien unique, dépose ses pièces,
+// l'IA extrait les données, l'admin valide et convertit en Person+Org+LegalLink.
+enum PreEnrollmentStatus {
+  PENDING_FORM // lien généré, attente du contact
+  SUBMITTED // formulaire soumis, fichiers reçus
+  EXTRACTING // pipeline IA en cours
+  EXTRACTED // données extraites, prêt à valider
+  VALIDATED // admin a validé
+  CONVERTED // converti en Person + Org + LegalLink + AgeficeProfile
+  EXPIRED
+  REJECTED
+}
+
+model PreEnrollment {
+  id                     String              @id @default(uuid())
+  tenantId               String
+  // Lien public unique
+  token                  String              @unique
+  expiresAt              DateTime
+  // Émission
+  sentByUserId           String?
+  sentTo                 String? // email contact (info audit)
+  sentAt                 DateTime?
+  // Identité saisie par le contact
+  firstName              String?
+  lastName               String?
+  email                  String?
+  phone                  String?
+  birthDate              DateTime?
+  birthPlace             String?
+  professionalStatus     String? // "Agent commercial" / "Salarié" / "Dirigeant"
+  educationLevel         String?
+  diploma                String?
+  professionalExperience String?
+  // Fichiers MinIO (clés relatives au bucket)
+  cniKey                 String?
+  ribKey                 String?
+  cfpKey                 String? // Attestation CFP AGEFICE
+  rgpdAcceptedAt         DateTime?
+  submittedAt            DateTime?
+  // Pipeline IA
+  status                 PreEnrollmentStatus @default(PENDING_FORM)
+  extractedData          Json? // données structurées extraites par l'IA
+  aiExtractedAt          DateTime?
+  aiModel                String?
+  aiPromptVersion        String?
+  aiErrorMsg             String?
+  // Validation admin
+  validatedByUserId      String?
+  validatedAt            DateTime?
+  rejectionReason        String?
+  // Conversion en apprenant
+  convertedToPersonId    String?
+  convertedToOrgId       String?
+  convertedAt            DateTime?
+  // Pré-inscription ciblée à une session (optionnel)
+  intendedSessionId      String?
+  intendedSession        TrainingSession?    @relation(fields: [intendedSessionId], references: [id])
+  // Audit
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@index([tenantId, status])
+  @@index([token])
 }
 
 // Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
