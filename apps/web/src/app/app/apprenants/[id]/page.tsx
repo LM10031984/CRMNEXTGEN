@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
+import { EditPersonButton } from '@/components/forms/edit-person-button';
 import { Badge } from '@/components/ui/badge';
 import { LegalLinkEditor } from '@/components/editors/legal-link-editor';
 
@@ -58,16 +59,35 @@ export default async function ApprenantDetailPage({ params }: { params: Promise<
         <ArrowLeft className="h-4 w-4" /> Retour à la liste
       </Link>
 
-      <PageHeader
-        title={
-          <span className="flex items-center gap-3">
-            {person.lastName.toUpperCase()} {person.firstName}
-            {isEi && <Badge variant="primary">EI / multi-casquettes</Badge>}
-            {person.requiresCleanup && <Badge variant="warning">à corriger</Badge>}
-          </span>
-        }
-        subtitle={person.professionalStatus ?? undefined}
-      />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader
+          title={
+            <span className="flex items-center gap-3">
+              {person.lastName.toUpperCase()} {person.firstName}
+              {isEi && <Badge variant="primary">EI / multi-casquettes</Badge>}
+              {person.requiresCleanup && <Badge variant="warning">à corriger</Badge>}
+            </span>
+          }
+          subtitle={person.professionalStatus ?? undefined}
+        />
+        <EditPersonButton
+          personId={person.id}
+          current={{
+            civility: person.civility,
+            firstName: person.firstName,
+            lastName: person.lastName,
+            birthName: person.birthName,
+            birthDate: person.birthDate,
+            email: person.email,
+            phone: person.phone,
+            educationLevel: person.educationLevel,
+            diplomas: person.diplomas,
+            professionalExperience: person.professionalExperience,
+            professionalStatus: person.professionalStatus,
+            bpfDefaultStatus: person.bpfDefaultStatus,
+          }}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

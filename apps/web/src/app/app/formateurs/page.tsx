@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Plus, Mail, Phone, MapPin, Briefcase } from 'lucide-react';
+import { Mail, Phone, MapPin, Briefcase } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { CreateTrainerButton } from '@/components/forms/create-trainer-button';
 
 export default async function FormateursPage() {
   const { user } = await validateRequest();
@@ -58,16 +59,7 @@ export default async function FormateursPage() {
       <PageHeader
         title="Formateurs"
         subtitle={`${allTrainers.length} formateur${allTrainers.length > 1 ? 's' : ''} (interne ou sous-traitant)`}
-        actions={
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors opacity-60 cursor-not-allowed"
-            title="Disponible au palier 2.2"
-          >
-            <Plus className="h-4 w-4" /> Nouveau formateur
-          </button>
-        }
+        actions={<CreateTrainerButton variant="primary" />}
       />
 
       {allTrainers.length === 0 ? (

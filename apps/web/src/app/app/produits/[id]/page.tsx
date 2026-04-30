@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { EditProductButton } from '@/components/forms/edit-product-button';
 
 const MOD_LABEL: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -35,26 +36,45 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <ArrowLeft className="h-4 w-4" /> Retour au catalogue
       </Link>
 
-      <PageHeader
-        title={product.title}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2 mt-1">
-            <Badge variant="muted" className="font-mono">{product.code}</Badge>
-            <Badge variant="info">{MOD_LABEL[product.modality] ?? product.modality}</Badge>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" /> {product.durationHours}h
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3.5 w-3.5" /> {product.capacityMin}–{product.capacityMax} personnes
-            </span>
-            {Number(product.priceHT) > 0 && (
-              <span className="text-xs font-medium text-foreground">
-                {Number(product.priceHT).toFixed(0)} € HT
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader
+          title={product.title}
+          subtitle={
+            <span className="flex flex-wrap items-center gap-2 mt-1">
+              <Badge variant="muted" className="font-mono">{product.code}</Badge>
+              <Badge variant="info">{MOD_LABEL[product.modality] ?? product.modality}</Badge>
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" /> {product.durationHours}h
               </span>
-            )}
-          </span>
-        }
-      />
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="h-3.5 w-3.5" /> {product.capacityMin}–{product.capacityMax} personnes
+              </span>
+              {Number(product.priceHT) > 0 && (
+                <span className="text-xs font-medium text-foreground">
+                  {Number(product.priceHT).toFixed(0)} € HT
+                </span>
+              )}
+            </span>
+          }
+        />
+        <EditProductButton
+          productId={product.id}
+          current={{
+            title: product.title,
+            theme: product.theme,
+            durationHours: product.durationHours,
+            priceHT: Number(product.priceHT),
+            prerequisites: product.prerequisites,
+            targetAudience: product.targetAudience,
+            pedagogicalMethods: product.pedagogicalMethods,
+            pedagogicalSupport: product.pedagogicalSupport,
+            evaluationMethods: product.evaluationMethods,
+            trainerProfile: product.trainerProfile,
+            accessibility: product.accessibility,
+            accessConditions: product.accessConditions,
+          }}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

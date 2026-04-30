@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
+import { EditOrganizationButton } from '@/components/forms/edit-organization-button';
 import { Badge } from '@/components/ui/badge';
 
 const FORM_LABEL: Record<string, string> = {
@@ -69,23 +70,41 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
         <ArrowLeft className="h-4 w-4" /> Retour à la liste
       </Link>
 
-      <PageHeader
-        title={
-          <span className="flex items-center gap-3">
-            {org.legalName}
-            <Badge variant="muted">{FORM_LABEL[org.legalForm] ?? org.legalForm}</Badge>
-            {org.opcoCode && <Badge variant="info">OPCO {org.opcoCode}</Badge>}
-            {org.requiresCleanup && (
-              <Badge variant="warning">
-                <AlertTriangle className="h-3 w-3" /> à corriger
-              </Badge>
-            )}
-          </span>
-        }
-        subtitle={
-          [org.network, org.brandName, org.representative].filter(Boolean).join(' · ') || undefined
-        }
-      />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader
+          title={
+            <span className="flex items-center gap-3">
+              {org.legalName}
+              <Badge variant="muted">{FORM_LABEL[org.legalForm] ?? org.legalForm}</Badge>
+              {org.opcoCode && <Badge variant="info">OPCO {org.opcoCode}</Badge>}
+              {org.requiresCleanup && (
+                <Badge variant="warning">
+                  <AlertTriangle className="h-3 w-3" /> à corriger
+                </Badge>
+              )}
+            </span>
+          }
+          subtitle={
+            [org.network, org.brandName, org.representative].filter(Boolean).join(' · ') || undefined
+          }
+        />
+        <EditOrganizationButton
+          organizationId={org.id}
+          current={{
+            legalName: org.legalName,
+            legalForm: org.legalForm,
+            siren: org.siren,
+            siret: org.siret,
+            naf: org.naf,
+            vatNumber: org.vatNumber,
+            email: org.email,
+            phone: org.phone,
+            opcoCode: org.opcoCode,
+            network: org.network,
+            activityDescription: org.activityDescription,
+          }}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
