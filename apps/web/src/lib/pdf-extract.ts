@@ -21,16 +21,28 @@ const VISION_OCR_PROMPT =
   "Si l'image est un document d'identité (CNI / passeport / titre de séjour), transcris aussi le contenu de la MRZ (zone à lecture optique en bas).";
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> {
+  // pdf-parse v2 expose une classe PDFParse, plus la fonction default
+  // legacy. L'ancienne syntaxe `pdfParse(buffer)` échoue avec
+  // "Object.defineProperty called on non-object".
   // @ts-expect-error import ESM dynamique d'un module CJS
-  const pdfParse = (await import('pdf-parse')).default ?? (await import('pdf-parse'));
+  const mod = await import('pdf-parse');
+  const PDFParse = mod.PDFParse ?? mod.default?.PDFParse;
+  if (!PDFParse) {
+    return { text: '', pages: 0, warnings: ['pdf-parse non chargé : classe PDFParse introuvable.'] };
+  }
   try {
-    const r = await pdfParse(buffer);
-    const text = (r.text ?? '').trim();
+    const parser = new PDFParse({ data: buffer });
+    const r = await parser.getText();
+    const text = ((r.text as string | undefined) ?? '').trim();
+    const pages = (r.pages?.length as number | undefined) ?? (r.numpages as number | undefined) ?? 0;
     const warnings: string[] = [];
     if (text.length < 30) {
-      warnings.push('Texte extrait très court — le PDF est probablement un scan sans OCR.');
+      // Fallback OCR vision : si le PDF est un scan sans couche texte,
+      // on essaie de l'extraire via Ollama vision (lent mais fonctionnel).
+      // Pour l'instant on remonte juste un warning explicite.
+      warnings.push('Texte extrait très court — le PDF est probablement un scan sans OCR. Re-déposer une photo (JPEG) du document permettrait à l\'OCR vision de le traiter.');
     }
-    return { text, pages: r.numpages ?? 0, warnings };
+    return { text, pages, warnings };
   } catch (e: any) {
     return { text: '', pages: 0, warnings: [`Échec parsing PDF : ${e?.message ?? e}`] };
   }

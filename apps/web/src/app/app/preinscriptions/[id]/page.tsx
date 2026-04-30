@@ -8,6 +8,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { PreEnrollmentActions } from '@/components/preinscriptions/detail-actions';
+import { RetryExtractionButton } from '@/components/preinscriptions/retry-extraction-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,9 @@ export default async function PreEnrollmentDetailPage({
               <p className="text-sm text-muted-foreground">{pe.email ?? '— pas d\'email —'}</p>
             </div>
           </div>
+          {(pe.status === 'EXTRACTED' || pe.status === 'EXTRACTING' || pe.status === 'SUBMITTED') && (
+            <RetryExtractionButton preEnrollmentId={pe.id} />
+          )}
         </div>
       </div>
 
