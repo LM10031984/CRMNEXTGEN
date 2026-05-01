@@ -61,8 +61,8 @@ export async function listLearnersWithAgeficeBudget(opts?: {
   // 2. Agrégat des participations AGEFICE de l'année où le dossier a été monté
   // (financingRequestDate). Cf feedback_budget_agefice_annee_dossier : le budget
   // 3000€/an se compte sur la date de dépôt du dossier, PAS sur la date de la
-  // session. Si financingRequestDate est null (dossier pas encore monté), on
-  // exclut — le budget n'est pas encore consommé.
+  // session. Fallback session.startDate quand financingRequestDate est null
+  // (la plupart des inscriptions importées de SmartOF n'ont pas cette date).
   const personIds = persons.map((p) => p.id);
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
@@ -72,7 +72,13 @@ export async function listLearnersWithAgeficeBudget(opts?: {
     where: {
       personId: { in: personIds },
       sponsorOrg: { opcoCode: 'AGEFICE' },
-      financingRequestDate: { gte: yearStart, lt: yearEnd },
+      OR: [
+        { financingRequestDate: { gte: yearStart, lt: yearEnd } },
+        {
+          financingRequestDate: null,
+          session: { startDate: { gte: yearStart, lt: yearEnd } },
+        },
+      ],
     },
     _sum: { priceHT: true },
     _count: { id: true },

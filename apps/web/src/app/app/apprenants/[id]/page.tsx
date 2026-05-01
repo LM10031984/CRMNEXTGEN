@@ -83,16 +83,17 @@ export default async function ApprenantDetailPage({
   );
 
   // Budget AGEFICE de l'année où le dossier a été monté (financingRequestDate),
-  // PAS l'année de la session (cf mémoire feedback_budget_agefice_annee_dossier).
-  // Tant que le dossier n'est pas monté (financingRequestDate null), on exclut
-  // du calcul : le budget n'est pas encore consommé.
+  // PAS l'année de la session (cf feedback_budget_agefice_annee_dossier).
+  // Fallback session.startDate quand financingRequestDate est null : la majorité
+  // des inscriptions importées de SmartOF n'ont pas cette date, on prend la
+  // date de la session comme proxy raisonnable. Dès que la vraie date du dossier
+  // est saisie, elle prend la priorité.
   const currentYear = new Date().getFullYear();
-  const ageficeParticipations = person.participations.filter(
-    (p) =>
-      p.sponsorOrg?.opcoCode === 'AGEFICE' &&
-      p.financingRequestDate != null &&
-      new Date(p.financingRequestDate).getFullYear() === currentYear,
-  );
+  const ageficeParticipations = person.participations.filter((p) => {
+    if (p.sponsorOrg?.opcoCode !== 'AGEFICE') return false;
+    const refDate = p.financingRequestDate ?? p.session.startDate;
+    return new Date(refDate).getFullYear() === currentYear;
+  });
   const ageficeConsumed = ageficeParticipations.reduce(
     (s, p) => s + Number(p.priceHT),
     0,
