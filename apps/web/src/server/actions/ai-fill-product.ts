@@ -138,23 +138,33 @@ const USER_TEMPLATE = `Génère le programme complet pour une formation Start Ac
 - Modalité : {{MODALITY}}
 - Prix HT par stagiaire : {{PRICE}} €
 
-CHOIX DU FORMAT programMd selon la durée :
-- < 12h : format horaire détaillé (## 9h00 – 10h30 | Titre)
-- 14h à 28h : format Jour 1/2/3 + Matin/Après-midi
-- > 28h : format Jour avec sous-thèmes
+RÈGLES DE FORMAT TRÈS IMPORTANTES :
 
-Retourne EXCLUSIVEMENT le JSON suivant (aucun texte avant ou après, pas de code fence) :
+1. "objectives" est un TABLEAU DE CHAÎNES (string[]). Chaque chaîne est UN objectif court (max 30 mots), commençant par un VERBE D'ACTION à l'infinitif (Comprendre, Maîtriser, Identifier, Analyser, Élaborer, Intégrer, Utiliser…). NE JAMAIS commencer un objectif par "À l'issue de la formation" — cette phrase est intro, pas répétée dans chaque puce.
+
+2. "programMd" est une SEULE CHAÎNE de texte au format Markdown (PAS un objet, PAS un tableau). Format selon durée :
+   - <= 8h : format horaire avec sections "## 9h00 – 10h30 | Titre" puis listes "- puce"
+   - 14h à 28h : format "## Jour 1 : Sous-titre" puis "### Matin (9h-12h)" / "### Après-midi (14h-18h)" puis listes
+   - > 28h : format Jour avec sous-thèmes répartis dans la journée
+
+3. "evaluationMethods" : multilignes commençant par "- " — émargement demi-journée, certificat, QCM final, satisfaction stagiaire.
+
+4. "accessibility" : reprend systématiquement "La loi du 5 septembre 2018..." comme phrase d'ouverture.
+
+5. "accessConditions" : commence par "Afin de vous inscrire à notre formation, merci de contacter minimum 14 jours avant le début de la formation." puis convention 7 jours avant, puis subrogation paiement.
+
+Retourne EXCLUSIVEMENT le JSON ci-dessous (aucun texte avant ou après, pas de code fence) :
 {
-  "objectives": ["puce 1", "puce 2", "puce 3", "puce 4"],
+  "objectives": ["Comprendre les fondamentaux de…", "Maîtriser l'utilisation de…", "Identifier les opportunités…", "Élaborer un plan d'action…"],
   "targetAudience": "Description du public visé en 1-3 lignes",
-  "prerequisites": "Description des prérequis ou 'Aucun prérequis spécifique.'",
-  "pedagogicalMethods": "Méthodes pédagogiques (commencer par 'La formation se déroule en présentiel.' puis 1-2 lignes spécifiques)",
+  "prerequisites": "Description courte ou 'Aucun prérequis spécifique.'",
+  "pedagogicalMethods": "La formation se déroule en présentiel.\\nLes formateurs proposeront des mises en situation professionnelles…",
   "pedagogicalSupport": "Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.",
-  "evaluationMethods": "Liste des modalités d'évaluation au format multilignes (émargement + certificat + QCM + satisfaction)",
-  "trainerProfile": "Profil du formateur en 2-4 lignes",
-  "accessibility": "Texte d'accessibilité PMR (loi du 5 septembre 2018...)",
-  "accessConditions": "Modalités d'inscription et délais (14 jours avant + convention 7 jours avant + subrogation)",
-  "programMd": "Programme détaillé en Markdown avec ## et puces, format adapté à la durée"
+  "evaluationMethods": "- Une liste d'émargement est à signer à la demi-journée.\\n- Un certificat de réalisation sera délivré à chaque participant à la fin de la formation.\\n- Une évaluation sous forme de QCM aura lieu en fin de formation.\\n- Évaluation de la satisfaction stagiaire et montée en compétences.",
+  "trainerProfile": "Tous les formateurs de l'équipe Start Academy ont minimum 8 années d'expérience dans l'immobilier…",
+  "accessibility": "La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel »…\\nNotre organisme tente de donner à tous les mêmes chances…",
+  "accessConditions": "Afin de vous inscrire à notre formation, merci de contacter minimum 14 jours avant le début de la formation.\\nUne fois votre inscription validée, nous vous adresserons une convention de formation et une convocation vous sera envoyée par mail 7 jours avant le début de la formation.\\nEn cas de subrogation de paiement, un accord du financeur doit nous être parvenu avec le début de la formation.",
+  "programMd": "## Jour 1 : Titre\\n### Matin (9h-12h)\\n- Point 1\\n- Point 2\\n\\n### Après-midi (14h-18h)\\n- Point 3\\n- Point 4"
 }`;
 
 export async function aiPreFillProduct(input: {
@@ -198,8 +208,46 @@ export async function aiPreFillProduct(input: {
     }
 
     const j = r.parsedJson as Partial<AiProductDraft>;
+
+    // Nettoyage défensif : certains modèles répètent "À l'issue de la
+    // formation le stagiaire sera capable de :" en préfixe de chaque
+    // objectif, on l'enlève. Et les puces qui commencent par - ou • aussi.
+    const cleanObjective = (s: string): string =>
+      s
+        .replace(/^[-•*]\s*/, '')
+        .replace(/^À l['']issue de la formation,?\s+le stagiaire sera capable de\s*:?\s*/i, '')
+        .trim();
+
+    // Si le modèle a renvoyé programMd comme un objet/tableau au lieu d'une
+    // chaîne, on tente une conversion best-effort.
+    const stringifyProgramMd = (v: unknown): string => {
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) {
+        return v
+          .map((day: any) => {
+            const title = day?.jour ?? day?.title ?? '';
+            const sections = Array.isArray(day?.sections) ? day.sections : [];
+            const body = sections
+              .map((sec: any) => {
+                const secTitle = sec?.titre ?? sec?.title ?? '';
+                const items = Array.isArray(sec?.points) ? sec.points : Array.isArray(sec?.items) ? sec.items : [];
+                return `### ${secTitle}\n${items.map((p: string) => `- ${p}`).join('\n')}`;
+              })
+              .join('\n\n');
+            return `## ${title}\n${body}`;
+          })
+          .join('\n\n');
+      }
+      return '';
+    };
+
     const draft: AiProductDraft = {
-      objectives: Array.isArray(j.objectives) ? j.objectives.filter((o): o is string => typeof o === 'string') : [],
+      objectives: Array.isArray(j.objectives)
+        ? j.objectives
+            .filter((o): o is string => typeof o === 'string')
+            .map(cleanObjective)
+            .filter(Boolean)
+        : [],
       targetAudience: typeof j.targetAudience === 'string' ? j.targetAudience : '',
       prerequisites: typeof j.prerequisites === 'string' ? j.prerequisites : '',
       pedagogicalMethods: typeof j.pedagogicalMethods === 'string' ? j.pedagogicalMethods : '',
@@ -210,7 +258,7 @@ export async function aiPreFillProduct(input: {
       trainerProfile: typeof j.trainerProfile === 'string' ? j.trainerProfile : '',
       accessibility: typeof j.accessibility === 'string' ? j.accessibility : '',
       accessConditions: typeof j.accessConditions === 'string' ? j.accessConditions : '',
-      programMd: typeof j.programMd === 'string' ? j.programMd : '',
+      programMd: stringifyProgramMd(j.programMd),
     };
 
     return { ok: true, draft, durationMs: r.durationMs };
