@@ -28,7 +28,7 @@ import {
   type CreateSessionInput,
 } from '@/server/actions/sessions-create';
 
-type Modality = 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE';
+type Modality = 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
 type FinancingMode = 'OPCO' | 'CPF' | 'ENTREPRISE' | 'AUTOFINANCEMENT' | 'POLE_EMPLOI' | 'AUTRE';
 
 interface Product {
@@ -110,7 +110,7 @@ export function SessionWizard({
     setSelectedProduct(p);
     setModality(p.modality);
     setCapacityMax(String(p.capacityMax));
-    setPricePerLearner(String(p.priceHT));
+    setPricePerLearner(Number(p.priceHT) > 0 ? String(p.priceHT) : '');
     if (p.durationHours && startDate) {
       const days = Math.max(1, Math.ceil(p.durationHours / 7));
       setEndDate(plusDays(startDate, days - 1));
@@ -314,9 +314,15 @@ export function SessionWizard({
                         <Clock className="h-3 w-3" /> {p.durationHours}h
                       </Badge>
                       <Badge variant="muted">{p.modality}</Badge>
-                      <Badge variant="muted" className="tabular-nums">
-                        {Number(p.priceHT).toFixed(0)} €
-                      </Badge>
+                      {Number(p.priceHT) > 0 ? (
+                        <Badge variant="muted" className="tabular-nums">
+                          {Number(p.priceHT).toFixed(0)} €
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" className="italic">
+                          Tarif à saisir
+                        </Badge>
+                      )}
                     </div>
                   </button>
                 );
@@ -362,6 +368,7 @@ export function SessionWizard({
                 <option value="PRESENTIEL">Présentiel</option>
                 <option value="DISTANCIEL">Distanciel</option>
                 <option value="MIXTE">Mixte</option>
+                <option value="ELEARNING">E-learning</option>
               </select>
             </Field>
             <Field label="Capacité max">
@@ -398,7 +405,7 @@ export function SessionWizard({
                 step="0.01"
                 value={pricePerLearner}
                 onChange={(e) => setPricePerLearner(e.target.value)}
-                placeholder={String(Number(selectedProduct.priceHT))}
+                placeholder={Number(selectedProduct.priceHT) > 0 ? String(Number(selectedProduct.priceHT)) : 'Ex: 480'}
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
               />
             </Field>

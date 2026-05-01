@@ -7,22 +7,16 @@ import { SearchInput } from '@/components/ui/search-input';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
+import { SessionStatusBadgeMenu } from '@/components/sessions/session-status-badge-menu';
+import type { SessionStatus } from '@/server/actions/sessions-create';
 
 const PAGE_SIZE = 25;
 
-const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
-  DRAFT: { label: 'Brouillon', variant: 'muted' },
-  PLANNED: { label: 'Planifiée', variant: 'info' },
-  OPEN: { label: 'Ouverte', variant: 'info' },
-  VALIDATED: { label: 'Validée', variant: 'success' },
-  IN_PROGRESS: { label: 'En cours', variant: 'primary' },
-  COMPLETED: { label: 'Terminée', variant: 'success' },
-  CANCELLED: { label: 'Annulée', variant: 'danger' },
-};
+type SessionFilter = 'completed' | 'upcoming' | 'cancelled' | 'ei' | 'this_week' | 'no_attendees' | 'to_invoice';
 
 interface SP {
   q?: string;
-  filter?: 'completed' | 'upcoming' | 'cancelled' | 'ei';
+  filter?: SessionFilter;
   page?: string;
 }
 
@@ -32,6 +26,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   const { q, filter, page: pageStr } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
   const now = new Date();
+  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const where: Prisma.TrainingSessionWhereInput = { tenantId: user.tenantId };
   if (q && q.trim()) {
@@ -46,8 +41,30 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   if (filter === 'ei') {
     where.participants = { some: { sponsorOrg: { legalForm: { in: ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'] } } } };
   }
+  if (filter === 'this_week') {
+    where.startDate = { gte: now, lte: weekFromNow };
+  }
+  if (filter === 'no_attendees') {
+    where.participants = { none: {} };
+  }
+  if (filter === 'to_invoice') {
+    // Sessions terminées dont au moins 1 inscrit n'a pas encore été facturé
+    where.endDate = { lt: now };
+    where.participants = { some: { invoices: { none: {} } } };
+  }
 
-  const [total, rows, allCount, completedCount, upcomingCount, eiCount] = await Promise.all([
+  const [
+    total,
+    rows,
+    allCount,
+    completedCount,
+    upcomingCount,
+    eiCount,
+    thisWeekCount,
+    noAttendeesCount,
+    toInvoiceCount,
+    totalParticipations,
+  ] = await Promise.all([
     prisma.trainingSession.count({ where }),
     prisma.trainingSession.findMany({
       where,
@@ -79,11 +96,34 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         participants: { some: { sponsorOrg: { legalForm: { in: ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'] } } } },
       },
     }),
+    prisma.trainingSession.count({
+      where: { tenantId: user.tenantId, startDate: { gte: now, lte: weekFromNow } },
+    }),
+    prisma.trainingSession.count({
+      where: { tenantId: user.tenantId, participants: { none: {} } },
+    }),
+    prisma.trainingSession.count({
+      where: {
+        tenantId: user.tenantId,
+        endDate: { lt: now },
+        participants: { some: { invoices: { none: {} } } },
+      },
+    }),
+    prisma.sessionParticipant.count({ where: { session: { tenantId: user.tenantId } } }),
   ]);
+
+  const subtitleParts = [
+    `${allCount} session${allCount > 1 ? 's' : ''}`,
+    `${totalParticipations} inscrit${totalParticipations > 1 ? 's' : ''} cumulé${totalParticipations > 1 ? 's' : ''}`,
+  ];
+  if (eiCount > 0) subtitleParts.push(`${eiCount} avec EI`);
 
   const filterChips = [
     { label: 'Toutes', href: hrefWith({ q, filter: undefined }), active: !filter, count: allCount },
+    { label: 'Cette semaine', href: hrefWith({ q, filter: 'this_week' }), active: filter === 'this_week', count: thisWeekCount },
     { label: 'À venir', href: hrefWith({ q, filter: 'upcoming' }), active: filter === 'upcoming', count: upcomingCount },
+    { label: 'Sans inscrit', href: hrefWith({ q, filter: 'no_attendees' }), active: filter === 'no_attendees', count: noAttendeesCount },
+    { label: 'À facturer', href: hrefWith({ q, filter: 'to_invoice' }), active: filter === 'to_invoice', count: toInvoiceCount },
     { label: 'Terminées', href: hrefWith({ q, filter: 'completed' }), active: filter === 'completed', count: completedCount },
     { label: 'Avec EI', href: hrefWith({ q, filter: 'ei' }), active: filter === 'ei', count: eiCount },
     { label: 'Annulées', href: hrefWith({ q, filter: 'cancelled' }), active: filter === 'cancelled' },
@@ -93,7 +133,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         title="Sessions de formation"
-        subtitle={`${allCount} sessions importées depuis SmartOF (${eiCount} avec ≥1 inscription EI)`}
+        subtitle={subtitleParts.join(' · ')}
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -124,7 +164,6 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
       ) : (
         <div className="rounded-2xl border border-border bg-white divide-y divide-border overflow-hidden">
           {rows.map((s) => {
-            const statusInfo = STATUS_LABELS[s.status] ?? { label: s.status, variant: 'muted' as const };
             const start = new Date(s.startDate);
             const end = new Date(s.endDate);
             const sameDay = start.toDateString() === end.toDateString();
@@ -164,7 +203,11 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
                       <AlertTriangle className="h-3 w-3" /> à clore
                     </Badge>
                   )}
-                  <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                  <SessionStatusBadgeMenu
+                    sessionId={s.id}
+                    sessionCode={s.code}
+                    status={s.status as SessionStatus}
+                  />
                 </div>
               </Link>
             );

@@ -9,7 +9,7 @@ export interface CreateSessionInput {
   productId: string;
   startDate: string; // ISO
   endDate: string;
-  modality: 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE';
+  modality: 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
   locationName?: string | null; // texte libre, on créera/réutilisera la Location
   locationCity?: string | null;
   trainerPersonIds: string[]; // au moins 1
@@ -39,7 +39,7 @@ export async function searchProducts(query: string, limit = 20) {
   const { user } = await validateRequest();
   if (!user) return [];
   const term = query.trim();
-  return prisma.trainingProduct.findMany({
+  const rows = await prisma.trainingProduct.findMany({
     where: {
       tenantId: user.tenantId,
       isActive: true,
@@ -65,6 +65,11 @@ export async function searchProducts(query: string, limit = 20) {
       capacityMax: true,
     },
   });
+  return rows.map((p) => ({
+    ...p,
+    priceHT: Number(p.priceHT),
+    groupFlatPrice: p.groupFlatPrice == null ? null : Number(p.groupFlatPrice),
+  }));
 }
 
 export async function listTrainers(): Promise<
@@ -202,4 +207,25 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');
   return { ok: true, sessionId: session.id };
+}
+
+const SESSION_STATUSES = ['DRAFT', 'PLANNED', 'OPEN', 'VALIDATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const;
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
+
+export async function updateSessionStatus(
+  sessionId: string,
+  status: SessionStatus,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'unauthorized' };
+  if (!SESSION_STATUSES.includes(status)) return { ok: false, error: 'invalid_status' };
+  const session = await prisma.trainingSession.findUnique({
+    where: { id: sessionId },
+    select: { tenantId: true },
+  });
+  if (!session || session.tenantId !== user.tenantId) return { ok: false, error: 'not_found' };
+  await prisma.trainingSession.update({ where: { id: sessionId }, data: { status } });
+  revalidatePath('/app/sessions');
+  revalidatePath(`/app/sessions/${sessionId}`);
+  return { ok: true };
 }
