@@ -12,6 +12,7 @@ import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
 import { DeleteSessionButton } from '@/components/sessions/delete-session-button';
+import { BackToListLink } from '@/components/ui/back-to-list-link';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
   DRAFT: { label: 'Brouillon', variant: 'muted' },
@@ -53,12 +54,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center justify-between">
-        <Link
-          href="/app/sessions"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" /> Retour aux sessions
-        </Link>
+        <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
         <div className="flex items-center gap-2">
           <GenerateClosurePackButton
             sessionId={session.id}

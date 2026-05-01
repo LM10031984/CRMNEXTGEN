@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EditOrganizationButton } from '@/components/forms/edit-organization-button';
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
+import { BackToListLink } from '@/components/ui/back-to-list-link';
 
 // Auto-entrepreneur = EI au régime micro depuis 2016, fusionnés dans l'UI
 const FORM_LABEL: Record<string, string> = {
@@ -65,12 +66,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link
-        href="/app/organisations"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour à la liste
-      </Link>
+      <BackToListLink fallbackHref="/app/organisations" label="Retour à la liste" />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader

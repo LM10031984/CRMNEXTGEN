@@ -15,6 +15,7 @@ import { LearnerTabs } from '@/components/apprenants/learner-tabs';
 import { BudgetAgefice } from '@/components/apprenants/budget-agefice';
 import { LearnerCompletenessBadge } from '@/components/apprenants/learner-completeness-badge';
 import { computeLearnerCompleteness } from '@/lib/learner-completeness';
+import { BackToListLink } from '@/components/ui/back-to-list-link';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -110,12 +111,7 @@ export default async function ApprenantDetailPage({
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link
-        href="/app/apprenants"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour à la liste
-      </Link>
+      <BackToListLink fallbackHref="/app/apprenants" label="Retour à la liste" />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader
