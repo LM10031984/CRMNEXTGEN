@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:full": "concurrently -n next,worker -c blue,magenta -k \"pnpm dev\" \"pnpm worker:closure\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -58,6 +59,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "dotenv-cli": "^7.4.4",
     "eslint": "^9.17.0",
     "eslint-config-next": "^14.2.21",
