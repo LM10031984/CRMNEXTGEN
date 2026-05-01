@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import type { Route } from 'next';
 import { Search, X } from 'lucide-react';
 
 export function SearchInput({ placeholder = 'Rechercher…' }: { placeholder?: string }) {
@@ -18,7 +19,7 @@ export function SearchInput({ placeholder = 'Rechercher…' }: { placeholder?: s
       else params.delete('q');
       params.delete('page');
       const qs = params.toString();
-      router.replace(`${pathname}${qs ? `?${qs}` : ''}`);
+      router.replace(`${pathname}${qs ? `?${qs}` : ''}` as Route);
     }, 250);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import {
   Users,
@@ -147,7 +148,7 @@ export function Sidebar() {
                   return (
                     <li key={item.href}>
                       <Link
-                        href={item.href}
+                        href={item.href as Route}
                         title={collapsed ? item.label : undefined}
                         className={cn(
                           'flex items-center gap-2.5 rounded-lg text-sm transition-colors',

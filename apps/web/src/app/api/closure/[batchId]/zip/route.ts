@@ -17,7 +17,8 @@ export async function GET(
   if (!r.ok || !r.buffer || !r.filename) {
     return new NextResponse(r.error ?? 'Zip indisponible', { status: 400 });
   }
-  return new NextResponse(r.buffer, {
+  // Buffer extends Uint8Array — Next.js types acceptent Uint8Array comme BodyInit
+  return new NextResponse(new Uint8Array(r.buffer), {
     status: 200,
     headers: {
       'Content-Type': 'application/zip',

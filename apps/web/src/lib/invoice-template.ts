@@ -131,7 +131,7 @@ ${STYLES}
     <strong>${escapeHtml(d.payerName)}</strong>
     ${d.payerSiret ? `SIRET ${f(d.payerSiret)}<br>` : ''}
     ${d.payerAddress ? `${f(d.payerAddress)}<br>` : ''}
-    ${[d.payerCp, d.payerVille].filter(Boolean).map(escapeHtml).join(' ')}<br>
+    ${[d.payerCp, d.payerVille].filter((s): s is string => Boolean(s)).map(escapeHtml).join(' ')}<br>
     ${d.payerEmail ? f(d.payerEmail) : ''}
   </div>
 </div>

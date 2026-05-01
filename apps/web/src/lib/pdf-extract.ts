@@ -24,8 +24,12 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> 
   // pdf-parse v2 expose une classe PDFParse, plus la fonction default
   // legacy. L'ancienne syntaxe `pdfParse(buffer)` échoue avec
   // "Object.defineProperty called on non-object".
-  // @ts-expect-error import ESM dynamique d'un module CJS
-  const mod = await import('pdf-parse');
+  const mod = (await import('pdf-parse')) as unknown as {
+    PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string; pages?: unknown[]; numpages?: number }> };
+    default?: {
+      PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string; pages?: unknown[]; numpages?: number }> };
+    };
+  };
   const PDFParse = mod.PDFParse ?? mod.default?.PDFParse;
   if (!PDFParse) {
     return { text: '', pages: 0, warnings: ['pdf-parse non chargé : classe PDFParse introuvable.'] };

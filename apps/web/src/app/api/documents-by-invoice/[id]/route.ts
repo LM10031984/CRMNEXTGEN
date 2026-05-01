@@ -13,7 +13,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 
   try {
     const buffer = await downloadFile(DOCS_BUCKET, invoice.pdfUrl);
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

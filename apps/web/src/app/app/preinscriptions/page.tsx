@@ -93,7 +93,7 @@ export default async function PreinscriptionsPage() {
                   <Th>Émis le</Th>
                   <Th>Soumis le</Th>
                   <Th>Expire le</Th>
-                  <Th></Th>
+                  <Th>{' '}</Th>
                 </tr>
               </thead>
               <tbody>

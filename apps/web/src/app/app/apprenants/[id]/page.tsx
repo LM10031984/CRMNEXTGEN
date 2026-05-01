@@ -39,7 +39,7 @@ export default async function ApprenantDetailPage({
       legalLinks: {
         orderBy: { isPrimary: 'desc' },
         include: {
-          organization: { select: { id: true, legalName: true, siret: true, opcoCode: true } },
+          organization: { select: { id: true, legalName: true, legalForm: true, siret: true, opcoCode: true } },
         },
       },
       sensitiveData: true,

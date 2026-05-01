@@ -18,7 +18,7 @@ export async function GET(
 
   try {
     const buffer = await downloadFile(DOCS_BUCKET, doc.pdfUrl);
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
