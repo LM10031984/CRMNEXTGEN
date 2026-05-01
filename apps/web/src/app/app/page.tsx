@@ -92,8 +92,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <CaCard icon={TrendingUp} label="CA prévu" value={stats.ca.total} accent="primary" href={`/app/inscriptions${year ? `?year=${year}` : ''}`} />
-          <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" href={`/app/sessions?status=signed${year ? `&year=${year}` : ''}`} />
-          <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} href="/app/sessions?upcoming=1" />
+          <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" href={`/app/sessions?filter=signed`} />
+          <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} href="/app/sessions?filter=upcoming" />
           <CaCard icon={Banknote} label="Facturé" value={stats.ca.invoiced} href="/app/factures" />
           <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" href="/app/factures?status=collected" />
           <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} href="/app/factures?status=remaining" />
@@ -380,22 +380,26 @@ function TopList({
       {rows.length === 0 ? (
         <p className="text-xs text-muted-foreground italic">Aucune donnée pour la période sélectionnée.</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {rows.map((r, i) => (
-            <li key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30">
-              <div className="h-6 w-6 rounded-full bg-primary-50 text-primary-700 inline-flex items-center justify-center font-semibold text-[10px] shrink-0">
-                {i + 1}
-              </div>
+            <li key={i}>
               <Link
                 href={r.href as any}
-                className="flex-1 min-w-0 truncate text-sm font-medium hover:text-primary"
+                title={r.primary}
+                className="flex gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors"
               >
-                {r.primary}
+                <div className="h-6 w-6 rounded-full bg-primary-50 text-primary-700 inline-flex items-center justify-center font-semibold text-[10px] shrink-0">
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium leading-snug break-words">{r.primary}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>{r.secondary}</span>
+                    <span aria-hidden>·</span>
+                    <span className="font-semibold text-foreground tabular-nums">{r.value}</span>
+                  </div>
+                </div>
               </Link>
-              <div className="text-right text-xs shrink-0">
-                <div className="font-semibold tabular-nums">{r.value}</div>
-                <div className="text-muted-foreground">{r.secondary}</div>
-              </div>
             </li>
           ))}
         </ul>

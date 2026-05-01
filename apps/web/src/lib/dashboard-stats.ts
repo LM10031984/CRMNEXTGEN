@@ -177,7 +177,13 @@ export async function getDashboardStats(
 
     // Performance
     prisma.trainingSession.count({ where: sessionWhere }),
-    prisma.trainingSession.count({ where: { ...sessionWhere, startDate: { gt: now } } }),
+    prisma.trainingSession.count({
+      where: {
+        ...sessionWhere,
+        startDate: { gt: now },
+        status: { notIn: ['DRAFT', 'CANCELLED'] },
+      },
+    }),
     prisma.trainingSession.findMany({
       where: sessionWhere,
       select: {
@@ -213,7 +219,15 @@ export async function getDashboardStats(
     }),
     prisma.sessionParticipant.aggregate({
       _sum: { priceHT: true },
-      where: { session: { ...participantSessionFilter, startDate: { gt: now } } },
+      where: {
+        session: {
+          ...participantSessionFilter,
+          startDate: { gt: now },
+          // CA "a venir" : on exclut les brouillons et les annulees — ces tarifs
+          // ne sont ni engages ni signes, ils faussent l'agregat.
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+      },
     }),
     prisma.sessionParticipant.aggregate({
       _sum: { priceHT: true },
@@ -332,7 +346,13 @@ export async function getDashboardStats(
     }),
     prisma.sessionParticipant.aggregate({
       _sum: { priceHT: true },
-      where: { session: { tenantId, startDate: { gt: now } } },
+      where: {
+        session: {
+          tenantId,
+          startDate: { gt: now },
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+      },
     }),
 
     // Liste des années avec données (pour le sélecteur)

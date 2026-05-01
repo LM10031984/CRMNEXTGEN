@@ -12,7 +12,7 @@ import type { SessionStatus } from '@/server/actions/sessions-create';
 
 const PAGE_SIZE = 25;
 
-type SessionFilter = 'completed' | 'upcoming' | 'cancelled' | 'ei' | 'this_week' | 'no_attendees' | 'to_invoice';
+type SessionFilter = 'completed' | 'upcoming' | 'cancelled' | 'ei' | 'this_week' | 'no_attendees' | 'to_invoice' | 'signed';
 
 interface SP {
   q?: string;
@@ -36,8 +36,16 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     ];
   }
   if (filter === 'completed') where.status = 'COMPLETED';
-  if (filter === 'upcoming') where.startDate = { gt: now };
+  if (filter === 'upcoming') {
+    // Sessions futures, on exclut brouillons et annulees pour rester coherent
+    // avec le KPI "CA a venir" du dashboard.
+    where.startDate = { gt: now };
+    where.status = { notIn: ['DRAFT', 'CANCELLED'] };
+  }
   if (filter === 'cancelled') where.status = 'CANCELLED';
+  if (filter === 'signed') {
+    where.status = { in: ['VALIDATED', 'IN_PROGRESS', 'COMPLETED'] };
+  }
   if (filter === 'ei') {
     where.participants = { some: { sponsorOrg: { legalForm: { in: ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'] } } } };
   }
