@@ -54,22 +54,30 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
   // ou OpcoCatalog et apparaissent dans /app/financeurs. On les exclut
   // d'ici pour que la liste reste celle des entreprises clientes (EI,
   // SARL, agences, enseignes).
+  // Note Prisma : `mode: 'insensitive'` n'est pas autorisé dans un `not`,
+  // on s'appuie donc sur les variantes courantes en MAJUSCULES (cohérent
+  // avec les imports SmartOF / Airtable / référentiels OPCO).
   const FINANCER_NAME_PREFIXES = [
     'AGEFICE',
+    'Agefice',
+    'agefice',
     'OPCO_EP',
     'OPCO EP',
+    'Opco_EP',
     'ATLAS',
+    'Atlas',
     'CPF',
     'FI-FPL',
     'FIF-PL',
     'OPCOMMERCE',
+    'Opcommerce',
   ];
 
   const where: Prisma.OrganizationWhereInput = {
     tenantId: user.tenantId,
     archived: false,
     AND: FINANCER_NAME_PREFIXES.map((p) => ({
-      legalName: { not: { startsWith: p, mode: 'insensitive' as const } },
+      legalName: { not: { startsWith: p } },
     })),
   };
   if (q && q.trim()) {
