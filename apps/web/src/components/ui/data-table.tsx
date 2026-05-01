@@ -7,6 +7,10 @@ export interface Column<T> {
   cell: (row: T) => ReactNode;
   className?: string;
   width?: string;
+  // Si true, la cellule de cette colonne n'est PAS wrappée dans le <a>
+  // de rowHref. Utile pour les colonnes "actions" qui contiennent des
+  // boutons cliquables qu'on ne veut pas faire naviguer.
+  noLink?: boolean;
 }
 
 interface Props<T> {
@@ -60,7 +64,7 @@ export function DataTable<T>({ rows, columns, rowKey, rowHref, empty }: Props<T>
                 >
                   {columns.map((col) => (
                     <td key={col.key} className={cn('px-4 py-3', col.className)}>
-                      {href ? (
+                      {href && !col.noLink ? (
                         <a href={href} className="block">
                           {col.cell(row)}
                         </a>

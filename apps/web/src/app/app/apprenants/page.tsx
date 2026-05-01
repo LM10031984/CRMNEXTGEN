@@ -8,6 +8,7 @@ import { FilterChips } from '@/components/ui/filter-chips';
 import { Pagination } from '@/components/ui/pagination';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
+import { LearnerQuickViewButton } from '@/components/apprenants/learner-quick-view-button';
 
 const PAGE_SIZE = 25;
 
@@ -140,14 +141,19 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
     {
       key: 'flags',
       header: '',
-      width: '120px',
+      width: '160px',
       className: 'text-right',
-      cell: (row) =>
-        row.requiresCleanup ? (
-          <Badge variant="warning">
-            <AlertTriangle className="h-3 w-3" /> à corriger
-          </Badge>
-        ) : null,
+      noLink: true,
+      cell: (row) => (
+        <div className="inline-flex items-center gap-1.5">
+          {row.requiresCleanup && (
+            <Badge variant="warning">
+              <AlertTriangle className="h-3 w-3" /> à corriger
+            </Badge>
+          )}
+          <LearnerQuickViewButton personId={row.id} />
+        </div>
+      ),
     },
   ];
 
