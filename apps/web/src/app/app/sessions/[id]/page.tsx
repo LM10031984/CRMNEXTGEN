@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { GenerateProgrammeButton } from '@/components/sessions/generate-programme-button';
 import { GenerateAgeficeButton } from '@/components/sessions/generate-agefice-button';
+import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
@@ -58,11 +59,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         >
           <ArrowLeft className="h-4 w-4" /> Retour aux sessions
         </Link>
-        <DeleteSessionButton
-          sessionId={session.id}
-          sessionCode={session.code}
-          participantCount={session.participants.length}
-        />
+        <div className="flex items-center gap-2">
+          <GenerateClosurePackButton
+            sessionId={session.id}
+            participantCount={session.participants.length}
+          />
+          <DeleteSessionButton
+            sessionId={session.id}
+            sessionCode={session.code}
+            participantCount={session.participants.length}
+          />
+        </div>
       </div>
 
       <PageHeader
@@ -192,6 +199,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                                   participantId={p.id}
                                   currentPriceHT={Number(p.priceHT)}
                                   currentStatus={p.enrollmentStatus}
+                                  currentFinancingRequestDate={p.financingRequestDate}
                                 />
                               </div>
                             </li>
@@ -238,14 +246,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             </section>
           )}
 
-          <section className="rounded-2xl border border-dashed border-border bg-muted/30 p-5 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1.5">Bientôt disponible :</p>
-            <ul className="space-y-0.5 list-disc pl-4">
-              <li>Wizard création/édition de session (palier 2.3)</li>
-              <li>Génération en 1 clic du pack docs fin-de-formation (palier 4)</li>
-              <li>Bouton AGEFICE pour les inscrits EI éligibles (palier 3)</li>
-            </ul>
-          </section>
         </div>
       </div>
     </div>

@@ -261,3 +261,52 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, '')
     .toLowerCase();
 }
+
+/**
+ * Re-enqueue tous les jobs en ERROR du batch. Utile pour la page batch
+ * (bouton "Régénérer les erreurs"). Idempotent : un job DONE ou en cours
+ * n'est pas touché.
+ */
+export async function retryClosureBatchErrors(
+  batchId: string,
+): Promise<{ ok: boolean; relaunched?: number; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const batch = await prisma.closureBatch.findFirst({
+    where: { id: batchId, tenantId: user.tenantId },
+    include: { jobs: { where: { status: 'ERROR' } } },
+  });
+  if (!batch) return { ok: false, error: 'Batch introuvable' };
+  if (batch.jobs.length === 0) return { ok: true, relaunched: 0 };
+
+  // Reset des compteurs et des jobs en erreur
+  await prisma.$transaction([
+    prisma.closureJob.updateMany({
+      where: { id: { in: batch.jobs.map((j) => j.id) } },
+      data: { status: 'QUEUED', errorMessage: null, attempts: 0, startedAt: null, completedAt: null },
+    }),
+    prisma.closureBatch.update({
+      where: { id: batchId },
+      data: {
+        status: 'RUNNING',
+        errorDocs: { decrement: batch.jobs.length },
+        completedAt: null,
+      },
+    }),
+  ]);
+
+  for (const job of batch.jobs) {
+    await enqueueClosureJob({
+      jobId: job.id,
+      batchId,
+      tenantId: user.tenantId,
+      sessionId: batch.sessionId,
+      participantId: job.participantId,
+      kind: job.kind,
+    });
+  }
+
+  revalidatePath(`/app/sessions/${batch.sessionId}/closure/${batchId}`);
+  return { ok: true, relaunched: batch.jobs.length };
+}
