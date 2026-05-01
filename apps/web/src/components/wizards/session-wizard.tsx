@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
+import { QuickCreateProductButton } from '@/components/wizards/quick-create-product';
 import {
   searchProducts,
   createSessionFull,
@@ -262,14 +263,24 @@ export function SessionWizard({
               Tu peux dérouler la liste ou taper un nom / thème pour filtrer.
             </p>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={productQuery}
-              onChange={(e) => runProductSearch(e.target.value)}
-              placeholder="Cherche un produit (titre, code, thème…)"
-              className="w-full pl-9 pr-3 h-10 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={productQuery}
+                onChange={(e) => runProductSearch(e.target.value)}
+                placeholder="Cherche un produit (titre, code, thème…)"
+                className="w-full pl-9 pr-3 h-10 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <QuickCreateProductButton
+              onCreated={(p) => {
+                // Ajoute en tête de la liste + auto-sélectionne (déclenche
+                // l'auto-avancement à l'étape 2)
+                setProductResults((prev) => [p, ...prev.filter((x) => x.id !== p.id)]);
+                handleSelectProduct(p);
+              }}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[450px] overflow-y-auto">

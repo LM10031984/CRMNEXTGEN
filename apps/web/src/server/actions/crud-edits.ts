@@ -161,6 +161,62 @@ export async function updateTrainingProduct(input: {
   return { ok: true };
 }
 
+// ── Création produit de formation ────────────────────────────────────────
+/**
+ * Création d'un produit de formation avec les champs minimum nécessaires
+ * pour l'utiliser tout de suite dans le wizard nouvelle session.
+ * Les autres champs (objectifs, méthodes pédago, prérequis…) seront
+ * complétés depuis la fiche produit via updateTrainingProduct.
+ */
+export async function createTrainingProduct(input: {
+  title: string;
+  durationHours: number;
+  priceHT?: number;
+  modality?: 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
+  theme?: string | null;
+  capacityMax?: number;
+}): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: 'Intitulé obligatoire.' };
+  if (!input.durationHours || input.durationHours <= 0) {
+    return { ok: false, error: 'Durée en heures obligatoire (entier > 0).' };
+  }
+
+  // Génère un code FRM-NNNN incrémental
+  const last = await prisma.trainingProduct.findFirst({
+    where: { tenantId: user.tenantId, code: { startsWith: 'FRM-' } },
+    orderBy: { code: 'desc' },
+    select: { code: true },
+  });
+  const lastSeq = last?.code.match(/FRM-(\d+)/)?.[1];
+  const nextSeq = lastSeq ? parseInt(lastSeq, 10) + 1 : 1;
+  const code = `FRM-${String(nextSeq).padStart(4, '0')}`;
+
+  const product = await prisma.trainingProduct.create({
+    data: {
+      tenantId: user.tenantId,
+      code,
+      title,
+      durationHours: input.durationHours,
+      modality: input.modality ?? 'PRESENTIEL',
+      priceHT: new Prisma.Decimal(input.priceHT ?? 0),
+      capacityMax: input.capacityMax ?? 12,
+      capacityMin: 1,
+      theme: input.theme ?? null,
+      objectives: [] as Prisma.InputJsonValue,
+      programMd: '',
+      vatRate: new Prisma.Decimal(0),
+      version: 1,
+      isActive: true,
+    },
+  });
+
+  revalidatePath('/app/produits');
+  return { ok: true, productId: product.id, code: product.code };
+}
+
 // ── Création formateur ───────────────────────────────────────────────────
 export async function createTrainer(input: {
   firstName: string;
