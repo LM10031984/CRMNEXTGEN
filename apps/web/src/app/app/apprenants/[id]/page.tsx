@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { LegalLinkEditor } from '@/components/editors/legal-link-editor';
 import { LearnerTabs } from '@/components/apprenants/learner-tabs';
 import { BudgetAgefice } from '@/components/apprenants/budget-agefice';
-import { Info } from 'lucide-react';
+import { LearnerCompletenessBadge } from '@/components/apprenants/learner-completeness-badge';
+import { computeLearnerCompleteness } from '@/lib/learner-completeness';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -146,11 +147,13 @@ export default async function ApprenantDetailPage({
         />
       </div>
 
+      <LearnerCompletenessBadge result={computeLearnerCompleteness(person)} />
+
       <LearnerTabs
         tabs={[
-          { key: 'info', label: 'Informations', icon: Info },
-          { key: 'activity', label: 'Activité formation', icon: GraduationCap, badge: totalParticipations },
-          { key: 'documents', label: 'Documents', icon: FileText, badge: documents.length },
+          { key: 'info', label: 'Informations', iconKey: 'info' },
+          { key: 'activity', label: 'Activité formation', iconKey: 'activity', badge: totalParticipations },
+          { key: 'documents', label: 'Documents', iconKey: 'documents', badge: documents.length },
         ]}
       />
 

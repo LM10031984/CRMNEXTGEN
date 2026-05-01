@@ -5,10 +5,13 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Info, GraduationCap, FileText } from 'lucide-react';
 
+const ICONS = { info: Info, activity: GraduationCap, documents: FileText } as const;
+export type LearnerTabIcon = keyof typeof ICONS;
+
 interface Tab {
   key: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  iconKey: LearnerTabIcon;
   badge?: number;
 }
 
@@ -22,7 +25,7 @@ export function LearnerTabs({ tabs }: { tabs: Tab[] }) {
       <nav className="flex gap-1 -mb-px">
         {tabs.map((t) => {
           const isActive = active === t.key;
-          const Icon = t.icon;
+          const Icon = ICONS[t.iconKey];
           const params = new URLSearchParams(sp.toString());
           if (t.key === 'info') params.delete('tab');
           else params.set('tab', t.key);
@@ -58,4 +61,3 @@ export function LearnerTabs({ tabs }: { tabs: Tab[] }) {
   );
 }
 
-export const LEARNER_TAB_ICONS = { Info, GraduationCap, FileText };
