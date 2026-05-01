@@ -38,12 +38,12 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
           session: {
             select: {
               id: true, code: true, name: true, status: true,
-              startDate: true, endDate: true,
+              startDate: true, endDate: true, pricePerLearner: true,
+              product: { select: { theme: true, durationHours: true } },
               _count: { select: { participants: true } },
             },
           },
         },
-        take: 50,
       },
       trainerAvailabilities: {
         where: { startsAt: { gt: new Date() } },
@@ -55,13 +55,33 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
   if (!trainer) notFound();
 
+  const now = new Date();
   const subOrg = trainer.legalLinks[0]?.organization;
   const address = (trainer.personalAddress ?? null) as null | { street?: string; postalCode?: string; city?: string };
   const totalSessions = trainer.trainerSessions.length;
   const completedSessions = trainer.trainerSessions.filter((s) => s.session.status === 'COMPLETED').length;
-  const upcomingSessions = trainer.trainerSessions.filter(
-    (s) => s.session.startDate > new Date(),
-  ).length;
+  const upcomingSessions = trainer.trainerSessions.filter((s) => s.session.startDate > now).length;
+  const totalHoursAnimated = trainer.trainerSessions
+    .filter((s) => s.session.status === 'COMPLETED')
+    .reduce((sum, s) => sum + (s.session.product?.durationHours ?? 0), 0);
+
+  // Expertise par thème : on regroupe les sessions animées (terminées + en cours)
+  // par thème du produit et on compte les heures cumulees pour ressortir le top 3.
+  const themeMap = new Map<string, { sessions: number; hours: number }>();
+  for (const ts of trainer.trainerSessions) {
+    if (ts.session.status === 'CANCELLED' || ts.session.status === 'DRAFT') continue;
+    const theme = ts.session.product?.theme?.trim();
+    if (!theme) continue;
+    const cur = themeMap.get(theme) ?? { sessions: 0, hours: 0 };
+    cur.sessions += 1;
+    cur.hours += ts.session.product?.durationHours ?? 0;
+    themeMap.set(theme, cur);
+  }
+  const topThemes = [...themeMap.entries()]
+    .map(([theme, stats]) => ({ theme, ...stats }))
+    .sort((a, b) => b.hours - a.hours || b.sessions - a.sessions)
+    .slice(0, 5);
+  const maxThemeHours = topThemes[0]?.hours ?? 0;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -81,10 +101,11 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
       />
 
       {/* Stats activité */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatBlock label="Sessions animées (total)" value={totalSessions} hint={`dont ${completedSessions} terminées`} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatBlock label="Sessions animées" value={totalSessions} hint={`dont ${completedSessions} terminées`} />
+        <StatBlock label="Heures dispensées" value={totalHoursAnimated} suffix="h" hint="cumulé sur sessions terminées" />
         <StatBlock label="Sessions à venir" value={upcomingSessions} />
-        <StatBlock label="Disponibilités déclarées" value={trainer.trainerAvailabilities.length} hint="à venir" />
+        <StatBlock label="Disponibilités" value={trainer.trainerAvailabilities.length} hint="à venir, déclarées" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -134,7 +155,10 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
                       >
                         <div className="font-medium truncate">{ts.session.name ?? '(sans nom)'}</div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(ts.session.startDate).toLocaleDateString('fr-FR')} · {ts.session._count.participants} apprenant{ts.session._count.participants > 1 ? 's' : ''}
+                          {new Date(ts.session.startDate).toLocaleDateString('fr-FR')}
+                          {ts.session.product?.theme ? ` · ${ts.session.product.theme}` : ''}
+                          {ts.session.product?.durationHours ? ` · ${ts.session.product.durationHours}h` : ''}
+                          {' · '}{ts.session._count.participants} apprenant{ts.session._count.participants > 1 ? 's' : ''}
                           {ts.dailyRate && Number(ts.dailyRate) > 0 ? ` · ${Number(ts.dailyRate).toFixed(0)} €/j` : ''}
                         </div>
                       </Link>
@@ -154,6 +178,38 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {topThemes.length > 0 && (
+            <section className="rounded-2xl border border-border bg-white p-6">
+              <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+                <Award className="h-4 w-4" /> Expertise
+              </h2>
+              <ul className="space-y-3">
+                {topThemes.map((t) => {
+                  const pct = maxThemeHours > 0 ? Math.round((t.hours / maxThemeHours) * 100) : 0;
+                  return (
+                    <li key={t.theme}>
+                      <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                        <span className="font-medium truncate">{t.theme}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                          {t.sessions} session{t.sessions > 1 ? 's' : ''} · {t.hours}h
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[11px] text-muted-foreground mt-3">
+                Top thèmes par volume horaire animé (sessions terminées + en cours).
+              </p>
+            </section>
+          )}
+
           {subOrg && (
             <section className="rounded-2xl border border-border bg-white p-6">
               <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
@@ -232,13 +288,16 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
   );
 }
 
-function StatBlock({ label, value, hint }: { label: string; value: number; hint?: string }) {
+function StatBlock({ label, value, hint, suffix }: { label: string; value: number; hint?: string; suffix?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-white p-5">
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </div>
-      <div className="text-3xl font-semibold mt-1.5 tabular-nums">{value}</div>
+      <div className="text-3xl font-semibold mt-1.5 tabular-nums">
+        {value}
+        {suffix && <span className="text-base text-muted-foreground ml-1">{suffix}</span>}
+      </div>
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   );

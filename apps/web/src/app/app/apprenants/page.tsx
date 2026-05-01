@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, AlertTriangle, Briefcase } from 'lucide-react';
+import { Plus, AlertTriangle, Briefcase, List, LayoutGrid } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -20,6 +20,7 @@ interface ApprenantRow {
   phone: string | null;
   professionalStatus: string | null;
   requiresCleanup: boolean;
+  cleanupNotes: string | null;
   legalLinks: { role: string; isPrimary: boolean; organization: { id: string; legalName: string } }[];
 }
 
@@ -27,13 +28,15 @@ interface SearchParams {
   q?: string;
   filter?: 'cleanup' | 'ei' | 'all';
   page?: string;
+  all?: string;
 }
 
 export default async function ApprenantsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const { user } = await validateRequest();
   if (!user) return null;
-  const { q, filter, page: pageStr } = await searchParams;
+  const { q, filter, page: pageStr, all: allParam } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+  const showAll = allParam === '1';
 
   const where: Prisma.PersonWhereInput = {
     tenantId: user.tenantId,
@@ -57,8 +60,7 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
     prisma.person.findMany({
       where,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      ...(showAll ? {} : { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
       select: {
         id: true,
         firstName: true,
@@ -67,6 +69,7 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
         phone: true,
         professionalStatus: true,
         requiresCleanup: true,
+        cleanupNotes: true,
         legalLinks: {
           orderBy: { isPrimary: 'desc' },
           select: {
@@ -141,17 +144,24 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
     {
       key: 'flags',
       header: '',
-      width: '160px',
+      width: '260px',
       className: 'text-right',
       noLink: true,
       cell: (row) => (
-        <div className="inline-flex items-center gap-1.5">
-          {row.requiresCleanup && (
-            <Badge variant="warning">
-              <AlertTriangle className="h-3 w-3" /> à corriger
-            </Badge>
+        <div className="flex flex-col items-end gap-1">
+          <div className="inline-flex items-center gap-1.5">
+            {row.requiresCleanup && (
+              <Badge variant="warning" title={row.cleanupNotes ?? undefined}>
+                <AlertTriangle className="h-3 w-3" /> à corriger
+              </Badge>
+            )}
+            <LearnerQuickViewButton personId={row.id} />
+          </div>
+          {row.requiresCleanup && row.cleanupNotes && (
+            <span className="text-[11px] text-amber-700 italic max-w-[240px] truncate" title={row.cleanupNotes}>
+              {row.cleanupNotes}
+            </span>
           )}
-          <LearnerQuickViewButton personId={row.id} />
         </div>
       ),
     },
@@ -176,7 +186,23 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
 
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <SearchInput placeholder="Nom, prénom, email…" />
-        <FilterChips chips={filterChips} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={hrefWith({ q, filter, all: showAll ? undefined : '1' }) as any}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {showAll ? (
+              <>
+                <LayoutGrid className="h-4 w-4" /> Paginer ({PAGE_SIZE}/page)
+              </>
+            ) : (
+              <>
+                <List className="h-4 w-4" /> Voir tout ({total})
+              </>
+            )}
+          </Link>
+          <FilterChips chips={filterChips} />
+        </div>
       </div>
 
       <DataTable<ApprenantRow>
@@ -187,21 +213,24 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
         empty={q ? `Aucun apprenant ne correspond à « ${q} ».` : 'Aucun apprenant.'}
       />
 
-      <Pagination
-        total={total}
-        page={page}
-        pageSize={PAGE_SIZE}
-        basePath="/app/apprenants"
-        searchParams={{ q, filter }}
-      />
+      {!showAll && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={PAGE_SIZE}
+          basePath="/app/apprenants"
+          searchParams={{ q, filter }}
+        />
+      )}
     </div>
   );
 }
 
-function hrefWith(opts: { q?: string; filter?: string }): string {
+function hrefWith(opts: { q?: string; filter?: string; all?: string }): string {
   const params = new URLSearchParams();
   if (opts.q) params.set('q', opts.q);
   if (opts.filter) params.set('filter', opts.filter);
+  if (opts.all) params.set('all', opts.all);
   const qs = params.toString();
   return `/app/apprenants${qs ? `?${qs}` : ''}`;
 }

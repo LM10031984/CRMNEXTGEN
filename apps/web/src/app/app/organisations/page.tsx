@@ -1,4 +1,5 @@
-import { Plus, AlertTriangle, Users, FileCheck } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, AlertTriangle, Users, FileCheck, List, LayoutGrid } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -17,6 +18,7 @@ interface OrgRow {
   siret: string | null;
   opcoCode: string | null;
   requiresCleanup: boolean;
+  cleanupNotes: string | null;
   network: string | null;
   representative: string | null;
   ageficeProfile: { id: string } | null;
@@ -27,6 +29,7 @@ interface SP {
   q?: string;
   filter?: 'cleanup' | 'agefice' | 'ei';
   page?: string;
+  all?: string;
 }
 
 // Auto-entrepreneur et EI sont juridiquement la même chose (un AE = une EI
@@ -49,8 +52,9 @@ const FORM_LABEL: Record<string, string> = {
 export default async function OrganisationsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { user } = await validateRequest();
   if (!user) return null;
-  const { q, filter, page: pageStr } = await searchParams;
+  const { q, filter, page: pageStr, all: allParam } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+  const showAll = allParam === '1';
 
   // Les financeurs (PA AGEFICE, OPCO_EP, ATLAS, etc.) ne sont PAS des
   // organisations clientes/employeurs. Ils vivent dans AgeficePointAccueil
@@ -101,8 +105,7 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
     prisma.organization.findMany({
       where,
       orderBy: { legalName: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      ...(showAll ? {} : { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
       select: {
         id: true,
         legalName: true,
@@ -110,6 +113,7 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
         siret: true,
         opcoCode: true,
         requiresCleanup: true,
+        cleanupNotes: true,
         network: true,
         representative: true,
         ageficeProfile: { select: { id: true } },
@@ -174,19 +178,26 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
     {
       key: 'flags',
       header: '',
-      width: '180px',
+      width: '260px',
       className: 'text-right',
       cell: (row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {row.ageficeProfile && (
-            <Badge variant="info">
-              <FileCheck className="h-3 w-3" /> AGEFICE
-            </Badge>
-          )}
-          {row.requiresCleanup && (
-            <Badge variant="warning">
-              <AlertTriangle className="h-3 w-3" /> à corriger
-            </Badge>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5">
+            {row.ageficeProfile && (
+              <Badge variant="info">
+                <FileCheck className="h-3 w-3" /> AGEFICE
+              </Badge>
+            )}
+            {row.requiresCleanup && (
+              <Badge variant="warning" title={row.cleanupNotes ?? undefined}>
+                <AlertTriangle className="h-3 w-3" /> à corriger
+              </Badge>
+            )}
+          </div>
+          {row.requiresCleanup && row.cleanupNotes && (
+            <span className="text-[11px] text-amber-700 italic max-w-[240px] truncate" title={row.cleanupNotes}>
+              {row.cleanupNotes}
+            </span>
           )}
         </div>
       ),
@@ -212,7 +223,23 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
 
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <SearchInput placeholder="Raison sociale, SIRET, NAF…" />
-        <FilterChips chips={filterChips} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={hrefWith({ q, filter, all: showAll ? undefined : '1' }) as any}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {showAll ? (
+              <>
+                <LayoutGrid className="h-4 w-4" /> Paginer ({PAGE_SIZE}/page)
+              </>
+            ) : (
+              <>
+                <List className="h-4 w-4" /> Voir tout ({total})
+              </>
+            )}
+          </Link>
+          <FilterChips chips={filterChips} />
+        </div>
       </div>
 
       <DataTable<OrgRow>
@@ -223,21 +250,24 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
         empty={q ? `Aucune organisation ne correspond à « ${q} ».` : 'Aucune organisation.'}
       />
 
-      <Pagination
-        total={total}
-        page={page}
-        pageSize={PAGE_SIZE}
-        basePath="/app/organisations"
-        searchParams={{ q, filter }}
-      />
+      {!showAll && (
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={PAGE_SIZE}
+          basePath="/app/organisations"
+          searchParams={{ q, filter }}
+        />
+      )}
     </div>
   );
 }
 
-function hrefWith(opts: { q?: string; filter?: string }): string {
+function hrefWith(opts: { q?: string; filter?: string; all?: string }): string {
   const params = new URLSearchParams();
   if (opts.q) params.set('q', opts.q);
   if (opts.filter) params.set('filter', opts.filter);
+  if (opts.all) params.set('all', opts.all);
   const qs = params.toString();
   return `/app/organisations${qs ? `?${qs}` : ''}`;
 }
