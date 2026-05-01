@@ -12,6 +12,7 @@ import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
 import { DeleteSessionButton } from '@/components/sessions/delete-session-button';
+import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
@@ -59,6 +60,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <GenerateClosurePackButton
             sessionId={session.id}
             participantCount={session.participants.length}
+          />
+          <DuplicateSessionButton
+            sessionId={session.id}
+            sessionCode={session.code}
+            sourceStartDate={session.startDate}
           />
           <DeleteSessionButton
             sessionId={session.id}

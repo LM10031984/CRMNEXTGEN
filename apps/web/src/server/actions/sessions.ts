@@ -271,6 +271,80 @@ export async function createSession(input: {
   return { ok: true, id: session.id, code };
 }
 
+/**
+ * Duplique une session existante : meme produit, meme tarif, memes formateurs,
+ * meme modalite/lieu. Decale les dates de duration jours par rapport a une
+ * nouvelle date de debut. Cree N occurrences si recurrence (intervalle en
+ * mois). Status DRAFT a chaque fois pour forcer la validation manuelle.
+ * N'embarque PAS les participants.
+ */
+export async function duplicateSession(input: {
+  sessionId: string;
+  newStartDate: string;
+  recurrence?: { count: number; intervalMonths: number };
+}): Promise<{ ok: true; createdIds: string[]; firstCode: string } | { ok: false; error: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const source = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    include: { trainers: { select: { personId: true, role: true } } },
+  });
+  if (!source) return { ok: false, error: 'Session source introuvable.' };
+
+  const startBase = new Date(input.newStartDate);
+  if (Number.isNaN(startBase.getTime())) return { ok: false, error: 'Date de debut invalide.' };
+
+  const durationMs = new Date(source.endDate).getTime() - new Date(source.startDate).getTime();
+  const occurrences = Math.max(1, input.recurrence?.count ?? 1);
+  const intervalMonths = input.recurrence?.intervalMonths ?? 1;
+
+  const year = startBase.getFullYear();
+  const lastSession = await prisma.trainingSession.findFirst({
+    where: { tenantId: user.tenantId, code: { startsWith: `SES-${year}-` } },
+    orderBy: { code: 'desc' },
+  });
+  const lastSeqMatch = lastSession?.code?.match(/SES-\d{4}-(\d+)/);
+  let nextSeq = lastSeqMatch && lastSeqMatch[1] ? parseInt(lastSeqMatch[1], 10) + 1 : 1;
+
+  const createdIds: string[] = [];
+  let firstCode = '';
+
+  for (let i = 0; i < occurrences; i++) {
+    const start = new Date(startBase);
+    start.setMonth(start.getMonth() + i * intervalMonths);
+    const end = new Date(start.getTime() + durationMs);
+    const code = sessionCode(start.getFullYear(), nextSeq);
+    nextSeq += 1;
+    if (i === 0) firstCode = code;
+
+    const created = await prisma.trainingSession.create({
+      data: {
+        tenantId: user.tenantId,
+        productId: source.productId,
+        code,
+        name: source.name,
+        status: SessionStatus.DRAFT,
+        startDate: start,
+        endDate: end,
+        modality: source.modality,
+        capacityMin: source.capacityMin,
+        capacityMax: source.capacityMax,
+        pricePerLearner: source.pricePerLearner,
+        locationId: source.locationId,
+        internalNotes: source.internalNotes,
+        trainers: {
+          create: source.trainers.map((t) => ({ personId: t.personId, role: t.role })),
+        },
+      },
+    });
+    createdIds.push(created.id);
+  }
+
+  revalidatePath('/app/sessions');
+  return { ok: true, createdIds, firstCode };
+}
+
 // ---------- Helper : produits disponibles ----------
 
 export async function listProducts() {
