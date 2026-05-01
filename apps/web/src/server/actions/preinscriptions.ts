@@ -38,8 +38,14 @@ export async function createPreEnrollmentLink(input: {
     },
   });
 
-  // URL absolue calculée côté serveur (en prod : APP_URL env)
-  const baseUrl = process.env.APP_URL ?? 'http://localhost:3000';
+  // URL absolue calculée côté serveur. Préfère NEXT_PUBLIC_APP_URL (déjà
+  // dans .env.example) puis APP_URL en fallback. Le port doit correspondre
+  // à celui où tourne réellement Next (3000-3003 selon disponibilité) —
+  // pour le dev local, on essaie de détecter le port via Host header
+  // côté server action n'est pas possible, donc l'utilisateur DOIT
+  // synchroniser NEXT_PUBLIC_APP_URL avec le port effectif.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
   const url = `${baseUrl}/preinscription/${token}`;
 
   revalidatePath('/app/preinscriptions');
