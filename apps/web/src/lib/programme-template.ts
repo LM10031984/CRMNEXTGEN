@@ -1,12 +1,10 @@
 /**
  * Template HTML du programme de formation Start Academy.
  *
- * Structure alignée sur le DOCX de référence (Maîtriser l'IA…) :
- * en-tête avec logo Start Academy, titre formation, sections OBJECTIFS /
- * PUBLIC VISÉ / NIVEAU PRÉREQUIS / DURÉE / MOYENS PÉDAGOGIQUES /
- * CONTENU DÉTAILLÉ. Footer corporate Start Academy.
- *
- * Charte : couleur primaire #00B4E6 (bleu logo) + #00527A (texte titres).
+ * Structure ALIGNÉE STRICTEMENT sur les 3 modèles DOCX fournis par Laurent
+ * (Maitrisez l'IA en 3 jours, Management & performance, Immobilier 2h/jour) :
+ * 11 sections en MAJUSCULES, formulations exactes des phrases standard,
+ * footer corporate fixe identique au DOCX.
  */
 
 import { marked } from 'marked';
@@ -46,7 +44,7 @@ export interface ProgrammeData {
   produitTrainerProfile: string | null;
   produitPedagogicalSupport: string | null;
 
-  // OF (gardé pour compatibilité, mais lu depuis getOfConfig() en interne)
+  // OF (gardé pour compatibilité)
   ofName: string;
   ofSiret: string;
   ofAddress: string;
@@ -55,7 +53,6 @@ export interface ProgrammeData {
   ofEmail: string;
 }
 
-const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
 let logoCache: string | null = null;
@@ -76,126 +73,125 @@ const BRAND_DARK = '#00527A';
 
 const STYLES = `
 <style>
-  @page { size: A4; margin: 18mm 18mm 22mm 18mm; }
+  @page { size: A4; margin: 22mm 18mm 22mm 18mm; }
   * { box-sizing: border-box; }
   body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Calibri', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: 11pt;
-    color: #0F172A;
-    line-height: 1.55;
+    color: #1F2937;
+    line-height: 1.5;
     margin: 0;
   }
-  header.top {
-    border-bottom: 3px solid ${BRAND_BLUE};
-    padding-bottom: 12px;
-    margin-bottom: 22px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+
+  /* Logo en haut centré */
+  header.cover {
+    text-align: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
   }
-  header.top img.logo { height: 56px; width: auto; }
-  header.top .meta {
-    font-size: 8.5pt;
-    color: #64748B;
-    text-align: right;
-  }
+  header.cover img.logo { height: 70px; width: auto; }
+
+  /* Titre principal */
   h1.title {
-    font-size: 20pt;
+    font-size: 22pt;
     color: ${BRAND_DARK};
-    margin: 0 0 18px 0;
+    text-align: center;
+    margin: 8px 0 24px 0;
     line-height: 1.25;
     font-weight: 700;
   }
-  .badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 22px;
-  }
-  .badge {
-    display: inline-block;
-    background: ${BRAND_BLUE};
-    color: white;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 9pt;
-    font-weight: 600;
-  }
+
+  /* Sections : MAJUSCULES, gras, soulignées dans le DOCX */
   h2.section {
+    font-size: 12pt;
+    color: ${BRAND_DARK};
+    margin: 20px 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    border-bottom: 1.5px solid ${BRAND_BLUE};
+    padding-bottom: 3px;
+  }
+
+  /* Sous-sections (Jour 1, Matin, etc.) */
+  h3.day {
     font-size: 11pt;
     color: ${BRAND_DARK};
-    margin: 22px 0 8px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
     font-weight: 700;
-    border-bottom: 2px solid ${BRAND_BLUE};
-    padding-bottom: 4px;
-  }
-  h3 {
-    font-size: 10.5pt;
-    color: ${BRAND_DARK};
     margin: 14px 0 4px 0;
+  }
+  h4.timeslot {
+    font-size: 10.5pt;
     font-weight: 600;
+    color: #334155;
+    margin: 10px 0 3px 0;
   }
+
   p { margin: 4px 0 8px 0; }
-  ul { margin: 4px 0 10px 18px; padding: 0; }
-  li { margin-bottom: 4px; }
-  table.summary {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 8px 0 16px 0;
-    font-size: 10pt;
+  ul {
+    margin: 4px 0 10px 22px;
+    padding: 0;
+    list-style-type: disc;
   }
-  table.summary td {
-    padding: 6px 10px;
-    border-bottom: 1px solid #E2E8F0;
-    vertical-align: top;
-  }
-  table.summary td:first-child {
-    color: #64748B;
-    width: 36%;
-    font-size: 9pt;
-  }
-  table.summary td:last-child { font-weight: 500; }
-  .programme-md { font-size: 10.5pt; }
-  .programme-md p { margin: 6px 0; }
+  ul ul { list-style-type: circle; margin-top: 2px; }
+  li { margin-bottom: 3px; }
+
+  /* Markdown rendu pour le contenu détaillé */
+  .programme-md p { margin: 4px 0; }
   .programme-md h2 {
     font-size: 11pt;
     color: ${BRAND_DARK};
-    margin: 14px 0 6px 0;
-    border: none;
+    font-weight: 700;
     text-transform: none;
+    border: none;
     padding: 0;
     letter-spacing: 0;
+    margin: 14px 0 4px 0;
   }
   .programme-md h3 {
-    font-size: 10pt;
-    color: ${BRAND_DARK};
-    margin: 12px 0 4px 0;
+    font-size: 10.5pt;
+    color: #334155;
+    font-weight: 600;
+    margin: 10px 0 3px 0;
   }
-  section { page-break-inside: avoid; }
-  .signature-block {
-    margin-top: 26px;
-    border: 1px dashed #94A3B8;
-    border-radius: 6px;
-    padding: 14px;
-    font-size: 10pt;
+  .programme-md strong { color: ${BRAND_DARK}; }
+
+  /* Tarif final */
+  .tarif {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-left: 3px solid ${BRAND_BLUE};
+    background: #F0F9FF;
+    font-size: 11pt;
   }
-  .signature-block .label { color: #64748B; font-size: 8.5pt; }
-  .signature-block .name { font-weight: 600; margin-top: 4px; }
+  .tarif strong { color: ${BRAND_DARK}; }
+
+  /* Récap session (encart bleu en début) */
+  .session-recap {
+    margin-top: 8px;
+    margin-bottom: 18px;
+    padding: 10px 14px;
+    background: #F8FAFC;
+    border-left: 3px solid ${BRAND_BLUE};
+    font-size: 9.5pt;
+  }
+  .session-recap div { margin: 2px 0; }
+  .session-recap .label { color: #64748B; display: inline-block; min-width: 90px; }
+
+  section { page-break-inside: auto; }
+
   footer.corp {
     position: fixed;
-    bottom: 6mm;
+    bottom: 8mm;
     left: 18mm;
     right: 18mm;
-    border-top: 1px solid #CBD5E1;
-    padding-top: 5px;
+    border-top: 1px solid #94A3B8;
+    padding-top: 4px;
     font-size: 7.5pt;
-    color: #64748B;
+    color: #475569;
     text-align: center;
     line-height: 1.45;
   }
-  footer.corp strong { color: ${BRAND_DARK}; }
 </style>
 `;
 
@@ -207,22 +203,63 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+const DEFAULT_TARGET_AUDIENCE =
+  "Professionnels de l'immobilier (agents commerciaux, conseillers, négociateurs, gérants d'agences) souhaitant développer leurs compétences.";
+const DEFAULT_PREREQUISITES = "Aucun prérequis spécifique.";
+const DEFAULT_PEDAGOGICAL_METHODS =
+  "La formation se déroule en présentiel.\nLes formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.";
+const DEFAULT_PEDAGOGICAL_SUPPORT =
+  "Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.";
+const DEFAULT_TRAINER_PROFILE =
+  "Tous les formateurs de l'équipe Start Academy ont minimum 8 années d'expérience dans l'immobilier, notamment dans le domaine de la vente de biens, de formation d'agents et de coaching d'équipes commerciales.";
+const DEFAULT_EVALUATION_METHODS =
+  "- Une liste d'émargement est à signer à la demi-journée.\n- Un certificat de réalisation sera délivré à chaque participant à la fin de la formation.\n- Une évaluation sous forme de QCM aura lieu en fin de formation.\n- Évaluation de la satisfaction stagiaire et évaluation de la montée en compétences étape par étape par des mises en situation pratiques.";
+const DEFAULT_ACCESS_CONDITIONS =
+  "Afin de vous inscrire à notre formation, merci de contacter minimum 14 jours avant le début de la formation.\nUne fois votre inscription validée, nous vous adresserons une convention de formation et une convocation vous sera envoyée par mail 7 jours avant le début de la formation.\nEn cas de subrogation de paiement, un accord du financeur doit nous être parvenu avec le début de la formation.";
+const DEFAULT_ACCESSIBILITY =
+  "La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l'accès à l'emploi des personnes en situation de handicap.\nNotre organisme tente de donner à tous les mêmes chances d'accéder ou de maintenir l'emploi.\nNous pouvons adapter certaines de nos modalités de formation, pour cela, nous étudierons ensemble vos besoins.";
+
+/**
+ * Convertit "70" en "70 heures (1 journée de 7 heures)" / "21" en
+ * "21 heures (3 journées de 7 heures)". Heuristique simple basée sur 7h/jour.
+ */
+function formatDuree(heures: number): string {
+  if (heures <= 0) return '—';
+  if (heures === 7) return '7 heures (1 journée)';
+  if (heures % 7 === 0) {
+    const j = heures / 7;
+    return `${heures} heures (${j} journée${j > 1 ? 's' : ''} de 7 heures)`;
+  }
+  if (heures === 8) return '8 heures (1 journée)';
+  if (heures % 8 === 0) {
+    const j = heures / 8;
+    return `${heures} heures (${j} journée${j > 1 ? 's' : ''} de 8 heures)`;
+  }
+  return `${heures} heures`;
+}
+
 export function renderProgrammeHtml(data: ProgrammeData): string {
   const of = getOfConfig();
   const logoDataUrl = loadLogoDataUrl();
+
+  const objectifs = data.produitObjectifs.length > 0
+    ? data.produitObjectifs
+    : ['Objectifs à définir dans la fiche produit.'];
+
   const programmeHtml = data.produitProgrammeMd
     ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)
-    : '<em>Programme à compléter dans la fiche produit.</em>';
-
-  const objectifsHtml =
-    data.produitObjectifs.length > 0
-      ? `<ul>${data.produitObjectifs.map((o) => `<li>${escapeHtml(o)}</li>`).join('')}</ul>`
-      : '<em>Objectifs à compléter dans la fiche produit.</em>';
+    : '<p><em>Programme à compléter dans la fiche produit (champ Programme détaillé).</em></p>';
 
   const formateurs = data.sessionFormateurs.length > 0 ? data.sessionFormateurs.join(', ') : 'À confirmer';
-
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
-  const today = new Date();
+
+  // Méthodes pédagogiques : on s'assure que la phrase générique livret/Canva
+  // apparaît toujours en dernière ligne (pattern Start Academy)
+  let methods = (data.produitPedagogicalMethods ?? DEFAULT_PEDAGOGICAL_METHODS).trim();
+  let support = (data.produitPedagogicalSupport ?? DEFAULT_PEDAGOGICAL_SUPPORT).trim();
+  if (!methods.toLowerCase().includes('livret') && !support.toLowerCase().includes('livret')) {
+    support = DEFAULT_PEDAGOGICAL_SUPPORT;
+  }
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -233,63 +270,62 @@ ${STYLES}
 </head>
 <body>
 
-<header class="top">
+<header class="cover">
   ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<div style="font-size:18pt;font-weight:700;color:${BRAND_DARK};">${escapeHtml(of.name)}</div>`}
-  <div class="meta">
-    <div><strong>${escapeHtml(data.sessionCode)}</strong></div>
-    <div>${escapeHtml(data.produitCode)}</div>
-    <div>${fmtDate.format(today)}</div>
-  </div>
 </header>
 
 <h1 class="title">${escapeHtml(data.produitTitre)}</h1>
 
-<div class="badges">
-  <span class="badge">${data.produitDureeHeures} heures</span>
-  <span class="badge">${escapeHtml(data.sessionModalite)}</span>
-  <span class="badge">${fmtEUR.format(data.produitPriceHT)} HT</span>
+${data.sessionCode ? `
+<div class="session-recap">
+  <div><span class="label">Session :</span> <strong>${escapeHtml(data.sessionCode)}</strong></div>
+  <div><span class="label">Apprenant :</span> ${escapeHtml(`${data.apprenantPrenom} ${data.apprenantNom}`)}</div>
+  <div><span class="label">Dates :</span> du ${data.sessionStartDate.toLocaleDateString('fr-FR')} au ${data.sessionEndDate.toLocaleDateString('fr-FR')}</div>
+  <div><span class="label">Lieu :</span> ${escapeHtml(data.sessionLieu ?? of.addressFull)}</div>
+  <div><span class="label">Formateur :</span> ${escapeHtml(formateurs)}</div>
 </div>
+` : ''}
 
 <section>
-  <h2 class="section">Récapitulatif de la session</h2>
-  <table class="summary">
-    <tr><td>Intitulé</td><td>${escapeHtml(data.produitTitre)}</td></tr>
-    <tr><td>Code session</td><td>${escapeHtml(data.sessionCode)}</td></tr>
-    <tr><td>Apprenant</td><td>${escapeHtml(`${data.apprenantPrenom} ${data.apprenantNom}`)}</td></tr>
-    <tr><td>Dates</td><td>du ${fmtDate.format(data.sessionStartDate)} au ${fmtDate.format(data.sessionEndDate)}</td></tr>
-    <tr><td>Durée totale</td><td>${data.produitDureeHeures} heures</td></tr>
-    <tr><td>Modalité</td><td>${escapeHtml(data.sessionModalite)}</td></tr>
-    <tr><td>Lieu</td><td>${escapeHtml(data.sessionLieu ?? of.addressFull)}</td></tr>
-    <tr><td>Formateur(s)</td><td>${escapeHtml(formateurs)}</td></tr>
-    <tr><td>Tarif HT / apprenant</td><td>${fmtEUR.format(data.produitPriceHT)}</td></tr>
-  </table>
-</section>
-
-<section>
-  <h2 class="section">Les objectifs pédagogiques de la formation</h2>
+  <h2 class="section">Les objectifs pédagogiques de formation</h2>
   <p>À l'issue de la formation, le stagiaire sera capable de :</p>
-  ${objectifsHtml}
+  <ul>${objectifs.map((o) => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
 </section>
 
 <section>
   <h2 class="section">Public visé</h2>
-  <p>${escapeHtml(data.produitTargetAudience ?? "Professionnels de l'immobilier (agents commerciaux, conseillers, négociateurs, gérants d'agences) souhaitant développer leurs compétences.")}</p>
+  ${escapeHtml(data.produitTargetAudience ?? DEFAULT_TARGET_AUDIENCE)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
 </section>
 
 <section>
   <h2 class="section">Niveau de connaissances préalables requis</h2>
-  <p>${escapeHtml(data.produitPrerequisites ?? "Aucun prérequis spécifique.")}</p>
+  ${escapeHtml(data.produitPrerequisites ?? DEFAULT_PREREQUISITES)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
 </section>
 
 <section>
   <h2 class="section">La durée de formation</h2>
-  <p>${data.produitDureeHeures} heures.</p>
+  <p>${formatDuree(data.produitDureeHeures)}</p>
 </section>
 
 <section>
   <h2 class="section">Les moyens pédagogiques et techniques</h2>
-  <p>${escapeHtml(data.produitPedagogicalMethods ?? "Apports théoriques alternés avec mises en situation pratiques, cas concrets, exercices et échanges entre participants.")}</p>
-  <p>${escapeHtml(data.produitPedagogicalSupport ?? "Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.")}</p>
+  ${escapeHtml(methods)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
+  <p>${escapeHtml(support)}</p>
 </section>
 
 <section>
@@ -298,35 +334,54 @@ ${STYLES}
 </section>
 
 <section>
-  <h2 class="section">Modalités d'évaluation</h2>
-  <p>${escapeHtml(data.produitEvaluationMethods ?? "Évaluation continue par le formateur · QCM final · Grille d'observation · Questionnaire de satisfaction.")}</p>
+  <h2 class="section">L'encadrement de l'action de formation</h2>
+  <p>${escapeHtml(data.produitTrainerProfile ?? DEFAULT_TRAINER_PROFILE)}</p>
+  ${formateurs && formateurs !== 'À confirmer' ? `<p>Formateur(s) de cette session : <strong>${escapeHtml(formateurs)}</strong>.</p>` : ''}
 </section>
 
 <section>
-  <h2 class="section">Profil du formateur</h2>
-  <p>${escapeHtml(data.produitTrainerProfile ?? `Formateur expérimenté du secteur immobilier, qualifié et habilité à dispenser cette formation. Formateur(s) de cette session : ${formateurs}.`)}</p>
+  <h2 class="section">Les moyens d'évaluation mise en œuvre et suivi</h2>
+  ${escapeHtml(data.produitEvaluationMethods ?? DEFAULT_EVALUATION_METHODS)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
+</section>
+
+<section>
+  <h2 class="section">Modalités d'inscription et délai d'accès à notre formation</h2>
+  ${escapeHtml(data.produitAccessConditions ?? DEFAULT_ACCESS_CONDITIONS)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
+  <p>Pour toute question, merci de contacter ${escapeHtml(respFullName)} — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
 </section>
 
 <section>
   <h2 class="section">Accessibilité aux personnes en situation de handicap</h2>
-  <p>${escapeHtml(data.produitAccessibility ?? `${of.name} est attentif à l'accessibilité de ses formations. Pour toute situation particulière, merci de nous contacter en amont à ${of.email} pour étudier ensemble les adaptations nécessaires.`)}</p>
+  ${escapeHtml(data.produitAccessibility ?? DEFAULT_ACCESSIBILITY)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')}
+  <p>Pour toutes questions, merci de contacter ${escapeHtml(respFullName)} — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
 </section>
 
 <section>
-  <h2 class="section">Conditions d'accès et délais</h2>
-  <p>${escapeHtml(data.produitAccessConditions ?? "Inscription ouverte jusqu'à 7 jours avant le démarrage de la session, sous réserve des places disponibles.")}</p>
+  <h2 class="section">Tarif</h2>
+  <div class="tarif">
+    <strong>${fmtEUR.format(data.produitPriceHT)}</strong> HT par stagiaire
+    <span style="color:#64748B; font-size: 9.5pt;">— TVA non applicable en vertu de l'article 261-4-4° du CGI.</span>
+  </div>
 </section>
 
-<div class="signature-block">
-  <div class="label">Apprenant — Lu et approuvé</div>
-  <div class="name">${escapeHtml(`${data.apprenantPrenom} ${data.apprenantNom}`)}</div>
-  <div style="height: 36px;"></div>
-  <div class="label">Date et signature</div>
-</div>
-
 <footer class="corp">
-  <strong>${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
-  NDA ${escapeHtml(of.rnq)} – Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – ${escapeHtml(of.phone)}
+  <strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
+  NDA ${escapeHtml(of.rnq)} - Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – Tél : ${escapeHtml(of.phone)}
 </footer>
 
 </body>

@@ -163,10 +163,10 @@ export async function updateTrainingProduct(input: {
 
 // ── Création produit de formation ────────────────────────────────────────
 /**
- * Création d'un produit de formation avec les champs minimum nécessaires
- * pour l'utiliser tout de suite dans le wizard nouvelle session.
- * Les autres champs (objectifs, méthodes pédago, prérequis…) seront
- * complétés depuis la fiche produit via updateTrainingProduct.
+ * Création d'un produit de formation. Tous les champs Qualiopi (objectifs,
+ * public, prérequis, méthodes, supports, évaluation, formateur, accessibilité,
+ * conditions d'accès, programme détaillé) sont supportés pour permettre la
+ * création complète depuis le wizard, optionnellement pré-remplie par IA.
  */
 export async function createTrainingProduct(input: {
   title: string;
@@ -175,6 +175,17 @@ export async function createTrainingProduct(input: {
   modality?: 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
   theme?: string | null;
   capacityMax?: number;
+  // Champs Qualiopi optionnels (alignés avec updateTrainingProduct)
+  objectives?: string[];
+  programMd?: string;
+  prerequisites?: string | null;
+  targetAudience?: string | null;
+  pedagogicalMethods?: string | null;
+  pedagogicalSupport?: string | null;
+  evaluationMethods?: string | null;
+  trainerProfile?: string | null;
+  accessibility?: string | null;
+  accessConditions?: string | null;
 }): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -205,8 +216,16 @@ export async function createTrainingProduct(input: {
       capacityMax: input.capacityMax ?? 12,
       capacityMin: 1,
       theme: input.theme ?? null,
-      objectives: [] as Prisma.InputJsonValue,
-      programMd: '',
+      objectives: (input.objectives ?? []) as Prisma.InputJsonValue,
+      programMd: input.programMd ?? '',
+      prerequisites: input.prerequisites ?? null,
+      targetAudience: input.targetAudience ?? null,
+      pedagogicalMethods: input.pedagogicalMethods ?? null,
+      pedagogicalSupport: input.pedagogicalSupport ?? null,
+      evaluationMethods: input.evaluationMethods ?? null,
+      trainerProfile: input.trainerProfile ?? null,
+      accessibility: input.accessibility ?? null,
+      accessConditions: input.accessConditions ?? null,
       vatRate: new Prisma.Decimal(0),
       version: 1,
       isActive: true,
