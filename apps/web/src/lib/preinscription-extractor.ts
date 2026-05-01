@@ -49,13 +49,23 @@ interface RibExtraction {
 }
 
 interface CfpExtraction {
-  socialSecurityNb: string | null;
-  affiliationUrssaf: string | null;
-  activityCode: string | null; // code APE
+  // Identité (cross-check avec saisie apprenant)
+  firstName: string | null;
+  lastName: string | null;
+  // Adresse stagiaire (utile pour résoudre le PA AGEFICE par dépt)
+  addressStreet: string | null;
+  addressPostalCode: string | null;
+  addressCity: string | null;
+  // Données légales (à pousser dans Person.SensitiveData et Org.AgeficeProfile)
+  socialSecurityNb: string | null;     // 13 chiffres + clé 2 chiffres
+  siret: string | null;                // 14 chiffres SIRET de l'auto-entreprise
+  numTi: string | null;                // Numéro Travailleur Indépendant URSSAF
+  affiliationUrssaf: string | null;    // si présent
+  activityCode: string | null;         // code APE/NAF "6831Z" pour immobilier
+  // Cotisation
   contributionAmount: number | null;
   contributionYear: number | null;
-  paName: string | null; // Nom du PA AGEFICE
-  paAddress: string | null;
+  attestationDate: string | null;      // date de l'attestation (ISO)
 }
 
 const PROMPTS = {
@@ -93,17 +103,25 @@ Document :
 {TEXT}
 =====`,
 
-  CFP: `Voici le texte extrait d'une Attestation de Contribution à la Formation Professionnelle (CFP) française, généralement émise par l'URSSAF pour les indépendants AGEFICE.
+  CFP: `Voici le texte extrait d'une Attestation de Contribution à la Formation Professionnelle (CFP) émise par l'URSSAF pour les micro-entrepreneurs / auto-entrepreneurs cotisant à l'AGEFICE.
+
+Format type : "MR/MME [NOM] [Prénom]" / "[Adresse]" / "[CP] [Ville]" / "N° Sécurité Sociale [13 chiffres]" / "N° SIRET [14 chiffres]" / "N° TI [chiffres]" / "CODE NAF [4 chiffres + lettre]" / "Vous avez acquitté un versement de [montant] euros, relatif à la contribution due au titre de l'exercice [année]." / "A [Ville], le [Date]"
 
 Extrais ces champs au format JSON strict :
 {
-  "socialSecurityNb": "Numéro de Sécurité sociale à 13 chiffres + clé 2 chiffres si visible (chaîne ou null)",
-  "affiliationUrssaf": "N° d'affiliation URSSAF (chaîne ou null)",
-  "activityCode": "Code activité (APE/NAF) au format 0000A (chaîne ou null)",
-  "contributionAmount": "Montant de la contribution versée (nombre ou null)",
-  "contributionYear": "Année de la contribution (entier YYYY ou null)",
-  "paName": "Nom du Point d'Accueil AGEFICE rattaché (chaîne ou null)",
-  "paAddress": "Adresse complète du PA AGEFICE (chaîne ou null)"
+  "firstName": "Prénom (chaîne ou null) — STEVE pour 'MR NOEL STEVE'",
+  "lastName": "Nom (chaîne MAJUSCULES ou null) — NOEL pour 'MR NOEL STEVE'",
+  "addressStreet": "Rue + bâtiment du stagiaire (chaîne ou null)",
+  "addressPostalCode": "Code postal du stagiaire à 5 chiffres (chaîne ou null)",
+  "addressCity": "Ville du stagiaire (chaîne ou null)",
+  "socialSecurityNb": "N° Sécurité sociale à 13 chiffres (chaîne ou null) — sans la clé",
+  "siret": "N° SIRET à 14 chiffres (chaîne ou null)",
+  "numTi": "N° TI (Numéro Travailleur Indépendant) (chaîne ou null)",
+  "affiliationUrssaf": "Autre n° URSSAF si présent (chaîne ou null)",
+  "activityCode": "Code NAF/APE au format 0000A (chaîne ou null) — ex 6831Z",
+  "contributionAmount": "Montant en euros de la contribution versée (nombre ou null)",
+  "contributionYear": "Année (4 chiffres) de l'exercice cotisé (entier ou null)",
+  "attestationDate": "Date d'émission de l'attestation au format ISO YYYY-MM-DD (chaîne ou null)"
 }
 
 Document :
@@ -123,7 +141,11 @@ interface ExtractionResult {
 async function extractOne<T>(text: string, kind: keyof typeof PROMPTS): Promise<T | null> {
   if (text.trim().length < 20) return null;
   const prompt = PROMPTS[kind].replace('{TEXT}', text.slice(0, 6000));
+  // mistral-small:24b est ~3-5x plus rapide que qwen3:30b-a3b sur extraction
+  // structurée et tout aussi fiable sur les docs URSSAF/RIB courts. On le
+  // garde par défaut, override possible via OLLAMA_MODEL_FAST.
   const r = await callOllama({
+    model: process.env.OLLAMA_MODEL_FAST,
     systemPrompt: SYSTEM_PROMPT,
     prompt,
     jsonOutput: true,

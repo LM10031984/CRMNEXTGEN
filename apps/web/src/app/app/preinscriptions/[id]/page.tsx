@@ -9,6 +9,7 @@ import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { PreEnrollmentActions } from '@/components/preinscriptions/detail-actions';
 import { RetryExtractionButton } from '@/components/preinscriptions/retry-extraction-button';
+import { IdentityCheckPanel } from '@/components/preinscriptions/identity-check-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +119,16 @@ export default async function PreEnrollmentDetailPage({
       {/* Données IA */}
       {extracted && (
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <ExtractCard title="Carte d'identité" icon={CreditCard} data={extracted.cni} />
+          <IdentityCheckPanel
+            cni={extracted.cni}
+            saved={{
+              firstName: pe.firstName,
+              lastName: pe.lastName,
+              birthDate: pe.birthDate,
+              birthPlace: pe.birthPlace,
+            }}
+            hasDocument={!!pe.cniKey}
+          />
           <ExtractCard title="RIB" icon={Building2} data={extracted.rib} />
           <ExtractCard title="Attestation CFP" icon={FileText} data={extracted.cfp} />
         </section>

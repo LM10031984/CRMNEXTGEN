@@ -42,8 +42,11 @@ export function PreEnrollmentActions({
   const rib = extracted?.rib ?? {};
   const cfp = extracted?.cfp ?? {};
 
-  const [firstName, setFirstName] = useState(saved.firstName ?? cni.firstName ?? '');
-  const [lastName, setLastName] = useState(saved.lastName ?? cni.lastName ?? '');
+  // Cross-fill : la CFP est la source PRINCIPALE des données métier (n° SS,
+  // SIRET, adresse, identité). On lui donne priorité sur la CNI quand
+  // l'apprenant n'a pas saisi (saved → cfp → cni).
+  const [firstName, setFirstName] = useState(saved.firstName ?? cfp.firstName ?? cni.firstName ?? '');
+  const [lastName, setLastName] = useState(saved.lastName ?? cfp.lastName ?? cni.lastName ?? '');
   const [birthName, setBirthName] = useState(cni.birthName ?? '');
   const [email, setEmail] = useState(saved.email ?? '');
   const [phone, setPhone] = useState(saved.phone ?? '');
@@ -54,12 +57,12 @@ export function PreEnrollmentActions({
   const [professionalStatus, setProfessionalStatus] = useState(saved.professionalStatus ?? '');
 
   const [createEiOrg, setCreateEiOrg] = useState(true);
-  const [eiSiret, setEiSiret] = useState('');
+  const [eiSiret, setEiSiret] = useState(cfp.siret ?? '');
   const [eiLegalName, setEiLegalName] = useState('');
   const [eiNaf, setEiNaf] = useState(cfp.activityCode ?? '');
-  const [eiAddress, setEiAddress] = useState(rib.rawAddress ?? '');
-  const [eiCity, setEiCity] = useState('');
-  const [eiPostalCode, setEiPostalCode] = useState('');
+  const [eiAddress, setEiAddress] = useState(cfp.addressStreet ?? rib.rawAddress ?? '');
+  const [eiCity, setEiCity] = useState(cfp.addressCity ?? '');
+  const [eiPostalCode, setEiPostalCode] = useState(cfp.addressPostalCode ?? '');
 
   const [iban, setIban] = useState(rib.iban ?? '');
   const [bic, setBic] = useState(rib.bic ?? '');
@@ -68,7 +71,7 @@ export function PreEnrollmentActions({
   const [socialSecurityNb, setSocialSecurityNb] = useState(cfp.socialSecurityNb ?? '');
   const [paName, setPaName] = useState(cfp.paName ?? '');
   const [paAddress, setPaAddress] = useState(cfp.paAddress ?? '');
-  const [affiliationUrssaf, setAffiliationUrssaf] = useState(cfp.affiliationUrssaf ?? '');
+  const [affiliationUrssaf, setAffiliationUrssaf] = useState(cfp.affiliationUrssaf ?? cfp.numTi ?? '');
 
   const handleConvert = () => {
     setError(null);
