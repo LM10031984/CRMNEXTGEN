@@ -1,10 +1,13 @@
 import type { User } from 'lucia';
 import { logoutAction } from '@/app/login/actions';
+import { CmdkTrigger } from './cmdk-trigger';
 
 export function TopBar({ user }: { user: User }) {
   return (
-    <header className="h-14 border-b border-border bg-white flex items-center px-8 sticky top-0 z-10">
-      <div className="flex-1" />
+    <header className="h-14 border-b border-border bg-white flex items-center px-8 sticky top-0 z-10 gap-3">
+      <div className="flex-1 max-w-md">
+        <CmdkTrigger />
+      </div>
       <div className="flex items-center gap-3">
         <div className="text-right text-xs">
           <div className="font-medium leading-tight">{user.firstName} {user.lastName}</div>

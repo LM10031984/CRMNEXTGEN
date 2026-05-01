@@ -24,6 +24,7 @@
     "argon2": "^0.41.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "dotenv": "^16.4.7",
     "lucia": "^3.2.2",
     "lucide-react": "^0.471.0",
