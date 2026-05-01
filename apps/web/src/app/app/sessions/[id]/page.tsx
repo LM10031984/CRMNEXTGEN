@@ -14,6 +14,7 @@ import { EditParticipantButton } from '@/components/sessions/edit-participant-bu
 import { DeleteSessionButton } from '@/components/sessions/delete-session-button';
 import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
   DRAFT: { label: 'Brouillon', variant: 'muted' },
@@ -54,6 +55,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6 max-w-5xl">
+      <RecordRecentVisit
+        kind="session"
+        id={session.id}
+        title={session.name ?? session.code}
+        subtitle={`${session.code} · ${start.toLocaleDateString('fr-FR')}`}
+        href={`/app/sessions/${session.id}`}
+      />
       <div className="flex items-center justify-between">
         <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
         <div className="flex items-center gap-2">

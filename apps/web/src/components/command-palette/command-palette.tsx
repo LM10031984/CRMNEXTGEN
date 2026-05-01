@@ -30,18 +30,7 @@ import {
   type UniversalSearchResult,
   type UniversalHit,
 } from '@/server/actions/search-universal';
-
-const RECENT_KEY = 'qualiof-cmdk-recents';
-const RECENT_MAX = 5;
-
-interface RecentItem {
-  kind: UniversalHit['kind'];
-  id: string;
-  title: string;
-  subtitle: string | null;
-  href: string;
-  visitedAt: number;
-}
+import { loadRecents, saveRecent, type RecentItem } from '@/lib/cmdk-recents';
 
 const KIND_ICON: Record<UniversalHit['kind'], React.ComponentType<{ className?: string }>> = {
   person: User,
@@ -63,26 +52,6 @@ const SHORTCUTS = [
   { label: 'Dossiers OPCO', icon: ClipboardCheck, href: '/app/dossiers-opco', keywords: 'dossier opco agefice remboursement' },
   { label: 'Factures', icon: Receipt, href: '/app/factures', keywords: 'facture facturation paiement' },
 ] as const;
-
-function loadRecents(): RecentItem[] {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as RecentItem[];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecent(item: Omit<RecentItem, 'visitedAt'>) {
-  try {
-    const list = loadRecents().filter((r) => !(r.kind === item.kind && r.id === item.id));
-    list.unshift({ ...item, visitedAt: Date.now() });
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
-  } catch {
-    // ignore
-  }
-}
 
 export function CommandPalette() {
   const router = useRouter();

@@ -6,6 +6,8 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { EditProductButton } from '@/components/forms/edit-product-button';
+import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 
 const MOD_LABEL: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -29,12 +31,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link
-        href="/app/produits"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Retour au catalogue
-      </Link>
+      <RecordRecentVisit
+        kind="product"
+        id={product.id}
+        title={product.title}
+        subtitle={`${product.code} · ${product.durationHours}h`}
+        href={`/app/produits/${product.id}`}
+      />
+      <BackToListLink fallbackHref="/app/produits" label="Retour au catalogue" />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader

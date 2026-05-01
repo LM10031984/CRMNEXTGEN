@@ -16,6 +16,7 @@ import { BudgetAgefice } from '@/components/apprenants/budget-agefice';
 import { LearnerCompletenessBadge } from '@/components/apprenants/learner-completeness-badge';
 import { computeLearnerCompleteness } from '@/lib/learner-completeness';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -111,6 +112,13 @@ export default async function ApprenantDetailPage({
 
   return (
     <div className="space-y-6 max-w-5xl">
+      <RecordRecentVisit
+        kind="person"
+        id={person.id}
+        title={`${person.lastName.toUpperCase()} ${person.firstName}`}
+        subtitle={person.professionalStatus}
+        href={`/app/apprenants/${person.id}`}
+      />
       <BackToListLink fallbackHref="/app/apprenants" label="Retour à la liste" />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
