@@ -107,6 +107,10 @@ export async function updateParticipant(input: {
   priceHT?: number;
   enrollmentStatus?: keyof typeof EnrollmentStatus;
   sponsorOrgId?: string;
+  // Date de dépôt du dossier de financement (ex: dossier AGEFICE). Détermine
+  // l'année à laquelle s'applique le budget consommé. cf
+  // feedback_budget_agefice_annee_dossier. ISO yyyy-mm-dd ou null pour effacer.
+  financingRequestDate?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -132,6 +136,15 @@ export async function updateParticipant(input: {
     if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
     data.sponsorOrg = { connect: { id: input.sponsorOrgId } };
   }
+  if (input.financingRequestDate !== undefined) {
+    if (input.financingRequestDate === null || input.financingRequestDate === '') {
+      data.financingRequestDate = null;
+    } else {
+      const d = new Date(input.financingRequestDate);
+      if (Number.isNaN(d.getTime())) return { ok: false, error: 'Date dossier invalide.' };
+      data.financingRequestDate = d;
+    }
+  }
 
   if (Object.keys(data).length === 0) return { ok: true };
 
@@ -140,6 +153,7 @@ export async function updateParticipant(input: {
     data,
   });
   revalidatePath(`/app/sessions/${part.session.id}`);
+  revalidatePath('/app/budget-agefice');
   return { ok: true };
 }
 

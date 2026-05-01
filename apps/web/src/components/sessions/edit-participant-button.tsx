@@ -10,6 +10,7 @@ interface EditParticipantButtonProps {
   participantId: string;
   currentPriceHT: number;
   currentStatus: string;
+  currentFinancingRequestDate?: Date | string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -20,15 +21,26 @@ const STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'Annulé' },
 ] as const;
 
+function toIsoDate(d: Date | string | null | undefined): string {
+  if (!d) return '';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
 export function EditParticipantButton({
   participantId,
   currentPriceHT,
   currentStatus,
+  currentFinancingRequestDate,
 }: EditParticipantButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [priceHT, setPriceHT] = useState<string>(String(currentPriceHT));
   const [status, setStatus] = useState<string>(currentStatus);
+  const [financingRequestDate, setFinancingRequestDate] = useState<string>(
+    toIsoDate(currentFinancingRequestDate),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +61,7 @@ export function EditParticipantButton({
         participantId,
         priceHT: parsedPrice,
         enrollmentStatus: status as any,
+        financingRequestDate: financingRequestDate || null,
       });
       if (r.ok) {
         toast.success(`Inscription mise à jour — ${parsedPrice.toFixed(2)} €`);
@@ -116,6 +129,20 @@ export function EditParticipantButton({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Date de dépôt du dossier (AGEFICE / OPCO)
+                </label>
+                <input
+                  type="date"
+                  value={financingRequestDate}
+                  onChange={(e) => setFinancingRequestDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Détermine l'année à laquelle le budget AGEFICE est imputé. Vide = on prend la date de la session par défaut.
+                </p>
               </div>
               {error && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
