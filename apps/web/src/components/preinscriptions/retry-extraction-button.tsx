@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { retriggerExtraction } from '@/server/actions/preinscription-public';
 
 export function RetryExtractionButton({ preEnrollmentId }: { preEnrollmentId: string }) {
@@ -14,6 +15,7 @@ export function RetryExtractionButton({ preEnrollmentId }: { preEnrollmentId: st
     try {
       const r = await retriggerExtraction(preEnrollmentId);
       if (r.ok) {
+        toast.info('Extraction lancée — résultats dans ~10-30 sec', { duration: 5000 });
         // L'extraction tourne en arrière-plan ~10-30s. On rafraîchit
         // 4 fois sur 30s pour voir le résultat apparaître au fil de l'eau.
         let count = 0;
@@ -26,11 +28,11 @@ export function RetryExtractionButton({ preEnrollmentId }: { preEnrollmentId: st
           }
         }, 7500);
       } else {
-        alert(`Erreur : ${r.error}`);
+        toast.error(r.error ?? 'Erreur lors de la relance');
         setBusy(false);
       }
     } catch (e: any) {
-      alert(`Erreur : ${e?.message ?? e}`);
+      toast.error(`Erreur : ${e?.message ?? e}`);
       setBusy(false);
     }
   }

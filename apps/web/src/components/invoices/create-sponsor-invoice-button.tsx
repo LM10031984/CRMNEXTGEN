@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Receipt } from 'lucide-react';
+import { toast } from 'sonner';
 import { createInvoiceForSponsorGroup } from '@/server/actions/invoices';
 
 export function CreateSponsorInvoiceButton({
@@ -42,12 +43,13 @@ export function CreateSponsorInvoiceButton({
     try {
       const r = await createInvoiceForSponsorGroup({ sessionId, sponsorOrgId });
       if (r.ok) {
+        toast.success(`Facture ${r.number} émise — ${totalHT.toFixed(2)} € HT`);
         router.refresh();
       } else {
-        alert(`Erreur : ${r.error}`);
+        toast.error(r.error ?? 'Erreur lors de la génération de la facture');
       }
     } catch (e: any) {
-      alert(`Erreur : ${e?.message ?? e}`);
+      toast.error(`Erreur : ${e?.message ?? e}`);
     } finally {
       setBusy(false);
     }

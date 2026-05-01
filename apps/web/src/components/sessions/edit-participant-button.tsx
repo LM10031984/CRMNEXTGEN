@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil } from 'lucide-react';
+import { toast } from 'sonner';
 import { updateParticipant } from '@/server/actions/sessions';
 
 interface EditParticipantButtonProps {
@@ -23,6 +25,7 @@ export function EditParticipantButton({
   currentPriceHT,
   currentStatus,
 }: EditParticipantButtonProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [priceHT, setPriceHT] = useState<string>(String(currentPriceHT));
   const [status, setStatus] = useState<string>(currentStatus);
@@ -48,7 +51,9 @@ export function EditParticipantButton({
         enrollmentStatus: status as any,
       });
       if (r.ok) {
+        toast.success(`Inscription mise à jour — ${parsedPrice.toFixed(2)} €`);
         setOpen(false);
+        router.refresh();
       } else {
         setError(r.error ?? 'Erreur inconnue.');
       }

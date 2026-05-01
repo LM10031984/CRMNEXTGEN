@@ -8,6 +8,7 @@
 
 import { useState, useTransition } from 'react';
 import { Plus, X, Search, UserCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { searchPersons } from '@/server/actions/persons';
 import { createLegalLink } from '@/server/actions/legal-links';
 
@@ -69,6 +70,7 @@ export function AddPersonToOrgButton({
         role: role as Parameters<typeof createLegalLink>[0]['role'],
       });
       if (r.ok) {
+        toast.success(`${selected?.firstName} ${selected?.lastName.toUpperCase()} rattaché·e`);
         setOpen(false);
         setSelected(null);
         setQuery('');

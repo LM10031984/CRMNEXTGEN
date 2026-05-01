@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
+import { toast } from 'sonner';
 
 export interface EditField {
   name: string;
@@ -65,6 +66,7 @@ export function EditModal({
     try {
       const r = await onSubmit(cleaned);
       if (r.ok) {
+        toast.success('Modifications enregistrées');
         setOpen(false);
         onSuccess?.();
         // refresh côté serveur via revalidatePath dans l'action

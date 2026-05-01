@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { deleteSession } from '@/server/actions/sessions';
 
 export function DeleteSessionButton({
@@ -27,13 +28,14 @@ export function DeleteSessionButton({
     try {
       const r = await deleteSession(sessionId);
       if (r.ok) {
+        toast.success(`Session ${sessionCode} supprimée`);
         router.push('/app/sessions');
       } else {
-        alert(`Erreur : ${r.error}`);
+        toast.error(r.error ?? 'Erreur lors de la suppression');
         setBusy(false);
       }
     } catch (e: any) {
-      alert(`Erreur : ${e?.message ?? e}`);
+      toast.error(`Erreur : ${e?.message ?? e}`);
       setBusy(false);
     }
   }
