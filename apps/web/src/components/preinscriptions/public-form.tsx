@@ -62,8 +62,8 @@ export function PublicPreEnrollmentForm({
   const [slots, setSlots] = useState<FileSlot[]>([
     {
       kind: 'CNI',
-      label: 'Carte d\'identité (CNI)',
-      description: 'Photo recto/verso ou scan PDF',
+      label: 'Pièce d\'identité',
+      description: 'CNI, passeport ou titre de séjour — photo (JPG/PNG) ou PDF',
       icon: CreditCard,
       required: true,
       file: null,
@@ -71,7 +71,7 @@ export function PublicPreEnrollmentForm({
     {
       kind: 'RIB',
       label: 'RIB',
-      description: 'PDF du RIB de ton compte professionnel',
+      description: 'PDF ou photo du RIB de ton compte professionnel',
       icon: Building2,
       required: true,
       file: null,
@@ -79,7 +79,7 @@ export function PublicPreEnrollmentForm({
     {
       kind: 'CFP',
       label: 'Attestation CFP AGEFICE',
-      description: 'Attestation de paiement de la contribution à la formation pro',
+      description: "Attestation URSSAF de versement de la contribution à la formation pro (recommandée pour pré-remplir le dossier)",
       icon: FileText,
       required: false,
       file: null,
