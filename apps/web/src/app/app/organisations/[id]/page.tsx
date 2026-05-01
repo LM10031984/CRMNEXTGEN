@@ -6,6 +6,7 @@ import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { EditOrganizationButton } from '@/components/forms/edit-organization-button';
+import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
 
 const FORM_LABEL: Record<string, string> = {
@@ -143,10 +144,14 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
           </section>
 
           <section className="rounded-2xl border border-border bg-white p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Personnes rattachées ({org.legalLinks.length})
               </h2>
+              <AddPersonToOrgButton
+                organizationId={org.id}
+                excludePersonIds={org.legalLinks.map((l) => l.person.id)}
+              />
             </div>
             {org.legalLinks.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">Aucune personne rattachée.</p>

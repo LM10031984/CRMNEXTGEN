@@ -49,9 +49,28 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
   const { q, filter, page: pageStr } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
 
+  // Les financeurs (PA AGEFICE, OPCO_EP, ATLAS, etc.) ne sont PAS des
+  // organisations clientes/employeurs. Ils vivent dans AgeficePointAccueil
+  // ou OpcoCatalog et apparaissent dans /app/financeurs. On les exclut
+  // d'ici pour que la liste reste celle des entreprises clientes (EI,
+  // SARL, agences, enseignes).
+  const FINANCER_NAME_PREFIXES = [
+    'AGEFICE',
+    'OPCO_EP',
+    'OPCO EP',
+    'ATLAS',
+    'CPF',
+    'FI-FPL',
+    'FIF-PL',
+    'OPCOMMERCE',
+  ];
+
   const where: Prisma.OrganizationWhereInput = {
     tenantId: user.tenantId,
     archived: false,
+    AND: FINANCER_NAME_PREFIXES.map((p) => ({
+      legalName: { not: { startsWith: p, mode: 'insensitive' as const } },
+    })),
   };
   if (q && q.trim()) {
     const term = q.trim();
