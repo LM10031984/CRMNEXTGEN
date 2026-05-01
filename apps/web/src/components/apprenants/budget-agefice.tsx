@@ -1,6 +1,7 @@
 /**
- * Compteur Budget AGEFICE — montant consommé sur l'année civile vs plafond
- * 3 000 € (validé par Laurent le 30/04/2026).
+ * Compteur Budget AGEFICE — montant consommé sur l'année où le dossier a été
+ * monté (financingRequestDate) vs plafond 3 000 €. Cf
+ * feedback_budget_agefice_annee_dossier.
  */
 
 import Link from 'next/link';
@@ -84,7 +85,7 @@ export function BudgetAgefice({
 
       {sessions.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">
-          Aucune formation cofinancée AGEFICE en {year}.
+          Aucun dossier AGEFICE déposé en {year}.
         </p>
       ) : (
         <ul className="divide-y divide-border text-sm">

@@ -82,12 +82,16 @@ export default async function ApprenantDetailPage({
     0,
   );
 
-  // Budget AGEFICE année civile en cours (cf mémoire : plafond 3000€/an)
+  // Budget AGEFICE de l'année où le dossier a été monté (financingRequestDate),
+  // PAS l'année de la session (cf mémoire feedback_budget_agefice_annee_dossier).
+  // Tant que le dossier n'est pas monté (financingRequestDate null), on exclut
+  // du calcul : le budget n'est pas encore consommé.
   const currentYear = new Date().getFullYear();
   const ageficeParticipations = person.participations.filter(
     (p) =>
       p.sponsorOrg?.opcoCode === 'AGEFICE' &&
-      new Date(p.session.startDate).getFullYear() === currentYear,
+      p.financingRequestDate != null &&
+      new Date(p.financingRequestDate).getFullYear() === currentYear,
   );
   const ageficeConsumed = ageficeParticipations.reduce(
     (s, p) => s + Number(p.priceHT),

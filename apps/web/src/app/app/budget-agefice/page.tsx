@@ -1,5 +1,7 @@
 /**
- * Vue Budget AGEFICE par apprenant (année calendaire en cours).
+ * Vue Budget AGEFICE par apprenant. L'année se compte sur la date où le
+ * dossier a été monté (financingRequestDate), PAS la date de la session
+ * (cf feedback_budget_agefice_annee_dossier).
  *
  * Cas d'usage prioritaire (validé par Laurent 30/04/2026) : repérer les
  * apprenants qui n'ont pas encore consommé tout leur plafond annuel
@@ -66,7 +68,7 @@ export default async function BudgetAgeficePage({
 
       <PageHeader
         title={`Budget AGEFICE — ${year}`}
-        subtitle={`Plafond ${fmtEUR.format(PLAFOND_AGEFICE)} / apprenant / année calendaire — repère qui peut encore consommer`}
+        subtitle={`Plafond ${fmtEUR.format(PLAFOND_AGEFICE)} / apprenant / année du dossier déposé — repère qui peut encore consommer`}
       />
 
       {/* KPIs */}
