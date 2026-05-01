@@ -19,7 +19,8 @@ import { prisma, type ClosureDocKind, type DocType, type PedagogicalKind } from 
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { getWorkerRedis } from './redis';
 import { CLOSURE_QUEUE_NAME } from './queue';
-import { renderMockClosureDoc } from './mock-renderer';
+import { renderClosureDoc } from './renderer';
+import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
 
 const CONCURRENCY = Number(process.env.CLOSURE_WORKER_CONCURRENCY ?? 5);
@@ -77,24 +78,43 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
   await markBatchRunningIfNeeded(payload.batchId);
 
   try {
-    // 2. Charge les données nécessaires au render
+    // 2. Charge les données nécessaires au render (participant + session + product + location + trainers)
     const participant = await prisma.sessionParticipant.findFirst({
       where: { id: payload.participantId, session: { tenantId: payload.tenantId } },
       include: {
         person: true,
-        session: { include: { product: true } },
+        session: {
+          include: {
+            product: true,
+            location: true,
+            trainers: { include: { person: true } },
+          },
+        },
       },
     });
     if (!participant) throw new Error(`Inscription introuvable : ${payload.participantId}`);
 
-    const ctx = {
-      participantFullName: `${participant.person.firstName} ${participant.person.lastName}`.trim(),
-      sessionCode: participant.session.code,
-      sessionTitle: participant.session.product.title,
+    const session = participant.session;
+    const product = session.product;
+    const sessionLocation = session.location
+      ? `${session.location.name}${(session.location.address as { city?: string } | null)?.city ? ` — ${(session.location.address as { city?: string }).city}` : ''}`
+      : null;
+
+    const ctx: ClosureContext = {
+      apprenantPrenom: participant.person.firstName,
+      apprenantNom: participant.person.lastName,
+      apprenantCivility: participant.person.civility ?? null,
+      sessionCode: session.code,
+      sessionTitle: product.title,
+      sessionStartDate: session.startDate,
+      sessionEndDate: session.endDate,
+      sessionLocation,
+      sessionTrainers: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
+      durationHours: product.durationHours,
     };
 
-    // 3. Render PDF (mock Day 1, réel à partir de Day 2)
-    const { pdfBuffer, rawJson } = await renderMockClosureDoc(payload, ctx);
+    // 3. Render PDF via le dispatch real (Day 2 avec stubs IA, Day 3 avec Ollama)
+    const { pdfBuffer, rawJson } = await renderClosureDoc(payload.kind, ctx);
 
     // 4. Upload MinIO
     const hash = createHash('sha256').update(pdfBuffer).digest('hex');
