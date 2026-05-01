@@ -3,14 +3,18 @@
 import { EditModal } from './edit-modal';
 import { updateOrganization } from '@/server/actions/crud-edits';
 
+// Auto-entrepreneur = EI au régime micro (depuis 2016), une seule option
+// "Auto-entrepreneur" qui couvre les 2. En base on stocke AUTO_ENTREPRENEUR
+// pour cohérence avec la majorité des Org existantes (EI 216 + AE 27 → 243).
 const LEGAL_FORM_OPTIONS = [
-  { value: 'EI', label: 'Entreprise individuelle (EI)' },
-  { value: 'AUTO_ENTREPRENEUR', label: 'Auto-entrepreneur / Micro-entreprise' },
+  { value: 'AUTO_ENTREPRENEUR', label: 'Auto-entrepreneur (EI / Micro-entreprise)' },
   { value: 'EIRL', label: 'EIRL' },
   { value: 'SARL', label: 'SARL' },
   { value: 'SAS', label: 'SAS' },
   { value: 'SASU', label: 'SASU' },
+  { value: 'EURL', label: 'EURL' },
   { value: 'SA', label: 'SA' },
+  { value: 'ASSOCIATION', label: 'Association' },
   { value: 'AUTRE', label: 'Autre' },
 ];
 

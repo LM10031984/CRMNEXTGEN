@@ -29,16 +29,19 @@ interface SP {
   page?: string;
 }
 
+// Auto-entrepreneur et EI sont juridiquement la même chose (un AE = une EI
+// au régime micro depuis 2016). On les fusionne en un seul libellé pour
+// éviter la confusion dans l'UI. La distinction reste en base si besoin.
 const FORM_LABEL: Record<string, string> = {
-  EI: 'EI',
-  AUTO_ENTREPRENEUR: 'Auto-entr.',
+  EI: 'Auto-entrepreneur',
+  AUTO_ENTREPRENEUR: 'Auto-entrepreneur',
   EIRL: 'EIRL',
   SAS: 'SAS',
   SARL: 'SARL',
   SASU: 'SASU',
   EURL: 'EURL',
   SA: 'SA',
-  ASSOCIATION: 'Asso',
+  ASSOCIATION: 'Association',
   PARTICULIER: 'Particulier',
   AUTRE: 'Autre',
 };

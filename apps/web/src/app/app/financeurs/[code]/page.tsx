@@ -52,8 +52,9 @@ interface ParticipantRow {
   opcoReimbursed: boolean;
 }
 
+// Auto-entrepreneur = EI au régime micro depuis 2016, fusionnés dans l'UI
 const FORM_LABEL: Record<string, string> = {
-  EI: 'EI',
+  EI: 'Auto-entr.',
   AUTO_ENTREPRENEUR: 'Auto-entr.',
   EIRL: 'EIRL',
   SAS: 'SAS',

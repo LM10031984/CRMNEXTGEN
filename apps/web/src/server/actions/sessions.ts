@@ -144,8 +144,18 @@ export async function updateParticipant(input: {
 }
 
 /**
- * Supprime une session et toutes ses dépendances (participants, formateurs,
- * documents). Refuse si des factures émises sont rattachées (intégrité légale).
+ * Supprime une session et toutes ses dépendances directes en cascade
+ * (participants, formateurs, asset pédagogiques — déjà onDelete: Cascade
+ * dans le schéma).
+ *
+ * Pour les relations sans cascade Prisma (Invoice.session et Document.session
+ * sont en Restrict par défaut côté DB), on détache d'abord en mettant
+ * sessionId = null. Les factures émises survivent ainsi à la suppression
+ * de leur session — comportement légal correct (la facture reste valide
+ * juridiquement même si la session est annulée/supprimée).
+ *
+ * Refuse uniquement si des factures NON-DRAFT sont rattachées : on
+ * empêche les suppressions accidentelles d'une session déjà facturée.
  */
 export async function deleteSession(sessionId: string): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
@@ -157,7 +167,6 @@ export async function deleteSession(sessionId: string): Promise<{ ok: boolean; e
   });
   if (!session) return { ok: false, error: 'Session introuvable.' };
 
-  // Refuse si des factures émises sont rattachées à cette session
   const invoiceCount = await prisma.invoice.count({
     where: { sessionId, status: { not: 'DRAFT' } },
   });
@@ -168,7 +177,29 @@ export async function deleteSession(sessionId: string): Promise<{ ok: boolean; e
     };
   }
 
-  await prisma.trainingSession.delete({ where: { id: sessionId } });
+  try {
+    await prisma.$transaction([
+      // Détache les factures DRAFT (rare, mais possible) — elles survivent
+      prisma.invoice.updateMany({
+        where: { sessionId },
+        data: { sessionId: null },
+      }),
+      // Détache les Documents non-cascade (programme/AGEFICE générés)
+      prisma.document.updateMany({
+        where: { sessionId },
+        data: { sessionId: null },
+      }),
+      // Suppression effective (cascade Prisma sur participants, trainers,
+      // attendances, pedagogicalAssets)
+      prisma.trainingSession.delete({ where: { id: sessionId } }),
+    ]);
+  } catch (e: any) {
+    return {
+      ok: false,
+      error: `Échec suppression : ${e?.message ?? e}. Vérifie qu'aucune dépendance n'empêche la suppression.`,
+    };
+  }
+
   revalidatePath('/app/sessions');
   return { ok: true };
 }

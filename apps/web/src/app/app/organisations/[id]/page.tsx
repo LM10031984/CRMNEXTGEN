@@ -9,8 +9,9 @@ import { EditOrganizationButton } from '@/components/forms/edit-organization-but
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
 
+// Auto-entrepreneur = EI au régime micro depuis 2016, fusionnés dans l'UI
 const FORM_LABEL: Record<string, string> = {
-  EI: 'Entreprise individuelle',
+  EI: 'Auto-entrepreneur',
   AUTO_ENTREPRENEUR: 'Auto-entrepreneur',
   EIRL: 'EIRL',
   SAS: 'SAS',

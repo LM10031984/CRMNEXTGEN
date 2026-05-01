@@ -99,7 +99,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <div className="flex items-center gap-2">
                 {eiCount > 0 && (
                   <Badge variant="primary">
-                    {eiCount} en EI / Auto-entrepreneur
+                    {eiCount} auto-entrepreneur{eiCount > 1 ? 's' : ''}
                   </Badge>
                 )}
                 <AddParticipantDialog
@@ -141,7 +141,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                               {g.sponsor.legalName}
                             </Link>
                             <Badge variant={isEi ? 'primary' : 'muted'}>
-                              {isEi ? 'EI / Auto-entr.' : g.sponsor.legalForm}
+                              {isEi ? 'Auto-entrepreneur' : g.sponsor.legalForm}
                             </Badge>
                             {g.sponsor.opcoCode && <Badge variant="info">OPCO {g.sponsor.opcoCode}</Badge>}
                             {g.participants.length > 1 && (
