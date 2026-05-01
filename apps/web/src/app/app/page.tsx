@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { validateRequest } from '@/lib/auth';
 import { getDashboardStats } from '@/lib/dashboard-stats';
+import { getAgeficeBudgetSummary } from '@/server/actions/budget-agefice';
 import { Badge } from '@/components/ui/badge';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { MonthlyChart } from '@/components/dashboard/monthly-chart';
@@ -29,6 +30,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const stats = await getDashboardStats(user.tenantId, year);
   const yearLabel = year != null ? String(year) : 'Toutes années';
+
+  // Budget AGEFICE : on cible toujours l'année calendaire en cours pour
+  // l'encart pipeline (le plafond 3000€ est annuel par apprenant).
+  const ageficeYear = year ?? new Date().getFullYear();
+  const ageficeSummary = await getAgeficeBudgetSummary(ageficeYear);
 
   // Filtre années
   const yearChips = [
@@ -141,9 +147,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <PipelineRow icon={Megaphone} label="Leads à relancer / qualifier" value={stats.pipeline.leadsToFollowup} href="/app/leads" />
             <PipelineRow icon={Inbox} label="Pré-inscriptions à valider" value={stats.pipeline.preEnrollmentsToValidate} href="/app/preinscriptions" />
             <PipelineRow icon={Calendar} label={`Sessions à venir (${fmtNb.format(stats.alerts.sessionsNext7Days)} dans 7 jours)`} value={stats.pipeline.upcomingSessions} href="/app/sessions" />
+            <PipelineRow
+              icon={Wallet}
+              label={`Apprenants avec budget AGEFICE restant ${ageficeYear}`}
+              value={ageficeSummary.withBudgetLeft}
+              href={`/app/budget-agefice?filter=has_budget_left&year=${ageficeYear}`}
+            />
             <li className="pt-3 border-t border-primary-200 mt-3 flex items-center justify-between">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">CA prévu sessions à venir</span>
               <strong className="text-primary-800 tabular-nums">{fmtEUR.format(stats.pipeline.upcomingForecast)}</strong>
+            </li>
+            <li className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Budget AGEFICE encore mobilisable</span>
+              <strong className="text-emerald-700 tabular-nums">{fmtEUR.format(ageficeSummary.totalRemaining)}</strong>
             </li>
           </ul>
         </div>

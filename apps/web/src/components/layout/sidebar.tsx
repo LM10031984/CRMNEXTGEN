@@ -20,6 +20,7 @@ import {
   Inbox,
   ChevronLeft,
   ChevronRight,
+  Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +58,7 @@ const NAV: NavSection[] = [
     title: 'Référentiels',
     items: [
       { label: 'Financeurs', href: '/app/financeurs', icon: Landmark },
+      { label: 'Budget AGEFICE', href: '/app/budget-agefice', icon: Wallet },
     ],
   },
   {
