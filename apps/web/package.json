@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "worker:closure": "dotenv -e ../../.env -- tsx scripts/closure-worker.ts",
+    "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
@@ -21,11 +23,14 @@
     "@radix-ui/react-dropdown-menu": "^2.1.4",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-slot": "^1.1.1",
+    "archiver": "^7.0.1",
     "argon2": "^0.41.1",
+    "bullmq": "^5.76.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dotenv": "^16.4.7",
+    "ioredis": "^5.10.1",
     "lucia": "^3.2.2",
     "lucide-react": "^0.471.0",
     "marked": "^18.0.2",
@@ -43,15 +48,18 @@
   },
   "devDependencies": {
     "@lucia-auth/adapter-prisma": "^4.0.1",
+    "@types/archiver": "^7.0.0",
     "@types/node": "^22.10.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
+    "dotenv-cli": "^7.4.4",
     "eslint": "^9.17.0",
     "eslint-config-next": "^14.2.21",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

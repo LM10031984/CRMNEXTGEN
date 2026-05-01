@@ -1074,3 +1074,73 @@ model ExternalIdentity {
   @@unique([source, externalId])
   @@index([tenantId, entityType, entityId])
 }
+
+// =====================================================
+// === Pack fin de formation (palier 4) — orchestration BullMQ
+// =====================================================
+
+// 5 types de docs générés par le bouton "📦 Pack fin de formation"
+// ATTESTATION + CERTIFICAT → écrits dans Document (DocType.ATTESTATION_FIN/CERTIFICAT_REALISATION)
+// QCM + GRILLE_OBS + ANALYSE_BESOIN → écrits dans PedagogicalAsset
+enum ClosureDocKind {
+  ATTESTATION
+  CERTIFICAT
+  QCM
+  GRILLE_OBS
+  ANALYSE_BESOIN
+}
+
+enum ClosureBatchStatus {
+  PENDING
+  RUNNING
+  COMPLETED // tous les jobs ok
+  PARTIAL   // au moins 1 job en erreur, reste ok
+  FAILED    // tous les jobs en erreur
+}
+
+enum ClosureJobStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  ERROR
+}
+
+model ClosureBatch {
+  id              String             @id @default(uuid())
+  tenantId        String
+  sessionId       String
+  status          ClosureBatchStatus @default(PENDING)
+  totalDocs       Int                @default(0)
+  doneDocs        Int                @default(0)
+  errorDocs       Int                @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdByUserId String?
+  jobs            ClosureJob[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([tenantId, sessionId])
+  @@index([status])
+}
+
+model ClosureJob {
+  id                  String           @id @default(uuid())
+  batchId             String
+  batch               ClosureBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  participantId       String
+  kind                ClosureDocKind
+  status              ClosureJobStatus @default(QUEUED)
+  attempts            Int              @default(0)
+  errorMessage        String?
+  // Réfs vers le doc produit
+  documentId          String? // si kind ∈ {ATTESTATION, CERTIFICAT}
+  pedagogicalAssetId  String? // si kind ∈ {QCM, GRILLE_OBS, ANALYSE_BESOIN}
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([batchId, participantId, kind])
+  @@index([batchId, status])
+}
