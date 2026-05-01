@@ -1,6 +1,7 @@
 import type { User } from 'lucia';
 import { logoutAction } from '@/app/login/actions';
 import { CmdkTrigger } from './cmdk-trigger';
+import { NotificationsBell } from './notifications-bell';
 
 export function TopBar({ user }: { user: User }) {
   return (
@@ -9,6 +10,7 @@ export function TopBar({ user }: { user: User }) {
         <CmdkTrigger />
       </div>
       <div className="flex items-center gap-3">
+        <NotificationsBell />
         <div className="text-right text-xs">
           <div className="font-medium leading-tight">{user.firstName} {user.lastName}</div>
           <div className="text-muted-foreground">{user.role}</div>
