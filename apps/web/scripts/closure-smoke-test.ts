@@ -73,7 +73,7 @@ async function main() {
   console.log(`→ ${batch.jobs.length} jobs enqueued dans BullMQ`);
 
   const startedAt = Date.now();
-  const TIMEOUT_MS = 90_000;
+  const TIMEOUT_MS = 360_000; // 6 min — laisse le temps à Ollama de générer (QCM ~90s)
   while (Date.now() - startedAt < TIMEOUT_MS) {
     await new Promise((r) => setTimeout(r, 1000));
     const b = await prisma.closureBatch.findUnique({ where: { id: batch.id } });

@@ -78,11 +78,20 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
   await markBatchRunningIfNeeded(payload.batchId);
 
   try {
-    // 2. Charge les données nécessaires au render (participant + session + product + location + trainers)
+    // 2. Charge les données nécessaires au render (participant + session + product + location +
+    //    trainers + legalLinks pour le profil pro du stagiaire utilisé par les generators IA)
     const participant = await prisma.sessionParticipant.findFirst({
       where: { id: payload.participantId, session: { tenantId: payload.tenantId } },
       include: {
-        person: true,
+        person: {
+          include: {
+            legalLinks: {
+              where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL', 'DIRIGEANT', 'SALARIE'] } },
+              orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }],
+              include: { organization: { select: { legalName: true, brandName: true } } },
+            },
+          },
+        },
         session: {
           include: {
             product: true,
@@ -100,6 +109,12 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       ? `${session.location.name}${(session.location.address as { city?: string } | null)?.city ? ` — ${(session.location.address as { city?: string }).city}` : ''}`
       : null;
 
+    // Profil pro du stagiaire à partir du LegalLink primaire (si dispo)
+    const primaryLink = participant.person.legalLinks[0] ?? null;
+    const entreprise = primaryLink
+      ? primaryLink.organization.brandName ?? primaryLink.organization.legalName
+      : null;
+
     const ctx: ClosureContext = {
       apprenantPrenom: participant.person.firstName,
       apprenantNom: participant.person.lastName,
@@ -111,6 +126,17 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       sessionLocation,
       sessionTrainers: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
       durationHours: product.durationHours,
+      tenantId: payload.tenantId,
+      formationMeta: {
+        programmeMd: product.programMd ?? '',
+      },
+      stagiaireMeta: {
+        entreprise,
+        fonction: primaryLink?.function ?? null,
+        anciennete: participant.person.professionalExperience ?? null,
+        diplomes: participant.person.diplomas ?? null,
+        professionalStatus: participant.person.professionalStatus ?? null,
+      },
     };
 
     // 3. Render PDF via le dispatch real (Day 2 avec stubs IA, Day 3 avec Ollama)

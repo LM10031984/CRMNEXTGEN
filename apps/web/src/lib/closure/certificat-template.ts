@@ -16,15 +16,9 @@ import {
   formatHours,
   loadSignatureDataUrl,
   renderBrandHeader,
+  stagiaireLabel,
   wrapHtml,
 } from './shared-template';
-
-function genderedLabel(civility: string | null): string {
-  const c = (civility ?? '').toUpperCase();
-  if (c === 'MME' || c === 'MRS' || c === 'MS') return 'La stagiaire';
-  if (c === 'M' || c === 'M.' || c === 'MR' || c === 'MONSIEUR') return 'Le stagiaire';
-  return 'Le/La stagiaire';
-}
 
 export function renderCertificatHtml(ctx: ClosureContext): string {
   const of = getOfConfig();
@@ -53,7 +47,7 @@ ${renderBrandHeader()}
 
   <table style="margin-top: 12px; font-size: 11pt; border-collapse: collapse;">
     <tbody>
-      <tr><td style="padding: 5px 12px 5px 0; font-weight: 700; color: ${BRAND_DARK}; vertical-align: top; width: 70mm;">${escapeHtml(genderedLabel(ctx.apprenantCivility))} :</td><td style="padding: 5px 0;">${escapeHtml(stagiaireFull)}</td></tr>
+      <tr><td style="padding: 5px 12px 5px 0; font-weight: 700; color: ${BRAND_DARK}; vertical-align: top; width: 70mm;">${escapeHtml(stagiaireLabel(ctx.apprenantCivility))} :</td><td style="padding: 5px 0;">${escapeHtml(stagiaireFull)}</td></tr>
       <tr><td style="padding: 5px 12px 5px 0; font-weight: 700; color: ${BRAND_DARK}; vertical-align: top;">A suivi la formation :</td><td style="padding: 5px 0;">${escapeHtml(ctx.sessionTitle)}</td></tr>
       <tr><td style="padding: 5px 12px 5px 0; font-weight: 700; color: ${BRAND_DARK}; vertical-align: top;">Nature de l'action de formation :</td><td style="padding: 5px 0;">Action de formation au sens de l'article L.6313-1 du Code du travail</td></tr>
       <tr><td style="padding: 5px 12px 5px 0; font-weight: 700; color: ${BRAND_DARK}; vertical-align: top;">${escapeHtml(periodLabel)} :</td><td style="padding: 5px 0;">${escapeHtml(periodValue)}</td></tr>

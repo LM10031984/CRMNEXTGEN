@@ -63,6 +63,45 @@ export function escapeHtml(s: string | null | undefined): string {
     .replace(/"/g, '&quot;');
 }
 
+export type Gender = 'F' | 'M' | null;
+
+/**
+ * Normalise la civility (très libre en base : "Madame", "Mme", "MME", "M.",
+ * "Monsieur"…) vers `'F' | 'M' | null`. Source unique de vérité utilisée par
+ * les 5 templates pour ne pas multiplier les variantes orthographiques.
+ */
+export function normalizeGender(civility: string | null | undefined): Gender {
+  if (!civility) return null;
+  const c = civility.trim().toUpperCase().replace(/\./g, '');
+  if (['MME', 'MRS', 'MS', 'MADAME'].includes(c)) return 'F';
+  if (['M', 'MR', 'MONSIEUR'].includes(c)) return 'M';
+  return null;
+}
+
+/** "Madame" / "Monsieur" / null — utilisable comme préfixe nom complet. */
+export function civilityLabel(civility: string | null | undefined): string | null {
+  const g = normalizeGender(civility);
+  if (g === 'F') return 'Madame';
+  if (g === 'M') return 'Monsieur';
+  return null;
+}
+
+/** "La stagiaire" / "Le stagiaire" / "Le/La stagiaire". */
+export function stagiaireLabel(civility: string | null | undefined): string {
+  const g = normalizeGender(civility);
+  if (g === 'F') return 'La stagiaire';
+  if (g === 'M') return 'Le stagiaire';
+  return 'Le/La stagiaire';
+}
+
+/** "La soussignée" / "Le soussigné" / "Le/La soussigné(e)". */
+export function soussigneLabel(civility: string | null | undefined): string {
+  const g = normalizeGender(civility);
+  if (g === 'F') return 'La soussignée';
+  if (g === 'M') return 'Le soussigné';
+  return 'Le/La soussigné(e)';
+}
+
 export function formatDateFr(date: Date | string | null | undefined): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -79,6 +118,19 @@ export function formatHours(hours: number): string {
   return `${hours} heures`;
 }
 
+/** Données métier additionnelles consommées par les generators Ollama
+ *  (cf ollama-generators.ts). Optionnel pour les templates statiques. */
+export interface ClosureFormationMeta {
+  programmeMd: string;
+}
+export interface ClosureStagiaireMeta {
+  entreprise: string | null;
+  fonction: string | null;
+  anciennete: string | null;
+  diplomes: string | null;
+  professionalStatus: string | null;
+}
+
 export interface ClosureContext {
   // Apprenant
   apprenantPrenom: string;
@@ -92,6 +144,11 @@ export interface ClosureContext {
   sessionLocation: string | null;
   sessionTrainers: string[];
   durationHours: number;
+  // Métadonnées pour les generators IA (optionnelles — templates statiques les ignorent)
+  formationMeta?: ClosureFormationMeta;
+  stagiaireMeta?: ClosureStagiaireMeta;
+  // Pour AIGenerationJob logging
+  tenantId?: string;
 }
 
 /**
@@ -346,10 +403,11 @@ export function renderInfoBox(ctx: ClosureContext): string {
 }
 
 export function renderStagiaireBlock(ctx: ClosureContext): string {
-  const civ = ctx.apprenantCivility ?? '';
+  const prefix = civilityLabel(ctx.apprenantCivility);
+  const fullName = `${prefix ? prefix + ' ' : ''}${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
   return `
 <div class="stagiaire-block">
-  <div class="name">${escapeHtml(`${civ ? civ + ' ' : ''}${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim())}</div>
+  <div class="name">${escapeHtml(fullName)}</div>
 </div>
 `.trim();
 }

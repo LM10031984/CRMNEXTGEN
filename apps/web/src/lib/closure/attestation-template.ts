@@ -11,20 +11,15 @@ import { getOfConfig } from '@/lib/of-config';
 import {
   type ClosureContext,
   BRAND_DARK,
+  civilityLabel,
   escapeHtml,
   formatDateFr,
   formatHours,
   loadSignatureDataUrl,
   renderBrandHeader,
+  soussigneLabel,
   wrapHtml,
 } from './shared-template';
-
-function genderedStagiaire(civility: string | null): string {
-  if (!civility) return 'Le/La soussigné(e)';
-  const c = civility.toUpperCase();
-  if (c === 'MME' || c === 'MRS' || c === 'MS') return 'La soussignée';
-  return 'Le soussigné';
-}
 
 export function renderAttestationHtml(ctx: ClosureContext): string {
   const of = getOfConfig();
@@ -37,8 +32,7 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
       ? `le ${formatDateFr(ctx.sessionStartDate)}`
       : `du ${formatDateFr(ctx.sessionStartDate)} au ${formatDateFr(ctx.sessionEndDate)}`;
   const stagiaireFull = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
-  const apprenantCivLabel =
-    (ctx.apprenantCivility ?? '').toUpperCase() === 'MME' ? 'Madame' : 'Monsieur';
+  const apprenantPrefix = civilityLabel(ctx.apprenantCivility); // null si inconnu → on n'affiche rien
   const lieuFait = of.addressVille || 'Vence';
 
   const body = `
@@ -49,10 +43,10 @@ ${renderBrandHeader()}
   <hr class="doc-rule" />
 
   <section class="attestation-body">
-    <p>${escapeHtml(genderedStagiaire(of.resp.civilite === 'MME' ? 'MME' : null))} <strong>${escapeHtml(respFullName)}</strong>, ${escapeHtml(respTitre)} de l'organisme de formation <strong>${escapeHtml(of.name)}</strong> (SIRET ${escapeHtml(of.siret)} — N° de déclaration ${escapeHtml(of.rnq)}), atteste que :</p>
+    <p>${escapeHtml(soussigneLabel(of.resp.civilite))} <strong>${escapeHtml(respFullName)}</strong>, ${escapeHtml(respTitre)} de l'organisme de formation <strong>${escapeHtml(of.name)}</strong> (SIRET ${escapeHtml(of.siret)} — N° de déclaration ${escapeHtml(of.rnq)}), atteste que :</p>
 
     <p style="margin-left: 12mm; margin-top: 14px;">
-      <strong>${escapeHtml(apprenantCivLabel)} ${escapeHtml(stagiaireFull)}</strong>
+      <strong>${apprenantPrefix ? escapeHtml(apprenantPrefix) + ' ' : ''}${escapeHtml(stagiaireFull)}</strong>
     </p>
 
     <p>a suivi avec assiduité l'action de formation intitulée :</p>

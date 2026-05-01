@@ -11,7 +11,8 @@
     "test": "vitest run",
     "worker:closure": "dotenv -e ../../.env -- tsx scripts/closure-worker.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
-    "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts"
+    "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
+    "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
