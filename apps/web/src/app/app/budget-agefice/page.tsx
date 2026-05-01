@@ -12,10 +12,8 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { FilterChips } from '@/components/ui/filter-chips';
-import {
-  listLearnersWithAgeficeBudget,
-  PLAFOND_AGEFICE,
-} from '@/server/actions/budget-agefice';
+import { listLearnersWithAgeficeBudget } from '@/server/actions/budget-agefice';
+import { PLAFOND_AGEFICE } from '@/lib/budget-agefice-constants';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';

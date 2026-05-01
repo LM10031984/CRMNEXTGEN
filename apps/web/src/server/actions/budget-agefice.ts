@@ -11,20 +11,7 @@
 
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-
-export const PLAFOND_AGEFICE = 3000;
-
-export interface LearnerBudgetRow {
-  personId: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  consomme: number;        // € HT cette année calendaire
-  nbSessions: number;
-  restant: number;         // 3000 - consomme (max 0)
-  pct: number;             // % consommé
-  status: 'free' | 'low' | 'mid' | 'near_limit' | 'over';
-}
+import { PLAFOND_AGEFICE, type LearnerBudgetRow } from '@/lib/budget-agefice-constants';
 
 function categorize(pct: number): LearnerBudgetRow['status'] {
   if (pct === 0) return 'free';
