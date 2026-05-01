@@ -102,17 +102,20 @@ export function SessionWizard({
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Effet : quand on choisit un produit, on prefill modality, capacityMax, prix
+  // Effet : quand on choisit un produit, on prefill modality, capacityMax,
+  // prix, ET on avance automatiquement à l'étape 2 (résout la friction
+  // "Bouton Suivant introuvable" de l'audit UX du 30/04).
   const handleSelectProduct = (p: Product) => {
     setSelectedProduct(p);
     setModality(p.modality);
     setCapacityMax(String(p.capacityMax));
     setPricePerLearner(String(p.priceHT));
-    // Si la durée est en jours et que startDate est défini, propose endDate
     if (p.durationHours && startDate) {
       const days = Math.max(1, Math.ceil(p.durationHours / 7));
       setEndDate(plusDays(startDate, days - 1));
     }
+    // Avance auto à l'étape 2 si on est encore à l'étape 1
+    setStep((prev) => (prev === 1 ? 2 : prev));
   };
 
   const runProductSearch = (q: string) => {
@@ -609,41 +612,53 @@ export function SessionWizard({
         </div>
       )}
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          onClick={goPrev}
-          disabled={step === 1 || pending}
-          className={cn(
-            'inline-flex items-center gap-1.5 h-10 px-4 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-colors',
-            (step === 1 || pending) && 'opacity-50 cursor-not-allowed',
-          )}
-        >
-          <ChevronLeft className="h-4 w-4" /> Précédent
-        </button>
-        {step < 4 ? (
+      {/* Padding bottom pour ne pas chevaucher le footer sticky */}
+      <div className="h-20" />
+
+      {/* Footer actions sticky en bas — toujours visible même si l'étape
+          contient 20 cartes produits (résout friction "bouton Suivant
+          introuvable" de l'audit UX) */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 ml-[var(--sidebar-w,256px)]">
+        <div className="max-w-screen-2xl mx-auto px-8 py-3 flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={goNext}
-            disabled={pending}
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
-          >
-            Suivant <ChevronRight className="h-4 w-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={pending}
+            onClick={goPrev}
+            disabled={step === 1 || pending}
             className={cn(
-              'inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors',
-              pending && 'opacity-70 cursor-wait',
+              'inline-flex items-center gap-1.5 h-10 px-4 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-colors',
+              (step === 1 || pending) && 'opacity-50 cursor-not-allowed',
             )}
           >
-            {pending ? 'Création…' : <>Créer la session <Check className="h-4 w-4" /></>}
+            <ChevronLeft className="h-4 w-4" /> Précédent
           </button>
-        )}
+          {step === 1 && selectedProduct && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              ✓ {selectedProduct.code} — {selectedProduct.title.slice(0, 40)}{selectedProduct.title.length > 40 ? '…' : ''}
+            </span>
+          )}
+          {step < 4 ? (
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors shadow-sm"
+            >
+              Suivant <ChevronRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={pending}
+              className={cn(
+                'inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm',
+                pending && 'opacity-70 cursor-wait',
+              )}
+            >
+              {pending ? 'Création…' : <>Créer la session <Check className="h-4 w-4" /></>}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
