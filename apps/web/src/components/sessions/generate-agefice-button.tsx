@@ -5,9 +5,15 @@ import { Receipt, Loader2, Check, ExternalLink, AlertCircle, AlertTriangle } fro
 import { cn } from '@/lib/utils';
 import { generateAgeficeForParticipant } from '@/server/actions/agefice-generator';
 
-export function GenerateAgeficeButton({ participantId }: { participantId: string }) {
+export function GenerateAgeficeButton({
+  participantId,
+  initialDocumentId,
+}: {
+  participantId: string;
+  initialDocumentId?: string | null;
+}) {
   const [pending, startTransition] = useTransition();
-  const [docId, setDocId] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(initialDocumentId ?? null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 

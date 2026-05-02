@@ -5,9 +5,15 @@ import { FileText, Loader2, Check, ExternalLink, AlertCircle } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { generateProgrammeForParticipant } from '@/server/actions/programme-generator';
 
-export function GenerateProgrammeButton({ participantId }: { participantId: string }) {
+export function GenerateProgrammeButton({
+  participantId,
+  initialDocumentId,
+}: {
+  participantId: string;
+  initialDocumentId?: string | null;
+}) {
   const [pending, startTransition] = useTransition();
-  const [docId, setDocId] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(initialDocumentId ?? null);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = () => {

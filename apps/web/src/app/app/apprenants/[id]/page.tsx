@@ -61,7 +61,7 @@ export default async function ApprenantDetailPage({
   // Documents liés à cet apprenant via ses participations
   const participantIds = person.participations.map((p) => p.id);
   const sessionIds = Array.from(new Set(person.participations.map((p) => p.session.id)));
-  const [rawDocs, rawAssets] = participantIds.length
+  const [rawDocs, rawAssets, rawInvoices] = participantIds.length
     ? await Promise.all([
         prisma.document.findMany({
           where: { tenantId: user.tenantId, participantId: { in: participantIds } },
@@ -73,8 +73,30 @@ export default async function ApprenantDetailPage({
           orderBy: { generatedAt: 'desc' },
           select: { id: true, kind: true, generatedAt: true, sessionId: true, participantId: true, pdfUrl: true },
         }),
+        prisma.invoice.findMany({
+          where: {
+            tenantId: user.tenantId,
+            OR: [
+              { participantId: { in: participantIds } },
+              ...(sessionIds.length ? [{ sessionId: { in: sessionIds } } as const] : []),
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, number: true, createdAt: true, sessionId: true, participantId: true, participantIds: true, status: true },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
+
+  // Filtre les factures groupées qui ne concernent pas vraiment cet apprenant
+  // (cas Invoice.sessionId match mais participant pas dans la liste)
+  const participantIdSet = new Set(participantIds);
+  const filteredInvoices = rawInvoices.filter((inv) => {
+    if (inv.participantId && participantIdSet.has(inv.participantId)) return true;
+    if (Array.isArray(inv.participantIds)) {
+      return inv.participantIds.some((x) => typeof x === 'string' && participantIdSet.has(x));
+    }
+    return false;
+  });
 
   // Mapping libellés humains pour les types Qualiopi
   const DOC_TYPE_LABELS: Record<string, string> = {
@@ -151,6 +173,15 @@ export default async function ApprenantDetailPage({
         pillarKey: 'pedagogique' as const,
         sortGroup: 1,
       })),
+    ...filteredInvoices.map((inv) => ({
+      key: `invoice:${inv.id}`,
+      label: `Facture ${inv.number}${inv.status === 'PAID' ? ' (payée)' : ''}`,
+      href: `/app/factures/${inv.id}`,
+      sessionId: inv.sessionId,
+      createdAt: inv.createdAt,
+      pillarKey: 'finance' as const,
+      sortGroup: 2,
+    })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   // Map sessionId → code+title pour grouper visuellement

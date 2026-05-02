@@ -6,9 +6,15 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { generateConventionForParticipant } from '@/server/actions/convention-generator';
 
-export function GenerateConventionButton({ participantId }: { participantId: string }) {
+export function GenerateConventionButton({
+  participantId,
+  initialDocumentId,
+}: {
+  participantId: string;
+  initialDocumentId?: string | null;
+}) {
   const [pending, startTransition] = useTransition();
-  const [docId, setDocId] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(initialDocumentId ?? null);
 
   const handleGenerate = () => {
     startTransition(async () => {

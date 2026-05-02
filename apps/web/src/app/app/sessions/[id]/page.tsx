@@ -52,7 +52,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   // Documents Qualiopi déjà générés pour cette session, indexés par participant + type
   const sessionParticipantIds = session.participants.map((p) => p.id);
-  const [sessionDocs, sessionAssets] = sessionParticipantIds.length
+  const [sessionDocs, sessionAssets, sessionInvoices] = sessionParticipantIds.length
     ? await Promise.all([
         prisma.document.findMany({
           where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds } },
@@ -62,8 +62,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds }, pdfUrl: { not: null } },
           select: { id: true, kind: true, participantId: true },
         }),
+        prisma.invoice.findMany({
+          where: {
+            tenantId: user.tenantId,
+            OR: [
+              { participantId: { in: sessionParticipantIds } },
+              { sessionId: session.id },
+            ],
+          },
+          select: { id: true, number: true, participantId: true, participantIds: true },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
 
   // Indexe par participant pour lookup en O(1) côté rendu
   const docsByParticipant = new Map<string, Map<string, string>>(); // partId → Map(type → docId)
@@ -79,6 +89,25 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     const m = assetsByParticipant.get(a.participantId) ?? new Map();
     m.set(a.kind, a.id);
     assetsByParticipant.set(a.participantId, m);
+  }
+
+  // Indexe les factures par participant. Une facture peut couvrir plusieurs
+  // inscrits (groupage sponsor via Invoice.participantIds Json[]) ou un seul
+  // (via Invoice.participantId).
+  const invoiceByParticipant = new Map<string, { id: string; number: string }>();
+  for (const inv of sessionInvoices) {
+    const ids: string[] = [];
+    if (inv.participantId) ids.push(inv.participantId);
+    if (Array.isArray(inv.participantIds)) {
+      for (const x of inv.participantIds) {
+        if (typeof x === 'string') ids.push(x);
+      }
+    }
+    for (const pid of ids) {
+      if (!invoiceByParticipant.has(pid)) {
+        invoiceByParticipant.set(pid, { id: inv.id, number: inv.number });
+      }
+    }
   }
 
   // Derniers batches pack fin de formation pour cette session (audit trail)
@@ -242,18 +271,37 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                                 >
                                   {p.person.firstName} {p.person.lastName.toUpperCase()}
                                 </Link>
-                                <div className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-2">
+                                <div className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-2 flex-wrap">
                                   <span className="tabular-nums">{Number(p.priceHT).toFixed(2)} €</span>
                                   <span>·</span>
                                   <span>{p.enrollmentStatus}</span>
-                                  {p.invoiceSent && <Badge variant="success">Facturé</Badge>}
+                                  {invoiceByParticipant.get(p.id) ? (
+                                    <Link
+                                      href={`/app/factures/${invoiceByParticipant.get(p.id)!.id}` as Route}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium hover:bg-emerald-100"
+                                      title="Ouvrir la facture"
+                                    >
+                                      Facture {invoiceByParticipant.get(p.id)!.number}
+                                    </Link>
+                                  ) : p.invoiceSent ? (
+                                    <Badge variant="success">Facturé</Badge>
+                                  ) : null}
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                                <GenerateConventionButton participantId={p.id} />
-                                <GenerateProgrammeButton participantId={p.id} />
+                                <GenerateConventionButton
+                                  participantId={p.id}
+                                  initialDocumentId={docsByParticipant.get(p.id)?.get('CONVENTION') ?? null}
+                                />
+                                <GenerateProgrammeButton
+                                  participantId={p.id}
+                                  initialDocumentId={docsByParticipant.get(p.id)?.get('PROGRAMME') ?? null}
+                                />
                                 {(isEi || g.sponsor.opcoCode === 'AGEFICE') && (
-                                  <GenerateAgeficeButton participantId={p.id} />
+                                  <GenerateAgeficeButton
+                                    participantId={p.id}
+                                    initialDocumentId={docsByParticipant.get(p.id)?.get('AGEFICE') ?? null}
+                                  />
                                 )}
                                 <EditParticipantButton
                                   participantId={p.id}
@@ -287,6 +335,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <thead className="bg-muted/30">
                     <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                       <th className="px-4 py-2 font-semibold">Apprenant</th>
+                      <th className="px-2 py-2 font-semibold text-center">Convention</th>
                       <th className="px-2 py-2 font-semibold text-center">Programme</th>
                       <th className="px-2 py-2 font-semibold text-center">AGEFICE</th>
                       <th className="px-2 py-2 font-semibold text-center">Analyse besoin</th>
@@ -294,13 +343,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       <th className="px-2 py-2 font-semibold text-center">Grille obs.</th>
                       <th className="px-2 py-2 font-semibold text-center">Attestation</th>
                       <th className="px-2 py-2 font-semibold text-center">Certificat</th>
+                      <th className="px-2 py-2 font-semibold text-center">Facture</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {session.participants.map((p) => {
                       const docs = docsByParticipant.get(p.id);
                       const assets = assetsByParticipant.get(p.id);
+                      const invoice = invoiceByParticipant.get(p.id);
                       const cells: { label: string; href?: string }[] = [
+                        { label: 'Convention', href: docs?.get('CONVENTION') ? `/api/documents/${docs.get('CONVENTION')}` : undefined },
                         { label: 'Programme', href: docs?.get('PROGRAMME') ? `/api/documents/${docs.get('PROGRAMME')}` : undefined },
                         { label: 'AGEFICE', href: docs?.get('AGEFICE') ? `/api/documents/${docs.get('AGEFICE')}` : undefined },
                         { label: 'Analyse besoin', href: assets?.get('ANALYSE_BESOIN') ? `/api/pedagogical-assets/${assets.get('ANALYSE_BESOIN')}` : undefined },
@@ -308,6 +360,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                         { label: 'Grille observation', href: assets?.get('GRILLE_OBS') ? `/api/pedagogical-assets/${assets.get('GRILLE_OBS')}` : undefined },
                         { label: 'Attestation', href: docs?.get('ATTESTATION_FIN') ? `/api/documents/${docs.get('ATTESTATION_FIN')}` : undefined },
                         { label: 'Certificat', href: docs?.get('CERTIFICAT_REALISATION') ? `/api/documents/${docs.get('CERTIFICAT_REALISATION')}` : undefined },
+                        { label: invoice?.number ?? 'Facture', href: invoice ? `/app/factures/${invoice.id}` : undefined },
                       ];
                       return (
                         <tr key={p.id} className="hover:bg-muted/20">
