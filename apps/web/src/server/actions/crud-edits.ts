@@ -274,3 +274,107 @@ export async function createTrainer(input: {
   revalidatePath('/app/sessions/nouvelle');
   return { ok: true, personId: person.id };
 }
+
+// ── Création apprenant ───────────────────────────────────────────────────
+export async function createPerson(input: {
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  professionalStatus?: string | null;
+}): Promise<{ ok: boolean; personId?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+  if (!input.firstName.trim() || !input.lastName.trim()) {
+    return { ok: false, error: 'Nom et prénom requis.' };
+  }
+  const person = await prisma.person.create({
+    data: {
+      tenantId: user.tenantId,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      email: input.email?.trim() || null,
+      phone: input.phone?.trim() || null,
+      professionalStatus: input.professionalStatus?.trim() || null,
+    },
+  });
+  revalidatePath('/app/apprenants');
+  return { ok: true, personId: person.id };
+}
+
+// ── Création organisation ────────────────────────────────────────────────
+const VALID_LEGAL_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR', 'SAS', 'SARL', 'SASU', 'EURL', 'SA', 'ASSOCIATION', 'PARTICULIER', 'AUTRE'] as const;
+type LegalForm = (typeof VALID_LEGAL_FORMS)[number];
+
+export async function createOrganization(input: {
+  legalName: string;
+  legalForm: LegalForm;
+  siret?: string | null;
+  opcoCode?: string | null;
+}): Promise<{ ok: boolean; orgId?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+  if (!input.legalName.trim()) return { ok: false, error: 'Raison sociale requise.' };
+  if (!VALID_LEGAL_FORMS.includes(input.legalForm)) return { ok: false, error: 'Forme juridique invalide.' };
+  const siret = input.siret?.replace(/\s+/g, '') || null;
+  if (siret && !/^\d{14}$/.test(siret)) return { ok: false, error: 'SIRET invalide (14 chiffres).' };
+
+  const org = await prisma.organization.create({
+    data: {
+      tenantId: user.tenantId,
+      legalName: input.legalName.trim(),
+      legalForm: input.legalForm,
+      siret,
+      opcoCode: input.opcoCode?.trim() || null,
+    },
+  });
+  revalidatePath('/app/organisations');
+  return { ok: true, orgId: org.id };
+}
+
+// ── Création produit de formation ────────────────────────────────────────
+const VALID_MODALITIES = ['PRESENTIEL', 'DISTANCIEL', 'MIXTE', 'ELEARNING'] as const;
+type ProductModality = (typeof VALID_MODALITIES)[number];
+
+export async function createProduct(input: {
+  title: string;
+  durationHours: number;
+  modality: ProductModality;
+  priceHT?: number | null;
+  theme?: string | null;
+  capacityMin?: number | null;
+  capacityMax?: number | null;
+}): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+  if (!input.title.trim()) return { ok: false, error: 'Titre requis.' };
+  if (!input.durationHours || input.durationHours <= 0) return { ok: false, error: 'Durée invalide.' };
+  if (!VALID_MODALITIES.includes(input.modality)) return { ok: false, error: 'Modalité invalide.' };
+
+  const last = await prisma.trainingProduct.findFirst({
+    where: { tenantId: user.tenantId, code: { startsWith: 'PROD-' } },
+    orderBy: { code: 'desc' },
+  });
+  const seqMatch = last?.code?.match(/PROD-0*(\d+)/);
+  const nextSeq = seqMatch && seqMatch[1] ? parseInt(seqMatch[1], 10) + 1 : 1;
+  const code = `PROD-${String(nextSeq).padStart(4, '0')}`;
+
+  const product = await prisma.trainingProduct.create({
+    data: {
+      tenantId: user.tenantId,
+      code,
+      title: input.title.trim(),
+      durationHours: input.durationHours,
+      modality: input.modality,
+      priceHT: input.priceHT ? new Prisma.Decimal(input.priceHT) : new Prisma.Decimal(0),
+      theme: input.theme?.trim() || null,
+      capacityMin: input.capacityMin ?? 1,
+      capacityMax: input.capacityMax ?? 12,
+      isActive: true,
+      objectives: [],
+      programMd: '',
+    },
+  });
+  revalidatePath('/app/produits');
+  return { ok: true, productId: product.id, code };
+}

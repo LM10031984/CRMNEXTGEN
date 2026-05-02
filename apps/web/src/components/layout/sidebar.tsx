@@ -143,7 +143,14 @@ export function Sidebar() {
               )}
               <ul className={cn('space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
                 {section.items.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                  // Pour la racine /app (Tableau de bord), match strict —
+                  // sinon startsWith('/app/') activerait Dashboard sur toutes
+                  // les pages enfants. Pour les autres, on autorise le prefixe
+                  // pour highlighter une fiche detail (/app/sessions/[id]).
+                  const active =
+                    item.href === '/app'
+                      ? pathname === '/app'
+                      : pathname === item.href || pathname.startsWith(item.href + '/');
                   const Icon = item.icon;
                   return (
                     <li key={item.href}>

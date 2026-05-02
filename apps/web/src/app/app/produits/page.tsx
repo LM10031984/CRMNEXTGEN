@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SearchInput } from '@/components/ui/search-input';
 import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
+import { CreateProductButton } from '@/components/forms/create-product-button';
 
 const PAGE_SIZE = 24;
 
@@ -67,16 +68,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Produits de formation"
         subtitle={`${total} formation${total > 1 ? 's' : ''} active${total > 1 ? 's' : ''}`}
-        actions={
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors opacity-60 cursor-not-allowed"
-            title="Disponible au palier 2.2"
-          >
-            <Plus className="h-4 w-4" /> Nouvelle formation
-          </button>
-        }
+        actions={<CreateProductButton />}
       />
 
       <SearchInput placeholder="Titre, code, thème, public visé…" />
