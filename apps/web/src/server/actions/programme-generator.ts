@@ -129,6 +129,100 @@ export async function generateProgrammeForParticipant(
 }
 
 /**
+ * Genere un programme PDF generique au PRODUIT (pas a l'apprenant). Le
+ * programme est par definition une description du contenu pedagogique du
+ * produit — il ne change pas par session. Utilise sur la fiche produit
+ * (/app/produits/[id]) pour avoir le PDF a la demande lors d'un controle
+ * Qualiopi sans avoir a passer par une session/inscription.
+ *
+ * Strategie de cache : si un Document type=PROGRAMME existe deja pour ce
+ * produit (entityType="product", entityId=productId) avec un hash identique,
+ * on le reutilise au lieu de regenerer.
+ */
+export async function generateProgrammeForProduct(
+  productId: string,
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const product = await prisma.trainingProduct.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+  });
+  if (!product) return { ok: false, error: 'Produit introuvable' };
+
+  const objectives = (product.objectives as string[] | null) ?? [];
+  const data: ProgrammeData = {
+    // Pas d'apprenant ni de session — programme generique
+    produitTitre: product.title,
+    produitCode: product.code,
+    produitDureeHeures: product.durationHours,
+    produitPriceHT: Number(product.priceHT),
+    produitObjectifs: objectives,
+    produitProgrammeMd: typeof product.programMd === 'string' ? product.programMd : '',
+    produitPrerequisites: product.prerequisites,
+    produitTargetAudience: product.targetAudience,
+    produitPedagogicalMethods: product.pedagogicalMethods,
+    produitEvaluationMethods: product.evaluationMethods,
+    produitAccessibility: product.accessibility,
+    produitAccessConditions: product.accessConditions,
+    produitTrainerProfile: product.trainerProfile,
+    produitPedagogicalSupport: product.pedagogicalSupport,
+    ofName: OF_DEFAULTS.name,
+    ofSiret: OF_DEFAULTS.siret,
+    ofAddress: OF_DEFAULTS.address,
+    ofRnq: OF_DEFAULTS.rnq,
+    ofPhone: OF_DEFAULTS.phone,
+    ofEmail: OF_DEFAULTS.email,
+  };
+
+  let pdfBuffer: Buffer;
+  try {
+    const html = renderProgrammeHtml(data);
+    pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderProgrammeFooterHtml() });
+  } catch (e: any) {
+    return { ok: false, error: `Erreur generation PDF programme : ${e?.message ?? e}` };
+  }
+
+  const hash = createHash('sha256').update(pdfBuffer).digest('hex');
+
+  // Reutilise un Document existant pour ce produit avec le meme hash
+  const existing = await prisma.document.findFirst({
+    where: {
+      tenantId: user.tenantId,
+      type: 'PROGRAMME',
+      entityType: 'product',
+      entityId: productId,
+      hashSha256: hash,
+    },
+  });
+  if (existing) {
+    return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
+  }
+
+  const safeSlug = product.code.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const objectKey = `programmes/produits/${safeSlug}-${hash.slice(0, 8)}.pdf`;
+  try {
+    await uploadFile(DOCS_BUCKET, objectKey, pdfBuffer, 'application/pdf');
+  } catch (e: any) {
+    return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}` };
+  }
+
+  const doc = await prisma.document.create({
+    data: {
+      tenantId: user.tenantId,
+      type: 'PROGRAMME',
+      entityType: 'product',
+      entityId: productId,
+      pdfUrl: objectKey,
+      hashSha256: hash,
+    },
+  });
+
+  revalidatePath(`/app/produits/${productId}`);
+  return { ok: true, documentId: doc.id, pdfUrl: objectKey };
+}
+
+/**
  * Stream le PDF d'un Document existant (utilisé par la route /api/documents/[id]).
  */
 export async function getDocumentPdfBuffer(documentId: string): Promise<Buffer | null> {

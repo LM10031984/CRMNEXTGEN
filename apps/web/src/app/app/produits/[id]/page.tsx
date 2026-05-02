@@ -9,6 +9,7 @@ import { EditProductButton } from '@/components/forms/edit-product-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 import { DeleteProductButton } from '@/components/forms/delete-product-button';
+import { GenerateProductProgrammeButton } from '@/components/produits/generate-product-programme-button';
 
 const MOD_LABEL: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -82,6 +83,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             accessConditions: product.accessConditions,
           }}
         />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50/50 p-4">
+        <div className="text-sm">
+          <div className="font-semibold text-primary-800">Programme PDF Qualiopi</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            Génère un PDF prêt à présenter en cas de contrôle, basé sur les champs ci-dessous (objectifs, public, prérequis, programme détaillé).
+          </div>
+        </div>
+        <GenerateProductProgrammeButton productId={product.id} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

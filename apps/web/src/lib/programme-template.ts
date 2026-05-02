@@ -14,21 +14,21 @@ import fs from 'node:fs';
 import { getOfConfig } from './of-config';
 
 export interface ProgrammeData {
-  // Apprenant
-  apprenantPrenom: string;
-  apprenantNom: string;
-  apprenantEmail: string | null;
+  // Apprenant — optionnel (programme generique au produit, pas par apprenant)
+  apprenantPrenom?: string;
+  apprenantNom?: string;
+  apprenantEmail?: string | null;
 
-  // Session
-  sessionCode: string;
-  sessionName: string;
-  sessionStartDate: Date;
-  sessionEndDate: Date;
-  sessionLieu: string | null;
-  sessionModalite: string;
-  sessionFormateurs: string[];
+  // Session — optionnel
+  sessionCode?: string;
+  sessionName?: string;
+  sessionStartDate?: Date;
+  sessionEndDate?: Date;
+  sessionLieu?: string | null;
+  sessionModalite?: string;
+  sessionFormateurs?: string[];
 
-  // Produit
+  // Produit (obligatoire — c'est le coeur du programme)
   produitTitre: string;
   produitCode: string;
   produitDureeHeures: number;
@@ -254,7 +254,7 @@ export function renderProgrammeHtml(data: ProgrammeData): string {
     ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)
     : '<p><em>Programme à compléter dans la fiche produit (champ Programme détaillé).</em></p>';
 
-  const formateurs = data.sessionFormateurs.length > 0 ? data.sessionFormateurs.join(', ') : 'À confirmer';
+  const formateurs = (data.sessionFormateurs?.length ?? 0) > 0 ? data.sessionFormateurs!.join(', ') : 'À confirmer';
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
 
   // Méthodes pédagogiques : on s'assure que la phrase générique livret/Canva
