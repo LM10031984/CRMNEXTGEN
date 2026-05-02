@@ -1,0 +1,322 @@
+/**
+ * Template HTML de la Convention de formation professionnelle.
+ *
+ * Structure alignée sur les 3 exemples DOCX fournis par Laurent (Convention
+ * IA conseillers immobiliers, Convention recommandation, Convention
+ * Optimiser l'immobilier). Articles 1-10 + signatures.
+ *
+ * Logique : 1 convention par "bénéficiaire" (= entreprise qui paye) :
+ * - Si l'apprenant est auto-entrepreneur : son auto-entreprise est le
+ *   benéficiaire. Représenté par lui-même. 1 convention = 1 stagiaire.
+ * - Si l'apprenant est salarié : la structure employeur est le bénéficiaire.
+ *   Représenté par le dirigeant. 1 convention peut grouper plusieurs
+ *   stagiaires de la même structure sur la même session.
+ */
+
+import { marked } from 'marked';
+import path from 'node:path';
+import fs from 'node:fs';
+import { getOfConfig } from './of-config';
+
+export interface ConventionStagiaire {
+  prenom: string;
+  nom: string;
+  email: string | null;
+}
+
+export interface ConventionData {
+  // Bénéficiaire (entreprise qui signe & paye)
+  beneficiaireRaisonSociale: string;
+  beneficiaireSiret: string | null;
+  beneficiaireRcsVille: string | null; // "Grasse", "Nice", etc.
+  beneficiaireRepresentantNom: string;
+
+  // Stagiaires concernés (1 si AE, N si entreprise avec salariés)
+  stagiaires: ConventionStagiaire[];
+
+  // Session
+  sessionStartDate: Date;
+  sessionEndDate: Date;
+  sessionLieu: string;
+
+  // Produit
+  produitTitre: string;
+  produitDureeHeures: number;
+  produitObjectifs: string[];
+  produitProgrammeMd: string;
+  produitTrainerProfile: string | null;
+  produitPriceHTPerStagiaire: number;
+}
+
+const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
+const fmtDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+let logoCache: string | null = null;
+function loadLogoDataUrl(): string {
+  if (logoCache !== null) return logoCache;
+  try {
+    const p = path.join(process.cwd(), 'src', 'assets', 'logo-start-academy.png');
+    const b = fs.readFileSync(p);
+    logoCache = `data:image/png;base64,${b.toString('base64')}`;
+  } catch {
+    logoCache = '';
+  }
+  return logoCache;
+}
+
+const BRAND_BLUE = '#00B4E6';
+const BRAND_DARK = '#00527A';
+
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatDuree(heures: number): string {
+  if (heures <= 0) return '—';
+  if (heures % 7 === 0) {
+    const j = heures / 7;
+    return `${heures} heures (${j} journée${j > 1 ? 's' : ''} de 7 heures)`;
+  }
+  if (heures % 8 === 0) {
+    const j = heures / 8;
+    return `${heures} heures (${j} journée${j > 1 ? 's' : ''} de 8 heures)`;
+  }
+  return `${heures} heures`;
+}
+
+const STYLES = `
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Calibri', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    color: #1F2937;
+    line-height: 1.5;
+    margin: 0;
+  }
+  header.cover { text-align: center; margin-bottom: 14px; }
+  header.cover img.logo { height: 60px; }
+  h1.title {
+    font-size: 18pt;
+    color: ${BRAND_DARK};
+    text-align: center;
+    margin: 8px 0 4px 0;
+    font-weight: 700;
+  }
+  .subtitle {
+    text-align: center;
+    color: #475569;
+    font-size: 10pt;
+    margin-bottom: 22px;
+    font-style: italic;
+  }
+  h2.article {
+    font-size: 12pt;
+    color: ${BRAND_DARK};
+    margin: 18px 0 6px 0;
+    font-weight: 700;
+    border-bottom: 1.5px solid ${BRAND_BLUE};
+    padding-bottom: 3px;
+  }
+  p { margin: 4px 0 8px 0; }
+  ul { margin: 4px 0 10px 22px; padding: 0; list-style-type: disc; }
+  li { margin-bottom: 3px; }
+  .parties { margin: 14px 0 18px 0; }
+  .parties .partie {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    background: #F8FAFC;
+    border-left: 3px solid ${BRAND_BLUE};
+  }
+  .parties .partie strong { color: ${BRAND_DARK}; }
+  .signatures {
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+  .signatures .box {
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 14px;
+    min-height: 130px;
+  }
+  .signatures .box .label {
+    font-size: 9.5pt;
+    color: #64748B;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .signatures .box .name { font-weight: 600; color: ${BRAND_DARK}; }
+  .programme-md { background: #FAFAFA; padding: 10px 14px; border-radius: 4px; }
+  .programme-md p { margin: 4px 0; }
+  .programme-md h2 { font-size: 11pt; color: ${BRAND_DARK}; margin: 10px 0 4px 0; border: none; padding: 0; }
+  .programme-md h3 { font-size: 10.5pt; color: #334155; margin: 8px 0 3px 0; }
+  .programme-md strong { color: ${BRAND_DARK}; }
+  .tarif {
+    margin-top: 8px;
+    padding: 10px 14px;
+    border-left: 3px solid ${BRAND_BLUE};
+    background: #F0F9FF;
+  }
+  .tarif strong { color: ${BRAND_DARK}; font-size: 13pt; }
+  section { page-break-inside: avoid; }
+  .programme-md, section.programme-section { page-break-inside: auto; }
+  h2.article { page-break-after: avoid; }
+</style>`;
+
+export function renderConventionHtml(data: ConventionData): string {
+  const of = getOfConfig();
+  const logoDataUrl = loadLogoDataUrl();
+  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
+  const programmeHtml = data.produitProgrammeMd
+    ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)
+    : '<p><em>Programme à compléter dans la fiche produit (champ Programme détaillé).</em></p>';
+  const objectifs = data.produitObjectifs.length > 0
+    ? data.produitObjectifs
+    : ['Objectifs à compléter dans la fiche produit.'];
+  const nbStagiaires = data.stagiaires.length;
+  const stagiaireListe = data.stagiaires
+    .map((s) => `${escapeHtml(`${s.prenom} ${s.nom.toUpperCase()}`)}${s.email ? ` (${escapeHtml(s.email)})` : ''}`)
+    .join('<br>');
+  const totalHT = data.produitPriceHTPerStagiaire * nbStagiaires;
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Convention — ${escapeHtml(data.produitTitre)}</title>
+${STYLES}
+</head>
+<body>
+
+<header class="cover">
+  ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong>`}
+</header>
+
+<h1 class="title">CONVENTION DE FORMATION PROFESSIONNELLE</h1>
+<p class="subtitle">(Articles L.6353-1 et D.6353-1 du Code du travail)</p>
+
+<p>Entre les soussignés :</p>
+
+<div class="parties">
+  <div class="partie">
+    <strong>1) L'organisme de formation</strong><br>
+    <strong>${escapeHtml(of.name)}</strong>, adresse siège social : ${escapeHtml(of.addressFull)}<br>
+    N° SIRET : ${escapeHtml(of.siret)} — enregistré auprès de la Direction Régionale de l'Économie, de l'Emploi du Travail et des Solidarités sous le numéro ${escapeHtml(of.rnq)}.
+  </div>
+  <div class="partie">
+    <strong>2) ${escapeHtml(data.beneficiaireRaisonSociale)}</strong><br>
+    ${data.beneficiaireSiret ? `Immatriculée au Registre du Commerce et des Sociétés${data.beneficiaireRcsVille ? ' de ' + escapeHtml(data.beneficiaireRcsVille) : ''} sous le numéro ${escapeHtml(data.beneficiaireSiret)}<br>` : ''}
+    Représentée par <strong>${escapeHtml(data.beneficiaireRepresentantNom)}</strong>, ci-après désignée « l'entreprise bénéficiaire ».
+  </div>
+</div>
+
+<p>Est conclue la convention suivante, en application des dispositions du Livre III de la sixième partie du Code du travail portant organisation de la formation professionnelle.</p>
+
+<section>
+  <h2 class="article">Article 1 — Objet</h2>
+  <p>En exécution du présent contrat, l'organisme de formation s'engage à organiser l'action de formation : <strong>« ${escapeHtml(data.produitTitre)} »</strong>.</p>
+  <p><em>Catégorie d'action de formation (article L.6313-1 du Code du travail)</em> : Actions de formation de développement des compétences.</p>
+</section>
+
+<section>
+  <h2 class="article">Article 2 — Nature et caractéristiques de l'action</h2>
+  <p>L'action de formation entre dans le champ d'application des dispositions relatives à la formation professionnelle tel qu'il est défini aux articles L.6353-1 et suivants du Code du travail. Elle a pour objectifs de :</p>
+  <ul>${objectifs.map((o) => `<li>${escapeHtml(o)}</li>`).join('')}</ul>
+  <p>À l'issue de la formation, un certificat de réalisation sera délivré au stagiaire.</p>
+  <p>Sa durée est fixée à <strong>${formatDuree(data.produitDureeHeures)}</strong>.</p>
+</section>
+
+<section class="programme-section">
+  <h2 class="article">Article 3 — Programme de formation</h2>
+  <div class="programme-md">${programmeHtml}</div>
+</section>
+
+<section>
+  <h2 class="article">Article 4 — Organisation de l'action de formation</h2>
+  <p>L'action de formation aura lieu du <strong>${fmtDate(data.sessionStartDate)} à 9h</strong> au <strong>${fmtDate(data.sessionEndDate)} à 17h</strong>, au ${escapeHtml(data.sessionLieu)}.</p>
+  <p>Elle est organisée pour un effectif de <strong>${nbStagiaires} stagiaire${nbStagiaires > 1 ? 's' : ''}</strong>.</p>
+  <p>L'organisme ${escapeHtml(of.name)} accueillera ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
+  <p style="padding-left: 14px;">${stagiaireListe}</p>
+  ${data.produitTrainerProfile ? `<p>Profil du formateur : ${escapeHtml(data.produitTrainerProfile)}</p>` : ''}
+</section>
+
+<section>
+  <h2 class="article">Article 5 — Modalités d'évaluation et de sanction</h2>
+  <ul>
+    <li>Une liste d'émargement est à signer à la demi-journée.</li>
+    <li>Un certificat de réalisation sera délivré à chaque participant à la fin de la formation.</li>
+    <li>Une évaluation sous forme de QCM aura lieu en fin de formation.</li>
+    <li>Évaluation de la satisfaction stagiaire et évaluation de la montée en compétences par des mises en situation pratiques.</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="article">Article 6 — Accessibilité aux personnes en situation de handicap</h2>
+  <p>La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l'accès à l'emploi des personnes en situation de handicap. Notre organisme tente de donner à tous les mêmes chances d'accéder ou de maintenir l'emploi. Nous pouvons adapter certaines de nos modalités de formation, pour cela, nous étudierons ensemble vos besoins.</p>
+  <p>Pour toute question, merci de contacter ${escapeHtml(respFullName)} — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
+</section>
+
+<section>
+  <h2 class="article">Article 7 — Tarif de la formation</h2>
+  <div class="tarif">
+    <strong>${fmtEUR.format(data.produitPriceHTPerStagiaire)}</strong> HT par stagiaire
+    ${nbStagiaires > 1 ? `<br><span style="color:#475569;">Soit un total de <strong>${fmtEUR.format(totalHT)} HT</strong> pour ${nbStagiaires} stagiaires.</span>` : ''}
+    <br><span style="font-size: 9.5pt; color: #64748B;">TVA non applicable en vertu de l'article 261-4-4° du CGI.</span>
+  </div>
+</section>
+
+<section>
+  <h2 class="article">Article 8 — Modalités de règlement</h2>
+  <p>Le paiement sera effectué à réception de la facture émise par l'organisme de formation, par virement bancaire, sous 30 jours fin de mois.</p>
+  <p>En cas de subrogation de paiement par un OPCO ou financeur tiers, l'accord du financeur doit être communiqué à l'organisme avant le début de la formation.</p>
+</section>
+
+<section>
+  <h2 class="article">Article 9 — Dédit ou abandon</h2>
+  <p>En cas de renoncement par l'entreprise bénéficiaire à l'exécution de la présente convention dans un délai inférieur à 14 jours avant la date de début de la formation, l'organisme retiendra 30 % du montant total de la formation à titre de dédit.</p>
+  <p>En cas de réalisation partielle de la formation du fait du stagiaire, seules les heures effectivement suivies seront facturées.</p>
+</section>
+
+<section>
+  <h2 class="article">Article 10 — Différends éventuels</h2>
+  <p>Si une contestation ou un différend ne peut être réglé à l'amiable, le tribunal de commerce de Grasse sera seul compétent pour se prononcer.</p>
+</section>
+
+<div class="signatures">
+  <div class="box">
+    <div class="label">Pour l'organisme de formation</div>
+    <div class="name">${escapeHtml(respFullName)}</div>
+    <div style="font-size: 9.5pt; color: #475569;">${escapeHtml(of.resp.titre ?? '')} — ${escapeHtml(of.name)}</div>
+    <div style="margin-top: 10px; font-size: 9pt; color: #64748B;">Date et signature :</div>
+  </div>
+  <div class="box">
+    <div class="label">Pour l'entreprise bénéficiaire</div>
+    <div class="name">${escapeHtml(data.beneficiaireRepresentantNom)}</div>
+    <div style="font-size: 9.5pt; color: #475569;">${escapeHtml(data.beneficiaireRaisonSociale)}</div>
+    <div style="margin-top: 10px; font-size: 9pt; color: #64748B;">Date et signature :</div>
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
+export function renderConventionFooterHtml(): string {
+  const of = getOfConfig();
+  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #475569; margin: 0; padding: 0;">
+  <div style="border-top: 1px solid #94A3B8; padding: 4px 18mm 0 18mm; text-align: center; line-height: 1.45;">
+    <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
+    NDA ${escapeHtml(of.rnq)} – Convention de formation professionnelle – ${escapeHtml(respFullName)} – ${escapeHtml(of.email)}
+  </div>
+</body></html>`;
+}
