@@ -60,13 +60,107 @@ export default async function ApprenantDetailPage({
 
   // Documents liés à cet apprenant via ses participations
   const participantIds = person.participations.map((p) => p.id);
-  const documents = participantIds.length
-    ? await prisma.document.findMany({
-        where: { tenantId: user.tenantId, participantId: { in: participantIds } },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, type: true, createdAt: true, sessionId: true },
+  const sessionIds = Array.from(new Set(person.participations.map((p) => p.session.id)));
+  const [rawDocs, rawAssets] = participantIds.length
+    ? await Promise.all([
+        prisma.document.findMany({
+          where: { tenantId: user.tenantId, participantId: { in: participantIds } },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, type: true, createdAt: true, sessionId: true, participantId: true },
+        }),
+        prisma.pedagogicalAsset.findMany({
+          where: { tenantId: user.tenantId, participantId: { in: participantIds } },
+          orderBy: { generatedAt: 'desc' },
+          select: { id: true, kind: true, generatedAt: true, sessionId: true, participantId: true, pdfUrl: true },
+        }),
+      ])
+    : [[], []];
+
+  // Mapping libellés humains pour les types Qualiopi
+  const DOC_TYPE_LABELS: Record<string, string> = {
+    CONVENTION: 'Convention de formation',
+    PROGRAMME: 'Programme de formation',
+    CONVOCATION: 'Convocation',
+    EMARGEMENT: "Feuille d'émargement",
+    ASSIDUITE: "Attestation d'assiduité",
+    ATTESTATION_FIN: 'Attestation de fin de formation',
+    CERTIFICAT_REALISATION: 'Certificat de réalisation',
+    AGEFICE: 'Demande de prise en charge AGEFICE',
+    EVALUATION_ACQUIS: 'Évaluation des acquis',
+    SATISFACTION: 'Évaluation de satisfaction',
+    SUPPORT_PEDAGOGIQUE: 'Support pédagogique',
+    PRE_ACCORD_OPCO: 'Pré-accord OPCO',
+    VALIDATION_OPCO: 'Validation OPCO',
+    FACTURE: 'Facture',
+    CUSTOM: 'Document personnalisé',
+  };
+  const PEDAGOGICAL_KIND_LABELS: Record<string, string> = {
+    ANALYSE_BESOIN: 'Analyse des besoins',
+    QCM: "QCM d'évaluation",
+    GRILLE_OBS: "Grille d'observation",
+    COMPETENCES: 'Référentiel de compétences',
+    DEROULE: 'Déroulé pédagogique',
+  };
+
+  // Document unifié pour la liste : type Document + type PedagogicalAsset
+  type DocItem = {
+    key: string;
+    label: string;
+    href: string;
+    sessionId: string | null;
+    createdAt: Date;
+    pillarKey: 'qualiopi' | 'admin' | 'pedagogique' | 'finance';
+    sortGroup: number;
+  };
+
+  const QUALIOPI_PILLAR: Record<string, DocItem['pillarKey']> = {
+    CONVENTION: 'admin',
+    PROGRAMME: 'qualiopi',
+    CONVOCATION: 'admin',
+    EMARGEMENT: 'qualiopi',
+    ASSIDUITE: 'qualiopi',
+    ATTESTATION_FIN: 'qualiopi',
+    CERTIFICAT_REALISATION: 'qualiopi',
+    AGEFICE: 'finance',
+    EVALUATION_ACQUIS: 'pedagogique',
+    SATISFACTION: 'pedagogique',
+    SUPPORT_PEDAGOGIQUE: 'pedagogique',
+    PRE_ACCORD_OPCO: 'finance',
+    VALIDATION_OPCO: 'finance',
+    FACTURE: 'finance',
+  };
+
+  const documents: DocItem[] = [
+    ...rawDocs.map((d) => ({
+      key: `doc:${d.id}`,
+      label: DOC_TYPE_LABELS[d.type] ?? d.type,
+      href: `/api/documents/${d.id}`,
+      sessionId: d.sessionId,
+      createdAt: d.createdAt,
+      pillarKey: QUALIOPI_PILLAR[d.type] ?? 'admin',
+      sortGroup: 0,
+    })),
+    ...rawAssets
+      .filter((a) => a.pdfUrl)
+      .map((a) => ({
+        key: `asset:${a.id}`,
+        label: PEDAGOGICAL_KIND_LABELS[a.kind] ?? a.kind,
+        href: `/api/pedagogical-assets/${a.id}`,
+        sessionId: a.sessionId,
+        createdAt: a.generatedAt,
+        pillarKey: 'pedagogique' as const,
+        sortGroup: 1,
+      })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  // Map sessionId → code+title pour grouper visuellement
+  const sessionMeta = sessionIds.length
+    ? await prisma.trainingSession.findMany({
+        where: { id: { in: sessionIds } },
+        select: { id: true, code: true, name: true, product: { select: { title: true } } },
       })
     : [];
+  const sessionMetaById = new Map(sessionMeta.map((s) => [s.id, s]));
 
   const address = (person.personalAddress ?? null) as null | {
     street?: string;
@@ -335,41 +429,91 @@ export default async function ApprenantDetailPage({
         </div>
       )}
 
-      {tab === 'documents' && (
-        <section className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="p-5 border-b border-border">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-              Documents générés ({documents.length})
-            </h2>
-          </div>
-          {documents.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted-foreground italic">
-              Aucun document généré. Les documents apparaîtront ici dès qu'une fiche AGEFICE,
-              programme ou facture sera produite pour cet apprenant.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {documents.map((d) => (
-                <li key={d.id}>
-                  <a
-                    href={`/api/documents/${d.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors"
-                  >
-                    <FileText className="h-4 w-4 text-primary" />
-                    <span className="flex-1 font-medium text-sm">{d.type}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(d.createdAt).toLocaleDateString('fr-FR')}
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+      {tab === 'documents' && (() => {
+        // Group docs par session pour donner un sens Qualiopi (par formation suivie)
+        const bySession = new Map<string | null, DocItem[]>();
+        for (const d of documents) {
+          const list = bySession.get(d.sessionId) ?? [];
+          list.push(d);
+          bySession.set(d.sessionId, list);
+        }
+        const PILLAR_LABELS = {
+          qualiopi: { label: 'Qualiopi', cls: 'bg-emerald-100 text-emerald-800' },
+          pedagogique: { label: 'Pédagogique', cls: 'bg-blue-100 text-blue-800' },
+          admin: { label: 'Administratif', cls: 'bg-slate-100 text-slate-700' },
+          finance: { label: 'Financier', cls: 'bg-amber-100 text-amber-800' },
+        } as const;
+        return (
+          <section className="rounded-2xl border border-border bg-white overflow-hidden">
+            <div className="p-5 border-b border-border">
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+                Documents générés ({documents.length})
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Groupés par session — clic sur un document pour l'ouvrir.
+              </p>
+            </div>
+            {documents.length === 0 ? (
+              <p className="p-8 text-center text-sm text-muted-foreground italic">
+                Aucun document généré. Les documents apparaîtront ici dès qu'une fiche AGEFICE,
+                programme, attestation, certificat, QCM, grille d'observation ou facture sera
+                produite pour cet apprenant.
+              </p>
+            ) : (
+              <div className="divide-y divide-border">
+                {Array.from(bySession.entries()).map(([sId, items]) => {
+                  const meta = sId ? sessionMetaById.get(sId) : null;
+                  return (
+                    <div key={sId ?? 'no-session'} className="p-4">
+                      <div className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-2 flex-wrap">
+                        {meta ? (
+                          <>
+                            <Link
+                              href={`/app/sessions/${meta.id}`}
+                              className="font-mono text-[11px] bg-muted/60 px-2 py-0.5 rounded hover:bg-muted"
+                            >
+                              {meta.code}
+                            </Link>
+                            <span className="text-foreground">{meta.product?.title ?? meta.name}</span>
+                          </>
+                        ) : (
+                          <span className="italic">Hors session</span>
+                        )}
+                        <span className="text-[11px]">· {items.length} doc{items.length > 1 ? 's' : ''}</span>
+                      </div>
+                      <ul className="space-y-1.5 ml-1">
+                        {items.map((d) => {
+                          const pillar = PILLAR_LABELS[d.pillarKey];
+                          return (
+                            <li key={d.key}>
+                              <a
+                                href={d.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-2.5 rounded-md border border-border hover:bg-muted/30 hover:border-primary/30 transition-colors"
+                              >
+                                <FileText className="h-4 w-4 text-primary shrink-0" />
+                                <span className="flex-1 font-medium text-sm truncate">{d.label}</span>
+                                <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${pillar.cls}`}>
+                                  {pillar.label}
+                                </span>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  {new Date(d.createdAt).toLocaleDateString('fr-FR')}
+                                </span>
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        );
+      })()}
     </div>
   );
 }

@@ -90,6 +90,7 @@ export interface ClosureBatchStatusJob {
   attempts: number;
   errorMessage: string | null;
   documentId: string | null;
+  pedagogicalAssetId: string | null;
 }
 
 export interface ClosureBatchStatusPayload {
@@ -151,6 +152,7 @@ export async function getClosureBatchStatus(
         attempts: j.attempts,
         errorMessage: j.errorMessage,
         documentId: j.documentId,
+        pedagogicalAssetId: j.pedagogicalAssetId,
       })),
     },
   };

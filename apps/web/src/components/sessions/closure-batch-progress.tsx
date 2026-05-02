@@ -184,9 +184,13 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                   >
                     {jobIcon(j.status)}
                     <span className="flex-1 truncate">{j.kindLabel}</span>
-                    {j.documentId && j.status === 'DONE' && (
+                    {j.status === 'DONE' && (j.documentId || j.pedagogicalAssetId) && (
                       <a
-                        href={`/api/documents/${j.documentId}`}
+                        href={
+                          j.documentId
+                            ? `/api/documents/${j.documentId}`
+                            : `/api/pedagogical-assets/${j.pedagogicalAssetId}`
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline shrink-0"

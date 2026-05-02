@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -47,6 +48,53 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     },
   });
   if (!session) notFound();
+
+  // Documents Qualiopi déjà générés pour cette session, indexés par participant + type
+  const sessionParticipantIds = session.participants.map((p) => p.id);
+  const [sessionDocs, sessionAssets] = sessionParticipantIds.length
+    ? await Promise.all([
+        prisma.document.findMany({
+          where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds } },
+          select: { id: true, type: true, participantId: true },
+        }),
+        prisma.pedagogicalAsset.findMany({
+          where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds }, pdfUrl: { not: null } },
+          select: { id: true, kind: true, participantId: true },
+        }),
+      ])
+    : [[], []];
+
+  // Indexe par participant pour lookup en O(1) côté rendu
+  const docsByParticipant = new Map<string, Map<string, string>>(); // partId → Map(type → docId)
+  const assetsByParticipant = new Map<string, Map<string, string>>(); // partId → Map(kind → assetId)
+  for (const d of sessionDocs) {
+    if (!d.participantId) continue;
+    const m = docsByParticipant.get(d.participantId) ?? new Map();
+    m.set(d.type, d.id);
+    docsByParticipant.set(d.participantId, m);
+  }
+  for (const a of sessionAssets) {
+    if (!a.participantId) continue;
+    const m = assetsByParticipant.get(a.participantId) ?? new Map();
+    m.set(a.kind, a.id);
+    assetsByParticipant.set(a.participantId, m);
+  }
+
+  // Derniers batches pack fin de formation pour cette session (audit trail)
+  const closureBatches = await prisma.closureBatch.findMany({
+    where: { tenantId: user.tenantId, sessionId: session.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      id: true,
+      status: true,
+      totalDocs: true,
+      doneDocs: true,
+      errorDocs: true,
+      createdAt: true,
+      completedAt: true,
+    },
+  });
 
   const statusInfo = STATUS_LABELS[session.status] ?? { label: session.status, variant: 'muted' as const };
   const eiCount = session.participants.filter((p) => SOLO_FORMS.includes(p.sponsorOrg.legalForm)).length;
@@ -222,6 +270,126 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               </div>
             )}
           </section>
+
+          {/* Conformité Qualiopi : matrice apprenant × document */}
+          {session.participants.length > 0 && (
+            <section className="rounded-2xl border border-border bg-white overflow-hidden">
+              <div className="flex items-center justify-between p-5 border-b border-border">
+                <h2 className="font-semibold inline-flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-primary" /> Conformité Qualiopi
+                </h2>
+                <span className="text-xs text-muted-foreground">Clic sur ✓ pour ouvrir le PDF</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30">
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <th className="px-4 py-2 font-semibold">Apprenant</th>
+                      <th className="px-2 py-2 font-semibold text-center">Programme</th>
+                      <th className="px-2 py-2 font-semibold text-center">AGEFICE</th>
+                      <th className="px-2 py-2 font-semibold text-center">Analyse besoin</th>
+                      <th className="px-2 py-2 font-semibold text-center">QCM</th>
+                      <th className="px-2 py-2 font-semibold text-center">Grille obs.</th>
+                      <th className="px-2 py-2 font-semibold text-center">Attestation</th>
+                      <th className="px-2 py-2 font-semibold text-center">Certificat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {session.participants.map((p) => {
+                      const docs = docsByParticipant.get(p.id);
+                      const assets = assetsByParticipant.get(p.id);
+                      const cells: { label: string; href?: string }[] = [
+                        { label: 'Programme', href: docs?.get('PROGRAMME') ? `/api/documents/${docs.get('PROGRAMME')}` : undefined },
+                        { label: 'AGEFICE', href: docs?.get('AGEFICE') ? `/api/documents/${docs.get('AGEFICE')}` : undefined },
+                        { label: 'Analyse besoin', href: assets?.get('ANALYSE_BESOIN') ? `/api/pedagogical-assets/${assets.get('ANALYSE_BESOIN')}` : undefined },
+                        { label: 'QCM', href: assets?.get('QCM') ? `/api/pedagogical-assets/${assets.get('QCM')}` : undefined },
+                        { label: 'Grille observation', href: assets?.get('GRILLE_OBS') ? `/api/pedagogical-assets/${assets.get('GRILLE_OBS')}` : undefined },
+                        { label: 'Attestation', href: docs?.get('ATTESTATION_FIN') ? `/api/documents/${docs.get('ATTESTATION_FIN')}` : undefined },
+                        { label: 'Certificat', href: docs?.get('CERTIFICAT_REALISATION') ? `/api/documents/${docs.get('CERTIFICAT_REALISATION')}` : undefined },
+                      ];
+                      return (
+                        <tr key={p.id} className="hover:bg-muted/20">
+                          <td className="px-4 py-2">
+                            <Link
+                              href={`/app/apprenants/${p.person.id}?tab=documents`}
+                              className="text-sm hover:text-primary"
+                            >
+                              {p.person.firstName} {p.person.lastName.toUpperCase()}
+                            </Link>
+                          </td>
+                          {cells.map((c, i) => (
+                            <td key={i} className="px-2 py-2 text-center">
+                              {c.href ? (
+                                <a
+                                  href={c.href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`${c.label} — clic pour ouvrir`}
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </a>
+                              ) : (
+                                <span
+                                  title={`${c.label} — non généré`}
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-400"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* Historique des packs fin de formation lancés sur cette session */}
+          {closureBatches.length > 0 && (
+            <section className="rounded-2xl border border-border bg-white overflow-hidden">
+              <div className="p-5 border-b border-border">
+                <h2 className="font-semibold inline-flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" /> Packs fin de formation
+                </h2>
+              </div>
+              <ul className="divide-y divide-border">
+                {closureBatches.map((b) => {
+                  const variant: 'success' | 'warning' | 'danger' | 'info' | 'muted' =
+                    b.status === 'COMPLETED'
+                      ? 'success'
+                      : b.status === 'PARTIAL'
+                        ? 'warning'
+                        : b.status === 'FAILED'
+                          ? 'danger'
+                          : b.status === 'RUNNING'
+                            ? 'info'
+                            : 'muted';
+                  return (
+                    <li key={b.id}>
+                      <Link
+                        href={`/app/sessions/${session.id}/closure/${b.id}` as Route}
+                        className="flex items-center gap-3 p-4 hover:bg-muted/20 transition-colors"
+                      >
+                        <Badge variant={variant}>{b.status}</Badge>
+                        <span className="text-sm flex-1">
+                          {b.doneDocs} / {b.totalDocs} docs
+                          {b.errorDocs > 0 && <span className="text-red-600"> · {b.errorDocs} erreur(s)</span>}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
         </div>
 
         <div className="space-y-6">
