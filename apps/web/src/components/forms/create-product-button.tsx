@@ -22,9 +22,23 @@ export function CreateProductButton() {
   const [theme, setTheme] = useState('');
   const [durationHours, setDurationHours] = useState('8');
   const [modality, setModality] = useState<typeof MODALITIES[number]['value']>('PRESENTIEL');
-  const [priceHT, setPriceHT] = useState('');
+  const HOURLY_RATE = 42; // tarif horaire Start Academy (= 42 €/h, ex: 72h × 42 = 3024 €)
+  const [priceHT, setPriceHT] = useState(String(8 * HOURLY_RATE)); // 8h × 42 = 336 € initial
+  const [priceTouched, setPriceTouched] = useState(false);
   const [capacityMax, setCapacityMax] = useState('12');
   const [autoFillWithAI, setAutoFillWithAI] = useState(true);
+
+  // Auto-calcul du tarif tant que l'utilisateur n'a pas touche au champ.
+  // Des qu'il modifie priceHT manuellement, on respecte sa valeur.
+  function updateDuration(v: string) {
+    setDurationHours(v);
+    if (!priceTouched) {
+      const h = parseFloat(v.replace(',', '.'));
+      if (Number.isFinite(h) && h > 0) {
+        setPriceHT(String(Math.round(h * HOURLY_RATE)));
+      }
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +66,7 @@ export function CreateProductButton() {
           toast.success(`Produit ${r.code} créé`);
         }
         setOpen(false);
-        setTitle(''); setTheme(''); setDurationHours('8'); setModality('PRESENTIEL'); setPriceHT(''); setCapacityMax('12');
+        setTitle(''); setTheme(''); setDurationHours('8'); setModality('PRESENTIEL'); setPriceHT(String(8 * HOURLY_RATE)); setPriceTouched(false); setCapacityMax('12');
         router.push(`/app/produits/${r.productId}` as any);
       } else {
         setError(r.error ?? 'Erreur inconnue.');
@@ -92,7 +106,7 @@ export function CreateProductButton() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Durée (h) *</label>
-                  <input type="number" min="1" step="0.5" value={durationHours} onChange={(e) => setDurationHours(e.target.value)} required className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                  <input type="number" min="1" step="0.5" value={durationHours} onChange={(e) => updateDuration(e.target.value)} required className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Modalité *</label>
@@ -106,10 +120,22 @@ export function CreateProductButton() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Tarif HT (€) — optionnel</label>
-                <input type="number" min="0" step="0.01" value={priceHT} onChange={(e) => setPriceHT(e.target.value)} placeholder="ex: 480" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Tarif HT (€) {!priceTouched && <span className="text-primary">— auto-calculé {HOURLY_RATE}€ × heures</span>}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={priceHT}
+                  onChange={(e) => { setPriceHT(e.target.value); setPriceTouched(true); }}
+                  placeholder={`ex: ${HOURLY_RATE * 8}`}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Le tarif final est défini par session. Tu peux laisser vide ici.
+                  {priceTouched
+                    ? 'Tarif personnalisé — l\'auto-calcul est désactivé.'
+                    : `Le tarif s'ajuste automatiquement (${HOURLY_RATE} €/h) tant que tu n'y touches pas. Modifiable.`}
                 </p>
               </div>
               <label className="flex items-start gap-2 text-sm cursor-pointer p-3 rounded-lg border border-primary-200 bg-primary-50/40">

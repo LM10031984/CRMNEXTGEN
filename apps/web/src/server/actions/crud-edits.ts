@@ -352,13 +352,32 @@ export async function createProduct(input: {
   if (!input.durationHours || input.durationHours <= 0) return { ok: false, error: 'Durée invalide.' };
   if (!VALID_MODALITIES.includes(input.modality)) return { ok: false, error: 'Modalité invalide.' };
 
-  const last = await prisma.trainingProduct.findFirst({
+  // Le tri SQL `ORDER BY code DESC` echoue ici parce que des codes legacy
+  // type "PROD-IMPORT-FALLBACK" ressortent en tete (alphabetiquement I > 0).
+  // On filtre cote SQL sur le format strict PROD-DDDD puis on prend le max
+  // numerique cote JS — robuste au format mixte des imports SmartOF.
+  const candidates = await prisma.trainingProduct.findMany({
     where: { tenantId: user.tenantId, code: { startsWith: 'PROD-' } },
-    orderBy: { code: 'desc' },
+    select: { code: true },
   });
-  const seqMatch = last?.code?.match(/PROD-0*(\d+)/);
-  const nextSeq = seqMatch && seqMatch[1] ? parseInt(seqMatch[1], 10) + 1 : 1;
-  const code = `PROD-${String(nextSeq).padStart(4, '0')}`;
+  const maxSeq = candidates.reduce((m, p) => {
+    const match = p.code.match(/^PROD-0*(\d+)$/);
+    if (!match || !match[1]) return m;
+    return Math.max(m, parseInt(match[1], 10));
+  }, 0);
+  // Boucle de garde au cas ou un code PROD-NNNN aurait ete cree entretemps
+  // (improbable mais le cout est negligeable). Max 50 essais.
+  let code = '';
+  for (let attempt = 1; attempt <= 50; attempt++) {
+    code = `PROD-${String(maxSeq + attempt).padStart(4, '0')}`;
+    const exists = await prisma.trainingProduct.findFirst({
+      where: { tenantId: user.tenantId, code },
+      select: { id: true },
+    });
+    if (!exists) break;
+    code = '';
+  }
+  if (!code) return { ok: false, error: 'Impossible de générer un code unique (50 collisions). Réessaie.' };
 
   const product = await prisma.trainingProduct.create({
     data: {
