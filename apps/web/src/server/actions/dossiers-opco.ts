@@ -54,6 +54,18 @@ export async function toggleDossierBoolean(
     data.amountRemaining = amountRemaining;
   }
 
+  // Memorise la date de transition false→true (et la remet a null si on
+  // detoggle). Permet de calculer le DSO moyen entre fin de formation et
+  // paiement client / remboursement OPCO. Cf retours Laurent 02/05.
+  const dateFieldMap: Record<ToggleField, keyof Prisma.SessionParticipantUpdateInput> = {
+    invoiceSent: 'invoiceSentAt',
+    paymentReceived: 'paymentReceivedAt',
+    opcoApproved: 'opcoApprovedAt',
+    opcoReimbursed: 'opcoReimbursedAt',
+  };
+  const dateField = dateFieldMap[field];
+  (data as Record<string, unknown>)[dateField] = next ? new Date() : null;
+
   await prisma.sessionParticipant.update({
     where: { id: participantId },
     data,

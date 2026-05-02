@@ -508,6 +508,11 @@ model SessionParticipant {
   closingDocsSent          Boolean @default(false)
   invoiceSent              Boolean @default(false)
   paymentReceived          Boolean @default(false)
+  // Dates de transition false→true (calcul DSO et delais OPCO)
+  invoiceSentAt            DateTime?
+  paymentReceivedAt        DateTime?
+  opcoApprovedAt           DateTime?
+  opcoReimbursedAt         DateTime?
   opcoPreApproved          Boolean @default(false)
   opcoApproved             Boolean @default(false)
   opcoReimbursed           Boolean @default(false)
