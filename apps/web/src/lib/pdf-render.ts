@@ -9,19 +9,30 @@
 
 const GOTENBERG_URL = process.env.GOTENBERG_URL ?? 'http://localhost:3001';
 
-export async function renderHtmlToPdf(html: string, _fileName = 'document.html'): Promise<Buffer> {
-  // Gotenberg attend un multipart/form-data avec le HTML en pièce jointe
-  // nommée "index.html" — sinon HTTP 400 "form file 'index.html' is required"
+export async function renderHtmlToPdf(
+  html: string,
+  options?: { footerHtml?: string; headerHtml?: string },
+): Promise<Buffer> {
   const form = new FormData();
   form.append('files', new Blob([html], { type: 'text/html' }), 'index.html');
-  // Marges raisonnables A4 (en pouces, le défaut Gotenberg)
-  form.append('marginTop', '0.6');
-  form.append('marginBottom', '0.6');
+  if (options?.footerHtml) {
+    form.append('files', new Blob([options.footerHtml], { type: 'text/html' }), 'footer.html');
+  }
+  if (options?.headerHtml) {
+    form.append('files', new Blob([options.headerHtml], { type: 'text/html' }), 'header.html');
+  }
+  // Marges raisonnables A4 (en pouces, le defaut Gotenberg). On reserve plus
+  // de marge en bas pour laisser la place au footer.html sans empieter sur
+  // le contenu (sinon on a des paragraphes ecrits par-dessus le footer).
+  form.append('marginTop', options?.headerHtml ? '0.9' : '0.6');
+  form.append('marginBottom', options?.footerHtml ? '0.9' : '0.6');
   form.append('marginLeft', '0.6');
   form.append('marginRight', '0.6');
-  form.append('paperWidth', '8.27'); // A4
+  form.append('paperWidth', '8.27');
   form.append('paperHeight', '11.69');
-  form.append('preferCssPageSize', 'true');
+  // preferCssPageSize=false sinon le @page CSS ecrase nos marges Gotenberg
+  // (et le contenu vient se superposer au footer.html sur les pages 2+).
+  form.append('preferCssPageSize', options?.footerHtml ? 'false' : 'true');
 
   const res = await fetch(`${GOTENBERG_URL}/forms/chromium/convert/html`, {
     method: 'POST',

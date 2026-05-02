@@ -166,8 +166,8 @@ const STYLES = `
   }
   .tarif strong { color: ${BRAND_DARK}; }
 
-  /* Récap session (encart bleu en début) */
-  .session-recap {
+  /* Récap produit (encart bleu en début) */
+  .produit-recap {
     margin-top: 8px;
     margin-bottom: 18px;
     padding: 10px 14px;
@@ -175,23 +175,27 @@ const STYLES = `
     border-left: 3px solid ${BRAND_BLUE};
     font-size: 9.5pt;
   }
-  .session-recap div { margin: 2px 0; }
-  .session-recap .label { color: #64748B; display: inline-block; min-width: 90px; }
+  .produit-recap div { margin: 2px 0; }
+  .produit-recap .label { color: #64748B; display: inline-block; min-width: 110px; }
 
-  section { page-break-inside: auto; }
-
-  footer.corp {
-    position: fixed;
-    bottom: 8mm;
-    left: 18mm;
-    right: 18mm;
-    border-top: 1px solid #94A3B8;
-    padding-top: 4px;
-    font-size: 7.5pt;
-    color: #475569;
-    text-align: center;
-    line-height: 1.45;
+  /* Bloc contact en fin de doc */
+  .contact-block {
+    margin-top: 18px;
+    padding: 10px 14px;
+    background: #F0F9FF;
+    border-left: 3px solid ${BRAND_BLUE};
+    font-size: 10pt;
   }
+  .contact-block p { margin: 0; }
+
+  /* Pagination : evite de couper les sections au milieu si possible */
+  section { page-break-inside: avoid; }
+  /* Le programmeMd peut etre long, on autorise la coupure mais on garde
+     les titres avec leur premier paragraphe */
+  .programme-md { page-break-inside: auto; }
+  .programme-md h2, .programme-md h3 { page-break-after: avoid; }
+
+  /* Le footer corporate est gere par Gotenberg footerHtml — pas inline ici */
 </style>
 `;
 
@@ -276,15 +280,10 @@ ${STYLES}
 
 <h1 class="title">${escapeHtml(data.produitTitre)}</h1>
 
-${data.sessionCode ? `
-<div class="session-recap">
-  <div><span class="label">Session :</span> <strong>${escapeHtml(data.sessionCode)}</strong></div>
-  <div><span class="label">Apprenant :</span> ${escapeHtml(`${data.apprenantPrenom} ${data.apprenantNom}`)}</div>
-  <div><span class="label">Dates :</span> du ${data.sessionStartDate.toLocaleDateString('fr-FR')} au ${data.sessionEndDate.toLocaleDateString('fr-FR')}</div>
-  <div><span class="label">Lieu :</span> ${escapeHtml(data.sessionLieu ?? of.addressFull)}</div>
-  <div><span class="label">Formateur :</span> ${escapeHtml(formateurs)}</div>
+<div class="produit-recap">
+  <div><span class="label">Code produit :</span> <strong>${escapeHtml(data.produitCode)}</strong></div>
+  <div><span class="label">Durée :</span> ${formatDuree(data.produitDureeHeures)}</div>
 </div>
-` : ''}
 
 <section>
   <h2 class="section">Les objectifs pédagogiques de formation</h2>
@@ -357,7 +356,6 @@ ${data.sessionCode ? `
     .filter(Boolean)
     .map((line) => `<p>${line}</p>`)
     .join('')}
-  <p>Pour toute question, merci de contacter ${escapeHtml(respFullName)} — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
 </section>
 
 <section>
@@ -368,7 +366,10 @@ ${data.sessionCode ? `
     .filter(Boolean)
     .map((line) => `<p>${line}</p>`)
     .join('')}
-  <p>Pour toutes questions, merci de contacter ${escapeHtml(respFullName)} — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
+</section>
+
+<section class="contact-block">
+  <p>Pour toute question : <strong>${escapeHtml(respFullName)}</strong> — ${escapeHtml(of.email)} — ${escapeHtml(of.phone)}.</p>
 </section>
 
 <section>
@@ -379,11 +380,24 @@ ${data.sessionCode ? `
   </div>
 </section>
 
-<footer class="corp">
-  <strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
-  NDA ${escapeHtml(of.rnq)} - Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – Tél : ${escapeHtml(of.phone)}
-</footer>
-
 </body>
 </html>`;
+}
+
+/**
+ * Footer HTML répété par Gotenberg sur chaque page (passé en footer.html
+ * dans le multipart). Doit etre un document HTML autonome, le styling vient
+ * inline (Gotenberg ignore les <style> externes et CSS @page).
+ */
+export function renderProgrammeFooterHtml(): string {
+  const of = getOfConfig();
+  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #475569; margin: 0; padding: 0;">
+  <div style="border-top: 1px solid #94A3B8; padding: 4px 18mm 0 18mm; text-align: center; line-height: 1.45;">
+    <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
+    NDA ${escapeHtml(of.rnq)} – Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – Tél : ${escapeHtml(of.phone)}
+  </div>
+</body></html>`;
 }

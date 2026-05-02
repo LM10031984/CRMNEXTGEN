@@ -6,7 +6,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
-import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
+import { renderProgrammeHtml, renderProgrammeFooterHtml, type ProgrammeData } from '@/lib/programme-template';
 
 const OF_DEFAULTS = {
   name: 'Start Academy',
@@ -85,7 +85,7 @@ export async function generateProgrammeForParticipant(
   let pdfBuffer: Buffer;
   try {
     const html = renderProgrammeHtml(data);
-    pdfBuffer = await renderHtmlToPdf(html, `programme-${session.code}.html`);
+    pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderProgrammeFooterHtml() });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}` };
   }
