@@ -344,7 +344,8 @@ export async function createProduct(input: {
   theme?: string | null;
   capacityMin?: number | null;
   capacityMax?: number | null;
-}): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
+  autoFillWithAI?: boolean;
+}): Promise<{ ok: boolean; productId?: string; code?: string; aiFilled?: boolean; aiError?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
   if (!input.title.trim()) return { ok: false, error: 'Titre requis.' };
@@ -375,6 +376,50 @@ export async function createProduct(input: {
       programMd: '',
     },
   });
+
+  // Auto-fill IA : objectifs / public / prerequis / programme detaille via
+  // Ollama. Lent (~10-30s sur Mac M5) mais rempli toute la fiche en un coup.
+  // Si Ollama plante, on garde le produit basique cree au-dessus + on remonte
+  // l'erreur a l'UI pour que Laurent puisse retenter "Editer > Auto-remplir IA"
+  // depuis la fiche produit.
+  if (input.autoFillWithAI !== false) {
+    try {
+      const { aiPreFillProduct } = await import('./ai-fill-product');
+      const r = await aiPreFillProduct({
+        title: input.title,
+        theme: input.theme,
+        durationHours: input.durationHours,
+        modality: input.modality,
+        priceHT: input.priceHT ?? undefined,
+      });
+      if (r.ok && r.draft) {
+        await prisma.trainingProduct.update({
+          where: { id: product.id },
+          data: {
+            objectives: r.draft.objectives,
+            targetAudience: r.draft.targetAudience || null,
+            prerequisites: r.draft.prerequisites || null,
+            pedagogicalMethods: r.draft.pedagogicalMethods || null,
+            pedagogicalSupport: r.draft.pedagogicalSupport || null,
+            evaluationMethods: r.draft.evaluationMethods || null,
+            trainerProfile: r.draft.trainerProfile || null,
+            accessibility: r.draft.accessibility || null,
+            accessConditions: r.draft.accessConditions || null,
+            programMd: r.draft.programMd,
+          },
+        });
+        revalidatePath('/app/produits');
+        revalidatePath(`/app/produits/${product.id}`);
+        return { ok: true, productId: product.id, code, aiFilled: true };
+      }
+      revalidatePath('/app/produits');
+      return { ok: true, productId: product.id, code, aiFilled: false, aiError: r.error };
+    } catch (e: any) {
+      revalidatePath('/app/produits');
+      return { ok: true, productId: product.id, code, aiFilled: false, aiError: e?.message ?? String(e) };
+    }
+  }
+
   revalidatePath('/app/produits');
   return { ok: true, productId: product.id, code };
 }

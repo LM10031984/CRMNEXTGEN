@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Plus, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { createProduct } from '@/server/actions/crud-edits';
 
 const MODALITIES = [
@@ -23,6 +24,7 @@ export function CreateProductButton() {
   const [modality, setModality] = useState<typeof MODALITIES[number]['value']>('PRESENTIEL');
   const [priceHT, setPriceHT] = useState('');
   const [capacityMax, setCapacityMax] = useState('12');
+  const [autoFillWithAI, setAutoFillWithAI] = useState(true);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,8 +41,16 @@ export function CreateProductButton() {
         priceHT: Number.isFinite(price ?? NaN) ? price : null,
         theme: theme.trim() || null,
         capacityMax: Number.isFinite(cap) ? cap : null,
+        autoFillWithAI,
       });
       if (r.ok && r.productId) {
+        if (autoFillWithAI && r.aiFilled) {
+          toast.success(`Produit ${r.code} créé + auto-rempli par IA`);
+        } else if (autoFillWithAI && !r.aiFilled) {
+          toast.warning(`Produit ${r.code} créé. Auto-fill IA a échoué : ${r.aiError ?? 'Ollama'}. Tu peux retenter via Éditer.`);
+        } else {
+          toast.success(`Produit ${r.code} créé`);
+        }
         setOpen(false);
         setTitle(''); setTheme(''); setDurationHours('8'); setModality('PRESENTIEL'); setPriceHT(''); setCapacityMax('12');
         router.push(`/app/produits/${r.productId}` as any);
@@ -102,10 +112,30 @@ export function CreateProductButton() {
                   Le tarif final est défini par session. Tu peux laisser vide ici.
                 </p>
               </div>
+              <label className="flex items-start gap-2 text-sm cursor-pointer p-3 rounded-lg border border-primary-200 bg-primary-50/40">
+                <input
+                  type="checkbox"
+                  checked={autoFillWithAI}
+                  onChange={(e) => setAutoFillWithAI(e.target.checked)}
+                  className="h-4 w-4 mt-0.5"
+                />
+                <span className="flex-1">
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Auto-remplir avec l'IA
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">
+                    Génère automatiquement objectifs / public / pré-requis / programme détaillé via Ollama (≈ 10–30 s). Tu pourras tout éditer ensuite.
+                  </span>
+                </span>
+              </label>
               {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</div>}
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setOpen(false)} disabled={busy} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted">Annuler</button>
-                <button type="submit" disabled={busy} className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50">{busy ? 'Création…' : 'Créer le produit'}</button>
+                <button type="submit" disabled={busy} className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5">
+                  {busy && autoFillWithAI ? <Sparkles className="h-3.5 w-3.5 animate-pulse" /> : null}
+                  {busy ? (autoFillWithAI ? 'Création + IA…' : 'Création…') : 'Créer le produit'}
+                </button>
               </div>
             </form>
           </div>
