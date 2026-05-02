@@ -378,3 +378,47 @@ export async function createProduct(input: {
   revalidatePath('/app/produits');
   return { ok: true, productId: product.id, code };
 }
+
+// ── Suppression formateur ────────────────────────────────────────────────
+export async function deleteTrainer(personId: string): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const person = await prisma.person.findFirst({
+    where: { id: personId, tenantId: user.tenantId },
+    select: { id: true, _count: { select: { trainerSessions: true, participations: true } } },
+  });
+  if (!person) return { ok: false, error: 'Formateur introuvable.' };
+  if (person._count.trainerSessions > 0) {
+    return { ok: false, error: `Impossible : ${person._count.trainerSessions} session(s) ont ce formateur affecté.` };
+  }
+  if (person._count.participations > 0) {
+    return { ok: false, error: 'Cette personne est aussi inscrite comme apprenante. Suppression bloquée.' };
+  }
+
+  await prisma.externalIdentity.deleteMany({
+    where: { tenantId: user.tenantId, entityType: 'Person.Trainer', entityId: personId },
+  });
+  await prisma.person.delete({ where: { id: personId } });
+  revalidatePath('/app/formateurs');
+  return { ok: true };
+}
+
+// ── Suppression produit de formation ────────────────────────────────────
+export async function deleteProduct(productId: string): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const product = await prisma.trainingProduct.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+    select: { id: true, _count: { select: { trainingSessions: true } } },
+  });
+  if (!product) return { ok: false, error: 'Produit introuvable.' };
+  if (product._count.trainingSessions > 0) {
+    return { ok: false, error: `Impossible : ${product._count.trainingSessions} session(s) utilisent ce produit. Désactive-le plutôt.` };
+  }
+
+  await prisma.trainingProduct.delete({ where: { id: productId } });
+  revalidatePath('/app/produits');
+  return { ok: true };
+}

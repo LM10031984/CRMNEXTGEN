@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { EditProductButton } from '@/components/forms/edit-product-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
+import { DeleteProductButton } from '@/components/forms/delete-product-button';
 
 const MOD_LABEL: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -38,7 +39,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         subtitle={`${product.code} · ${product.durationHours}h`}
         href={`/app/produits/${product.id}`}
       />
-      <BackToListLink fallbackHref="/app/produits" label="Retour au catalogue" />
+      <div className="flex items-center justify-between gap-3">
+        <BackToListLink fallbackHref="/app/produits" label="Retour au catalogue" />
+        <DeleteProductButton productId={product.id} productCode={product.code} />
+      </div>
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader

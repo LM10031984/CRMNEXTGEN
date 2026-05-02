@@ -9,6 +9,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { DeleteTrainerButton } from '@/components/forms/delete-trainer-button';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
   DRAFT: { label: 'Brouillon', variant: 'muted' },
@@ -85,7 +86,13 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <BackToListLink fallbackHref="/app/formateurs" label="Retour aux formateurs" />
+      <div className="flex items-center justify-between gap-3">
+        <BackToListLink fallbackHref="/app/formateurs" label="Retour aux formateurs" />
+        <DeleteTrainerButton
+          personId={trainer.id}
+          fullName={`${trainer.firstName} ${trainer.lastName}`}
+        />
+      </div>
 
       <PageHeader
         title={
