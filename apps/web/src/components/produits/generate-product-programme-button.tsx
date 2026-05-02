@@ -12,13 +12,16 @@ export function GenerateProductProgrammeButton({ productId }: { productId: strin
 
   const handleGenerate = () => {
     startTransition(async () => {
-      const r = await generateProgrammeForProduct(productId);
-      if (r.ok && r.documentId) {
-        setDocId(r.documentId);
-        // Ouvre directement le PDF en nouvel onglet : 1 clic = visualisation
-        window.open(`/api/documents/${r.documentId}`, '_blank');
-      } else {
-        toast.error(r.error ?? 'Erreur génération programme');
+      try {
+        const r = await generateProgrammeForProduct(productId);
+        if (r?.ok && r.documentId) {
+          setDocId(r.documentId);
+          window.open(`/api/documents/${r.documentId}`, '_blank');
+        } else {
+          toast.error(r?.error ?? 'Erreur génération programme (réponse vide du serveur)');
+        }
+      } catch (e: any) {
+        toast.error(`Erreur : ${e?.message ?? String(e)}`);
       }
     });
   };

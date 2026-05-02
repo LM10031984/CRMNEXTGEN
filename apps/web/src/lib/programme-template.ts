@@ -250,8 +250,18 @@ export function renderProgrammeHtml(data: ProgrammeData): string {
     ? data.produitObjectifs
     : ['Objectifs à définir dans la fiche produit.'];
 
+  // Normalise le markdown : l'IA peut generer "##Titre" sans espace ou
+  // "**texte**" inline qui est mal rendu si pas a la bonne place. On ajoute
+  // l'espace manquant apres les # et on retire les ** orphelins en debut/fin
+  // de ligne, sinon ces caracteres ressortent litteraux dans le PDF.
+  const normalizeMd = (md: string): string =>
+    md
+      .replace(/(^|\n)(#{1,6})([^\s#])/g, '$1$2 $3')
+      .replace(/^\s*\*+\s*$/gm, '')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|\n)[*-]\s*$/g, '$1');
   const programmeHtml = data.produitProgrammeMd
-    ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)
+    ? (marked.parse(normalizeMd(data.produitProgrammeMd), { async: false, breaks: true }) as string)
     : '<p><em>Programme à compléter dans la fiche produit (champ Programme détaillé).</em></p>';
 
   const formateurs = (data.sessionFormateurs?.length ?? 0) > 0 ? data.sessionFormateurs!.join(', ') : 'À confirmer';
