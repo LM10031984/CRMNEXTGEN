@@ -9,6 +9,7 @@
  */
 
 import { renderHtmlToPdf } from '@/lib/pdf-render';
+import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 import type { ClosureDocKind, ClosureRenderResult } from './types';
 import type { ClosureContext } from './shared-template';
 import { renderAttestationHtml } from './attestation-template';
@@ -58,12 +59,12 @@ export async function renderClosureDoc(
   switch (kind) {
     case 'ATTESTATION': {
       const html = renderAttestationHtml(ctx);
-      const pdfBuffer = await renderHtmlToPdf(html, 'attestation.html');
+      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
       return { pdfBuffer };
     }
     case 'CERTIFICAT': {
       const html = renderCertificatHtml(ctx);
-      const pdfBuffer = await renderHtmlToPdf(html, 'certificat.html');
+      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
       return { pdfBuffer };
     }
     case 'QCM': {
@@ -81,7 +82,7 @@ export async function renderClosureDoc(
         content = stubQcmContent(ctx);
       }
       const html = renderQcmHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, 'qcm.html');
+      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
       return { pdfBuffer, rawJson: { source, ...content } };
     }
     case 'GRILLE_OBS': {
@@ -99,7 +100,7 @@ export async function renderClosureDoc(
         content = stubGrilleContent(ctx);
       }
       const html = renderGrilleObservationHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, 'grille-observation.html');
+      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
       return { pdfBuffer, rawJson: { source, ...content } };
     }
     case 'ANALYSE_BESOIN': {
@@ -117,7 +118,7 @@ export async function renderClosureDoc(
         content = stubAnalyseBesoinContent(ctx);
       }
       const html = renderAnalyseBesoinHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, 'analyse-besoin.html');
+      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
       return { pdfBuffer, rawJson: { source, ...content } };
     }
     default: {

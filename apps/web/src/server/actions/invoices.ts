@@ -7,6 +7,7 @@ import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
+import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 
 const OF = {
   name: process.env.OF_NAME ?? 'Start Academy',
@@ -123,7 +124,7 @@ export async function createInvoiceFromParticipant(
 
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), `${invoice.number}.html`);
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), { footerHtml: renderOfStandardFooterHtml() });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
   }
@@ -277,7 +278,7 @@ export async function createInvoiceForSponsorGroup(input: {
 
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), `${invoice.number}.html`);
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), { footerHtml: renderOfStandardFooterHtml() });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
   }

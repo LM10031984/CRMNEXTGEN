@@ -399,15 +399,7 @@ ${STYLES}
  * dans le multipart). Doit etre un document HTML autonome, le styling vient
  * inline (Gotenberg ignore les <style> externes et CSS @page).
  */
-export function renderProgrammeFooterHtml(): string {
-  const of = getOfConfig();
-  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #475569; margin: 0; padding: 0;">
-  <div style="border-top: 1px solid #94A3B8; padding: 4px 18mm 0 18mm; text-align: center; line-height: 1.45;">
-    <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
-    NDA ${escapeHtml(of.rnq)} – Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – Tél : ${escapeHtml(of.phone)}
-  </div>
-</body></html>`;
-}
+// Re-export pour compatibilite avec les imports existants. Le footer commun
+// est maintenant defini dans lib/of-pdf-footer.ts et reutilise par TOUS les
+// docs PDF (programme, convention, facture, AGEFICE, closure pack…).
+export { renderOfStandardFooterHtml as renderProgrammeFooterHtml } from './of-pdf-footer';

@@ -317,15 +317,5 @@ ${STYLES}
 </html>`;
 }
 
-export function renderConventionFooterHtml(): string {
-  const of = getOfConfig();
-  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #475569; margin: 0; padding: 0;">
-  <div style="border-top: 1px solid #94A3B8; padding: 4px 18mm 0 18mm; text-align: center; line-height: 1.45;">
-    <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
-    NDA ${escapeHtml(of.rnq)} – Convention de formation professionnelle – ${escapeHtml(respFullName)} – ${escapeHtml(of.email)}
-  </div>
-</body></html>`;
-}
+// Footer commun a tous les docs PDF QualiOF — cf lib/of-pdf-footer.ts.
+export { renderOfStandardFooterHtml as renderConventionFooterHtml } from './of-pdf-footer';
