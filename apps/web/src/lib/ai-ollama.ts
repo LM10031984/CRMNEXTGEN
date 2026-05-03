@@ -16,6 +16,8 @@ export interface OllamaCallOptions {
   jsonOutput?: boolean;
   temperature?: number;
   maxTokens?: number;
+  /** Timeout en ms ; default 180_000 (3 min) — évite worker pendu si Ollama bloque. */
+  timeoutMs?: number;
 }
 
 export interface OllamaResult {
@@ -41,10 +43,16 @@ export async function callOllama(opts: OllamaCallOptions): Promise<OllamaResult>
   if (opts.systemPrompt) body.system = opts.systemPrompt;
   if (opts.jsonOutput) body.format = 'json';
 
+  // AbortSignal timeout : sans ça un worker BullMQ peut rester pendu
+  // indéfiniment si Ollama bloque (queue interne saturée, modèle qui swap).
+  // Default 600s (10 min) : avec OLLAMA_NUM_PARALLEL>1 sur Apple Silicon,
+  // une génération QCM 13 questions peut prendre 4-5 min sous compétition GPU.
+  const timeoutMs = opts.timeoutMs ?? 600_000;
   const res = await fetch(`${OLLAMA_HOST}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const txt = await res.text();

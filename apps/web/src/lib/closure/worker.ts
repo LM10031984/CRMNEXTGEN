@@ -23,7 +23,12 @@ import { renderClosureDoc } from './renderer';
 import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
 
-const CONCURRENCY = Number(process.env.CLOSURE_WORKER_CONCURRENCY ?? 5);
+// Concurrency 3 par défaut : sur Apple Silicon avec mistral-small:24b en
+// local, 5 contextes en parallèle saturent le GPU et font traîner toutes
+// les requêtes (latence moyenne 4-5 min, timeouts en cascade). 3 workers
+// laissent assez de bande passante pour que chaque génération se termine
+// en ~2 min. À monter jusqu'à 8 quand on bascule sur Claude API.
+const CONCURRENCY = Number(process.env.CLOSURE_WORKER_CONCURRENCY ?? 3);
 
 // Mapping kind → DocType pour les documents écrits dans `Document`
 const DOC_TYPE_BY_KIND: Partial<Record<ClosureDocKind, DocType>> = {
