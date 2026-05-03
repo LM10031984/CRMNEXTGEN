@@ -140,16 +140,19 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
     };
 
     // 3. Render PDF via le dispatch real (Day 2 avec stubs IA, Day 3 avec Ollama)
-    const { pdfBuffer, rawJson } = await renderClosureDoc(payload.kind, ctx);
+    const { pdfBuffer, rawJson, usedStub } = await renderClosureDoc(payload.kind, ctx);
 
     // 4. Upload MinIO
     const hash = createHash('sha256').update(pdfBuffer).digest('hex');
     const safePersonSlug = `${participant.person.lastName}-${participant.person.firstName}`
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '') // combining diacritical marks (é → e), unambigu encoding
       .replace(/[^a-zA-Z0-9-]/g, '-')
       .toLowerCase();
-    const key = `closure/${participant.session.code}/${payload.batchId.slice(0, 8)}/${safePersonSlug}-${payload.kind.toLowerCase()}-${hash.slice(0, 8)}.pdf`;
+    // Path tenant-scoped + batchId complet (122 bits entropie) pour éviter
+    // les clés prévisibles si le bucket MinIO devient un jour public par
+    // erreur. Cf A5 du code review.
+    const key = `closure/${payload.tenantId}/${participant.session.code}/${payload.batchId}/${safePersonSlug}-${payload.kind.toLowerCase()}-${hash.slice(0, 8)}.pdf`;
     await uploadFile(DOCS_BUCKET, key, pdfBuffer, 'application/pdf');
 
     // 5a. Si ATTESTATION/CERTIFICAT → Document
@@ -203,7 +206,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       pedagogicalAssetId = asset.id;
     }
 
-    // 6. Marque le job DONE + incrémente le batch
+    // 6. Marque le job DONE + incrémente le batch + finalise atomiquement
     await prisma.closureJob.update({
       where: { id: payload.jobId },
       data: {
@@ -211,14 +214,11 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
         completedAt: new Date(),
         documentId,
         pedagogicalAssetId,
+        usedStub: Boolean(usedStub),
         errorMessage: null,
       },
     });
-    await prisma.closureBatch.update({
-      where: { id: payload.batchId },
-      data: { doneDocs: { increment: 1 } },
-    });
-    await finalizeBatchIfDone(payload.batchId);
+    await bumpAndFinalize(payload.batchId, 'done');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Si BullMQ va retry, on garde le job en PROCESSING (pas ERROR définitif)
@@ -231,11 +231,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       },
     });
     if (isFinalAttempt) {
-      await prisma.closureBatch.update({
-        where: { id: payload.batchId },
-        data: { errorDocs: { increment: 1 } },
-      });
-      await finalizeBatchIfDone(payload.batchId);
+      await bumpAndFinalize(payload.batchId, 'error');
     }
     throw err; // BullMQ doit voir l'erreur pour gérer retry
   }
@@ -248,19 +244,43 @@ async function markBatchRunningIfNeeded(batchId: string): Promise<void> {
   });
 }
 
-async function finalizeBatchIfDone(batchId: string): Promise<void> {
-  const batch = await prisma.closureBatch.findUnique({ where: { id: batchId } });
-  if (!batch) return;
-  const handled = batch.doneDocs + batch.errorDocs;
-  if (handled < batch.totalDocs) return;
+/**
+ * Incrémente atomiquement le compteur (done ou error) du batch et — si tous
+ * les jobs sont traités — bascule le status vers COMPLETED / PARTIAL / FAILED
+ * dans la même transaction.
+ *
+ * Sans transaction, jusqu'à 5 workers peuvent terminer en parallèle (concurrency=5)
+ * et conclure de manière incohérente que `handled < totalDocs` chacun de leur
+ * côté → batch stuck en RUNNING. Cf B1 du code review.
+ *
+ * Le `where: { status: { in: ['PENDING','RUNNING'] } }` évite d'écraser un
+ * batch déjà finalisé (cas retry tardif).
+ *
+ * Isolation `Serializable` : Postgres garantit que les autres transactions
+ * concurrentes voient un état cohérent — à défaut on retombe sur le pattern
+ * "ABORTED + retry" Prisma natif.
+ */
+async function bumpAndFinalize(batchId: string, kind: 'done' | 'error'): Promise<void> {
+  await prisma.$transaction(
+    async (tx) => {
+      const batch = await tx.closureBatch.update({
+        where: { id: batchId },
+        data: kind === 'done' ? { doneDocs: { increment: 1 } } : { errorDocs: { increment: 1 } },
+        select: { totalDocs: true, doneDocs: true, errorDocs: true, status: true },
+      });
 
-  let nextStatus: 'COMPLETED' | 'PARTIAL' | 'FAILED';
-  if (batch.errorDocs === 0) nextStatus = 'COMPLETED';
-  else if (batch.doneDocs === 0) nextStatus = 'FAILED';
-  else nextStatus = 'PARTIAL';
+      const handled = batch.doneDocs + batch.errorDocs;
+      if (handled < batch.totalDocs) return;
+      if (batch.status !== 'PENDING' && batch.status !== 'RUNNING') return; // déjà finalisé
 
-  await prisma.closureBatch.update({
-    where: { id: batchId },
-    data: { status: nextStatus, completedAt: new Date() },
-  });
+      const next: 'COMPLETED' | 'PARTIAL' | 'FAILED' =
+        batch.errorDocs === 0 ? 'COMPLETED' : batch.doneDocs === 0 ? 'FAILED' : 'PARTIAL';
+
+      await tx.closureBatch.updateMany({
+        where: { id: batchId, status: { in: ['PENDING', 'RUNNING'] } },
+        data: { status: next, completedAt: new Date() },
+      });
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }

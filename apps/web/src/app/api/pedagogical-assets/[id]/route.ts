@@ -35,7 +35,9 @@ export async function GET(
       },
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return new NextResponse(`Error reading file: ${msg}`, { status: 500 });
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[pedagogical-assets/${id}] read error :`, e);
+    }
+    return new NextResponse('Document indisponible', { status: 500 });
   }
 }

@@ -219,6 +219,7 @@ async function runOllamaJson<T>(
           tenantId,
           provider: 'ollama',
           model: MODEL,
+          promptVersion: PROMPT_VERSION, // traçabilité audit Qualiopi
           inputHash,
           status: 'running',
           refTable,

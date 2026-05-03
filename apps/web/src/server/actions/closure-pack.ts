@@ -6,7 +6,7 @@ import { prisma, type ClosureDocKind } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { CLOSURE_DOC_KINDS, CLOSURE_DOC_KIND_LABELS } from '@/lib/closure/types';
-import { enqueueClosureJob } from '@/lib/closure/queue';
+import { enqueueClosureJob, getClosureQueue } from '@/lib/closure/queue';
 
 /**
  * Lance la génération du pack fin de formation pour TOUS les participants
@@ -64,17 +64,20 @@ export async function generateClosurePack(
     include: { jobs: { select: { id: true, participantId: true, kind: true } } },
   });
 
-  // Enqueue tous les jobs BullMQ
-  for (const job of batch.jobs) {
-    await enqueueClosureJob({
-      jobId: job.id,
-      batchId: batch.id,
-      tenantId: user.tenantId,
-      sessionId,
-      participantId: job.participantId,
-      kind: job.kind,
-    });
-  }
+  // Enqueue tous les jobs BullMQ en parallèle (150 round-trips Redis
+  // séquentiels = ~1s ; en parallèle ~50ms). Cf A1 du code review.
+  await Promise.all(
+    batch.jobs.map((job) =>
+      enqueueClosureJob({
+        jobId: job.id,
+        batchId: batch.id,
+        tenantId: user.tenantId,
+        sessionId,
+        participantId: job.participantId,
+        kind: job.kind,
+      }),
+    ),
+  );
 
   revalidatePath(`/app/sessions/${sessionId}`);
   return { ok: true, batchId: batch.id, total: totalDocs };
@@ -91,6 +94,7 @@ export interface ClosureBatchStatusJob {
   errorMessage: string | null;
   documentId: string | null;
   pedagogicalAssetId: string | null;
+  usedStub: boolean;
 }
 
 export interface ClosureBatchStatusPayload {
@@ -153,6 +157,7 @@ export async function getClosureBatchStatus(
         errorMessage: j.errorMessage,
         documentId: j.documentId,
         pedagogicalAssetId: j.pedagogicalAssetId,
+        usedStub: j.usedStub,
       })),
     },
   };
@@ -257,7 +262,7 @@ export async function buildClosureZipBuffer(
 function slugify(s: string): string {
   return s
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
@@ -265,49 +270,84 @@ function slugify(s: string): string {
 }
 
 /**
- * Re-enqueue tous les jobs en ERROR du batch. Utile pour la page batch
- * (bouton "Régénérer les erreurs"). Idempotent : un job DONE ou en cours
- * n'est pas touché.
+ * Re-enqueue les jobs ERROR (et optionnellement les jobs DONE avec stub
+ * fallback) du batch. Utile pour la page batch (bouton "Régénérer les
+ * erreurs / les stubs"). Idempotent : un job en cours n'est pas touché.
+ *
+ * @param includeStubs si true, inclut aussi les jobs DONE avec usedStub=true
+ *   (cas où Ollama avait échoué et qu'on veut re-tenter pour avoir un
+ *   contenu IA personnalisé avant audit Qualiopi).
  */
 export async function retryClosureBatchErrors(
   batchId: string,
+  options: { includeStubs?: boolean } = {},
 ): Promise<{ ok: boolean; relaunched?: number; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
+  const orFilter = options.includeStubs
+    ? [{ status: 'ERROR' as const }, { status: 'DONE' as const, usedStub: true }]
+    : [{ status: 'ERROR' as const }];
+
   const batch = await prisma.closureBatch.findFirst({
     where: { id: batchId, tenantId: user.tenantId },
-    include: { jobs: { where: { status: 'ERROR' } } },
+    include: { jobs: { where: { OR: orFilter } } },
   });
   if (!batch) return { ok: false, error: 'Batch introuvable' };
   if (batch.jobs.length === 0) return { ok: true, relaunched: 0 };
 
-  // Reset des compteurs et des jobs en erreur
+  // Compteur ERROR à décrémenter (les stubs étaient comptés en doneDocs, on les
+  // décrémente symétriquement et ils repasseront en doneDocs après re-génération)
+  const errorJobs = batch.jobs.filter((j) => j.status === 'ERROR');
+  const stubJobs = batch.jobs.filter((j) => j.status === 'DONE' && j.usedStub);
+
   await prisma.$transaction([
     prisma.closureJob.updateMany({
       where: { id: { in: batch.jobs.map((j) => j.id) } },
-      data: { status: 'QUEUED', errorMessage: null, attempts: 0, startedAt: null, completedAt: null },
+      data: {
+        status: 'QUEUED',
+        errorMessage: null,
+        attempts: 0,
+        startedAt: null,
+        completedAt: null,
+        usedStub: false,
+        documentId: null,
+        pedagogicalAssetId: null,
+      },
     }),
     prisma.closureBatch.update({
       where: { id: batchId },
       data: {
         status: 'RUNNING',
-        errorDocs: { decrement: batch.jobs.length },
+        errorDocs: { decrement: errorJobs.length },
+        doneDocs: { decrement: stubJobs.length },
         completedAt: null,
       },
     }),
   ]);
 
-  for (const job of batch.jobs) {
-    await enqueueClosureJob({
-      jobId: job.id,
-      batchId,
-      tenantId: user.tenantId,
-      sessionId: batch.sessionId,
-      participantId: job.participantId,
-      kind: job.kind,
-    });
-  }
+  // BullMQ refuse silencieusement queue.add({ jobId }) si le job existe déjà
+  // côté Redis (typiquement en état "failed" après les 3 attempts initiaux).
+  // → on supprime explicitement avant de re-enqueue. Cf B2 du code review.
+  const queue = getClosureQueue();
+  await Promise.all(
+    batch.jobs.map(async (job) => {
+      try {
+        const existing = await queue.getJob(job.id);
+        if (existing) await existing.remove();
+      } catch {
+        /* job déjà parti, OK */
+      }
+      await enqueueClosureJob({
+        jobId: job.id,
+        batchId,
+        tenantId: user.tenantId,
+        sessionId: batch.sessionId,
+        participantId: job.participantId,
+        kind: job.kind,
+      });
+    }),
+  );
 
   revalidatePath(`/app/sessions/${batch.sessionId}/closure/${batchId}`);
   return { ok: true, relaunched: batch.jobs.length };

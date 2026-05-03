@@ -1049,19 +1049,23 @@ model PedagogicalAsset {
 }
 
 model AIGenerationJob {
-  id        String   @id @default(uuid())
-  tenantId  String
-  provider  String
-  model     String
-  inputHash String
-  status    String
-  retries   Int      @default(0)
-  latencyMs Int?
-  errorMsg  String?
-  refTable  String
-  refId     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  tenantId      String
+  provider      String
+  model         String
+  // Version du prompt utilisé pour cette génération — cf qualiopi-prompts.PROMPT_VERSION.
+  // Indispensable pour répondre à un audit Qualiopi qui demanderait
+  // "quel prompt a généré le QCM de Mme X le 12/02/2026".
+  promptVersion String?
+  inputHash     String
+  status        String
+  retries       Int      @default(0)
+  latencyMs     Int?
+  errorMsg      String?
+  refTable      String
+  refId         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId, status])
   @@index([refTable, refId])
@@ -1141,6 +1145,10 @@ model ClosureJob {
   // Réfs vers le doc produit
   documentId          String? // si kind ∈ {ATTESTATION, CERTIFICAT}
   pedagogicalAssetId  String? // si kind ∈ {QCM, GRILLE_OBS, ANALYSE_BESOIN}
+  // True si l'IA Ollama a échoué et qu'on a fallback sur stub-content.ts —
+  // le PDF est produit (status DONE) mais avec un contenu générique non
+  // personnalisé. À régénérer manuellement avant un audit Qualiopi.
+  usedStub            Boolean          @default(false)
   startedAt           DateTime?
   completedAt         DateTime?
   createdAt           DateTime         @default(now())

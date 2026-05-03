@@ -83,7 +83,7 @@ export async function renderClosureDoc(
       }
       const html = renderQcmHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
-      return { pdfBuffer, rawJson: { source, ...content } };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'GRILLE_OBS': {
       let content: GrilleContent;
@@ -101,7 +101,7 @@ export async function renderClosureDoc(
       }
       const html = renderGrilleObservationHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
-      return { pdfBuffer, rawJson: { source, ...content } };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'ANALYSE_BESOIN': {
       let content: AnalyseBesoinContent;
@@ -119,7 +119,7 @@ export async function renderClosureDoc(
       }
       const html = renderAnalyseBesoinHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
-      return { pdfBuffer, rawJson: { source, ...content } };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     default: {
       const _exhaustive: never = kind;

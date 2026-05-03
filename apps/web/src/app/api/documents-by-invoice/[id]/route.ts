@@ -21,7 +21,10 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
         'Cache-Control': 'private, max-age=3600',
       },
     });
-  } catch (e: any) {
-    return new NextResponse(`Error: ${e?.message ?? e}`, { status: 500 });
+  } catch (e: unknown) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[documents-by-invoice/${id}] read error :`, e);
+    }
+    return new NextResponse('Document indisponible', { status: 500 });
   }
 }

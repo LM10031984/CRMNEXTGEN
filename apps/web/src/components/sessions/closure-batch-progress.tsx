@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import { Download, RefreshCw, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Download, RefreshCw, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -106,9 +106,9 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
     groups.set(j.participantId, g);
   }
 
-  function handleRetry() {
+  function handleRetry(includeStubs = false) {
     startRetry(async () => {
-      const r = await retryClosureBatchErrors(batchId);
+      const r = await retryClosureBatchErrors(batchId, { includeStubs });
       if (r.ok) {
         toast.success(`${r.relaunched ?? 0} job(s) relancé(s)`);
       } else {
@@ -119,6 +119,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
 
   const canDownload = batch.doneDocs > 0;
   const hasErrors = batch.errorDocs > 0;
+  const stubCount = batch.jobs.filter((j) => j.status === 'DONE' && j.usedStub).length;
   const isFinal = batch.status === 'COMPLETED' || batch.status === 'PARTIAL' || batch.status === 'FAILED';
 
   return (
@@ -131,18 +132,31 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
             <span className="text-sm text-muted-foreground">
               {batch.doneDocs} / {batch.totalDocs} documents générés
               {batch.errorDocs > 0 && <span className="text-red-600"> · {batch.errorDocs} erreur(s)</span>}
+              {stubCount > 0 && <span className="text-amber-600"> · {stubCount} stub(s) IA</span>}
             </span>
           </div>
           <div className="flex items-center gap-2">
             {hasErrors && isFinal && (
               <button
                 type="button"
-                onClick={handleRetry}
+                onClick={() => handleRetry(false)}
                 disabled={retrying}
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 disabled:opacity-60"
               >
                 {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Régénérer les erreurs
+              </button>
+            )}
+            {stubCount > 0 && isFinal && (
+              <button
+                type="button"
+                onClick={() => handleRetry(true)}
+                disabled={retrying}
+                title="Relance la génération IA pour les docs où Ollama avait échoué (contenu générique). Indispensable avant un audit Qualiopi."
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100 disabled:opacity-60"
+              >
+                {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                Régénérer les {stubCount} stub(s)
               </button>
             )}
             {canDownload && (
@@ -179,11 +193,23 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                 {g.jobs.map((j) => (
                   <div
                     key={j.id}
-                    className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md border border-border bg-muted/20"
+                    className={`flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md border ${
+                      j.status === 'DONE' && j.usedStub
+                        ? 'border-amber-200 bg-amber-50/60'
+                        : 'border-border bg-muted/20'
+                    }`}
                     title={j.errorMessage ?? undefined}
                   >
                     {jobIcon(j.status)}
                     <span className="flex-1 truncate">{j.kindLabel}</span>
+                    {j.status === 'DONE' && j.usedStub && (
+                      <span
+                        className="shrink-0 inline-flex items-center gap-1 text-amber-700 text-[10px] font-semibold uppercase tracking-wide"
+                        title="Contenu générique (Ollama a échoué) — à régénérer avant audit Qualiopi"
+                      >
+                        <AlertTriangle className="h-3 w-3" /> Stub
+                      </span>
+                    )}
                     {j.status === 'DONE' && (j.documentId || j.pedagogicalAssetId) && (
                       <a
                         href={

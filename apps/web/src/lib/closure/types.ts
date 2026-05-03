@@ -38,8 +38,13 @@ export interface ClosureJobPayload {
  * Résultat retourné par un renderer (mock ou réel) — buffer du PDF + clé MinIO finale.
  * Le renderer peut aussi renvoyer du JSON brut (cas QCM/grille d'observation) à stocker
  * dans `PedagogicalAsset.rawJson` à côté du PDF.
+ *
+ * `usedStub: true` signale que l'IA a échoué et qu'on a fallback sur le contenu
+ * générique de stub-content.ts — le doc DOIT être régénéré avant un audit
+ * Qualiopi car son contenu n'est pas personnalisé.
  */
 export interface ClosureRenderResult {
   pdfBuffer: Buffer;
   rawJson?: unknown;
+  usedStub?: boolean;
 }
