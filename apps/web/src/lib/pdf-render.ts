@@ -25,7 +25,9 @@ export async function renderHtmlToPdf(
   // de marge en bas pour laisser la place au footer.html sans empieter sur
   // le contenu (sinon on a des paragraphes ecrits par-dessus le footer).
   form.append('marginTop', options?.headerHtml ? '0.9' : '0.6');
-  form.append('marginBottom', options?.footerHtml ? '0.9' : '0.6');
+  // marginBottom 1.1 inch pour reserver de la place a un footer 9pt sur 2
+  // lignes + line-height 1.5 (sinon le contenu vient empieter dessus).
+  form.append('marginBottom', options?.footerHtml ? '1.1' : '0.6');
   form.append('marginLeft', '0.6');
   form.append('marginRight', '0.6');
   form.append('paperWidth', '8.27');

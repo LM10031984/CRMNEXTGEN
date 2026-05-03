@@ -6,9 +6,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
-import { GenerateProgrammeButton } from '@/components/sessions/generate-programme-button';
-import { GenerateAgeficeButton } from '@/components/sessions/generate-agefice-button';
-import { GenerateConventionButton } from '@/components/sessions/generate-convention-button';
+import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
@@ -288,21 +286,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                                   ) : null}
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                                <GenerateConventionButton
+                              <div className="flex items-center gap-1 shrink-0">
+                                <ParticipantActionsMenu
                                   participantId={p.id}
-                                  initialDocumentId={docsByParticipant.get(p.id)?.get('CONVENTION') ?? null}
+                                  participantName={`${p.person.firstName} ${p.person.lastName}`}
+                                  showAgefice={isEi || g.sponsor.opcoCode === 'AGEFICE'}
+                                  initialDocs={{
+                                    CONVENTION: docsByParticipant.get(p.id)?.get('CONVENTION') ?? null,
+                                    PROGRAMME: docsByParticipant.get(p.id)?.get('PROGRAMME') ?? null,
+                                    AGEFICE: docsByParticipant.get(p.id)?.get('AGEFICE') ?? null,
+                                  }}
                                 />
-                                <GenerateProgrammeButton
-                                  participantId={p.id}
-                                  initialDocumentId={docsByParticipant.get(p.id)?.get('PROGRAMME') ?? null}
-                                />
-                                {(isEi || g.sponsor.opcoCode === 'AGEFICE') && (
-                                  <GenerateAgeficeButton
-                                    participantId={p.id}
-                                    initialDocumentId={docsByParticipant.get(p.id)?.get('AGEFICE') ?? null}
-                                  />
-                                )}
                                 <EditParticipantButton
                                   participantId={p.id}
                                   currentPriceHT={Number(p.priceHT)}

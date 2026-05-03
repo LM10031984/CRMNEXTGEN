@@ -29,8 +29,8 @@ export function renderOfStandardFooterHtml(): string {
   const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
-<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 7.5pt; color: #475569; margin: 0; padding: 0;">
-  <div style="border-top: 1px solid #94A3B8; padding: 4px 18mm 0 18mm; text-align: center; line-height: 1.45;">
+<body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 9pt; color: #1F2937; margin: 0; padding: 0;">
+  <div style="border-top: 1px solid #94A3B8; padding: 6px 18mm 0 18mm; text-align: center; line-height: 1.5;">
     <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
     Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
   </div>
