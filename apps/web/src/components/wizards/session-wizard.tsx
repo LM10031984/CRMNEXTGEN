@@ -19,6 +19,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { computeEndDateISO, isBusinessDayISO } from '@/lib/business-days';
 import { Badge } from '@/components/ui/badge';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
 import { QuickCreateProductButton } from '@/components/wizards/quick-create-product';
@@ -112,8 +113,8 @@ export function SessionWizard({
     setCapacityMax(String(p.capacityMax));
     setPricePerLearner(Number(p.priceHT) > 0 ? String(p.priceHT) : '');
     if (p.durationHours && startDate) {
-      const days = Math.max(1, Math.ceil(p.durationHours / 7));
-      setEndDate(plusDays(startDate, days - 1));
+      // Règle métier : 8h = 1 journée, skip week-ends + jours fériés FR
+      setEndDate(computeEndDateISO(startDate, p.durationHours));
     }
     // Avance auto à l'étape 2 si on est encore à l'étape 1
     setStep((prev) => (prev === 1 ? 2 : prev));
@@ -347,9 +348,26 @@ export function SessionWizard({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setStartDate(next);
+                  // Auto-calcul date de fin : 8h = 1 journée, skip W-E + fériés FR
+                  if (next && selectedProduct?.durationHours) {
+                    setEndDate(computeEndDateISO(next, selectedProduct.durationHours));
+                  }
+                }}
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              {startDate && !isBusinessDayISO(startDate) && (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  ⚠ {(() => {
+                    const d = new Date(startDate + 'T00:00:00Z');
+                    const dow = d.getUTCDay();
+                    if (dow === 0 || dow === 6) return 'C\'est un week-end';
+                    return 'C\'est un jour férié français';
+                  })()}
+                </p>
+              )}
             </Field>
             <Field label="Date de fin" required>
               <input
@@ -358,6 +376,13 @@ export function SessionWizard({
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              {selectedProduct?.durationHours ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Auto-calculée : {Math.max(1, Math.ceil(selectedProduct.durationHours / 8))} jour
+                  {Math.ceil(selectedProduct.durationHours / 8) > 1 ? 's' : ''} ouvré
+                  {Math.ceil(selectedProduct.durationHours / 8) > 1 ? 's' : ''} ({selectedProduct.durationHours}h ÷ 8h/j)
+                </p>
+              ) : null}
             </Field>
             <Field label="Modalité">
               <select
