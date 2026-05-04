@@ -122,6 +122,10 @@ export default async function ApprenantDetailPage({
     GRILLE_OBS: "Grille d'observation",
     COMPETENCES: 'Référentiel de compétences',
     DEROULE: 'Déroulé pédagogique',
+    POSITIONNEMENT: 'Questionnaire de positionnement',
+    SATISFACTION_CHAUD: 'Évaluation de satisfaction à chaud',
+    SATISFACTION_FROID: 'Évaluation de satisfaction à froid',
+    EMARGEMENT: "Fiche d'émargement",
   };
 
   // Document unifié pour la liste : type Document + type PedagogicalAsset

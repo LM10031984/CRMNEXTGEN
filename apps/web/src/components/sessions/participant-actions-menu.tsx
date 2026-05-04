@@ -75,11 +75,37 @@ export function ParticipantActionsMenu({
     );
   };
 
+  // Bouton "Générer" inline pour AGEFICE quand le doc n'existe pas encore.
+  // Évite que Laurent doive ouvrir le dropdown "···" pour générer (frustration
+  // signalée 03/05 — le bouton AGEFICE était devenu invisible après refonte).
+  const generateChip = (kind: DocLink['type'], icon: React.ComponentType<{ className?: string }>, color: string, label: string) => {
+    const Icon = icon;
+    if (docs[kind]) return null; // déjà généré : on affiche le chip de lien à la place
+    return (
+      <button
+        key={`gen-${kind}`}
+        type="button"
+        disabled={pending}
+        onClick={() => generate(kind)}
+        title={`${label} — pas encore généré, cliquer pour générer`}
+        className={cn(
+          'inline-flex items-center justify-center h-7 px-2 gap-1 rounded-md text-[11px] font-medium hover:opacity-80 transition-opacity border border-dashed',
+          color,
+          pending && 'opacity-60 cursor-wait',
+        )}
+      >
+        {pending && activeKind === kind ? <Loader2 className="h-3 w-3 animate-spin" /> : <Icon className="h-3 w-3" />}
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div className="flex items-center gap-1 shrink-0">
       {chip('CONVENTION', FileText, 'bg-sky-100 text-sky-800')}
       {chip('PROGRAMME', FileText, 'bg-amber-100 text-amber-800')}
       {showAgefice && chip('AGEFICE', Receipt, 'bg-amber-100 text-amber-800')}
+      {showAgefice && generateChip('AGEFICE', Receipt, 'bg-amber-50 text-amber-700 border-amber-300', 'Générer AGEFICE')}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button

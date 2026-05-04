@@ -16,12 +16,20 @@ import { callOllama } from '@/lib/ai-ollama';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
+  SYSTEM_PROMPT_DEROULE,
   SYSTEM_PROMPT_GRILLE_OBSERVATION,
+  SYSTEM_PROMPT_POSITIONNEMENT,
   SYSTEM_PROMPT_QCM,
+  SYSTEM_PROMPT_SATISFACTION_CHAUD,
+  SYSTEM_PROMPT_SATISFACTION_FROID,
 } from './qualiopi-prompts';
 import type { QcmContent } from './qcm-template';
 import type { GrilleContent } from './grille-observation-template';
 import type { AnalyseBesoinContent } from './analyse-besoin-template';
+import type { PositionnementContent } from './positionnement-template';
+import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
+import type { SatisfactionFroidContent } from './satisfaction-froid-template';
+import type { DerouleContent } from './deroule-template';
 
 // mistral-small:24b est le meilleur compromis qualité/vitesse/JSON-compliance
 // pour ces 3 docs. qwen3:30b-a3b a un comportement instable avec
@@ -98,6 +106,117 @@ const GrilleSchema = z.object({
     commentaire: z.string().min(10),
     axe_amelioration: z.string().min(10),
   }),
+});
+
+// Positionnement : 6-8 compétences avec niveaux avant/après (progression nette).
+const NiveauPositionnement = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
+const PositionnementSchema = z.object({
+  objectifs_formation: z.string().min(10),
+  demande_specifique: z.string().nullable().optional(),
+  prerequis: z.string().min(10),
+  competences: z
+    .array(
+      z.object({
+        label: z.string().min(5),
+        avant: NiveauPositionnement,
+        apres: NiveauPositionnement,
+      }),
+    )
+    .min(6)
+    .max(10),
+  commentaires: z.string().nullable().optional(),
+});
+
+// Satisfaction chaud : ratings sur 5 sections + récap.
+const RatingSchema = z.union([z.literal('Très bien'), z.literal('Bien'), z.literal('Moyen'), z.literal('Mauvais')]);
+const UtiliteSchema = z.union([z.literal('Très utile'), z.literal('Utile'), z.literal('Peu utile'), z.literal('Pas utile')]);
+const SatisfactionChaudSchema = z.object({
+  organisation: z.object({
+    communication: RatingSchema,
+    delai: RatingSchema,
+    duree: RatingSchema,
+    engagements: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  moyens: z.object({
+    cadre: RatingSchema,
+    locaux: RatingSchema,
+    supports: RatingSchema,
+    materiel: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  pedagogie: z.object({
+    difficulte: RatingSchema,
+    articulation: RatingSchema,
+    theorique: RatingSchema,
+    pratique: RatingSchema,
+    rythme: RatingSchema,
+    approche: RatingSchema,
+    ecoute: RatingSchema,
+    animation: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  groupe: z.object({
+    ambiance: RatingSchema,
+    nombre: RatingSchema,
+    heterogeneite: RatingSchema,
+    attention: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  benefice: z.object({
+    adequation: RatingSchema,
+    utilite: UtiliteSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  recommandation: z.union([z.literal('Oui'), z.literal('Non')]),
+  remarques: z.string().nullable().optional(),
+});
+
+// Satisfaction froid : 9 ratings + bilan.
+const SatisfactionFroidSchema = z.object({
+  mise_en_pratique: z.object({
+    applique: RatingSchema,
+    frequence: RatingSchema,
+    resultats: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  impact: z.object({
+    performance: RatingSchema,
+    autonomie: RatingSchema,
+    confiance: RatingSchema,
+    satisfaction_client: RatingSchema,
+    commentaire: z.string().nullable().optional(),
+  }),
+  bilan: z.object({
+    atteinte_objectifs: RatingSchema,
+    recommandation: z.union([z.literal('Oui'), z.literal('Non')]),
+    utilite_long_terme: RatingSchema,
+  }),
+  remarques: z.string().nullable().optional(),
+});
+
+// Déroulé pédagogique : N jours × M séquences (pauses incluses avec isPause).
+const DerouleSchema = z.object({
+  jours: z
+    .array(
+      z.object({
+        theme: z.string().min(5),
+        sequences: z
+          .array(
+            z.object({
+              duree: z.string().min(3),
+              objectifs: z.string(),
+              contenu: z.string(),
+              outils: z.string(),
+              exercice: z.string(),
+              evaluation: z.string(),
+              isPause: z.boolean().optional(),
+            }),
+          )
+          .min(5),
+      }),
+    )
+    .min(1),
 });
 
 // =====================================================
@@ -298,6 +417,139 @@ async function tryOnce<T>(
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: msg, latencyMs };
   }
+}
+
+// =====================================================
+// Generators 4 nouveaux docs (positionnement, satisfactions, déroulé)
+// =====================================================
+
+export async function generatePositionnementContent(
+  formation: FormationCtx,
+  stagiaire: StagiaireCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<PositionnementContent | null> {
+  const stagiaireBlock = [
+    `Prénom : ${stagiaire.prenom}`,
+    `Nom : ${stagiaire.nom}`,
+    stagiaire.fonction ? `Fonction : ${stagiaire.fonction}` : null,
+    stagiaire.entreprise ? `Entreprise : ${stagiaire.entreprise}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const prompt = `Génère un questionnaire de positionnement personnalisé pour le stagiaire ci-dessous.
+
+Formation :
+Titre : ${formation.titre}
+Durée : ${formation.nombreHeures} heures
+Programme :
+${formation.programmeMd || '(programme à compléter)'}
+
+Stagiaire :
+${stagiaireBlock || '(profil non détaillé)'}
+
+Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.`;
+
+  return runOllamaJson(
+    'generate-positionnement',
+    SYSTEM_PROMPT_POSITIONNEMENT,
+    prompt,
+    PositionnementSchema,
+    refTable,
+    refId,
+    tenantId,
+  );
+}
+
+export async function generateSatisfactionChaudContent(
+  formation: FormationCtx,
+  stagiaire: StagiaireCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<SatisfactionChaudContent | null> {
+  const prompt = `Rédige une évaluation de satisfaction à chaud pour le stagiaire ${stagiaire.prenom} ${stagiaire.nom} qui vient de terminer la formation "${formation.titre}" (${formation.nombreHeures} heures).
+
+Programme :
+${formation.programmeMd || '(programme à compléter)'}
+
+Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.`;
+
+  return runOllamaJson(
+    'generate-satisfaction-chaud',
+    SYSTEM_PROMPT_SATISFACTION_CHAUD,
+    prompt,
+    SatisfactionChaudSchema,
+    refTable,
+    refId,
+    tenantId,
+  );
+}
+
+export async function generateSatisfactionFroidContent(
+  formation: FormationCtx,
+  stagiaire: StagiaireCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<SatisfactionFroidContent | null> {
+  const prompt = `Rédige une évaluation de satisfaction à froid (3-6 mois après la formation) pour ${stagiaire.prenom} ${stagiaire.nom} sur la formation "${formation.titre}".
+
+Programme :
+${formation.programmeMd || '(programme à compléter)'}
+
+Profil : ${stagiaire.fonction ?? 'professionnel'}${stagiaire.entreprise ? ` chez ${stagiaire.entreprise}` : ''}.
+
+Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.`;
+
+  return runOllamaJson(
+    'generate-satisfaction-froid',
+    SYSTEM_PROMPT_SATISFACTION_FROID,
+    prompt,
+    SatisfactionFroidSchema,
+    refTable,
+    refId,
+    tenantId,
+  );
+}
+
+export async function generateDerouleContent(
+  formation: FormationCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<DerouleContent | null> {
+  const nbJours = Math.max(1, Math.ceil(formation.nombreHeures / 7));
+  const prompt = `Génère un déroulé pédagogique détaillé pour la formation suivante.
+
+Titre : ${formation.titre}
+Durée totale : ${formation.nombreHeures} heures
+Nombre de jours : ${nbJours} (≈ ${Math.round(formation.nombreHeures / nbJours)} h/jour)
+
+Programme :
+${formation.programmeMd || '(programme à compléter)'}
+
+Pour chaque jour, génère 7 séquences :
+1. Accueil (30 min, début 8h30)
+2. Séquence principale matin (~ ${Math.round((formation.nombreHeures / nbJours - 1) * 0.5 * 60)} min)
+3. Pause déjeuner (60 min) — marquer isPause: true, autres champs vides
+4. Séquence après-midi 1
+5. Pause (10 min) — isPause: true, autres champs vides
+6. Séquence après-midi 2
+7. Bilan (30 min) — pour le DERNIER jour (jour ${nbJours}), intituler "Évaluation des acquis et clôture"
+
+Total durée formation = ${formation.nombreHeures} heures (hors pauses).`;
+
+  return runOllamaJson(
+    'generate-deroule',
+    SYSTEM_PROMPT_DEROULE,
+    prompt,
+    DerouleSchema,
+    refTable,
+    refId,
+    tenantId,
+  );
 }
 
 const MAX_ATTEMPTS = Number(process.env.CLOSURE_OLLAMA_RETRIES ?? 2); // 1 essai initial + 1 retry par défaut

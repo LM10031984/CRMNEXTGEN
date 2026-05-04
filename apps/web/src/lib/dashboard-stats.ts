@@ -21,6 +21,12 @@ export interface DashboardStats {
     pastNotInvoiced: number; // passées non facturées (à facturer)
   };
 
+  cashflow: {
+    dso: number | null; // Days Sales Outstanding — délai moyen de paiement (jours)
+    nbInvoicesPaid: number; // nb de SP avec paymentReceivedAt + invoiceSentAt
+    nbInvoicesPending: number; // nb de SP invoiceSent mais pas encore payées
+  };
+
   performance: {
     nbSessions: number;
     nbParticipants: number;
@@ -162,6 +168,9 @@ export async function getDashboardStats(
     leadsToFollowup,
     preEnrollmentsToValidate,
     upcomingForecastAgg,
+
+    dsoAgg,
+    nbInvoicesPendingAgg,
 
     availableYearsRaw,
   ] = await Promise.all([
@@ -355,6 +364,29 @@ export async function getDashboardStats(
       },
     }),
 
+    // DSO — délai moyen de paiement (jours) sur les SP avec invoiceSentAt + paymentReceivedAt
+    prisma.$queryRaw<Array<{ dsoDays: number | null; nbPaid: bigint }>>(Prisma.sql`
+      SELECT
+        AVG(EXTRACT(EPOCH FROM (sp."paymentReceivedAt" - sp."invoiceSentAt")) / 86400)::float8 AS "dsoDays",
+        COUNT(*)::bigint AS "nbPaid"
+      FROM "SessionParticipant" sp
+      JOIN "TrainingSession" s ON s.id = sp."sessionId"
+      WHERE s."tenantId" = ${tenantId}
+        AND sp."invoiceSentAt" IS NOT NULL
+        AND sp."paymentReceivedAt" IS NOT NULL
+        AND sp."paymentReceivedAt" >= sp."invoiceSentAt"
+      ${yearSqlFilter}
+    `),
+
+    // Nb factures émises mais pas encore payées
+    prisma.sessionParticipant.count({
+      where: {
+        session: participantSessionFilter,
+        invoiceSent: true,
+        paymentReceived: false,
+      },
+    }),
+
     // Liste des années avec données (pour le sélecteur)
     prisma.$queryRaw<Array<{ year: number }>>`
       SELECT DISTINCT EXTRACT(YEAR FROM "startDate")::int AS year
@@ -389,6 +421,11 @@ export async function getDashboardStats(
       collected: Number(collectedAgg._sum.amountCollected ?? 0),
       remaining: Number(remainingAgg._sum.amountRemaining ?? 0),
       pastNotInvoiced: Number(pastNotInvoicedAgg._sum.priceHT ?? 0),
+    },
+    cashflow: {
+      dso: dsoAgg[0]?.dsoDays != null ? Math.round(Number(dsoAgg[0].dsoDays)) : null,
+      nbInvoicesPaid: Number(dsoAgg[0]?.nbPaid ?? 0),
+      nbInvoicesPending: nbInvoicesPendingAgg,
     },
     performance: {
       nbSessions,

@@ -33,8 +33,12 @@ import {
 } from './stub-content';
 import {
   generateAnalyseBesoinContent,
+  generateDerouleContent,
   generateGrilleContent,
+  generatePositionnementContent,
   generateQcmContent,
+  generateSatisfactionChaudContent,
+  generateSatisfactionFroidContent,
   attachQcmScoring,
   type FormationCtx,
   type StagiaireCtx,
@@ -187,32 +191,82 @@ export async function renderClosureDoc(
       return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'POSITIONNEMENT': {
-      // Day 4 : pour l'instant stub (Ollama generator à brancher plus tard).
-      const content = stubPositionnementContent(ctx);
+      let content;
+      let source: 'ollama' | 'stub' = 'stub';
+      if (USE_OLLAMA) {
+        const ai = await generatePositionnementContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
+        if (ai) {
+          content = ai;
+          source = 'ollama';
+        } else {
+          content = stubPositionnementContent(ctx);
+        }
+      } else {
+        content = stubPositionnementContent(ctx);
+      }
       const html = renderPositionnementHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdfWeasy(html);
-      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'SATISFACTION_CHAUD': {
-      const content = stubSatisfactionChaudContent(ctx);
+      let content;
+      let source: 'ollama' | 'stub' = 'stub';
+      if (USE_OLLAMA) {
+        const ai = await generateSatisfactionChaudContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
+        if (ai) {
+          content = ai;
+          source = 'ollama';
+        } else {
+          content = stubSatisfactionChaudContent(ctx);
+        }
+      } else {
+        content = stubSatisfactionChaudContent(ctx);
+      }
       const html = renderSatisfactionChaudHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdfWeasy(html);
-      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'SATISFACTION_FROID': {
-      const content = stubSatisfactionFroidContent(ctx);
+      let content;
+      let source: 'ollama' | 'stub' = 'stub';
+      if (USE_OLLAMA) {
+        const ai = await generateSatisfactionFroidContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
+        if (ai) {
+          content = ai;
+          source = 'ollama';
+        } else {
+          content = stubSatisfactionFroidContent(ctx);
+        }
+      } else {
+        content = stubSatisfactionFroidContent(ctx);
+      }
       const html = renderSatisfactionFroidHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdfWeasy(html);
-      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'DEROULE_PEDA': {
-      // Partagé par session : si un déroulé existe déjà pour la session,
-      // on le réutilise tel quel (pas regénéré par stagiaire).
+      // Partagé par session : 1) si un déroulé existe déjà pour la session
+      // → on le réutilise. 2) Sinon Ollama. 3) Sinon stub.
       const existing = await loadSessionDeroule(ctx.sessionId);
-      const content = existing ?? stubDerouleContent(ctx);
+      let content;
+      let source: 'shared' | 'ollama' | 'stub' = 'stub';
+      if (existing) {
+        content = existing;
+        source = 'shared';
+      } else if (USE_OLLAMA) {
+        const ai = await generateDerouleContent(buildFormationCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
+        if (ai) {
+          content = ai;
+          source = 'ollama';
+        } else {
+          content = stubDerouleContent(ctx);
+        }
+      } else {
+        content = stubDerouleContent(ctx);
+      }
       const html = renderDerouleHtml(ctx, content);
       const pdfBuffer = await renderHtmlToPdfWeasy(html);
-      return { pdfBuffer, rawJson: { source: existing ? 'shared' : 'stub', ...content }, usedStub: !existing };
+      return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'EMARGEMENT': {
       const html = renderEmargementHtml(ctx);

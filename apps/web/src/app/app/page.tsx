@@ -98,6 +98,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" href="/app/factures?status=collected" />
           <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} href="/app/factures?status=remaining" />
         </div>
+        {/* Cashflow : DSO + factures en attente */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+          <PerfCard
+            icon={Clock}
+            label={`DSO ${stats.cashflow.nbInvoicesPaid > 0 ? `(${stats.cashflow.nbInvoicesPaid} payées)` : ''}`}
+            value={stats.cashflow.dso !== null ? `${stats.cashflow.dso} j` : '—'}
+          />
+          <PerfCard
+            icon={AlertCircle}
+            label="Factures en attente"
+            value={fmtNb.format(stats.cashflow.nbInvoicesPending)}
+          />
+        </div>
       </section>
 
       {/* Performance */}
