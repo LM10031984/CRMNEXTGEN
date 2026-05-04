@@ -239,3 +239,51 @@ function guessContentType(key: string): string {
   if (ext === 'png') return 'image/png';
   return 'application/octet-stream';
 }
+
+/**
+ * Extraction réutilisable hors flux PreEnrollment.
+ *
+ * Prend des fichiers en mémoire (Buffer + contentType) pour CNI / RIB / CFP
+ * et renvoie les données extraites par Ollama. Utilisé par le wizard de
+ * création apprenant manuel : l'admin upload les 3 docs → extraction →
+ * pré-remplit le formulaire avant validation.
+ *
+ * Aucun side-effect DB : pure fonction d'extraction.
+ */
+export interface ExtractedDocs {
+  cni: CniExtraction | null;
+  rib: RibExtraction | null;
+  cfp: CfpExtraction | null;
+  warnings: string[];
+  durationMs: number;
+}
+
+export type DocFile = { kind: 'CNI' | 'RIB' | 'CFP'; buffer: Buffer; contentType: string };
+
+export async function extractDocsFromBuffers(files: DocFile[]): Promise<ExtractedDocs> {
+  const start = Date.now();
+  const result: ExtractedDocs = { cni: null, rib: null, cfp: null, warnings: [], durationMs: 0 };
+
+  for (const f of files) {
+    try {
+      const ext = await extractTextFromFile(f.buffer, f.contentType);
+      result.warnings.push(...ext.warnings.map((w) => `[${f.kind}] ${w}`));
+      if (!ext.text || ext.text.trim().length < 20) {
+        result.warnings.push(`[${f.kind}] Texte extrait trop court (< 20 char), skip`);
+        continue;
+      }
+      if (f.kind === 'CNI') {
+        result.cni = await extractOne<CniExtraction>(ext.text, 'CNI');
+      } else if (f.kind === 'RIB') {
+        result.rib = await extractOne<RibExtraction>(ext.text, 'RIB');
+      } else if (f.kind === 'CFP') {
+        result.cfp = await extractOne<CfpExtraction>(ext.text, 'CFP');
+      }
+    } catch (e: any) {
+      result.warnings.push(`[${f.kind}] ${e?.message ?? e}`);
+    }
+  }
+
+  result.durationMs = Date.now() - start;
+  return result;
+}

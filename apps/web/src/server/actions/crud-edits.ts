@@ -282,12 +282,27 @@ export async function createPerson(input: {
   email?: string | null;
   phone?: string | null;
   professionalStatus?: string | null;
+  // Champs étendus alimentés par le wizard auto-fill (extraction CFP/CNI/RIB).
+  civility?: string | null;
+  birthName?: string | null;
+  birthDate?: string | null; // ISO YYYY-MM-DD
+  addressStreet?: string | null;
+  addressPostalCode?: string | null;
+  addressCity?: string | null;
 }): Promise<{ ok: boolean; personId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
   if (!input.firstName.trim() || !input.lastName.trim()) {
     return { ok: false, error: 'Nom et prénom requis.' };
   }
+  const personalAddress =
+    input.addressStreet || input.addressPostalCode || input.addressCity
+      ? {
+          street: input.addressStreet?.trim() || null,
+          postalCode: input.addressPostalCode?.trim() || null,
+          city: input.addressCity?.trim() || null,
+        }
+      : null;
   const person = await prisma.person.create({
     data: {
       tenantId: user.tenantId,
@@ -296,6 +311,10 @@ export async function createPerson(input: {
       email: input.email?.trim() || null,
       phone: input.phone?.trim() || null,
       professionalStatus: input.professionalStatus?.trim() || null,
+      civility: input.civility?.trim() || null,
+      birthName: input.birthName?.trim() || null,
+      birthDate: input.birthDate ? new Date(input.birthDate) : null,
+      personalAddress: personalAddress ? (personalAddress as object) : undefined,
     },
   });
   revalidatePath('/app/apprenants');
