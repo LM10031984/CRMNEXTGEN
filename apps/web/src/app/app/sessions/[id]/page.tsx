@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Che
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
+import { DeleteEntityButton } from '@/components/forms/delete-entity-button';
 import { Badge } from '@/components/ui/badge';
 import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
@@ -181,6 +182,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </span>
         }
       />
+
+      <div className="flex justify-end">
+        <DeleteEntityButton
+          entity="session"
+          entityId={session.id}
+          entityName={session.name ?? session.code}
+          redirectTo="/app/sessions"
+          variant="button"
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

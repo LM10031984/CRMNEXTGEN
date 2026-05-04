@@ -8,6 +8,7 @@ import { prisma } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
+import { DeleteEntityButton } from '@/components/forms/delete-entity-button';
 import { EditPersonButton } from '@/components/forms/edit-person-button';
 import { Badge } from '@/components/ui/badge';
 import { LegalLinkEditor } from '@/components/editors/legal-link-editor';
@@ -277,6 +278,13 @@ export default async function ApprenantDetailPage({
             professionalStatus: person.professionalStatus,
             bpfDefaultStatus: person.bpfDefaultStatus,
           }}
+        />
+        <DeleteEntityButton
+          entity="person"
+          entityId={person.id}
+          entityName={`${person.firstName} ${person.lastName}`}
+          redirectTo="/app/apprenants"
+          variant="button"
         />
       </div>
 

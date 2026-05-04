@@ -36,6 +36,9 @@ export function CreatePersonButton() {
   const [addressPostalCode, setAddressPostalCode] = useState('');
   const [addressCity, setAddressCity] = useState('');
   const [professionalStatus, setProfessionalStatus] = useState('');
+  const [siret, setSiret] = useState('');
+  const [activityCode, setActivityCode] = useState('');
+  const [socialSecurityNb, setSocialSecurityNb] = useState('');
   // Uploads
   const [cniFile, setCniFile] = useState<File | null>(null);
   const [ribFile, setRibFile] = useState<File | null>(null);
@@ -45,7 +48,7 @@ export function CreatePersonButton() {
   function reset() {
     setFirstName(''); setLastName(''); setCivility(''); setEmail(''); setPhone('');
     setBirthDate(''); setBirthName(''); setAddressStreet(''); setAddressPostalCode(''); setAddressCity('');
-    setProfessionalStatus('');
+    setProfessionalStatus(''); setSiret(''); setActivityCode(''); setSocialSecurityNb('');
     setCniFile(null); setRibFile(null); setCfpFile(null);
     setExtras(null); setError(null); setWarnings([]);
   }
@@ -77,6 +80,9 @@ export function CreatePersonButton() {
       if (!addressStreet && d.addressStreet) setAddressStreet(d.addressStreet);
       if (!addressPostalCode && d.addressPostalCode) setAddressPostalCode(d.addressPostalCode);
       if (!addressCity && d.addressCity) setAddressCity(d.addressCity);
+      if (!siret && d.siret) setSiret(d.siret);
+      if (!activityCode && d.activityCode) setActivityCode(d.activityCode);
+      if (!socialSecurityNb && d.socialSecurityNb) setSocialSecurityNb(d.socialSecurityNb);
       setExtras({
         iban: d.iban, bic: d.bic, bankName: d.bankName,
         siret: d.siret, activityCode: d.activityCode,
@@ -107,6 +113,11 @@ export function CreatePersonButton() {
         addressStreet: addressStreet.trim() || null,
         addressPostalCode: addressPostalCode.trim() || null,
         addressCity: addressCity.trim() || null,
+        socialSecurityNb: socialSecurityNb.trim() || null,
+        siret: siret.trim() || null,
+        activityCode: activityCode.trim() || null,
+        cfpAmount: extras?.contributionAmount ?? null,
+        cfpYear: extras?.contributionYear ?? null,
       });
       if (r.ok && r.personId) {
         setOpen(false);
@@ -190,14 +201,32 @@ export function CreatePersonButton() {
                 </div>
               )}
               {extras && (
-                <div className="text-[11px] text-muted-foreground border-t border-border pt-2 mt-2 space-y-0.5">
+                <div className="text-[11px] text-muted-foreground border-t border-border pt-2 mt-2 space-y-1">
                   <div className="font-medium text-foreground inline-flex items-center gap-1"><Check className="h-3 w-3 text-green-600" /> Données extraites :</div>
-                  {extras.siret && <div>SIRET : <span className="font-mono">{extras.siret}</span></div>}
-                  {extras.activityCode && <div>Code NAF : <span className="font-mono">{extras.activityCode}</span></div>}
                   {extras.iban && <div>IBAN : <span className="font-mono">{extras.iban}</span></div>}
                   {extras.bic && <div>BIC : <span className="font-mono">{extras.bic}</span> {extras.bankName && `(${extras.bankName})`}</div>}
-                  {extras.contributionAmount && <div>CFP {extras.contributionYear} : {extras.contributionAmount} €</div>}
-                  <div className="text-[10px] italic">Tu pourras créer l'auto-entreprise et le RIB depuis la fiche après création.</div>
+                  {extras.contributionAmount !== null && extras.contributionAmount !== undefined && (
+                    (() => {
+                      const cfp = extras.contributionAmount;
+                      const year = extras.contributionYear ?? '';
+                      // Règle AGEFICE :
+                      // - CFP >= 7€ : plafond 3000€/an (5000€ si RNCP)
+                      // - CFP > 0€ et < 7€ : plafond 600€/an
+                      // - CFP = 0€ : pas de droit
+                      const eligible = cfp >= 7 ? '3000' : cfp > 0 ? '600' : null;
+                      const color = !eligible ? 'bg-red-50 border-red-300 text-red-800' : eligible === '3000' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-amber-50 border-amber-300 text-amber-800';
+                      const droitsYear = typeof year === 'number' ? year + 1 : '';
+                      return (
+                        <div className={`mt-2 px-3 py-2 rounded-md border ${color}`}>
+                          <div className="text-xs font-semibold">CFP exercice {year} : {cfp} €</div>
+                          {eligible === '3000' && <div className="text-[11px] mt-0.5">→ Droits {droitsYear} : <strong>3 000 €/an</strong> (jusqu'à 5 000 € pour formation RNCP)</div>}
+                          {eligible === '600' && <div className="text-[11px] mt-0.5">→ Droits {droitsYear} : <strong>600 €/an</strong> (CFP &lt; 7 €)</div>}
+                          {!eligible && <div className="text-[11px] mt-0.5">→ <strong>Aucun droit AGEFICE {droitsYear}</strong> (CFP nulle)</div>}
+                        </div>
+                      );
+                    })()
+                  )}
+                  <div className="text-[10px] italic mt-1">Le SIRET, code NAF et N° sécu sont reportés dans le formulaire ci-dessous.</div>
                 </div>
               )}
             </div>
@@ -258,6 +287,22 @@ export function CreatePersonButton() {
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Statut professionnel</label>
                 <input type="text" value={professionalStatus} onChange={(e) => setProfessionalStatus(e.target.value)} placeholder="Ex: Agent commercial" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">SIRET (auto-entreprise)</label>
+                  <input type="text" value={siret} onChange={(e) => setSiret(e.target.value)} placeholder="14 chiffres" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Si rempli : crée auto-entreprise + lien EI_SELF</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Code NAF</label>
+                  <input type="text" value={activityCode} onChange={(e) => setActivityCode(e.target.value)} placeholder="Ex: 6831Z" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">N° de sécurité sociale</label>
+                <input type="text" value={socialSecurityNb} onChange={(e) => setSocialSecurityNb(e.target.value)} placeholder="13 chiffres" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
+                <p className="text-[10px] text-muted-foreground mt-1">Stocké dans table SensitiveData (RGPD)</p>
               </div>
               {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</div>}
               <div className="flex justify-end gap-2 pt-2">

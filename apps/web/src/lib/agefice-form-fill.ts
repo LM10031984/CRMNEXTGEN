@@ -190,13 +190,34 @@ interface FormSetters {
   select(name: string, value: string | null | undefined): void;
 }
 
+/**
+ * Le PDF AGEFICE utilise la police WinAnsi (cp1252) qui ne supporte pas
+ * l'Unicode. Avant injection on remplace les caractères courants posant
+ * problème (●, ✓, fines, em-dashes, etc.) par leur équivalent ASCII.
+ * Les caractères restants hors plage 0x20-0xFF sont strippés.
+ */
+function sanitizeWinAnsi(s: string): string {
+  return s
+    .replace(/[●•▪◦]/g, '-')
+    .replace(/[✓✔]/g, 'OK')
+    .replace(/[✗✘]/g, 'X')
+    .replace(/[—–]/g, '-')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/ /g, ' ')         // espace insécable → espace
+    .replace(/[ -​]/g, ' ') // espaces fines
+    // Strip tout caractère hors WinAnsi (cp1252 ≈ 0x20-0xFF sauf 0x80-0x9F).
+    .replace(/[^\x20-\x7E -ÿ]/g, '');
+}
+
 function buildSetters(form: ReturnType<PDFDocument['getForm']>): FormSetters {
   const fields = new Map(form.getFields().map((f) => [f.getName(), f]));
   return {
     text(name, value) {
       const f = fields.get(name);
       if (f instanceof PDFTextField && value != null) {
-        f.setText(String(value));
+        f.setText(sanitizeWinAnsi(String(value)));
       }
     },
     check(name, on) {
@@ -265,9 +286,9 @@ async function applyOfSignature(
   const blockY = 110;
   const blockW = 170;
 
-  // Nom + titre juste au-dessus de la signature
-  const nameLine = `${resp.prenom} ${resp.nom},`;
-  const titleLine = resp.titre;
+  // Nom + titre juste au-dessus de la signature (sanitizés pour WinAnsi)
+  const nameLine = sanitizeWinAnsi(`${resp.prenom} ${resp.nom},`);
+  const titleLine = sanitizeWinAnsi(resp.titre);
   // Signature : largeur réduite à 90pt pour ne pas déborder sur le texte du bloc imprimé
   const sigWidth = 90;
   const sigHeight = (sigImage.height / sigImage.width) * sigWidth;

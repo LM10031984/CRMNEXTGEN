@@ -21,32 +21,22 @@ const VISION_OCR_PROMPT =
   "Si l'image est un document d'identité (CNI / passeport / titre de séjour), transcris aussi le contenu de la MRZ (zone à lecture optique en bas).";
 
 export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> {
-  // pdf-parse v2 expose une classe PDFParse, plus la fonction default
-  // legacy. L'ancienne syntaxe `pdfParse(buffer)` échoue avec
-  // "Object.defineProperty called on non-object".
-  const mod = (await import('pdf-parse')) as unknown as {
-    PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string; pages?: unknown[]; numpages?: number }> };
-    default?: {
-      PDFParse?: new (opts: { data: Buffer }) => { getText: () => Promise<{ text?: string; pages?: unknown[]; numpages?: number }> };
-    };
-  };
-  const PDFParse = mod.PDFParse ?? mod.default?.PDFParse;
-  if (!PDFParse) {
-    return { text: '', pages: 0, warnings: ['pdf-parse non chargé : classe PDFParse introuvable.'] };
-  }
+  // unpdf est ESM-native et fonctionne dans les server actions Next.js
+  // (pdf-parse v2 plante avec "Object.defineProperty called on non-object"
+  // sur certains PDFs URSSAF dans le contexte Next 15 / RSC).
   try {
-    const parser = new PDFParse({ data: buffer });
-    const r = await parser.getText();
-    const text = ((r.text as string | undefined) ?? '').trim();
-    const pages = (r.pages?.length as number | undefined) ?? (r.numpages as number | undefined) ?? 0;
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const uint8 = new Uint8Array(buffer);
+    const doc = await getDocumentProxy(uint8);
+    const pages = doc.numPages;
+    const result = await extractText(doc, { mergePages: true });
+    const t: unknown = result.text;
+    const finalText = (typeof t === 'string' ? t : Array.isArray(t) ? (t as string[]).join('\n') : '').trim();
     const warnings: string[] = [];
-    if (text.length < 30) {
-      // Fallback OCR vision : si le PDF est un scan sans couche texte,
-      // on essaie de l'extraire via Ollama vision (lent mais fonctionnel).
-      // Pour l'instant on remonte juste un warning explicite.
-      warnings.push('Texte extrait très court — le PDF est probablement un scan sans OCR. Re-déposer une photo (JPEG) du document permettrait à l\'OCR vision de le traiter.');
+    if (finalText.length < 30) {
+      warnings.push("Texte extrait très court — le PDF est probablement un scan sans OCR. Re-déposer une photo (JPEG) du document permettrait à l'OCR vision de le traiter.");
     }
-    return { text, pages, warnings };
+    return { text: finalText, pages, warnings };
   } catch (e: any) {
     return { text: '', pages: 0, warnings: [`Échec parsing PDF : ${e?.message ?? e}`] };
   }

@@ -289,6 +289,15 @@ export async function createPerson(input: {
   addressStreet?: string | null;
   addressPostalCode?: string | null;
   addressCity?: string | null;
+  // Données sensibles (table SensitiveData séparée pour RGPD)
+  socialSecurityNb?: string | null;
+  // Auto-entreprise associée (crée Organization EI + LegalLink EI_SELF si SIRET)
+  siret?: string | null;
+  activityCode?: string | null;
+  // CFP : montant déclaré + année exercice (l'attestation URSSAF). Crée
+  // l'AgeficeProfile lié à l'auto-entreprise pour persister les droits.
+  cfpAmount?: number | null;
+  cfpYear?: number | null;
 }): Promise<{ ok: boolean; personId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -303,22 +312,94 @@ export async function createPerson(input: {
           city: input.addressCity?.trim() || null,
         }
       : null;
-  const person = await prisma.person.create({
-    data: {
-      tenantId: user.tenantId,
-      firstName: input.firstName.trim(),
-      lastName: input.lastName.trim(),
-      email: input.email?.trim() || null,
-      phone: input.phone?.trim() || null,
-      professionalStatus: input.professionalStatus?.trim() || null,
-      civility: input.civility?.trim() || null,
-      birthName: input.birthName?.trim() || null,
-      birthDate: input.birthDate ? new Date(input.birthDate) : null,
-      personalAddress: personalAddress ? (personalAddress as object) : undefined,
-    },
+
+  const siret = input.siret?.replace(/\s+/g, '') || null;
+  const validSiret = siret && /^\d{14}$/.test(siret) ? siret : null;
+  const ssn = input.socialSecurityNb?.replace(/\s+/g, '') || null;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const person = await tx.person.create({
+      data: {
+        tenantId: user.tenantId,
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
+        email: input.email?.trim() || null,
+        phone: input.phone?.trim() || null,
+        professionalStatus: input.professionalStatus?.trim() || null,
+        civility: input.civility?.trim() || null,
+        birthName: input.birthName?.trim() || null,
+        birthDate: input.birthDate ? new Date(input.birthDate) : null,
+        personalAddress: personalAddress ? (personalAddress as object) : undefined,
+      },
+    });
+
+    if (ssn) {
+      await tx.sensitiveData.create({
+        data: { personId: person.id, socialSecurityNb: ssn },
+      });
+    }
+
+    if (validSiret) {
+      // Cherche une Org existante avec ce SIRET dans le tenant, sinon en crée une
+      let org = await tx.organization.findFirst({
+        where: { tenantId: user.tenantId, siret: validSiret },
+      });
+      if (!org) {
+        org = await tx.organization.create({
+          data: {
+            tenantId: user.tenantId,
+            legalName: `${input.firstName.trim()} ${input.lastName.trim()}`,
+            legalForm: 'AUTO_ENTREPRENEUR',
+            siret: validSiret,
+            opcoCode: 'AGEFICE',
+            naf: input.activityCode?.trim() || null,
+          },
+        });
+      }
+      await tx.legalLink.create({
+        data: {
+          personId: person.id,
+          organizationId: org.id,
+          role: 'EI_SELF',
+          isPrimary: true,
+        },
+      });
+
+      // Crée AgeficeProfile pour persister la CFP déclarée (si fournie).
+      // Règle de calcul du budget : >=7€ → 3000€, >0€<7€ → 600€, =0 → 0€.
+      if (input.cfpAmount !== null && input.cfpAmount !== undefined && input.cfpAmount >= 0) {
+        const eligible = input.cfpAmount >= 7 ? 3000 : input.cfpAmount > 0 ? 600 : 0;
+        const existingProfile = await tx.ageficeProfile.findUnique({
+          where: { organizationId: org.id },
+        });
+        if (existingProfile) {
+          await tx.ageficeProfile.update({
+            where: { organizationId: org.id },
+            data: {
+              lastCfpAmount: input.cfpAmount,
+              lastCfpYear: input.cfpYear ?? null,
+              lastCfpEligibleBudget: eligible,
+            },
+          });
+        } else {
+          await tx.ageficeProfile.create({
+            data: {
+              organizationId: org.id,
+              paFields: {},
+              lastCfpAmount: input.cfpAmount,
+              lastCfpYear: input.cfpYear ?? null,
+              lastCfpEligibleBudget: eligible,
+            },
+          });
+        }
+      }
+    }
+
+    return person;
   });
+
   revalidatePath('/app/apprenants');
-  return { ok: true, personId: person.id };
+  return { ok: true, personId: result.id };
 }
 
 // ── Création organisation ────────────────────────────────────────────────
@@ -503,5 +584,81 @@ export async function deleteProduct(productId: string): Promise<{ ok: boolean; e
 
   await prisma.trainingProduct.delete({ where: { id: productId } });
   revalidatePath('/app/produits');
+  return { ok: true };
+}
+
+// ── Suppression apprenant ────────────────────────────────────────────────
+// Soft delete par défaut (archived=true). Hard delete uniquement si aucune
+// participation/inscription/document — sinon casserait les références
+// historiques (factures, attestations passées, etc.).
+export async function deletePerson(
+  personId: string,
+  opts: { force?: boolean } = {},
+): Promise<{ ok: boolean; archived?: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const person = await prisma.person.findFirst({
+    where: { id: personId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      _count: { select: { participations: true, trainerSessions: true } },
+    },
+  });
+  if (!person) return { ok: false, error: 'Apprenant introuvable.' };
+
+  const hasHistory = person._count.participations > 0 || person._count.trainerSessions > 0;
+
+  if (hasHistory && !opts.force) {
+    // Soft delete : on archive (l'apprenant disparaît des listes mais
+    // reste référencé dans les inscriptions / docs historiques).
+    await prisma.person.update({
+      where: { id: personId },
+      data: { archived: true },
+    });
+    revalidatePath('/app/apprenants');
+    return { ok: true, archived: true };
+  }
+
+  // Hard delete : aucune trace historique OU force=true (admin a confirmé).
+  // Les SensitiveData / LegalLinks sont en onDelete: Cascade.
+  await prisma.person.delete({ where: { id: personId } });
+  revalidatePath('/app/apprenants');
+  return { ok: true, archived: false };
+}
+
+// ── Suppression session ──────────────────────────────────────────────────
+// Refuse la suppression si la session a des participants ou des batches
+// closure générés. L'admin doit d'abord supprimer/archiver les apprenants
+// ou utiliser CANCELLED comme statut.
+export async function deleteTrainingSession(
+  sessionId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      _count: { select: { participants: true, documents: true } },
+    },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+  if (session._count.participants > 0) {
+    return {
+      ok: false,
+      error: `Impossible : ${session._count.participants} apprenant(s) inscrit(s). Désinscris-les ou passe la session en CANCELLED.`,
+    };
+  }
+  if (session._count.documents > 0) {
+    return {
+      ok: false,
+      error: `Impossible : ${session._count.documents} document(s) déjà généré(s) pour cette session.`,
+    };
+  }
+
+  await prisma.trainingSession.delete({ where: { id: sessionId } });
+  revalidatePath('/app/sessions');
   return { ok: true };
 }
