@@ -1,13 +1,17 @@
 /**
- * Génération PDF via Gotenberg (déjà installé sur localhost:3001).
- * On envoie un HTML formaté + assets, on récupère le PDF en buffer.
+ * Génération PDF via Gotenberg (Chromium) ou WeasyPrint.
  *
- * Note Gotenberg : sur /forms/chromium/convert/html, le fichier principal
- * DOIT s'appeler "index.html". Le paramètre `fileName` du second arg n'est
- * conservé que pour de futurs assets (CSS, images).
+ * Gotenberg/Chromium : meilleur support des images, JS, layouts complexes.
+ *   Mais downscale les headers/footers (footer.html illisible) et ne répète
+ *   pas `position: fixed` sur multi-pages.
+ *
+ * WeasyPrint : support natif CSS Paged Media (running headers/footers via
+ *   `@page { @bottom-center { content: element(footer) } }`), footer
+ *   répété et lisible sur chaque page. Utilisé pour les docs closure.
  */
 
 const GOTENBERG_URL = process.env.GOTENBERG_URL ?? 'http://localhost:3001';
+const WEASYPRINT_URL = process.env.WEASYPRINT_URL ?? 'http://localhost:5001';
 
 export async function renderHtmlToPdf(
   html: string,
@@ -25,9 +29,10 @@ export async function renderHtmlToPdf(
   // de marge en bas pour laisser la place au footer.html sans empieter sur
   // le contenu (sinon on a des paragraphes ecrits par-dessus le footer).
   form.append('marginTop', options?.headerHtml ? '0.9' : '0.6');
-  // marginBottom 1.1 inch pour reserver de la place a un footer 9pt sur 2
-  // lignes + line-height 1.5 (sinon le contenu vient empieter dessus).
-  form.append('marginBottom', options?.footerHtml ? '1.1' : '0.6');
+  // marginBottom 1.0 inch (~25mm) pour le footer.html Gotenberg avec
+  // font-size 36pt (compense le downscale Chromium ~30% → visuel 11pt).
+  // Il faut assez de hauteur pour 2 lignes en 36pt downscalées.
+  form.append('marginBottom', options?.footerHtml ? '1.0' : '0.6');
   form.append('marginLeft', '0.6');
   form.append('marginRight', '0.6');
   form.append('paperWidth', '8.27');
@@ -43,6 +48,26 @@ export async function renderHtmlToPdf(
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`Gotenberg HTTP ${res.status} — ${txt.slice(0, 300)}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Rendu via WeasyPrint — utilisé pour les docs Qualiopi closure (footer
+ * répété sur chaque page via CSS Paged Media). Le HTML doit utiliser :
+ *   `@page { @bottom-center { content: element(footer); } }`
+ *   `footer { position: running(footer); }`
+ */
+export async function renderHtmlToPdfWeasy(html: string): Promise<Buffer> {
+  const res = await fetch(`${WEASYPRINT_URL}/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    body: html,
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`WeasyPrint HTTP ${res.status} — ${txt.slice(0, 300)}`);
   }
   const arrayBuffer = await res.arrayBuffer();
   return Buffer.from(arrayBuffer);

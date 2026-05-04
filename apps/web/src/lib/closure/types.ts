@@ -15,6 +15,11 @@ export const CLOSURE_DOC_KINDS = [
   'QCM',
   'GRILLE_OBS',
   'ANALYSE_BESOIN',
+  'POSITIONNEMENT',
+  'SATISFACTION_CHAUD',
+  'SATISFACTION_FROID',
+  'DEROULE_PEDA',
+  'EMARGEMENT',
 ] as const satisfies readonly ClosureDocKind[];
 
 export const CLOSURE_DOC_KIND_LABELS: Record<ClosureDocKind, string> = {
@@ -23,6 +28,11 @@ export const CLOSURE_DOC_KIND_LABELS: Record<ClosureDocKind, string> = {
   QCM: 'QCM final',
   GRILLE_OBS: "Grille d'observation",
   ANALYSE_BESOIN: 'Analyse des besoins',
+  POSITIONNEMENT: 'Questionnaire de positionnement',
+  SATISFACTION_CHAUD: 'Évaluation de satisfaction à chaud',
+  SATISFACTION_FROID: 'Évaluation de satisfaction à froid',
+  DEROULE_PEDA: 'Déroulé pédagogique',
+  EMARGEMENT: "Fiche d'émargement",
 };
 
 export interface ClosureJobPayload {

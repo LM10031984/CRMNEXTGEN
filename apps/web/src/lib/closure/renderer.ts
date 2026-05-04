@@ -8,24 +8,34 @@
  * plus tard.
  */
 
-import { renderHtmlToPdf } from '@/lib/pdf-render';
-import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
+import { prisma } from '@qualiof/db';
+import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import type { ClosureDocKind, ClosureRenderResult } from './types';
 import type { ClosureContext } from './shared-template';
 import { renderAttestationHtml } from './attestation-template';
 import { renderCertificatHtml } from './certificat-template';
-import { renderQcmHtml, type QcmContent } from './qcm-template';
+import { renderQcmHtml, type QcmContent, type QcmQuestion } from './qcm-template';
 import { renderGrilleObservationHtml, type GrilleContent } from './grille-observation-template';
 import { renderAnalyseBesoinHtml, type AnalyseBesoinContent } from './analyse-besoin-template';
+import { renderEmargementHtml } from './emargement-template';
+import { renderPositionnementHtml } from './positionnement-template';
+import { renderSatisfactionChaudHtml } from './satisfaction-chaud-template';
+import { renderSatisfactionFroidHtml } from './satisfaction-froid-template';
+import { renderDerouleHtml } from './deroule-template';
 import {
   stubAnalyseBesoinContent,
   stubGrilleContent,
   stubQcmContent,
+  stubPositionnementContent,
+  stubSatisfactionChaudContent,
+  stubSatisfactionFroidContent,
+  stubDerouleContent,
 } from './stub-content';
 import {
   generateAnalyseBesoinContent,
   generateGrilleContent,
   generateQcmContent,
+  attachQcmScoring,
   type FormationCtx,
   type StagiaireCtx,
 } from './ollama-generators';
@@ -38,6 +48,51 @@ function buildFormationCtx(ctx: ClosureContext): FormationCtx {
     programmeMd: ctx.formationMeta?.programmeMd ?? '',
     nombreHeures: ctx.durationHours,
   };
+}
+
+/**
+ * Cherche un QCM déjà généré pour cette session (n'importe quel participant).
+ * Si trouvé, on en extrait les questions de référence (en strippant les
+ * selected_answer/is_correct du précédent stagiaire) pour les réutiliser
+ * sur le stagiaire courant avec un scoring propre.
+ *
+ * Retourne null si aucun QCM n'existe encore pour la session — l'appelant
+ * doit alors générer un nouveau QCM via Ollama.
+ */
+async function loadSessionQcm(sessionId: string): Promise<{ questions: Omit<QcmQuestion, 'selected_answer' | 'is_correct'>[] } | null> {
+  if (!sessionId || sessionId === 'mock-session-id') return null;
+  const existing = await prisma.pedagogicalAsset.findFirst({
+    where: { sessionId, kind: 'QCM' },
+    select: { rawJson: true },
+    orderBy: { generatedAt: 'asc' },
+  });
+  const raw = existing?.rawJson as { questions?: { question: string; options: { letter: string; text: string }[]; correct_answer: string }[] } | null | undefined;
+  if (!raw?.questions || raw.questions.length < 5) return null;
+  // On ne garde QUE les champs partagés (question + options + correct_answer).
+  // Les selected_answer/is_correct/score étaient propres au stagiaire précédent.
+  const stripped = raw.questions.map((q) => ({
+    question: q.question,
+    options: q.options,
+    correct_answer: q.correct_answer,
+  }));
+  return { questions: stripped };
+}
+
+/**
+ * Cherche un déroulé pédagogique déjà généré pour cette session.
+ * Le déroulé est PARTAGÉ : tous les stagiaires d'une formation reçoivent
+ * le même document (1 seul déroulé par produit/session).
+ */
+async function loadSessionDeroule(sessionId: string): Promise<{ jours: { theme: string; sequences: { duree: string; objectifs: string; contenu: string; outils: string; exercice: string; evaluation: string }[] }[] } | null> {
+  if (!sessionId || sessionId === 'mock-session-id') return null;
+  const existing = await prisma.pedagogicalAsset.findFirst({
+    where: { sessionId, kind: 'DEROULE' },
+    select: { rawJson: true },
+    orderBy: { generatedAt: 'asc' },
+  });
+  const raw = existing?.rawJson as { jours?: unknown[] } | null | undefined;
+  if (!raw?.jours || !Array.isArray(raw.jours) || raw.jours.length === 0) return null;
+  return raw as { jours: { theme: string; sequences: { duree: string; objectifs: string; contenu: string; outils: string; exercice: string; evaluation: string }[] }[] };
 }
 
 function buildStagiaireCtx(ctx: ClosureContext): StagiaireCtx {
@@ -59,18 +114,28 @@ export async function renderClosureDoc(
   switch (kind) {
     case 'ATTESTATION': {
       const html = renderAttestationHtml(ctx);
-      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
       return { pdfBuffer };
     }
     case 'CERTIFICAT': {
       const html = renderCertificatHtml(ctx);
-      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
       return { pdfBuffer };
     }
     case 'QCM': {
+      // Règle métier : 1 SEUL QCM par session (mêmes questions+correct_answer
+      // pour tous les stagiaires), seul le scoring (selected_answer/score) varie.
+      // On cherche d'abord un QCM déjà généré pour la session ; sinon on en
+      // génère un nouveau via Ollama.
+      const existingQcm = await loadSessionQcm(ctx.sessionId);
       let content: QcmContent;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'ollama' | 'stub' | 'shared' = 'stub';
+
+      if (existingQcm) {
+        // Réutilisation des questions, scoring spécifique à ce stagiaire.
+        content = attachQcmScoring(existingQcm.questions);
+        source = 'shared';
+      } else if (USE_OLLAMA) {
         const ai = await generateQcmContent(buildFormationCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
@@ -82,7 +147,7 @@ export async function renderClosureDoc(
         content = stubQcmContent(ctx);
       }
       const html = renderQcmHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
       return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'GRILLE_OBS': {
@@ -100,7 +165,7 @@ export async function renderClosureDoc(
         content = stubGrilleContent(ctx);
       }
       const html = renderGrilleObservationHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
       return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
     }
     case 'ANALYSE_BESOIN': {
@@ -118,8 +183,41 @@ export async function renderClosureDoc(
         content = stubAnalyseBesoinContent(ctx);
       }
       const html = renderAnalyseBesoinHtml(ctx, content);
-      const pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderOfStandardFooterHtml() });
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
       return { pdfBuffer, rawJson: { source, ...content }, usedStub: source === 'stub' };
+    }
+    case 'POSITIONNEMENT': {
+      // Day 4 : pour l'instant stub (Ollama generator à brancher plus tard).
+      const content = stubPositionnementContent(ctx);
+      const html = renderPositionnementHtml(ctx, content);
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
+      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+    }
+    case 'SATISFACTION_CHAUD': {
+      const content = stubSatisfactionChaudContent(ctx);
+      const html = renderSatisfactionChaudHtml(ctx, content);
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
+      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+    }
+    case 'SATISFACTION_FROID': {
+      const content = stubSatisfactionFroidContent(ctx);
+      const html = renderSatisfactionFroidHtml(ctx, content);
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
+      return { pdfBuffer, rawJson: { source: 'stub', ...content }, usedStub: true };
+    }
+    case 'DEROULE_PEDA': {
+      // Partagé par session : si un déroulé existe déjà pour la session,
+      // on le réutilise tel quel (pas regénéré par stagiaire).
+      const existing = await loadSessionDeroule(ctx.sessionId);
+      const content = existing ?? stubDerouleContent(ctx);
+      const html = renderDerouleHtml(ctx, content);
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
+      return { pdfBuffer, rawJson: { source: existing ? 'shared' : 'stub', ...content }, usedStub: !existing };
+    }
+    case 'EMARGEMENT': {
+      const html = renderEmargementHtml(ctx);
+      const pdfBuffer = await renderHtmlToPdfWeasy(html);
+      return { pdfBuffer, rawJson: { source: 'static' }, usedStub: false };
     }
     default: {
       const _exhaustive: never = kind;

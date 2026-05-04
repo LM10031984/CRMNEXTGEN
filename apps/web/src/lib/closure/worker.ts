@@ -41,6 +41,11 @@ const PEDAGOGICAL_KIND_BY_KIND: Partial<Record<ClosureDocKind, PedagogicalKind>>
   QCM: 'QCM',
   GRILLE_OBS: 'GRILLE_OBS',
   ANALYSE_BESOIN: 'ANALYSE_BESOIN',
+  POSITIONNEMENT: 'POSITIONNEMENT',
+  SATISFACTION_CHAUD: 'SATISFACTION_CHAUD',
+  SATISFACTION_FROID: 'SATISFACTION_FROID',
+  DEROULE_PEDA: 'DEROULE',
+  EMARGEMENT: 'EMARGEMENT',
 };
 
 export function startClosureWorker(): Worker<ClosureJobPayload> {
@@ -124,6 +129,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       apprenantPrenom: participant.person.firstName,
       apprenantNom: participant.person.lastName,
       apprenantCivility: participant.person.civility ?? null,
+      sessionId: session.id,
       sessionCode: session.code,
       sessionTitle: product.title,
       sessionStartDate: session.startDate,

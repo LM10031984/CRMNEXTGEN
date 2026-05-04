@@ -64,18 +64,18 @@ export function renderGrilleObservationHtml(
   const obsGlob = content.observations_globales ?? null;
   const obsGlobBlock = obsGlob
     ? `
-<h2 class="section">Observations et axes de progression</h2>
+<h2 class="section dark upper">OBSERVATIONS ET AXES DE PROGRESSION</h2>
 ${obsGlob.commentaire ? `
-  <p style="margin-bottom: 6px;"><strong style="color: ${BRAND_DARK};">Commentaire :</strong></p>
+  <p style="margin-bottom: 4px;"><strong style="color: ${BRAND_DARK};">Commentaire :</strong></p>
   <p class="paragraph" style="margin-left: 6px;">${escapeHtml(obsGlob.commentaire)}</p>
 ` : ''}
 ${obsGlob.axe_amelioration ? `
-  <p style="margin-bottom: 6px;"><strong style="color: ${BRAND_DARK};">Axe d'amélioration :</strong></p>
+  <p style="margin-bottom: 4px;"><strong style="color: ${BRAND_DARK};">Axe d'amélioration :</strong></p>
   <p class="paragraph" style="margin-left: 6px;">${escapeHtml(obsGlob.axe_amelioration)}</p>
 ` : ''}
 `
     : `
-<h2 class="section">Observations et axes de progression</h2>
+<h2 class="section dark upper">OBSERVATIONS ET AXES DE PROGRESSION</h2>
 <p style="color: #94A3B8; font-style: italic;">À compléter par le formateur en fin de formation.</p>
 <div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 14px; min-height: 36mm; margin-top: 6px;"></div>
 `;
@@ -83,8 +83,8 @@ ${obsGlob.axe_amelioration ? `
   const body = `
 ${renderBrandHeader()}
 <main class="body">
-  <h1 class="doc-title">Grille d'observation des compétences</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Suivi pédagogique du stagiaire</p>
+  <h1 class="doc-title">GRILLE D'AMÉLIORATION STAGIAIRE</h1>
+  <p class="doc-subtitle">Indicateur Qualiopi 11 — Suivi pédagogique individualisé</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}
@@ -92,13 +92,13 @@ ${renderBrandHeader()}
 
   <div class="legend-box">
     <strong style="color: ${BRAND_DARK};">Échelle de notation :</strong>
-    <span class="badge-niveau A" style="margin-left: 6px;">A</span> Maîtrise (90-100%) ·
-    <span class="badge-niveau B">B</span> Atteint (71-89%) ·
+    <span class="badge-niveau A" style="margin-left: 6px;">A</span> Objectif atteint avec maîtrise parfaite (90-100%) ·
+    <span class="badge-niveau B">B</span> Objectif atteint (71-89%) ·
     <span class="badge-niveau C">C</span> Moyennement atteint (51-70%) ·
     <span class="badge-niveau D">D</span> Non atteint (&lt; 50%)
   </div>
 
-  <h2 class="section">Compétences évaluées</h2>
+  <h2 class="section dark upper">COMPÉTENCES ÉVALUÉES</h2>
   <table class="data">
     <thead>
       <tr>

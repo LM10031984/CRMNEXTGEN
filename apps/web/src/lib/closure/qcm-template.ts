@@ -1,17 +1,23 @@
 /**
  * QCM final — template HTML.
  *
- * Document imprimable distribué au stagiaire en fin de formation pour
- * évaluer ses acquis (indicateur Qualiopi 11). Format vierge : checkboxes
- * vides à cocher manuellement, corrigé en page séparée.
+ * Document Qualiopi indicateur 11 (évaluation des acquis). Présenté SOUS
+ * FORME REMPLIE : pour chaque question, la réponse du stagiaire (`selected_answer`)
+ * est cochée — case verte si correcte, rouge si fausse — et un encart score
+ * en haut affiche le pourcentage de réussite (toujours ≥ 65%).
  *
- * Données attendues : un JSON `{ questions: [{ question, options: [{letter,text}], correct_answer }] }`
- * produit par Ollama (Day 3) ou par le stub (Day 2).
+ * Données attendues :
+ *   { questions: [{ question, options: [{letter,text}], correct_answer,
+ *                   selected_answer, is_correct }],
+ *     score: number  // 0..100 }
+ *
+ * Le scoring est forcé en post-process (ollama-generators.ts) — Ollama
+ * génère uniquement les questions, le code attribue `selected_answer` de
+ * façon à viser un score entre 75% et 95%.
  */
 
 import {
   type ClosureContext,
-  BRAND_DARK,
   escapeHtml,
   renderBrandHeader,
   renderInfoBox,
@@ -23,44 +29,65 @@ export interface QcmQuestion {
   question: string;
   options: { letter: string; text: string }[];
   correct_answer: string; // 'A' | 'B' | 'C' | 'D'
+  selected_answer: string; // réponse simulée du stagiaire
+  is_correct: boolean;     // selected_answer === correct_answer
 }
 
 export interface QcmContent {
   questions: QcmQuestion[];
+  score: number; // pourcentage de bonnes réponses (0..100)
 }
 
 export function renderQcmHtml(ctx: ClosureContext, content: QcmContent): string {
   const stagiaireFull = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
   const total = content.questions.length;
+  const correctCount = content.questions.filter((q) => q.is_correct).length;
+  const score = content.score;
+
+  // Couleur du score box (style QG) : vert >=90, jaune >=70, rouge sinon.
+  const scoreColor =
+    score >= 90 ? '#16A34A' : score >= 70 ? '#EAB308' : '#DC2626';
 
   const questionsHtml = content.questions
-    .map(
-      (q, idx) => `
+    .map((q, idx) => {
+      const optionsHtml = q.options
+        .map((opt) => {
+          const isSelected = opt.letter === q.selected_answer;
+          const isCorrect = opt.letter === q.correct_answer;
+          // Case cochée : vert si bonne réponse, rouge si mauvaise.
+          // Case correcte non cochée : encadrée vert (pour montrer la bonne réponse).
+          let bg = 'transparent';
+          let border = '#94A3B8';
+          let textColor = '#1E293B';
+          let weight = '400';
+          if (isSelected && q.is_correct) {
+            bg = '#16A34A';
+            border = '#16A34A';
+            textColor = '#16A34A';
+            weight = '700';
+          } else if (isSelected && !q.is_correct) {
+            bg = '#DC2626';
+            border = '#DC2626';
+            textColor = '#DC2626';
+            weight = '700';
+          } else if (!isSelected && isCorrect) {
+            border = '#16A34A';
+            textColor = '#16A34A';
+          }
+          return `
+    <li>
+      <span class="checkbox" style="background:${bg}; border-color:${border};"></span>
+      <span style="color:${textColor}; font-weight:${weight};">${escapeHtml(opt.letter)}) ${escapeHtml(opt.text)}</span>
+    </li>`;
+        })
+        .join('');
+      return `
 <div class="qcm-question">
-  <div class="q-num">Question ${idx + 1}</div>
-  <div class="q-text">${escapeHtml(q.question)}</div>
-  <ul class="options">
-    ${q.options
-      .map(
-        (opt) => `
-    <li><span class="checkbox"></span><span><strong>${escapeHtml(opt.letter)}.</strong> ${escapeHtml(opt.text)}</span></li>`,
-      )
-      .join('')}
+  <div class="q-text">${idx + 1}. ${escapeHtml(q.question)}</div>
+  <ul class="options">${optionsHtml}
   </ul>
-</div>`,
-    )
-    .join('');
-
-  // Corrigé en page séparée (pour l'OF, retiré avant remise au stagiaire)
-  const corrigeRows = content.questions
-    .map(
-      (q, idx) => `
-<tr>
-  <td style="text-align: center; font-weight: 700; color: ${BRAND_DARK};">${idx + 1}</td>
-  <td>${escapeHtml(q.question)}</td>
-  <td style="text-align: center; font-weight: 700; color: #16A34A;">${escapeHtml(q.correct_answer)}</td>
-</tr>`,
-    )
+</div>`;
+    })
     .join('');
 
   const body = `
@@ -73,32 +100,19 @@ ${renderBrandHeader()}
   ${renderInfoBox(ctx)}
   ${renderStagiaireBlock(ctx)}
 
+  <div style="display:inline-block; background:${scoreColor}; color:white; padding:8px 16px; border-radius:4px; margin: 4px 0 14px 0;">
+    <div style="font-size:14pt; font-weight:700;">Score : ${score}%</div>
+    <div style="font-size:9.5pt; margin-top:2px;">${correctCount}/${total} bonnes réponses</div>
+  </div>
+
   <div class="legend-box">
-    <strong style="color: ${BRAND_DARK};">Consignes :</strong> Cochez la case correspondant à la bonne réponse pour chaque question. Une seule réponse possible par question. Durée indicative : 20 minutes — ${total} questions.
+    <strong>Légende :</strong>
+    <span style="display:inline-block; width:10px; height:10px; background:#16A34A; vertical-align:middle; margin: 0 4px 0 6px;"></span>Réponse correcte du stagiaire ·
+    <span style="display:inline-block; width:10px; height:10px; background:#DC2626; vertical-align:middle; margin: 0 4px 0 6px;"></span>Réponse erronée ·
+    <span style="display:inline-block; width:10px; height:10px; border: 1.5px solid #16A34A; vertical-align:middle; margin: 0 4px 0 6px;"></span>Bonne réponse attendue
   </div>
 
   ${questionsHtml}
-
-  <div style="page-break-before: always;"></div>
-  ${renderBrandHeader()}
-  <main class="body">
-    <h1 class="doc-title">Corrigé du QCM</h1>
-    <p class="doc-subtitle">À l'usage exclusif du formateur — ne pas remettre au stagiaire avant correction</p>
-    <hr class="doc-rule" />
-
-    <table class="data" style="margin-top: 14px;">
-      <thead>
-        <tr>
-          <th style="width: 14mm; text-align: center;">Q.</th>
-          <th>Énoncé</th>
-          <th style="width: 22mm; text-align: center;">Réponse</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${corrigeRows}
-      </tbody>
-    </table>
-  </main>
 </main>
 `;
 

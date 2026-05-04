@@ -10,13 +10,13 @@
 import { getOfConfig } from '@/lib/of-config';
 import {
   type ClosureContext,
-  BRAND_DARK,
   civilityLabel,
   escapeHtml,
   formatDateFr,
   formatHours,
   loadSignatureDataUrl,
   renderBrandHeader,
+  renderOfficialBadges,
   soussigneLabel,
   wrapHtml,
 } from './shared-template';
@@ -37,6 +37,7 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
 
   const body = `
 ${renderBrandHeader()}
+${renderOfficialBadges()}
 <main class="body">
   <h1 class="doc-title center">ATTESTATION DE FIN DE FORMATION</h1>
   <p class="doc-subtitle center">Conformément à l'article L.6353-1 du Code du travail — indicateur Qualiopi 11</p>
@@ -45,15 +46,11 @@ ${renderBrandHeader()}
   <section class="attestation-body">
     <p>${escapeHtml(soussigneLabel(of.resp.civilite))} <strong>${escapeHtml(respFullName)}</strong>, ${escapeHtml(respTitre)} de l'organisme de formation <strong>${escapeHtml(of.name)}</strong> (SIRET ${escapeHtml(of.siret)} — N° de déclaration ${escapeHtml(of.rnq)}), atteste que :</p>
 
-    <p style="margin-left: 12mm; margin-top: 14px;">
-      <strong>${apprenantPrefix ? escapeHtml(apprenantPrefix) + ' ' : ''}${escapeHtml(stagiaireFull)}</strong>
-    </p>
+    <p style="margin-top: 14px;"><strong>${apprenantPrefix ? escapeHtml(apprenantPrefix) + ' ' : ''}${escapeHtml(stagiaireFull)}</strong></p>
 
     <p>a suivi avec assiduité l'action de formation intitulée :</p>
 
-    <p style="margin-left: 12mm;">
-      <strong>« ${escapeHtml(ctx.sessionTitle)} »</strong>
-    </p>
+    <p><strong>« ${escapeHtml(ctx.sessionTitle)} »</strong></p>
 
     <p>qui s'est déroulée ${escapeHtml(dateStr)}, pour une durée totale de <strong>${escapeHtml(formatHours(ctx.durationHours))}</strong>${ctx.sessionLocation ? `, à <strong>${escapeHtml(ctx.sessionLocation)}</strong>` : ''}.</p>
 
@@ -67,11 +64,6 @@ ${renderBrandHeader()}
       <div class="label">${escapeHtml(respFullName)}</div>
       <div class="role">${escapeHtml(respTitre)} — ${escapeHtml(of.name)}</div>
       ${signatureDataUrl ? `<img class="tampon" src="${signatureDataUrl}" alt="Signature et cachet" />` : ''}
-    </div>
-    <div class="col">
-      <div class="label">${escapeHtml(stagiaireFull)}</div>
-      <div class="role">Stagiaire</div>
-      <div style="margin-top: 38mm; border-top: 1px dashed ${BRAND_DARK}; width: 70mm; padding-top: 4px; font-size: 9pt; color: #64748B;">Signature</div>
     </div>
   </div>
 </main>

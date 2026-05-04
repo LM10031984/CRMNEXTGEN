@@ -61,6 +61,20 @@ services:
       - "--log-level=info"
     restart: unless-stopped
 
+  # WeasyPrint pour les docs Qualiopi closure (footer répété sur chaque
+  # page via CSS Paged Media — Chromium downscale trop violemment).
+  weasyprint:
+    build: ./docker/weasyprint
+    container_name: qualiof_weasyprint
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5001/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   # ⚠️ Ollama containerisé n'a PAS accès au GPU Metal sur Mac Apple Silicon.
   # Recommandation : installer Ollama natif (`brew install ollama`) et commenter ce service.
   # On le garde en option pour les machines Linux ou en CI.

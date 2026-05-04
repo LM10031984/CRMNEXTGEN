@@ -13,7 +13,7 @@
 
 import {
   type ClosureContext,
-  BRAND_DARK,
+  SECTION_BLUE,
   escapeHtml,
   renderBrandHeader,
   renderInfoBox,
@@ -48,7 +48,7 @@ function renderListSection(
   return `
 <h2 class="section">${escapeHtml(title)}</h2>
 <ul class="bullets" style="list-style: none; margin-left: 14px;">
-  ${items.map((it) => `<li><span style="color: ${BRAND_DARK}; font-weight: 700; margin-right: 6px;">${bullet}</span>${escapeHtml(it)}</li>`).join('')}
+  ${items.map((it) => `<li><span style="color: ${SECTION_BLUE}; font-weight: 700; margin-right: 6px;">${bullet}</span>${escapeHtml(it)}</li>`).join('')}
 </ul>
 `;
 }

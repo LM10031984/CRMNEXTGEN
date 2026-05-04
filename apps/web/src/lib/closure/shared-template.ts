@@ -2,9 +2,9 @@
  * Module partagé pour les 5 templates HTML du pack fin de formation.
  *
  * Reproduit l'identité visuelle de Qualiopi Gen (cf pdf-generator.ts) :
- *   - Bandeau bleu foncé `#00527A` avec logo Start Academy blanc centré
- *   - Encart info formation (bleu clair F0F9FF, bordure 3px BRAND_BLUE)
- *   - Sections titrées en bleu foncé MAJUSCULE soulignées
+ *   - Bandeau bleu foncé plein `#00527A` (35mm) avec logo Start Academy BLANC centré
+ *   - Encart info formation (table 2 colonnes, fond bleu clair `#F0F9FF`, rounded)
+ *   - Sections titrées en bleu Word `#4472C4` (pour analyse besoin) ou bleu foncé
  *   - Footer corporate fixe bas de page (siège social + RNQ + contact)
  *
  * Le rendu PDF passe par Gotenberg (cohérent avec programme-template.ts).
@@ -17,6 +17,7 @@ import { getOfConfig } from '@/lib/of-config';
 export const BRAND_BLUE = '#00B4E6';
 export const BRAND_DARK = '#00527A';
 export const BRAND_LIGHT_BG = '#F0F9FF';
+export const SECTION_BLUE = '#4472C4'; // bleu Word — utilisé pour titres section (analyse besoin)
 export const TEXT = '#1E293B';
 export const MUTED = '#64748B';
 
@@ -50,8 +51,29 @@ export function loadLogoColorDataUrl(): string {
   return loadAssetDataUrl(['logo-start-academy.png']);
 }
 
+/** Logo blanc transparent pour bandeau bleu foncé (style Qualiopi Gen). */
+export function loadLogoWhiteDataUrl(): string {
+  return loadAssetDataUrl(['logo-white.png']);
+}
+
+/** Logo officiel Ministère du Travail (haut gauche docs Qualiopi). */
+export function loadLogoMinistereDataUrl(): string {
+  return loadAssetDataUrl(['logo-ministere-travail.png']);
+}
+
+/** Logo officiel Qualiopi processus certifié (haut droite docs Qualiopi). */
+export function loadLogoQualiopiDataUrl(): string {
+  return loadAssetDataUrl(['logo-qualiopi.png']);
+}
+
 export function loadSignatureDataUrl(): string {
-  return loadAssetDataUrl(['tampon-signature.png', 'signature-laurent.png']);
+  // signature-laurent.png = signature de Laurent Marx (responsable Start Academy).
+  // Fallback : tampon-signature-fusion.png (signature Julien Lafitte) puis tampon-signature.png.
+  return loadAssetDataUrl([
+    'signature-laurent.png',
+    'tampon-signature-fusion.png',
+    'tampon-signature.png',
+  ]);
 }
 
 export function escapeHtml(s: string | null | undefined): string {
@@ -137,6 +159,7 @@ export interface ClosureContext {
   apprenantNom: string;
   apprenantCivility: string | null;
   // Session / produit
+  sessionId: string; // pour partager le QCM entre stagiaires d'une même session
   sessionCode: string;
   sessionTitle: string;
   sessionStartDate: Date;
@@ -156,7 +179,11 @@ export interface ClosureContext {
  */
 export const SHARED_STYLES = `
 <style>
-  @page { size: A4; margin: 0 0 22mm 0; }
+  /* CSS Paged Media (WeasyPrint) — footer répété nativement sur chaque page
+   * via running element. Marges @page : 25mm haut (pages 2+), 0 page 1
+   * (bandeau brand pleine largeur), 22mm bas réservés pour le footer running. */
+  @page { size: A4; margin: 25mm 0 22mm 0; @bottom-center { content: element(corpfooter); } }
+  @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
   body {
     font-family: 'Calibri', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -167,23 +194,53 @@ export const SHARED_STYLES = `
     padding: 0;
   }
 
-  /* Bandeau header (fond blanc + logo couleur + bordure bleu foncé) */
+  /* Bandeau header (fond bleu foncé plein + logo BLANC centré) — style Qualiopi Gen */
   header.brand {
-    background: white;
-    border-bottom: 4px solid ${BRAND_DARK};
-    padding: 14mm 0 8mm 0;
-    text-align: center;
+    background: ${BRAND_DARK};
+    height: 35mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0;
+    padding: 0;
   }
-  header.brand img.logo { height: 18mm; width: auto; }
+  header.brand img.logo { height: 25mm; width: auto; }
   header.brand .of-name {
+    color: white;
     font-size: 22pt;
     font-weight: 700;
     letter-spacing: 1px;
   }
 
-  /* Wrapper contenu (marges latérales) */
-  main.body { padding: 12mm 18mm 0 18mm; }
+  /* Wrapper contenu (marges latérales). Padding-bottom 8mm de respiration —
+   * le footer est déjà géré par la marge @page (running element). */
+  main.body { padding: 12mm 18mm 8mm 18mm; }
+
+  /* Footer corporate — running element WeasyPrint (CSS Paged Media).
+   * Devient le contenu de @bottom-center de chaque page automatiquement.
+   * Taille 11pt RÉELLE (pas downscalée comme avec Gotenberg/Chromium). */
+  footer.corp {
+    position: running(corpfooter);
+    padding: 4px 18mm 0 18mm;
+    border-top: 1px solid #94A3B8;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #1F2937;
+    text-align: center;
+  }
+  footer.corp strong { color: ${BRAND_DARK}; }
+
+  /* Bandeau "logos officiels" (Ministère du Travail à gauche, Qualiopi à droite)
+   * — conforme au modèle DOCX C3_i11 du certificat de réalisation. */
+  .official-badges {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6mm 18mm 0 18mm;
+    margin-bottom: 4mm;
+  }
+  .official-badges .badge-left { height: 22mm; width: auto; }
+  .official-badges .badge-right { height: 18mm; width: auto; }
 
   /* Titre du document (sous le bandeau) */
   h1.doc-title {
@@ -202,44 +259,54 @@ export const SHARED_STYLES = `
     margin: 0 0 12px 0;
   }
 
-  /* Encart info formation (bleu clair) */
+  /* Encart info formation (rounded, fond bleu clair, table 2x2 — style QG) */
   .info-box {
     background: ${BRAND_LIGHT_BG};
-    border-left: 3px solid ${BRAND_BLUE};
     border-radius: 4px;
     padding: 10px 14px;
     margin: 0 0 14px 0;
-    font-size: 10pt;
+    font-size: 11pt;
   }
-  .info-box .row { display: flex; gap: 6px; align-items: baseline; margin: 3px 0; flex-wrap: wrap; }
-  .info-box .label { color: ${MUTED}; font-weight: 600; min-width: 80px; }
-  .info-box .value { color: ${TEXT}; }
-  .info-box .pair { display: inline-flex; gap: 6px; margin-right: 24px; }
+  .info-box table { width: 100%; border-collapse: collapse; }
+  .info-box td { padding: 3px 8px 3px 0; vertical-align: baseline; }
+  .info-box td.label { color: ${TEXT}; font-weight: 700; width: 28mm; }
+  .info-box td.value { color: ${TEXT}; }
 
-  /* Bloc stagiaire compact */
+  /* Bloc stagiaire compact (titre "Stagiaire" + nom + entreprise/fonction muted) */
   .stagiaire-block {
     margin: 0 0 16px 0;
   }
-  .stagiaire-block .name { font-size: 13pt; font-weight: 700; color: ${BRAND_DARK}; }
-  .stagiaire-block .meta { font-size: 9.5pt; color: ${MUTED}; margin-top: 2px; }
+  .stagiaire-block .title {
+    font-size: 12pt;
+    font-weight: 700;
+    color: ${TEXT};
+    margin-bottom: 4px;
+  }
+  .stagiaire-block .name { font-size: 10.5pt; color: ${TEXT}; }
+  .stagiaire-block .meta { font-size: 10pt; color: ${MUTED}; margin-top: 2px; }
 
-  /* Sections titrées */
+  /* Sections titrées (style QG : pas de bordure, titre simple) */
   h2.section {
     font-size: 12pt;
-    color: ${BRAND_DARK};
-    margin: 16px 0 6px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: ${SECTION_BLUE};
+    margin: 14px 0 6px 0;
     font-weight: 700;
-    border-bottom: 1.5px solid ${BRAND_BLUE};
-    padding-bottom: 3px;
+    text-transform: none;
+    letter-spacing: 0;
   }
-  h2.section.no-rule { border-bottom: none; padding-bottom: 0; }
+  h2.section.dark { color: ${BRAND_DARK}; }
+  h2.section.upper { text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1.5px solid ${BRAND_BLUE}; padding-bottom: 3px; }
 
-  ul.bullets { margin: 4px 0 12px 22px; padding: 0; }
+  ul.bullets { margin: 4px 0 12px 22px; padding: 0; page-break-inside: avoid; }
   ul.bullets li { margin-bottom: 4px; font-size: 10.5pt; }
 
-  p.paragraph { margin: 4px 0 10px 0; font-size: 10.5pt; line-height: 1.55; }
+  p.paragraph { margin: 4px 0 10px 0; font-size: 10.5pt; line-height: 1.55; orphans: 3; widows: 3; }
+
+  /* Une section + son contenu immédiat ne se coupent pas en bas de page :
+   * si elle ne tient pas, elle passe en page suivante (évite le titre seul
+   * en bas qui colle au footer). */
+  h2.section { page-break-after: avoid; }
+  h2.section + p, h2.section + ul, h2.section + table { page-break-before: avoid; }
 
   /* Tables (grille observation, déroulé) */
   table.data {
@@ -278,21 +345,6 @@ export const SHARED_STYLES = `
   .badge-niveau.C { background: #F59E0B; }
   .badge-niveau.D { background: #DC2626; }
 
-  /* Footer fixe bas de page (toutes pages) */
-  footer.corp {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    border-top: 1px solid #94A3B8;
-    padding: 4px 18mm 8px 18mm;
-    font-size: 7.5pt;
-    color: #475569;
-    text-align: center;
-    line-height: 1.45;
-    background: white;
-  }
-
   /* Signature & cachet */
   .signature-block {
     margin-top: 28px;
@@ -306,22 +358,25 @@ export const SHARED_STYLES = `
   }
   .signature-block .label { font-weight: 600; color: ${BRAND_DARK}; font-size: 10pt; }
   .signature-block .role { font-size: 9pt; color: ${MUTED}; margin-top: 2px; }
-  .signature-block img.tampon { height: 38mm; margin-top: 6px; }
+  .signature-block img.tampon { height: 25mm; margin-top: 6px; }
 
-  /* QCM specific */
+  /* QCM specific (style Qualiopi Gen : numéro + énoncé sur même ligne, bleu cyan) */
   .qcm-question {
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     page-break-inside: avoid;
   }
   .qcm-question .q-num {
-    color: ${BRAND_DARK};
+    color: #0E7490;
     font-weight: 700;
     font-size: 10.5pt;
+    display: inline;
   }
   .qcm-question .q-text {
-    color: ${TEXT};
+    color: #0E7490;
+    font-weight: 700;
     font-size: 10.5pt;
-    margin-bottom: 6px;
+    margin: 0 0 6px 0;
+    display: block;
   }
   .qcm-question ul.options { list-style: none; padding-left: 0; margin: 0; }
   .qcm-question ul.options li {
@@ -352,7 +407,7 @@ export const SHARED_STYLES = `
 
   section.attestation-body {
     margin-top: 14px;
-    text-align: justify;
+    text-align: left;
     font-size: 11pt;
     line-height: 1.7;
   }
@@ -362,69 +417,114 @@ export const SHARED_STYLES = `
 `;
 
 /**
- * Bandeau brand en haut de chaque doc — fond blanc avec logo couleur centré
- * + barre bleu foncé épaisse en bas (cohérent avec programme-template.ts existant
- * de QualiOF qui utilise déjà ce pattern).
+ * Bandeau brand en haut de chaque doc — fond bleu foncé plein avec logo BLANC
+ * centré (style Qualiopi Gen). Hauteur 35mm pour reproduire le rendu jsPDF
+ * d'origine.
  */
 export function renderBrandHeader(): string {
   const of = getOfConfig();
-  const dataUrl = loadLogoColorDataUrl();
+  const dataUrl = loadLogoWhiteDataUrl();
   const inner = dataUrl
     ? `<img class="logo" src="${dataUrl}" alt="${escapeHtml(of.name)}" />`
-    : `<div class="of-name" style="color:${BRAND_DARK};">${escapeHtml(of.name).toUpperCase()}</div>`;
+    : `<div class="of-name">${escapeHtml(of.name).toUpperCase()}</div>`;
   return `<header class="brand">${inner}</header>`;
 }
 
 /**
- * Encart "info formation" affiché sous le titre (bleu clair, 4 champs sur 2 lignes).
+ * Bandeau "officiel" pour les documents Qualiopi : logo Ministère du Travail
+ * en haut à gauche, logo Qualiopi processus certifié en haut à droite.
+ * Conforme au modèle DOCX C3_i11 fourni par Laurent (cert. de réalisation).
+ * Apparaît sur la PAGE 1 uniquement (en flow normal après le bandeau brand).
+ */
+export function renderOfficialBadges(): string {
+  const ministere = loadLogoMinistereDataUrl();
+  const qualiopi = loadLogoQualiopiDataUrl();
+  return `
+<div class="official-badges">
+  ${ministere ? `<img class="badge-left" src="${ministere}" alt="Ministère du Travail" />` : '<span></span>'}
+  ${qualiopi ? `<img class="badge-right" src="${qualiopi}" alt="Qualiopi processus certifié" />` : '<span></span>'}
+</div>
+`.trim();
+}
+
+/**
+ * Encart "info formation" affiché sous le titre — style Qualiopi Gen :
+ * encart bleu clair rounded, table 2 lignes (Formation/Date(s) puis Lieu/Durée).
  */
 export function renderInfoBox(ctx: ClosureContext): string {
-  const dateStr =
-    ctx.sessionStartDate.toDateString() === ctx.sessionEndDate.toDateString()
-      ? `Le ${formatDateFr(ctx.sessionStartDate)}`
-      : `Du ${formatDateFr(ctx.sessionStartDate)} au ${formatDateFr(ctx.sessionEndDate)}`;
-  const trainer = ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À confirmer';
+  // Qualiopi Gen affiche toujours la date de fin (ou de début si pas de fin)
+  const sameDay = ctx.sessionStartDate.toDateString() === ctx.sessionEndDate.toDateString();
+  const dateStr = sameDay
+    ? formatDateFr(ctx.sessionStartDate)
+    : `Du ${formatDateFr(ctx.sessionStartDate)} au ${formatDateFr(ctx.sessionEndDate)}`;
   return `
 <div class="info-box">
-  <div class="row">
-    <span class="label">Formation :</span>
-    <span class="value"><strong>${escapeHtml(ctx.sessionTitle)}</strong></span>
-  </div>
-  <div class="row">
-    <span class="pair"><span class="label">Date(s) :</span><span class="value">${escapeHtml(dateStr)}</span></span>
-    <span class="pair"><span class="label">Durée :</span><span class="value">${escapeHtml(formatHours(ctx.durationHours))}</span></span>
-  </div>
-  <div class="row">
-    <span class="pair"><span class="label">Lieu :</span><span class="value">${escapeHtml(ctx.sessionLocation ?? 'À confirmer')}</span></span>
-    <span class="pair"><span class="label">Formateur :</span><span class="value">${escapeHtml(trainer)}</span></span>
-  </div>
+  <table>
+    <tbody>
+      <tr>
+        <td class="label">Formation :</td>
+        <td class="value" colspan="3">${escapeHtml(ctx.sessionTitle)}</td>
+      </tr>
+      <tr>
+        <td class="label">Date(s) :</td>
+        <td class="value">${escapeHtml(dateStr)}</td>
+        <td class="label" style="width:18mm;">Durée :</td>
+        <td class="value">${escapeHtml(formatHours(ctx.durationHours))}</td>
+      </tr>
+      <tr>
+        <td class="label">Lieu :</td>
+        <td class="value" colspan="3">${escapeHtml(ctx.sessionLocation ?? 'À confirmer')}</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 `.trim();
 }
 
+/**
+ * Bloc "Stagiaire" — style Qualiopi Gen : titre "Stagiaire" puis nom + entreprise/fonction.
+ */
 export function renderStagiaireBlock(ctx: ClosureContext): string {
-  const prefix = civilityLabel(ctx.apprenantCivility);
-  const fullName = `${prefix ? prefix + ' ' : ''}${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
+  const fullName = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
+  const meta = ctx.stagiaireMeta;
+  const metaLine =
+    meta?.entreprise || meta?.fonction
+      ? `<div class="meta">${escapeHtml(meta?.entreprise ?? '')}${meta?.entreprise && meta?.fonction ? ' — ' : ''}${escapeHtml(meta?.fonction ?? '')}</div>`
+      : '';
   return `
 <div class="stagiaire-block">
+  <div class="title">Stagiaire</div>
   <div class="name">${escapeHtml(fullName)}</div>
+  ${metaLine}
 </div>
 `.trim();
 }
 
+/**
+ * Footer corporate inclus directement dans le body HTML — `position: fixed`
+ * bottom: 0 pour rester collé au bas de la zone imprimable. Taille 11pt
+ * RÉELLE (pas downscalée comme dans le footer.html Gotenberg qui était
+ * illisible). Sur les docs multi-pages, Chromium n'affiche pas position
+ * fixed sur les pages 2+ — limitation acceptée.
+ */
 export function renderCorpFooter(): string {
   const of = getOfConfig();
-  const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
+  const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
   return `
 <footer class="corp">
-  <strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong> – siège social ${escapeHtml(of.addressFull)} – N° SIRET ${escapeHtml(of.siret)}<br>
-  NDA ${escapeHtml(of.rnq)} – Coordonnées de contact : ${escapeHtml(respFullName)} – E-mail : ${escapeHtml(of.email)} – Tél : ${escapeHtml(of.phone)}
+  <strong>${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
 </footer>
 `.trim();
 }
 
 /**
  * Wrapper : produit un document HTML complet à partir d'un body interne.
+ *
+ * IMPORTANT WeasyPrint : le footer en `position: running(corpfooter)` DOIT
+ * être placé en TÊTE du body, sinon il n'est pas disponible pour le
+ * `@bottom-center` de la page 1 (WeasyPrint le découvre seulement quand
+ * la pagination atteint son emplacement dans le flux).
  */
 export function wrapHtml(opts: { title: string; bodyHtml: string }): string {
   return `<!DOCTYPE html>
@@ -435,8 +535,8 @@ export function wrapHtml(opts: { title: string; bodyHtml: string }): string {
   ${SHARED_STYLES}
 </head>
 <body>
-${opts.bodyHtml}
 ${renderCorpFooter()}
+${opts.bodyHtml}
 </body>
 </html>`;
 }

@@ -7,7 +7,7 @@
  * et tracer dans AIGenerationJob.aiPromptVersion.
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v1-2026-05-01';
+export const PROMPT_VERSION = 'qualiopi-gen-v2-2026-05-03';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -18,6 +18,8 @@ Les questions doivent :
 - Être formulées de manière claire et professionnelle
 - Couvrir différents aspects de la formation
 - Être de difficulté modérée (un stagiaire ayant suivi la formation doit pouvoir répondre à >90%)
+
+Génère AU MOINS 10 questions (idéalement 12-13).
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 { "questions": [{ "question": "...", "options": [{"letter": "A", "text": "..."}, ...], "correct_answer": "A|B|C|D" }] }`;
@@ -38,18 +40,24 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 }`;
 
 export const SYSTEM_PROMPT_GRILLE_OBSERVATION = `Tu es un expert en ingénierie pédagogique et évaluation Qualiopi.
-Tu génères des grilles d'observation individuelles pour les stagiaires en formation professionnelle.
-Tu dois te baser STRICTEMENT sur le titre et le programme de la formation pour générer des compétences, commentaires et axes d'amélioration pertinents et spécifiques.
+Tu génères des grilles d'observation individuelles REMPLIES pour les stagiaires en formation professionnelle.
+Tu dois te baser STRICTEMENT sur le titre et le programme de la formation pour générer des compétences, niveaux, observations, commentaires et axes d'amélioration pertinents et spécifiques.
 Ne génère JAMAIS de contenu générique. Chaque élément doit être directement lié au contenu réel de la formation.
+
+POUR CHAQUE COMPÉTENCE, tu dois OBLIGATOIREMENT remplir :
+- niveau : "A" (maîtrise parfaite, 90-100%) ou "B" (objectif atteint, 71-89%). Maximum 1 ou 2 compétences peuvent être en "C" (moyennement atteint). JAMAIS de "D".
+- observation : 1 phrase courte, positive et concrète, liée à la compétence évaluée
+
+Le ton général doit être bienveillant et valorisant — le stagiaire a réussi sa formation.
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 {
   "competences": [
-    { "nom": "string (compétence concrète, formulée comme une action)", "niveau": null, "observation": null }
-  ] (exactement 7 compétences, niveau et observation toujours null — la grille reste à remplir par le formateur),
+    { "nom": "string (compétence concrète, formulée comme une action)", "niveau": "A" | "B" | "C", "observation": "string (1 phrase positive)" }
+  ] (exactement 7 compétences, toutes remplies),
   "observations_globales": {
-    "commentaire": "string (2-3 phrases positives et personnalisées)",
-    "axe_amelioration": "string (1-2 phrases sur un axe de progression)"
+    "commentaire": "string (2-3 phrases positives et personnalisées sur le stagiaire)",
+    "axe_amelioration": "string (1-2 phrases bienveillantes sur un axe de progression possible)"
   }
 }`;
 
