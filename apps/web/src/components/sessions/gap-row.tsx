@@ -6,6 +6,7 @@ import { Check, X, Briefcase, AlertCircle, ChevronDown, ChevronRight } from 'luc
 import { Badge } from '@/components/ui/badge';
 import { addParticipant } from '@/server/actions/sessions';
 import { ignoreMissingParticipant, type SessionGap } from '@/server/actions/session-gaps';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 const ROLE_LABELS: Record<string, string> = {
@@ -164,7 +165,7 @@ function MissingRow({ sessionId, rawName, candidates, defaultPrice, done, onReso
                 <Badge variant={isEi ? 'primary' : 'muted'}>
                   {isEi ? 'EI' : ROLE_LABELS[link.role] ?? link.role}
                 </Badge>
-                {link.organization.opcoCode && <Badge variant="info">{link.organization.opcoCode}</Badge>}
+                {link.organization.opcoCode && <Badge variant="info">{formatFunderCode(link.organization.opcoCode)}</Badge>}
               </button>
             );
           })}

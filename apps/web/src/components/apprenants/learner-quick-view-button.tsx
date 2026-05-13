@@ -6,6 +6,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Eye, X, Mail, Phone, Briefcase, GraduationCap, Wallet, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLearnerQuickView, type LearnerQuickViewData } from '@/server/actions/persons';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -123,7 +124,7 @@ export function LearnerQuickViewButton({ personId }: { personId: string }) {
                           <div className="text-xs text-muted-foreground">
                             {ROLE_LABELS[l.role] ?? l.role}
                             {l.isPrimary && ' · principal'}
-                            {l.opcoCode && ` · OPCO ${l.opcoCode}`}
+                            {l.opcoCode && ` · ${formatFunderCode(l.opcoCode)}`}
                           </div>
                         </div>
                       </li>
@@ -132,6 +133,7 @@ export function LearnerQuickViewButton({ personId }: { personId: string }) {
                 </section>
               )}
 
+              {/* grid-cols-3 OK même mobile : 3 KPI compacts (chiffre + label court) */}
               <section className="grid grid-cols-3 gap-2">
                 <KPI icon={GraduationCap} label="Sessions" value={String(data.totalParticipations)} />
                 <KPI icon={Wallet} label="Total CA" value={fmtEUR.format(data.totalAmount)} />

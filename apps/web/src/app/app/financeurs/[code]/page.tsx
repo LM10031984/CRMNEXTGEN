@@ -16,6 +16,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 export const dynamic = 'force-dynamic';
 
@@ -289,7 +290,7 @@ export default async function FinanceurDetailPage({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">{opco.code}</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">{formatFunderCode(opco.code)}</h1>
                 <Badge variant="muted">{opco.type}</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-1">{opco.name}</p>

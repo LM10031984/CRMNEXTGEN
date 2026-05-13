@@ -13,9 +13,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Search, X, ChevronDown, Briefcase, Check, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { searchPersons, type PersonSearchResult } from '@/server/actions/persons';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -91,9 +93,8 @@ export function PersonOrOrgPicker({
   function handlePersonClick(person: PersonSearchResult) {
     if (person.legalLinks.length === 0) {
       // Pas de LegalLink → on demande une création (TODO palier 2.2bis)
-      alert(
-        `${person.firstName} ${person.lastName} n'a aucune organisation rattachée. ` +
-          `Crée d'abord un LegalLink depuis sa fiche.`,
+      toast.warning(
+        `${person.firstName} ${person.lastName} n'a aucune organisation rattachée. Crée d'abord un LegalLink depuis sa fiche.`,
       );
       return;
     }
@@ -205,7 +206,7 @@ export function PersonOrOrgPicker({
                       {isEi ? '💼 EI / Auto-entr.' : ROLE_LABELS[link.role] ?? link.role}
                     </Badge>
                     {link.organization.opcoCode && (
-                      <Badge variant="info">OPCO {link.organization.opcoCode}</Badge>
+                      <Badge variant="info">{formatFunderCode(link.organization.opcoCode)}</Badge>
                     )}
                     {link.isPrimary && <Badge variant="success">Principal</Badge>}
                   </div>

@@ -4,6 +4,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,7 +118,7 @@ export default async function FinanceursPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base">{opco.code}</h3>
+                      <h3 className="font-semibold text-base">{formatFunderCode(opco.code)}</h3>
                       <Badge variant="muted" className="text-[10px]">{opco.type}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{opco.name}</p>
@@ -126,6 +127,7 @@ export default async function FinanceursPage() {
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
               </div>
 
+              {/* grid-cols-2 OK même mobile : 2 KpiBlock compacts (chiffre + label court) */}
               <div className="grid grid-cols-2 gap-3 mb-5">
                 <KpiBlock
                   icon={Building2}

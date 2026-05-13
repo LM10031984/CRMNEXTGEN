@@ -9,6 +9,7 @@ import { useState, useTransition } from 'react';
 import { Plus, X, Star, StarOff, Briefcase, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { searchOrganizations, createLegalLink, deleteLegalLink, setPrimaryLegalLink } from '@/server/actions/legal-links';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 const ROLE_OPTIONS = [
   { value: 'DIRIGEANT', label: 'Dirigeant' },
@@ -125,7 +126,7 @@ export function LegalLinkEditor({ personId, links }: Props) {
                     </Badge>
                     {link.isPrimary && <Badge variant="info">Principal</Badge>}
                     {link.organization.opcoCode && (
-                      <Badge variant="default">OPCO {link.organization.opcoCode}</Badge>
+                      <Badge variant="default">{formatFunderCode(link.organization.opcoCode)}</Badge>
                     )}
                   </div>
                   {link.organization.siret && (
