@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
-import { getOfConfig } from '@/lib/of-config';
+import { loadOfConfig } from '@/lib/of-config';
 import { buildDeroulementPedagogique } from '@/lib/pedagogy-templates';
 import {
   fillAgeficePdf,
@@ -170,7 +170,7 @@ export async function generateAgeficeForParticipant(
   const session = participant.session;
   const product = session.product;
   const paFields = (agefice?.paFields ?? {}) as Record<string, any>;
-  const of = getOfConfig();
+  const of = await loadOfConfig(user.tenantId);
 
   // ── Construit le payload ─────────────────────────────────────
   const totalHours = product.durationHours;

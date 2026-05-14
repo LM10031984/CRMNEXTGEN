@@ -19,14 +19,13 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
-import { renderHtmlToPdf } from '@/lib/pdf-render';
+import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import {
   renderConventionHtml,
-  renderConventionFooterHtml,
   type ConventionData,
   type ConventionStagiaire,
 } from '@/lib/convention-template';
-import { getOfConfig } from '@/lib/of-config';
+import { loadOfConfig } from '@/lib/of-config';
 
 export async function generateConventionForParticipant(
   participantId: string,
@@ -77,7 +76,7 @@ export async function generateConventionForParticipant(
   ];
 
   // Lieu : on prend l'adresse de la session si elle existe, sinon le siège OF
-  const of = getOfConfig();
+  const of = await loadOfConfig(user.tenantId);
   const locAddress = participant.session.location?.address as Record<string, string> | string | null;
   let lieu: string;
   if (typeof locAddress === 'string') lieu = locAddress;
@@ -114,8 +113,8 @@ export async function generateConventionForParticipant(
 
   let pdfBuffer: Buffer;
   try {
-    const html = renderConventionHtml(data);
-    pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderConventionFooterHtml() });
+    const html = renderConventionHtml(data, of);
+    pdfBuffer = await renderHtmlToPdfWeasy(html);
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF convention : ${e?.message ?? e}` };
   }

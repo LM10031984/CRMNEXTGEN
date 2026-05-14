@@ -8,18 +8,12 @@ import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
 import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
+import { loadOfConfig } from '@/lib/of-config';
 
-const OF = {
-  name: process.env.OF_NAME ?? 'Start Academy',
-  siret: process.env.OF_SIRET ?? '00000000000000',
-  rnq: process.env.OF_RNQ ?? '— RNQ à compléter —',
-  address: process.env.OF_ADDRESS ?? '— Adresse à compléter —',
-  phone: process.env.OF_PHONE ?? '04 00 00 00 00',
-  email: process.env.OF_EMAIL ?? 'contact@start-academy.fr',
-  tvaIntra: process.env.OF_TVA_INTRA ?? null,
-  iban: process.env.OF_IBAN ?? null,
-  bic: process.env.OF_BIC ?? null,
-};
+// Phase 7 — Plan 07-01 : suppression du bloc `OF` local qui bypassait
+// `getOfConfig()` en lisant directement les variables d'environnement.
+// Les Server Actions ci-dessous appellent désormais
+// `await loadOfConfig(user.tenantId)` pour lire BDD avec fallback ENV (D-01 hybrid).
 
 /**
  * Génère le prochain numéro FAC-NNNNNN en transaction (lock optimiste).
@@ -58,6 +52,9 @@ export async function createInvoiceFromParticipant(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
+  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
+  const of = await loadOfConfig(user.tenantId);
+
   const session = participant.session;
   const product = session.product;
   const vatRate = input.vatRate ?? 0;
@@ -93,13 +90,13 @@ export async function createInvoiceFromParticipant(
     issueDate: invoice.issueDate ?? new Date(),
     dueDate: invoice.dueDate ?? new Date(),
     status: invoice.status,
-    ofName: OF.name,
-    ofSiret: OF.siret,
-    ofRnq: OF.rnq,
-    ofAddress: OF.address,
-    ofPhone: OF.phone,
-    ofEmail: OF.email,
-    ofTvaIntra: OF.tvaIntra,
+    ofName: of.name,
+    ofSiret: of.siret,
+    ofRnq: of.rnq,
+    ofAddress: of.addressFull,
+    ofPhone: of.phone,
+    ofEmail: of.email,
+    ofTvaIntra: of.tvaIntra || null,
     payerName: participant.sponsorOrg.legalName,
     payerSiret: participant.sponsorOrg.siret,
     payerAddress: sponsorAddr?.street ?? null,
@@ -118,8 +115,8 @@ export async function createInvoiceFromParticipant(
     amountTTC,
     notes: input.notes ?? null,
     paymentMethod: 'Virement bancaire',
-    paymentIban: OF.iban,
-    paymentBic: OF.bic,
+    paymentIban: of.iban || null,
+    paymentBic: of.bic || null,
   };
 
   let pdfBuffer: Buffer;
@@ -152,10 +149,10 @@ export async function createInvoiceFromParticipant(
     },
   });
 
-  // Marque l'inscription comme facturée
+  // Marque l'inscription comme facturée + memorise la date pour la timeline OPCO
   await prisma.sessionParticipant.update({
     where: { id: participant.id },
-    data: { invoiceSent: true },
+    data: { invoiceSent: true, invoiceSentAt: new Date() },
   });
 
   revalidatePath('/app/factures');
@@ -204,6 +201,9 @@ export async function createInvoiceForSponsorGroup(input: {
   });
   if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
 
+  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
+  const of = await loadOfConfig(user.tenantId);
+
   const vatRate = input.vatRate ?? 0;
   const dueDays = input.dueDateDays ?? 30;
   const totalHT = session.participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
@@ -246,13 +246,13 @@ export async function createInvoiceForSponsorGroup(input: {
     issueDate: invoice.issueDate ?? new Date(),
     dueDate: invoice.dueDate ?? new Date(),
     status: invoice.status,
-    ofName: OF.name,
-    ofSiret: OF.siret,
-    ofRnq: OF.rnq,
-    ofAddress: OF.address,
-    ofPhone: OF.phone,
-    ofEmail: OF.email,
-    ofTvaIntra: OF.tvaIntra,
+    ofName: of.name,
+    ofSiret: of.siret,
+    ofRnq: of.rnq,
+    ofAddress: of.addressFull,
+    ofPhone: of.phone,
+    ofEmail: of.email,
+    ofTvaIntra: of.tvaIntra || null,
     payerName: sponsor.legalName,
     payerSiret: sponsor.siret,
     payerAddress: sponsorAddr?.street ?? null,
@@ -271,8 +271,8 @@ export async function createInvoiceForSponsorGroup(input: {
     amountTTC: totalTTC,
     notes: input.notes ?? null,
     paymentMethod: 'Virement bancaire',
-    paymentIban: OF.iban,
-    paymentBic: OF.bic,
+    paymentIban: of.iban || null,
+    paymentBic: of.bic || null,
     lines: lines.length > 1 ? lines : undefined,
   };
 

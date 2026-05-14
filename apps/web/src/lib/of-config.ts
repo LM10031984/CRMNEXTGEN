@@ -52,6 +52,8 @@ export interface OfConfig {
   logoPath: string;
   signaturePedagoPath: string;
   signatureDirigeantPath: string;
+  // Référent handicap (Qualiopi indicateur 26) — défaut Start Academy "Laurent MARX"
+  handicapReferent: string;
   resp: OfPerson;
   contact: OfPerson;
 }
@@ -173,6 +175,7 @@ export function resolveOfConfig(t: TenantInput | null): OfConfig {
     logoPath: pick(t?.logoPath, 'OF_LOGO_PATH'),
     signaturePedagoPath: pick(t?.signaturePedagoPath, 'OF_SIGNATURE_PEDAGO_PATH'),
     signatureDirigeantPath: pick(t?.signatureDirigeantPath, 'OF_SIGNATURE_DIRIGEANT_PATH'),
+    handicapReferent: pick(null, 'OF_HANDICAP_REFERENT', 'Laurent MARX'),
     resp,
     contact,
   };

@@ -22,7 +22,9 @@ import {
 } from './shared-template';
 
 export function renderCertificatHtml(ctx: ClosureContext): string {
-  const of = getOfConfig();
+  // Phase 7 — Plan 07-01 : utilise ctx.of (pre-résolu BDD-first par le worker)
+  // si disponible, sinon fallback `getOfConfig()` legacy ENV.
+  const of = ctx.of ?? getOfConfig();
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const respTitre = of.resp.titre || 'Représentant légal';
   const signatureDataUrl = loadSignatureDataUrl();
@@ -48,7 +50,7 @@ export function renderCertificatHtml(ctx: ClosureContext): string {
     </div>`;
 
   const body = `
-${renderBrandHeader()}
+${renderBrandHeader(ctx.of)}
 ${renderOfficialBadges()}
 <main class="body">
   <h1 class="doc-title center" style="font-size: 20pt;">CERTIFICAT DE RÉALISATION</h1>
@@ -86,5 +88,5 @@ ${renderOfficialBadges()}
 </main>
 `;
 
-  return wrapHtml({ title: `Certificat de réalisation — ${stagiaireFull}`, bodyHtml: body });
+  return wrapHtml({ title: `Certificat de réalisation — ${stagiaireFull}`, bodyHtml: body, of: ctx.of });
 }

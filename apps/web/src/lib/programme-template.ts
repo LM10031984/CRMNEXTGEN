@@ -11,7 +11,12 @@ import { marked } from 'marked';
 import path from 'node:path';
 import fs from 'node:fs';
 
-import { getOfConfig } from './of-config';
+import type { OfConfig } from './of-config';
+import {
+  OF_PAGED_FOOTER_STYLES,
+  OF_PAGED_PAGE_RULE,
+  renderOfPagedFooter,
+} from './of-paged-footer';
 
 export interface ProgrammeData {
   // Apprenant — optionnel (programme generique au produit, pas par apprenant)
@@ -73,7 +78,8 @@ const BRAND_DARK = '#00527A';
 
 const STYLES = `
 <style>
-  @page { size: A4; margin: 22mm 18mm 22mm 18mm; }
+  ${OF_PAGED_PAGE_RULE}
+  ${OF_PAGED_FOOTER_STYLES}
   * { box-sizing: border-box; }
   body {
     font-family: 'Calibri', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -81,6 +87,7 @@ const STYLES = `
     color: #1F2937;
     line-height: 1.5;
     margin: 0;
+    padding: 0;
   }
 
   /* Logo en haut centré */
@@ -136,25 +143,95 @@ const STYLES = `
   ul ul { list-style-type: circle; margin-top: 2px; }
   li { margin-bottom: 3px; }
 
-  /* Markdown rendu pour le contenu détaillé */
-  .programme-md p { margin: 4px 0; }
+  /* Markdown rendu pour le contenu détaillé — mise en page enrichie */
+  .programme-md {
+    font-size: 10pt;
+    line-height: 1.5;
+  }
+  .programme-md p {
+    margin: 6px 0 8px 0;
+    text-align: justify;
+  }
   .programme-md h2 {
-    font-size: 11pt;
+    font-size: 12pt;
     color: ${BRAND_DARK};
     font-weight: 700;
     text-transform: none;
     border: none;
-    padding: 0;
+    border-left: 4px solid ${BRAND_BLUE};
+    padding: 6px 0 6px 10px;
     letter-spacing: 0;
-    margin: 14px 0 4px 0;
+    margin: 22px 0 10px 0;
+    background: #F0F9FF;
   }
   .programme-md h3 {
     font-size: 10.5pt;
-    color: #334155;
-    font-weight: 600;
-    margin: 10px 0 3px 0;
+    color: ${BRAND_DARK};
+    font-weight: 700;
+    margin: 16px 0 6px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px dashed #CBD5E1;
   }
-  .programme-md strong { color: ${BRAND_DARK}; }
+  .programme-md h4 {
+    font-size: 10pt;
+    color: #475569;
+    font-weight: 600;
+    margin: 10px 0 4px 0;
+    font-style: italic;
+  }
+  .programme-md ul {
+    margin: 6px 0 10px 18px;
+    list-style: none;
+    padding: 0;
+  }
+  .programme-md ul li {
+    position: relative;
+    padding-left: 14px;
+    margin-bottom: 5px;
+  }
+  .programme-md ul li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: ${BRAND_BLUE};
+    font-weight: 700;
+  }
+  .programme-md ul ul {
+    margin-top: 4px;
+    margin-left: 12px;
+  }
+  .programme-md ul ul li::before {
+    content: '◦';
+    color: #94A3B8;
+  }
+  .programme-md ol {
+    margin: 6px 0 10px 22px;
+    padding: 0;
+  }
+  .programme-md ol li { margin-bottom: 5px; }
+  .programme-md strong { color: ${BRAND_DARK}; font-weight: 700; }
+  .programme-md em { color: #475569; font-style: italic; }
+  .programme-md blockquote {
+    margin: 8px 0;
+    padding: 8px 12px;
+    background: #FFFBEB;
+    border-left: 3px solid #F59E0B;
+    color: #78350F;
+    font-size: 9.5pt;
+  }
+  .programme-md hr {
+    border: none;
+    border-top: 1px solid #E2E8F0;
+    margin: 14px 0;
+  }
+  .programme-md code {
+    background: #F1F5F9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 9pt;
+    color: ${BRAND_DARK};
+  }
 
   /* Tarif final */
   .tarif {
@@ -242,8 +319,7 @@ function formatDuree(heures: number): string {
   return `${heures} heures`;
 }
 
-export function renderProgrammeHtml(data: ProgrammeData): string {
-  const of = getOfConfig();
+export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
   const logoDataUrl = loadLogoDataUrl();
 
   const objectifs = data.produitObjectifs.length > 0
@@ -283,6 +359,7 @@ export function renderProgrammeHtml(data: ProgrammeData): string {
 ${STYLES}
 </head>
 <body>
+${renderOfPagedFooter()}
 
 <header class="cover">
   ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<div style="font-size:18pt;font-weight:700;color:${BRAND_DARK};">${escapeHtml(of.name)}</div>`}
@@ -394,12 +471,9 @@ ${STYLES}
 </html>`;
 }
 
-/**
- * Footer HTML répété par Gotenberg sur chaque page (passé en footer.html
- * dans le multipart). Doit etre un document HTML autonome, le styling vient
- * inline (Gotenberg ignore les <style> externes et CSS @page).
- */
-// Re-export pour compatibilite avec les imports existants. Le footer commun
-// est maintenant defini dans lib/of-pdf-footer.ts et reutilise par TOUS les
-// docs PDF (programme, convention, facture, AGEFICE, closure pack…).
-export { renderOfStandardFooterHtml as renderProgrammeFooterHtml } from './of-pdf-footer';
+// Footer désormais inclus dans le HTML (running element WeasyPrint) — cf
+// renderOfPagedFooter ci-dessus. L'ancien footer Gotenberg natif (downscalé
+// par Chromium → illisible) n'est plus utilisé pour le programme.
+export function renderProgrammeFooterHtml(): string {
+  return '';
+}

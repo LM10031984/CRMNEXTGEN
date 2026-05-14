@@ -16,7 +16,12 @@
 import { marked } from 'marked';
 import path from 'node:path';
 import fs from 'node:fs';
-import { getOfConfig } from './of-config';
+import type { OfConfig } from './of-config';
+import {
+  OF_PAGED_FOOTER_STYLES,
+  OF_PAGED_PAGE_RULE,
+  renderOfPagedFooter,
+} from './of-paged-footer';
 
 export interface ConventionStagiaire {
   prenom: string;
@@ -90,6 +95,8 @@ function formatDuree(heures: number): string {
 
 const STYLES = `
 <style>
+  ${OF_PAGED_PAGE_RULE}
+  ${OF_PAGED_FOOTER_STYLES}
   * { box-sizing: border-box; }
   body {
     font-family: 'Calibri', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -97,6 +104,7 @@ const STYLES = `
     color: #1F2937;
     line-height: 1.5;
     margin: 0;
+    padding: 0;
   }
   header.cover { text-align: center; margin-bottom: 14px; }
   header.cover img.logo { height: 60px; }
@@ -171,8 +179,7 @@ const STYLES = `
   h2.article { page-break-after: avoid; }
 </style>`;
 
-export function renderConventionHtml(data: ConventionData): string {
-  const of = getOfConfig();
+export function renderConventionHtml(data: ConventionData, of: OfConfig): string {
   const logoDataUrl = loadLogoDataUrl();
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const programmeHtml = data.produitProgrammeMd
@@ -195,6 +202,7 @@ export function renderConventionHtml(data: ConventionData): string {
 ${STYLES}
 </head>
 <body>
+${renderOfPagedFooter()}
 
 <header class="cover">
   ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong>`}
@@ -317,5 +325,11 @@ ${STYLES}
 </html>`;
 }
 
-// Footer commun a tous les docs PDF QualiOF — cf lib/of-pdf-footer.ts.
-export { renderOfStandardFooterHtml as renderConventionFooterHtml } from './of-pdf-footer';
+// Footer désormais inclus dans le HTML (running element WeasyPrint) — cf
+// renderOfPagedFooter ci-dessus. L'ancien footer Gotenberg natif (downscalé
+// par Chromium → illisible) n'est plus utilisé pour la convention.
+// Re-export inchangé pour compat (renvoie le footer Gotenberg vide pour les
+// rares appelants qui passeraient encore l'option à renderHtmlToPdf).
+export function renderConventionFooterHtml(): string {
+  return '';
+}

@@ -12,7 +12,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import { getOfConfig } from '@/lib/of-config';
+import { getOfConfig, type OfConfig } from '@/lib/of-config';
 
 export const BRAND_BLUE = '#00B4E6';
 export const BRAND_DARK = '#00527A';
@@ -172,6 +172,10 @@ export interface ClosureContext {
   stagiaireMeta?: ClosureStagiaireMeta;
   // Pour AIGenerationJob logging
   tenantId?: string;
+  // Phase 7 — OF config pre-résolue (BDD fallback ENV). Si absent, les templates
+  // utilisent `getOfConfig()` legacy (ENV-only). Le worker closure peuple ce champ
+  // après `loadOfConfig(job.tenantId)` pour activer le BDD-first.
+  of?: OfConfig;
 }
 
 /**
@@ -421,12 +425,14 @@ export const SHARED_STYLES = `
  * centré (style Qualiopi Gen). Hauteur 35mm pour reproduire le rendu jsPDF
  * d'origine.
  */
-export function renderBrandHeader(): string {
-  const of = getOfConfig();
+export function renderBrandHeader(of?: OfConfig): string {
+  // Phase 7 — `of` optionnel : si passé par l'appelant (loadOfConfig(tenantId)),
+  // utilise BDD-first. Sinon fallback `getOfConfig()` sync legacy (ENV-only).
+  const cfg = of ?? getOfConfig();
   const dataUrl = loadLogoWhiteDataUrl();
   const inner = dataUrl
-    ? `<img class="logo" src="${dataUrl}" alt="${escapeHtml(of.name)}" />`
-    : `<div class="of-name">${escapeHtml(of.name).toUpperCase()}</div>`;
+    ? `<img class="logo" src="${dataUrl}" alt="${escapeHtml(cfg.name)}" />`
+    : `<div class="of-name">${escapeHtml(cfg.name).toUpperCase()}</div>`;
   return `<header class="brand">${inner}</header>`;
 }
 
@@ -507,13 +513,14 @@ export function renderStagiaireBlock(ctx: ClosureContext): string {
  * illisible). Sur les docs multi-pages, Chromium n'affiche pas position
  * fixed sur les pages 2+ — limitation acceptée.
  */
-export function renderCorpFooter(): string {
-  const of = getOfConfig();
-  const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
+export function renderCorpFooter(of?: OfConfig): string {
+  // Phase 7 — `of` optionnel (cf. renderBrandHeader)
+  const cfg = of ?? getOfConfig();
+  const contactNom = `${cfg.contact.prenom} ${cfg.contact.nom}`.trim();
   return `
 <footer class="corp">
-  <strong>${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
+  <strong>${escapeHtml(cfg.name)}</strong> – Siège social : ${escapeHtml(cfg.addressFull)} - SIRET : ${escapeHtml(cfg.siret)} – NDA ${escapeHtml(cfg.rnq)}<br>
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}
 </footer>
 `.trim();
 }
@@ -526,7 +533,7 @@ export function renderCorpFooter(): string {
  * `@bottom-center` de la page 1 (WeasyPrint le découvre seulement quand
  * la pagination atteint son emplacement dans le flux).
  */
-export function wrapHtml(opts: { title: string; bodyHtml: string }): string {
+export function wrapHtml(opts: { title: string; bodyHtml: string; of?: OfConfig }): string {
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -535,7 +542,7 @@ export function wrapHtml(opts: { title: string; bodyHtml: string }): string {
   ${SHARED_STYLES}
 </head>
 <body>
-${renderCorpFooter()}
+${renderCorpFooter(opts.of)}
 ${opts.bodyHtml}
 </body>
 </html>`;

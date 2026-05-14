@@ -5,19 +5,43 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, downloadFile, DOCS_BUCKET } from '@/lib/storage';
-import { renderHtmlToPdf } from '@/lib/pdf-render';
-import { renderProgrammeHtml, renderProgrammeFooterHtml, type ProgrammeData } from '@/lib/programme-template';
+import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
+import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
+import { loadOfConfig } from '@/lib/of-config';
 
-const OF_DEFAULTS = {
-  name: 'Start Academy',
-  siret: process.env.OF_SIRET ?? '00000000000000',
-  address: process.env.OF_ADDRESS ?? '— Adresse à compléter dans .env —',
-  rnq: process.env.OF_RNQ ?? '— Numéro de déclaration à compléter —',
-  phone: process.env.OF_PHONE ?? '04 00 00 00 00',
-  email: process.env.OF_EMAIL ?? 'contact@start-academy.fr',
-};
+// Phase 7 — Plan 07-01 : suppression de l'objet `const OF_DEFAULTS = { ... }`
+// local qui bypassait `getOfConfig()`. Les fonctions ci-dessous appellent
+// désormais `await loadOfConfig(user.tenantId)` pour lire BDD avec fallback ENV.
 
+/**
+ * Programme = asset PRODUIT (1 fois pour tous les apprenants — cf décision
+ * Laurent 05/05/2026). Ce wrapper résout le productId depuis le participant
+ * et délègue à generateProgrammeForProduct (find-or-create idempotent).
+ */
 export async function generateProgrammeForParticipant(
+  participantId: string,
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const participant = await prisma.sessionParticipant.findFirst({
+    where: { id: participantId, session: { tenantId: user.tenantId } },
+    select: { session: { select: { productId: true, id: true } }, person: { select: { id: true } } },
+  });
+  if (!participant) return { ok: false, error: 'Inscription introuvable' };
+
+  const r = await generateProgrammeForProduct(participant.session.productId);
+  revalidatePath(`/app/sessions/${participant.session.id}`);
+  revalidatePath(`/app/apprenants/${participant.person.id}`);
+  return r;
+}
+
+/**
+ * Ancienne implémentation par-participant (générait 1 PDF par stagiaire avec
+ * son nom dans le footer). Conservée pour référence mais plus appelée nulle
+ * part — supprimer si validé en run.
+ */
+async function _legacy_generateProgrammeForParticipant(
   participantId: string,
 ): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
   const { user } = await validateRequest();
@@ -41,6 +65,9 @@ export async function generateProgrammeForParticipant(
 
   const session = participant.session;
   const product = session.product;
+
+  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
+  const of = await loadOfConfig(user.tenantId);
 
   // 2. Construit le payload
   const objectives = Array.isArray(product.objectives) ? (product.objectives as string[]) : [];
@@ -73,19 +100,19 @@ export async function generateProgrammeForParticipant(
     produitAccessConditions: product.accessConditions,
     produitTrainerProfile: product.trainerProfile,
     produitPedagogicalSupport: product.pedagogicalSupport,
-    ofName: OF_DEFAULTS.name,
-    ofSiret: OF_DEFAULTS.siret,
-    ofAddress: OF_DEFAULTS.address,
-    ofRnq: OF_DEFAULTS.rnq,
-    ofPhone: OF_DEFAULTS.phone,
-    ofEmail: OF_DEFAULTS.email,
+    ofName: of.name,
+    ofSiret: of.siret,
+    ofAddress: of.addressFull,
+    ofRnq: of.rnq,
+    ofPhone: of.phone,
+    ofEmail: of.email,
   };
 
   // 3. Render HTML → PDF
   let pdfBuffer: Buffer;
   try {
-    const html = renderProgrammeHtml(data);
-    pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderProgrammeFooterHtml() });
+    const html = renderProgrammeHtml(data, of);
+    pdfBuffer = await renderHtmlToPdfWeasy(html);
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}` };
   }
@@ -141,6 +168,7 @@ export async function generateProgrammeForParticipant(
  */
 export async function generateProgrammeForProduct(
   productId: string,
+  opts: { force?: boolean } = {},
 ): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
@@ -150,7 +178,30 @@ export async function generateProgrammeForProduct(
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
 
+  // Mode find-or-create par défaut : si un programme existe déjà pour ce
+  // produit (peu importe le hash), on le réutilise. Le bouton "Régénérer"
+  // sur la fiche produit passe `force: true` pour forcer une nouvelle
+  // génération (ex: après modification du programmeMd).
+  if (!opts.force) {
+    const existing = await prisma.document.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        type: 'PROGRAMME',
+        entityType: 'product',
+        entityId: productId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) {
+      return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
+    }
+  }
+
   const objectives = (product.objectives as string[] | null) ?? [];
+
+  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
+  const of = await loadOfConfig(user.tenantId);
+
   const data: ProgrammeData = {
     // Pas d'apprenant ni de session — programme generique
     produitTitre: product.title,
@@ -167,18 +218,18 @@ export async function generateProgrammeForProduct(
     produitAccessConditions: product.accessConditions,
     produitTrainerProfile: product.trainerProfile,
     produitPedagogicalSupport: product.pedagogicalSupport,
-    ofName: OF_DEFAULTS.name,
-    ofSiret: OF_DEFAULTS.siret,
-    ofAddress: OF_DEFAULTS.address,
-    ofRnq: OF_DEFAULTS.rnq,
-    ofPhone: OF_DEFAULTS.phone,
-    ofEmail: OF_DEFAULTS.email,
+    ofName: of.name,
+    ofSiret: of.siret,
+    ofAddress: of.addressFull,
+    ofRnq: of.rnq,
+    ofPhone: of.phone,
+    ofEmail: of.email,
   };
 
   let pdfBuffer: Buffer;
   try {
-    const html = renderProgrammeHtml(data);
-    pdfBuffer = await renderHtmlToPdf(html, { footerHtml: renderProgrammeFooterHtml() });
+    const html = renderProgrammeHtml(data, of);
+    pdfBuffer = await renderHtmlToPdfWeasy(html);
   } catch (e: any) {
     return { ok: false, error: `Erreur generation PDF programme : ${e?.message ?? e}` };
   }

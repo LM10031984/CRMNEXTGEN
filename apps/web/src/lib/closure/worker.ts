@@ -15,13 +15,17 @@
 
 import { createHash } from 'node:crypto';
 import { Worker, type Job } from 'bullmq';
-import { prisma, type ClosureDocKind, type DocType, type PedagogicalKind } from '@qualiof/db';
+import { prisma, type ClosureBatchStatus, type ClosureDocKind, type DocType, type PedagogicalKind } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
+import { sendMail } from '@/lib/mailer';
 import { getWorkerRedis } from './redis';
 import { CLOSURE_QUEUE_NAME } from './queue';
 import { renderClosureDoc } from './renderer';
 import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
+import { loadOfConfig } from '@/lib/of-config';
+
+const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
 // Concurrency 3 par défaut : sur Apple Silicon avec mistral-small:24b en
 // local, 5 contextes en parallèle saturent le GPU et font traîner toutes
@@ -106,7 +110,10 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
           include: {
             product: true,
             location: true,
-            trainers: { include: { person: true } },
+            trainers: {
+              include: { person: true },
+              orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
+            },
           },
         },
       },
@@ -125,6 +132,10 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       ? primaryLink.organization.brandName ?? primaryLink.organization.legalName
       : null;
 
+    // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid).
+    // Propagé via ctx.of à tous les templates closure pour cohérence multi-tenant.
+    const of = await loadOfConfig(payload.tenantId);
+
     const ctx: ClosureContext = {
       apprenantPrenom: participant.person.firstName,
       apprenantNom: participant.person.lastName,
@@ -135,9 +146,15 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       sessionStartDate: session.startDate,
       sessionEndDate: session.endDate,
       sessionLocation,
-      sessionTrainers: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
+      // Seul le formateur principal signe les docs Qualiopi (fallback : 1er
+      // par ordre stable si aucun marqué primary).
+      sessionTrainers: (() => {
+        const primary = session.trainers.find((t) => t.isPrimary) ?? session.trainers[0];
+        return primary ? [`${primary.person.firstName} ${primary.person.lastName}`.trim()] : [];
+      })(),
       durationHours: product.durationHours,
       tenantId: payload.tenantId,
+      of,
       formationMeta: {
         programmeMd: product.programMd ?? '',
       },
@@ -229,7 +246,8 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
         errorMessage: null,
       },
     });
-    await bumpAndFinalize(payload.batchId, 'done');
+    const finalized = await bumpAndFinalize(payload.batchId, 'done');
+    if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Si BullMQ va retry, on garde le job en PROCESSING (pas ERROR définitif)
@@ -242,7 +260,8 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       },
     });
     if (isFinalAttempt) {
-      await bumpAndFinalize(payload.batchId, 'error');
+      const finalized = await bumpAndFinalize(payload.batchId, 'error');
+      if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
     }
     throw err; // BullMQ doit voir l'erreur pour gérer retry
   }
@@ -271,8 +290,16 @@ async function markBatchRunningIfNeeded(batchId: string): Promise<void> {
  * concurrentes voient un état cohérent — à défaut on retombe sur le pattern
  * "ABORTED + retry" Prisma natif.
  */
-async function bumpAndFinalize(batchId: string, kind: 'done' | 'error'): Promise<void> {
-  await prisma.$transaction(
+async function bumpAndFinalize(
+  batchId: string,
+  kind: 'done' | 'error',
+): Promise<'COMPLETED' | 'PARTIAL' | 'FAILED' | null> {
+  // Retourne le statut terminal SI ET SEULEMENT SI cette transaction a été
+  // celle qui a effectué la transition PENDING/RUNNING → terminal. Avec
+  // concurrency=3, plusieurs workers tentent de finaliser en parallèle ; le
+  // updateMany filtré garantit qu'une seule tentative compte (count=1) et
+  // donc qu'un seul email est envoyé par batch.
+  return prisma.$transaction(
     async (tx) => {
       const batch = await tx.closureBatch.update({
         where: { id: batchId },
@@ -281,17 +308,109 @@ async function bumpAndFinalize(batchId: string, kind: 'done' | 'error'): Promise
       });
 
       const handled = batch.doneDocs + batch.errorDocs;
-      if (handled < batch.totalDocs) return;
-      if (batch.status !== 'PENDING' && batch.status !== 'RUNNING') return; // déjà finalisé
+      if (handled < batch.totalDocs) return null;
+      if (batch.status !== 'PENDING' && batch.status !== 'RUNNING') return null;
 
       const next: 'COMPLETED' | 'PARTIAL' | 'FAILED' =
         batch.errorDocs === 0 ? 'COMPLETED' : batch.doneDocs === 0 ? 'FAILED' : 'PARTIAL';
 
-      await tx.closureBatch.updateMany({
+      const updated = await tx.closureBatch.updateMany({
         where: { id: batchId, status: { in: ['PENDING', 'RUNNING'] } },
         data: { status: next, completedAt: new Date() },
       });
+      return updated.count === 1 ? next : null;
     },
     { isolationLevel: 'Serializable' },
   );
+}
+
+/**
+ * Envoie un email à l'utilisateur ayant lancé le pack pour signaler que tous
+ * les jobs sont traités. Idempotent par construction : `bumpAndFinalize` ne
+ * retourne un statut non-null qu'une seule fois par batch (transaction qui
+ * gagne la course).
+ *
+ * Mode dry-run automatique si SMTP_HOST n'est pas configuré (cf lib/mailer.ts) —
+ * en dev local, le mail est simplement loggé en console.
+ */
+async function notifyBatchCompletion(
+  batchId: string,
+  finalStatus: ClosureBatchStatus,
+): Promise<void> {
+  try {
+    const batch = await prisma.closureBatch.findUnique({
+      where: { id: batchId },
+      select: {
+        id: true,
+        sessionId: true,
+        totalDocs: true,
+        doneDocs: true,
+        errorDocs: true,
+        createdByUserId: true,
+      },
+    });
+    if (!batch || !batch.createdByUserId) return;
+
+    const [user, session] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: batch.createdByUserId },
+        select: { email: true, firstName: true },
+      }),
+      prisma.trainingSession.findUnique({
+        where: { id: batch.sessionId },
+        select: { code: true, name: true },
+      }),
+    ]);
+    if (!user?.email || !session) return;
+
+    const sessionLabel = session.name ?? session.code;
+    const link = `${APP_BASE_URL}/app/sessions/${batch.sessionId}/closure/${batch.id}`;
+    const statusLabel: Record<ClosureBatchStatus, { label: string; emoji: string; color: string }> = {
+      COMPLETED: { label: 'Pack terminé avec succès', emoji: '✅', color: '#16a34a' },
+      PARTIAL: { label: 'Pack terminé partiellement', emoji: '⚠️', color: '#d97706' },
+      FAILED: { label: 'Échec de la génération du pack', emoji: '❌', color: '#dc2626' },
+      PENDING: { label: '', emoji: '', color: '' },
+      RUNNING: { label: '', emoji: '', color: '' },
+    };
+    const meta = statusLabel[finalStatus];
+    if (!meta.label) return;
+
+    const subject = `${meta.emoji} ${meta.label} — ${sessionLabel}`;
+    const greeting = user.firstName ? `Bonjour ${user.firstName},` : 'Bonjour,';
+    const html = `<!doctype html>
+<html><body style="font-family:-apple-system,Segoe UI,Helvetica,sans-serif;color:#1f2937;max-width:600px;margin:0 auto;padding:24px;">
+  <p style="margin:0 0 16px;">${greeting}</p>
+  <p style="margin:0 0 16px;">La génération du pack fin de formation pour la session
+  <strong>${sessionLabel}</strong> est terminée.</p>
+  <div style="border-left:4px solid ${meta.color};background:#f9fafb;padding:12px 16px;margin:16px 0;border-radius:4px;">
+    <div style="font-weight:600;color:${meta.color};margin-bottom:4px;">${meta.label}</div>
+    <div style="font-size:14px;color:#4b5563;">
+      ${batch.doneDocs} / ${batch.totalDocs} documents générés${batch.errorDocs > 0 ? ` · ${batch.errorDocs} erreur(s)` : ''}
+    </div>
+  </div>
+  <p style="margin:24px 0;">
+    <a href="${link}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:500;">
+      Ouvrir le pack
+    </a>
+  </p>
+  <p style="margin:0;font-size:12px;color:#6b7280;">
+    Vous recevez cet email car vous avez lancé la génération du pack depuis QualiOF.
+  </p>
+</body></html>`;
+    const text = `${greeting}
+
+${meta.label} pour la session ${sessionLabel}.
+${batch.doneDocs} / ${batch.totalDocs} documents générés${batch.errorDocs > 0 ? ` · ${batch.errorDocs} erreur(s)` : ''}.
+
+Ouvrir le pack : ${link}
+`;
+
+    const r = await sendMail({ to: user.email, subject, html, text });
+    if (r.ok && !r.dryRun) {
+      console.log(`[closure-worker] ✉ notif sent to ${user.email} (batch=${batch.id}, status=${finalStatus})`);
+    }
+  } catch (e) {
+    // Une erreur d'email ne doit jamais casser le worker.
+    console.error('[closure-worker] notifyBatchCompletion error:', (e as Error).message);
+  }
 }
