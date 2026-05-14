@@ -22,14 +22,27 @@ datasource db {
 // =====================================================
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  siret     String?
-  numDA     String?
-  rcs       String?
-  address   Json?
-  users     User[]
-  createdAt DateTime @default(now())
+  id                     String   @id @default(uuid())
+  name                   String
+  siret                  String?
+  numDA                  String?
+  rcs                    String?
+  // Phase 7 — paramètres OF éditables (SET-01/02/03). Toutes nullables :
+  // null = fallback ENV (D-01 hybrid BDD/ENV). Première sauvegarde fait basculer
+  // la source de vérité en BDD.
+  legalForm              String? // forme juridique libre (SAS, EURL, ...) — voir enum LegalForm pour valeurs canoniques
+  legalMentions          String?  @db.Text
+  address                Json?
+  invoicePrefix          String?  @default("FAC")
+  iban                   String?
+  bic                    String?
+  emailFrom              String?
+  logoPath               String? // ex "/of-assets/{tenantId}/logo.png"
+  signaturePedagoPath    String?
+  signatureDirigeantPath String?
+  users                  User[]
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @default(now()) @updatedAt
 }
 
 enum UserRole {
@@ -160,6 +173,7 @@ model Organization {
   leadsAsOrg              Lead[]               @relation("LeadOrg")
   invoices                Invoice[]
   comments                InternalComment[]
+  opcoSubmissions         OpcoSubmission[]
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
 
@@ -349,6 +363,14 @@ model TrainingSession {
   internalNotes         String?
   // Tarification spécifique session (sinon hérite produit)
   pricePerLearner       Decimal?             @db.Decimal(10, 2)
+  // Hébergement formateur (utilisé dans la check-list C4.i17 Qualiopi).
+  // Saisi à la création de session ou lors du "Préparer la formation".
+  needsTrainerLodging   Boolean              @default(false)
+  trainerLodgingPlace   String?
+  trainerLodgingDates   String? // Format libre "Du JJ/MM au JJ/MM" — saisi à la main
+  // Accessibilité (PSH) pour la check-list — détail + adaptations à prévoir
+  hasDisabledLearner    Boolean              @default(false)
+  disabilityAdaptations String?
   // Suivi commercial
   preEnrollmentsFromMls Int                  @default(0) // NB_pre_inscription Airtable
   // Relations
@@ -385,8 +407,13 @@ model SessionTrainer {
   person    Person          @relation(fields: [personId], references: [id])
   role      String
   dailyRate Decimal?        @db.Decimal(10, 2)
+  /// Formateur principal de la session — c'est lui qui apparaît comme
+  /// signataire sur tous les documents Qualiopi (convention, grille, satisfaction…).
+  /// 1 seul `isPrimary=true` par session ; les autres sont co-formateurs.
+  isPrimary Boolean         @default(false)
 
   @@unique([sessionId, personId])
+  @@index([sessionId, isPrimary])
 }
 
 model SessionSlot {
@@ -463,6 +490,14 @@ enum PaymentStatus {
   WRITE_OFF
 }
 
+/// US-008 : distingue les vraies inscriptions formation des dossiers de
+/// "pré-inscription budget" — réservation d'un budget OPCO sans formation
+/// définitivement planifiée (ex: dépôt AGEFICE en décembre pour budget 2026).
+enum DossierType {
+  FORMATION
+  PREINSCRIPTION_BUDGET
+}
+
 model SessionParticipant {
   id               String          @id @default(uuid())
   sessionId        String
@@ -499,35 +534,41 @@ model SessionParticipant {
   paymentStatus PaymentStatus @default(PENDING)
 
   // Checklist Qualiopi (booleans calqués sur Airtable Inscriptions)
-  conventionSigned         Boolean @default(false)
-  programmeDelivered       Boolean @default(false)
-  certificateDelivered     Boolean @default(false)
-  pedagogicalSupportsGiven Boolean @default(false)
-  attendanceSheetCollected Boolean @default(false)
-  assiduitySheetCollected  Boolean @default(false)
-  evaluationCollected      Boolean @default(false)
-  satisfactionCollected    Boolean @default(false)
-  closingDocsSent          Boolean @default(false)
-  invoiceSent              Boolean @default(false)
-  paymentReceived          Boolean @default(false)
+  conventionSigned         Boolean   @default(false)
+  programmeDelivered       Boolean   @default(false)
+  certificateDelivered     Boolean   @default(false)
+  pedagogicalSupportsGiven Boolean   @default(false)
+  attendanceSheetCollected Boolean   @default(false)
+  assiduitySheetCollected  Boolean   @default(false)
+  evaluationCollected      Boolean   @default(false)
+  satisfactionCollected    Boolean   @default(false)
+  closingDocsSent          Boolean   @default(false)
+  invoiceSent              Boolean   @default(false)
+  paymentReceived          Boolean   @default(false)
   // Dates de transition false→true (calcul DSO et delais OPCO)
   invoiceSentAt            DateTime?
   paymentReceivedAt        DateTime?
   opcoApprovedAt           DateTime?
   opcoReimbursedAt         DateTime?
-  opcoPreApproved          Boolean @default(false)
-  opcoApproved             Boolean @default(false)
-  opcoReimbursed           Boolean @default(false)
+  opcoPreApproved          Boolean   @default(false)
+  opcoApproved             Boolean   @default(false)
+  opcoReimbursed           Boolean   @default(false)
+
+  // US-008 : type de dossier — par défaut une vraie inscription formation,
+  // peut être basculé en "réservation budget" pour les dossiers déposés
+  // sans formation définitivement calée (ex: AGEFICE budget annuel).
+  dossierType DossierType @default(FORMATION)
 
   // Erreur de cohérence détectée (= "Erreur_payeur" dans Airtable)
   payerErrorMessage String?
   internalNotes     String?
 
   // Relations
-  invoices      Invoice[]
-  comments      InternalComment[]
-  tasks         Task[]
-  agreementDocs Document[] // les documents Qualiopi rattachés à cette inscription
+  invoices        Invoice[]
+  comments        InternalComment[]
+  tasks           Task[]
+  agreementDocs   Document[] // les documents Qualiopi rattachés à cette inscription
+  opcoSubmissions OpcoSubmission[] // dossiers OPCO envoyés au financeur
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -536,6 +577,7 @@ model SessionParticipant {
   @@index([sponsorOrgId])
   @@index([financingStatus])
   @@index([paymentStatus])
+  @@index([dossierType])
 }
 
 model Attendance {
@@ -651,8 +693,8 @@ model Invoice {
   // Liens métier
   participantId    String?
   participant      SessionParticipant? @relation(fields: [participantId], references: [id])
-  participantIds   Json?               // si facture multi-participants groupée par sponsor (salariés d'une SARL)
-  sessionId        String?             // session dont sont issus les participants (pour facture groupée)
+  participantIds   Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
+  sessionId        String? // session dont sont issus les participants (pour facture groupée)
   payerOrgId       String?
   payerOrg         Organization?       @relation(fields: [payerOrgId], references: [id])
   payerContactId   String? // optionnel : un Contact spécifique
@@ -700,6 +742,9 @@ model InvoicePayment {
 enum DocType {
   CONVENTION
   PROGRAMME
+  DEROULE_PEDAGOGIQUE // 1 par produit (asset partagé) — ajouté 05/05/2026
+  CHECKLIST_FORMATION // 1 par session — C4.i17 Qualiopi
+  GRILLE_OBS_SESSION // 1 par session (consolidée formateur) — C3.i11 Qualiopi
   CONVOCATION
   EMARGEMENT
   ASSIDUITE
@@ -708,6 +753,10 @@ enum DocType {
   AGEFICE
   EVALUATION_ACQUIS
   SATISFACTION
+  /// Bilan satisfaction agrégé pour TOUTE la session — moyenne des satisfactions
+  /// chaud individuelles + points forts/faibles + taux recommandation NPS.
+  /// 1 par session, indicateur Qualiopi 30. Ajouté 12/05/2026.
+  SATISFACTION_SESSION
   SUPPORT_PEDAGOGIQUE
   PRE_ACCORD_OPCO
   VALIDATION_OPCO
@@ -825,6 +874,62 @@ model OpcoCatalog {
   updatedAt            DateTime       @updatedAt
 }
 
+/// Statut du dossier OPCO envoyé au financeur (AGEFICE, etc.).
+/// Pipeline : DRAFT → SENT → APPROVED|REJECTED → REIMBURSED. La timeline
+/// 4-étapes existante (`SessionParticipant.opcoApproved/opcoReimbursed`)
+/// est synchronisée à partir de ce status.
+enum OpcoSubmissionStatus {
+  DRAFT // composé mais pas envoyé
+  SENT // mail envoyé au financeur
+  ACK_RECEIVED // accusé reçu (rare, optionnel)
+  APPROVED // accord de prise en charge reçu
+  REJECTED // refus
+  REIMBURSED // virement reçu — dossier clos
+  CANCELED // annulé manuellement par Laurent
+}
+
+/// Un dossier complet (CNI+RIB+CFP+Convention+Programme+PDF AGEFICE) envoyé
+/// au financeur d'une inscription. 1 SessionParticipant peut avoir plusieurs
+/// submissions (resoumission après rejet par exemple).
+model OpcoSubmission {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  participantId      String
+  participant        SessionParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  // Sponsor = financeur cible (souvent l'AGEFICE local PA)
+  sponsorOrgId       String
+  sponsorOrg         Organization         @relation(fields: [sponsorOrgId], references: [id])
+  status             OpcoSubmissionStatus @default(DRAFT)
+  // Email destinataire (resolu au moment de l'envoi : sponsor.emailBilling || sponsor.email)
+  recipientEmail     String?
+  // Composition mail
+  subject            String?
+  bodyHtml           String?
+  // Pièces jointes : [{ key: MinIO, filename, kind: DocType-like, sizeBytes }]
+  attachments        Json
+  // Tracking SMTP
+  threadId           String? // messageId Nodemailer pour suivi
+  sentAt             DateTime?
+  ackAt              DateTime?
+  approvedAt         DateTime?
+  rejectedAt         DateTime?
+  reimbursedAt       DateTime?
+  // Relances auto cron
+  reminderCount      Int                  @default(0)
+  lastReminderSentAt DateTime?
+  // Notes internes (rejet motif, montant accord, etc.)
+  internalNotes      String?
+  // Audit
+  createdById        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([participantId])
+  @@index([sponsorOrgId])
+  @@index([status])
+  @@index([tenantId, status])
+}
+
 // =====================================================
 // === Tâches & commentaires (utilitaires CRM)
 // =====================================================
@@ -916,30 +1021,30 @@ model AuditLog {
 // =====================================================
 
 model AgeficeProfile {
-  id                 String              @id @default(uuid())
-  organizationId     String              @unique
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                         String               @id @default(uuid())
+  organizationId             String               @unique
+  organization               Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // PA AGEFICE rattaché — privilégier la FK vers le référentiel AgeficePointAccueil ;
   // les champs paName/paNumber/paContact/paAddress sont conservés pour compatibilité
   // avec les imports SmartOF (saisie texte libre) et pour override manuel rare.
-  pointAccueilId     String?
-  pointAccueil       AgeficePointAccueil? @relation(fields: [pointAccueilId], references: [id])
-  pointAccueilLockedManually Boolean      @default(false) // true = ne pas réécrire au prochain import
-  paName             String? // "AGEFICE 06"
-  paNumber           String?
-  paContact          String?
-  paAddress          Json?
-  paFields           Json // 54 champs PDF AGEFICE pré-remplis
-  pdfTemplateVersion String              @default("2023-2024")
+  pointAccueilId             String?
+  pointAccueil               AgeficePointAccueil? @relation(fields: [pointAccueilId], references: [id])
+  pointAccueilLockedManually Boolean              @default(false) // true = ne pas réécrire au prochain import
+  paName                     String? // "AGEFICE 06"
+  paNumber                   String?
+  paContact                  String?
+  paAddress                  Json?
+  paFields                   Json // 54 champs PDF AGEFICE pré-remplis
+  pdfTemplateVersion         String               @default("2023-2024")
   // Dernière CFP déclarée (cf attestation URSSAF) — alimente le badge
   // "Budget AGEFICE disponible" sur la fiche apprenant.
   // Règle N-1 → N : CFP exercice 2024 donne des droits utilisables en 2025.
-  lastCfpAmount        Float?
-  lastCfpYear          Int?     // exercice de la CFP (ex: 2024)
-  lastCfpEligibleBudget Int?    // 3000 | 600 | 0 — calculé selon montant
-  cfpAttestationKey    String?  // Attestation CFP scannée en MinIO
-  updatedAt          DateTime            @updatedAt
-  createdAt          DateTime            @default(now())
+  lastCfpAmount              Float?
+  lastCfpYear                Int? // exercice de la CFP (ex: 2024)
+  lastCfpEligibleBudget      Int? // 3000 | 600 | 0 — calculé selon montant
+  cfpAttestationKey          String? // Attestation CFP scannée en MinIO
+  updatedAt                  DateTime             @updatedAt
+  createdAt                  DateTime             @default(now())
 }
 
 // Pré-inscription publique : un contact reçoit un lien unique, dépose ses pièces,
@@ -982,6 +1087,9 @@ model PreEnrollment {
   cfpKey                 String? // Attestation CFP AGEFICE
   rgpdAcceptedAt         DateTime?
   submittedAt            DateTime?
+  // Relances email auto pour les pré-inscriptions PENDING_FORM trop anciennes
+  lastReminderSentAt     DateTime?
+  reminderCount          Int                 @default(0)
   // Pipeline IA
   status                 PreEnrollmentStatus @default(PENDING_FORM)
   extractedData          Json? // données structurées extraites par l'IA
@@ -1011,18 +1119,18 @@ model PreEnrollment {
 // Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
 model AgeficePointAccueil {
   id             String           @id @default(uuid())
-  name           String           // "CCI Nice Côte d'Azur"
+  name           String // "CCI Nice Côte d'Azur"
   address1       String?
   address2       String?
-  postalCode     String           // "06000" (string padding 5)
-  city           String           // "NICE"
-  department     String           // "06" — calculé depuis postalCode (2 chars, 3 pour DOM-TOM 97X/98X)
+  postalCode     String // "06000" (string padding 5)
+  city           String // "NICE"
+  department     String // "06" — calculé depuis postalCode (2 chars, 3 pour DOM-TOM 97X/98X)
   departmentName String?
-  phone          String?          // "04 93 13 75 00"
+  phone          String? // "04 93 13 75 00"
   email          String?
   website        String?
-  contactName    String?          // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
-  numberPta      String?          // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
+  contactName    String? // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
+  numberPta      String? // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
   source         String           @default("agefice.fr-2025") // versioning du référentiel
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -1121,8 +1229,8 @@ enum ClosureBatchStatus {
   PENDING
   RUNNING
   COMPLETED // tous les jobs ok
-  PARTIAL   // au moins 1 job en erreur, reste ok
-  FAILED    // tous les jobs en erreur
+  PARTIAL // au moins 1 job en erreur, reste ok
+  FAILED // tous les jobs en erreur
 }
 
 enum ClosureJobStatus {
@@ -1152,25 +1260,25 @@ model ClosureBatch {
 }
 
 model ClosureJob {
-  id                  String           @id @default(uuid())
-  batchId             String
-  batch               ClosureBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  participantId       String
-  kind                ClosureDocKind
-  status              ClosureJobStatus @default(QUEUED)
-  attempts            Int              @default(0)
-  errorMessage        String?
+  id                 String           @id @default(uuid())
+  batchId            String
+  batch              ClosureBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  participantId      String
+  kind               ClosureDocKind
+  status             ClosureJobStatus @default(QUEUED)
+  attempts           Int              @default(0)
+  errorMessage       String?
   // Réfs vers le doc produit
-  documentId          String? // si kind ∈ {ATTESTATION, CERTIFICAT}
-  pedagogicalAssetId  String? // si kind ∈ {QCM, GRILLE_OBS, ANALYSE_BESOIN}
+  documentId         String? // si kind ∈ {ATTESTATION, CERTIFICAT}
+  pedagogicalAssetId String? // si kind ∈ {QCM, GRILLE_OBS, ANALYSE_BESOIN}
   // True si l'IA Ollama a échoué et qu'on a fallback sur stub-content.ts —
   // le PDF est produit (status DONE) mais avec un contenu générique non
   // personnalisé. À régénérer manuellement avant un audit Qualiopi.
-  usedStub            Boolean          @default(false)
-  startedAt           DateTime?
-  completedAt         DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  usedStub           Boolean          @default(false)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@unique([batchId, participantId, kind])
   @@index([batchId, status])
