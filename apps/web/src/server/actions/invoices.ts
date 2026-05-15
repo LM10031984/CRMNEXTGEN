@@ -9,25 +9,16 @@ import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
 import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 import { loadOfConfig } from '@/lib/of-config';
+import { getNextInvoiceNumber } from '@/lib/numbering';
 
 // Phase 7 — Plan 07-01 : suppression du bloc `OF` local qui bypassait
 // `getOfConfig()` en lisant directement les variables d'environnement.
 // Les Server Actions ci-dessous appellent désormais
 // `await loadOfConfig(user.tenantId)` pour lire BDD avec fallback ENV (D-01 hybrid).
-
-/**
- * Génère le prochain numéro FAC-NNNNNN en transaction (lock optimiste).
- * Pas de "trou" possible : on prend le max puis +1.
- */
-async function nextInvoiceNumber(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
-  const last = await tx.invoice.findFirst({
-    where: { tenantId, number: { startsWith: 'FAC-' } },
-    orderBy: { number: 'desc' },
-    select: { number: true },
-  });
-  const n = last ? parseInt(last.number.replace('FAC-', ''), 10) || 0 : 0;
-  return `FAC-${String(n + 1).padStart(6, '0')}`;
-}
+//
+// Phase 7 — Plan 07-02 : la numérotation a été extraite dans `lib/numbering.ts`
+// pour lire `Tenant.invoicePrefix` (préfixe configurable depuis Paramètres,
+// fallback 'FAC'). Préserve la sémantique atomique (à appeler dans un tx).
 
 interface CreateInvoiceInput {
   participantId: string;
@@ -64,7 +55,7 @@ export async function createInvoiceFromParticipant(
 
   // Création atomique : numéro + invoice
   const invoice = await prisma.$transaction(async (tx) => {
-    const number = await nextInvoiceNumber(tx, user.tenantId);
+    const number = await getNextInvoiceNumber(user.tenantId, tx);
     return tx.invoice.create({
       data: {
         tenantId: user.tenantId,
@@ -212,7 +203,7 @@ export async function createInvoiceForSponsorGroup(input: {
   const participantIds = session.participants.map((p) => p.id);
 
   const invoice = await prisma.$transaction(async (tx) => {
-    const number = await nextInvoiceNumber(tx, user.tenantId);
+    const number = await getNextInvoiceNumber(user.tenantId, tx);
     return tx.invoice.create({
       data: {
         tenantId: user.tenantId,
