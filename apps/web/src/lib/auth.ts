@@ -28,6 +28,9 @@ export const lucia = new Lucia(adapter, {
     lastName: data.lastName,
     role: data.role,
     tenantId: data.tenantId,
+    // Phase 8 — soft-delete : exposé pour permettre à validateRequest() ci-dessous
+    // d'invalider la session des users désactivés sans 2e query (cf RESEARCH Pitfall #1).
+    disabledAt: data.disabledAt,
   }),
 });
 
@@ -40,6 +43,9 @@ declare module 'lucia' {
       lastName: string;
       role: string;
       tenantId: string;
+      // Phase 8 — soft-delete marker (null = actif). Lucia adapter Prisma sait le lire
+      // automatiquement depuis le model `User`.
+      disabledAt: Date | null;
     };
   }
 }
@@ -50,6 +56,21 @@ export const validateRequest = cache(
     if (!sessionId) return { user: null, session: null };
 
     const result = await lucia.validateSession(sessionId);
+
+    // Phase 8 — Rejet user désactivé (D-05 + RESEARCH Pitfall #1).
+    // ORDRE STRICT : validateSession → check disabledAt → cookie maintenance.
+    // Si on inversait, on aurait un bug (pas d'user à lire pour check).
+    if (result.user && result.session && result.user.disabledAt) {
+      await lucia.invalidateSession(result.session.id);
+      try {
+        const blank = lucia.createBlankSessionCookie();
+        (await cookies()).set(blank.name, blank.value, blank.attributes);
+      } catch {
+        // cookies() throws hors Route Handler/Action — ignoré (idem fallthrough cookie ci-dessous).
+      }
+      return { user: null, session: null };
+    }
+
     try {
       if (result.session && result.session.fresh) {
         const sessionCookie = lucia.createSessionCookie(result.session.id);

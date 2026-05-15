@@ -55,22 +55,29 @@ enum UserRole {
 }
 
 model User {
-  id           String        @id @default(uuid())
+  id           String           @id @default(uuid())
   tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email        String        @unique
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String           @unique
   hashedPwd    String
   firstName    String
   lastName     String
-  role         UserRole      @default(LECTEUR)
+  role         UserRole         @default(LECTEUR)
+  // Phase 8 — soft-delete + métadonnées invitation (D-03 CONTEXT.md)
+  disabledAt   DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
+  lastLoginAt  DateTime? // mis à jour dans loginAction sur succès
+  invitedAt    DateTime? // null = créé manuellement (seed)
+  invitedBy    String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
+  invitations  UserInvitation[] @relation("UserInvitations")
   authSessions AuthSession[]
   auditLogs    AuditLog[]
   leadsOwned   Lead[]
   tasksOwned   Task[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([tenantId])
+  @@index([tenantId, disabledAt])
 }
 
 model AuthSession {
@@ -78,6 +85,27 @@ model AuthSession {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+}
+
+/// Phase 8 — Invitation tokenisée pour création de mot de passe (D-04 CONTEXT.md).
+/// Token clair (random 32 hex) exposé dans l'URL `/invitation/{token}`. Pas hashé en BDD
+/// car single-use + expiration 7j + 128 bits d'entropie suffisent (RESEARCH Finding #4).
+model UserInvitation {
+  id        String    @id @default(uuid())
+  tenantId  String
+  email     String
+  token     String    @unique // random 32 hex, exposé dans URL — pas hashé (cf RESEARCH Finding #4)
+  role      UserRole
+  expiresAt DateTime // J+7 par défaut
+  usedAt    DateTime? // null = pas encore utilisée
+  userId    String?
+  user      User?     @relation("UserInvitations", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy String // FK User.id de l'admin qui a déclenché l'invitation
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([token])
+  @@index([email, tenantId])
 }
 
 // =====================================================
