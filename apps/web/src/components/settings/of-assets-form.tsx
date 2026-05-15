@@ -4,6 +4,12 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Image as ImageIcon, RotateCcw } from 'lucide-react';
+import {
+  uploadTenantLogo,
+  uploadTenantSignature,
+  resetTenantLogo,
+  resetTenantSignature,
+} from '@/server/actions/tenant-assets';
 
 /**
  * Form Logo & signatures (Phase 7 Plan 07-04 — SET-02 assets).
@@ -20,64 +26,9 @@ import { Image as ImageIcon, RotateCcw } from 'lucide-react';
  *  - Bouton "Restaurer par défaut" → AlertDialog confirmation → reset.
  *
  * Server actions consommées (Plan 07-03) :
- *  - uploadTenantLogo / uploadTenantSignature (role: 'pedago' | 'dirigeant')
- *  - resetTenantLogo / resetTenantSignature
- *
- * ⚠️ Plan 07-03 EN PARALLÈLE — au moment où ce fichier est écrit,
- * `apps/web/src/server/actions/tenant-assets.ts` peut ne pas encore exister.
- * On utilise des stubs locaux typés. Quand 07-03 sera mergé :
- *   1. Remplacer les stubs ci-dessous par les vrais imports :
- *      `import { uploadTenantLogo, uploadTenantSignature, resetTenantLogo, resetTenantSignature } from '@/server/actions/tenant-assets';`
- *   2. Supprimer les fonctions stub `__stubUpload*` / `__stubReset*` ci-dessous.
- *   3. Vérifier la signature exacte (FormData vs objet) — adapter handlers
- *      si nécessaire (cf. signature finale du Plan 07-03 dans son SUMMARY).
- *
- * Voir SUMMARY 07-04 section "TODO Plan 07-03 wiring" pour le détail.
+ *  - uploadTenantLogo(formData) / uploadTenantSignature(role, formData)
+ *  - resetTenantLogo() / resetTenantSignature(role)
  */
-
-// ─── STUBS TEMPORAIRES (à remplacer après merge 07-03) ───────────────────
-// TODO(07-03): supprimer ces stubs et importer les vraies server actions
-// depuis @/server/actions/tenant-assets.
-
-type UploadResult = { ok: true } | { ok: false; error: string };
-
-async function __stubUploadLogo(_fd: FormData): Promise<UploadResult> {
-  return {
-    ok: false,
-    error:
-      'Upload non disponible : Plan 07-03 (tenant-assets.ts) en cours de développement. Réessayer après merge.',
-  };
-}
-
-async function __stubUploadSignature(
-  _role: 'pedago' | 'dirigeant',
-  _fd: FormData,
-): Promise<UploadResult> {
-  return {
-    ok: false,
-    error:
-      'Upload non disponible : Plan 07-03 (tenant-assets.ts) en cours de développement. Réessayer après merge.',
-  };
-}
-
-async function __stubResetLogo(): Promise<UploadResult> {
-  return {
-    ok: false,
-    error:
-      'Reset non disponible : Plan 07-03 (tenant-assets.ts) en cours de développement.',
-  };
-}
-
-async function __stubResetSignature(
-  _role: 'pedago' | 'dirigeant',
-): Promise<UploadResult> {
-  return {
-    ok: false,
-    error:
-      'Reset non disponible : Plan 07-03 (tenant-assets.ts) en cours de développement.',
-  };
-}
-// ─── FIN STUBS ──────────────────────────────────────────────────────────
 
 interface OfAssetsFormProps {
   initial: {
@@ -226,8 +177,8 @@ function AssetRow({
     startTransition(async () => {
       const result =
         kind === 'logo'
-          ? await __stubUploadLogo(fd)
-          : await __stubUploadSignature(
+          ? await uploadTenantLogo(fd)
+          : await uploadTenantSignature(
               kind === 'signature-pedago' ? 'pedago' : 'dirigeant',
               fd,
             );
@@ -321,8 +272,8 @@ function ResetButton({
     startTransition(async () => {
       const result =
         kind === 'logo'
-          ? await __stubResetLogo()
-          : await __stubResetSignature(
+          ? await resetTenantLogo()
+          : await resetTenantSignature(
               kind === 'signature-pedago' ? 'pedago' : 'dirigeant',
             );
       if (result.ok) {
