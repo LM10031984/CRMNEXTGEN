@@ -34,6 +34,17 @@ vi.mock('@qualiof/db', () => ({
     tenant: { findUnique: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
   },
+  LegalForm: {
+    SAS: 'SAS',
+    SARL: 'SARL',
+    SASU: 'SASU',
+    EURL: 'EURL',
+    SA: 'SA',
+    EI: 'EI',
+    EIRL: 'EIRL',
+    AUTO_ENTREPRENEUR: 'AUTO_ENTREPRENEUR',
+    AUTRE: 'AUTRE',
+  },
 }));
 
 vi.mock('@/lib/auth', () => ({

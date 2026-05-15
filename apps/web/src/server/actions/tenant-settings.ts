@@ -27,6 +27,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { computeDiff, logTenantSettingsChange } from '@/lib/audit-log';
 import {
   tenantIdentitySchema,
   tenantAddressSchema,
@@ -38,83 +39,9 @@ import {
   type TenantEmailInput,
 } from '@qualiof/shared';
 
-type Diff = Record<string, { before: unknown; after: unknown }>;
-
 export type ActionResult =
   | { ok: true }
   | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> };
-
-/**
- * Helper pur — calcule la diff entre deux snapshots de champs Tenant.
- *
- * Stratégie de comparaison :
- *  - `null` et `undefined` sont normalisés à chaîne vide (les Paramètres OF
- *    autorisent souvent "vidange" d'un champ qui passe de `'X'` à `null`).
- *  - Les objets (typiquement `address` Json) sont comparés via JSON.stringify
- *    (shallow, suffisant pour les structures plates utilisées dans Tenant).
- *  - Les primitives sont comparées via leur String() representation.
- *
- * Retourne uniquement les clés qui diffèrent réellement → no-op AuditLog si {}.
- *
- * Exporté pour tests + réutilisation Plan 07-03.
- */
-export function computeDiff<T extends Record<string, unknown>>(before: T, after: T): Diff {
-  const diff: Diff = {};
-  for (const key of Object.keys(after)) {
-    const b = before[key];
-    const a = after[key];
-    const bStr =
-      b === null || b === undefined
-        ? ''
-        : typeof b === 'object'
-          ? JSON.stringify(b)
-          : String(b);
-    const aStr =
-      a === null || a === undefined
-        ? ''
-        : typeof a === 'object'
-          ? JSON.stringify(a)
-          : String(a);
-    if (bStr !== aStr) {
-      diff[key] = { before: b ?? null, after: a ?? null };
-    }
-  }
-  return diff;
-}
-
-/**
- * Helper — écrit une row AuditLog si la diff n'est pas vide.
- *
- * Convention `action` (D-09 + Phase 8 RBAC) :
- *  - 'parameters.update' : identité, adresse, RIB, email
- *  - 'parameters.upload.logo' : Plan 07-03
- *  - 'parameters.upload.signature.pedago' : Plan 07-03
- *  - 'parameters.upload.signature.dirigeant' : Plan 07-03
- *
- * Exporté pour réutilisation Plan 07-03.
- */
-export async function logTenantSettingsChange(opts: {
-  tenantId: string;
-  userId: string;
-  action: string;
-  diff: Diff;
-}): Promise<void> {
-  // No-op si aucun champ n'a changé — évite les logs vides qui polluent
-  // l'historique sans valeur informative.
-  if (Object.keys(opts.diff).length === 0) return;
-  await prisma.auditLog.create({
-    data: {
-      tenantId: opts.tenantId,
-      userId: opts.userId,
-      entity: 'Tenant',
-      entityId: opts.tenantId,
-      action: opts.action,
-      // Cast `never` pour bypass Prisma.InputJsonValue strict — la diff est un
-      // Record sérialisable (validée à la construction par computeDiff).
-      diff: opts.diff as never,
-    },
-  });
-}
 
 // ─── 1. SET-01 — Identité OF ────────────────────────────────────────────
 export async function updateTenantIdentity(input: TenantIdentityInput): Promise<ActionResult> {

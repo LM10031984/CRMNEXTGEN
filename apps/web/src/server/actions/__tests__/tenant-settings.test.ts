@@ -29,6 +29,17 @@ vi.mock('@qualiof/db', () => ({
     tenant: { findUnique: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
   },
+  LegalForm: {
+    SAS: 'SAS',
+    SARL: 'SARL',
+    SASU: 'SASU',
+    EURL: 'EURL',
+    SA: 'SA',
+    EI: 'EI',
+    EIRL: 'EIRL',
+    AUTO_ENTREPRENEUR: 'AUTO_ENTREPRENEUR',
+    AUTRE: 'AUTRE',
+  },
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -47,8 +58,8 @@ import {
   updateTenantAddress,
   updateTenantBilling,
   updateTenantEmail,
-  computeDiff,
 } from '../tenant-settings';
+import { computeDiff } from '@/lib/audit-log';
 
 const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeof vi.fn>;
 const tenantUpdate = prisma.tenant.update as unknown as ReturnType<typeof vi.fn>;

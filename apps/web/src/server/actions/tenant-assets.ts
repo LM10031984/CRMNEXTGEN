@@ -46,7 +46,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { invalidateAssetCache } from '@/lib/closure/shared-template';
-import { logTenantSettingsChange } from './tenant-settings';
+import { logTenantSettingsChange } from '@/lib/audit-log';
 
 // ─── Constantes ─────────────────────────────────────────────────────────
 const MAX_LOGO_MB = 5;
