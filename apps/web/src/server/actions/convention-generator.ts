@@ -109,6 +109,8 @@ export async function generateConventionForParticipant(
     produitProgrammeMd: typeof participant.session.product.programMd === 'string' ? participant.session.product.programMd : '',
     produitTrainerProfile: participant.session.product.trainerProfile,
     produitPriceHTPerStagiaire: Number(participant.priceHT),
+    // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
+    tenantId: user.tenantId,
   };
 
   let pdfBuffer: Buffer;

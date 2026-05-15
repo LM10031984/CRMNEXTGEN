@@ -14,9 +14,8 @@
  */
 
 import { marked } from 'marked';
-import path from 'node:path';
-import fs from 'node:fs';
 import type { OfConfig } from './of-config';
+import { loadLogoColorDataUrl } from './closure/shared-template';
 import {
   OF_PAGED_FOOTER_STYLES,
   OF_PAGED_PAGE_RULE,
@@ -51,23 +50,20 @@ export interface ConventionData {
   produitProgrammeMd: string;
   produitTrainerProfile: string | null;
   produitPriceHTPerStagiaire: number;
+
+  // Phase 7 (Plan 07-03) — tenantId optionnel pour résoudre le logo uploadé
+  // dans `public/of-assets/{tenantId}/`. Si absent, fallback bundled
+  // `src/assets/logo-start-academy.png`.
+  tenantId?: string;
 }
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 const fmtDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-let logoCache: string | null = null;
-function loadLogoDataUrl(): string {
-  if (logoCache !== null) return logoCache;
-  try {
-    const p = path.join(process.cwd(), 'src', 'assets', 'logo-start-academy.png');
-    const b = fs.readFileSync(p);
-    logoCache = `data:image/png;base64,${b.toString('base64')}`;
-  } catch {
-    logoCache = '';
-  }
-  return logoCache;
-}
+// Phase 7 (Plan 07-03) — Le cache local logo a été supprimé au profit du
+// cache central dans `closure/shared-template.ts` (loadLogoColorDataUrl).
+// Cela permet à un upload de logo via Paramètres de prendre effet
+// immédiatement sur les conventions via `invalidateAssetCache(tenantId)`.
 
 const BRAND_BLUE = '#00B4E6';
 const BRAND_DARK = '#00527A';
@@ -180,7 +176,9 @@ const STYLES = `
 </style>`;
 
 export function renderConventionHtml(data: ConventionData, of: OfConfig): string {
-  const logoDataUrl = loadLogoDataUrl();
+  // Phase 7 (Plan 07-03) — cherche d'abord dans `public/of-assets/{tenantId}/`
+  // pour respecter l'upload UI Paramètres, fallback bundled `src/assets/`.
+  const logoDataUrl = loadLogoColorDataUrl(data.tenantId);
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const programmeHtml = data.produitProgrammeMd
     ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)

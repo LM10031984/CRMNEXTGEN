@@ -27,7 +27,9 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   const of = ctx.of ?? getOfConfig();
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const respTitre = of.resp.titre || 'Représentant légal';
-  const signatureDataUrl = loadSignatureDataUrl();
+  // Phase 7 (Plan 07-03) — résolution signature pédago uploadée via Paramètres
+  // (signature-pedago.png), fallback bundled signature-laurent.png.
+  const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
   const today = formatDateFr(new Date());
   const dateStr =
     ctx.sessionStartDate.toDateString() === ctx.sessionEndDate.toDateString()
@@ -38,7 +40,7 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   const lieuFait = of.addressVille || 'Vence';
 
   const body = `
-${renderBrandHeader(ctx.of)}
+${renderBrandHeader(ctx.of, ctx.tenantId)}
 ${renderOfficialBadges()}
 <main class="body">
   <h1 class="doc-title center">ATTESTATION DE FIN DE FORMATION</h1>

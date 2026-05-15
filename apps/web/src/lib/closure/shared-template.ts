@@ -21,22 +21,61 @@ export const SECTION_BLUE = '#4472C4'; // bleu Word — utilisé pour titres sec
 export const TEXT = '#1E293B';
 export const MUTED = '#64748B';
 
+/**
+ * Cache module-scope pour les data-URLs des assets.
+ *
+ * Phase 7 (Plan 07-03) — la clé inclut désormais le préfixe `tenantId` (ou
+ * `_default` si aucun) pour permettre de garder en cache simultanément les
+ * variantes par tenant. `invalidateAssetCache(tenantId)` ci-dessous purge
+ * toutes les entrées qui commencent par `${tenantId}::` (appelé par les
+ * server actions upload/reset après écriture/suppression disque).
+ */
 const fileCache = new Map<string, string>();
 
 /**
- * Charge un fichier image depuis `apps/web/src/assets/` et retourne une data-URL.
- * Retourne '' si le fichier est absent (le template doit gracefully fallback).
+ * Charge un fichier image et retourne une data-URL.
+ *
+ * Phase 7 (Plan 07-03) — Stratégie de résolution :
+ *  - **Priority 1** : si `tenantId` fourni, cherche dans
+ *    `apps/web/public/of-assets/{tenantId}/{filename}` (assets uploadés via UI)
+ *  - **Priority 2** : fallback `apps/web/src/assets/{filename}` (bundled assets)
+ *
+ * Retourne '' si aucun fichier trouvé (le template doit gracefully fallback).
+ *
+ * Cache key : `${tenantId ?? '_default'}::${filenames.join('|')}` — permet
+ * d'avoir simultanément les variantes par tenant et fallback.
  */
-function loadAssetDataUrl(filenames: string[]): string {
-  const cacheKey = filenames.join('|');
+function loadAssetDataUrl(filenames: string[], tenantId?: string): string {
+  const cacheKey = `${tenantId ?? '_default'}::${filenames.join('|')}`;
   const cached = fileCache.get(cacheKey);
   if (cached !== undefined) return cached;
+
+  // Priority 1 : tenant uploaded assets (public/of-assets/{tenantId}/)
+  if (tenantId) {
+    for (const name of filenames) {
+      try {
+        const p = path.join(process.cwd(), 'public', 'of-assets', tenantId, name);
+        const buf = fs.readFileSync(p);
+        const ext = path.extname(name).slice(1) || 'png';
+        // SVG content-type quirk : doit être `image/svg+xml` (pas `image/svg`)
+        const mime = ext === 'svg' ? 'svg+xml' : ext;
+        const url = `data:image/${mime};base64,${buf.toString('base64')}`;
+        fileCache.set(cacheKey, url);
+        return url;
+      } catch {
+        /* try next filename, then bundled fallback */
+      }
+    }
+  }
+
+  // Priority 2 : bundled assets (src/assets/)
   for (const name of filenames) {
     try {
       const p = path.join(process.cwd(), 'src', 'assets', name);
       const buf = fs.readFileSync(p);
       const ext = path.extname(name).slice(1) || 'png';
-      const url = `data:image/${ext};base64,${buf.toString('base64')}`;
+      const mime = ext === 'svg' ? 'svg+xml' : ext;
+      const url = `data:image/${mime};base64,${buf.toString('base64')}`;
       fileCache.set(cacheKey, url);
       return url;
     } catch {
@@ -47,13 +86,47 @@ function loadAssetDataUrl(filenames: string[]): string {
   return '';
 }
 
-export function loadLogoColorDataUrl(): string {
-  return loadAssetDataUrl(['logo-start-academy.png']);
+/**
+ * Phase 7 (Plan 07-03) — purge le cache `fileCache` pour un tenant donné.
+ *
+ * Appelé par les server actions `uploadTenantLogo`, `uploadTenantSignature`,
+ * `resetTenantLogo`, `resetTenantSignature` après mutation du disque pour
+ * que la prochaine lecture relise le nouveau fichier (ou détecte sa
+ * disparition après reset).
+ *
+ * Supprime toutes les entrées de `fileCache` dont la clé commence par
+ * `${tenantId}::` (toutes les variantes de filenames cachées pour ce tenant).
+ */
+export function invalidateAssetCache(tenantId: string): void {
+  const prefix = `${tenantId}::`;
+  for (const key of Array.from(fileCache.keys())) {
+    if (key.startsWith(prefix)) fileCache.delete(key);
+  }
 }
 
-/** Logo blanc transparent pour bandeau bleu foncé (style Qualiopi Gen). */
-export function loadLogoWhiteDataUrl(): string {
-  return loadAssetDataUrl(['logo-white.png']);
+/**
+ * Logo couleur de l'OF (en-tête programme/convention, signature attestation).
+ *
+ * Phase 7 (Plan 07-03) — cherche d'abord dans `public/of-assets/{tenantId}/`
+ * (variantes `logo.png|jpg|svg`), fallback bundled `logo-start-academy.png`.
+ */
+export function loadLogoColorDataUrl(tenantId?: string): string {
+  return loadAssetDataUrl(
+    ['logo.png', 'logo.jpg', 'logo.svg', 'logo-start-academy.png'],
+    tenantId,
+  );
+}
+
+/**
+ * Logo blanc transparent pour bandeau bleu foncé (style Qualiopi Gen).
+ *
+ * Phase 7 (Plan 07-03) — cherche d'abord `logo-white.png` dans
+ * `public/of-assets/{tenantId}/`, fallback bundled `logo-start-academy-white.png`.
+ * (Si seul `logo.png` couleur a été uploadé, le bandeau bleu retombe sur
+ * le logo blanc bundled — comportement acceptable.)
+ */
+export function loadLogoWhiteDataUrl(tenantId?: string): string {
+  return loadAssetDataUrl(['logo-white.png', 'logo-start-academy-white.png'], tenantId);
 }
 
 /** Logo officiel Ministère du Travail (haut gauche docs Qualiopi). */
@@ -66,14 +139,27 @@ export function loadLogoQualiopiDataUrl(): string {
   return loadAssetDataUrl(['logo-qualiopi.png']);
 }
 
-export function loadSignatureDataUrl(): string {
-  // signature-laurent.png = signature de Laurent Marx (responsable Start Academy).
-  // Fallback : tampon-signature-fusion.png (signature Julien Lafitte) puis tampon-signature.png.
-  return loadAssetDataUrl([
-    'signature-laurent.png',
-    'tampon-signature-fusion.png',
-    'tampon-signature.png',
-  ]);
+/**
+ * Signature à apposer en bas de doc Qualiopi (certificat, attestation).
+ *
+ * Phase 7 (Plan 07-03) — `role` détermine la cible :
+ *  - 'pedago' (défaut) : signature responsable pédagogique
+ *    → cherche `signature-pedago.png` dans public/of-assets/{tenantId}/,
+ *      fallback bundled `signature-laurent.png` puis `tampon-signature-fusion.png`
+ *  - 'dirigeant' : signature dirigeant (pour conventions, attestations dirigeant)
+ *    → cherche `signature-dirigeant.png` dans public/of-assets/{tenantId}/,
+ *      fallback bundled `tampon-signature-fusion.png` puis `tampon-signature.png`
+ */
+export function loadSignatureDataUrl(
+  tenantId?: string,
+  role: 'pedago' | 'dirigeant' = 'pedago',
+): string {
+  const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
+  const fallbacks =
+    role === 'pedago'
+      ? [filename, 'signature-laurent.png', 'tampon-signature-fusion.png']
+      : [filename, 'tampon-signature-fusion.png', 'tampon-signature.png'];
+  return loadAssetDataUrl(fallbacks, tenantId);
 }
 
 export function escapeHtml(s: string | null | undefined): string {
@@ -425,11 +511,13 @@ export const SHARED_STYLES = `
  * centré (style Qualiopi Gen). Hauteur 35mm pour reproduire le rendu jsPDF
  * d'origine.
  */
-export function renderBrandHeader(of?: OfConfig): string {
+export function renderBrandHeader(of?: OfConfig, tenantId?: string): string {
   // Phase 7 — `of` optionnel : si passé par l'appelant (loadOfConfig(tenantId)),
   // utilise BDD-first. Sinon fallback `getOfConfig()` sync legacy (ENV-only).
+  // `tenantId` (Plan 07-03) permet de lire d'abord le logo blanc uploadé dans
+  // public/of-assets/{tenantId}/, fallback bundled.
   const cfg = of ?? getOfConfig();
-  const dataUrl = loadLogoWhiteDataUrl();
+  const dataUrl = loadLogoWhiteDataUrl(tenantId);
   const inner = dataUrl
     ? `<img class="logo" src="${dataUrl}" alt="${escapeHtml(cfg.name)}" />`
     : `<div class="of-name">${escapeHtml(cfg.name).toUpperCase()}</div>`;

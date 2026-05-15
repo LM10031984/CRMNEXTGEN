@@ -27,7 +27,10 @@ export function renderCertificatHtml(ctx: ClosureContext): string {
   const of = ctx.of ?? getOfConfig();
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const respTitre = of.resp.titre || 'Représentant légal';
-  const signatureDataUrl = loadSignatureDataUrl();
+  // Phase 7 (Plan 07-03) — résolution signature uploadée via Paramètres dans
+  // `public/of-assets/{ctx.tenantId}/signature-dirigeant.png` (certificat signé
+  // par le dirigeant/représentant légal), fallback bundled.
+  const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'dirigeant');
   // Date du certificat = date de fin de formation (et non date d'édition).
   // Indicateur Qualiopi : le certificat atteste de la fin effective de l'action.
   const dateCertificat = formatDateFr(ctx.sessionEndDate);
@@ -50,7 +53,7 @@ export function renderCertificatHtml(ctx: ClosureContext): string {
     </div>`;
 
   const body = `
-${renderBrandHeader(ctx.of)}
+${renderBrandHeader(ctx.of, ctx.tenantId)}
 ${renderOfficialBadges()}
 <main class="body">
   <h1 class="doc-title center" style="font-size: 20pt;">CERTIFICAT DE RÉALISATION</h1>

@@ -106,6 +106,9 @@ async function _legacy_generateProgrammeForParticipant(
     ofRnq: of.rnq,
     ofPhone: of.phone,
     ofEmail: of.email,
+    // Phase 7 (Plan 07-03) — permet à `renderProgrammeHtml` de résoudre le
+    // logo uploadé via Paramètres dans `public/of-assets/{tenantId}/`.
+    tenantId: user.tenantId,
   };
 
   // 3. Render HTML → PDF
@@ -224,6 +227,8 @@ export async function generateProgrammeForProduct(
     ofRnq: of.rnq,
     ofPhone: of.phone,
     ofEmail: of.email,
+    // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
+    tenantId: user.tenantId,
   };
 
   let pdfBuffer: Buffer;
