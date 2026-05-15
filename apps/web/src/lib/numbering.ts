@@ -25,8 +25,7 @@
  * pour les écrans de preview / read-only.
  */
 
-import type { Prisma } from '@prisma/client';
-import { prisma } from '@qualiof/db';
+import { type Prisma, prisma } from '@qualiof/db';
 
 export async function getNextInvoiceNumber(
   tenantId: string,

@@ -132,7 +132,7 @@ describe('updateTenantIdentity', () => {
       select: { name: true, siret: true, numDA: true, rcs: true, legalForm: true },
     });
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const auditCall = auditLogCreate.mock.calls[0][0];
+    const auditCall = auditLogCreate.mock.calls[0]![0];
     expect(auditCall.data.entity).toBe('Tenant');
     expect(auditCall.data.entityId).toBe('tenant-1');
     expect(auditCall.data.action).toBe('parameters.update');
@@ -181,7 +181,7 @@ describe('updateTenantIdentity', () => {
 describe('updateTenantAddress', () => {
   it("Test 5 — succès : update address + legalMentions + AuditLog", async () => {
     tenantFindUnique.mockResolvedValueOnce({ address: null, legalMentions: null });
-    const afterAddr = { street: '12 rue X', postalCode: '75001', city: 'Paris' };
+    const afterAddr = { street: '12 rue X', postalCode: '75001', city: 'Paris', country: 'France' };
     tenantUpdate.mockResolvedValueOnce({
       address: afterAddr,
       legalMentions: 'Mentions Start Academy',
@@ -200,8 +200,8 @@ describe('updateTenantAddress', () => {
       }),
     );
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe('parameters.update');
-    expect(auditLogCreate.mock.calls[0][0].data.entity).toBe('Tenant');
+    expect(auditLogCreate.mock.calls[0]?.[0]?.data.action).toBe('parameters.update');
+    expect(auditLogCreate.mock.calls[0]?.[0]?.data.entity).toBe('Tenant');
   });
 });
 
@@ -238,7 +238,7 @@ describe('updateTenantBilling', () => {
       }),
     );
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const auditDiff = auditLogCreate.mock.calls[0][0].data.diff;
+    const auditDiff = auditLogCreate.mock.calls[0]?.[0]?.data.diff;
     expect(auditDiff.invoicePrefix).toEqual({ before: 'FAC', after: 'INV' });
     expect(auditDiff.iban).toEqual({ before: null, after: 'FR7612345678901234567890123' });
   });
@@ -260,7 +260,7 @@ describe('updateTenantEmail', () => {
       select: { emailFrom: true },
     });
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe('parameters.update');
+    expect(auditLogCreate.mock.calls[0]?.[0]?.data.action).toBe('parameters.update');
   });
 
   it("Test 6bis — emailFrom vide ('') → BDD reçoit null (revient en fallback ENV)", async () => {

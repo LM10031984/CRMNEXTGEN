@@ -109,7 +109,9 @@ export async function logTenantSettingsChange(opts: {
       entity: 'Tenant',
       entityId: opts.tenantId,
       action: opts.action,
-      diff: opts.diff,
+      // Cast `never` pour bypass Prisma.InputJsonValue strict — la diff est un
+      // Record sérialisable (validée à la construction par computeDiff).
+      diff: opts.diff as never,
     },
   });
 }

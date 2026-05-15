@@ -96,7 +96,8 @@ function makeFile(opts: { name: string; type: string; size?: number; content?: B
   // Si on veut un fichier "plus gros", on duplique le buffer
   const finalBuf =
     sizeBytes <= content.length ? content : Buffer.concat([content, Buffer.alloc(sizeBytes - content.length)]);
-  return new File([finalBuf], opts.name, { type: opts.type });
+  // Cast Buffer→Uint8Array pour satisfaire le type BlobPart strict (TS 5.7+).
+  return new File([new Uint8Array(finalBuf)], opts.name, { type: opts.type });
 }
 
 function makeFormData(file: File): FormData {
@@ -135,7 +136,7 @@ describe('uploadTenantLogo', () => {
     expect(result).toEqual({ ok: true, path: '/of-assets/tenant-1/logo.png' });
     expect(mkdirMock).toHaveBeenCalled();
     expect(writeFileMock).toHaveBeenCalled();
-    const writeCall = writeFileMock.mock.calls[0];
+    const writeCall = writeFileMock.mock.calls[0]!;
     expect(writeCall[0]).toContain('public/of-assets/tenant-1/logo.png');
     // Supprime les variantes png/jpg/svg (idempotent même si absentes)
     expect(unlinkMock).toHaveBeenCalledTimes(3);
@@ -148,7 +149,7 @@ describe('uploadTenantLogo', () => {
     expect(invalidateMock).toHaveBeenCalledWith('tenant-1');
 
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const auditCall = auditLogCreate.mock.calls[0][0];
+    const auditCall = auditLogCreate.mock.calls[0]![0];
     expect(auditCall.data.action).toBe('parameters.upload.logo');
     expect(auditCall.data.entity).toBe('Tenant');
     expect(auditCall.data.entityId).toBe('tenant-1');
@@ -188,8 +189,8 @@ describe('uploadTenantLogo', () => {
     const file = makeFile({ name: 'logo.svg', type: 'image/svg+xml' });
     await uploadTenantLogo(makeFormData(file));
 
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe('parameters.upload.logo');
-    expect(auditLogCreate.mock.calls[0][0].data.diff.logoPath.after).toBe(
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe('parameters.upload.logo');
+    expect(auditLogCreate.mock.calls[0]![0].data.diff.logoPath.after).toBe(
       '/of-assets/tenant-1/logo.svg',
     );
   });
@@ -215,12 +216,12 @@ describe('uploadTenantSignature', () => {
       path: '/of-assets/tenant-1/signature-pedago.png',
     });
 
-    expect(writeFileMock.mock.calls[0][0]).toContain('signature-pedago.png');
+    expect(writeFileMock.mock.calls[0]![0]).toContain('signature-pedago.png');
     expect(tenantUpdate).toHaveBeenCalledWith({
       where: { id: 'tenant-1' },
       data: { signaturePedagoPath: '/of-assets/tenant-1/signature-pedago.png' },
     });
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe(
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe(
       'parameters.upload.signature.pedago',
     );
   });
@@ -242,12 +243,12 @@ describe('uploadTenantSignature', () => {
       path: '/of-assets/tenant-1/signature-dirigeant.png',
     });
 
-    expect(writeFileMock.mock.calls[0][0]).toContain('signature-dirigeant.png');
+    expect(writeFileMock.mock.calls[0]![0]).toContain('signature-dirigeant.png');
     expect(tenantUpdate).toHaveBeenCalledWith({
       where: { id: 'tenant-1' },
       data: { signatureDirigeantPath: '/of-assets/tenant-1/signature-dirigeant.png' },
     });
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe(
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe(
       'parameters.upload.signature.dirigeant',
     );
   });
@@ -289,8 +290,8 @@ describe('resetTenantLogo', () => {
       data: { logoPath: null },
     });
     expect(invalidateMock).toHaveBeenCalledWith('tenant-1');
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe('parameters.reset.logo');
-    expect(auditLogCreate.mock.calls[0][0].data.diff.logoPath).toEqual({
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe('parameters.reset.logo');
+    expect(auditLogCreate.mock.calls[0]![0].data.diff.logoPath).toEqual({
       before: '/of-assets/tenant-1/logo.png',
       after: null,
     });
@@ -322,13 +323,13 @@ describe('resetTenantSignature', () => {
 
     expect(result).toEqual({ ok: true });
     expect(unlinkMock).toHaveBeenCalledTimes(1);
-    expect(unlinkMock.mock.calls[0][0]).toContain('signature-pedago.png');
+    expect(unlinkMock.mock.calls[0]![0]).toContain('signature-pedago.png');
     expect(tenantUpdate).toHaveBeenCalledWith({
       where: { id: 'tenant-1' },
       data: { signaturePedagoPath: null },
     });
     expect(invalidateMock).toHaveBeenCalledWith('tenant-1');
-    expect(auditLogCreate.mock.calls[0][0].data.action).toBe(
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe(
       'parameters.reset.signature.pedago',
     );
   });
