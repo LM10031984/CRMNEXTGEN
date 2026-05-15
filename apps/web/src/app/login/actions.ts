@@ -7,21 +7,125 @@ import { prisma } from '@qualiof/db';
 import { loginSchema, type LoginInput } from '@qualiof/shared';
 import { lucia } from '@/lib/auth';
 
-export async function loginAction(input: LoginInput): Promise<{ ok: true } | { ok: false; error: string }> {
+/**
+ * Login server action — Phase 8 Plan 08-05 (RBAC-05 + D-10 CONTEXT.md).
+ *
+ * Extensions vs. Phase 1 :
+ *  - `auth.login.failed` AuditLog row sur user désactivé / mot de passe incorrect
+ *    (diff.reason = 'disabled' | 'bad_password')
+ *  - `auth.login.success` AuditLog row + `User.lastLoginAt = now()` à chaque
+ *    connexion réussie (sert l'UI "Dernière connexion" de Plan 08-04 +
+ *    permet la détection brute-force dans la page Historique).
+ *  - User désactivé : retourne `'Compte désactivé.'` au lieu du message
+ *    générique pour distinguer (info utile pour l'utilisateur final).
+ *  - Email inconnu : PAS de AuditLog (pas de tenantId résoluble — la contrainte
+ *    FK `AuditLog.tenantId → Tenant.id` empêche un log "orphelin"). Conséquence
+ *    acceptée : on perd la trace des tentatives sur des emails inexistants
+ *    (RESEARCH Finding #5 — détection brute-force se fait sur les `bad_password`).
+ *
+ * Toutes les écritures AuditLog sont best-effort : encapsulées dans `safeAudit`
+ * (try/catch silencieux) pour qu'une erreur d'audit ne bloque JAMAIS le flow
+ * de login (sécurité > observabilité dans ce cas précis).
+ */
+
+/**
+ * Best-effort AuditLog write — ne propage AUCUNE erreur.
+ *
+ * Utilise `prisma.auditLog.create` directement (et non `logUserAction` du helper)
+ * pour pouvoir wrapper dans try/catch ici sans polluer le helper générique.
+ */
+async function safeAudit(data: {
+  tenantId: string;
+  userId: string | null;
+  targetUserId: string;
+  action: string;
+  diff?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: data.tenantId,
+        userId: data.userId,
+        entity: 'User',
+        entityId: data.targetUserId,
+        action: data.action,
+        diff: (data.diff ?? {}) as never,
+      },
+    });
+  } catch {
+    // Best-effort : un échec d'audit ne doit pas bloquer le login.
+    // (e.g. Prisma timeout, FK contrainte, etc.)
+  }
+}
+
+export async function loginAction(
+  input: LoginInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'Données invalides.' };
   }
   const { email, password } = parsed.data;
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) return { ok: false, error: 'Identifiants invalides.' };
+  const lcEmail = email.toLowerCase();
+
+  const user = await prisma.user.findUnique({ where: { email: lcEmail } });
+  if (!user) {
+    // Pas de tenantId résoluble → pas d'AuditLog persistable (FK requise).
+    // Réponse identique à "mauvais mdp" pour ne pas leaker l'existence d'un email.
+    return { ok: false, error: 'Identifiants invalides.' };
+  }
+
+  // Garde "compte désactivé" — message distinct (UX) + audit failed (sécurité).
+  if (user.disabledAt) {
+    await safeAudit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      targetUserId: user.id,
+      action: 'auth.login.failed',
+      diff: { email: lcEmail, reason: 'disabled' },
+    });
+    return {
+      ok: false,
+      error: 'Compte désactivé. Contactez votre administrateur.',
+    };
+  }
 
   const ok = await argon2.verify(user.hashedPwd, password);
-  if (!ok) return { ok: false, error: 'Identifiants invalides.' };
+  if (!ok) {
+    await safeAudit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      targetUserId: user.id,
+      action: 'auth.login.failed',
+      diff: { email: lcEmail, reason: 'bad_password' },
+    });
+    return { ok: false, error: 'Identifiants invalides.' };
+  }
+
+  // Succès — on met à jour lastLoginAt (best-effort aussi : un échec d'update
+  // ne doit pas empêcher la création de session) + on logge auth.login.success.
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+  } catch {
+    // Best-effort : pas critique pour la session
+  }
+  await safeAudit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    targetUserId: user.id,
+    action: 'auth.login.success',
+  });
 
   const session = await lucia.createSession(user.id, {});
   const sessionCookie = lucia.createSessionCookie(session.id);
-  (await cookies()).set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
+  (await cookies()).set(
+    sessionCookie.name,
+    sessionCookie.value,
+    sessionCookie.attributes,
+  );
   redirect('/app');
 }
 
