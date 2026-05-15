@@ -71,3 +71,42 @@ export async function logTenantSettingsChange(opts: {
     },
   });
 }
+
+/**
+ * Helper AuditLog pour les actions sur entité 'User' (Phase 8 D-10).
+ *
+ * Convention `action` :
+ *  - 'users.invite' / 'users.invitation.resend'
+ *  - 'users.disable' / 'users.enable'
+ *  - 'users.role.change'
+ *  - 'users.password.reset_requested' (déclenché par un admin)
+ *  - 'users.password.set' (par l'user lui-même via /invitation/[token])
+ *  - 'auth.login.success' / 'auth.login.failed' (entity='User' aussi, entityId=user.id ou null)
+ *
+ * Distinction par rapport à `logTenantSettingsChange` :
+ *  - `targetUserId` = l'utilisateur concerné par l'action (ligne AuditLog.entityId)
+ *  - `actorUserId`  = l'admin qui déclenche (peut être null pour login.failed sans user résolu)
+ *  - **Pas de no-op sur diff vide** : certaines actions n'ont pas de diff (disable, login.success).
+ */
+export async function logUserAction(opts: {
+  tenantId: string;
+  actorUserId: string | null;
+  targetUserId: string;
+  action: string;
+  diff?: Diff | Record<string, unknown>;
+  ip?: string | null;
+  userAgent?: string | null;
+}): Promise<void> {
+  await prisma.auditLog.create({
+    data: {
+      tenantId: opts.tenantId,
+      userId: opts.actorUserId,
+      entity: 'User',
+      entityId: opts.targetUserId,
+      action: opts.action,
+      diff: (opts.diff ?? {}) as never,
+      ip: opts.ip ?? null,
+      userAgent: opts.userAgent ?? null,
+    },
+  });
+}
