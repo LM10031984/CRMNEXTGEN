@@ -2,86 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { Route } from 'next';
-import { usePathname } from 'next/navigation';
-import {
-  Users,
-  Building2,
-  GraduationCap,
-  BookOpen,
-  FileText,
-  Calendar,
-  Receipt,
-  Megaphone,
-  Settings,
-  LayoutDashboard,
-  ListChecks,
-  Landmark,
-  ClipboardCheck,
-  Inbox,
-  ChevronLeft,
-  ChevronRight,
-  Wallet,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-interface NavSection {
-  title?: string;
-  items: NavItem[];
-}
-
-const NAV: NavSection[] = [
-  {
-    items: [{ label: 'Tableau de bord', href: '/app', icon: LayoutDashboard }],
-  },
-  {
-    title: 'Base contacts',
-    items: [
-      { label: 'Apprenants', href: '/app/apprenants', icon: Users },
-      { label: 'Organisations', href: '/app/organisations', icon: Building2 },
-      { label: 'Formateurs', href: '/app/formateurs', icon: GraduationCap },
-    ],
-  },
-  {
-    title: 'Bibliothèque',
-    items: [
-      { label: 'Produits de formation', href: '/app/produits', icon: BookOpen },
-      { label: 'Modèles de documents', href: '/app/templates', icon: FileText },
-    ],
-  },
-  {
-    title: 'Référentiels',
-    items: [
-      { label: 'Financeurs', href: '/app/financeurs', icon: Landmark },
-      { label: 'Budget AGEFICE', href: '/app/budget-agefice', icon: Wallet },
-    ],
-  },
-  {
-    title: 'Activité',
-    items: [
-      { label: 'Sessions', href: '/app/sessions', icon: Calendar },
-      { label: 'Pré-inscriptions', href: '/app/preinscriptions', icon: Inbox },
-      { label: 'Inscriptions', href: '/app/inscriptions', icon: ListChecks },
-      { label: 'Dossiers OPCO', href: '/app/dossiers-opco', icon: ClipboardCheck },
-      { label: 'Factures', href: '/app/factures', icon: Receipt },
-      { label: 'Leads', href: '/app/leads', icon: Megaphone },
-    ],
-  },
-  {
-    items: [{ label: 'Paramètres', href: '/app/parametres', icon: Settings }],
-  },
-];
+import { ActiveBatchesBadge } from './active-batches-badge';
+import { SidebarNav } from './sidebar-nav';
+import type { NavSection } from './nav-config';
 
 const STORAGE_KEY = 'qualiof-sidebar-collapsed';
 
-export function Sidebar() {
-  const pathname = usePathname();
+interface SidebarProps {
+  /**
+   * Sections de navigation déjà filtrées par rôle (D-07). Passées en prop par
+   * `app/app/layout.tsx` (Server Component) qui appelle `filterNavForRole(NAV, user.role)`.
+   * Cette prop évite de réimporter `NAV` ici et de re-filtrer côté client.
+   */
+  nav: NavSection[];
+}
+
+/**
+ * Sidebar desktop (hidden < md, visible >= md). Pour mobile, voir <MobileNavDrawer>
+ * activé par <MobileMenuButton> dans la TopBar.
+ *
+ * État `collapsed` (largeur 256/64 px) persiste dans localStorage.
+ * Le rendu de la nav est délégué à <SidebarNav> qui consomme la prop `nav`.
+ */
+export function Sidebar({ nav }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   // Hydrate l'état depuis localStorage côté client (SSR ne le voit pas)
@@ -89,7 +34,7 @@ export function Sidebar() {
     try {
       setCollapsed(localStorage.getItem(STORAGE_KEY) === '1');
     } catch {
-      // ignore (Safari incognito etc.)
+      // ignore
     }
   }, []);
 
@@ -108,7 +53,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'shrink-0 border-r border-border bg-white h-screen fixed top-0 left-0 z-30 flex flex-col transition-[width] duration-200',
+        'hidden md:flex shrink-0 border-r border-border bg-white h-screen fixed top-0 left-0 z-30 flex-col transition-[width] duration-200',
         collapsed ? 'w-[64px]' : 'w-64',
       )}
     >
@@ -133,51 +78,13 @@ export function Sidebar() {
 
       {/* Zone scrollable avec gradient en bas pour signaler le contenu coupé */}
       <div className="flex-1 relative overflow-hidden">
-        <nav className="h-full overflow-y-auto py-4 pb-10">
-          {NAV.map((section, sIdx) => (
-            <div key={sIdx} className="mb-6">
-              {section.title && !collapsed && (
-                <div className="px-6 mb-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-                  {section.title}
-                </div>
-              )}
-              <ul className={cn('space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
-                {section.items.map((item) => {
-                  // Pour la racine /app (Tableau de bord), match strict —
-                  // sinon startsWith('/app/') activerait Dashboard sur toutes
-                  // les pages enfants. Pour les autres, on autorise le prefixe
-                  // pour highlighter une fiche detail (/app/sessions/[id]).
-                  const active =
-                    item.href === '/app'
-                      ? pathname === '/app'
-                      : pathname === item.href || pathname.startsWith(item.href + '/');
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href as Route}
-                        title={collapsed ? item.label : undefined}
-                        className={cn(
-                          'flex items-center gap-2.5 rounded-lg text-sm transition-colors',
-                          collapsed ? 'justify-center p-2' : 'px-3 py-2',
-                          active
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-foreground hover:bg-muted',
-                        )}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
+        <SidebarNav nav={nav} collapsed={collapsed} />
         {/* Gradient bas — signale que la zone scrolle si contenu débordant */}
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
       </div>
+
+      {/* Badge "génération de pack en cours" — affiché uniquement si batch actif */}
+      <ActiveBatchesBadge collapsed={collapsed} />
 
       <div
         className={cn(

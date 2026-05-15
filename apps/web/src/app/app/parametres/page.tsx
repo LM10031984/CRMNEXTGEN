@@ -309,12 +309,18 @@ export default async function ParametresPage() {
           description="Gestion des accès et des rôles"
           allowEdit={false}
           readView={
-            <>
-              <p className="text-sm text-muted-foreground mb-3">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
                 Rôles : ADMIN, MANAGER, FORMATEUR, COMMERCIAL, COMPTABLE, LECTEUR.
               </p>
-              <Badge variant="muted">Disponible Phase 8 RBAC</Badge>
-            </>
+              <a
+                href="/app/parametres/utilisateurs"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                Gérer les utilisateurs
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
           }
         />
 
