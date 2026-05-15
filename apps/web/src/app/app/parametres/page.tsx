@@ -1,17 +1,85 @@
-import { Settings, Building2, Users, Sparkles } from 'lucide-react';
+import {
+  Building2,
+  MapPin,
+  Image,
+  Hash,
+  CreditCard,
+  Mail,
+  Users,
+  Sparkles,
+  Settings,
+  FileText,
+} from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { SettingsSection } from '@/components/settings/settings-section';
+import { OfIdentityForm } from '@/components/settings/of-identity-form';
+import { OfAddressForm } from '@/components/settings/of-address-form';
+import { OfAssetsForm } from '@/components/settings/of-assets-form';
+import { OfInvoicingForm } from '@/components/settings/of-invoicing-form';
+import { OfBankingForm } from '@/components/settings/of-banking-form';
+import { OfEmailForm } from '@/components/settings/of-email-form';
+import { formatIban } from '@/lib/iban-format';
 
+/**
+ * Page Paramètres OF (Phase 7 Plan 07-04).
+ *
+ * Server Component qui :
+ *  - Récupère le Tenant complet + count factures
+ *  - Rend 6 sections éditables (inline edit via SettingsSection) +
+ *    3 sections legacy en lecture seule (Utilisateurs / OPCO / Docs Qualiopi)
+ *  - Layout : grid 1 colonne, sections empilées (recommandation A Finding 8
+ *    RESEARCH.md — préfère "scroll continu" plutôt que tabs pour réduire
+ *    la charge cognitive sur une page peu fréquentée).
+ *
+ * Décisions UX :
+ *  - "Modifier" par section (pas un mode édition global) → cohérent avec
+ *    le pattern fiche apprenant Phase 5.
+ *  - Sections legacy conservées en bas (Utilisateurs/OPCO/Docs) avec
+ *    `allowEdit={false}` → pas de bouton Modifier.
+ *  - Préférence stockage hybride BDD ⤳ ENV (D-01 CONTEXT.md) :
+ *    si BDD est null → afficher placeholder italique "à renseigner".
+ */
 export default async function ParametresPage() {
   const { user } = await validateRequest();
   if (!user) return null;
 
-  const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } });
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+  });
+  const invoiceCount = await prisma.invoice.count({
+    where: { tenantId: user.tenantId },
+  });
   const usersCount = await prisma.user.count({ where: { tenantId: user.tenantId } });
   const opcos = await prisma.opcoCatalog.findMany({ orderBy: { name: 'asc' } });
-  const docCatalog = await prisma.qualiopiDocCatalog.findMany({ orderBy: { phase: 'asc' } });
+  const docCatalog = await prisma.qualiopiDocCatalog.findMany({
+    orderBy: { phase: 'asc' },
+  });
+
+  if (!tenant) {
+    return (
+      <div className="space-y-6 max-w-5xl">
+        <PageHeader
+          title="Paramètres"
+          subtitle="Configuration de votre organisme de formation"
+        />
+        <p className="text-sm text-red-600">Tenant introuvable.</p>
+      </div>
+    );
+  }
+
+  // Adresse — le Json Prisma est typé `JsonValue`. On cast en shape connue.
+  const address = (tenant.address ?? null) as {
+    street?: string;
+    street2?: string;
+    postalCode?: string;
+    city?: string;
+    country?: string;
+  } | null;
+
+  const invoicePrefix = tenant.invoicePrefix ?? 'FAC';
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -20,106 +88,343 @@ export default async function ParametresPage() {
         subtitle="Configuration de votre organisme de formation"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-border bg-white p-6">
-          <h2 className="font-semibold mb-4 inline-flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" /> Organisme
-          </h2>
-          <dl className="space-y-3 text-sm">
-            <Field label="Nom" value={tenant?.name ?? '—'} />
-            <Field label="SIRET" value={tenant?.siret ?? <span className="text-muted-foreground italic">à renseigner</span>} />
-            <Field label="N° Déclaration d'activité" value={tenant?.numDA ?? <span className="text-muted-foreground italic">à renseigner</span>} />
-            <Field label="RCS" value={tenant?.rcs ?? <span className="text-muted-foreground italic">à renseigner</span>} />
-          </dl>
-          <p className="mt-4 text-xs text-muted-foreground">
-            💡 Édition de ces champs disponible au palier 2.2.
-          </p>
-        </section>
+      <div className="grid grid-cols-1 gap-6">
+        {/* ─── 1. Organisme — Identité légale (SET-01) ──────────────────── */}
+        <SettingsSection
+          icon={Building2}
+          title="Organisme — Identité légale"
+          description="Raison sociale, SIRET, déclaration d'activité, RCS, forme juridique"
+          readView={
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <Field label="Raison sociale" value={tenant.name} />
+              <Field label="SIRET" value={tenant.siret} />
+              <Field label="N° Déclaration d'activité" value={tenant.numDA} />
+              <Field label="RCS" value={tenant.rcs} />
+              <Field label="Forme juridique" value={tenant.legalForm} />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfIdentityForm
+              initial={{
+                name: tenant.name,
+                siret: tenant.siret,
+                numDA: tenant.numDA,
+                rcs: tenant.rcs,
+                legalForm: tenant.legalForm,
+              }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
 
-        <section className="rounded-2xl border border-border bg-white p-6">
-          <h2 className="font-semibold mb-4 inline-flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" /> Utilisateurs ({usersCount})
-          </h2>
-          <p className="text-sm text-muted-foreground mb-3">
-            Gestion des accès et des rôles (ADMIN, MANAGER, FORMATEUR, COMMERCIAL, COMPTABLE, LECTEUR).
-          </p>
-          <Badge variant="muted">Disponible palier 2.2</Badge>
-        </section>
+        {/* ─── 2. Adresse & mentions légales (SET-02 texte) ─────────────── */}
+        <SettingsSection
+          icon={MapPin}
+          title="Adresse & mentions légales"
+          description="Apparaît dans les conventions, factures et documents Qualiopi"
+          readView={
+            <dl className="space-y-3">
+              <Field
+                label="Adresse"
+                value={
+                  address
+                    ? [
+                        address.street,
+                        address.street2,
+                        [address.postalCode, address.city]
+                          .filter(Boolean)
+                          .join(' '),
+                        address.country,
+                      ]
+                        .filter(Boolean)
+                        .join(', ')
+                    : null
+                }
+              />
+              <Field
+                label="Mentions légales"
+                value={
+                  tenant.legalMentions ? (
+                    <span className="whitespace-pre-wrap">{tenant.legalMentions}</span>
+                  ) : null
+                }
+              />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfAddressForm
+              initial={{
+                address: address ?? null,
+                legalMentions: tenant.legalMentions,
+              }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
 
-        <section className="rounded-2xl border border-border bg-white p-6 lg:col-span-2">
-          <h2 className="font-semibold mb-4 inline-flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" /> OPCO référencés ({opcos.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {opcos.map((o) => (
-              <div
-                key={o.id}
-                className="rounded-lg border border-border p-3 text-sm flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium">{o.name}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {o.type} {o.averageDelayDays ? `· délai ${o.averageDelayDays}j` : ''}
-                    {o.yearlyCapPerPerson ? ` · plafond ${Number(o.yearlyCapPerPerson).toFixed(0)}€/an` : ''}
-                  </div>
-                </div>
-                <Badge variant="success">{o.status}</Badge>
+        {/* ─── 3. Logo & signatures (SET-02 assets) ──────────────────── */}
+        <SettingsSection
+          icon={Image}
+          title="Logo & signatures"
+          description="Affichés en en-tête / pied des documents Qualiopi générés"
+          readView={
+            <div className="text-sm text-muted-foreground">
+              Cliquer sur <strong>Modifier</strong> pour gérer le logo et les
+              signatures.
+              {(tenant.logoPath ||
+                tenant.signaturePedagoPath ||
+                tenant.signatureDirigeantPath) && (
+                <ul className="mt-2 text-xs space-y-0.5">
+                  {tenant.logoPath && <li>• Logo personnalisé actif</li>}
+                  {tenant.signaturePedagoPath && (
+                    <li>• Signature responsable pédagogique personnalisée</li>
+                  )}
+                  {tenant.signatureDirigeantPath && (
+                    <li>• Signature dirigeant personnalisée</li>
+                  )}
+                </ul>
+              )}
+            </div>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfAssetsForm
+              initial={{
+                logoPath: tenant.logoPath,
+                signaturePedagoPath: tenant.signaturePedagoPath,
+                signatureDirigeantPath: tenant.signatureDirigeantPath,
+              }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── 4. Numérotation factures (SET-03 préfixe) ─────────────── */}
+        <SettingsSection
+          icon={Hash}
+          title="Numérotation factures"
+          description={`Prochain numéro : ${invoicePrefix}-${(invoiceCount + 1).toString().padStart(6, '0')}`}
+          readView={
+            <dl className="space-y-3">
+              <Field label="Préfixe" value={<span className="font-mono">{invoicePrefix}</span>} />
+              <Field
+                label="Factures émises"
+                value={
+                  invoiceCount > 0
+                    ? `${invoiceCount} facture${invoiceCount > 1 ? 's' : ''}`
+                    : 'Aucune facture émise pour l\'instant'
+                }
+              />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfInvoicingForm
+              initial={{
+                invoicePrefix,
+                iban: tenant.iban,
+                bic: tenant.bic,
+              }}
+              invoiceCount={invoiceCount}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── 5. Coordonnées bancaires (SET-03 RIB) ─────────────────── */}
+        <SettingsSection
+          icon={CreditCard}
+          title="Coordonnées bancaires"
+          description="Apparaissent en bas des factures et conventions"
+          readView={
+            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
+              <div className="sm:col-span-2">
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">IBAN</dt>
+                <dd className="font-mono text-sm mt-0.5">
+                  {tenant.iban ? formatIban(tenant.iban) : (
+                    <span className="text-muted-foreground italic">à renseigner</span>
+                  )}
+                </dd>
               </div>
-            ))}
-          </div>
-        </section>
+              <Field
+                label="BIC"
+                value={tenant.bic ? <span className="font-mono">{tenant.bic}</span> : null}
+              />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfBankingForm
+              initial={{
+                invoicePrefix,
+                iban: tenant.iban,
+                bic: tenant.bic,
+              }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
 
-        <section className="rounded-2xl border border-border bg-white p-6 lg:col-span-2">
-          <h2 className="font-semibold mb-4 inline-flex items-center gap-2">
-            <Settings className="h-5 w-5 text-primary" /> Référentiel documents Qualiopi ({docCatalog.length})
-          </h2>
-          <div className="overflow-x-auto -mx-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
-                  <th className="px-2 py-2">Document</th>
-                  <th className="px-2 py-2">Phase</th>
-                  <th className="px-2 py-2">Indicateur</th>
-                  <th className="px-2 py-2">Obligatoire</th>
-                  <th className="px-2 py-2">Délai</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docCatalog.map((d) => (
-                  <tr key={d.id} className="border-b border-border last:border-0">
-                    <td className="px-2 py-2 font-medium">{d.name}</td>
-                    <td className="px-2 py-2 text-xs">
-                      <Badge variant="muted">{d.phase}</Badge>
-                    </td>
-                    <td className="px-2 py-2 text-xs text-muted-foreground">
-                      {d.qualiopiIndicator ?? '—'}
-                    </td>
-                    <td className="px-2 py-2">
-                      {d.isMandatory ? (
-                        <Badge variant="primary">Oui</Badge>
-                      ) : (
-                        <Badge variant="muted">Non</Badge>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-xs text-muted-foreground">
-                      {d.recommendedDelay ?? '—'}
-                    </td>
+        {/* ─── 6. Email expéditeur (SET-03 email) ────────────────────── */}
+        <SettingsSection
+          icon={Mail}
+          title="Email expéditeur"
+          description="Adresse 'From' des emails envoyés par l'application"
+          readView={
+            <dl className="space-y-3">
+              <Field
+                label="Adresse d'envoi"
+                value={
+                  tenant.emailFrom ? (
+                    <a
+                      href={`mailto:${tenant.emailFrom}`}
+                      className="text-primary hover:underline"
+                    >
+                      {tenant.emailFrom}
+                    </a>
+                  ) : null
+                }
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Le mot de passe SMTP reste géré dans la configuration serveur.
+              </p>
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <OfEmailForm
+              initial={{ emailFrom: tenant.emailFrom }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── Sections legacy read-only ──────────────────────────────── */}
+
+        <SettingsSection
+          icon={Users}
+          title={`Utilisateurs (${usersCount})`}
+          description="Gestion des accès et des rôles"
+          allowEdit={false}
+          readView={
+            <>
+              <p className="text-sm text-muted-foreground mb-3">
+                Rôles : ADMIN, MANAGER, FORMATEUR, COMMERCIAL, COMPTABLE, LECTEUR.
+              </p>
+              <Badge variant="muted">Disponible Phase 8 RBAC</Badge>
+            </>
+          }
+        />
+
+        <SettingsSection
+          icon={Sparkles}
+          title={`OPCO référencés (${opcos.length})`}
+          description="Catalogue des financeurs alimentant le module Dossiers OPCO"
+          allowEdit={false}
+          readView={
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {opcos.map((o) => (
+                <div
+                  key={o.id}
+                  className="rounded-lg border border-border p-3 text-sm flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium">{o.name}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {o.type}{' '}
+                      {o.averageDelayDays ? `· délai ${o.averageDelayDays}j` : ''}
+                      {o.yearlyCapPerPerson
+                        ? ` · plafond ${Number(o.yearlyCapPerPerson).toFixed(0)}€/an`
+                        : ''}
+                    </div>
+                  </div>
+                  <Badge variant="success">{o.status}</Badge>
+                </div>
+              ))}
+            </div>
+          }
+        />
+
+        <SettingsSection
+          icon={Settings}
+          title={`Référentiel documents Qualiopi (${docCatalog.length})`}
+          description="32 indicateurs Qualiopi — alimenté par la seed Prisma"
+          allowEdit={false}
+          readView={
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
+                    <th className="px-2 py-2">
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                        Document
+                      </span>
+                    </th>
+                    <th className="px-2 py-2">Phase</th>
+                    <th className="px-2 py-2">Indicateur</th>
+                    <th className="px-2 py-2">Obligatoire</th>
+                    <th className="px-2 py-2">Délai</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {docCatalog.map((d) => (
+                    <tr key={d.id} className="border-b border-border last:border-0">
+                      <td className="px-2 py-2 font-medium">{d.name}</td>
+                      <td className="px-2 py-2 text-xs">
+                        <Badge variant="muted">{d.phase}</Badge>
+                      </td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">
+                        {d.qualiopiIndicator ?? '—'}
+                      </td>
+                      <td className="px-2 py-2">
+                        {d.isMandatory ? (
+                          <Badge variant="primary">Oui</Badge>
+                        ) : (
+                          <Badge variant="muted">Non</Badge>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">
+                        {d.recommendedDelay ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          }
+        />
       </div>
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  const isEmpty =
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    (typeof value === 'string' && value.trim() === '');
   return (
     <div>
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</dt>
-      <dd>{value}</dd>
+      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+        {label}
+      </dt>
+      <dd className="mt-0.5">
+        {isEmpty ? (
+          <span className="text-muted-foreground italic">à renseigner</span>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }
