@@ -22,27 +22,33 @@ datasource db {
 // =====================================================
 
 model Tenant {
-  id                     String   @id @default(uuid())
-  name                   String
-  siret                  String?
-  numDA                  String?
-  rcs                    String?
+  id                      String         @id @default(uuid())
+  name                    String
+  siret                   String?
+  numDA                   String?
+  rcs                     String?
   // Phase 7 — paramètres OF éditables (SET-01/02/03). Toutes nullables :
   // null = fallback ENV (D-01 hybrid BDD/ENV). Première sauvegarde fait basculer
   // la source de vérité en BDD.
-  legalForm              String? // forme juridique libre (SAS, EURL, ...) — voir enum LegalForm pour valeurs canoniques
-  legalMentions          String?  @db.Text
-  address                Json?
-  invoicePrefix          String?  @default("FAC")
-  iban                   String?
-  bic                    String?
-  emailFrom              String?
-  logoPath               String? // ex "/of-assets/{tenantId}/logo.png"
-  signaturePedagoPath    String?
-  signatureDirigeantPath String?
-  users                  User[]
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @default(now()) @updatedAt
+  legalForm               String? // forme juridique libre (SAS, EURL, ...) — voir enum LegalForm pour valeurs canoniques
+  legalMentions           String?        @db.Text
+  address                 Json?
+  invoicePrefix           String?        @default("FAC")
+  iban                    String?
+  bic                     String?
+  emailFrom               String?
+  logoPath                String? // ex "/of-assets/{tenantId}/logo.png"
+  signaturePedagoPath     String?
+  signatureDirigeantPath  String?
+  // Phase 9 — Distribution leads automatique (LEAD-01 D-06).
+  // Par défaut true pour rétro-compat (les tenants existants gardent le comportement actuel).
+  autoAssignLeads         Boolean        @default(true)
+  notifyOnLeadAssignEmail Boolean        @default(true)
+  notifyOnLeadAssignBell  Boolean        @default(true)
+  users                   User[]
+  notifications           Notification[]
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @default(now()) @updatedAt
 }
 
 enum UserRole {
@@ -55,26 +61,27 @@ enum UserRole {
 }
 
 model User {
-  id           String           @id @default(uuid())
-  tenantId     String
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email        String           @unique
-  hashedPwd    String
-  firstName    String
-  lastName     String
-  role         UserRole         @default(LECTEUR)
+  id            String           @id @default(uuid())
+  tenantId      String
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email         String           @unique
+  hashedPwd     String
+  firstName     String
+  lastName      String
+  role          UserRole         @default(LECTEUR)
   // Phase 8 — soft-delete + métadonnées invitation (D-03 CONTEXT.md)
-  disabledAt   DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
-  lastLoginAt  DateTime? // mis à jour dans loginAction sur succès
-  invitedAt    DateTime? // null = créé manuellement (seed)
-  invitedBy    String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
-  invitations  UserInvitation[] @relation("UserInvitations")
-  authSessions AuthSession[]
-  auditLogs    AuditLog[]
-  leadsOwned   Lead[]
-  tasksOwned   Task[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  disabledAt    DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
+  lastLoginAt   DateTime? // mis à jour dans loginAction sur succès
+  invitedAt     DateTime? // null = créé manuellement (seed)
+  invitedBy     String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
+  invitations   UserInvitation[] @relation("UserInvitations")
+  authSessions  AuthSession[]
+  auditLogs     AuditLog[]
+  leadsOwned    Lead[]
+  tasksOwned    Task[]
+  notifications Notification[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, disabledAt])
@@ -675,6 +682,9 @@ model Lead {
   reminderTemplate    String? // "Formule_relance" Airtable
   validatedAt         DateTime?
   notes               String?
+  // Phase 9 — Date de transition vers WON (LEAD-02 KPI 2/4).
+  // Set automatiquement par `updateLeadStatus` quand status passe à WON ; null sinon.
+  wonAt               DateTime?
   // Relations
   actions             LeadAction[]
   tasks               Task[]
@@ -684,6 +694,7 @@ model Lead {
 
   @@index([tenantId, status])
   @@index([tenantId, ownerUserId])
+  @@index([tenantId, status, wonAt])
 }
 
 model LeadAction {
@@ -1021,6 +1032,29 @@ model InternalComment {
   createdAt      DateTime            @default(now())
 
   @@index([tenantId, createdAt])
+}
+
+// =====================================================
+// === Notifications persistées (Phase 9 — LEAD-01)
+// =====================================================
+
+/// Notifications événementielles par-user (vs cloche dérivée tenant-wide
+/// dans `server/actions/notifications.ts`).
+/// Phase 9 introduit le premier type : 'lead.assigned'. Futurs types possibles :
+/// 'session.to_close', 'dossier.incomplete', etc. — schema extensible via `payload Json`.
+model Notification {
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // 'lead.assigned' (Phase 9), extensible
+  payload   Json // typage runtime via packages/shared/src/schemas/lead.ts LeadAssignedPayloadSchema
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, userId, readAt]) // requête cloche
+  @@index([tenantId, type, createdAt]) // futurs filtres admin
 }
 
 // =====================================================
