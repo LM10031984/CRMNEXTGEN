@@ -44,7 +44,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
-import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { invalidateAssetCache } from '@/lib/closure/shared-template';
 import { logTenantSettingsChange } from '@/lib/audit-log';
 
@@ -94,54 +94,60 @@ async function unlinkIfExists(filePath: string): Promise<void> {
  *  6. revalidatePath('/app/parametres') pour rafraîchir l'aperçu UI.
  */
 export async function uploadTenantLogo(formData: FormData): Promise<AssetResult> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  try {
+    const user = await requireRole(['ADMIN']);
 
-  const f = formData.get('file');
-  if (!(f instanceof File) || f.size === 0) {
-    return { ok: false, error: 'Aucun fichier' };
+    const f = formData.get('file');
+    if (!(f instanceof File) || f.size === 0) {
+      return { ok: false, error: 'Aucun fichier' };
+    }
+    if (f.size > MAX_LOGO_MB * 1024 * 1024) {
+      return { ok: false, error: `Logo > ${MAX_LOGO_MB} Mo` };
+    }
+    if (!ALLOWED_LOGO_MIME.has(f.type)) {
+      return { ok: false, error: 'Format autorisé : PNG, JPG, SVG' };
+    }
+
+    const ext = extFromMime(f.type);
+    const dir = tenantAssetDir(user.tenantId);
+    await fs.mkdir(dir, { recursive: true });
+
+    // Supprime les variantes d'extension précédentes (logo.png, logo.jpg, logo.svg)
+    // — sinon `loadLogoColorDataUrl` qui essaie .png → .jpg → .svg pourrait
+    // continuer de servir l'ancien fichier d'une autre extension.
+    await Promise.all(
+      ['png', 'jpg', 'svg'].map((e) => unlinkIfExists(path.join(dir, `logo.${e}`))),
+    );
+
+    const filename = `logo.${ext}`;
+    const buffer = Buffer.from(await f.arrayBuffer());
+    await fs.writeFile(path.join(dir, filename), buffer);
+
+    const publicPath = `/of-assets/${user.tenantId}/${filename}`;
+    const before = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { logoPath: true },
+    });
+    await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: { logoPath: publicPath },
+    });
+
+    invalidateAssetCache(user.tenantId);
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'parameters.upload.logo',
+      diff: { logoPath: { before: before?.logoPath ?? null, after: publicPath } },
+    });
+    revalidatePath('/app/parametres');
+    return { ok: true, path: publicPath };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
   }
-  if (f.size > MAX_LOGO_MB * 1024 * 1024) {
-    return { ok: false, error: `Logo > ${MAX_LOGO_MB} Mo` };
-  }
-  if (!ALLOWED_LOGO_MIME.has(f.type)) {
-    return { ok: false, error: 'Format autorisé : PNG, JPG, SVG' };
-  }
-
-  const ext = extFromMime(f.type);
-  const dir = tenantAssetDir(user.tenantId);
-  await fs.mkdir(dir, { recursive: true });
-
-  // Supprime les variantes d'extension précédentes (logo.png, logo.jpg, logo.svg)
-  // — sinon `loadLogoColorDataUrl` qui essaie .png → .jpg → .svg pourrait
-  // continuer de servir l'ancien fichier d'une autre extension.
-  await Promise.all(
-    ['png', 'jpg', 'svg'].map((e) => unlinkIfExists(path.join(dir, `logo.${e}`))),
-  );
-
-  const filename = `logo.${ext}`;
-  const buffer = Buffer.from(await f.arrayBuffer());
-  await fs.writeFile(path.join(dir, filename), buffer);
-
-  const publicPath = `/of-assets/${user.tenantId}/${filename}`;
-  const before = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: { logoPath: true },
-  });
-  await prisma.tenant.update({
-    where: { id: user.tenantId },
-    data: { logoPath: publicPath },
-  });
-
-  invalidateAssetCache(user.tenantId);
-  await logTenantSettingsChange({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: 'parameters.upload.logo',
-    diff: { logoPath: { before: before?.logoPath ?? null, after: publicPath } },
-  });
-  revalidatePath('/app/parametres');
-  return { ok: true, path: publicPath };
 }
 
 /**
@@ -156,37 +162,43 @@ export async function uploadTenantLogo(formData: FormData): Promise<AssetResult>
  * Idempotent : si déjà reset, retourne { ok: true } sans toucher AuditLog.
  */
 export async function resetTenantLogo(): Promise<SimpleResult> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  try {
+    const user = await requireRole(['ADMIN']);
 
-  const before = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: { logoPath: true },
-  });
-  if (!before?.logoPath) {
-    // Déjà reset — no-op (pas d'AuditLog superflu)
+    const before = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { logoPath: true },
+    });
+    if (!before?.logoPath) {
+      // Déjà reset — no-op (pas d'AuditLog superflu)
+      return { ok: true };
+    }
+
+    const dir = tenantAssetDir(user.tenantId);
+    await Promise.all(
+      ['png', 'jpg', 'svg'].map((e) => unlinkIfExists(path.join(dir, `logo.${e}`))),
+    );
+
+    await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: { logoPath: null },
+    });
+
+    invalidateAssetCache(user.tenantId);
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'parameters.reset.logo',
+      diff: { logoPath: { before: before.logoPath, after: null } },
+    });
+    revalidatePath('/app/parametres');
     return { ok: true };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
   }
-
-  const dir = tenantAssetDir(user.tenantId);
-  await Promise.all(
-    ['png', 'jpg', 'svg'].map((e) => unlinkIfExists(path.join(dir, `logo.${e}`))),
-  );
-
-  await prisma.tenant.update({
-    where: { id: user.tenantId },
-    data: { logoPath: null },
-  });
-
-  invalidateAssetCache(user.tenantId);
-  await logTenantSettingsChange({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: 'parameters.reset.logo',
-    diff: { logoPath: { before: before.logoPath, after: null } },
-  });
-  revalidatePath('/app/parametres');
-  return { ok: true };
 }
 
 // ─── SIGNATURES ─────────────────────────────────────────────────────────
@@ -211,49 +223,56 @@ export async function uploadTenantSignature(
   role: 'pedago' | 'dirigeant',
   formData: FormData,
 ): Promise<AssetResult> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  try {
+    const user = await requireRole(['ADMIN']);
 
-  const f = formData.get('file');
-  if (!(f instanceof File) || f.size === 0) {
-    return { ok: false, error: 'Aucun fichier' };
+    const f = formData.get('file');
+    if (!(f instanceof File) || f.size === 0) {
+      return { ok: false, error: 'Aucun fichier' };
+    }
+    if (f.size > MAX_SIGNATURE_MB * 1024 * 1024) {
+      return { ok: false, error: `Signature > ${MAX_SIGNATURE_MB} Mo` };
+    }
+    if (!ALLOWED_SIGNATURE_MIME.has(f.type)) {
+      return { ok: false, error: 'Format autorisé : PNG, JPG' };
+    }
+
+    const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
+    const dir = tenantAssetDir(user.tenantId);
+    await fs.mkdir(dir, { recursive: true });
+
+    const buffer = Buffer.from(await f.arrayBuffer());
+    await fs.writeFile(path.join(dir, filename), buffer);
+
+    const publicPath = `/of-assets/${user.tenantId}/${filename}`;
+    const fieldName = role === 'pedago' ? 'signaturePedagoPath' : 'signatureDirigeantPath';
+    const before = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { signaturePedagoPath: true, signatureDirigeantPath: true },
+    });
+    const beforeVal =
+      role === 'pedago' ? before?.signaturePedagoPath : before?.signatureDirigeantPath;
+
+    await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: { [fieldName]: publicPath },
+    });
+
+    invalidateAssetCache(user.tenantId);
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: `parameters.upload.signature.${role}`,
+      diff: { [fieldName]: { before: beforeVal ?? null, after: publicPath } },
+    });
+    revalidatePath('/app/parametres');
+    return { ok: true, path: publicPath };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
   }
-  if (f.size > MAX_SIGNATURE_MB * 1024 * 1024) {
-    return { ok: false, error: `Signature > ${MAX_SIGNATURE_MB} Mo` };
-  }
-  if (!ALLOWED_SIGNATURE_MIME.has(f.type)) {
-    return { ok: false, error: 'Format autorisé : PNG, JPG' };
-  }
-
-  const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
-  const dir = tenantAssetDir(user.tenantId);
-  await fs.mkdir(dir, { recursive: true });
-
-  const buffer = Buffer.from(await f.arrayBuffer());
-  await fs.writeFile(path.join(dir, filename), buffer);
-
-  const publicPath = `/of-assets/${user.tenantId}/${filename}`;
-  const fieldName = role === 'pedago' ? 'signaturePedagoPath' : 'signatureDirigeantPath';
-  const before = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: { signaturePedagoPath: true, signatureDirigeantPath: true },
-  });
-  const beforeVal = role === 'pedago' ? before?.signaturePedagoPath : before?.signatureDirigeantPath;
-
-  await prisma.tenant.update({
-    where: { id: user.tenantId },
-    data: { [fieldName]: publicPath },
-  });
-
-  invalidateAssetCache(user.tenantId);
-  await logTenantSettingsChange({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: `parameters.upload.signature.${role}`,
-    diff: { [fieldName]: { before: beforeVal ?? null, after: publicPath } },
-  });
-  revalidatePath('/app/parametres');
-  return { ok: true, path: publicPath };
 }
 
 /**
@@ -268,35 +287,42 @@ export async function uploadTenantSignature(
  * Idempotent : si déjà reset, retourne { ok: true } sans toucher AuditLog.
  */
 export async function resetTenantSignature(role: 'pedago' | 'dirigeant'): Promise<SimpleResult> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  try {
+    const user = await requireRole(['ADMIN']);
 
-  const fieldName = role === 'pedago' ? 'signaturePedagoPath' : 'signatureDirigeantPath';
-  const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
+    const fieldName = role === 'pedago' ? 'signaturePedagoPath' : 'signatureDirigeantPath';
+    const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
 
-  const before = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: { signaturePedagoPath: true, signatureDirigeantPath: true },
-  });
-  const beforeVal = role === 'pedago' ? before?.signaturePedagoPath : before?.signatureDirigeantPath;
-  if (!beforeVal) {
-    // Déjà reset — no-op
+    const before = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { signaturePedagoPath: true, signatureDirigeantPath: true },
+    });
+    const beforeVal =
+      role === 'pedago' ? before?.signaturePedagoPath : before?.signatureDirigeantPath;
+    if (!beforeVal) {
+      // Déjà reset — no-op
+      return { ok: true };
+    }
+
+    await unlinkIfExists(path.join(tenantAssetDir(user.tenantId), filename));
+    await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: { [fieldName]: null },
+    });
+
+    invalidateAssetCache(user.tenantId);
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: `parameters.reset.signature.${role}`,
+      diff: { [fieldName]: { before: beforeVal, after: null } },
+    });
+    revalidatePath('/app/parametres');
     return { ok: true };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
   }
-
-  await unlinkIfExists(path.join(tenantAssetDir(user.tenantId), filename));
-  await prisma.tenant.update({
-    where: { id: user.tenantId },
-    data: { [fieldName]: null },
-  });
-
-  invalidateAssetCache(user.tenantId);
-  await logTenantSettingsChange({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: `parameters.reset.signature.${role}`,
-    diff: { [fieldName]: { before: beforeVal, after: null } },
-  });
-  revalidatePath('/app/parametres');
-  return { ok: true };
 }

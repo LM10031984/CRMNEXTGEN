@@ -46,13 +46,34 @@ vi.mock('@/lib/auth', () => ({
   validateRequest: vi.fn(),
 }));
 
+vi.mock('@/lib/rbac', () => {
+  class UnauthorizedError extends Error {
+    constructor(msg = 'Non authentifié') {
+      super(msg);
+      this.name = 'UnauthorizedError';
+    }
+  }
+  class ForbiddenError extends Error {
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'ForbiddenError';
+    }
+  }
+  return {
+    requireRole: vi.fn(),
+    hasRole: vi.fn(),
+    UnauthorizedError,
+    ForbiddenError,
+  };
+});
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
 
 // Imports après mocks
 import { prisma } from '@qualiof/db';
-import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError } from '@/lib/rbac';
 import {
   updateTenantIdentity,
   updateTenantAddress,
@@ -64,18 +85,29 @@ import { computeDiff } from '@/lib/audit-log';
 const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeof vi.fn>;
 const tenantUpdate = prisma.tenant.update as unknown as ReturnType<typeof vi.fn>;
 const auditLogCreate = prisma.auditLog.create as unknown as ReturnType<typeof vi.fn>;
-const validateRequestMock = validateRequest as unknown as ReturnType<typeof vi.fn>;
+const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
 
-const FAKE_USER = { id: 'user-1', tenantId: 'tenant-1' };
+const FAKE_USER = { id: 'user-1', tenantId: 'tenant-1', role: 'ADMIN' };
 
 beforeEach(() => {
   tenantFindUnique.mockReset();
   tenantUpdate.mockReset();
   auditLogCreate.mockReset();
-  validateRequestMock.mockReset();
-  // Default : user authentifié
-  validateRequestMock.mockResolvedValue({ user: FAKE_USER, session: { id: 's1' } });
+  requireRoleMock.mockReset();
+  // Default : user ADMIN authentifié
+  requireRoleMock.mockResolvedValue(FAKE_USER);
 });
+
+// Compat shim — tests "non authentifié" écrits avec validateRequestMock
+const validateRequestMock = {
+  mockResolvedValue: (v: { user: null | typeof FAKE_USER; session: unknown }) => {
+    if (v.user === null) {
+      requireRoleMock.mockRejectedValueOnce(new UnauthorizedError());
+    } else {
+      requireRoleMock.mockResolvedValueOnce(v.user);
+    }
+  },
+};
 
 // ─── computeDiff (helper pur) ────────────────────────────────────────────
 

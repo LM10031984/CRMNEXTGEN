@@ -51,6 +51,27 @@ vi.mock('@/lib/auth', () => ({
   validateRequest: vi.fn(),
 }));
 
+vi.mock('@/lib/rbac', () => {
+  class UnauthorizedError extends Error {
+    constructor(msg = 'Non authentifié') {
+      super(msg);
+      this.name = 'UnauthorizedError';
+    }
+  }
+  class ForbiddenError extends Error {
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'ForbiddenError';
+    }
+  }
+  return {
+    requireRole: vi.fn(),
+    hasRole: vi.fn(),
+    UnauthorizedError,
+    ForbiddenError,
+  };
+});
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
@@ -74,7 +95,7 @@ vi.mock('node:fs', () => {
 
 // Imports après mocks
 import { prisma } from '@qualiof/db';
-import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError } from '@/lib/rbac';
 import { invalidateAssetCache } from '@/lib/closure/shared-template';
 import { promises as fs } from 'node:fs';
 import {
@@ -87,13 +108,24 @@ import {
 const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeof vi.fn>;
 const tenantUpdate = prisma.tenant.update as unknown as ReturnType<typeof vi.fn>;
 const auditLogCreate = prisma.auditLog.create as unknown as ReturnType<typeof vi.fn>;
-const validateRequestMock = validateRequest as unknown as ReturnType<typeof vi.fn>;
+const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
 const invalidateMock = invalidateAssetCache as unknown as ReturnType<typeof vi.fn>;
 const mkdirMock = fs.mkdir as unknown as ReturnType<typeof vi.fn>;
 const writeFileMock = fs.writeFile as unknown as ReturnType<typeof vi.fn>;
 const unlinkMock = fs.unlink as unknown as ReturnType<typeof vi.fn>;
 
-const FAKE_USER = { id: 'user-1', tenantId: 'tenant-1' };
+const FAKE_USER = { id: 'user-1', tenantId: 'tenant-1', role: 'ADMIN' };
+
+// Compat shim — tests "non authentifié" écrits avec validateRequestMock
+const validateRequestMock = {
+  mockResolvedValue: (v: { user: null | typeof FAKE_USER; session: unknown }) => {
+    if (v.user === null) {
+      requireRoleMock.mockRejectedValueOnce(new UnauthorizedError());
+    } else {
+      requireRoleMock.mockResolvedValueOnce(v.user);
+    }
+  },
+};
 
 // PNG minimal 1x1 transparent
 const TINY_PNG = Buffer.from(
@@ -121,14 +153,14 @@ beforeEach(() => {
   tenantFindUnique.mockReset();
   tenantUpdate.mockReset();
   auditLogCreate.mockReset();
-  validateRequestMock.mockReset();
+  requireRoleMock.mockReset();
   invalidateMock.mockReset();
   mkdirMock.mockReset();
   writeFileMock.mockReset();
   unlinkMock.mockReset();
 
-  // Defaults — user authentifié, fs ops succeed
-  validateRequestMock.mockResolvedValue({ user: FAKE_USER, session: { id: 's1' } });
+  // Defaults — user ADMIN authentifié, fs ops succeed
+  requireRoleMock.mockResolvedValue(FAKE_USER);
   mkdirMock.mockResolvedValue(undefined);
   writeFileMock.mockResolvedValue(undefined);
   unlinkMock.mockResolvedValue(undefined);

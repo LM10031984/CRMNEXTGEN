@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
-import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 
 type ToggleField = 'invoiceSent' | 'opcoApproved' | 'opcoReimbursed' | 'paymentReceived';
 
@@ -21,8 +21,15 @@ export async function toggleDossierBoolean(
   field: ToggleField,
   next: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -71,7 +78,44 @@ export async function toggleDossierBoolean(
     data,
   });
 
+  // Synchro OpcoSubmission : APPROVED quand opcoApproved → true, REIMBURSED
+  // quand opcoReimbursed → true. Met à jour le dernier dossier envoyé.
+  if (next && (field === 'opcoApproved' || field === 'opcoReimbursed')) {
+    await syncOpcoSubmissionStatus(participantId, field);
+  }
+
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${participant.sessionId}`);
   return { ok: true };
+}
+
+/**
+ * Met à jour le dernier OpcoSubmission status=SENT (ou ACK_RECEIVED) d'un
+ * participant pour refléter la validation/remboursement venant de la timeline.
+ */
+async function syncOpcoSubmissionStatus(
+  participantId: string,
+  field: 'opcoApproved' | 'opcoReimbursed',
+) {
+  const last = await prisma.opcoSubmission.findFirst({
+    where: {
+      participantId,
+      status: { in: ['SENT', 'ACK_RECEIVED', 'APPROVED'] },
+    },
+    orderBy: { sentAt: 'desc' },
+    select: { id: true, status: true },
+  });
+  if (!last) return;
+  const now = new Date();
+  if (field === 'opcoApproved' && last.status !== 'APPROVED' && last.status !== 'REIMBURSED') {
+    await prisma.opcoSubmission.update({
+      where: { id: last.id },
+      data: { status: 'APPROVED', approvedAt: now },
+    });
+  } else if (field === 'opcoReimbursed' && last.status !== 'REIMBURSED') {
+    await prisma.opcoSubmission.update({
+      where: { id: last.id },
+      data: { status: 'REIMBURSED', reimbursedAt: now },
+    });
+  }
 }

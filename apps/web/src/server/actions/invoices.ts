@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
-import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
@@ -30,8 +30,15 @@ interface CreateInvoiceInput {
 export async function createInvoiceFromParticipant(
   input: CreateInvoiceInput,
 ): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: input.participantId, session: { tenantId: user.tenantId } },
@@ -168,8 +175,15 @@ export async function createInvoiceForSponsorGroup(input: {
   dueDateDays?: number;
   notes?: string;
 }): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const session = await prisma.trainingSession.findFirst({
     where: { id: input.sessionId, tenantId: user.tenantId },
@@ -316,8 +330,15 @@ export async function recordInvoicePayment(input: {
   receivedAt: string; // ISO
   reference?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const invoice = await prisma.invoice.findFirst({
     where: { id: input.invoiceId, tenantId: user.tenantId },

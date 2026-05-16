@@ -12,6 +12,7 @@
 import { Prisma, prisma } from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 
 // ── Person ────────────────────────────────────────────────────────────────
 export async function updatePerson(input: {
@@ -298,7 +299,18 @@ export async function createPerson(input: {
   // l'AgeficeProfile lié à l'auto-entreprise pour persister les droits.
   cfpAmount?: number | null;
   cfpYear?: number | null;
-}): Promise<{ ok: boolean; personId?: string; error?: string }> {
+  // Keys MinIO des 3 fichiers uploadés au préalable via uploadApprenantDocs.
+  // Stockées sur Person (RIB), SensitiveData (CNI), AgeficeProfile (CFP).
+  cniKey?: string | null;
+  ribKey?: string | null;
+  cfpKey?: string | null;
+  // Enseigne / réseau immobilier — crée un 2e LegalLink AGENT_COMMERCIAL.
+  // Cas majoritaire des apprenants Start Academy : EI + Enseigne (cf
+  // feedback_pattern_agent_commercial). Si null → pas de 2e link.
+  enseigneOrgId?: string | null;
+  // Pour créer une enseigne à la volée si elle n'existe pas (UX wizard).
+  enseigneNewName?: string | null;
+}): Promise<{ ok: boolean; personId?: string; primaryOrgId?: string; enseigneOrgId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
   if (!input.firstName.trim() || !input.lastName.trim()) {
@@ -318,6 +330,7 @@ export async function createPerson(input: {
   const ssn = input.socialSecurityNb?.replace(/\s+/g, '') || null;
 
   const result = await prisma.$transaction(async (tx) => {
+    let primaryOrgId: string | null = null;
     const person = await tx.person.create({
       data: {
         tenantId: user.tenantId,
@@ -330,12 +343,17 @@ export async function createPerson(input: {
         birthName: input.birthName?.trim() || null,
         birthDate: input.birthDate ? new Date(input.birthDate) : null,
         personalAddress: personalAddress ? (personalAddress as object) : undefined,
+        ribKey: input.ribKey ?? null,
       },
     });
 
-    if (ssn) {
+    if (ssn || input.cniKey) {
       await tx.sensitiveData.create({
-        data: { personId: person.id, socialSecurityNb: ssn },
+        data: {
+          personId: person.id,
+          socialSecurityNb: ssn,
+          idDocumentUrl: input.cniKey ?? null,
+        },
       });
     }
 
@@ -364,11 +382,21 @@ export async function createPerson(input: {
           isPrimary: true,
         },
       });
+      primaryOrgId = org.id;
 
-      // Crée AgeficeProfile pour persister la CFP déclarée (si fournie).
-      // Règle de calcul du budget : >=7€ → 3000€, >0€<7€ → 600€, =0 → 0€.
-      if (input.cfpAmount !== null && input.cfpAmount !== undefined && input.cfpAmount >= 0) {
-        const eligible = input.cfpAmount >= 7 ? 3000 : input.cfpAmount > 0 ? 600 : 0;
+      // Crée AgeficeProfile pour persister la CFP déclarée (si fournie) ou la
+      // key MinIO de l'attestation. Règle de calcul du budget : >=7€ → 3000€,
+      // >0€<7€ → 600€, =0 → 0€.
+      const hasCfpAmount =
+        input.cfpAmount !== null && input.cfpAmount !== undefined && input.cfpAmount >= 0;
+      if (hasCfpAmount || input.cfpKey) {
+        const eligible = hasCfpAmount
+          ? input.cfpAmount! >= 7
+            ? 3000
+            : input.cfpAmount! > 0
+              ? 600
+              : 0
+          : null;
         const existingProfile = await tx.ageficeProfile.findUnique({
           where: { organizationId: org.id },
         });
@@ -376,9 +404,14 @@ export async function createPerson(input: {
           await tx.ageficeProfile.update({
             where: { organizationId: org.id },
             data: {
-              lastCfpAmount: input.cfpAmount,
-              lastCfpYear: input.cfpYear ?? null,
-              lastCfpEligibleBudget: eligible,
+              ...(hasCfpAmount
+                ? {
+                    lastCfpAmount: input.cfpAmount!,
+                    lastCfpYear: input.cfpYear ?? null,
+                    lastCfpEligibleBudget: eligible,
+                  }
+                : {}),
+              ...(input.cfpKey ? { cfpAttestationKey: input.cfpKey } : {}),
             },
           });
         } else {
@@ -386,20 +419,62 @@ export async function createPerson(input: {
             data: {
               organizationId: org.id,
               paFields: {},
-              lastCfpAmount: input.cfpAmount,
+              lastCfpAmount: hasCfpAmount ? input.cfpAmount! : null,
               lastCfpYear: input.cfpYear ?? null,
               lastCfpEligibleBudget: eligible,
+              cfpAttestationKey: input.cfpKey ?? null,
             },
           });
         }
       }
     }
 
-    return person;
+    // Enseigne / réseau immobilier — 2e LegalLink AGENT_COMMERCIAL
+    let enseigneOrgId: string | null = null;
+    if (input.enseigneOrgId) {
+      // Vérifie que l'org appartient au tenant
+      const enseigne = await tx.organization.findFirst({
+        where: { id: input.enseigneOrgId, tenantId: user.tenantId },
+      });
+      if (enseigne) {
+        await tx.legalLink.create({
+          data: {
+            personId: person.id,
+            organizationId: enseigne.id,
+            role: 'AGENT_COMMERCIAL',
+          },
+        });
+        enseigneOrgId = enseigne.id;
+      }
+    } else if (input.enseigneNewName?.trim()) {
+      // Crée l'enseigne à la volée (legalForm SARL par défaut, à éditer après)
+      const newEnseigne = await tx.organization.create({
+        data: {
+          tenantId: user.tenantId,
+          legalName: input.enseigneNewName.trim(),
+          legalForm: 'SARL',
+        },
+      });
+      await tx.legalLink.create({
+        data: {
+          personId: person.id,
+          organizationId: newEnseigne.id,
+          role: 'AGENT_COMMERCIAL',
+        },
+      });
+      enseigneOrgId = newEnseigne.id;
+    }
+
+    return { person, primaryOrgId, enseigneOrgId };
   });
 
   revalidatePath('/app/apprenants');
-  return { ok: true, personId: result.id };
+  return {
+    ok: true,
+    personId: result.person.id,
+    primaryOrgId: result.primaryOrgId ?? undefined,
+    enseigneOrgId: result.enseigneOrgId ?? undefined,
+  };
 }
 
 // ── Création organisation ────────────────────────────────────────────────
@@ -545,8 +620,15 @@ export async function createProduct(input: {
 
 // ── Suppression formateur ────────────────────────────────────────────────
 export async function deleteTrainer(personId: string): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const person = await prisma.person.findFirst({
     where: { id: personId, tenantId: user.tenantId },
@@ -570,8 +652,15 @@ export async function deleteTrainer(personId: string): Promise<{ ok: boolean; er
 
 // ── Suppression produit de formation ────────────────────────────────────
 export async function deleteProduct(productId: string): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const product = await prisma.trainingProduct.findFirst({
     where: { id: productId, tenantId: user.tenantId },
@@ -595,8 +684,15 @@ export async function deletePerson(
   personId: string,
   opts: { force?: boolean } = {},
 ): Promise<{ ok: boolean; archived?: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const person = await prisma.person.findFirst({
     where: { id: personId, tenantId: user.tenantId },
@@ -634,8 +730,15 @@ export async function deletePerson(
 export async function deleteTrainingSession(
   sessionId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId: user.tenantId },

@@ -9,6 +9,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { sessionCode } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { generateClosurePack } from './closure-pack';
+import { generateConventionForParticipant } from './convention-generator';
 
 // ---------- Inscription d'un participant à une session ----------
 
@@ -25,8 +28,15 @@ export async function addParticipant(input: {
    */
   legalLinkRole?: LinkRole;
 }): Promise<{ ok: true; id: string } | { ok: false; error: string; needsLegalLinkRole?: boolean }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   // Vérifie que la session, la personne et l'org appartiennent au tenant
   const [session, person, sponsor] = await Promise.all([
@@ -74,6 +84,27 @@ export async function addParticipant(input: {
         sponsorOrgId: input.sponsorOrgId,
       },
     });
+
+    // Auto-génère la convention de formation (Code du Travail L6353-1) si elle
+    // n'existe pas déjà pour ce participant. Template pur (pas Ollama) → ~1s.
+    // Fire-and-forget pour ne pas bloquer l'inscription si génération échoue.
+    const existingConvention = await prisma.document.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        type: 'CONVENTION',
+        participantId: part.id,
+      },
+      select: { id: true },
+    });
+    if (!existingConvention) {
+      generateConventionForParticipant(part.id).catch((e) => {
+        console.warn(
+          `[addParticipant] auto-gen convention failed for ${part.id}:`,
+          e?.message ?? e,
+        );
+      });
+    }
+
     revalidatePath(`/app/sessions/${input.sessionId}`);
     return { ok: true, id: part.id };
   } catch (err) {
@@ -82,8 +113,15 @@ export async function addParticipant(input: {
 }
 
 export async function removeParticipant(participantId: string): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: participantId },
@@ -112,8 +150,15 @@ export async function updateParticipant(input: {
   // feedback_budget_agefice_annee_dossier. ISO yyyy-mm-dd ou null pour effacer.
   financingRequestDate?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: input.participantId },
@@ -172,12 +217,19 @@ export async function updateParticipant(input: {
  * empêche les suppressions accidentelles d'une session déjà facturée.
  */
 export async function deleteSession(sessionId: string): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId: user.tenantId },
-    select: { id: true },
+    select: { id: true, code: true },
   });
   if (!session) return { ok: false, error: 'Session introuvable.' };
 
@@ -187,34 +239,36 @@ export async function deleteSession(sessionId: string): Promise<{ ok: boolean; e
   if (invoiceCount > 0) {
     return {
       ok: false,
-      error: `Impossible de supprimer : ${invoiceCount} facture(s) émise(s) sur cette session. Avoirs requis avant suppression.`,
+      error: `Impossible de supprimer ${session.code} : ${invoiceCount} facture(s) émise(s). Annule ou crédite ces factures d'abord.`,
     };
   }
 
   try {
-    await prisma.$transaction([
-      // Détache les factures DRAFT (rare, mais possible) — elles survivent
-      prisma.invoice.updateMany({
-        where: { sessionId },
-        data: { sessionId: null },
-      }),
-      // Détache les Documents non-cascade (programme/AGEFICE générés)
-      prisma.document.updateMany({
-        where: { sessionId },
-        data: { sessionId: null },
-      }),
-      // Suppression effective (cascade Prisma sur participants, trainers,
-      // attendances, pedagogicalAssets)
-      prisma.trainingSession.delete({ where: { id: sessionId } }),
-    ]);
+    // Détache tout ce qui n'est pas en cascade avant le DELETE final.
+    // ClosureBatch n'a pas de FK formelle vers TrainingSession (sessionId est
+    // juste un String non-contraint) — on les supprime explicitement.
+    // SQL raw direct pour bypasser tout problème de FK Prisma côté ORM.
+    await prisma.$executeRaw`UPDATE "Invoice" SET "sessionId" = NULL WHERE "sessionId" = ${sessionId}`;
+    await prisma.$executeRaw`UPDATE "Document" SET "sessionId" = NULL WHERE "sessionId" = ${sessionId}`;
+    // ClosureJob → ClosureBatch (cascade interne), supprime les batches qui suppriment leurs jobs
+    await prisma.$executeRaw`DELETE FROM "ClosureBatch" WHERE "sessionId" = ${sessionId}`;
+    // PedagogicalAsset a CASCADE via FK PostgreSQL → suppression auto
+    // Le DELETE final déclenche toutes les CASCADES restantes (participants, trainers, slots, attendances)
+    const result = await prisma.$executeRaw`DELETE FROM "TrainingSession" WHERE id = ${sessionId}`;
+    if (result === 0) {
+      return { ok: false, error: `Session ${session.code} non supprimée (déjà absente ?)` };
+    }
   } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    console.error(`[deleteSession ${session.code}] failed:`, msg);
     return {
       ok: false,
-      error: `Échec suppression : ${e?.message ?? e}. Vérifie qu'aucune dépendance n'empêche la suppression.`,
+      error: `Échec suppression ${session.code} : ${msg.slice(0, 300)}`,
     };
   }
 
   revalidatePath('/app/sessions');
+  revalidatePath('/app/dossiers-opco');
   return { ok: true };
 }
 
@@ -230,8 +284,15 @@ export async function createSession(input: {
   pricePerLearner?: number;
   internalNotes?: string;
 }): Promise<{ ok: true; id: string; code: string } | { ok: false; error: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const product = await prisma.trainingProduct.findFirst({
     where: { id: input.productId, tenantId: user.tenantId },
@@ -283,8 +344,15 @@ export async function duplicateSession(input: {
   newStartDate: string;
   recurrence?: { count: number; intervalMonths: number };
 }): Promise<{ ok: true; createdIds: string[]; firstCode: string } | { ok: false; error: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const source = await prisma.trainingSession.findFirst({
     where: { id: input.sessionId, tenantId: user.tenantId },
@@ -355,6 +423,128 @@ export async function listProducts() {
     orderBy: { title: 'asc' },
     select: { id: true, code: true, title: true, durationHours: true, modality: true, priceHT: true },
   });
+}
+
+// ---------- Mise à jour du statut d'une session ----------
+
+const VALID_SESSION_STATUSES: SessionStatus[] = [
+  'DRAFT',
+  'PLANNED',
+  'OPEN',
+  'VALIDATED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+];
+
+export async function updateSessionStatus(input: {
+  sessionId: string;
+  newStatus: SessionStatus;
+}): Promise<{ ok: boolean; error?: string; autoPackTriggered?: boolean }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+  if (!VALID_SESSION_STATUSES.includes(input.newStatus)) {
+    return { ok: false, error: 'Statut invalide.' };
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true, status: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  // Verrou : une fois COMPLETED, on n'autorise que IN_PROGRESS (rectification)
+  // ou CANCELLED → COMPLETED reste interdit pour préserver l'historique propre
+  // (le pack closure a déjà été généré).
+  if (session.status === 'COMPLETED' && input.newStatus !== 'IN_PROGRESS') {
+    return {
+      ok: false,
+      error: 'Une session terminée ne peut être ré-ouverte que vers "En cours" (rectification).',
+    };
+  }
+
+  await prisma.trainingSession.update({
+    where: { id: input.sessionId },
+    data: { status: input.newStatus },
+  });
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  revalidatePath('/app/sessions');
+
+  // Auto-déclenchement du pack fin de formation lors d'une transition vers
+  // COMPLETED — élimine le clic manuel "Générer le pack". Garde-fous :
+  //   - Skip si un batch RUNNING/PENDING existe déjà (évite les doublons en cas
+  //     de toggle rapide IN_PROGRESS ↔ COMPLETED par l'utilisateur).
+  //   - Fire-and-forget (`void`) : la pré-génération du déroulé/grille obs
+  //     session peut prendre 5-10 min via Ollama. Ne pas bloquer la réponse
+  //     du toggle de statut.
+  //   - Erreurs swallowed : un échec d'enqueue ne doit pas casser le change
+  //     de statut. L'utilisateur pourra retrigger manuellement depuis la
+  //     fiche session.
+  let autoPackTriggered = false;
+  if (input.newStatus === 'COMPLETED' && session.status !== 'COMPLETED') {
+    const inFlight = await prisma.closureBatch.count({
+      where: {
+        tenantId: user.tenantId,
+        sessionId: input.sessionId,
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+    });
+    if (inFlight === 0) {
+      autoPackTriggered = true;
+      void generateClosurePack(input.sessionId).catch((e) => {
+        console.error('[auto-pack] échec déclenchement pour', input.sessionId, ':', (e as Error).message);
+      });
+    }
+  }
+
+  return { ok: true, autoPackTriggered };
+}
+
+// ---------- Mise à jour des paramètres logistique session (C4.i17) ----------
+
+export async function updateSessionLogistics(input: {
+  sessionId: string;
+  needsTrainerLodging?: boolean;
+  trainerLodgingPlace?: string | null;
+  trainerLodgingDates?: string | null;
+  hasDisabledLearner?: boolean;
+  disabilityAdaptations?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  await prisma.trainingSession.update({
+    where: { id: input.sessionId },
+    data: {
+      ...(input.needsTrainerLodging !== undefined ? { needsTrainerLodging: input.needsTrainerLodging } : {}),
+      ...(input.trainerLodgingPlace !== undefined ? { trainerLodgingPlace: input.trainerLodgingPlace?.trim() || null } : {}),
+      ...(input.trainerLodgingDates !== undefined ? { trainerLodgingDates: input.trainerLodgingDates?.trim() || null } : {}),
+      ...(input.hasDisabledLearner !== undefined ? { hasDisabledLearner: input.hasDisabledLearner } : {}),
+      ...(input.disabilityAdaptations !== undefined ? { disabilityAdaptations: input.disabilityAdaptations?.trim() || null } : {}),
+    },
+  });
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true };
 }
 
 // ---------- Action helper pour redirect après création ----------

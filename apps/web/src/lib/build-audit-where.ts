@@ -22,7 +22,7 @@
  *    ou seulement par borne basse.
  */
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@qualiof/db';
 
 export interface AuditFilters {
   userId?: string;

@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { generateConventionForParticipant } from './convention-generator';
 
 export interface CreateSessionInput {
   productId: string;
@@ -109,8 +111,15 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   sessionId?: string;
   error?: string;
 }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   // Validations
   if (!input.productId) return { ok: false, error: 'Produit obligatoire' };
@@ -188,8 +197,9 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     }
 
     // Participants (chacun = 1 SessionParticipant avec sponsorOrgId)
+    const createdParticipantIds: string[] = [];
     for (const p of input.participants) {
-      await tx.sessionParticipant.create({
+      const part = await tx.sessionParticipant.create({
         data: {
           sessionId: created.id,
           personId: p.personId,
@@ -199,14 +209,24 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
           financingMode: p.financingMode ?? null,
         },
       });
+      createdParticipantIds.push(part.id);
     }
 
-    return created;
+    return { created, createdParticipantIds };
   });
+
+  // Auto-génère 1 convention par participant ajouté à la création de session.
+  // Fire-and-forget : si une génération échoue, la session est quand même créée.
+  // Template pur (pas Ollama) → ~1s/convention.
+  for (const pid of session.createdParticipantIds) {
+    generateConventionForParticipant(pid).catch((e) => {
+      console.warn(`[createSessionWithParticipants] convention auto-gen failed for ${pid}:`, e?.message ?? e);
+    });
+  }
 
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');
-  return { ok: true, sessionId: session.id };
+  return { ok: true, sessionId: session.created.id };
 }
 
 const SESSION_STATUSES = ['DRAFT', 'PLANNED', 'OPEN', 'VALIDATED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const;
@@ -216,8 +236,15 @@ export async function updateSessionStatus(
   sessionId: string,
   status: SessionStatus,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'unauthorized' };
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
   if (!SESSION_STATUSES.includes(status)) return { ok: false, error: 'invalid_status' };
   const session = await prisma.trainingSession.findUnique({
     where: { id: sessionId },
