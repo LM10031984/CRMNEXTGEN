@@ -110,3 +110,37 @@ export async function logUserAction(opts: {
     },
   });
 }
+
+/**
+ * Helper AuditLog pour entité 'Lead' (Phase 9 — D-07 convention CONTEXT.md).
+ *
+ * Convention `action` :
+ *  - 'leads.auto_assigned'       → actorUserId=null (system, à la création du Lead)
+ *  - 'leads.reassigned'          → actorUserId=user.id (clic manuel "Réassigner")
+ *  - 'leads.distribution_config' → actorUserId=admin.id (modif des 3 toggles)
+ *  - 'leads.status.change'       → actorUserId=user.id (transition status, set wonAt)
+ *
+ * Distinction par rapport à `logUserAction` :
+ *  - `targetLeadId` = Lead concerné (AuditLog.entityId, AuditLog.entity='Lead').
+ *  - `actorUserId`  = qui déclenche (null = system, ex. auto-assignation).
+ *  - Pas de no-op sur diff vide : certains événements n'ont qu'un payload
+ *    (ex. `leads.auto_assigned` après création).
+ */
+export async function logLeadEvent(opts: {
+  tenantId: string;
+  actorUserId: string | null;
+  targetLeadId: string;
+  action: string;
+  diff?: Diff | Record<string, unknown>;
+}): Promise<void> {
+  await prisma.auditLog.create({
+    data: {
+      tenantId: opts.tenantId,
+      userId: opts.actorUserId,
+      entity: 'Lead',
+      entityId: opts.targetLeadId,
+      action: opts.action,
+      diff: (opts.diff ?? {}) as never,
+    },
+  });
+}
