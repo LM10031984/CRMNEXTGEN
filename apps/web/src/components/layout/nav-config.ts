@@ -16,6 +16,8 @@ import {
   Wallet,
   History,
   UserCog,
+  TrendingUp,
+  Sliders,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -105,6 +107,15 @@ export const NAV: NavSection[] = [
         icon: Megaphone,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
+      // Vue de charge (Phase 9 Plan 09-04) : ADMIN+MANAGER uniquement
+      // — destinee aux supervisions de pipeline commercial (pas a COMMERCIAL
+      // qui voit ses propres leads via la liste filtree).
+      {
+        label: 'Vue de charge',
+        href: '/app/leads/charge',
+        icon: TrendingUp,
+        allowedRoles: ['ADMIN', 'MANAGER'],
+      },
     ],
   },
   {
@@ -137,6 +148,14 @@ export const NAV: NavSection[] = [
         label: 'Paramètres',
         href: '/app/parametres',
         icon: Settings,
+        allowedRoles: ['ADMIN'],
+      },
+      // Distribution leads (Phase 9 Plan 09-04) : ADMIN only — 3 toggles tenant
+      // (autoAssignLeads / notifyOnLeadAssignEmail / notifyOnLeadAssignBell).
+      {
+        label: 'Distribution leads',
+        href: '/app/parametres/distribution-leads',
+        icon: Sliders,
         allowedRoles: ['ADMIN'],
       },
       // Utilisateurs (Phase 8 Plan 08-04) : ADMIN only

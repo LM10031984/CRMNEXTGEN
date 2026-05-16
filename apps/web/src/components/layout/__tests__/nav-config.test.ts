@@ -109,3 +109,48 @@ describe('filterNavForRole (Plan 08-04 — D-07 sidebar filter)', () => {
     expect(filterNavForRole(empty, 'ADMIN')).toEqual([]);
   });
 });
+
+/**
+ * Phase 9 Plan 09-04 — Ajouts sidebar :
+ *  - Section "Suivi" → "Vue de charge" (`/app/leads/charge`) visible ADMIN+MANAGER
+ *  - Section "Configuration" → "Distribution leads" (`/app/parametres/distribution-leads`) ADMIN-only
+ */
+describe('filterNavForRole — Phase 9 ajouts (Plan 09-04)', () => {
+  it('Vue de charge visible pour ADMIN', () => {
+    const nav = filterNavForRole(NAV, 'ADMIN');
+    const allItems = nav.flatMap((s) => s.items);
+    expect(allItems.some((i) => i.href === '/app/leads/charge')).toBe(true);
+  });
+
+  it('Vue de charge visible pour MANAGER', () => {
+    const nav = filterNavForRole(NAV, 'MANAGER');
+    const allItems = nav.flatMap((s) => s.items);
+    expect(allItems.some((i) => i.href === '/app/leads/charge')).toBe(true);
+  });
+
+  it('Vue de charge MASQUÉE pour COMMERCIAL (D-02 leadsCharge ADMIN+MANAGER only)', () => {
+    const nav = filterNavForRole(NAV, 'COMMERCIAL');
+    const allItems = nav.flatMap((s) => s.items);
+    expect(allItems.some((i) => i.href === '/app/leads/charge')).toBe(false);
+  });
+
+  it('Distribution leads visible UNIQUEMENT pour ADMIN', () => {
+    const adminItems = filterNavForRole(NAV, 'ADMIN').flatMap((s) => s.items);
+    const managerItems = filterNavForRole(NAV, 'MANAGER').flatMap((s) => s.items);
+    const commercialItems = filterNavForRole(NAV, 'COMMERCIAL').flatMap((s) => s.items);
+    expect(adminItems.some((i) => i.href === '/app/parametres/distribution-leads')).toBe(true);
+    expect(managerItems.some((i) => i.href === '/app/parametres/distribution-leads')).toBe(false);
+    expect(commercialItems.some((i) => i.href === '/app/parametres/distribution-leads')).toBe(false);
+  });
+
+  it('Vue de charge MASQUÉE pour FORMATEUR/COMPTABLE/LECTEUR', () => {
+    for (const role of ['FORMATEUR', 'COMPTABLE', 'LECTEUR'] as const) {
+      const nav = filterNavForRole(NAV, role);
+      const allItems = nav.flatMap((s) => s.items);
+      expect(
+        allItems.some((i) => i.href === '/app/leads/charge'),
+        `Vue de charge should be hidden for ${role}`,
+      ).toBe(false);
+    }
+  });
+});

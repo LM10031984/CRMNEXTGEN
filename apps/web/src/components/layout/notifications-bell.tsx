@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Bell, Inbox, AlertTriangle, AlertCircle, Users, ChevronRight } from 'lucide-react';
+import { Bell, Inbox, AlertTriangle, AlertCircle, Users, ChevronRight, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getNotifications, type NotificationItem, type NotificationKind } from '@/server/actions/notifications';
+import { markNotificationRead } from '@/server/actions/notification-mark-read';
 
 const ICONS: Record<NotificationKind, React.ComponentType<{ className?: string }>> = {
   preinscription: Inbox,
   session_no_attendee: AlertTriangle,
   session_to_close: AlertCircle,
   cleanup: Users,
+  'lead.assigned': UserPlus,
 };
 
 const SEVERITY_CLASSES: Record<NotificationItem['severity'], string> = {
@@ -78,14 +80,27 @@ export function NotificationsBell() {
             </div>
           ) : (
             <ul className="py-1">
-              {items.map((item) => {
+              {items.map((item, idx) => {
                 const Icon = ICONS[item.kind];
+                // Phase 9 Plan 09-04 — la cle doit etre unique : plusieurs items
+                // kind='lead.assigned' peuvent coexister (1 par row Notification).
+                // Pour les items derives (4 kinds tenant-wide), `kind` reste unique.
+                const key = item.id ?? `${item.kind}-${idx}`;
                 return (
-                  <li key={item.kind}>
+                  <li key={key}>
                     <DropdownMenu.Item asChild>
                       <Link
                         href={item.href as any}
-                        onClick={() => setOpen(false)}
+                        onClick={() => {
+                          // Phase 9 Plan 09-04 — marque la Notification row comme lue
+                          // au clic. Fire-and-forget : on ne bloque pas la navigation.
+                          // L'item disparait au prochain poll (60s) car readAt != null
+                          // exclut la row du findMany cote getNotifications.
+                          if (item.id) {
+                            void markNotificationRead(item.id);
+                          }
+                          setOpen(false);
+                        }}
                         className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer outline-none data-[highlighted]:bg-muted text-sm"
                       >
                         <span
