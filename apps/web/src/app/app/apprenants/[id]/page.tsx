@@ -15,9 +15,27 @@ import { LegalLinkEditor } from '@/components/editors/legal-link-editor';
 import { LearnerTabs } from '@/components/apprenants/learner-tabs';
 import { BudgetAgefice } from '@/components/apprenants/budget-agefice';
 import { LearnerCompletenessBadge } from '@/components/apprenants/learner-completeness-badge';
+import { IdentityDocsCard } from '@/components/apprenants/identity-docs-card';
+import { GenerateClosureForParticipantButton } from '@/components/apprenants/generate-closure-for-participant';
+import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { computeLearnerCompleteness } from '@/lib/learner-completeness';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { formatFunderCode } from '@/lib/funder-codes';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
+// Phase 9.1 Plan 04 — Timeline + PrioCards + Alert banner + helpers stats.
+import { LearnerPrioCards } from '@/components/apprenants/timeline/learner-prio-cards';
+import { LearnerAlertsBanner } from '@/components/apprenants/timeline/learner-alerts-banner';
+import { LearnerTimeline } from '@/components/apprenants/timeline/learner-timeline';
+import {
+  groupParticipationsByYear,
+  computeLearnerHours,
+  detectLearnerAlerts,
+  findFirstIncompleteSessionId,
+  countParticipationFilledDocs,
+  type ParticipationForStats,
+} from '@/lib/learner-stats';
+import { MATRIX_DOC_TYPES } from '@/lib/doc-scope';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -26,13 +44,18 @@ export default async function ApprenantDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; ageficeYear?: string }>;
 }) {
   const { user } = await validateRequest();
   if (!user) return null;
   const { id } = await params;
   const sp = await searchParams;
   const tab = sp.tab ?? 'info';
+  // UX-06 : sélecteur d'année du Budget AGEFICE (fallback année courante)
+  const ageficeYearParam = sp.ageficeYear ? parseInt(sp.ageficeYear, 10) : NaN;
+  const selectedAgeficeYear = Number.isFinite(ageficeYearParam)
+    ? ageficeYearParam
+    : new Date().getFullYear();
 
   const person = await prisma.person.findFirst({
     where: { id, tenantId: user.tenantId },
@@ -40,15 +63,33 @@ export default async function ApprenantDetailPage({
       legalLinks: {
         orderBy: { isPrimary: 'desc' },
         include: {
-          organization: { select: { id: true, legalName: true, legalForm: true, siret: true, opcoCode: true } },
+          organization: {
+            select: {
+              id: true,
+              legalName: true,
+              legalForm: true,
+              siret: true,
+              opcoCode: true,
+              ageficeProfile: { select: { cfpAttestationKey: true } },
+            },
+          },
         },
       },
       sensitiveData: true,
       participations: {
         include: {
+          // Phase 9.1 Plan 04 — étendu pour timeline + detectLearnerAlerts.
+          // Ajout : endDate, status, productId (lookup product docs).
           session: {
-            include: {
-              product: { select: { title: true, durationHours: true } },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              startDate: true,
+              endDate: true,
+              status: true,
+              productId: true,
+              product: { select: { id: true, title: true, durationHours: true } },
             },
           },
           sponsorOrg: { select: { legalName: true, opcoCode: true } },
@@ -62,7 +103,12 @@ export default async function ApprenantDetailPage({
   // Documents liés à cet apprenant via ses participations
   const participantIds = person.participations.map((p) => p.id);
   const sessionIds = Array.from(new Set(person.participations.map((p) => p.session.id)));
-  const [rawDocs, rawAssets, rawInvoices] = participantIds.length
+  // Phase 9.1 Plan 04 — productIds des sessions suivies (pour productDocs lookup
+  // — Bug P0 anti-régression : 1 PDF Programme stocké session-wide).
+  const productIds = Array.from(
+    new Set(person.participations.map((p) => p.session.productId)),
+  );
+  const [rawDocs, rawAssets, rawInvoices, rawProductDocs, rawSessionDocs] = participantIds.length
     ? await Promise.all([
         prisma.document.findMany({
           where: { tenantId: user.tenantId, participantId: { in: participantIds } },
@@ -85,8 +131,27 @@ export default async function ApprenantDetailPage({
           orderBy: { createdAt: 'desc' },
           select: { id: true, number: true, createdAt: true, sessionId: true, participantId: true, participantIds: true, status: true },
         }),
+        // Phase 9.1 Plan 04 — docs au niveau produit (Bug P0 anti-régression :
+        // 1 PDF Programme stocké session-wide via entityType='product').
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'product',
+            entityId: { in: productIds },
+          },
+          select: { id: true, type: true, entityId: true },
+        }),
+        // Phase 9.1 Plan 04 — docs au niveau session (Déroulé / Grille obs / Checklist).
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'session',
+            entityId: { in: sessionIds },
+          },
+          select: { id: true, type: true, entityId: true },
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], [], []];
 
   // Filtre les factures groupées qui ne concernent pas vraiment cet apprenant
   // (cas Invoice.sessionId match mais participant pas dans la liste)
@@ -215,6 +280,132 @@ export default async function ApprenantDetailPage({
     0,
   );
 
+  // Phase 9.1 Plan 04 — Construction des maps pour detectLearnerAlerts +
+  // groupement timeline. Toutes les sources matrice sont déjà chargées via
+  // le Promise.all bulk au-dessus (rawDocs / rawAssets / rawProductDocs /
+  // rawSessionDocs). On indexe pour passage à `deriveCellState` (Plan 01).
+  const participantDocsByPid = new Map<string, Map<string, { id: string }>>();
+  for (const d of rawDocs) {
+    if (!d.participantId) continue;
+    let inner = participantDocsByPid.get(d.participantId);
+    if (!inner) {
+      inner = new Map();
+      participantDocsByPid.set(d.participantId, inner);
+    }
+    inner.set(d.type as string, { id: d.id });
+  }
+  const pedAssetsByPid = new Map<string, Map<string, { id: string }>>();
+  for (const a of rawAssets) {
+    if (!a.participantId) continue;
+    let inner = pedAssetsByPid.get(a.participantId);
+    if (!inner) {
+      inner = new Map();
+      pedAssetsByPid.set(a.participantId, inner);
+    }
+    // Le `kind` PedagogicalAsset utilise les mêmes labels (QCM, EMARGEMENT, …)
+    // que DOC_TYPE_TO_PED_KIND (cf doc-scope.ts) — la lookup par docType remontant
+    // est gérée côté deriveCellState via DOC_TYPE_TO_PED_KIND mapping.
+    inner.set(a.kind as string, { id: a.id });
+  }
+  // sessionDocs indexé par sessionId (entityType='session' → entityId = sessionId)
+  const sessionDocsBySid = new Map<string, Map<string, { id: string }>>();
+  for (const d of rawSessionDocs) {
+    let inner = sessionDocsBySid.get(d.entityId);
+    if (!inner) {
+      inner = new Map();
+      sessionDocsBySid.set(d.entityId, inner);
+    }
+    inner.set(d.type as string, { id: d.id });
+  }
+  // productDocs indexé par sessionId (le doc est attaché au productId mais on
+  // l'expose par sessionId pour faciliter la lookup côté deriveCellState ;
+  // chaque session pointe vers son productId via p.session.productId).
+  const productDocsBySid = new Map<string, Map<string, { id: string }>>();
+  for (const d of rawProductDocs) {
+    // Re-router le productDoc vers toutes les sessions du même produit suivies
+    // par cet apprenant (cohérence avec deriveCellState lookup par sessionId).
+    for (const p of person.participations) {
+      if (p.session.productId !== d.entityId) continue;
+      let inner = productDocsBySid.get(p.session.id);
+      if (!inner) {
+        inner = new Map();
+        productDocsBySid.set(p.session.id, inner);
+      }
+      inner.set(d.type as string, { id: d.id });
+    }
+  }
+
+  // Phase 9.1 Plan 04 — Adaptation participation → ParticipationForStats
+  // (forme minimale typée pour les helpers purs `learner-stats.ts`).
+  const participationsForStats: ParticipationForStats[] = person.participations.map((p) => ({
+    id: p.id,
+    paymentStatus: p.paymentStatus,
+    docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
+    session: {
+      id: p.session.id,
+      startDate: p.session.startDate,
+      product: {
+        durationHours: p.session.product?.durationHours ?? 0,
+        title: p.session.product?.title ?? '(sans titre)',
+      },
+    },
+  }));
+
+  // Stats timeline + alertes
+  const currentYearForTimeline = new Date().getFullYear();
+  const totalHoursForTimeline = computeLearnerHours(participationsForStats);
+  const currentYearHours = computeLearnerHours(participationsForStats, currentYearForTimeline);
+  const byYear = groupParticipationsByYear(participationsForStats);
+  const firstYear =
+    [...byYear.keys()].sort((a, b) => a - b)[0] ?? currentYearForTimeline;
+  const { missingDocsCount, pendingPaymentsCount } = detectLearnerAlerts(
+    participationsForStats,
+    productDocsBySid,
+    sessionDocsBySid,
+    participantDocsByPid,
+    pedAssetsByPid,
+  );
+  const firstIncompleteSessionId = findFirstIncompleteSessionId(
+    participationsForStats,
+    productDocsBySid,
+    sessionDocsBySid,
+    participantDocsByPid,
+    pedAssetsByPid,
+  );
+
+  // Map sponsorOrg.opcoCode par participationId → funderCode pour timeline
+  // (le funder n'existe pas sur TrainingSession — il est porté par sponsorOrg
+  // de la participation, cf existing UX-12).
+  const funderByPid = new Map<string, string>();
+  for (const p of person.participations) {
+    if (p.sponsorOrg?.opcoCode) funderByPid.set(p.id, p.sponsorOrg.opcoCode);
+  }
+
+  // Build groups timeline (chaque session devient une TimelineSessionCardData)
+  const timelineGroups = [...byYear.entries()].map(([year, parts]) => ({
+    year,
+    sessions: parts.map((pStats) => {
+      const full = person.participations.find((pp) => pp.id === pStats.id)!;
+      return {
+        id: full.session.id,
+        productTitle: full.session.product?.title ?? full.session.name ?? '(sans titre)',
+        startDate: full.session.startDate,
+        endDate: full.session.endDate,
+        durationHours: full.session.product?.durationHours ?? 0,
+        funderCode: funderByPid.get(full.id) ?? null,
+        cancelled: full.session.status === 'CANCELLED',
+        docsFilled: countParticipationFilledDocs(
+          pStats,
+          productDocsBySid,
+          sessionDocsBySid,
+          participantDocsByPid,
+          pedAssetsByPid,
+        ),
+        docsTotal: MATRIX_DOC_TYPES.length,
+      };
+    }),
+  }));
+
   // Budget AGEFICE de l'année où le dossier a été monté (financingRequestDate),
   // PAS l'année de la session (cf feedback_budget_agefice_annee_dossier).
   // Fallback session.startDate quand financingRequestDate est null : la majorité
@@ -222,14 +413,28 @@ export default async function ApprenantDetailPage({
   // date de la session comme proxy raisonnable. Dès que la vraie date du dossier
   // est saisie, elle prend la priorité.
   const currentYear = new Date().getFullYear();
-  const ageficeParticipations = person.participations.filter((p) => {
-    if (p.sponsorOrg?.opcoCode !== 'AGEFICE') return false;
+  const allAgeficeParticipations = person.participations.filter(
+    (p) => p.sponsorOrg?.opcoCode === 'AGEFICE',
+  );
+  const ageficeAvailableYears = Array.from(
+    new Set(
+      allAgeficeParticipations.map((p) => {
+        const refDate = p.financingRequestDate ?? p.session.startDate;
+        return new Date(refDate).getFullYear();
+      }),
+    ),
+  ).sort((a, b) => b - a);
+  const ageficeParticipations = allAgeficeParticipations.filter((p) => {
     const refDate = p.financingRequestDate ?? p.session.startDate;
-    return new Date(refDate).getFullYear() === currentYear;
+    return new Date(refDate).getFullYear() === selectedAgeficeYear;
   });
   const ageficeConsumed = ageficeParticipations.reduce(
     (s, p) => s + Number(p.priceHT),
     0,
+  );
+  // UX-04 : on annote chaque session AGEFICE avec hasFicheAgefice pour le CTA
+  const ficheAgeficeByParticipantId = new Set(
+    rawDocs.filter((d) => d.type === 'AGEFICE').map((d) => d.participantId).filter((x): x is string => !!x),
   );
   const ageficeSessions = ageficeParticipations.map((p) => ({
     participantId: p.id,
@@ -238,6 +443,7 @@ export default async function ApprenantDetailPage({
     sessionName: p.session.name ?? p.session.product?.title ?? '',
     startDate: p.session.startDate,
     amountHT: Number(p.priceHT),
+    hasFicheAgefice: ficheAgeficeByParticipantId.has(p.id),
   }));
 
   return (
@@ -248,6 +454,13 @@ export default async function ApprenantDetailPage({
         title={`${person.lastName.toUpperCase()} ${person.firstName}`}
         subtitle={person.professionalStatus}
         href={`/app/apprenants/${person.id}`}
+      />
+      {/* UX-10 : Breadcrumb (remplace l'ancien BackToListLink, plus contextuel) */}
+      <Breadcrumb
+        items={[
+          { label: 'Apprenants', href: '/app/apprenants' },
+          { label: `${person.lastName.toUpperCase()} ${person.firstName}` },
+        ]}
       />
       <BackToListLink fallbackHref="/app/apprenants" label="Retour à la liste" />
 
@@ -290,11 +503,45 @@ export default async function ApprenantDetailPage({
 
       <LearnerCompletenessBadge result={computeLearnerCompleteness(person)} />
 
+      {/* Phase 9.1 Plan 04 — Bandeau alerte conditionnel (null si 0 alertes) */}
+      <LearnerAlertsBanner
+        missingDocsCount={missingDocsCount}
+        pendingPaymentsCount={pendingPaymentsCount}
+        firstIncompleteSessionId={firstIncompleteSessionId}
+      />
+
+      {/* Phase 9.1 Plan 04 — 3 PrioCards top fiche apprenant (D-09) */}
+      <LearnerPrioCards
+        totalHours={totalHoursForTimeline}
+        sessionsCount={person.participations.length}
+        currentYear={currentYearForTimeline}
+        currentYearHours={currentYearHours}
+        firstYear={firstYear}
+      />
+
+      {/* Phase 9.1 Plan 04 — Timeline verticale années (D-08) */}
+      <LearnerTimeline
+        groups={timelineGroups}
+        personHrefForEmpty={`/app/apprenants/${person.id}?tab=activity`}
+      />
+
       <LearnerTabs
         tabs={[
           { key: 'info', label: 'Informations', iconKey: 'info' },
-          { key: 'activity', label: 'Activité formation', iconKey: 'activity', badge: totalParticipations },
-          { key: 'documents', label: 'Documents', iconKey: 'documents', badge: documents.length },
+          {
+            key: 'activity',
+            label: 'Activité formation',
+            iconKey: 'activity',
+            badge: totalParticipations,
+            badgeTitle: `${totalParticipations} inscription${totalParticipations > 1 ? 's' : ''} en session`,
+          },
+          {
+            key: 'documents',
+            label: 'Documents',
+            iconKey: 'documents',
+            badge: documents.length,
+            badgeTitle: `${documents.length} document${documents.length > 1 ? 's' : ''} généré${documents.length > 1 ? 's' : ''}`,
+          },
         ]}
       />
 
@@ -367,6 +614,16 @@ export default async function ApprenantDetailPage({
               </dl>
             </section>
 
+            <IdentityDocsCard
+              personId={person.id}
+              cniKey={person.sensitiveData?.idDocumentUrl ?? null}
+              ribKey={person.ribKey ?? null}
+              cfpKey={
+                person.legalLinks.find((l) => l.role === 'EI_SELF')?.organization
+                  .ageficeProfile?.cfpAttestationKey ?? null
+              }
+            />
+
             {person.requiresCleanup && (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
                 <h3 className="font-semibold mb-1">À corriger</h3>
@@ -394,32 +651,47 @@ export default async function ApprenantDetailPage({
 
       {tab === 'activity' && (
         <div className="space-y-6">
-          {/* KPIs activité */}
+          {/* KPIs activité — UX-05 : Sessions + Heures cliquables (anchor vers liste inscriptions) */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KPI label="Sessions" value={String(totalParticipations)} icon={Calendar} />
-            <KPI label="Heures formées" value={`${totalHours} h`} icon={Clock} />
+            <KPI
+              label="Sessions"
+              value={String(totalParticipations)}
+              icon={Calendar}
+              href="#inscriptions-list"
+            />
+            <KPI
+              label="Heures formées"
+              value={`${totalHours} h`}
+              icon={Clock}
+              href="#inscriptions-list"
+            />
             <KPI
               label="CA généré"
               value={fmtEUR.format(person.participations.reduce((s, p) => s + Number(p.priceHT), 0))}
               icon={Wallet}
             />
             <KPI
-              label={`AGEFICE ${currentYear}`}
+              label={`AGEFICE ${selectedAgeficeYear}`}
               value={fmtEUR.format(ageficeConsumed)}
               icon={Wallet}
               accent={ageficeConsumed > 3000 ? 'red' : ageficeConsumed > 2700 ? 'orange' : 'default'}
+              href="#budget-agefice"
             />
           </div>
 
-          {/* Budget AGEFICE détaillé */}
-          <BudgetAgefice
-            year={currentYear}
-            consomme={ageficeConsumed}
-            sessions={ageficeSessions}
-          />
+          {/* Budget AGEFICE détaillé — UX-06 sélecteur année + UX-04 CTA dépôt */}
+          <div id="budget-agefice">
+            <BudgetAgefice
+              year={selectedAgeficeYear}
+              consomme={ageficeConsumed}
+              sessions={ageficeSessions}
+              availableYears={ageficeAvailableYears}
+              basePath={`/app/apprenants/${person.id}`}
+            />
+          </div>
 
-          {/* Historique sessions */}
-          <section className="rounded-2xl border border-border bg-white overflow-hidden">
+          {/* Historique sessions — id pour anchor des KPI cliquables (UX-05) */}
+          <section id="inscriptions-list" className="rounded-2xl border border-border bg-white overflow-hidden scroll-mt-20">
             <div className="p-5 border-b border-border">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Toutes les inscriptions ({totalParticipations})
@@ -432,16 +704,16 @@ export default async function ApprenantDetailPage({
             ) : (
               <ul className="divide-y divide-border">
                 {person.participations.map((p) => (
-                  <li key={p.id}>
-                    <Link
-                      href={`/app/sessions/${p.session.id}`}
-                      className="block p-4 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 flex-wrap">
+                  <li key={p.id} className="p-4 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Link
+                        href={`/app/sessions/${p.session.id}`}
+                        className="flex items-center gap-3 flex-1 min-w-0 group"
+                      >
                         <Badge variant="muted" className="font-mono text-xs">
                           {p.session.code}
                         </Badge>
-                        <span className="font-medium flex-1 min-w-0 truncate">
+                        <span className="font-medium flex-1 min-w-0 truncate group-hover:text-primary">
                           {p.session.name ?? p.session.product?.title ?? '(sans nom)'}
                         </span>
                         <span className="text-xs text-muted-foreground">
@@ -452,7 +724,7 @@ export default async function ApprenantDetailPage({
                         </Badge>
                         {p.sponsorOrg?.opcoCode && (
                           <Badge variant="info" className="text-[10px]">
-                            {p.sponsorOrg.opcoCode}
+                            {formatFunderCode(p.sponsorOrg.opcoCode)}
                           </Badge>
                         )}
                         <span className="font-medium text-sm tabular-nums">
@@ -462,8 +734,23 @@ export default async function ApprenantDetailPage({
                           {p.enrollmentStatus}
                         </Badge>
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                    </Link>
+                      </Link>
+                      <GenerateClosureForParticipantButton
+                        sessionId={p.session.id}
+                        participantId={p.id}
+                        sessionLabel={p.session.code}
+                      />
+                      <ParticipantActionsMenu
+                        participantId={p.id}
+                        participantName={`${person.firstName} ${person.lastName}`}
+                        showAgefice={p.sponsorOrg?.opcoCode === 'AGEFICE'}
+                        initialDocs={{
+                          CONVENTION: rawDocs.find((d) => d.participantId === p.id && d.type === 'CONVENTION')?.id ?? null,
+                          PROGRAMME: rawDocs.find((d) => d.participantId === p.id && d.type === 'PROGRAMME')?.id ?? null,
+                          AGEFICE: rawDocs.find((d) => d.participantId === p.id && d.type === 'AGEFICE')?.id ?? null,
+                        }}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -486,15 +773,29 @@ export default async function ApprenantDetailPage({
           admin: { label: 'Administratif', cls: 'bg-slate-100 text-slate-700' },
           finance: { label: 'Financier', cls: 'bg-amber-100 text-amber-800' },
         } as const;
+        // UX-03 : CTA pour générer un document si l'apprenant a au moins une participation
+        const hasParticipations = person.participations.length > 0;
         return (
           <section className="rounded-2xl border border-border bg-white overflow-hidden">
-            <div className="p-5 border-b border-border">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                Documents générés ({documents.length})
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Groupés par session — clic sur un document pour l'ouvrir.
-              </p>
+            <div className="p-5 border-b border-border flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+                  Documents générés ({documents.length})
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Groupés par session — clic sur un document pour l'ouvrir.
+                </p>
+              </div>
+              {hasParticipations && (
+                <Link
+                  href={`/app/apprenants/${person.id}?tab=activity#inscriptions-list`}
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-primary/40 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+                  title="Aller à l'onglet Activité — chaque session a un menu Actions pour générer ses documents"
+                >
+                  <FileText className="h-4 w-4" />
+                  Générer un document
+                </Link>
+              )}
             </div>
             {documents.length === 0 ? (
               <p className="p-8 text-center text-sm text-muted-foreground italic">
@@ -594,11 +895,14 @@ function KPI({
   value,
   icon: Icon,
   accent,
+  href,
 }: {
   label: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   accent?: 'default' | 'orange' | 'red';
+  /** Si fourni : KPI rendu en <a> cliquable (UX-05 — drill-down). */
+  href?: string;
 }) {
   const cls =
     accent === 'red'
@@ -606,12 +910,23 @@ function KPI({
       : accent === 'orange'
         ? 'border-orange-200 bg-orange-50/50'
         : 'border-border bg-white';
-  return (
-    <div className={`rounded-xl border p-4 ${cls}`}>
+  const inner = (
+    <>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
         <Icon className="h-3 w-3" /> {label}
       </div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <a
+        href={href}
+        className={`rounded-xl border p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 cursor-pointer ${cls}`}
+      >
+        {inner}
+      </a>
+    );
+  }
+  return <div className={`rounded-xl border p-4 ${cls}`}>{inner}</div>;
 }
