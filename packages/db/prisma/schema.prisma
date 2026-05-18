@@ -598,6 +598,16 @@ model SessionParticipant {
   payerErrorMessage String?
   internalNotes     String?
 
+  // Phase 9.1 — Centralisation Qualiopi 360°.
+  // Map: { [docType: DocType string]: { state, uploadedSignedPdfKey?, ... } }
+  // Voir packages/shared/src/schemas/qualiopi-matrix.ts pour la shape exacte.
+  // Source de vérité des statuts manuels par-participant (Bug P0 résolu :
+  // 1 PDF Programme stocké session-wide via Document.entityType='product',
+  // N statuts par-participant dérivés ici).
+  // Les booléens legacy (conventionSigned, programmeDelivered, ...) restent
+  // pour rétrocompat — shadowed quand docStatus[type] est présent.
+  docStatus Json?
+
   // Relations
   invoices        Invoice[]
   comments        InternalComment[]
