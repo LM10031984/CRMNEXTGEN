@@ -1,15 +1,48 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Clock, Users, Target, ListChecks } from 'lucide-react';
+import { Clock, Users } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { EditProductButton } from '@/components/forms/edit-product-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 import { DeleteProductButton } from '@/components/forms/delete-product-button';
-import { GenerateProductProgrammeButton } from '@/components/produits/generate-product-programme-button';
+import { ProductTabs } from '@/components/produits/tabs/product-tabs';
+import type { ProductTabId } from '@/components/produits/tabs/product-tabs';
+import { ProductStatsTab } from '@/components/produits/tabs/product-stats-tab';
+import { ProductSessionsTab } from '@/components/produits/tabs/product-sessions-tab';
+import { ProductLearnersTab } from '@/components/produits/tabs/product-learners-tab';
+import { ProductProgrammeTab } from '@/components/produits/tabs/product-programme-tab';
+import {
+  getProductStats,
+  listProductSessions,
+  listProductLearners,
+  type ProductStats,
+  type ProductSessionRow,
+  type ProductLearnerRow,
+} from '@/lib/product-stats';
+
+/**
+ * Phase 9.1 Plan 09.1-05 Task 3 — Fiche produit refondue en 4 onglets URL-state.
+ *
+ * CENTRAL-04 (4 onglets Stats / Sessions / Apprenants formés / Programme) +
+ * CENTRAL-05 (cross-nav D-05 vers /app/sessions/{id} et /app/apprenants/{personId}).
+ *
+ * Pattern URL state (UI-SPEC §"Component Contracts > ProductTabs") :
+ *  - Server Component lit `searchParams?.tab` (Next.js Page Props)
+ *  - Coerce invalide → 'stats' (fallback safe, UI-SPEC §Edge Cases)
+ *  - <ProductTabs> (Client) lit useSearchParams() pour active state +
+ *    navigue via <Link href="?tab=X">
+ *  - Lazy load : seulement les data du tab actif sont fetchées (pas d'over-fetch)
+ *
+ * Legacy header conservé (audit faux positif si supprimé) : BackToListLink +
+ * DeleteProductButton + EditProductButton + RecordRecentVisit + PageHeader.
+ * Les sections legacy "Documents Qualiopi du produit" / "Objectifs" /
+ * "Programme détaillé" / "Modules" / "Public & prérequis" sont REMPLACÉES par
+ * les 4 onglets (le Programme/Objectifs sont maintenant dans le tab Programme).
+ */
 
 const MOD_LABEL: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -18,18 +51,66 @@ const MOD_LABEL: Record<string, string> = {
   ELEARNING: 'E-learning',
 };
 
-export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const VALID_TABS: readonly ProductTabId[] = [
+  'stats',
+  'sessions',
+  'apprenants',
+  'programme',
+] as const;
+
+function coerceTab(raw: string | undefined): ProductTabId {
+  return (VALID_TABS as readonly string[]).includes(raw ?? '')
+    ? (raw as ProductTabId)
+    : 'stats';
+}
+
+export default async function ProductDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const { user } = await validateRequest();
   if (!user) return null;
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
+  const activeTab = coerceTab(sp.tab);
 
+  // Charge le produit (toujours nécessaire pour Breadcrumb + PageHeader + EditButton).
+  // Scope tenantId strict.
   const product = await prisma.trainingProduct.findFirst({
     where: { id, tenantId: user.tenantId },
     include: { modules: { orderBy: { order: 'asc' } } },
   });
   if (!product) notFound();
 
-  const objectives = (product.objectives ?? []) as string[];
+  // Lazy load par tab — seulement les data nécessaires à l'onglet courant.
+  // Le programmePdfId est chargé pour le tab "programme" (lien PDF si présent).
+  let stats: ProductStats | null = null;
+  let sessions: ProductSessionRow[] | null = null;
+  let learners: ProductLearnerRow[] | null = null;
+  let programmePdfId: string | null = null;
+
+  if (activeTab === 'stats') {
+    stats = await getProductStats(id, user.tenantId);
+  } else if (activeTab === 'sessions') {
+    sessions = await listProductSessions(id, user.tenantId);
+  } else if (activeTab === 'apprenants') {
+    learners = await listProductLearners(id, user.tenantId);
+  } else if (activeTab === 'programme') {
+    const programmeDoc = await prisma.document.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        type: 'PROGRAMME',
+        entityType: 'product',
+        entityId: id,
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    programmePdfId = programmeDoc?.id ?? null;
+  }
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -40,6 +121,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         subtitle={`${product.code} · ${product.durationHours}h`}
         href={`/app/produits/${product.id}`}
       />
+
+      <Breadcrumb
+        items={[
+          { label: 'Catalogue', href: '/app/produits' },
+          { label: product.title },
+        ]}
+      />
+
       <div className="flex items-center justify-between gap-3">
         <BackToListLink fallbackHref="/app/produits" label="Retour au catalogue" />
         <DeleteProductButton productId={product.id} productCode={product.code} />
@@ -50,7 +139,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           title={product.title}
           subtitle={
             <span className="flex flex-wrap items-center gap-2 mt-1">
-              <Badge variant="muted" className="font-mono">{product.code}</Badge>
+              <Badge variant="muted" className="font-mono">
+                {product.code}
+              </Badge>
               <Badge variant="info">{MOD_LABEL[product.modality] ?? product.modality}</Badge>
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" /> {product.durationHours}h
@@ -85,123 +176,29 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         />
       </div>
 
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50/50 p-4">
-        <div className="text-sm">
-          <div className="font-semibold text-primary-800">Programme PDF Qualiopi</div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Génère un PDF prêt à présenter en cas de contrôle, basé sur les champs ci-dessous (objectifs, public, prérequis, programme détaillé).
-          </div>
-        </div>
-        <GenerateProductProgrammeButton productId={product.id} />
+      <ProductTabs activeTab={activeTab} />
+
+      <div
+        role="tabpanel"
+        id={`tab-panel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        className="transition-opacity duration-150"
+      >
+        {activeTab === 'stats' && stats && <ProductStatsTab stats={stats} />}
+        {activeTab === 'sessions' && sessions && (
+          <ProductSessionsTab sessions={sessions} productId={product.id} />
+        )}
+        {activeTab === 'apprenants' && learners && (
+          <ProductLearnersTab learners={learners} />
+        )}
+        {activeTab === 'programme' && (
+          <ProductProgrammeTab
+            markdown={product.programMd}
+            pdfId={programmePdfId}
+            productId={product.id}
+          />
+        )}
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {objectives.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-6">
-              <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
-                <Target className="h-4 w-4" /> Objectifs pédagogiques
-              </h2>
-              <ul className="space-y-2 text-sm">
-                {objectives.filter(Boolean).map((obj, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                    <span>{obj}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {product.programMd && (
-            <section className="rounded-2xl border border-border bg-white p-6">
-              <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
-                <ListChecks className="h-4 w-4" /> Programme détaillé
-              </h2>
-              <pre className="whitespace-pre-wrap text-sm text-foreground font-sans leading-relaxed max-h-[600px] overflow-auto">
-                {product.programMd}
-              </pre>
-            </section>
-          )}
-
-          {product.modules.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-6">
-              <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
-                Modules ({product.modules.length})
-              </h2>
-              <ol className="space-y-3">
-                {product.modules.map((m, i) => (
-                  <li key={m.id} className="flex gap-3">
-                    <div className="h-7 w-7 rounded-full bg-primary-50 text-primary-700 inline-flex items-center justify-center font-semibold text-xs shrink-0">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">{m.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {Math.floor(m.durationMin / 60)}h{(m.durationMin % 60).toString().padStart(2, '0')}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <section className="rounded-2xl border border-border bg-white p-6 space-y-4">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-              Public & prérequis
-            </h2>
-            <Field label="Public visé" value={product.targetAudience ?? '—'} multiline />
-            <Field label="Prérequis" value={product.prerequisites ?? '—'} multiline />
-            <Field label="Modalités d'accès" value={product.accessConditions ?? '—'} multiline />
-            <Field label="Profil formateurs" value={product.trainerProfile ?? '—'} multiline />
-          </section>
-
-          <section className="rounded-2xl border border-border bg-white p-6 space-y-4">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-              Pédagogie & évaluation
-            </h2>
-            <Field
-              label="Modalités pédagogiques"
-              value={product.pedagogicalMethods ?? '—'}
-              multiline
-            />
-            <Field
-              label="Supports pédagogiques"
-              value={product.pedagogicalSupport ?? '—'}
-              multiline
-            />
-            <Field
-              label="Modalités d'évaluation"
-              value={product.evaluationMethods ?? '—'}
-              multiline
-            />
-          </section>
-
-          <section className="rounded-2xl border border-border bg-white p-6 space-y-3">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-              BPF
-            </h2>
-            <Field label="Spécialité" value={product.bpfSpecialty ?? '—'} multiline />
-            <Field label="Catégorie" value={product.bpfCategory ?? '—'} multiline />
-            <Field label="Niveau" value={product.bpfLevel ?? '—'} multiline />
-            {product.excludedFromBpf && <Badge variant="warning">Hors BPF</Badge>}
-          </section>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value, multiline }: { label: string; value: React.ReactNode; multiline?: boolean }) {
-  return (
-    <div>
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-0.5">
-        {label}
-      </dt>
-      <dd className={`text-sm ${multiline ? 'whitespace-pre-line' : ''}`}>{value}</dd>
     </div>
   );
 }
