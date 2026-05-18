@@ -1,14 +1,23 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
-import { DeleteEntityButton } from '@/components/forms/delete-entity-button';
 import { Badge } from '@/components/ui/badge';
+import { formatFunderCode } from '@/lib/funder-codes';
 import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
+import { PrepareTrainingButton } from '@/components/sessions/prepare-training-button';
+import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
+import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
+import { CreatePersonButton } from '@/components/forms/create-person-button';
+import { SessionStatusSelect } from '@/components/sessions/session-status-select';
+import { SessionLogisticsEditor } from '@/components/sessions/session-logistics-editor';
+import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-toggle';
+import { SessionSatisfactionPanel } from '@/components/sessions/session-satisfaction-panel';
+import { BatchProgressAutoRefresh } from '@/components/sessions/batch-progress-auto-refresh';
 import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
@@ -16,16 +25,8 @@ import { DeleteSessionButton } from '@/components/sessions/delete-session-button
 import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
-
-const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
-  DRAFT: { label: 'Brouillon', variant: 'muted' },
-  PLANNED: { label: 'Planifiée', variant: 'info' },
-  OPEN: { label: 'Ouverte', variant: 'info' },
-  VALIDATED: { label: 'Validée', variant: 'success' },
-  IN_PROGRESS: { label: 'En cours', variant: 'primary' },
-  COMPLETED: { label: 'Terminée', variant: 'success' },
-  CANCELLED: { label: 'Annulée', variant: 'danger' },
-};
+import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
+import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -42,8 +43,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         include: {
           person: { select: { id: true, firstName: true, lastName: true } },
-          sponsorOrg: { select: { id: true, legalName: true, legalForm: true, opcoCode: true } },
+          sponsorOrg: { select: { id: true, legalName: true, brandName: true, legalForm: true, opcoCode: true } },
         },
+      },
+      trainers: {
+        include: { person: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
       },
     },
   });
@@ -51,7 +56,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   // Documents Qualiopi déjà générés pour cette session, indexés par participant + type
   const sessionParticipantIds = session.participants.map((p) => p.id);
-  const [sessionDocs, sessionAssets, sessionInvoices] = sessionParticipantIds.length
+  const [sessionDocs, sessionAssets, sessionInvoices, productAssets, sessionSharedDocs] = sessionParticipantIds.length
     ? await Promise.all([
         prisma.document.findMany({
           where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds } },
@@ -71,8 +76,47 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           },
           select: { id: true, number: true, participantId: true, participantIds: true },
         }),
+        // Assets produit partagés par tous les apprenants : Programme + Déroulé
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'product',
+            entityId: session.product?.id,
+            type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, type: true },
+        }),
+        // Assets niveau session partagés par tous les apprenants :
+        // grille observation consolidée (C3.i11), check-list formation (C4.i17)
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'session',
+            entityId: session.id,
+            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION'] },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, type: true },
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], [], []];
+
+  // Index des assets produit par type — 1 lien partagé pour toutes les lignes
+  // de la matrice (programme + déroulé sont identiques pour tous les inscrits).
+  const productDocByType = new Map<string, string>();
+  for (const d of productAssets) {
+    if (!productDocByType.has(d.type)) productDocByType.set(d.type, d.id);
+  }
+  const programmeProductDocId = productDocByType.get('PROGRAMME');
+  const derouleProductDocId = productDocByType.get('DEROULE_PEDAGOGIQUE');
+
+  const sessionSharedDocByType = new Map<string, string>();
+  for (const d of sessionSharedDocs) {
+    if (!sessionSharedDocByType.has(d.type)) sessionSharedDocByType.set(d.type, d.id);
+  }
+  const grilleSessionDocId = sessionSharedDocByType.get('GRILLE_OBS_SESSION');
+  const checklistDocId = sessionSharedDocByType.get('CHECKLIST_FORMATION');
 
   // Indexe par participant pour lookup en O(1) côté rendu
   const docsByParticipant = new Map<string, Map<string, string>>(); // partId → Map(type → docId)
@@ -109,6 +153,94 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     }
   }
 
+  // ─── Phase 9.1 Plan 03 — Chargement bulk pour la matrice qualiopi ──────────
+  // 4 queries parallèles tenant-scopées :
+  //   - participantDocs : Document.entityType='participant' (per-participant)
+  //   - productDocs     : Document.entityType='product'     (1 PDF / N statuts — Bug P0)
+  //   - sessionDocs     : Document.entityType='session'     (session-only)
+  //   - pedagogicalAssets : PedagogicalAsset per participant
+  const [participantDocsRaw, productDocsRaw, sessionDocsRaw, pedAssetsRaw] = sessionParticipantIds.length
+    ? await Promise.all([
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'participant',
+            entityId: { in: sessionParticipantIds },
+          },
+          select: { id: true, type: true, entityId: true },
+        }),
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'product',
+            entityId: session.productId ?? '',
+          },
+          select: { id: true, type: true },
+        }),
+        prisma.document.findMany({
+          where: {
+            tenantId: user.tenantId,
+            entityType: 'session',
+            entityId: session.id,
+          },
+          select: { id: true, type: true },
+        }),
+        prisma.pedagogicalAsset.findMany({
+          where: { tenantId: user.tenantId, sessionId: session.id },
+          select: { id: true, participantId: true, kind: true },
+        }),
+      ])
+    : [[], [], [], []];
+
+  // Map<docType, {id}> pour productDocs / sessionDocs.
+  const productDocsMap = new Map<string, { id: string }>(
+    productDocsRaw.map((d) => [d.type as string, { id: d.id }]),
+  );
+  const sessionDocsMap = new Map<string, { id: string }>(
+    sessionDocsRaw.map((d) => [d.type as string, { id: d.id }]),
+  );
+
+  // Map<participantId, Map<docType, {id}>>
+  const participantDocsByPid = new Map<string, Map<string, { id: string }>>();
+  for (const d of participantDocsRaw) {
+    if (!d.entityId) continue;
+    let inner = participantDocsByPid.get(d.entityId);
+    if (!inner) {
+      inner = new Map();
+      participantDocsByPid.set(d.entityId, inner);
+    }
+    inner.set(d.type as string, { id: d.id });
+  }
+
+  // Map<participantId, Map<kind, {id}>>
+  const pedAssetsByPid = new Map<string, Map<string, { id: string }>>();
+  for (const a of pedAssetsRaw) {
+    if (!a.participantId) continue;
+    let inner = pedAssetsByPid.get(a.participantId);
+    if (!inner) {
+      inner = new Map();
+      pedAssetsByPid.set(a.participantId, inner);
+    }
+    inner.set(a.kind as string, { id: a.id });
+  }
+
+  // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
+  const matrixParticipants = session.participants.map((p) => ({
+    id: p.id,
+    personId: p.person.id,
+    fullName: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+    sponsorOrgId: p.sponsorOrg.id,
+    sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
+    sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
+    financingMode: p.financingMode as string | null,
+    docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
+    isAgefice: p.sponsorOrg.opcoCode === 'AGEFICE',
+    participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+    pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+  }));
+
+  const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
+
   // Derniers batches pack fin de formation pour cette session (audit trail)
   const closureBatches = await prisma.closureBatch.findMany({
     where: { tenantId: user.tenantId, sessionId: session.id },
@@ -125,10 +257,70 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     },
   });
 
-  const statusInfo = STATUS_LABELS[session.status] ?? { label: session.status, variant: 'muted' as const };
   const eiCount = session.participants.filter((p) => SOLO_FORMS.includes(p.sponsorOrg.legalForm)).length;
   const start = new Date(session.startDate);
   const end = new Date(session.endDate);
+
+  // Pour chaque participant, compteur de docs personnels générés (exclut les
+  // docs partagés produit/session : Programme, Déroulé, Grille session,
+  // Check-list). Affiché à la fois dans la liste des inscrits (badge ligne)
+  // ET dans le header de la matrice repliable (résumé agrégé).
+  const PERSONAL_DOC_TYPES = ['CONVENTION', 'AGEFICE', 'ATTESTATION_FIN', 'CERTIFICAT_REALISATION'] as const;
+  const PERSONAL_ASSET_KINDS = ['ANALYSE_BESOIN', 'POSITIONNEMENT', 'EMARGEMENT', 'GRILLE_OBS', 'QCM', 'SATISFACTION_CHAUD', 'SATISFACTION_FROID'] as const;
+  const PERSONAL_DOC_TOTAL = PERSONAL_DOC_TYPES.length + PERSONAL_ASSET_KINDS.length; // 11
+  const docCompletionByParticipant = new Map<string, number>();
+  for (const p of session.participants) {
+    const docs = docsByParticipant.get(p.id);
+    const assets = assetsByParticipant.get(p.id);
+    let n = 0;
+    for (const t of PERSONAL_DOC_TYPES) if (docs?.has(t)) n++;
+    for (const k of PERSONAL_ASSET_KINDS) if (assets?.has(k)) n++;
+    docCompletionByParticipant.set(p.id, n);
+  }
+  const totalCompleted = Array.from(docCompletionByParticipant.values()).reduce((s, x) => s + x, 0);
+  const totalExpected = session.participants.length * PERSONAL_DOC_TOTAL;
+  const completionPct = totalExpected > 0 ? Math.round((totalCompleted / totalExpected) * 100) : 0;
+
+  // Détail par type de doc — combien de participants ont chaque doc.
+  // Permet d'afficher "ce qui manque le plus" en un coup d'œil.
+  const DOC_LABEL_BY_TYPE: Record<string, string> = {
+    CONVENTION: 'Conventions',
+    AGEFICE: 'AGEFICE',
+    ATTESTATION_FIN: 'Attestations fin',
+    CERTIFICAT_REALISATION: 'Certificats',
+    ANALYSE_BESOIN: 'Analyses besoin',
+    POSITIONNEMENT: 'Positionnements',
+    EMARGEMENT: 'Émargements',
+    GRILLE_OBS: 'Grilles obs',
+    QCM: 'QCM',
+    SATISFACTION_CHAUD: 'Satisfactions chaud',
+    SATISFACTION_FROID: 'Satisfactions froid',
+  };
+  const docCountByType: Array<{ type: string; label: string; count: number; total: number; pct: number }> = [];
+  const totalP = session.participants.length;
+  for (const t of PERSONAL_DOC_TYPES) {
+    let count = 0;
+    for (const p of session.participants) {
+      if (docsByParticipant.get(p.id)?.has(t)) count++;
+    }
+    docCountByType.push({ type: t, label: DOC_LABEL_BY_TYPE[t] ?? t, count, total: totalP, pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0 });
+  }
+  for (const k of PERSONAL_ASSET_KINDS) {
+    let count = 0;
+    for (const p of session.participants) {
+      if (assetsByParticipant.get(p.id)?.has(k)) count++;
+    }
+    docCountByType.push({ type: k, label: DOC_LABEL_BY_TYPE[k] ?? k, count, total: totalP, pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0 });
+  }
+  // Top manquants : <100% triés par count croissant (premier = manque le plus)
+  const docsMissingMost = docCountByType
+    .filter((d) => d.count < d.total)
+    .sort((a, b) => a.count - b.count)
+    .slice(0, 5);
+
+  // Latest closure batch (premier de la liste déjà triée par createdAt desc).
+  // Utilisé pour le CTA primaire quand la session est COMPLETED.
+  const latestBatch = closureBatches[0] ?? null;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -142,20 +334,70 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       <div className="flex items-center justify-between">
         <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
         <div className="flex items-center gap-2">
+          {/* Action contextuelle selon le statut — guide l'utilisateur sur la
+              "prochaine étape logique" (Préparer / Marquer terminée / Voir).
+              Pour COMPLETED avec batch déjà généré, on affiche un lien direct
+              vers la page de progression à la place de Préparer. */}
+          {(() => {
+            switch (session.status) {
+              case 'DRAFT':
+              case 'PLANNED':
+              case 'OPEN':
+              case 'VALIDATED':
+                return (
+                  <PrepareTrainingButton
+                    sessionId={session.id}
+                    participantCount={session.participants.length}
+                  />
+                );
+              case 'IN_PROGRESS':
+                return (
+                  <MarkCompletedButton
+                    sessionId={session.id}
+                    participantCount={session.participants.length}
+                  />
+                );
+              case 'COMPLETED':
+                if (latestBatch) {
+                  return (
+                    <Link
+                      href={`/app/sessions/${session.id}/closure/${latestBatch.id}` as Route}
+                      className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
+                    >
+                      <Package className="h-4 w-4" /> Voir le pack
+                    </Link>
+                  );
+                }
+                return null;
+              case 'CANCELLED':
+              default:
+                return null;
+            }
+          })()}
+
+          {/* 📦 Pack fin de formation — TOUJOURS visible, c'est le bouton
+              le plus utilisé de la fiche session. Le cacher dans le kebab
+              cassait la mémoire musculaire ; on le garde en primaire bleu
+              en permanence. Disabled si pas d'apprenant éligible. */}
           <GenerateClosurePackButton
             sessionId={session.id}
             participantCount={session.participants.length}
           />
-          <DuplicateSessionButton
-            sessionId={session.id}
-            sessionCode={session.code}
-            sourceStartDate={session.startDate}
-          />
-          <DeleteSessionButton
-            sessionId={session.id}
-            sessionCode={session.code}
-            participantCount={session.participants.length}
-          />
+
+          {/* Kebab — uniquement les actions destructives ou rarement utilisées
+              (dupliquer / supprimer) pour ne pas encombrer la barre d'action. */}
+          <SessionActionsMenu>
+            <DuplicateSessionButton
+              sessionId={session.id}
+              sessionCode={session.code}
+              sourceStartDate={session.startDate}
+            />
+            <DeleteSessionButton
+              sessionId={session.id}
+              sessionCode={session.code}
+              participantCount={session.participants.length}
+            />
+          </SessionActionsMenu>
         </div>
       </div>
 
@@ -164,7 +406,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         subtitle={
           <span className="flex flex-wrap items-center gap-2 mt-1">
             <Badge variant="muted" className="font-mono">{session.code}</Badge>
-            <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+            <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               {start.toLocaleDateString('fr-FR')} → {end.toLocaleDateString('fr-FR')}
@@ -183,15 +425,84 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="flex justify-end">
-        <DeleteEntityButton
-          entity="session"
-          entityId={session.id}
-          entityName={session.name ?? session.code}
-          redirectTo="/app/sessions"
-          variant="button"
+      {/* Auto-refresh + progress bar visible quand un pack closure tourne */}
+      {latestBatch && (
+        <BatchProgressAutoRefresh
+          status={latestBatch.status}
+          totalDocs={latestBatch.totalDocs}
+          doneDocs={latestBatch.doneDocs}
+          errorDocs={latestBatch.errorDocs}
         />
-      </div>
+      )}
+
+      {/* Vue d'ensemble dossier Qualiopi — % complétion + ce qui manque le plus */}
+      {totalP > 0 && (
+        <section className={`rounded-2xl border-2 p-5 ${
+          completionPct >= 90 ? 'border-emerald-200 bg-emerald-50/30'
+          : completionPct >= 50 ? 'border-amber-200 bg-amber-50/30'
+          : 'border-red-200 bg-red-50/30'
+        }`}>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <div>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4" /> Dossier Qualiopi
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                {totalCompleted}/{totalExpected} docs ({totalP} apprenant{totalP > 1 ? 's' : ''} × {PERSONAL_DOC_TOTAL} docs)
+              </p>
+            </div>
+            <div className="text-3xl font-bold tabular-nums" style={{
+              color: completionPct >= 90 ? '#059669' : completionPct >= 50 ? '#D97706' : '#DC2626',
+            }}>
+              {completionPct}%
+            </div>
+          </div>
+          <div className="h-2 rounded-full bg-white border border-border overflow-hidden mb-4">
+            <div
+              className={`h-full transition-all ${completionPct >= 90 ? 'bg-emerald-500' : completionPct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+              style={{ width: `${completionPct}%` }}
+            />
+          </div>
+          {docsMissingMost.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wide">
+                ⚠ Ce qui manque le plus
+              </p>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {docsMissingMost.map((d) => (
+                  <li key={d.type} className="bg-white border border-border rounded-md px-3 py-2 text-xs flex items-center justify-between">
+                    <span className="font-medium">{d.label}</span>
+                    <span className={`font-semibold tabular-nums ${d.count === 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                      {d.count}/{d.total}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-xs text-emerald-700 font-medium">✓ Dossier complet pour tous les apprenants</p>
+          )}
+        </section>
+      )}
+
+      {/* Phase 9.1 Plan 03 — Documents session (3 cards horizontales D-04 bloc séparé) */}
+      <SessionOnlyDocsBlock
+        sessionId={session.id}
+        deroulePdfRef={sessionDocsMap.get('DEROULE_PEDAGOGIQUE')}
+        grilleObsPdfRef={sessionDocsMap.get('GRILLE_OBS_SESSION')}
+        checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
+        canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
+      />
+
+      {/* Phase 9.1 Plan 03 — Matrice Documents participants (CENTRAL-01 / CENTRAL-02) */}
+      <ParticipantDocMatrix
+        sessionId={session.id}
+        userRole={user.role}
+        hasAgeficeParticipant={hasAgeficeParticipant}
+        participants={matrixParticipants}
+        productDocs={productDocsMap}
+        sessionDocs={sessionDocsMap}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -206,6 +517,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                     {eiCount} auto-entrepreneur{eiCount > 1 ? 's' : ''}
                   </Badge>
                 )}
+                <CreatePersonButton
+                  enrollInSessionId={session.id}
+                  defaultPrice={Number(session.pricePerLearner ?? 0)}
+                  buttonLabel="Nouvel apprenant"
+                />
                 <AddParticipantDialog
                   sessionId={session.id}
                   defaultPrice={Number(session.pricePerLearner ?? 0)}
@@ -247,7 +563,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                             <Badge variant={isEi ? 'primary' : 'muted'}>
                               {isEi ? 'Auto-entrepreneur' : g.sponsor.legalForm}
                             </Badge>
-                            {g.sponsor.opcoCode && <Badge variant="info">OPCO {g.sponsor.opcoCode}</Badge>}
+                            {g.sponsor.opcoCode && <Badge variant="info">{formatFunderCode(g.sponsor.opcoCode)}</Badge>}
                             {g.participants.length > 1 && (
                               <Badge variant="warning">{g.participants.length} salariés groupés</Badge>
                             )}
@@ -284,6 +600,28 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                                   <span className="tabular-nums">{Number(p.priceHT).toFixed(2)} €</span>
                                   <span>·</span>
                                   <span>{p.enrollmentStatus}</span>
+                                  {(() => {
+                                    // Badge "X/11 docs prêts" — couleur progressive (rouge < 30%, ambre < 80%, vert sinon).
+                                    // Permet de voir d'un coup d'œil quels apprenants nécessitent encore une génération
+                                    // sans dérouler la matrice détaillée.
+                                    const n = docCompletionByParticipant.get(p.id) ?? 0;
+                                    const ratio = n / PERSONAL_DOC_TOTAL;
+                                    const cls =
+                                      ratio >= 0.8
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : ratio >= 0.3
+                                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                          : 'border-slate-200 bg-slate-50 text-slate-600';
+                                    return (
+                                      <Link
+                                        href={`/app/apprenants/${p.person.id}?tab=documents` as Route}
+                                        title={`${n}/${PERSONAL_DOC_TOTAL} documents personnels générés — cliquer pour ouvrir la fiche apprenant`}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-medium tabular-nums hover:bg-opacity-80 ${cls}`}
+                                      >
+                                        {n}/{PERSONAL_DOC_TOTAL} docs
+                                      </Link>
+                                    );
+                                  })()}
                                   {invoiceByParticipant.get(p.id) ? (
                                     <Link
                                       href={`/app/factures/${invoiceByParticipant.get(p.id)!.id}` as Route}
@@ -326,26 +664,94 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             )}
           </section>
 
-          {/* Conformité Qualiopi : matrice apprenant × document */}
+          {/* Formateurs de la session — étoile = formateur principal qui signe les docs Qualiopi */}
+          {session.trainers.length > 0 && (
+            <section className="rounded-2xl border border-border bg-white p-5">
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
+                Formateurs
+              </h2>
+              <ul className="divide-y divide-border">
+                {session.trainers.map((t) => (
+                  <li key={t.id} className="flex items-center gap-3 py-2">
+                    <PrimaryTrainerToggle
+                      sessionId={session.id}
+                      personId={t.person.id}
+                      personName={`${t.person.firstName} ${t.person.lastName}`}
+                      isPrimary={t.isPrimary}
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-sm">
+                        {t.person.firstName} {t.person.lastName}
+                      </span>
+                      {t.role && (
+                        <span className="text-xs text-muted-foreground ml-2">· {t.role}</span>
+                      )}
+                    </div>
+                    {t.isPrimary && (
+                      <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                        Principal — signe les docs Qualiopi
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Satisfaction agrégée — calcul live à partir des satisfactions chaud individuelles */}
+          <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
+
+          {/* Logistique session (C4.i17 Qualiopi) */}
+          <SessionLogisticsEditor
+            sessionId={session.id}
+            initial={{
+              needsTrainerLodging: session.needsTrainerLodging,
+              trainerLodgingPlace: session.trainerLodgingPlace,
+              trainerLodgingDates: session.trainerLodgingDates,
+              hasDisabledLearner: session.hasDisabledLearner,
+              disabilityAdaptations: session.disabilityAdaptations,
+            }}
+          />
+
+          {/* Conformité Qualiopi : matrice apprenant × document.
+              Repliable par défaut via <details> HTML5 (zéro JS, accessible).
+              Les compteurs agrégés viennent des variables `totalCompleted`,
+              `totalExpected`, `completionPct` calculés en haut du composant
+              (cf docCompletionByParticipant) — utilisées aussi dans les
+              badges par-ligne de la liste des inscrits. */}
           {session.participants.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white overflow-hidden">
-              <div className="flex items-center justify-between p-5 border-b border-border">
+            <details className="rounded-2xl border border-border bg-white overflow-hidden group">
+              <summary className="flex items-center justify-between p-5 border-b border-border cursor-pointer hover:bg-muted/20 transition-colors list-none [&::-webkit-details-marker]:hidden">
                 <h2 className="font-semibold inline-flex items-center gap-2">
                   <ClipboardCheck className="h-5 w-5 text-primary" /> Conformité Qualiopi
+                  <span className="text-xs font-normal text-muted-foreground ml-2 tabular-nums">
+                    {totalCompleted}/{totalExpected} docs · {completionPct}%
+                  </span>
                 </h2>
-                <span className="text-xs text-muted-foreground">Clic sur ✓ pour ouvrir le PDF</span>
-              </div>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className="hidden group-open:inline">Replier</span>
+                  <span className="inline group-open:hidden">Voir la matrice détaillée</span>
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                </span>
+              </summary>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30">
                     <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                       <th className="px-4 py-2 font-semibold">Apprenant</th>
+                      <th className="px-2 py-2 font-semibold text-center">Check-list (C4.i17)</th>
                       <th className="px-2 py-2 font-semibold text-center">Convention</th>
                       <th className="px-2 py-2 font-semibold text-center">Programme</th>
                       <th className="px-2 py-2 font-semibold text-center">AGEFICE</th>
                       <th className="px-2 py-2 font-semibold text-center">Analyse besoin</th>
-                      <th className="px-2 py-2 font-semibold text-center">QCM</th>
+                      <th className="px-2 py-2 font-semibold text-center">Positionnement</th>
+                      <th className="px-2 py-2 font-semibold text-center">Émargement</th>
+                      <th className="px-2 py-2 font-semibold text-center">Déroulé péda</th>
                       <th className="px-2 py-2 font-semibold text-center">Grille obs.</th>
+                      <th className="px-2 py-2 font-semibold text-center">Grille session (C3.i11)</th>
+                      <th className="px-2 py-2 font-semibold text-center">QCM</th>
+                      <th className="px-2 py-2 font-semibold text-center">Sat. chaud</th>
+                      <th className="px-2 py-2 font-semibold text-center">Sat. froid</th>
                       <th className="px-2 py-2 font-semibold text-center">Attestation</th>
                       <th className="px-2 py-2 font-semibold text-center">Certificat</th>
                       <th className="px-2 py-2 font-semibold text-center">Facture</th>
@@ -357,12 +763,21 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       const assets = assetsByParticipant.get(p.id);
                       const invoice = invoiceByParticipant.get(p.id);
                       const cells: { label: string; href?: string }[] = [
+                        { label: 'Check-list session', href: checklistDocId ? `/api/documents/${checklistDocId}` : undefined },
                         { label: 'Convention', href: docs?.get('CONVENTION') ? `/api/documents/${docs.get('CONVENTION')}` : undefined },
-                        { label: 'Programme', href: docs?.get('PROGRAMME') ? `/api/documents/${docs.get('PROGRAMME')}` : undefined },
+                        // Programme + Déroulé pédagogique = assets PRODUIT partagés
+                        // par tous les apprenants (1 lien identique sur toutes les lignes).
+                        { label: 'Programme (produit)', href: programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined },
                         { label: 'AGEFICE', href: docs?.get('AGEFICE') ? `/api/documents/${docs.get('AGEFICE')}` : undefined },
                         { label: 'Analyse besoin', href: assets?.get('ANALYSE_BESOIN') ? `/api/pedagogical-assets/${assets.get('ANALYSE_BESOIN')}` : undefined },
+                        { label: 'Positionnement', href: assets?.get('POSITIONNEMENT') ? `/api/pedagogical-assets/${assets.get('POSITIONNEMENT')}` : undefined },
+                        { label: 'Émargement', href: assets?.get('EMARGEMENT') ? `/api/pedagogical-assets/${assets.get('EMARGEMENT')}` : undefined },
+                        { label: 'Déroulé péda. (produit)', href: derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined },
+                        { label: 'Grille observation (formateur)', href: assets?.get('GRILLE_OBS') ? `/api/pedagogical-assets/${assets.get('GRILLE_OBS')}` : undefined },
+                        { label: 'Grille session (C3.i11)', href: grilleSessionDocId ? `/api/documents/${grilleSessionDocId}` : undefined },
                         { label: 'QCM', href: assets?.get('QCM') ? `/api/pedagogical-assets/${assets.get('QCM')}` : undefined },
-                        { label: 'Grille observation', href: assets?.get('GRILLE_OBS') ? `/api/pedagogical-assets/${assets.get('GRILLE_OBS')}` : undefined },
+                        { label: 'Satisfaction à chaud', href: assets?.get('SATISFACTION_CHAUD') ? `/api/pedagogical-assets/${assets.get('SATISFACTION_CHAUD')}` : undefined },
+                        { label: 'Satisfaction à froid', href: assets?.get('SATISFACTION_FROID') ? `/api/pedagogical-assets/${assets.get('SATISFACTION_FROID')}` : undefined },
                         { label: 'Attestation', href: docs?.get('ATTESTATION_FIN') ? `/api/documents/${docs.get('ATTESTATION_FIN')}` : undefined },
                         { label: 'Certificat', href: docs?.get('CERTIFICAT_REALISATION') ? `/api/documents/${docs.get('CERTIFICAT_REALISATION')}` : undefined },
                         { label: invoice?.number ?? 'Facture', href: invoice ? `/app/factures/${invoice.id}` : undefined },
@@ -405,7 +820,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           )}
 
           {/* Historique des packs fin de formation lancés sur cette session */}
@@ -471,6 +886,45 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             ) : (
               <p className="text-sm text-muted-foreground italic">—</p>
             )}
+          </section>
+
+          {/* Documents partagés par TOUS les apprenants (un seul PDF par
+              session/produit, accessible en un clic — évite de chercher
+              dans la matrice 17-col).
+              Programme + Déroulé = niveau PRODUIT
+              Grille obs session + Check-list = niveau SESSION */}
+          <section className="rounded-2xl border border-border bg-white p-6">
+            <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Documents partagés
+            </h2>
+            <ul className="space-y-1.5 text-sm">
+              {[
+                { label: 'Programme de formation', href: programmeProductDocId ? `/api/documents/${programmeProductDocId}` : null, scope: 'Produit' },
+                { label: 'Déroulé pédagogique', href: derouleProductDocId ? `/api/documents/${derouleProductDocId}` : null, scope: 'Produit' },
+                { label: 'Grille observation (C3.i11)', href: grilleSessionDocId ? `/api/documents/${grilleSessionDocId}` : null, scope: 'Session' },
+                { label: 'Check-list formation (C4.i17)', href: checklistDocId ? `/api/documents/${checklistDocId}` : null, scope: 'Session' },
+              ].map((d) => (
+                <li key={d.label} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-border/50">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-foreground truncate">{d.label}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{d.scope}</div>
+                  </div>
+                  {d.href ? (
+                    <a
+                      href={d.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+                    >
+                      Ouvrir
+                      <ChevronRight className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic shrink-0">Non généré</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </section>
 
           {session.internalNotes && (
