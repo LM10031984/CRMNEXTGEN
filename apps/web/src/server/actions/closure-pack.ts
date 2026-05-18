@@ -47,9 +47,25 @@ const DOC_TYPE_BY_CLOSURE_KIND: Partial<Record<ClosureDocKind, string>> = {
   CERTIFICAT: 'CERTIFICAT_REALISATION',
 };
 
+/**
+ * Phase 9.1 Plan 02 — extension de la signature :
+ *  - `kinds?: ClosureDocKind[]`  filtre la liste des kinds à processer
+ *                                (sinon = tous les CLOSURE_DOC_KINDS).
+ *  - `force?: boolean`           bypass le skip-existing UNIQUEMENT en mode mono
+ *                                (participantIds.length === 1). Cf. Pitfall 1
+ *                                RESEARCH : re-gen ciblée d'un seul kind pour
+ *                                un seul stagiaire doit toujours produire un
+ *                                nouveau job (sinon "bouton qui ne fait rien").
+ *                                En mode global, `force` est ignoré (protection
+ *                                contre regenerate accidentelle de batch entier).
+ */
 export async function generateClosurePack(
   sessionId: string,
-  options?: { participantIds?: string[] },
+  options?: {
+    participantIds?: string[];
+    kinds?: ClosureDocKind[];
+    force?: boolean;
+  },
 ): Promise<{
   ok: boolean;
   batchId?: string;
@@ -129,10 +145,25 @@ export async function generateClosurePack(
   // En mode mono-participant : on liste les kinds déjà présents pour skipper.
   // En mode global : on régénère tout (l'idempotence sha256 dédoublonne au render).
   const isMonoMode = !!options?.participantIds && options.participantIds.length > 0;
+  // Phase 9.1 Plan 02 — Pitfall 1 : bypass skip-existing UNIQUEMENT en mode mono
+  // single-participant + force=true. En mode global, `force` est ignoré
+  // pour protéger contre regenerate accidentelle d'un batch entier.
+  const forceMono =
+    options?.force === true &&
+    !!options?.participantIds &&
+    options.participantIds.length === 1;
   const participantIds = session.participants.map((p) => p.id);
 
+  // Phase 9.1 Plan 02 — `kinds?` filtre la liste à processer (sinon = tous).
+  const kindsToProcess: readonly ClosureDocKind[] =
+    options?.kinds && options.kinds.length > 0
+      ? (options.kinds.filter((k) =>
+          (CLOSURE_DOC_KINDS as readonly string[]).includes(k as string),
+        ) as ClosureDocKind[])
+      : CLOSURE_DOC_KINDS;
+
   let alreadyDoneByParticipant = new Map<string, Set<ClosureDocKind>>();
-  if (isMonoMode) {
+  if (isMonoMode && !forceMono) {
     const [existingDocs, existingAssets] = await Promise.all([
       prisma.document.findMany({
         where: {
@@ -176,14 +207,16 @@ export async function generateClosurePack(
   // Construit la liste des jobs à créer en filtrant les kinds déjà faits.
   const jobsToCreate = session.participants.flatMap((p) => {
     const done = alreadyDoneByParticipant.get(p.id) ?? new Set<ClosureDocKind>();
-    return CLOSURE_DOC_KINDS.filter((kind) => !done.has(kind)).map((kind) => ({
-      participantId: p.id,
-      kind,
-      status: 'QUEUED' as const,
-    }));
+    return kindsToProcess
+      .filter((kind) => !done.has(kind))
+      .map((kind) => ({
+        participantId: p.id,
+        kind,
+        status: 'QUEUED' as const,
+      }));
   });
 
-  const expectedTotal = session.participants.length * CLOSURE_DOC_KINDS.length;
+  const expectedTotal = session.participants.length * kindsToProcess.length;
   const skippedExisting = expectedTotal - jobsToCreate.length;
 
   if (jobsToCreate.length === 0) {
