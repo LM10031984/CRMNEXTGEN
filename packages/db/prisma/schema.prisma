@@ -34,6 +34,11 @@ model Tenant {
   legalMentions           String?        @db.Text
   address                 Json?
   invoicePrefix           String?        @default("FAC")
+  // Phase 11 — Avoirs + Relances (D-02, D-10).
+  // creditNotePrefix : préfixe séquence avoirs (AVO-NNNNNN), distinct de FAC- (CGI art. 289).
+  // invoiceReminderDays : array Postgres Int[] des seuils J+N pour relances impayés (1-3 valeurs croissantes).
+  creditNotePrefix        String?        @default("AVO")
+  invoiceReminderDays     Int[]          @default([30, 45])
   iban                    String?
   bic                     String?
   emailFrom               String?
@@ -739,6 +744,13 @@ model Invoice {
   tenantId         String
   number           String              @unique // numérotation continue (FAC-NNNNNN)
   status           InvoiceStatus       @default(DRAFT)
+  // Phase 11 — Avoirs (D-01). Self-FK : un avoir pointe vers la facture annulée.
+  originalInvoiceId String?
+  originalInvoice   Invoice?            @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  creditNotes       Invoice[]           @relation("InvoiceToCreditNote")
+  // Phase 11 — Tracking relances (D-13b). Idempotence + auto-stop.
+  lastReminderAt   DateTime?
+  reminderCount    Int                 @default(0)
   // Liens métier
   participantId    String?
   participant      SessionParticipant? @relation(fields: [participantId], references: [id])
@@ -770,6 +782,10 @@ model Invoice {
 
   @@index([tenantId, status])
   @@index([tenantId, issueDate])
+  // Phase 11 — index pour worker daily relances (scan status + lastReminderAt par tenant).
+  @@index([tenantId, status, lastReminderAt])
+  // Phase 11 — lookup inverse "quels avoirs sont liés à cette facture ?"
+  @@index([originalInvoiceId])
 }
 
 model InvoicePayment {
