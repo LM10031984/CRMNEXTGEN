@@ -9,6 +9,7 @@ import {
   Sparkles,
   Settings,
   FileText,
+  Receipt,
 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -21,6 +22,7 @@ import { OfAssetsForm } from '@/components/settings/of-assets-form';
 import { OfInvoicingForm } from '@/components/settings/of-invoicing-form';
 import { OfBankingForm } from '@/components/settings/of-banking-form';
 import { OfEmailForm } from '@/components/settings/of-email-form';
+import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-form';
 import { formatIban } from '@/lib/iban-format';
 
 /**
@@ -227,6 +229,49 @@ export default async function ParametresPage() {
                 bic: tenant.bic,
               }}
               invoiceCount={invoiceCount}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── 4bis. Facturation — Relances et avoirs (Phase 11 Plan 11-04) ─ */}
+        <SettingsSection
+          icon={Receipt}
+          title="Facturation — Relances et avoirs"
+          description="Préfixe séquence avoirs (CGI art. 289) et délais de relance impayés"
+          readView={
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <Field
+                label="Préfixe avoirs"
+                value={
+                  <span className="font-mono">
+                    {tenant.creditNotePrefix ?? 'AVO'}
+                  </span>
+                }
+              />
+              <Field
+                label="Délais de relance (jours)"
+                value={
+                  <span className="font-mono">
+                    {(tenant.invoiceReminderDays?.length
+                      ? tenant.invoiceReminderDays
+                      : [30, 45]
+                    ).join(', ')}
+                  </span>
+                }
+              />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <InvoiceSettingsForm
+              initial={{
+                invoiceReminderDays:
+                  tenant.invoiceReminderDays?.length
+                    ? tenant.invoiceReminderDays
+                    : [30, 45],
+                creditNotePrefix: tenant.creditNotePrefix,
+              }}
               onSaved={onSaved}
               onCancel={onCancel}
             />
