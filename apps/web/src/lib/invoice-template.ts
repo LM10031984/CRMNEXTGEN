@@ -45,6 +45,12 @@ export interface InvoiceData {
   // Si présent : facture multi-participants (groupage par sponsorOrg pour les
   // salariés d'une SARL). Une ligne par participant avec son montant HT.
   lines?: { label: string; amountHT: number }[];
+  // Phase 11 Plan 11-05 — Mode AVOIR (NCN au sens CGI art. 289).
+  // Default 'FACTURE' (rétro-compat). En mode 'AVOIR', le header devient
+  // "AVOIR" et un bandeau jaune "Avoir sur facture {originalNumber}" est inséré.
+  documentKind?: 'FACTURE' | 'AVOIR';
+  originalNumber?: string;       // uniquement renseigné en mode AVOIR
+  originalIssueDate?: Date;      // uniquement renseigné en mode AVOIR
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -95,12 +101,27 @@ const STYLES = `
 
 export function renderInvoiceHtml(d: InvoiceData): string {
   const exonerationTva = d.vatRate === 0;
+  // Phase 11 Plan 11-05 — mode AVOIR (NCN au sens CGI art. 289)
+  const docKind = d.documentKind ?? 'FACTURE';
+  const isCreditNote = docKind === 'AVOIR';
+  const headerTitle = isCreditNote ? 'AVOIR' : 'FACTURE';
+  const docLabel = isCreditNote ? 'Avoir' : 'Facture';
+  const avoirMention =
+    isCreditNote && d.originalNumber
+      ? `<div class="avoir-mention" style="background:#FEF3C7;border:1px solid #FCD34D;padding:12px;margin:0 0 16px 0;border-radius:4px;color:#78350F;">
+          <strong>Avoir sur facture ${escapeHtml(d.originalNumber)}</strong>${
+          d.originalIssueDate
+            ? ` émise le ${fmtDate.format(d.originalIssueDate)}`
+            : ''
+        }
+        </div>`
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Facture ${escapeHtml(d.number)}</title>
+<title>${docLabel} ${escapeHtml(d.number)}</title>
 ${STYLES}
 </head>
 <body>
@@ -114,10 +135,12 @@ ${STYLES}
     ${d.ofTvaIntra ? `<br>TVA Intracom. ${escapeHtml(d.ofTvaIntra)}` : ''}
   </div>
   <div class="invoice-box">
-    <h1>FACTURE</h1>
+    <h1>${headerTitle}</h1>
     <div class="num">${escapeHtml(d.number)}</div>
   </div>
 </div>
+
+${avoirMention}
 
 <div class="billing">
   <div class="block">
