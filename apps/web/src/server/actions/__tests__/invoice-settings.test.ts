@@ -26,6 +26,27 @@ vi.mock('@qualiof/db', () => ({
     tenant: { findUnique: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
   },
+  // Phase 9.1-02 D-Phase9.1-pattern : @qualiof/shared/constants importe
+  // LegalForm depuis @qualiof/db, donc le mock doit le fournir.
+  LegalForm: {
+    SAS: 'SAS',
+    SARL: 'SARL',
+    SASU: 'SASU',
+    EURL: 'EURL',
+    SA: 'SA',
+    EI: 'EI',
+    EIRL: 'EIRL',
+    AUTO_ENTREPRENEUR: 'AUTO_ENTREPRENEUR',
+    AUTRE: 'AUTRE',
+  },
+  UserRole: {
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    FORMATEUR: 'FORMATEUR',
+    COMMERCIAL: 'COMMERCIAL',
+    COMPTABLE: 'COMPTABLE',
+    LECTEUR: 'LECTEUR',
+  },
 }));
 
 vi.mock('@/lib/rbac', () => {
