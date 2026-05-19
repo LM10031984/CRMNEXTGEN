@@ -9,7 +9,9 @@ import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
 import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 import { loadOfConfig } from '@/lib/of-config';
-import { getNextInvoiceNumber } from '@/lib/numbering';
+import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
+import { logInvoiceEvent } from '@/lib/invoice-audit';
+import { CreateCreditNoteSchema } from '@qualiof/shared';
 
 // Phase 7 — Plan 07-01 : suppression du bloc `OF` local qui bypassait
 // `getOfConfig()` en lisant directement les variables d'environnement.
@@ -385,4 +387,177 @@ export async function recordInvoicePayment(input: {
   revalidatePath(`/app/factures/${invoice.id}`);
   revalidatePath('/app/dossiers-opco');
   return { ok: true };
+}
+
+/**
+ * Phase 11 Plan 11-05 — Création d'avoir (NCN au sens CGI art. 289).
+ *
+ * D-01/D-02 : Invoice + status='CREDIT_NOTE' + originalInvoiceId self-FK.
+ * D-03      : statut origine éligible ∈ {ISSUED, PAID, PARTIAL, OVERDUE}.
+ * D-04      : avoir total → CANCELLED, avoir partiel → original inchangé,
+ *             N avoirs cumulés autorisés tant que sum(avoirs) ≤ original.amountHT.
+ * D-19      : RBAC ADMIN + MANAGER + COMPTABLE.
+ * D-18      : AuditLog action 'invoices.credit_note_created'.
+ *
+ * Montants stockés en **NÉGATIF** (RESEARCH Finding 6) : simplifie les KPI
+ * "À encaisser" et permet d'exclure CREDIT_NOTE naturellement de SUM().
+ *
+ * Note PDF : la génération du PDF avoir (mode AVOIR du template — Plan 11-05
+ * Task 1) n'est pas encore branchée ici ; elle sera ajoutée par le Plan 11-08
+ * (page liste factures) ou directement dans une itération suivante. Pour
+ * l'instant on crée l'Invoice record (status=CREDIT_NOTE) qui suffit à la
+ * comptabilité et à la cross-nav fiche détail. L'UI affichera "PDF à régénérer"
+ * tant que pdfUrl est null (cohérent avec le pattern Phase 7-02).
+ */
+export async function createCreditNote(input: {
+  originalInvoiceId: string;
+  amountHtToCredit: number;
+  motif: string;
+}): Promise<
+  | { ok: true; creditNoteId: string; number: string }
+  | { ok: false; error: string }
+> {
+  // RBAC D-19
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  // Validation Zod (motif ≥3 chars, amountHtToCredit > 0, originalInvoiceId uuid)
+  const parsed = CreateCreditNoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.errors[0]?.message ?? 'Validation échouée',
+    };
+  }
+  const { originalInvoiceId, amountHtToCredit, motif } = parsed.data;
+
+  // Lookup facture origine (scope tenant — RGPD/multi-tenant)
+  const original = await prisma.invoice.findFirst({
+    where: { id: originalInvoiceId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      amountHT: true,
+      amountTTC: true,
+      vatRate: true,
+      participantId: true,
+      payerOrgId: true,
+      sessionId: true,
+      issueDate: true,
+    },
+  });
+  if (!original) return { ok: false, error: 'Facture introuvable' };
+
+  // D-03 : statuts éligibles
+  if (!['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(original.status)) {
+    return {
+      ok: false,
+      error: 'Avoir impossible sur facture brouillon/annulée/avoir',
+    };
+  }
+
+  const originalHt = Number(original.amountHT);
+  if (amountHtToCredit > originalHt) {
+    return {
+      ok: false,
+      error: `Le montant à créditer (${amountHtToCredit} €) dépasse le montant de la facture (${originalHt} €).`,
+    };
+  }
+
+  // D-04 : autoriser N avoirs partiels tant que sum ≤ original.amountHT.
+  // Avoirs stockés en négatif → Math.abs pour somme positive comparable.
+  const existingCreditNotes = await prisma.invoice.findMany({
+    where: {
+      originalInvoiceId,
+      tenantId: user.tenantId,
+      status: 'CREDIT_NOTE',
+    },
+    select: { amountHT: true },
+  });
+  const alreadyCredited = existingCreditNotes.reduce(
+    (sum, cn) => sum + Math.abs(Number(cn.amountHT)),
+    0,
+  );
+  if (alreadyCredited + amountHtToCredit > originalHt) {
+    const remaining = originalHt - alreadyCredited;
+    return {
+      ok: false,
+      error: `Cette facture est déjà avoirée à hauteur de ${alreadyCredited} €. Reste créditable : ${remaining} €.`,
+    };
+  }
+
+  const isTotalCreditNote = alreadyCredited + amountHtToCredit === originalHt;
+  const vatRateNum = Number(original.vatRate ?? 0);
+  const amountTtcToCredit =
+    Math.round(amountHtToCredit * (1 + vatRateNum / 100) * 100) / 100;
+
+  // Transaction atomique : (1) numérotation AVO, (2) create avoir,
+  // (3) update facture origine si avoir total.
+  const result = await prisma.$transaction(async (tx) => {
+    const number = await getNextCreditNoteNumber(user.tenantId, tx);
+
+    const creditNote = await tx.invoice.create({
+      data: {
+        tenantId: user.tenantId,
+        number,
+        status: 'CREDIT_NOTE',
+        originalInvoiceId: original.id,
+        participantId: original.participantId,
+        payerOrgId: original.payerOrgId,
+        sessionId: original.sessionId,
+        amountHT: new Prisma.Decimal(-Math.abs(amountHtToCredit)),
+        vatRate: original.vatRate,
+        amountTTC: new Prisma.Decimal(-Math.abs(amountTtcToCredit)),
+        amountPaid: new Prisma.Decimal(0),
+        issueDate: new Date(),
+        notes: motif,
+      },
+    });
+
+    let originalStatusAfter = original.status;
+    if (isTotalCreditNote) {
+      await tx.invoice.update({
+        where: { id: original.id },
+        data: { status: 'CANCELLED' },
+      });
+      originalStatusAfter = 'CANCELLED';
+    }
+
+    return { creditNote, originalStatusAfter };
+  });
+
+  // AuditLog D-18 (en dehors de la tx pour ne pas bloquer le rollback business)
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: result.creditNote.id,
+    action: 'invoices.credit_note_created',
+    diff: {
+      originalInvoiceId: original.id,
+      originalNumber: original.number,
+      amountHtCredited: amountHtToCredit,
+      motif,
+      originalStatusBefore: original.status,
+      originalStatusAfter: result.originalStatusAfter,
+    },
+  });
+
+  // Revalidate (D-07 cross-nav : liste factures + fiche origine + fiche avoir)
+  revalidatePath('/app/factures');
+  revalidatePath(`/app/factures/${originalInvoiceId}`);
+  revalidatePath(`/app/factures/${result.creditNote.id}`);
+
+  return {
+    ok: true,
+    creditNoteId: result.creditNote.id,
+    number: result.creditNote.number,
+  };
 }
