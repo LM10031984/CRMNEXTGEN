@@ -50,3 +50,53 @@ export async function getNextInvoiceNumber(
   const lastNum = last ? parseInt(last.number.replace(`${prefix}-`, ''), 10) || 0 : 0;
   return `${prefix}-${String(lastNum + 1).padStart(6, '0')}`;
 }
+
+/**
+ * Numérotation séquentielle avoirs (Phase 11 Plan 11-01).
+ *
+ * Clone-strict de `getNextInvoiceNumber` avec préfixe distinct lu depuis
+ * `Tenant.creditNotePrefix` (fallback `'AVO'`).
+ *
+ * **Convention française CGI art. 289** :
+ * - Un avoir (note de crédit / NCN) DOIT avoir sa propre séquence numérique,
+ *   distincte de celle des factures (FAC-NNNNNN vs AVO-NNNNNN).
+ * - Sans cette séparation, la séquence n'est plus continue ni traçable
+ *   (mélange FAC/AVO → trous + risque de re-numérotation).
+ *
+ * Format `{prefix}-NNNNNN` (6 chiffres zero-padded, cohérent factures).
+ * Pas de "trou" : on prend le max courant et on +1 (sequence atomique sous
+ * transaction Prisma).
+ *
+ * **Usage atomique (OBLIGATOIRE en création)** :
+ *   await prisma.$transaction(async (tx) => {
+ *     const number = await getNextCreditNoteNumber(tenantId, tx);
+ *     return tx.invoice.create({
+ *       data: { number, status: 'CREDIT_NOTE', originalInvoiceId, ... },
+ *     });
+ *   });
+ *
+ * Passer `tx` évite la race condition si 2 admins créent simultanément un
+ * avoir (sinon 2 avoirs pourraient se retrouver avec le même numéro).
+ */
+export async function getNextCreditNoteNumber(
+  tenantId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<string> {
+  const db = tx ?? prisma;
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { creditNotePrefix: true },
+  });
+  // Fallback cohérent avec `@default("AVO")` du schema Prisma (Phase 11-00).
+  // Trim défensif au cas où la valeur BDD contiendrait des espaces.
+  const prefix = (tenant?.creditNotePrefix ?? 'AVO').trim() || 'AVO';
+
+  const last = await db.invoice.findFirst({
+    where: { tenantId, number: { startsWith: `${prefix}-` } },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
+
+  const lastNum = last ? parseInt(last.number.replace(`${prefix}-`, ''), 10) || 0 : 0;
+  return `${prefix}-${String(lastNum + 1).padStart(6, '0')}`;
+}
