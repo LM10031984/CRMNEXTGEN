@@ -5,6 +5,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { RecordPaymentForm } from '@/components/invoices/record-payment-form';
+import { CreateCreditNoteDialog } from '@/components/invoices/create-credit-note-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,18 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       },
       payerOrg: { select: { id: true, legalName: true, siret: true } },
       payments: { orderBy: { receivedAt: 'desc' } },
+      // Phase 11 Plan 11-05 — Cross-nav avoirs (D-04 + D-07).
+      creditNotes: {
+        select: {
+          id: true,
+          number: true,
+          amountHT: true,
+          notes: true,
+          issueDate: true,
+        },
+        orderBy: { issueDate: 'desc' },
+      },
+      originalInvoice: { select: { id: true, number: true } },
     },
   });
   if (!invoice) notFound();
@@ -54,6 +67,9 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   const status = STATUS_LABEL[invoice.status] ?? { label: invoice.status, variant: 'muted' as const };
   const remaining = Number(invoice.amountTTC) - Number(invoice.amountPaid);
   const isOverdue = invoice.dueDate && invoice.dueDate < new Date() && invoice.status !== 'PAID' && invoice.status !== 'CANCELLED';
+  // Phase 11 Plan 11-05 — CTA "Créer un avoir" visible si statut éligible D-03.
+  const isCreditNoteEligible = ['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(invoice.status);
+  const isCreditNote = invoice.status === 'CREDIT_NOTE';
 
   return (
     <div className="space-y-6">
@@ -90,6 +106,18 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      {/* Bandeau retour vers facture originale si on est sur un AVOIR — D-04 */}
+      {isCreditNote && invoice.originalInvoice && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Link
+            href={`/app/factures/${invoice.originalInvoice.id}`}
+            className="inline-flex items-center gap-1 hover:underline font-medium"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Voir la facture originale {invoice.originalInvoice.number}
+          </Link>
+        </div>
+      )}
+
       {/* Montants */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard label="Total HT" value={fmtEUR.format(Number(invoice.amountHT))} />
@@ -102,10 +130,55 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
         />
       </section>
 
-      {/* Saisie paiement */}
-      <section>
+      {/* Saisie paiement + CTA avoir — Plan 11-05 D-03 */}
+      <section className="flex flex-wrap items-start gap-3">
         <RecordPaymentForm invoiceId={invoice.id} remaining={remaining} />
+        {isCreditNoteEligible && (
+          <CreateCreditNoteDialog
+            originalInvoiceId={invoice.id}
+            originalAmountHt={Number(invoice.amountHT)}
+            originalNumber={invoice.number}
+          />
+        )}
       </section>
+
+      {/* Section "Avoirs liés" — D-04 + D-07 cross-nav */}
+      {invoice.creditNotes && invoice.creditNotes.length > 0 && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/40 overflow-hidden">
+          <div className="px-5 py-3 border-b border-amber-200 bg-amber-50">
+            <h2 className="font-semibold text-sm inline-flex items-center gap-2 text-amber-900">
+              <FileText className="h-4 w-4" /> Avoirs liés ({invoice.creditNotes.length})
+            </h2>
+          </div>
+          <ul className="divide-y divide-amber-100">
+            {invoice.creditNotes.map((cn) => (
+              <li key={cn.id} className="px-5 py-3 text-sm flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/app/factures/${cn.id}`}
+                    className="font-mono font-medium hover:underline text-amber-900"
+                  >
+                    {cn.number}
+                  </Link>
+                  {cn.issueDate && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      émis le {fmtDate.format(cn.issueDate)}
+                    </span>
+                  )}
+                  {cn.notes && (
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {cn.notes}
+                    </div>
+                  )}
+                </div>
+                <span className="font-medium tabular-nums text-amber-900 whitespace-nowrap">
+                  {fmtEUR.format(Math.abs(Number(cn.amountHT)))} HT
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Détails */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
