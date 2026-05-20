@@ -6,6 +6,7 @@ import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { RecordPaymentForm } from '@/components/invoices/record-payment-form';
 import { CreateCreditNoteDialog } from '@/components/invoices/create-credit-note-dialog';
+import { SendReminderButton } from '@/components/invoices/send-reminder-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,32 +38,41 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   if (!user) return null;
   const { id } = await params;
 
-  const invoice = await prisma.invoice.findFirst({
-    where: { id, tenantId: user.tenantId },
-    include: {
-      participant: {
-        include: {
-          person: { select: { id: true, firstName: true, lastName: true, email: true } },
-          session: { select: { id: true, code: true, name: true, startDate: true, endDate: true } },
+  // Phase 11 Plan 11-06 Task 3 — récupère aussi la config tenant.invoiceReminderDays
+  // en parallèle du lookup facture pour câbler <SendReminderButton maxLevel>.
+  const [invoice, tenant] = await Promise.all([
+    prisma.invoice.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: {
+        participant: {
+          include: {
+            person: { select: { id: true, firstName: true, lastName: true, email: true } },
+            session: { select: { id: true, code: true, name: true, startDate: true, endDate: true } },
+          },
         },
-      },
-      payerOrg: { select: { id: true, legalName: true, siret: true } },
-      payments: { orderBy: { receivedAt: 'desc' } },
-      // Phase 11 Plan 11-05 — Cross-nav avoirs (D-04 + D-07).
-      creditNotes: {
-        select: {
-          id: true,
-          number: true,
-          amountHT: true,
-          notes: true,
-          issueDate: true,
+        payerOrg: { select: { id: true, legalName: true, siret: true } },
+        payments: { orderBy: { receivedAt: 'desc' } },
+        // Phase 11 Plan 11-05 — Cross-nav avoirs (D-04 + D-07).
+        creditNotes: {
+          select: {
+            id: true,
+            number: true,
+            amountHT: true,
+            notes: true,
+            issueDate: true,
+          },
+          orderBy: { issueDate: 'desc' },
         },
-        orderBy: { issueDate: 'desc' },
+        originalInvoice: { select: { id: true, number: true } },
       },
-      originalInvoice: { select: { id: true, number: true } },
-    },
-  });
+    }),
+    prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { invoiceReminderDays: true },
+    }),
+  ]);
   if (!invoice) notFound();
+  const tenantReminderDays = tenant?.invoiceReminderDays ?? [30, 45];
 
   const status = STATUS_LABEL[invoice.status] ?? { label: invoice.status, variant: 'muted' as const };
   const remaining = Number(invoice.amountTTC) - Number(invoice.amountPaid);
@@ -70,6 +80,11 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   // Phase 11 Plan 11-05 — CTA "Créer un avoir" visible si statut éligible D-03.
   const isCreditNoteEligible = ['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(invoice.status);
   const isCreditNote = invoice.status === 'CREDIT_NOTE';
+  // Phase 11 Plan 11-06 — Bouton manuel "Envoyer relance maintenant" visible
+  // si la facture est dans un état où une relance fait sens (D-13 auto-stop
+  // sur PAID/CANCELLED/CREDIT_NOTE/DRAFT). Le bouton lui-même se désactive
+  // aussi si reminderCount >= maxLevel.
+  const isReminderEligible = ['ISSUED', 'PARTIAL', 'OVERDUE'].includes(invoice.status);
 
   return (
     <div className="space-y-6">
@@ -130,7 +145,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
         />
       </section>
 
-      {/* Saisie paiement + CTA avoir — Plan 11-05 D-03 */}
+      {/* Saisie paiement + CTA avoir — Plan 11-05 D-03 + CTA relance manuel Plan 11-06 D-09 */}
       <section className="flex flex-wrap items-start gap-3">
         <RecordPaymentForm invoiceId={invoice.id} remaining={remaining} />
         {isCreditNoteEligible && (
@@ -138,6 +153,15 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
             originalInvoiceId={invoice.id}
             originalAmountHt={Number(invoice.amountHT)}
             originalNumber={invoice.number}
+          />
+        )}
+        {isReminderEligible && (
+          <SendReminderButton
+            invoiceId={invoice.id}
+            status={invoice.status}
+            lastReminderAt={invoice.lastReminderAt}
+            reminderCount={invoice.reminderCount}
+            maxLevel={tenantReminderDays.length}
           />
         )}
       </section>
