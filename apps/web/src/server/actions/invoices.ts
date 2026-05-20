@@ -11,6 +11,8 @@ import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
+import { sendMail } from '@/lib/mailer';
+import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
 
 // Phase 7 — Plan 07-01 : suppression du bloc `OF` local qui bypassait
@@ -560,4 +562,195 @@ export async function createCreditNote(input: {
     creditNoteId: result.creditNote.id,
     number: result.creditNote.number,
   };
+}
+
+/**
+ * Phase 11 Plan 11-06 — Envoi d'une relance facture (FACT-03).
+ *
+ * Server action **partagée cron + manual** (D-09) :
+ *  - `triggered_by='cron'`   → worker système, SKIP requireRole, idempotence 24h
+ *  - `triggered_by='manual'` → bouton UI, requireRole + revalidatePath,
+ *                              PAS d'idempotence (l'utilisateur force)
+ *
+ * Décisions clés :
+ *  - D-13   : auto-stop si status ∈ {PAID, CANCELLED, CREDIT_NOTE, DRAFT}
+ *  - D-13b  : idempotence 24h via `lastReminderAt` pour le cron uniquement
+ *  - D-13c  : AuditLog `invoices.reminder_sent` systématique (même sur erreur/dry-run)
+ *  - D-19   : RBAC manuel = ADMIN + MANAGER + COMPTABLE
+ *  - D-12   : niveau = clamp(reminderCount + 1, 1, invoiceReminderDays.length)
+ *  - Mailer : dry-run automatique si SMTP_HOST vide (mailer.ts)
+ *  - Email recipient priorité : payerOrg.emailBilling > payerOrg.email > participant.person.email
+ */
+
+const REMINDER_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
+
+function getReminderRecipientEmail(invoice: {
+  payerOrg: { email: string | null; emailBilling: string | null } | null;
+  participant: { person: { email: string | null } | null } | null;
+}): string | null {
+  return (
+    invoice.payerOrg?.emailBilling ??
+    invoice.payerOrg?.email ??
+    invoice.participant?.person?.email ??
+    null
+  );
+}
+
+export async function sendInvoiceReminder(input: {
+  invoiceId: string;
+  triggered_by: 'cron' | 'manual';
+}): Promise<
+  | { ok: true; level: 1 | 2; dryRun: boolean }
+  | { ok: false; error: string }
+> {
+  // RBAC : manual seulement (cron skip — worker système D-09)
+  let userId: string | null = null;
+  let tenantId: string;
+
+  if (input.triggered_by === 'manual') {
+    let user;
+    try {
+      user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+    } catch (e) {
+      if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+        return { ok: false, error: e.message };
+      }
+      throw e;
+    }
+    userId = user.id;
+    tenantId = user.tenantId;
+  } else {
+    // Cron : pas d'utilisateur — on lit le tenantId depuis la facture
+    const inv = await prisma.invoice.findUnique({
+      where: { id: input.invoiceId },
+      select: { tenantId: true },
+    });
+    if (!inv) return { ok: false, error: 'Facture introuvable' };
+    tenantId = inv.tenantId;
+  }
+
+  // Lookup facture + relations
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: input.invoiceId, tenantId },
+    include: {
+      payerOrg: { select: { legalName: true, email: true, emailBilling: true } },
+      participant: {
+        include: {
+          person: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+  if (!invoice) return { ok: false, error: 'Facture introuvable' };
+
+  // Auto-stop D-13 : PAID / CANCELLED / CREDIT_NOTE / DRAFT → skip
+  if (invoice.status === 'PAID') return { ok: false, error: 'Facture déjà payée' };
+  if (invoice.status === 'CANCELLED') return { ok: false, error: 'Facture annulée' };
+  if (invoice.status === 'CREDIT_NOTE') return { ok: false, error: 'Pas de relance sur un avoir' };
+  if (invoice.status === 'DRAFT') return { ok: false, error: 'Facture en brouillon' };
+
+  // Idempotence 24h pour cron uniquement (D-09 — manual confiance utilisateur)
+  if (input.triggered_by === 'cron' && invoice.lastReminderAt) {
+    const since = Date.now() - invoice.lastReminderAt.getTime();
+    if (since < REMINDER_DEDUP_WINDOW_MS) {
+      return { ok: false, error: 'Idempotence 24h (cron)' };
+    }
+  }
+
+  // Lecture tenant.invoiceReminderDays + niveau max
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { invoiceReminderDays: true },
+  });
+  const reminderDays = tenant?.invoiceReminderDays ?? [30, 45];
+  const maxLevel = reminderDays.length;
+
+  if (invoice.reminderCount >= maxLevel) {
+    return { ok: false, error: `Niveau maximum atteint (${maxLevel})` };
+  }
+
+  const level = Math.min(invoice.reminderCount + 1, maxLevel) as 1 | 2;
+
+  // Days overdue (depuis dueDate, fallback issueDate)
+  const dueDate = invoice.dueDate ?? invoice.issueDate ?? new Date();
+  const daysOverdue = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(dueDate).getTime()) / (24 * 60 * 60 * 1000)),
+  );
+
+  // Email recipient (priorité D-Phase11-Q5)
+  const recipientEmail = getReminderRecipientEmail(invoice);
+  if (!recipientEmail) {
+    // AuditLog quand même pour traçabilité (RESEARCH Q5)
+    await logInvoiceEvent({
+      tenantId,
+      actorUserId: userId,
+      targetInvoiceId: invoice.id,
+      action: 'invoices.reminder_sent',
+      diff: { level, triggered_by: input.triggered_by, error: 'no_email_recipient' },
+    });
+    return { ok: false, error: 'Aucun email payeur configuré' };
+  }
+
+  // Payer name (fallback person)
+  const payerName =
+    invoice.payerOrg?.legalName ??
+    (invoice.participant?.person
+      ? `${invoice.participant.person.firstName} ${invoice.participant.person.lastName}`
+      : 'Cher client');
+
+  // OfConfig (Phase 7 D-01 hybride BDD/ENV)
+  const of = await loadOfConfig(tenantId);
+
+  // Render template (Plan 11-03)
+  const remaining = Number(invoice.amountTTC) - Number(invoice.amountPaid);
+  const invoiceUrl = `${process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''}/app/factures/${invoice.id}`;
+
+  const { subject, html, text } = renderInvoiceReminderEmail(
+    {
+      level,
+      invoiceNumber: invoice.number,
+      issueDate: invoice.issueDate ?? new Date(),
+      dueDate: new Date(dueDate),
+      daysOverdue,
+      amountTtc: remaining,
+      payerName,
+      invoiceUrl,
+    },
+    of,
+  );
+
+  // Send mail (dry-run automatique si SMTP_HOST vide — cf mailer.ts)
+  const mailResult = await sendMail({ to: recipientEmail, subject, html, text });
+  const dryRun = mailResult.dryRun === true;
+
+  // Update tracking invoice
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: {
+      lastReminderAt: new Date(),
+      reminderCount: { increment: 1 },
+    },
+  });
+
+  // AuditLog D-13c (systématique — même sur dry-run)
+  await logInvoiceEvent({
+    tenantId,
+    actorUserId: userId,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.reminder_sent',
+    diff: {
+      level,
+      channel: 'email',
+      triggered_by: input.triggered_by,
+      dryRun,
+      daysOverdue,
+    },
+  });
+
+  if (input.triggered_by === 'manual') {
+    revalidatePath(`/app/factures/${invoice.id}`);
+  }
+
+  return { ok: true, level, dryRun };
 }
