@@ -1,16 +1,58 @@
-// Wave 0 stub — Phase 11 — implemented in Plan 11-07
-import { describe, it } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+/**
+ * Phase 11 Plan 11-07 Task 2 — Smoke pointer.
+ *
+ * Coverage complète vit dans la route :
+ *   `apps/web/src/app/api/factures/export/__tests__/route.test.ts` (11 tests)
+ *
+ * Ce fichier reste listé dans `11-VALIDATION.md` Wave 0 — on le garde non-vide
+ * pour ne pas régresser le gate Nyquist (pattern utilisé Phase 9.1 quand un
+ * fichier de test stub a été "remplacé" par les tests réels d'à côté).
+ *
+ * Le smoke test ci-dessous vérifie juste que la route handler `GET` est bien
+ * exportée et est une fonction — détection précoce d'un casse-pied import path
+ * (ex. renommage de fichier route.ts).
+ */
+
+// Mock minimal pour permettre l'import sans casser sur side-effects de auth/Prisma.
+vi.mock('@qualiof/db', () => ({
+  prisma: {
+    invoice: { findMany: vi.fn() },
+    auditLog: { create: vi.fn() },
+  },
+  LegalForm: {
+    SAS: 'SAS',
+    SARL: 'SARL',
+    SASU: 'SASU',
+    EURL: 'EURL',
+    SA: 'SA',
+    EI: 'EI',
+    EIRL: 'EIRL',
+    AUTO_ENTREPRENEUR: 'AUTO_ENTREPRENEUR',
+    AUTRE: 'AUTRE',
+  },
+  UserRole: {
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    FORMATEUR: 'FORMATEUR',
+    COMMERCIAL: 'COMMERCIAL',
+    COMPTABLE: 'COMPTABLE',
+    LECTEUR: 'LECTEUR',
+  },
+}));
+vi.mock('@/lib/auth', () => ({
+  lucia: {},
+  validateRequest: vi.fn(),
+}));
+vi.mock('@/lib/invoice-audit', () => ({
+  logInvoiceEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { GET } from '@/app/api/factures/export/route';
 
 describe('exportInvoicesXlsx (route /api/factures/export)', () => {
-  it.todo('GET sans session → 401');
-  it.todo('GET avec session COMMERCIAL → 403');
-  it.todo('GET avec session FORMATEUR → 403');
-  it.todo('GET avec session ADMIN → 200 + Content-Type xlsx');
-  it.todo('GET avec session COMPTABLE → 200');
-  it.todo('Content-Disposition contient filename=factures_YYYY-MM-DD_YYYY-MM-DD.xlsx');
-  it.todo('Bad request (from > to ou format invalide) → 400');
-  it.todo('Sheet contient 12 colonnes attendues : Date émission / Numéro / Type / Libellé / Payeur / SIRET / Montant HT / TVA / Montant TTC / Payé / Reste / Statut');
-  it.todo('Avoirs (status=CREDIT_NOTE) lignes avec Type=AVO + amountHT négatif');
-  it.todo('Crée AuditLog invoices.exported avec diff {from, to, count}');
-  it.todo('Période vide (0 factures matchées) → 200 + sheet avec headers uniquement');
+  it('exporte un handler GET fonctionnel', () => {
+    expect(typeof GET).toBe('function');
+  });
 });
