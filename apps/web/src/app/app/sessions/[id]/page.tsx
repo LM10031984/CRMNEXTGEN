@@ -46,7 +46,22 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       participants: {
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         include: {
-          person: { select: { id: true, firstName: true, lastName: true } },
+          person: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              // BUG-11 — pour permettre AGEFICE même si sponsorOrg n'est pas
+              // AGEFICE : on lit les LegalLinks pour détecter EI_SELF (TNS)
+              // ou un autre rattachement à une org AGEFICE.
+              legalLinks: {
+                select: {
+                  role: true,
+                  organization: { select: { opcoCode: true } },
+                },
+              },
+            },
+          },
           sponsorOrg: { select: { id: true, legalName: true, brandName: true, legalForm: true, opcoCode: true } },
         },
       },
@@ -238,7 +253,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
     financingMode: p.financingMode as string | null,
     docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
-    isAgefice: p.sponsorOrg.opcoCode === 'AGEFICE',
+    // BUG-11 — élargi : participant éligible AGEFICE si SOIT son sponsor est
+    // AGEFICE, SOIT il a un LegalLink EI_SELF (auto-entrepreneur TNS), SOIT
+    // il a une autre org rattachée avec opcoCode=AGEFICE. Permet de
+    // générer le dossier AGEFICE depuis la matrice même si le sponsor de la
+    // session est un OPCO classique (cas Florent HAUSSWIRTH / Imagimmo OPCO_EP
+    // qui est aussi auto-entrepreneur AGEFICE en parallèle).
+    isAgefice:
+      p.sponsorOrg.opcoCode === 'AGEFICE' ||
+      p.person.legalLinks.some(
+        (l) =>
+          l.role === 'EI_SELF' || l.organization?.opcoCode === 'AGEFICE',
+      ),
     participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
     pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
   }));
