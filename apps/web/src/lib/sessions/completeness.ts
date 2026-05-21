@@ -116,7 +116,11 @@ export function getSessionCompleteness(
       key: 'no_location',
       label: 'Lieu de formation non défini',
       hint: 'Associer un lieu (Location) à la session',
-      fix: { href: '#section-logistique', label: 'Aller à la logistique' },
+      // BUG-18 — pointe vers la nouvelle section "Lieu de formation"
+      // (#section-lieu) qui est toujours rendue avec état vide actionnable.
+      // SessionLogisticsEditor (section-logistique) ne traite que l'hébergement
+      // formateur + accessibilité PSH, pas le Location de la session.
+      fix: { href: '#section-lieu', label: 'Aller à la section Lieu' },
     });
   }
 

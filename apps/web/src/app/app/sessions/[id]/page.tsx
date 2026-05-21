@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -43,6 +43,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     where: { id, tenantId: user.tenantId },
     include: {
       product: true,
+      location: true,
       participants: {
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         include: {
@@ -722,13 +723,35 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </section>
 
           {/* Formateurs de la session — étoile = formateur principal qui signe les docs Qualiopi */}
-          {/* BUG-17 anchor — completeness badge link vers cette section */}
-          <div id="section-formateurs" className="scroll-mt-20" />
-          {session.trainers.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-5">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
-                Formateurs
-              </h2>
+          {/* BUG-17 anchor — completeness badge link vers cette section.
+              BUG-18 (suite) : on rend TOUJOURS la section (avec un état vide
+              actionnable) pour que l'anchor #section-formateurs mène à du
+              contenu visible — sinon le scroll arrive sur du vide. */}
+          <section
+            id="section-formateurs"
+            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20 target:ring-2 target:ring-primary target:ring-offset-2"
+          >
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
+              Formateurs
+            </h2>
+            {session.trainers.length === 0 ? (
+              <div className="flex flex-col items-start gap-3 py-4">
+                <p className="text-sm text-orange-700">
+                  <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                  Aucun formateur n&apos;est rattaché à cette session. La génération
+                  des documents Qualiopi nécessite au moins un formateur principal.
+                </p>
+                <Link
+                  href="/app/formateurs"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" /> Aller à la liste des formateurs
+                </Link>
+                <p className="text-xs text-muted-foreground">
+                  Depuis la fiche d&apos;un formateur, ajoute-le à la session {session.code}.
+                </p>
+              </div>
+            ) : (
               <ul className="divide-y divide-border">
                 {session.trainers.map((t) => (
                   <li key={t.id} className="flex items-center gap-3 py-2">
@@ -754,8 +777,53 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
+            )}
+          </section>
+
+          {/* Lieu de formation — visible toujours pour permettre à l'anchor
+              #section-lieu du blocker no_location de mener vers du contenu
+              actionnable (BUG-18). */}
+          <section
+            id="section-lieu"
+            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20"
+          >
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
+              Lieu de formation
+            </h2>
+            {session.location ? (
+              <div className="text-sm">
+                <div className="font-medium">{session.location.name}</div>
+                {(() => {
+                  const addr = session.location.address as
+                    | { street?: string; postalCode?: string; city?: string }
+                    | null;
+                  if (!addr) return null;
+                  return (
+                    <div className="text-muted-foreground mt-1">
+                      {[addr.street, [addr.postalCode, addr.city].filter(Boolean).join(' ')]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-3 py-2">
+                <p className="text-sm text-orange-700">
+                  <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                  {session.modality === 'DISTANCIEL'
+                    ? 'Aucun lieu défini (distanciel — facultatif).'
+                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles (Qualiopi indic 17 — moyens techniques mis à disposition).'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  L&apos;édition du lieu n&apos;est pas encore disponible inline.
+                  Pour modifier le lieu, dupliquez la session avec le nouveau
+                  lieu via le menu kebab (« Dupliquer ») ou contactez un
+                  administrateur.
+                </p>
+              </div>
+            )}
+          </section>
 
           {/* Satisfaction agrégée — calcul live à partir des satisfactions chaud individuelles */}
           <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
