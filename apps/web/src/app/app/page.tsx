@@ -3,13 +3,16 @@ import {
   Users, Calendar, BookOpen, AlertCircle, AlertTriangle, Building2,
   Euro, TrendingUp, Banknote, Clock, Sparkles, FileCheck, Inbox,
   Megaphone, Target, Activity, BarChart3, Trophy, Wallet, ChevronRight,
+  PieChart,
 } from 'lucide-react';
 import { validateRequest } from '@/lib/auth';
 import { getDashboardStats } from '@/lib/dashboard-stats';
 import { getAgeficeBudgetSummary } from '@/server/actions/budget-agefice';
 import { Badge } from '@/components/ui/badge';
 import { FilterChips } from '@/components/ui/filter-chips';
+import { CollapsibleSection } from '@/components/ui/collapsible-section';
 import { MonthlyChart } from '@/components/dashboard/monthly-chart';
+import { SatisfactionOverviewPanel } from '@/components/dashboard/satisfaction-overview-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,58 +82,133 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
+      {/* Onglets dashboard : Pilotage (vue actuelle) / Bilan Qualiopi C1.i2 */}
+      <div className="border-b border-border">
+        <nav className="flex gap-1 -mb-px">
+          <span className="inline-flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 border-primary text-primary font-medium">
+            <BarChart3 className="h-4 w-4" /> Pilotage
+          </span>
+          <Link
+            href={`/app/qualiopi-bilan${year ? `?year=${year}` : ''}` as any}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+          >
+            <PieChart className="h-4 w-4" /> Bilan Qualiopi
+          </Link>
+        </nav>
+      </div>
+
       {/* Filtre année */}
       <FilterChips chips={yearChips} />
 
-      {/* Bandeau CA */}
+      {/* À l'essentiel — UX-11 : 4 KPI prioritaires en grand */}
       <section>
         <div className="flex items-center gap-2 mb-3">
-          <Wallet className="h-4 w-4 text-muted-foreground" />
+          <Sparkles className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Chiffre d'affaires {yearLabel.toLowerCase()}
+            À l'essentiel
           </h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <CaCard icon={TrendingUp} label="CA prévu" value={stats.ca.total} accent="primary" href={`/app/inscriptions${year ? `?year=${year}` : ''}`} />
-          <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" href={`/app/sessions?filter=signed`} />
-          <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} href="/app/sessions?filter=upcoming" />
-          <CaCard icon={Banknote} label="Facturé" value={stats.ca.invoiced} href="/app/factures" />
-          <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" href="/app/factures?status=collected" />
-          <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} href="/app/factures?status=remaining" />
-        </div>
-        {/* Cashflow : DSO + factures en attente */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-          <PerfCard
-            icon={Clock}
-            label={`DSO ${stats.cashflow.nbInvoicesPaid > 0 ? `(${stats.cashflow.nbInvoicesPaid} payées)` : ''}`}
-            value={stats.cashflow.dso !== null ? `${stats.cashflow.dso} j` : '—'}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <PrioCard
+            icon={Euro}
+            label="CA encaissé"
+            value={fmtEUR.format(stats.ca.collected)}
+            sub={`${pct((stats.ca.collected / Math.max(1, stats.ca.invoiced)) * 100)} du facturé`}
+            accent="success"
+            href="/app/factures?status=PAID"
           />
-          <PerfCard
-            icon={AlertCircle}
-            label="Factures en attente"
-            value={fmtNb.format(stats.cashflow.nbInvoicesPending)}
+          <PrioCard
+            icon={Wallet}
+            label={`AGEFICE ${ageficeYear}`}
+            value={fmtEUR.format(ageficeSummary.totalRemaining)}
+            sub={`${ageficeSummary.withBudgetLeft} apprenant${ageficeSummary.withBudgetLeft > 1 ? 's' : ''} mobilisable${ageficeSummary.withBudgetLeft > 1 ? 's' : ''}`}
+            accent="primary"
+            href={`/app/budget-agefice?filter=has_budget_left&year=${ageficeYear}`}
+          />
+          <PrioCard
+            icon={Calendar}
+            label="Sessions à venir"
+            value={fmtNb.format(stats.pipeline.upcomingSessions)}
+            sub={`${fmtEUR.format(stats.pipeline.upcomingForecast)} CA prévu`}
+            accent="default"
+            href="/app/sessions?filter=upcoming"
+          />
+          <PrioCard
+            icon={Target}
+            label="Taux remplissage"
+            value={pct(stats.performance.avgFillRate)}
+            sub={`sur ${fmtNb.format(stats.performance.nbSessions)} session${stats.performance.nbSessions > 1 ? 's' : ''}`}
+            accent={stats.performance.avgFillRate < 50 ? 'warning' : 'default'}
           />
         </div>
       </section>
 
-      {/* Performance */}
-      <section>
-        <div className="flex items-center gap-2 mb-3">
-          <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Performance — moyennes & volumes
-          </h2>
+      {/* Indicateurs détaillés — UX-11 : repliable, fermé par défaut */}
+      <CollapsibleSection
+        id="dashboard-detailed"
+        title="Indicateurs détaillés"
+        subtitle="CA, cashflow, volumes & moyennes"
+        icon={<BarChart3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+      >
+        {/* Bandeau CA */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Chiffre d'affaires {yearLabel.toLowerCase()}
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            <CaCard icon={TrendingUp} label="CA prévu" value={stats.ca.total} accent="primary" href={`/app/inscriptions${year ? `?year=${year}` : ''}`} />
+            <CaCard icon={FileCheck} label="CA signé" value={stats.ca.signed} hint="validé/en cours/clos" href={`/app/sessions?filter=signed`} />
+            <CaCard icon={Clock} label="CA à venir" value={stats.ca.upcoming} hint={`${stats.counts.upcomingSessions} sessions`} href="/app/sessions?filter=upcoming" />
+            <CaCard icon={Banknote} label="Facturé" value={stats.ca.invoiced} href="/app/factures" />
+            <CaCard icon={Euro} label="Encaissé" value={stats.ca.collected} accent="success" href="/app/factures?status=PAID" />
+            <CaCard icon={AlertCircle} label="Reste à encaisser" value={stats.ca.remaining} accent={stats.ca.remaining > 0 ? 'warning' : 'default'} href="/app/factures?onlyUnpaid=1" />
+          </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <PerfCard icon={Calendar} label="Sessions" value={fmtNb.format(stats.performance.nbSessions)} />
-          <PerfCard icon={Users} label="Apprenants" value={fmtNb.format(stats.performance.nbParticipants)} />
-          <PerfCard icon={Activity} label="Heures formées" value={fmtNb.format(stats.performance.totalHours)} />
-          <PerfCard icon={Target} label="Taux remplissage" value={pct(stats.performance.avgFillRate)} />
-          <PerfCard icon={Euro} label="CA / session" value={fmtEUR.format(stats.performance.avgRevenuePerSession)} />
-          <PerfCard icon={Euro} label="CA / apprenant" value={fmtEUR.format(stats.performance.avgRevenuePerLearner)} />
-          <PerfCard icon={Clock} label="CA / heure" value={fmtEUR.format(stats.performance.revenuePerHour)} />
+
+        {/* Cashflow : DSO + factures en attente */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Cashflow
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
+            <PerfCard
+              icon={Clock}
+              label={`DSO ${stats.cashflow.nbInvoicesPaid > 0 ? `(${stats.cashflow.nbInvoicesPaid} payées)` : ''}`}
+              value={stats.cashflow.dso !== null ? `${stats.cashflow.dso} j` : '—'}
+            />
+            <PerfCard
+              icon={AlertCircle}
+              label="Factures en attente"
+              value={fmtNb.format(stats.cashflow.nbInvoicesPending)}
+            />
+          </div>
         </div>
-      </section>
+
+        {/* Performance */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Performance — moyennes & volumes
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            <PerfCard icon={Calendar} label="Sessions" value={fmtNb.format(stats.performance.nbSessions)} />
+            <PerfCard icon={Users} label="Apprenants" value={fmtNb.format(stats.performance.nbParticipants)} />
+            <PerfCard icon={Activity} label="Heures formées" value={fmtNb.format(stats.performance.totalHours)} />
+            <PerfCard icon={Target} label="Taux remplissage" value={pct(stats.performance.avgFillRate)} />
+            <PerfCard icon={Euro} label="CA / session" value={fmtEUR.format(stats.performance.avgRevenuePerSession)} />
+            <PerfCard icon={Euro} label="CA / apprenant" value={fmtEUR.format(stats.performance.avgRevenuePerLearner)} />
+            <PerfCard icon={Clock} label="CA / heure" value={fmtEUR.format(stats.performance.revenuePerHour)} />
+          </div>
+        </div>
+      </CollapsibleSection>
 
       {/* Alertes + Pipeline */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -179,7 +257,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </section>
 
       {/* Top sessions / Top produits / Top sponsors */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <TopList
           title="Top 5 sessions rentables"
           icon={Trophy}
@@ -227,6 +305,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <MonthlyChart data={stats.byMonth.map((m) => ({ month: m.month, sessions: m.sessions, revenue: m.revenue }))} />
       </section>
 
+      {/* Satisfaction globale + par session — Qualiopi i30 */}
+      <SatisfactionOverviewPanel tenantId={user.tenantId} />
+
       {/* Sessions récentes */}
       <section className="rounded-2xl border border-border bg-white p-6">
         <div className="flex items-center justify-between mb-4">
@@ -261,6 +342,58 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </section>
     </div>
   );
+}
+
+/**
+ * KPI prioritaire — format grand pour la section "À l'essentiel" (UX-11).
+ * Plus visible que CaCard / PerfCard : icône bg colorée, valeur en text-2xl, sub.
+ */
+function PrioCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent = 'default',
+  href,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: 'primary' | 'success' | 'warning' | 'default';
+  href?: string;
+}) {
+  const palette = {
+    primary: { card: 'border-primary-200 bg-primary-50/50', iconBox: 'bg-primary-100 text-primary-700' },
+    success: { card: 'border-emerald-200 bg-emerald-50/50', iconBox: 'bg-emerald-100 text-emerald-700' },
+    warning: { card: 'border-amber-200 bg-amber-50/50', iconBox: 'bg-amber-100 text-amber-800' },
+    default: { card: 'border-border bg-white', iconBox: 'bg-muted text-foreground' },
+  }[accent];
+  const inner = (
+    <>
+      <div className="flex items-center gap-3 mb-2">
+        <span className={`inline-flex items-center justify-center h-9 w-9 rounded-lg ${palette.iconBox}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground font-medium leading-tight">
+          {label}
+        </div>
+      </div>
+      <div className="text-2xl font-bold tabular-nums leading-tight">{value}</div>
+      {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+    </>
+  );
+  if (href) {
+    return (
+      <Link
+        href={href as any}
+        className={`block rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:shadow-sm ${palette.card}`}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={`rounded-2xl border p-5 ${palette.card}`}>{inner}</div>;
 }
 
 function CaCard({
