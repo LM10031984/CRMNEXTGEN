@@ -570,3 +570,178 @@ export async function createSessionAndRedirect(formData: FormData): Promise<void
   if (!res.ok) throw new Error(res.error);
   redirect(`/app/sessions/${res.id}`);
 }
+
+// ─── BUG-19 — Édition inline du lieu de formation ────────────────────────
+export async function updateSessionLocation(input: {
+  sessionId: string;
+  locationId: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  // Si locationId fourni, vérifier qu'il existe et appartient au tenant
+  if (input.locationId) {
+    const location = await prisma.location.findFirst({
+      where: { id: input.locationId, tenantId: user.tenantId },
+      select: { id: true },
+    });
+    if (!location) return { ok: false, error: 'Lieu introuvable ou non autorisé.' };
+  }
+
+  await prisma.trainingSession.update({
+    where: { id: input.sessionId },
+    data: { locationId: input.locationId },
+  });
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true };
+}
+
+// ─── BUG-19 — Ajouter / retirer un formateur de la session ───────────────
+export async function addSessionTrainer(input: {
+  sessionId: string;
+  personId: string;
+  role?: string;
+  isPrimary?: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  const person = await prisma.person.findFirst({
+    where: { id: input.personId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!person) return { ok: false, error: 'Personne introuvable.' };
+
+  // Si on demande isPrimary=true, démarquer tous les autres trainers de la session
+  await prisma.$transaction(async (tx) => {
+    if (input.isPrimary) {
+      await tx.sessionTrainer.updateMany({
+        where: { sessionId: input.sessionId },
+        data: { isPrimary: false },
+      });
+    }
+    await tx.sessionTrainer.upsert({
+      where: {
+        sessionId_personId: {
+          sessionId: input.sessionId,
+          personId: input.personId,
+        },
+      },
+      update: {
+        role: input.role ?? undefined,
+        isPrimary: input.isPrimary ?? undefined,
+      },
+      create: {
+        sessionId: input.sessionId,
+        personId: input.personId,
+        role: input.role ?? 'Formateur',
+        isPrimary: input.isPrimary ?? false,
+      },
+    });
+  });
+
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true };
+}
+
+export async function removeSessionTrainer(input: {
+  sessionId: string;
+  personId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  await prisma.sessionTrainer.delete({
+    where: {
+      sessionId_personId: {
+        sessionId: input.sessionId,
+        personId: input.personId,
+      },
+    },
+  }).catch(() => null); // ignore if not found
+
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true };
+}
+
+// Helpers de listing pour les pickers UI (BUG-19).
+export async function listLocations() {
+  const { user } = await validateRequest();
+  if (!user) return [];
+  return prisma.location.findMany({
+    where: { tenantId: user.tenantId },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, address: true },
+  });
+}
+
+export async function searchTrainerCandidates(query: string) {
+  const { user } = await validateRequest();
+  if (!user) return [];
+  const q = query.trim();
+  if (q.length === 0) {
+    // Liste les Person qui sont déjà formateur dans au moins 1 session
+    const recent = await prisma.person.findMany({
+      where: {
+        tenantId: user.tenantId,
+        trainerSessions: { some: {} },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: 20,
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    return recent;
+  }
+  return prisma.person.findMany({
+    where: {
+      tenantId: user.tenantId,
+      OR: [
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { lastName: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    take: 20,
+    select: { id: true, firstName: true, lastName: true, email: true },
+  });
+}

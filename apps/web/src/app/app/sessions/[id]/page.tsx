@@ -17,6 +17,8 @@ import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
 import { CreatePersonButton } from '@/components/forms/create-person-button';
 import { SessionStatusSelect } from '@/components/sessions/session-status-select';
 import { SessionLogisticsEditor } from '@/components/sessions/session-logistics-editor';
+import { SessionLocationPicker } from '@/components/sessions/session-location-picker';
+import { SessionTrainerPicker } from '@/components/sessions/session-trainer-picker';
 import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-toggle';
 import { SessionSatisfactionPanel } from '@/components/sessions/session-satisfaction-panel';
 import { BatchProgressAutoRefresh } from '@/components/sessions/batch-progress-auto-refresh';
@@ -735,21 +737,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               Formateurs
             </h2>
             {session.trainers.length === 0 ? (
-              <div className="flex flex-col items-start gap-3 py-4">
+              <div className="space-y-3 py-2">
                 <p className="text-sm text-orange-700">
                   <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
-                  Aucun formateur n&apos;est rattaché à cette session. La génération
-                  des documents Qualiopi nécessite au moins un formateur principal.
+                  Aucun formateur rattaché. Qualiopi indic 21 — formateur identifié obligatoire pour générer les docs.
                 </p>
-                <Link
-                  href="/app/formateurs"
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" /> Aller à la liste des formateurs
-                </Link>
-                <p className="text-xs text-muted-foreground">
-                  Depuis la fiche d&apos;un formateur, ajoute-le à la session {session.code}.
-                </p>
+                <SessionTrainerPicker sessionId={session.id} setAsPrimary />
               </div>
             ) : (
               <ul className="divide-y divide-border">
@@ -808,19 +801,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 })()}
               </div>
             ) : (
-              <div className="flex flex-col items-start gap-3 py-2">
+              <div className="space-y-3 py-2">
                 <p className="text-sm text-orange-700">
                   <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
                   {session.modality === 'DISTANCIEL'
                     ? 'Aucun lieu défini (distanciel — facultatif).'
-                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles (Qualiopi indic 17 — moyens techniques mis à disposition).'}
+                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles (Qualiopi indic 17).'}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  L&apos;édition du lieu n&apos;est pas encore disponible inline.
-                  Pour modifier le lieu, dupliquez la session avec le nouveau
-                  lieu via le menu kebab (« Dupliquer ») ou contactez un
-                  administrateur.
-                </p>
+                <SessionLocationPicker sessionId={session.id} />
               </div>
             )}
           </section>
