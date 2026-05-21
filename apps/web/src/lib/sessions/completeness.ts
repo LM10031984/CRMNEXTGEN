@@ -12,20 +12,35 @@
  *    si la session est incomplète, avec message clair listant les blockers)
  */
 
+export type SessionCompletenessBlockerKey =
+  | 'no_primary_trainer'
+  | 'no_price'
+  | 'no_dates'
+  | 'no_location'
+  | 'no_program'
+  | 'no_participants';
+
 export type SessionCompletenessBlocker = {
   /** Identifiant stable pour cibler (analytics, deep link) */
-  key:
-    | 'no_primary_trainer'
-    | 'no_price'
-    | 'no_dates'
-    | 'no_location'
-    | 'no_program'
-    | 'no_participants';
+  key: SessionCompletenessBlockerKey;
   /** Libellé affiché à l'utilisateur (français) */
   label: string;
   /** Hint : où corriger (URL anchor, modal, etc.) */
   hint: string;
+  /**
+   * Anchor #id ou URL complète à cliquer pour corriger directement.
+   * BUG-5/BUG-17 — chaque blocker pointe vers le bon endroit :
+   *  - no_program → URL absolue vers la fiche produit
+   *  - autres → anchor #id de section sur la fiche session
+   */
+  fix: { href: string; label: string };
 };
+
+export interface SessionCompletenessInputWithProductId
+  extends SessionCompletenessInput {
+  /** Optionnel — utilisé pour générer le lien 'fix' du blocker no_program. */
+  productId?: string | null;
+}
 
 export interface SessionCompletenessInput {
   startDate: Date | null;
@@ -59,7 +74,7 @@ export interface SessionCompleteness {
  * Modalité DISTANCIEL : la Location n'est PAS obligatoire (visio).
  */
 export function getSessionCompleteness(
-  s: SessionCompletenessInput,
+  s: SessionCompletenessInputWithProductId,
 ): SessionCompleteness {
   const blockers: SessionCompletenessBlocker[] = [];
 
@@ -68,6 +83,7 @@ export function getSessionCompleteness(
       key: 'no_primary_trainer',
       label: 'Formateur principal manquant',
       hint: 'Ajouter un formateur avec rôle « principal » dans l’onglet Formateurs',
+      fix: { href: '#section-formateurs', label: 'Aller à la section Formateurs' },
     });
   }
 
@@ -80,6 +96,7 @@ export function getSessionCompleteness(
       key: 'no_price',
       label: 'Tarif non renseigné',
       hint: 'Définir le prix HT par apprenant (champ Tarif sur la fiche session)',
+      fix: { href: '#section-logistique', label: 'Aller à la logistique' },
     });
   }
 
@@ -88,6 +105,7 @@ export function getSessionCompleteness(
       key: 'no_dates',
       label: 'Dates de session incomplètes',
       hint: 'Renseigner les dates de début et de fin de session',
+      fix: { href: '#section-logistique', label: 'Aller à la logistique' },
     });
   }
 
@@ -98,6 +116,7 @@ export function getSessionCompleteness(
       key: 'no_location',
       label: 'Lieu de formation non défini',
       hint: 'Associer un lieu (Location) à la session',
+      fix: { href: '#section-logistique', label: 'Aller à la logistique' },
     });
   }
 
@@ -106,6 +125,9 @@ export function getSessionCompleteness(
       key: 'no_program',
       label: 'Programme du produit absent ou trop court',
       hint: 'Compléter le programme markdown sur le produit de formation',
+      fix: s.productId
+        ? { href: `/app/produits/${s.productId}`, label: 'Éditer le produit' }
+        : { href: '#section-produit', label: 'Voir le produit' },
     });
   }
 
@@ -114,6 +136,7 @@ export function getSessionCompleteness(
       key: 'no_participants',
       label: 'Aucun apprenant inscrit',
       hint: 'Ajouter au moins un apprenant à la session',
+      fix: { href: '#section-participants', label: 'Ajouter un apprenant' },
     });
   }
 

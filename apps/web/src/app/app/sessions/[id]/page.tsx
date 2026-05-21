@@ -328,6 +328,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   // BUG-5 — indicateur visuel de complétude session pour guider l'utilisateur
   // avant qu'il clique 'Pack fin de formation' avec une session bancale.
+  // BUG-17 — chaque blocker contient un lien direct (anchor #section-X ou URL)
+  // vers l'élément à corriger.
   const sessionCompleteness = getSessionCompleteness({
     startDate: session.startDate,
     endDate: session.endDate,
@@ -337,6 +339,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
     product: session.product ? { programMd: session.product.programMd } : null,
     participantsCount: session.participants.length,
+    productId: session.product?.id ?? null,
   });
 
   return (
@@ -515,6 +518,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       />
 
       {/* Phase 9.1 Plan 03 — Matrice Documents participants (CENTRAL-01 / CENTRAL-02) */}
+      {/* BUG-17 anchor — completeness badge link vers cette section */}
+      <div id="section-participants" className="scroll-mt-20" />
       <ParticipantDocMatrix
         sessionId={session.id}
         userRole={user.role}
@@ -691,6 +696,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </section>
 
           {/* Formateurs de la session — étoile = formateur principal qui signe les docs Qualiopi */}
+          {/* BUG-17 anchor — completeness badge link vers cette section */}
+          <div id="section-formateurs" className="scroll-mt-20" />
           {session.trainers.length > 0 && (
             <section className="rounded-2xl border border-border bg-white p-5">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
@@ -728,6 +735,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
 
           {/* Logistique session (C4.i17 Qualiopi) */}
+          {/* BUG-17 anchor — completeness badge link vers cette section (tarif/dates/lieu) */}
+          <div id="section-logistique" className="scroll-mt-20" />
           <SessionLogisticsEditor
             sessionId={session.id}
             initial={{
@@ -915,6 +924,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="space-y-6">
+          {/* BUG-17 anchor — completeness badge link vers la section Produit (fallback si pas de productId) */}
+          <div id="section-produit" className="scroll-mt-20" />
           <section className="rounded-2xl border border-border bg-white p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Produit de formation
