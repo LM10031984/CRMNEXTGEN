@@ -20,6 +20,22 @@ import {
   type ClosureBatchStatusPayload,
   type ClosureBatchStatusJob,
 } from '@/server/actions/closure-pack';
+import { regenerateParticipantDoc } from '@/server/actions/qualiopi-matrix';
+
+// BUG-10 — map ClosureDocKind (worker) → MatrixDocType (regenerateParticipantDoc).
+// Inverse de DOC_TYPE_TO_CLOSURE_KIND dans lib/doc-scope.ts.
+const CLOSURE_KIND_TO_MATRIX_DOC_TYPE: Record<string, string> = {
+  CERTIFICAT: 'CERTIFICAT_REALISATION',
+  ATTESTATION: 'ATTESTATION_FIN',
+  QCM: 'EVALUATION_ACQUIS',
+  EMARGEMENT: 'EMARGEMENT',
+  ANALYSE_BESOIN: 'ANALYSE_BESOIN',
+  POSITIONNEMENT: 'POSITIONNEMENT',
+  SATISFACTION_CHAUD: 'SATISFACTION_CHAUD',
+  SATISFACTION_FROID: 'SATISFACTION_FROID',
+  GRILLE_OBS: 'GRILLE_OBS_SESSION',
+  DEROULE_PEDA: 'DEROULE_PEDAGOGIQUE',
+};
 
 interface Props {
   batchId: string;
@@ -117,6 +133,27 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
     });
   }
 
+  // BUG-10 — régénération CIBLÉE d'un seul job stub (sans relancer tous les
+  // stubs du batch via handleRetry(true)). Click sur le label "À régénérer".
+  function handleRegenSingle(j: ClosureBatchStatusJob) {
+    const docKind = CLOSURE_KIND_TO_MATRIX_DOC_TYPE[j.kind];
+    if (!docKind) {
+      toast.error(`Type de doc non reconnu : ${j.kind}`);
+      return;
+    }
+    startRetry(async () => {
+      const r = await regenerateParticipantDoc({
+        participantId: j.participantId,
+        docKind,
+      });
+      if (r.ok) {
+        toast.success(`Régénération lancée : ${j.kindLabel} pour ${j.participantName}`);
+      } else {
+        toast.error(r.error ?? 'Erreur');
+      }
+    });
+  }
+
   const canDownload = batch.doneDocs > 0;
   const hasErrors = batch.errorDocs > 0;
   const stubCount = batch.jobs.filter((j) => j.status === 'DONE' && j.usedStub).length;
@@ -132,7 +169,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
             <span className="text-sm text-muted-foreground">
               {batch.doneDocs} / {batch.totalDocs} documents générés
               {batch.errorDocs > 0 && <span className="text-red-600"> · {batch.errorDocs} erreur(s)</span>}
-              {stubCount > 0 && <span className="text-amber-600"> · {stubCount} stub(s) IA</span>}
+              {stubCount > 0 && <span className="text-amber-600"> · {stubCount} doc(s) à régénérer (IA)</span>}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -156,7 +193,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100 disabled:opacity-60"
               >
                 {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-                Régénérer les {stubCount} stub(s)
+                Régénérer les {stubCount} doc{stubCount > 1 ? 's' : ''} génériques
               </button>
             )}
             {canDownload && (
@@ -203,12 +240,15 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                     {jobIcon(j.status)}
                     <span className="flex-1 truncate">{j.kindLabel}</span>
                     {j.status === 'DONE' && j.usedStub && (
-                      <span
-                        className="shrink-0 inline-flex items-center gap-1 text-amber-700 text-[10px] font-semibold uppercase tracking-wide"
-                        title="Contenu générique (Ollama a échoué) — à régénérer avant audit Qualiopi"
+                      <button
+                        type="button"
+                        onClick={() => handleRegenSingle(j)}
+                        disabled={retrying}
+                        className="shrink-0 inline-flex items-center gap-1 text-amber-700 text-[10px] font-semibold uppercase tracking-wide hover:bg-amber-100 hover:text-amber-900 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                        title="Ce document a été généré avec un contenu de remplacement (l'IA Ollama a échoué ou répondu invalide). Cliquez pour relancer la génération IA. À faire avant tout audit Qualiopi."
                       >
-                        <AlertTriangle className="h-3 w-3" /> Stub
-                      </span>
+                        <AlertTriangle className="h-3 w-3" aria-hidden="true" /> À régénérer
+                      </button>
                     )}
                     {j.status === 'DONE' && (j.documentId || j.pedagogicalAssetId) && (
                       <a

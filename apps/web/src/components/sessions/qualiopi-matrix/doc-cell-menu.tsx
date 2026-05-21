@@ -170,17 +170,28 @@ export function DocCellMenu({
     <>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
+          {/* BUG-8 — sur cellule MISSING, le kebab passe en ✨ Sparkles primary
+              pour signaler clairement qu'une action de génération est disponible
+              (le kebab à 3 points était trop discret, les users le rataient). */}
           <button
             type="button"
             aria-label={`Actions pour ${docLabel} de ${participantName}`}
             aria-haspopup="menu"
             disabled={pending}
             className={cn(
-              'p-1 rounded hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none',
+              'p-1 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none transition-colors',
+              state === 'MISSING'
+                ? 'text-primary hover:bg-primary-50'
+                : 'hover:bg-muted/50',
               pending && 'opacity-50 cursor-wait',
             )}
+            title={state === 'MISSING' ? 'Générer ce document' : 'Actions sur ce document'}
           >
-            <MoreVertical className="h-4 w-4" aria-hidden="true" />
+            {state === 'MISSING' ? (
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <MoreVertical className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
