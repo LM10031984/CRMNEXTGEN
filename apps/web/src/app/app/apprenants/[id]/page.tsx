@@ -36,6 +36,8 @@ import {
   type ParticipationForStats,
 } from '@/lib/learner-stats';
 import { MATRIX_DOC_TYPES } from '@/lib/doc-scope';
+// Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche apprenant.
+import { LearnerInvoicesBlock } from '@/components/learners/learner-invoices-block';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -524,6 +526,11 @@ export default async function ApprenantDetailPage({
         groups={timelineGroups}
         personHrefForEmpty={`/app/apprenants/${person.id}?tab=activity`}
       />
+
+      {/* Phase 11 Plan 11-09 — Cross-nav D-07 : factures liées à cet apprenant
+          (1-2 clics vers fiche facture). Placé après la timeline et avant les
+          onglets pour cohérence layout Phase 9.1 (anti-régression CENTRAL-03). */}
+      <LearnerInvoicesBlock personId={person.id} tenantId={user.tenantId} />
 
       <LearnerTabs
         tabs={[
