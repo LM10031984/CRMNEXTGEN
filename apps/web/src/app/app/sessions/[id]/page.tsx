@@ -27,6 +27,8 @@ import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
 import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
+// Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche session.
+import { SessionInvoicesBlock } from '@/components/sessions/session-invoices-block';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -503,6 +505,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         productDocs={productDocsMap}
         sessionDocs={sessionDocsMap}
       />
+
+      {/* Phase 11 Plan 11-09 — Cross-nav D-07 : factures liées à cette session
+          (sessionId direct OU via participant.sessionId). Placé après la
+          matrice docs Phase 9.1 (anti-régression CENTRAL-01/02 : matrice +
+          SessionOnlyDocsBlock + Inscrits préservés). */}
+      <SessionInvoicesBlock sessionId={session.id} tenantId={user.tenantId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
