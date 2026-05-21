@@ -157,6 +157,32 @@ export async function createInvoiceFromParticipant(
     data: { invoiceSent: true, invoiceSentAt: new Date() },
   });
 
+  // Phase 11 Plan 11-08 backfill FACT-01 (D-18) — émet 2 events :
+  // 1. invoices.created  : trace complète des champs métier
+  // 2. invoices.issued   : tracking du passage DRAFT → ISSUED (création passe direct ISSUED)
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.created',
+    diff: {
+      amountHt: Number(invoice.amountHT),
+      amountTtc: Number(invoice.amountTTC),
+      vatRate: Number(invoice.vatRate),
+      participantId: invoice.participantId,
+      payerOrgId: invoice.payerOrgId,
+      sessionId: session.id,
+      number: invoice.number,
+    },
+  });
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.issued',
+    diff: { status: { before: 'DRAFT', after: 'ISSUED' } },
+  });
+
   revalidatePath('/app/factures');
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
@@ -320,6 +346,33 @@ export async function createInvoiceForSponsorGroup(input: {
     data: { invoiceSent: true },
   });
 
+  // Phase 11 Plan 11-08 backfill FACT-01 (D-18) — émet 2 events :
+  // 1. invoices.created  : trace métier (sponsor groupé, N participants, total HT/TTC)
+  // 2. invoices.issued   : passage DRAFT → ISSUED
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.created',
+    diff: {
+      amountHt: Number(invoice.amountHT),
+      amountTtc: Number(invoice.amountTTC),
+      vatRate: Number(invoice.vatRate),
+      participantIds,
+      payerOrgId: invoice.payerOrgId,
+      sessionId: session.id,
+      number: invoice.number,
+      grouped: true,
+    },
+  });
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.issued',
+    diff: { status: { before: 'DRAFT', after: 'ISSUED' } },
+  });
+
   revalidatePath('/app/factures');
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
@@ -384,6 +437,25 @@ export async function recordInvoicePayment(input: {
         ]
       : []),
   ]);
+
+  // Phase 11 Plan 11-08 backfill FACT-01 (D-18) — trace paiement comptable.
+  // Hors transaction : audit complémentaire qui ne doit pas bloquer
+  // le rollback business (cohérent createCreditNote Plan 11-05).
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoices.payment_recorded',
+    diff: {
+      amount: input.amount,
+      method: input.method,
+      receivedAt: input.receivedAt,
+      reference: input.reference ?? null,
+      fullyPaid,
+      newStatus: fullyPaid ? 'PAID' : 'PARTIAL',
+      balanceRemaining: Number(invoice.amountTTC) - newPaid,
+    },
+  });
 
   revalidatePath('/app/factures');
   revalidatePath(`/app/factures/${invoice.id}`);
