@@ -128,9 +128,10 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
 
     // Profil pro du stagiaire à partir du LegalLink primaire (si dispo)
     const primaryLink = participant.person.legalLinks[0] ?? null;
-    const entreprise = primaryLink
-      ? primaryLink.organization.brandName ?? primaryLink.organization.legalName
-      : null;
+    // Précédence : legalName (NOT NULL côté schema, c'est le nom légal Qualiopi).
+    // brandName n'est PAS utilisé : il a été pollué historiquement par des codes
+    // internes ENT-XXXX issus d'imports SmartOF (bug 2026-05-21 Fabrice/AKORIMMO).
+    const entreprise = primaryLink?.organization.legalName ?? null;
 
     // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid).
     // Propagé via ctx.of à tous les templates closure pour cohérence multi-tenant.
