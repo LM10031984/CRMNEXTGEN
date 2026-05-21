@@ -49,6 +49,12 @@ interface Props {
   excludePersonIds?: string[];
   placeholder?: string;
   autoFocus?: boolean;
+  /**
+   * Pré-remplit la recherche au mount (utilisé par BUG-7 après quick-create
+   * d'un apprenant — on pré-rempit avec son nom pour qu'il apparaisse direct
+   * dans les résultats).
+   */
+  defaultQuery?: string;
 }
 
 export function PersonOrOrgPicker({
@@ -57,8 +63,9 @@ export function PersonOrOrgPicker({
   excludePersonIds = [],
   placeholder = 'Rechercher un apprenant…',
   autoFocus,
+  defaultQuery,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(defaultQuery ?? '');
   const [results, setResults] = useState<PersonSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);

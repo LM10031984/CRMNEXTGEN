@@ -23,6 +23,7 @@ import { computeEndDateISO, isBusinessDayISO } from '@/lib/business-days';
 import { Badge } from '@/components/ui/badge';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
 import { QuickCreateProductButton } from '@/components/wizards/quick-create-product';
+import { QuickCreatePersonButton } from '@/components/wizards/quick-create-person';
 import {
   searchProducts,
   createSessionFull,
@@ -103,6 +104,9 @@ export function SessionWizard({
   // Étape 3
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // BUG-7 — quand on quick-create un apprenant, on pré-remplit la recherche
+  // du picker pour qu'il apparaisse directement dans les résultats.
+  const [pickerDefaultQuery, setPickerDefaultQuery] = useState<string | null>(null);
 
   // Effet : quand on choisit un produit, on prefill modality, capacityMax,
   // prix, ET on avance automatiquement à l'étape 2 (résout la friction
@@ -545,14 +549,29 @@ export function SessionWizard({
                 excludePersonIds={participants.map((p) => p.personId)}
                 placeholder="Cherche par nom, prénom, email…"
                 autoFocus
+                defaultQuery={pickerDefaultQuery ?? undefined}
               />
-              <button
-                type="button"
-                onClick={() => setPickerOpen(false)}
-                className="mt-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Annuler
-              </button>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerOpen(false);
+                    setPickerDefaultQuery(null);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Annuler
+                </button>
+                {/* BUG-7 — création d'apprenant inline sans quitter le wizard */}
+                <QuickCreatePersonButton
+                  onCreated={(p) => {
+                    // On rafraîchit le picker avec le nom de la personne créée
+                    // pour qu'elle apparaisse direct dans les résultats. L'user
+                    // doit ensuite choisir une casquette (sponsor org).
+                    setPickerDefaultQuery(`${p.lastName} ${p.firstName}`);
+                  }}
+                />
+              </div>
             </div>
           ) : (
             <button
