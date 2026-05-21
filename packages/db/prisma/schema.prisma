@@ -39,6 +39,11 @@ model Tenant {
   // invoiceReminderDays : array Postgres Int[] des seuils J+N pour relances impayés (1-3 valeurs croissantes).
   creditNotePrefix        String?        @default("AVO")
   invoiceReminderDays     Int[]          @default([30, 45])
+  // BUG-15 — Documents légaux statiques tenant (Qualiopi indic 9 — info
+  // déroulement prestation, et indic 1 — info site internet).
+  // Stockés en markdown, rendus en PDF via marked + paged footer.
+  cgvMarkdown             String?        @db.Text
+  reglementInterieurMarkdown String?     @db.Text
   iban                    String?
   bic                     String?
   emailFrom               String?
@@ -826,6 +831,9 @@ enum DocType {
   PRE_ACCORD_OPCO
   VALIDATION_OPCO
   FACTURE
+  /// BUG-15 — Documents légaux statiques tenant (indic 1 + 9 Qualiopi).
+  CGV
+  REGLEMENT_INTERIEUR
   CUSTOM
 }
 

@@ -23,6 +23,7 @@ import { OfInvoicingForm } from '@/components/settings/of-invoicing-form';
 import { OfBankingForm } from '@/components/settings/of-banking-form';
 import { OfEmailForm } from '@/components/settings/of-email-form';
 import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-form';
+import { LegalDocsForm } from '@/components/parametres/legal-docs-form';
 import { formatIban } from '@/lib/iban-format';
 
 /**
@@ -271,6 +272,51 @@ export default async function ParametresPage() {
                     ? tenant.invoiceReminderDays
                     : [30, 45],
                 creditNotePrefix: tenant.creditNotePrefix,
+              }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── 4ter. Documents légaux statiques (BUG-15) ───────────── */}
+        <SettingsSection
+          icon={FileText}
+          title="Documents légaux"
+          description="CGV (indic 1 Qualiopi) + Règlement intérieur (indic 9) — markdown éditable, PDF à la volée"
+          readView={
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              <Field
+                label="CGV"
+                value={
+                  tenant.cgvMarkdown ? (
+                    <span className="text-emerald-600">
+                      ✓ {tenant.cgvMarkdown.length.toLocaleString('fr-FR')} caractères
+                    </span>
+                  ) : (
+                    <span className="text-orange-600 italic">Non rédigées</span>
+                  )
+                }
+              />
+              <Field
+                label="Règlement intérieur"
+                value={
+                  tenant.reglementInterieurMarkdown ? (
+                    <span className="text-emerald-600">
+                      ✓ {tenant.reglementInterieurMarkdown.length.toLocaleString('fr-FR')} caractères
+                    </span>
+                  ) : (
+                    <span className="text-orange-600 italic">Non rédigé</span>
+                  )
+                }
+              />
+            </dl>
+          }
+          editView={(onSaved, onCancel) => (
+            <LegalDocsForm
+              initial={{
+                cgvMarkdown: tenant.cgvMarkdown ?? null,
+                reglementInterieurMarkdown: tenant.reglementInterieurMarkdown ?? null,
               }}
               onSaved={onSaved}
               onCancel={onCancel}

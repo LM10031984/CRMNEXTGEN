@@ -36,8 +36,10 @@ import {
   tenantAddressSchema,
   tenantBillingSchema,
   tenantEmailSchema,
+  tenantLegalDocsSchema,
   type TenantIdentityInput,
   type TenantAddressInput,
+  type TenantLegalDocsInput,
   type TenantBillingInput,
   type TenantEmailInput,
 } from '@qualiof/shared';
@@ -210,6 +212,52 @@ export async function updateTenantEmail(input: TenantEmailInput): Promise<Action
       where: { id: user.tenantId },
       data: { emailFrom: parsed.data.emailFrom || null },
       select: { emailFrom: true },
+    });
+
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'parameters.update',
+      diff: computeDiff(before as Record<string, unknown>, after as Record<string, unknown>),
+    });
+
+    revalidatePath('/app/parametres');
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+}
+
+// ─── 5. BUG-15 — Documents légaux (CGV + Règlement intérieur) ────────────
+export async function updateTenantLegalDocs(input: TenantLegalDocsInput): Promise<ActionResult> {
+  try {
+    const user = await requireRole(['ADMIN']);
+
+    const parsed = tenantLegalDocsSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: 'Validation échouée',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const before = await prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { cgvMarkdown: true, reglementInterieurMarkdown: true },
+    });
+    if (!before) return { ok: false, error: 'Tenant introuvable' };
+
+    const after = await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: {
+        cgvMarkdown: parsed.data.cgvMarkdown ?? null,
+        reglementInterieurMarkdown: parsed.data.reglementInterieurMarkdown ?? null,
+      },
+      select: { cgvMarkdown: true, reglementInterieurMarkdown: true },
     });
 
     await logTenantSettingsChange({

@@ -108,8 +108,27 @@ export const tenantEmailSchema = z.object({
     .pipe(z.string().email('Email invalide').or(z.literal(''))),
 });
 
+/**
+ * BUG-15 — documents légaux statiques tenant (CGV + règlement intérieur).
+ * Stockés en markdown éditable côté Paramètres, rendus en PDF via marked.
+ * Limites larges (50 000 chars) car ces docs peuvent être longs.
+ */
+export const tenantLegalDocsSchema = z.object({
+  cgvMarkdown: z
+    .string()
+    .max(50000, 'Maximum 50000 caractères')
+    .nullable()
+    .optional(),
+  reglementInterieurMarkdown: z
+    .string()
+    .max(50000, 'Maximum 50000 caractères')
+    .nullable()
+    .optional(),
+});
+
 // Types inférés — consommés par tenant-settings.ts (signatures Server Actions)
 export type TenantIdentityInput = z.infer<typeof tenantIdentitySchema>;
 export type TenantAddressInput = z.infer<typeof tenantAddressSchema>;
 export type TenantBillingInput = z.infer<typeof tenantBillingSchema>;
 export type TenantEmailInput = z.infer<typeof tenantEmailSchema>;
+export type TenantLegalDocsInput = z.infer<typeof tenantLegalDocsSchema>;
