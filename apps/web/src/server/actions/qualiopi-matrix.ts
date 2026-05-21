@@ -35,6 +35,7 @@ import { generateConventionForParticipant } from './convention-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateProgrammeForProduct } from './programme-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
+import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
 
 export type ActionResult<T = void> =
   | ({ ok: true } & T)
@@ -306,6 +307,12 @@ export async function regenerateParticipantDoc(
     }
     if (parsed.data.docKind === 'AGEFICE') {
       const res = await generateAgeficeForParticipant(parsed.data.participantId);
+      revalidatePath(`/app/sessions/${participant.sessionId}`);
+      return { ok: res.ok, ...(res.documentId ? { documentId: res.documentId } : {}), ...(res.error ? { error: res.error } : {}) };
+    }
+    if (parsed.data.docKind === 'ASSIDUITE') {
+      // BUG-12 — Attestation d'assiduité AGEFICE (modèle 2023, 27 fields PDF)
+      const res = await generateAgeficeAttendanceForParticipant(parsed.data.participantId);
       revalidatePath(`/app/sessions/${participant.sessionId}`);
       return { ok: res.ok, ...(res.documentId ? { documentId: res.documentId } : {}), ...(res.error ? { error: res.error } : {}) };
     }
