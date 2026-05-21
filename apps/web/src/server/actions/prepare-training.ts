@@ -7,14 +7,16 @@ import { generateProgrammeForProduct } from './programme-generator';
 import { generateConventionForParticipant } from './convention-generator';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
+import { generateConvocationForParticipant } from './convocation-generator';
 
 export interface PrepareTrainingResult {
   ok: boolean;
   total: number;
   programmesGenerated: number;
   conventionsGenerated: number;
+  convocationsGenerated: number;
   derouleGenerated: boolean;
-  errors: { participantName: string; doc: 'PROGRAMME' | 'CONVENTION' | 'DEROULE'; message: string }[];
+  errors: { participantName: string; doc: 'PROGRAMME' | 'CONVENTION' | 'DEROULE' | 'CONVOCATION'; message: string }[];
   error?: string;
 }
 
@@ -45,6 +47,7 @@ export async function prepareTrainingForSession(
       total: 0,
       programmesGenerated: 0,
       conventionsGenerated: 0,
+      convocationsGenerated: 0,
       derouleGenerated: false,
       errors: [],
       error: 'Non authentifié',
@@ -70,6 +73,7 @@ export async function prepareTrainingForSession(
       total: 0,
       programmesGenerated: 0,
       conventionsGenerated: 0,
+      convocationsGenerated: 0,
       derouleGenerated: false,
       errors: [],
       error: 'Session introuvable',
@@ -79,6 +83,7 @@ export async function prepareTrainingForSession(
   const errors: PrepareTrainingResult['errors'] = [];
   let programmesGenerated = 0;
   let conventionsGenerated = 0;
+  let convocationsGenerated = 0;
   let derouleGenerated = false;
 
   // Programme = asset PRODUIT (1 seul appel pour toute la session,
@@ -98,13 +103,18 @@ export async function prepareTrainingForSession(
     console.warn('[prepare-training] check-list non générée :', e?.message ?? e);
   });
 
-  // Convention = par participant (1 par stagiaire, idempotente sha256)
+  // Convention + Convocation = par participant (idempotentes sha256)
   await Promise.all(
     session.participants.map(async (p) => {
       const name = `${p.person.firstName} ${p.person.lastName}`;
-      const conv = await generateConventionForParticipant(p.id);
+      const [conv, convoc] = await Promise.all([
+        generateConventionForParticipant(p.id),
+        generateConvocationForParticipant(p.id),
+      ]);
       if (conv.ok) conventionsGenerated++;
       else errors.push({ participantName: name, doc: 'CONVENTION', message: conv.error ?? 'Erreur inconnue' });
+      if (convoc.ok) convocationsGenerated++;
+      else errors.push({ participantName: name, doc: 'CONVOCATION', message: convoc.error ?? 'Erreur inconnue' });
     }),
   );
 
@@ -115,6 +125,7 @@ export async function prepareTrainingForSession(
     total: session.participants.length,
     programmesGenerated,
     conventionsGenerated,
+    convocationsGenerated,
     derouleGenerated,
     errors,
   };

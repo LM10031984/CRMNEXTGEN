@@ -35,14 +35,15 @@ export function PrepareTrainingButton({ sessionId, participantCount }: Props) {
       }
       const programmes = r.programmesGenerated;
       const conventions = r.conventionsGenerated;
+      const convocations = r.convocationsGenerated;
       const deroule = r.derouleGenerated ? 1 : 0;
       if (r.errors.length === 0) {
         toast.success(
-          `Préparation OK : programme + ${deroule ? 'déroulé + ' : ''}${conventions} convention${conventions > 1 ? 's' : ''} + check-list`,
+          `Préparation OK : programme + ${deroule ? 'déroulé + ' : ''}check-list + ${conventions} convention${conventions > 1 ? 's' : ''} + ${convocations} convocation${convocations > 1 ? 's' : ''}`,
         );
       } else {
         toast.warning(
-          `Partiel : ${programmes} programme, ${deroule} déroulé, ${conventions}/${r.total} convention(s) (${r.errors.length} erreur${r.errors.length > 1 ? 's' : ''})`,
+          `Partiel : ${programmes} programme, ${deroule} déroulé, ${conventions}/${r.total} convention(s), ${convocations}/${r.total} convocation(s) (${r.errors.length} erreur${r.errors.length > 1 ? 's' : ''})`,
         );
       }
       setOpen(false);
@@ -99,13 +100,14 @@ export function PrepareTrainingButton({ sessionId, participantCount }: Props) {
           <li>Déroulé pédagogique (1 par produit, généré par IA)</li>
           <li>Check-list formation (1 par session)</li>
           <li>Convention de formation (1 par apprenant)</li>
+          <li>Convocation stagiaire (1 par apprenant)</li>
         </ul>
 
         <div className="rounded-lg bg-primary-50 border border-primary-100 px-4 py-3 mb-5 text-sm">
           <strong className="text-primary-900">{participantCount}</strong>
           <span className="text-primary-700"> apprenant(s) · </span>
-          <strong className="text-primary-900">{participantCount + 3} documents</strong>
-          <span className="text-primary-700"> (3 partagés + {participantCount} convention{participantCount > 1 ? 's' : ''})</span>
+          <strong className="text-primary-900">{participantCount * 2 + 3} documents</strong>
+          <span className="text-primary-700"> (3 partagés + {participantCount * 2} par stagiaire)</span>
         </div>
 
         {error && (

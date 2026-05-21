@@ -34,6 +34,7 @@ import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateProgrammeForProduct } from './programme-generator';
+import { generateConvocationForParticipant } from './convocation-generator';
 
 export type ActionResult<T = void> =
   | ({ ok: true } & T)
@@ -294,6 +295,12 @@ export async function regenerateParticipantDoc(
     // Generators synchrones — switch par docKind.
     if (parsed.data.docKind === 'CONVENTION') {
       const res = await generateConventionForParticipant(parsed.data.participantId);
+      revalidatePath(`/app/sessions/${participant.sessionId}`);
+      return res;
+    }
+    if (parsed.data.docKind === 'CONVOCATION') {
+      // BUG-14 — convocation synchrone, idempotente sha256.
+      const res = await generateConvocationForParticipant(parsed.data.participantId);
       revalidatePath(`/app/sessions/${participant.sessionId}`);
       return res;
     }
