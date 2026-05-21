@@ -87,7 +87,11 @@ export async function generateClosurePack(
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId: user.tenantId },
     include: {
-      product: { select: { id: true } },
+      // BUG-5 — on charge les champs utilisés par getSessionCompleteness pour
+      // bloquer l'enqueue si la session n'a pas le minimum vital (formateur,
+      // prix, dates, lieu, programme).
+      product: { select: { id: true, programMd: true } },
+      trainers: { select: { isPrimary: true } },
       participants: {
         where: {
           enrollmentStatus: { in: ['PRE_ENROLLED', 'CONFIRMED', 'ATTENDED'] },
@@ -102,6 +106,28 @@ export async function generateClosurePack(
   if (!session) return { ok: false, error: 'Session introuvable' };
   if (session.participants.length === 0) {
     return { ok: false, error: 'Aucun apprenant éligible (statut PRE_ENROLLED/CONFIRMED/ATTENDED)' };
+  }
+
+  // BUG-5 — pré-validation completeness. On bloque l'enqueue si la session
+  // n'a pas le minimum vital (formateur, prix, dates, lieu, programme).
+  // Évite de produire des docs Qualiopi avec des trous (non-conforme audit).
+  const { getSessionCompleteness } = await import('@/lib/sessions/completeness');
+  const completeness = getSessionCompleteness({
+    startDate: session.startDate,
+    endDate: session.endDate,
+    pricePerLearner: session.pricePerLearner,
+    locationId: session.locationId,
+    modality: session.modality,
+    trainers: session.trainers,
+    product: session.product ? { programMd: session.product.programMd } : null,
+    participantsCount: session.participants.length,
+  });
+  if (!completeness.ready) {
+    const blockersLabel = completeness.blockers.map((b) => b.label).join(' · ');
+    return {
+      ok: false,
+      error: `Session incomplète. À compléter avant de générer le pack : ${blockersLabel}`,
+    };
   }
 
   // Assets niveau session/produit générés en amont du batch BullMQ :

@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { formatFunderCode } from '@/lib/funder-codes';
 import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
+import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
+import { getSessionCompleteness } from '@/lib/sessions/completeness';
 import { PrepareTrainingButton } from '@/components/sessions/prepare-training-button';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
@@ -324,6 +326,19 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   // Utilisé pour le CTA primaire quand la session est COMPLETED.
   const latestBatch = closureBatches[0] ?? null;
 
+  // BUG-5 — indicateur visuel de complétude session pour guider l'utilisateur
+  // avant qu'il clique 'Pack fin de formation' avec une session bancale.
+  const sessionCompleteness = getSessionCompleteness({
+    startDate: session.startDate,
+    endDate: session.endDate,
+    pricePerLearner: session.pricePerLearner,
+    locationId: session.locationId,
+    modality: session.modality,
+    trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
+    product: session.product ? { programMd: session.product.programMd } : null,
+    participantsCount: session.participants.length,
+  });
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -334,7 +349,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         href={`/app/sessions/${session.id}`}
       />
       <div className="flex items-center justify-between">
-        <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
+        <div className="flex items-center gap-3">
+          <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
+          <SessionCompletenessBadge completeness={sessionCompleteness} />
+        </div>
         <div className="flex items-center gap-2">
           {/* Action contextuelle selon le statut — guide l'utilisateur sur la
               "prochaine étape logique" (Préparer / Marquer terminée / Voir).

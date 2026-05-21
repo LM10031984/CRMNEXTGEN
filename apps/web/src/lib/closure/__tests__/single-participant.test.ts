@@ -117,7 +117,17 @@ function buildSession(participants: Array<{ id: string; opcoCode?: string | null
   return {
     id: SESSION_ID,
     tenantId: TEST_USER.tenantId,
-    product: { id: 'product-1' },
+    // BUG-5 — champs requis par getSessionCompleteness (pré-validation server)
+    startDate: new Date('2026-06-01'),
+    endDate: new Date('2026-06-05'),
+    pricePerLearner: { toNumber: () => 1500 } as unknown as { toNumber(): number },
+    locationId: 'loc-1',
+    modality: 'PRESENTIEL',
+    trainers: [{ isPrimary: true }],
+    product: {
+      id: 'product-1',
+      programMd: 'Programme de test détaillé pour valider getSessionCompleteness.',
+    },
     participants: participants.map((p) => ({
       id: p.id,
       sponsorOrg: { opcoCode: p.opcoCode ?? null },
