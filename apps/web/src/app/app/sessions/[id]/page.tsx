@@ -831,48 +831,69 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             </details>
           )}
 
-          {/* Historique des packs fin de formation lancés sur cette session */}
-          {closureBatches.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white overflow-hidden">
-              <div className="p-5 border-b border-border">
-                <h2 className="font-semibold inline-flex items-center gap-2">
-                  <Package className="h-5 w-5 text-primary" /> Packs fin de formation
-                </h2>
-              </div>
-              <ul className="divide-y divide-border">
-                {closureBatches.map((b) => {
-                  const variant: 'success' | 'warning' | 'danger' | 'info' | 'muted' =
-                    b.status === 'COMPLETED'
-                      ? 'success'
-                      : b.status === 'PARTIAL'
-                        ? 'warning'
-                        : b.status === 'FAILED'
-                          ? 'danger'
-                          : b.status === 'RUNNING'
-                            ? 'info'
-                            : 'muted';
-                  return (
-                    <li key={b.id}>
-                      <Link
-                        href={`/app/sessions/${session.id}/closure/${b.id}` as Route}
-                        className="flex items-center gap-3 p-4 hover:bg-muted/20 transition-colors"
-                      >
-                        <Badge variant={variant}>{b.status}</Badge>
-                        <span className="text-sm flex-1">
-                          {b.doneDocs} / {b.totalDocs} docs
-                          {b.errorDocs > 0 && <span className="text-red-600"> · {b.errorDocs} erreur(s)</span>}
-                        </span>
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-                        </span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+          {/* Pack fin de formation — dernier en exergue + historique replié
+              (BUG-4 : éviter l'accumulation visuelle des anciens batches qui
+              prêtait à confusion). Lien vers la page hub pour voir tous. */}
+          {closureBatches.length > 0 && (() => {
+            const [latest, ...previous] = closureBatches;
+            if (!latest) return null;
+            const variantOf = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'muted' =>
+              status === 'COMPLETED'
+                ? 'success'
+                : status === 'PARTIAL'
+                  ? 'warning'
+                  : status === 'FAILED'
+                    ? 'danger'
+                    : status === 'RUNNING'
+                      ? 'info'
+                      : 'muted';
+            const renderRow = (b: typeof latest) => (
+              <Link
+                href={`/app/sessions/${session.id}/closure/${b.id}` as Route}
+                className="flex items-center gap-3 p-4 hover:bg-muted/20 transition-colors"
+              >
+                <Badge variant={variantOf(b.status)}>{b.status}</Badge>
+                <span className="text-sm flex-1">
+                  {b.doneDocs} / {b.totalDocs} docs
+                  {b.errorDocs > 0 && <span className="text-red-600"> · {b.errorDocs} erreur(s)</span>}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </Link>
+            );
+            return (
+              <section className="rounded-2xl border border-border bg-white overflow-hidden">
+                <div className="p-5 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+                  <h2 className="font-semibold inline-flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" /> Pack fin de formation
+                  </h2>
+                  <Link
+                    href={`/app/sessions/${session.id}/closure` as Route}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                  >
+                    Voir l&apos;historique complet <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <ul className="divide-y divide-border">
+                  <li key={latest.id}>{renderRow(latest)}</li>
+                </ul>
+                {previous.length > 0 && (
+                  <details className="border-t border-border">
+                    <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors px-5 py-3 list-none [&::-webkit-details-marker]:hidden">
+                      ▸ Historique ({previous.length} pack{previous.length > 1 ? 's' : ''} précédent{previous.length > 1 ? 's' : ''})
+                    </summary>
+                    <ul className="divide-y divide-border bg-muted/10">
+                      {previous.map((b) => (
+                        <li key={b.id}>{renderRow(b)}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
+            );
+          })()}
         </div>
 
         <div className="space-y-6">
