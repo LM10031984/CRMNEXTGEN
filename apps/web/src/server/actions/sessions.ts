@@ -7,11 +7,17 @@
 import { Prisma, prisma, SessionStatus, Modality, EnrollmentStatus, LinkRole } from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
 import { sessionCode } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
+
+// Zod schema pour unenrollParticipant — UUID strict pour participantId
+const UnenrollInputSchema = z.object({
+  participantId: z.string().uuid('participantId doit être un UUID valide'),
+});
 
 // ---------- Inscription d'un participant à une session ----------
 
@@ -112,10 +118,33 @@ export async function addParticipant(input: {
   }
 }
 
-export async function removeParticipant(participantId: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Désinscrit un participant d'une session — Quick task 260523-eyi.
+ *
+ * Différences vs ancienne `removeParticipant` :
+ *  - RBAC durci ADMIN+MANAGER (COMMERCIAL retiré — action destructive)
+ *  - Zod validation UUID en amont (participantId)
+ *  - Tenant scoping via session.tenantId
+ *  - Transaction Prisma delete + AuditLog atomique (action='sessionParticipants.delete')
+ *  - Discriminated return: { ok: true } | { ok: false; error: string }
+ *
+ * Convention AuditLog `[entity].[verb]` : `sessionParticipants.delete`
+ * (cohérence avec `parameters.update`, `documents.*`, `invoices.*`).
+ */
+export async function unenrollParticipant(
+  participantId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // 1) Validation Zod en premier (avant tout I/O)
+  const parsed = UnenrollInputSchema.safeParse({ participantId });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Entrée invalide.' };
+  }
+  const { participantId: validatedId } = parsed.data;
+
+  // 2) RBAC durci ADMIN+MANAGER
   let user;
   try {
-    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+    user = await requireRole(['ADMIN', 'MANAGER']);
   } catch (e) {
     if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
       return { ok: false, error: e.message };
@@ -123,14 +152,40 @@ export async function removeParticipant(participantId: string): Promise<{ ok: bo
     throw e;
   }
 
+  // 3) Récupération + tenant scoping
   const part = await prisma.sessionParticipant.findUnique({
-    where: { id: participantId },
-    include: { session: { select: { tenantId: true, id: true } } },
+    where: { id: validatedId },
+    include: {
+      session: { select: { tenantId: true, id: true } },
+      person: { select: { firstName: true, lastName: true } },
+    },
   });
   if (!part || part.session.tenantId !== user.tenantId) {
     return { ok: false, error: 'Inscription introuvable.' };
   }
-  await prisma.sessionParticipant.delete({ where: { id: participantId } });
+
+  // 4) Transaction atomique : delete + auditLog
+  await prisma.$transaction([
+    prisma.sessionParticipant.delete({ where: { id: validatedId } }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'SessionParticipant',
+        entityId: validatedId,
+        action: 'sessionParticipants.delete',
+        diff: {
+          sessionId: part.session.id,
+          personId: part.personId,
+          personName: `${part.person.firstName} ${part.person.lastName}`,
+          sponsorOrgId: part.sponsorOrgId,
+          priceHT: Number(part.priceHT),
+          enrollmentStatus: part.enrollmentStatus,
+        },
+      },
+    }),
+  ]);
+
   revalidatePath(`/app/sessions/${part.session.id}`);
   return { ok: true };
 }
@@ -609,6 +664,70 @@ export async function updateSessionLocation(input: {
   return { ok: true };
 }
 
+/**
+ * Crée une Location à la volée et l'attache à la session (find-or-create
+ * insensitive sur le nom pour éviter les doublons).
+ */
+export async function createLocationAndAttachToSession(input: {
+  sessionId: string;
+  name: string;
+  city?: string | null;
+  street?: string | null;
+  postalCode?: string | null;
+}): Promise<{ ok: boolean; error?: string; locationId?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: 'Le nom du lieu est obligatoire.' };
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  let locationId: string;
+  const existing = await prisma.location.findFirst({
+    where: {
+      tenantId: user.tenantId,
+      name: { equals: name, mode: 'insensitive' },
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    locationId = existing.id;
+  } else {
+    const address: Record<string, string> = {};
+    if (input.street?.trim()) address.street = input.street.trim();
+    if (input.postalCode?.trim()) address.postalCode = input.postalCode.trim();
+    if (input.city?.trim()) address.city = input.city.trim();
+    const loc = await prisma.location.create({
+      data: {
+        tenantId: user.tenantId,
+        name,
+        address: Object.keys(address).length > 0 ? address : Prisma.JsonNull,
+      },
+      select: { id: true },
+    });
+    locationId = loc.id;
+  }
+
+  await prisma.trainingSession.update({
+    where: { id: input.sessionId },
+    data: { locationId },
+  });
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true, locationId };
+}
+
 // ─── BUG-19 — Ajouter / retirer un formateur de la session ───────────────
 export async function addSessionTrainer(input: {
   sessionId: string;
@@ -719,14 +838,21 @@ export async function searchTrainerCandidates(query: string) {
   if (!user) return [];
   const q = query.trim();
   if (q.length === 0) {
-    // Liste les Person qui sont déjà formateur dans au moins 1 session
+    // Liste tous les formateurs identifiés du tenant :
+    //   - déjà rattachés à une session via SessionTrainer
+    //   - OU avec un LegalLink role=FORMATEUR (identifié sans avoir encore animé)
+    //   - OU avec professionalStatus contenant "formateur"
     const recent = await prisma.person.findMany({
       where: {
         tenantId: user.tenantId,
-        trainerSessions: { some: {} },
+        OR: [
+          { trainerSessions: { some: {} } },
+          { legalLinks: { some: { role: 'FORMATEUR' } } },
+          { professionalStatus: { contains: 'formateur', mode: 'insensitive' } },
+        ],
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      take: 20,
+      take: 50,
       select: { id: true, firstName: true, lastName: true, email: true },
     });
     return recent;
