@@ -14,12 +14,14 @@ import { getSessionCompleteness } from '@/lib/sessions/completeness';
 import { PrepareTrainingButton } from '@/components/sessions/prepare-training-button';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
+import { EditSessionDetailsDialog } from '@/components/sessions/edit-session-details-dialog';
 import { CreatePersonButton } from '@/components/forms/create-person-button';
 import { SessionStatusSelect } from '@/components/sessions/session-status-select';
 import { SessionLogisticsEditor } from '@/components/sessions/session-logistics-editor';
 import { SessionLocationPicker } from '@/components/sessions/session-location-picker';
 import { SessionTrainerPicker } from '@/components/sessions/session-trainer-picker';
 import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-toggle';
+import { RemoveTrainerButton } from '@/components/sessions/remove-trainer-button';
 import { SessionSatisfactionPanel } from '@/components/sessions/session-satisfaction-panel';
 import { BatchProgressAutoRefresh } from '@/components/sessions/batch-progress-auto-refresh';
 import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
@@ -31,8 +33,11 @@ import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
 import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
+import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 // Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche session.
 import { SessionInvoicesBlock } from '@/components/sessions/session-invoices-block';
+import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
+import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -386,6 +391,29 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <SessionCompletenessBadge completeness={sessionCompleteness} />
         </div>
         <div className="flex items-center gap-2">
+          {/* Quick task 260523-oze — Bouton "Modifier" (icône Pencil) pour
+              ADMIN+MANAGER : modale d'édition des 9 champs scalaires
+              (name, dates, capacités, modalité, prix HT, langue, notes).
+              Les autres champs (statut, lieu, formateurs, logistique) restent
+              éditables individuellement depuis la fiche. */}
+          {['ADMIN', 'MANAGER'].includes(user.role) && (
+            <EditSessionDetailsDialog
+              sessionId={session.id}
+              initial={{
+                name: session.name,
+                startDate: session.startDate,
+                endDate: session.endDate,
+                capacityMin: session.capacityMin,
+                capacityMax: session.capacityMax,
+                modality: session.modality,
+                pricePerLearner:
+                  session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+                language: session.language,
+                internalNotes: session.internalNotes,
+              }}
+            />
+          )}
+
           {/* Action contextuelle selon le statut — guide l'utilisateur sur la
               "prochaine étape logique" (Préparer / Marquer terminée / Voir).
               Pour COMPLETED avec batch déjà généré, on affiche un lien direct
@@ -459,10 +487,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <span className="flex flex-wrap items-center gap-2 mt-1">
             <Badge variant="muted" className="font-mono">{session.code}</Badge>
             <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              {start.toLocaleDateString('fr-FR')} → {end.toLocaleDateString('fr-FR')}
-            </span>
+            <SessionDatesEditor
+              sessionId={session.id}
+              initialStart={session.startDate}
+              initialEnd={session.endDate}
+            />
             {session.product?.durationHours ? (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" /> {session.product.durationHours}h
@@ -470,7 +499,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             ) : null}
             {Number(session.pricePerLearner ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Euro className="h-3.5 w-3.5" /> {Number(session.pricePerLearner).toFixed(0)} € / apprenant
+                <Euro className="h-3.5 w-3.5" /> {Number(session.pricePerLearner).toFixed(0)} € total session
               </span>
             )}
           </span>
@@ -486,6 +515,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           errorDocs={latestBatch.errorDocs}
         />
       )}
+
+      {/* Tasks TODO sur cette session (signalisation 🔴 formateur, etc.) */}
+      <SessionTasksPanel sessionId={session.id} tenantId={user.tenantId} />
 
       {/* Vue d'ensemble dossier Qualiopi — % complétion + ce qui manque le plus */}
       {totalP > 0 && (
@@ -540,7 +572,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       {/* Phase 9.1 Plan 03 — Documents session (3 cards horizontales D-04 bloc séparé) */}
       <SessionOnlyDocsBlock
         sessionId={session.id}
-        deroulePdfRef={sessionDocsMap.get('DEROULE_PEDAGOGIQUE')}
+        deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
         grilleObsPdfRef={sessionDocsMap.get('GRILLE_OBS_SESSION')}
         checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
         canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
@@ -556,6 +588,19 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         participants={matrixParticipants}
         productDocs={productDocsMap}
         sessionDocs={sessionDocsMap}
+      />
+
+      {/* Audit 2026-05-23 — Bloc Trésorerie : 4 statuts encaissement importés
+          depuis l'Excel "Tréso AGEFICE" (source de vérité, SmartOF est faux). */}
+      <TresoStatusBlock
+        participants={session.participants.map((p) => ({
+          id: p.id,
+          personName: `${p.person.firstName} ${p.person.lastName}`,
+          factureEnvoyee: p.factureEnvoyee,
+          validationOpco: p.validationOpco,
+          remboursementOpco: p.remboursementOpco,
+          paiementClient: p.paiementClient,
+        }))}
       />
 
       {/* Phase 11 Plan 11-09 — Cross-nav D-07 : factures liées à cette session
@@ -745,31 +790,42 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 <SessionTrainerPicker sessionId={session.id} setAsPrimary />
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {session.trainers.map((t) => (
-                  <li key={t.id} className="flex items-center gap-3 py-2">
-                    <PrimaryTrainerToggle
-                      sessionId={session.id}
-                      personId={t.person.id}
-                      personName={`${t.person.firstName} ${t.person.lastName}`}
-                      isPrimary={t.isPrimary}
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium text-sm">
-                        {t.person.firstName} {t.person.lastName}
-                      </span>
-                      {t.role && (
-                        <span className="text-xs text-muted-foreground ml-2">· {t.role}</span>
+              <>
+                <ul className="divide-y divide-border">
+                  {session.trainers.map((t) => (
+                    <li key={t.id} className="flex items-center gap-3 py-2">
+                      <PrimaryTrainerToggle
+                        sessionId={session.id}
+                        personId={t.person.id}
+                        personName={`${t.person.firstName} ${t.person.lastName}`}
+                        isPrimary={t.isPrimary}
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium text-sm">
+                          {t.person.firstName} {t.person.lastName}
+                        </span>
+                        {t.role && (
+                          <span className="text-xs text-muted-foreground ml-2">· {t.role}</span>
+                        )}
+                      </div>
+                      {t.isPrimary && (
+                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          Principal — signe les docs Qualiopi
+                        </span>
                       )}
-                    </div>
-                    {t.isPrimary && (
-                      <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                        Principal — signe les docs Qualiopi
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      <RemoveTrainerButton
+                        sessionId={session.id}
+                        personId={t.person.id}
+                        personName={`${t.person.firstName} ${t.person.lastName}`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Ajouter un autre formateur :</p>
+                  <SessionTrainerPicker sessionId={session.id} setAsPrimary={false} />
+                </div>
+              </>
             )}
           </section>
 
@@ -784,21 +840,31 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               Lieu de formation
             </h2>
             {session.location ? (
-              <div className="text-sm">
-                <div className="font-medium">{session.location.name}</div>
-                {(() => {
-                  const addr = session.location.address as
-                    | { street?: string; postalCode?: string; city?: string }
-                    | null;
-                  if (!addr) return null;
-                  return (
-                    <div className="text-muted-foreground mt-1">
-                      {[addr.street, [addr.postalCode, addr.city].filter(Boolean).join(' ')]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </div>
-                  );
-                })()}
+              <div className="space-y-3">
+                <div className="text-sm">
+                  <div className="font-medium">{session.location.name}</div>
+                  {(() => {
+                    const addr = session.location.address as
+                      | { street?: string; postalCode?: string; city?: string }
+                      | null;
+                    if (!addr) return null;
+                    return (
+                      <div className="text-muted-foreground mt-1">
+                        {[addr.street, [addr.postalCode, addr.city].filter(Boolean).join(' ')]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                    Changer de lieu
+                  </summary>
+                  <div className="mt-2">
+                    <SessionLocationPicker sessionId={session.id} />
+                  </div>
+                </details>
               </div>
             ) : (
               <div className="space-y-3 py-2">
