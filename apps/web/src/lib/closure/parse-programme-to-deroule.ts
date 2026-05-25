@@ -15,9 +15,9 @@
  *     - bullet 2
  *   10h45-11h00 : Pause
  *   11h00 – 12h30 : Module 2
- *   12h30 – 13h30 : Pause déjeuner
+ *   13h00 – 14h00 : Pause déjeuner
  *   Après-midi :
- *   13h30 – 15h30 : Module 3
+ *   14h00 – 15h30 : Module 3
  *   ...
  */
 
@@ -175,7 +175,7 @@ function parseDayLines(lines: string[]): RawSeq[] {
 
 /**
  * Insère des pauses implicites dans les gaps ≥ 30 min entre séquences.
- * Typiquement : gap de 12h00 à 13h00 → "Pause déjeuner".
+ * Typiquement : gap de 13h00 à 14h00 (norme Start Academy) → "Pause déjeuner".
  * Un gap de 10-15 min est une pause café, ≥ 30 min mérite une ligne dédiée.
  */
 function fillGapsWithPauses(seqs: RawSeq[]): RawSeq[] {
@@ -189,7 +189,7 @@ function fillGapsWithPauses(seqs: RawSeq[]): RawSeq[] {
     if (gap < 30) continue;
     // Gap midday (fin entre 11h30 et 13h00) = pause déjeuner
     const endMin = seqs[i]!.endMin;
-    const isDej = endMin >= 690 && endMin <= 780; // 11h30–13h00
+    const isDej = endMin >= 690 && endMin <= 870; // 11h30–14h30 (couvre normes historiques 12h-13h et règle Laurent 13h-14h)
     result.push({
       startMin: endMin,
       endMin: next.startMin,
