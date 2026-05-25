@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { callOllama } from '@/lib/ai-ollama';
+import { getDayStartEnd, PAUSE_DEJEUNER } from '@/lib/formation-horaires';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
@@ -591,13 +592,14 @@ export async function generateDerouleContent(
 ): Promise<DerouleContent | null> {
   const nbJours = Math.max(1, Math.ceil(formation.nombreHeures / 8));
   const heuresParJour = Math.round(formation.nombreHeures / nbJours);
+  const { start, end } = getDayStartEnd(heuresParJour);
 
   const hasProgramme = formation.programmeMd && formation.programmeMd.trim().length > 10;
 
   const prompt = `Génère un déroulé pédagogique pour la formation suivante.
 
 Titre : ${formation.titre}
-Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 1 ? 's' : ''} (${heuresParJour}h/jour, 9h00–${9 + heuresParJour}h00)
+Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 1 ? 's' : ''} (${heuresParJour}h/jour, ${start}–${end})
 
 ${hasProgramme ? `PROGRAMME DE RÉFÉRENCE (reprendre EXACTEMENT ces blocs horaires et titres) :
 ${formation.programmeMd}
@@ -606,7 +608,7 @@ INSTRUCTION : chaque bloc horaire du programme ci-dessus devient une séquence d
 
 Ajoute obligatoirement :
 - Accueil en début de journée (9h00, 15-30 min)
-- Pause déjeuner 12h00–13h30 (isPause: true, objectifs: "Pause déjeuner", autres champs vides)
+- Pause déjeuner ${PAUSE_DEJEUNER.start}–${PAUSE_DEJEUNER.end} (1h) (isPause: true, objectifs: "Pause déjeuner", autres champs vides)
 - Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" avec QCM et remise des attestations`;
 
