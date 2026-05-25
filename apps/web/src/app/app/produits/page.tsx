@@ -99,10 +99,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <span className="inline-flex items-center gap-1">
                   <Users className="h-3.5 w-3.5" /> {p.capacityMin}–{p.capacityMax} pers.
                 </span>
-                {Number(p.priceHT) > 0 && (
+                {Number(p.priceHT) > 0 ? (
                   <span className="ml-auto font-medium text-foreground">
                     {Number(p.priceHT).toFixed(0)} € HT
                   </span>
+                ) : (
+                  <Badge variant="danger" className="ml-auto">
+                    Prix manquant
+                  </Badge>
                 )}
               </div>
               {p.targetAudience && (

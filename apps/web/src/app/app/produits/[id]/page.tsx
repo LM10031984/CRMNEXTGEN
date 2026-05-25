@@ -15,6 +15,8 @@ import { ProductStatsTab } from '@/components/produits/tabs/product-stats-tab';
 import { ProductSessionsTab } from '@/components/produits/tabs/product-sessions-tab';
 import { ProductLearnersTab } from '@/components/produits/tabs/product-learners-tab';
 import { ProductProgrammeTab } from '@/components/produits/tabs/product-programme-tab';
+import { ProductSatisfactionPanel } from '@/components/produits/product-satisfaction-panel';
+import { PriceMissingBanner } from '@/components/produits/price-missing-banner';
 import {
   getProductStats,
   listProductSessions,
@@ -112,6 +114,21 @@ export default async function ProductDetailPage({
     programmePdfId = programmeDoc?.id ?? null;
   }
 
+  const editCurrent = {
+    title: product.title,
+    theme: product.theme,
+    durationHours: product.durationHours,
+    priceHT: Number(product.priceHT),
+    prerequisites: product.prerequisites,
+    targetAudience: product.targetAudience,
+    pedagogicalMethods: product.pedagogicalMethods,
+    pedagogicalSupport: product.pedagogicalSupport,
+    evaluationMethods: product.evaluationMethods,
+    trainerProfile: product.trainerProfile,
+    accessibility: product.accessibility,
+    accessConditions: product.accessConditions,
+  };
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -128,6 +145,10 @@ export default async function ProductDetailPage({
           { label: product.title },
         ]}
       />
+
+      {Number(product.priceHT) === 0 && (
+        <PriceMissingBanner productId={product.id} current={editCurrent} />
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <BackToListLink fallbackHref="/app/produits" label="Retour au catalogue" />
@@ -157,23 +178,7 @@ export default async function ProductDetailPage({
             </span>
           }
         />
-        <EditProductButton
-          productId={product.id}
-          current={{
-            title: product.title,
-            theme: product.theme,
-            durationHours: product.durationHours,
-            priceHT: Number(product.priceHT),
-            prerequisites: product.prerequisites,
-            targetAudience: product.targetAudience,
-            pedagogicalMethods: product.pedagogicalMethods,
-            pedagogicalSupport: product.pedagogicalSupport,
-            evaluationMethods: product.evaluationMethods,
-            trainerProfile: product.trainerProfile,
-            accessibility: product.accessibility,
-            accessConditions: product.accessConditions,
-          }}
-        />
+        <EditProductButton productId={product.id} current={editCurrent} />
       </div>
 
       <ProductTabs activeTab={activeTab} />
@@ -184,7 +189,14 @@ export default async function ProductDetailPage({
         aria-labelledby={`tab-${activeTab}`}
         className="transition-opacity duration-150"
       >
-        {activeTab === 'stats' && stats && <ProductStatsTab stats={stats} />}
+        {activeTab === 'stats' && stats && (
+          <div className="space-y-5">
+            <ProductStatsTab stats={stats} />
+            {/* Satisfaction agrégée toutes sessions confondues — Qualiopi 2026 :
+                indicateur 30 ouvert au niveau produit en plus du niveau session */}
+            <ProductSatisfactionPanel productId={product.id} tenantId={user.tenantId} />
+          </div>
+        )}
         {activeTab === 'sessions' && sessions && (
           <ProductSessionsTab sessions={sessions} productId={product.id} />
         )}
