@@ -18,6 +18,7 @@ import {
   UserCog,
   TrendingUp,
   Sliders,
+  Newspaper,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -115,6 +116,18 @@ export const NAV: NavSection[] = [
         href: '/app/leads/charge',
         icon: TrendingUp,
         allowedRoles: ['ADMIN', 'MANAGER'],
+      },
+      // Veille Qualiopi (Phase 13 Plan 13-03) : ADMIN/MANAGER/LECTEUR visualisent
+      // — LECTEUR consulte les 4 onglets thématiques (sans inbox D-03 — masquage
+      // strict côté server page.tsx + côté client VeilleTabsClient prop canSeeInbox).
+      // Les autres rôles (COMMERCIAL/COMPTABLE/FORMATEUR) ne voient PAS le lien
+      // (la sidebar est filtre VISUEL uniquement — server actions guardées par
+      // requireRole(['ADMIN','MANAGER']) cf. veille.ts Plan 02).
+      {
+        label: 'Veille Qualiopi',
+        href: '/app/veille',
+        icon: Newspaper,
+        allowedRoles: ['ADMIN', 'MANAGER', 'LECTEUR'],
       },
     ],
   },
