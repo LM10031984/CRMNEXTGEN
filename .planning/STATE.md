@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-05-25T12:24:11.861Z"
+stopped_at: Completed 13-05 (VEILLE-04) — worker BullMQ veille + 16 tests Wave 0 verts
+last_updated: "2026-05-25T12:37:27.980Z"
 last_activity: 2026-05-25
 progress:
   total_phases: 14
   completed_phases: 7
   total_plans: 58
-  completed_plans: 44
+  completed_plans: 45
 ---
 
 # STATE — QualiOF
@@ -28,7 +28,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 13 (veille-qualiopi-integree) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 
 ## Accumulated Context
 
@@ -191,7 +191,7 @@ Plan: 5 of 6
 
 ## Last session
 
-Stopped at: Completed 13-03-PLAN.md
+Stopped at: Completed 13-05 (VEILLE-04) — worker BullMQ veille + 16 tests Wave 0 verts
 Last commit: c8cf4b6 — fix(quick/260525-jpq): pass productId + grilleObsAssetCount to SessionOnlyDocsBlock
 Last completed plan: 260525-jpq (sidebar Documents partagés cohérente avec matrice + cliquable inline)
 Next plan: validation Laurent SES-0093 puis bug G (attente screenshot) puis chantier 2 horaires pause midi (BUG-A)

@@ -82,7 +82,7 @@
 - [x] **VEILLE-01** : Schéma Prisma `RegulatoryWatch` (tenantId, theme enum 23/24/25/26, title, url, source, frequency, responsable, exploitation, dateAdded, dateLastReviewed, status draft/active/archived, suggestedBy user/import/auto) + migration + import one-shot du xlsx existant (`C6.i23-24-25tableau veille.xlsx`, ~84 entrées).
 - [x] **VEILLE-02** : Page `/app/veille` — 4 onglets par thème Qualiopi, tableau filtrable/triable, ajout/édition manuelle (Radix Dialog), édition inline du champ Exploitation, indicateur "X jours depuis dernière mise à jour" par thème (alerte rouge > 90j), boîte de réception "Suggestions auto" à valider/rejeter. RBAC ADMIN+MANAGER pour CRUD, LECTEUR consultation.
 - [x] **VEILLE-03** : Export PDF audit Qualiopi (Gotenberg) — un PDF par thème avec sources/dates/exploitations + en-tête tenant, prêt à présenter à l'auditeur. Accès depuis `/app/veille`.
-- [ ] **VEILLE-04** : Worker BullMQ cron hebdo — RSS aggregator des sources connues (Centre Inffo, Agefiph, Lefebvre Dalloz, Journal de l'Agence, etc.) + Ollama `mistral-small:24b` pour classifier le thème et proposer un brouillon d'exploitation, INSERT en `status=draft` `suggestedBy=auto`. AuditLog convention `regulatoryWatch.[verb]`.
+- [x] **VEILLE-04** : Worker BullMQ cron hebdo — RSS aggregator des sources connues (Centre Inffo, Agefiph, Lefebvre Dalloz, Journal de l'Agence, etc.) + Ollama `mistral-small:24b` pour classifier le thème et proposer un brouillon d'exploitation, INSERT en `status=draft` `suggestedBy=auto`. AuditLog convention `regulatoryWatch.[verb]`.
 
 ---
 
