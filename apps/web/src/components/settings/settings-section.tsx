@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,7 +22,7 @@ import { cn } from '@/lib/utils';
  */
 
 export interface SettingsSectionProps {
-  icon: LucideIcon;
+  icon: ReactNode;
   title: string;
   description?: string;
   readView: ReactNode;
@@ -39,7 +38,7 @@ export interface SettingsSectionProps {
 }
 
 export function SettingsSection({
-  icon: Icon,
+  icon,
   title,
   description,
   readView,
@@ -61,10 +60,7 @@ export function SettingsSection({
     >
       <header className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-start gap-2 min-w-0">
-          <Icon
-            className="h-5 w-5 mt-0.5 text-primary shrink-0"
-            aria-hidden="true"
-          />
+          {icon}
           <div className="min-w-0">
             <h2 className="font-semibold leading-tight">{title}</h2>
             {description ? (
