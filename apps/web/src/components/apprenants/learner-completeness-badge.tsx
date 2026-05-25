@@ -1,7 +1,4 @@
-'use client';
-
-import { useState } from 'react';
-import { ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CompletenessField, CompletenessResult } from '@/lib/learner-completeness';
 
@@ -13,45 +10,44 @@ const CATEGORY_LABELS: Record<CompletenessField['category'], string> = {
   agefice: 'AGEFICE / OPCO',
 };
 
+/**
+ * Badge complétude apprenant. Audit 2026-05-12 UX-09 :
+ * la liste des champs manquants est visible DIRECTEMENT (chips inline),
+ * sans clic d'expansion supplémentaire (auparavant cachée derrière un toggle).
+ */
 export function LearnerCompletenessBadge({ result }: { result: CompletenessResult }) {
-  const [open, setOpen] = useState(false);
   const { percent, missing } = result;
 
   const tone =
     percent >= 90
-      ? { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircle2 }
+      ? { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircle2, chip: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
       : percent >= 60
-      ? { bar: 'bg-amber-400', text: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200', icon: AlertCircle }
-      : { bar: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: AlertCircle };
+      ? { bar: 'bg-amber-400', text: 'text-amber-800', bg: 'bg-amber-50', border: 'border-amber-200', icon: AlertCircle, chip: 'bg-amber-100 text-amber-900 border-amber-300' }
+      : { bar: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: AlertCircle, chip: 'bg-red-100 text-red-800 border-red-300' };
 
   const Icon = tone.icon;
 
-  // Regroupe les champs manquants par catégorie pour un affichage plus lisible
+  // Regroupe les champs manquants par catégorie pour un affichage compact lisible
   const missingByCat = missing.reduce<Record<string, CompletenessField[]>>((acc, f) => {
     (acc[f.category] ??= []).push(f);
     return acc;
   }, {});
+  const categoriesOrdered = (Object.keys(missingByCat) as CompletenessField['category'][]).sort();
 
   return (
     <section className={cn('rounded-2xl border p-4', tone.bg, tone.border)}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 w-full text-left"
-        aria-expanded={open}
-      >
+      <div className="flex items-center gap-3">
         <Icon className={cn('h-5 w-5 shrink-0', tone.text)} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={cn('text-sm font-semibold tabular-nums', tone.text)}>
               {percent}% complète
             </span>
-            {missing.length > 0 && (
+            {missing.length > 0 ? (
               <span className="text-xs text-muted-foreground">
                 · {missing.length} champ{missing.length > 1 ? 's' : ''} à renseigner
               </span>
-            )}
-            {missing.length === 0 && (
+            ) : (
               <span className="text-xs text-emerald-700">· Toutes les infos sont là</span>
             )}
           </div>
@@ -62,30 +58,27 @@ export function LearnerCompletenessBadge({ result }: { result: CompletenessResul
             />
           </div>
         </div>
-        {missing.length > 0 && (
-          <ChevronDown
-            className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', open && 'rotate-180')}
-          />
-        )}
-      </button>
+      </div>
 
-      {open && missing.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/60 space-y-3">
-          {(Object.entries(missingByCat) as Array<[CompletenessField['category'], CompletenessField[]]>).map(([cat, fields]) => (
-            <div key={cat}>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                {CATEGORY_LABELS[cat]}
-              </div>
-              <ul className="space-y-1">
-                {fields.map((f) => (
-                  <li key={f.key} className="flex items-center gap-2 text-sm">
-                    <span className="h-1 w-1 rounded-full bg-current opacity-40" />
-                    <span>{f.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+      {missing.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {categoriesOrdered.flatMap((cat) =>
+            missingByCat[cat]!.map((f) => (
+              <span
+                key={f.key}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border',
+                  tone.chip,
+                )}
+                title={`${CATEGORY_LABELS[cat]} — ${f.label}`}
+              >
+                <span className="opacity-60 text-[9px] uppercase tracking-wider">
+                  {CATEGORY_LABELS[cat]}
+                </span>
+                <span className="font-medium">{f.label}</span>
+              </span>
+            )),
+          )}
         </div>
       )}
     </section>

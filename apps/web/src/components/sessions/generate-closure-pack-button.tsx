@@ -3,7 +3,7 @@
 /**
  * Bouton "📦 Pack fin de formation" sur la fiche session.
  *
- * Modale de confirmation avec estimation : N apprenants × 5 docs.
+ * Modale de confirmation avec estimation : N apprenants × N docs.
  * Au clic, lance generateClosurePack et redirige vers la page batch
  * progression. Disponible quel que soit le statut de la session — la
  * server action filtre déjà sur les participants éligibles.
@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Package, Loader2, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateClosurePack } from '@/server/actions/closure-pack';
+import { CLOSURE_DOC_KINDS, CLOSURE_DOC_KIND_LABELS } from '@/lib/closure/types';
 
 interface Props {
   sessionId: string;
@@ -26,9 +27,11 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const totalDocs = participantCount * 5;
-  const estSeconds = Math.ceil((participantCount * 150) / 5); // 150s/apprenant, concurrency 5
-  const estMinutes = Math.ceil(estSeconds / 60);
+  const docsPerParticipant = CLOSURE_DOC_KINDS.length;
+  const totalDocs = participantCount * docsPerParticipant;
+  // ~30s/doc IA, concurrency 3 dans le worker BullMQ
+  const estSeconds = Math.ceil((totalDocs * 30) / 3);
+  const estMinutes = Math.max(1, Math.ceil(estSeconds / 60));
 
   function handleLaunch() {
     setError(null);
@@ -80,23 +83,21 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          Cette action va générer en parallèle, pour chaque apprenant éligible, les
-          5 documents Qualiopi de fin de formation :
+          Cette action va générer en parallèle, pour chaque apprenant éligible,
+          les {docsPerParticipant} documents Qualiopi de fin de formation :
         </p>
 
         <ul className="text-sm space-y-1 mb-4 ml-4 list-disc">
-          <li>Attestation de fin de formation</li>
-          <li>Certificat de réalisation</li>
-          <li>QCM final (questions générées par IA)</li>
-          <li>Grille d'observation (compétences générées par IA)</li>
-          <li>Analyse des besoins (rétroactive, IA)</li>
+          {CLOSURE_DOC_KINDS.map((k) => (
+            <li key={k}>{CLOSURE_DOC_KIND_LABELS[k]}</li>
+          ))}
         </ul>
 
         <div className="rounded-lg bg-primary-50 border border-primary-100 px-4 py-3 mb-5">
           <div className="text-sm">
             <strong className="text-primary-900">{participantCount}</strong>
             <span className="text-primary-700"> apprenant(s) × </span>
-            <strong className="text-primary-900">5 docs</strong>
+            <strong className="text-primary-900">{docsPerParticipant} docs</strong>
             <span className="text-primary-700"> = </span>
             <strong className="text-primary-900">{totalDocs} documents</strong>
           </div>

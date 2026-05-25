@@ -1,22 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import type { UserRole } from '@qualiof/db';
 import { cn } from '@/lib/utils';
 import { ActiveBatchesBadge } from './active-batches-badge';
 import { SidebarNav } from './sidebar-nav';
-import type { NavSection } from './nav-config';
+import { NAV, filterNavForRole } from './nav-config';
 
 const STORAGE_KEY = 'qualiof-sidebar-collapsed';
 
 interface SidebarProps {
   /**
-   * Sections de navigation déjà filtrées par rôle (D-07). Passées en prop par
-   * `app/app/layout.tsx` (Server Component) qui appelle `filterNavForRole(NAV, user.role)`.
-   * Cette prop évite de réimporter `NAV` ici et de re-filtrer côté client.
+   * Rôle de l'utilisateur courant. Reçu en prop (string sérialisable) plutôt que
+   * la nav pré-filtrée, pour ne PAS traverser la frontière RSC→Client avec les
+   * références de fonctions Lucide contenues dans `NavItem.icon` (cf. debug
+   * `dashboard-rsc-icon-prop` 2026-05-16). `NAV` est importé localement (bundle
+   * client) puis filtré ici via `filterNavForRole`.
    */
-  nav: NavSection[];
+  role: UserRole;
 }
 
 /**
@@ -26,7 +29,8 @@ interface SidebarProps {
  * État `collapsed` (largeur 256/64 px) persiste dans localStorage.
  * Le rendu de la nav est délégué à <SidebarNav> qui consomme la prop `nav`.
  */
-export function Sidebar({ nav }: SidebarProps) {
+export function Sidebar({ role }: SidebarProps) {
+  const nav = useMemo(() => filterNavForRole(NAV, role), [role]);
   const [collapsed, setCollapsed] = useState(false);
 
   // Hydrate l'état depuis localStorage côté client (SSR ne le voit pas)

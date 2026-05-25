@@ -49,10 +49,15 @@ export function MainContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
+    // min-h-screen volontairement absent : le wrapper parent `app/app/layout.tsx`
+    // l'applique déjà. Le retirer ici libère le contexte de positionnement
+    // `sticky` du <header> dans TopBar (audit 2026-05-12 BUG-02).
+    // ml-0 md:ml-… : la sidebar est cachée < md (Phase 2 RESP-02 — drawer mobile),
+    // donc on neutralise la margin en mobile pour reprendre toute la largeur.
     <div
       className={cn(
-        'flex flex-col min-h-screen transition-[margin-left] duration-200',
-        collapsed ? 'ml-[64px]' : 'ml-64',
+        'flex flex-col transition-[margin-left] duration-200',
+        collapsed ? 'ml-0 md:ml-[64px]' : 'ml-0 md:ml-64',
       )}
     >
       {children}

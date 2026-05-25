@@ -197,13 +197,15 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
         </div>
       </div>
 
-      <DataTable<ApprenantRow>
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        rowHref={(r) => `/app/apprenants/${r.id}`}
-        empty={q ? `Aucun apprenant ne correspond à « ${q} ».` : 'Aucun apprenant.'}
-      />
+      <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <DataTable<ApprenantRow>
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          rowHref={(r) => `/app/apprenants/${r.id}`}
+          empty={q ? `Aucun apprenant ne correspond à « ${q} ».` : 'Aucun apprenant.'}
+        />
+      </div>
 
       {!showAll && (
         <Pagination

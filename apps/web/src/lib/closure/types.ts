@@ -9,6 +9,14 @@ import type { ClosureDocKind } from '@qualiof/db';
 
 export type { ClosureDocKind };
 
+/**
+ * Kinds par-participant générés dans le pack closure (BullMQ jobs).
+ *
+ * `DEROULE_PEDA` n'est PLUS dans cette liste depuis 05/05/2026 : il est
+ * désormais généré au niveau PRODUIT (1 fois pour tous) via
+ * `generateDerouleForProduct`. Le déroulé apparaît toujours dans la matrice
+ * de conformité comme un asset partagé.
+ */
 export const CLOSURE_DOC_KINDS = [
   'ATTESTATION',
   'CERTIFICAT',
@@ -18,7 +26,6 @@ export const CLOSURE_DOC_KINDS = [
   'POSITIONNEMENT',
   'SATISFACTION_CHAUD',
   'SATISFACTION_FROID',
-  'DEROULE_PEDA',
   'EMARGEMENT',
 ] as const satisfies readonly ClosureDocKind[];
 

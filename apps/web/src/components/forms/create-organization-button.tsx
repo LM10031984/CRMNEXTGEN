@@ -76,7 +76,7 @@ export function CreateOrganizationButton() {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Raison sociale *</label>
                 <input type="text" value={legalName} onChange={(e) => setLegalName(e.target.value)} required autoFocus className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Forme juridique *</label>
                   <select value={legalForm} onChange={(e) => setLegalForm(e.target.value as any)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white">

@@ -61,7 +61,7 @@ export function SessionTrainerPicker({ sessionId, setAsPrimary = true }: Props) 
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un formateur (nom, prénom, email)…"
+          placeholder="Filtrer par nom (optionnel — la liste s'affiche dessous)…"
           className="w-full h-9 rounded-md border border-border pl-8 pr-3 text-sm"
         />
       </div>
@@ -71,7 +71,9 @@ export function SessionTrainerPicker({ sessionId, setAsPrimary = true }: Props) 
         </div>
       ) : results.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Aucune personne trouvée. Créer la personne depuis /app/formateurs ou /app/apprenants si elle n&apos;existe pas en base.
+          {query.trim().length === 0
+            ? "Aucun formateur identifié dans la base. Crée-en un depuis /app/formateurs (ou attribue le rôle FORMATEUR à un Person via LegalLink)."
+            : 'Aucun résultat — essaie un autre nom ou efface le filtre.'}
         </p>
       ) : (
         <ul className="divide-y divide-border border border-border rounded-md max-h-48 overflow-y-auto">

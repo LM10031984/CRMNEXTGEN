@@ -7,7 +7,7 @@
 
 const OLLAMA_HOST = process.env.OLLAMA_URL ?? process.env.OLLAMA_HOST ?? 'http://localhost:11434';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL_REASONING ?? process.env.OLLAMA_DEFAULT_MODEL ?? 'qwen3:30b-a3b';
-const VISION_MODEL = process.env.OLLAMA_MODEL_VISION ?? 'qwen2.5vl:7b';
+const VISION_MODEL = process.env.OLLAMA_MODEL_VISION ?? 'llama3.2-vision:11b';
 
 export interface OllamaCallOptions {
   model?: string;

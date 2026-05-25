@@ -588,6 +588,16 @@ model SessionParticipant {
   evaluationCollected      Boolean   @default(false)
   satisfactionCollected    Boolean   @default(false)
   closingDocsSent          Boolean   @default(false)
+
+  // Statuts trésorerie OPCO (calqués sur le suivi Excel "Tréso AGEFICE" de
+  // Start Academy — source de vérité encaissement, SmartOF étant faux).
+  // 4 booléens linéaires : facture émise → validation organisme → remboursement
+  // OPCO → paiement effectif du client (= AGEFICE rembourse l'apprenant, puis
+  // l'apprenant paye Start Academy).
+  factureEnvoyee     Boolean @default(false)
+  validationOpco     Boolean @default(false)
+  remboursementOpco  Boolean @default(false)
+  paiementClient     Boolean @default(false)
   invoiceSent              Boolean   @default(false)
   paymentReceived          Boolean   @default(false)
   // Dates de transition false→true (calcul DSO et delais OPCO)

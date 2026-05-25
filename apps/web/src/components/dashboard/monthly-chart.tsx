@@ -22,15 +22,14 @@ export function MonthlyChart({ data }: Props) {
         {data.map((d, i) => {
           const h = Math.max(4, Math.round((d.revenue / maxRevenue) * 100));
           return (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-              <div
-                className="w-full bg-primary/20 hover:bg-primary/40 transition-colors rounded-t-sm relative"
-                style={{ height: `${h}%` }}
-                title={`${d.month} : ${d.sessions} sessions · ${fmt.format(d.revenue)} €`}
-              >
-                <div className="opacity-0 group-hover:opacity-100 absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] whitespace-nowrap bg-foreground text-white px-1.5 py-0.5 rounded">
-                  {fmt.format(d.revenue)}€
-                </div>
+            <div
+              key={i}
+              className="flex-1 bg-primary/20 hover:bg-primary/40 transition-colors rounded-t-sm relative group cursor-default"
+              style={{ height: `${h}%` }}
+              title={`${d.month} : ${d.sessions} sessions · ${fmt.format(d.revenue)} €`}
+            >
+              <div className="opacity-0 group-hover:opacity-100 absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] whitespace-nowrap bg-foreground text-white px-1.5 py-0.5 rounded pointer-events-none">
+                {fmt.format(d.revenue)}€
               </div>
             </div>
           );

@@ -9,12 +9,16 @@
  */
 
 import Link from 'next/link';
-import { Wallet, AlertTriangle, CheckCircle2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Wallet, AlertTriangle, CheckCircle2, ChevronRight, ArrowLeft, Download } from 'lucide-react';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { FilterChips } from '@/components/ui/filter-chips';
-import { listLearnersWithAgeficeBudget } from '@/server/actions/budget-agefice';
+import { DossiersOpcoSearchInput } from '@/components/dossiers-opco/search-input';
+import {
+  listLearnersWithAgeficeBudget,
+  getAgeficeAvailableYears,
+} from '@/server/actions/budget-agefice';
 import { PLAFOND_AGEFICE } from '@/lib/budget-agefice-constants';
 import { cn } from '@/lib/utils';
 
@@ -40,22 +44,45 @@ export default async function BudgetAgeficePage({
   const filter = sp.filter ?? 'has_budget_left';
   const q = sp.q?.trim() ?? '';
 
-  const rows = await listLearnersWithAgeficeBudget({ year, filter, search: q });
-
-  // KPI globaux (recalculés sur tous les apprenants, pas le filtre)
-  const allRows = await listLearnersWithAgeficeBudget({ year });
+  const [rows, allRows, availableYears] = await Promise.all([
+    listLearnersWithAgeficeBudget({ year, filter, search: q }),
+    // KPI globaux (recalculés sur tous les apprenants, pas le filtre)
+    listLearnersWithAgeficeBudget({ year }),
+    getAgeficeAvailableYears(),
+  ]);
   const totalLearners = allRows.length;
   const withBudget = allRows.filter((r) => r.consomme < PLAFOND_AGEFICE);
   const noConso = allRows.filter((r) => r.consomme === 0);
   const totalRemaining = allRows.reduce((s, r) => s + r.restant, 0);
 
+  // Helper : construit un href en conservant tous les params actuels et en
+  // surchargeant uniquement ceux fournis.
+  const buildHref = (overrides: Partial<{ year: number; filter: string; q: string }>) => {
+    const params = new URLSearchParams();
+    const finalYear = overrides.year ?? year;
+    const finalFilter = overrides.filter ?? filter;
+    const finalQ = overrides.q !== undefined ? overrides.q : q;
+    params.set('year', String(finalYear));
+    params.set('filter', finalFilter);
+    if (finalQ) params.set('q', finalQ);
+    return `/app/budget-agefice?${params.toString()}`;
+  };
+
   const filterChips = [
-    { label: `Avec budget restant (${withBudget.length})`, href: `/app/budget-agefice?filter=has_budget_left&year=${year}`, active: filter === 'has_budget_left' },
-    { label: `Sans consommation (${noConso.length})`, href: `/app/budget-agefice?filter=no_consumption&year=${year}`, active: filter === 'no_consumption' },
-    { label: 'Proche du plafond', href: `/app/budget-agefice?filter=near_limit&year=${year}`, active: filter === 'near_limit' },
-    { label: 'Au plafond / dépassé', href: `/app/budget-agefice?filter=over&year=${year}`, active: filter === 'over' },
-    { label: `Tous les éligibles (${totalLearners})`, href: `/app/budget-agefice?filter=all&year=${year}`, active: filter === 'all' },
+    { label: `Avec budget restant (${withBudget.length})`, href: buildHref({ filter: 'has_budget_left' }), active: filter === 'has_budget_left' },
+    { label: `Sans consommation (${noConso.length})`, href: buildHref({ filter: 'no_consumption' }), active: filter === 'no_consumption' },
+    { label: 'Proche du plafond', href: buildHref({ filter: 'near_limit' }), active: filter === 'near_limit' },
+    { label: 'Au plafond / dépassé', href: buildHref({ filter: 'over' }), active: filter === 'over' },
+    { label: `Tous les éligibles (${totalLearners})`, href: buildHref({ filter: 'all' }), active: filter === 'all' },
   ];
+
+  const yearChips = availableYears.map((y) => ({
+    label: String(y),
+    href: buildHref({ year: y }),
+    active: y === year,
+  }));
+
+  const exportHref = `/api/budget-agefice/export?year=${year}&filter=${filter}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
 
   return (
     <div className="space-y-6">
@@ -66,10 +93,18 @@ export default async function BudgetAgeficePage({
         <ArrowLeft className="h-4 w-4" /> Retour au dashboard
       </Link>
 
-      <PageHeader
-        title={`Budget AGEFICE — ${year}`}
-        subtitle={`Plafond ${fmtEUR.format(PLAFOND_AGEFICE)} / apprenant / année du dossier déposé — repère qui peut encore consommer`}
-      />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <PageHeader
+          title={`Budget AGEFICE — ${year}`}
+          subtitle={`Plafond ${fmtEUR.format(PLAFOND_AGEFICE)} / apprenant / année du dossier déposé — repère qui peut encore consommer`}
+        />
+        <a
+          href={exportHref}
+          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 shrink-0"
+        >
+          <Download className="h-4 w-4" /> Exporter CSV
+        </a>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -94,6 +129,24 @@ export default async function BudgetAgeficePage({
           accent="primary"
           hint="cumul sur tous les apprenants"
         />
+      </div>
+
+      {availableYears.length > 1 && (
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+            Année du dossier
+          </div>
+          <FilterChips chips={yearChips} />
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <DossiersOpcoSearchInput placeholder="Rechercher un apprenant (nom, prénom, email)…" />
+        {q && (
+          <span className="text-xs text-muted-foreground">
+            {rows.length} résultat{rows.length > 1 ? 's' : ''} pour « {q} »
+          </span>
+        )}
       </div>
 
       <FilterChips chips={filterChips} />

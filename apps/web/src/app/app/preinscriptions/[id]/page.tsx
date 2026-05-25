@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PreEnrollmentActions } from '@/components/preinscriptions/detail-actions';
 import { RetryExtractionButton } from '@/components/preinscriptions/retry-extraction-button';
 import { IdentityCheckPanel } from '@/components/preinscriptions/identity-check-panel';
+import { SingleReminderButton } from '@/components/preinscriptions/single-reminder-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,6 +166,15 @@ export default async function PreEnrollmentDetailPage({
           <Row label="Expérience" value={pe.professionalExperience} />
         </dl>
       </section>
+
+      {/* Relance email — visible uniquement tant que la pré-inscription n'a pas été soumise */}
+      {pe.status === 'PENDING_FORM' && pe.expiresAt > new Date() && (
+        <SingleReminderButton
+          preEnrollmentId={pe.id}
+          reminderCount={pe.reminderCount}
+          lastReminderSentAt={pe.lastReminderSentAt}
+        />
+      )}
 
       {/* Actions */}
       {(pe.status === 'EXTRACTED' || pe.status === 'SUBMITTED' || pe.status === 'VALIDATED') && (

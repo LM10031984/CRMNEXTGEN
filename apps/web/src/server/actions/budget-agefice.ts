@@ -136,6 +136,36 @@ export async function listLearnersWithAgeficeBudget(opts?: {
 }
 
 /**
+ * Années pour lesquelles on a des participations AGEFICE (sur
+ * financingRequestDate, fallback session.startDate). Permet de proposer
+ * un sélecteur d'année cohérent avec les données réelles.
+ */
+export async function getAgeficeAvailableYears(): Promise<number[]> {
+  const { user } = await validateRequest();
+  if (!user) return [];
+
+  const rows = await prisma.sessionParticipant.findMany({
+    where: {
+      sponsorOrg: { opcoCode: 'AGEFICE' },
+      session: { tenantId: user.tenantId },
+    },
+    select: {
+      financingRequestDate: true,
+      session: { select: { startDate: true } },
+    },
+  });
+
+  const years = new Set<number>();
+  for (const r of rows) {
+    const d = r.financingRequestDate ?? r.session?.startDate ?? null;
+    if (d) years.add(d.getUTCFullYear());
+  }
+  // Toujours inclure l'année courante (utile si aucune donnée encore)
+  years.add(new Date().getUTCFullYear());
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+/**
  * KPI agrégé : combien d'apprenants éligibles, combien ont du budget
  * restant, combien sont au plafond, total restant à mobiliser.
  */

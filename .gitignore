@@ -50,3 +50,6 @@ venv/
 
 # Uploaded user data (palier 1: stays out of git)
 data/uploads/
+
+# GSD planning (local-only)
+.planning/

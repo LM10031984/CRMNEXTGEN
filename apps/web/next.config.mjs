@@ -18,6 +18,32 @@ const nextConfig = {
     },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
+  // Redirects pour URLs "naturelles" tapées à la main par les utilisateurs.
+  // Audit 2026-05-12 BUG-03 — voir CLAUDE.md > Routes (convention naming).
+  async redirects() {
+    return [
+      {
+        source: '/app/pre-inscriptions',
+        destination: '/app/preinscriptions',
+        permanent: true,
+      },
+      {
+        source: '/app/pre-inscriptions/:path*',
+        destination: '/app/preinscriptions/:path*',
+        permanent: true,
+      },
+      {
+        source: '/app/modeles',
+        destination: '/app/templates',
+        permanent: true,
+      },
+      {
+        source: '/app/modeles/:path*',
+        destination: '/app/templates/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

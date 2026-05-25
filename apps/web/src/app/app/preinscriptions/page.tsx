@@ -5,6 +5,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { NewLinkButton } from '@/components/preinscriptions/new-link-button';
+import { BulkRemindersButton } from '@/components/preinscriptions/bulk-reminders-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,12 @@ export default async function PreinscriptionsPage() {
       <PageHeader
         title="Pré-inscriptions"
         subtitle="Génère un lien à envoyer à tes contacts. Ils déposent leurs pièces, l'IA extrait les données, tu valides en 1 clic."
-        actions={<NewLinkButton />}
+        actions={
+          <div className="flex items-center gap-2">
+            <BulkRemindersButton pendingCount={counter('PENDING_FORM')} />
+            <NewLinkButton />
+          </div>
+        }
       />
 
       {/* Bandeau KPI */}
@@ -83,7 +89,7 @@ export default async function PreinscriptionsPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">

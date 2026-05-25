@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "dev:full": "rm -rf .next && concurrently -n next,closure,reminders -c blue,magenta,cyan -k \"pnpm dev\" \"pnpm worker:closure\" \"pnpm worker:reminders\"",
+    "dev:full": "rm -rf .next && concurrently -n next,closure -c blue,magenta -k \"pnpm dev\" \"pnpm worker:closure\"",
+    "dev:full:reminders": "rm -rf .next && concurrently -n next,closure,reminders -c blue,magenta,cyan -k \"pnpm dev\" \"pnpm worker:closure\" \"pnpm worker:reminders\"",
     "clean": "rm -rf .next .turbo",
     "build": "next build",
     "start": "next start",

@@ -9,6 +9,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { formatFunderCode } from '@/lib/funder-codes';
 import { DeleteTrainerButton } from '@/components/forms/delete-trainer-button';
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'success' | 'info' | 'warning' | 'muted' | 'danger' | 'primary' }> = {
@@ -233,7 +234,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
                   </div>
                 )}
                 {subOrg.opcoCode && (
-                  <Badge variant="info" className="mt-2">OPCO {subOrg.opcoCode}</Badge>
+                  <Badge variant="info" className="mt-2">{formatFunderCode(subOrg.opcoCode)}</Badge>
                 )}
               </Link>
             </section>

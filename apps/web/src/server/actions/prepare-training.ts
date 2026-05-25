@@ -59,6 +59,8 @@ export async function prepareTrainingForSession(
     select: {
       id: true,
       productId: true,
+      pricePerLearner: true,
+      product: { select: { id: true, title: true, priceHT: true } },
       participants: {
         select: {
           id: true,
@@ -78,6 +80,47 @@ export async function prepareTrainingForSession(
       errors: [],
       error: 'Session introuvable',
     };
+  }
+
+  // Garde-fou conformité Qualiopi : tarif obligatoire (jamais 0€ dans un
+  // programme/convention sinon NON CONFORME audit). Cf feedback Laurent
+  // 2026-05-25 — "ça ne doit jamais arriver".
+  const productPriceHT = Number(session.product?.priceHT ?? 0);
+  const sessionPrice = Number(session.pricePerLearner ?? 0);
+  if (productPriceHT === 0 && sessionPrice === 0) {
+    return {
+      ok: false,
+      total: 0,
+      programmesGenerated: 0,
+      conventionsGenerated: 0,
+      convocationsGenerated: 0,
+      derouleGenerated: false,
+      errors: [],
+      error: `Tarif manquant. Le produit "${session.product?.title ?? '(sans titre)'}" a un prix HT à 0 €. Renseigne-le sur /app/produits/${session.productId} avant de préparer la formation. Un programme Qualiopi avec tarif 0 € est non conforme.`,
+    };
+  }
+  // Cas import SmartOF : tarif côté session uniquement, produit resté à 0.
+  // On propage session.pricePerLearner → product.priceHT pour que le générateur
+  // de programme l'utilise (le programme lit product.priceHT). Évite à Laurent
+  // d'avoir à resaisir sur la fiche produit.
+  if (productPriceHT === 0 && sessionPrice > 0) {
+    await prisma.trainingProduct.update({
+      where: { id: session.productId },
+      data: { priceHT: sessionPrice },
+    });
+    console.info(
+      `[prepare-training] product ${session.productId} priceHT 0 → ${sessionPrice} (propagé depuis session ${sessionId})`,
+    );
+    // Supprime aussi le doc Programme obsolète (forcé à 0€) pour forcer regen
+    // avec le bon prix. Document est polymorphique : entityType + entityId.
+    await prisma.document.deleteMany({
+      where: {
+        tenantId: user.tenantId,
+        entityType: 'TrainingProduct',
+        entityId: session.productId,
+        type: 'PROGRAMME',
+      },
+    });
   }
 
   const errors: PrepareTrainingResult['errors'] = [];
@@ -102,6 +145,8 @@ export async function prepareTrainingForSession(
   generateChecklistForSession(sessionId).catch((e) => {
     console.warn('[prepare-training] check-list non générée :', e?.message ?? e);
   });
+  // NB : Grille d'observation formateur (C3.i11) = doc POST-formation, généré
+  // uniquement par closure-pack quand les participants sont CONFIRMED/ATTENDED.
 
   // Convention + Convocation = par participant (idempotentes sha256)
   await Promise.all(

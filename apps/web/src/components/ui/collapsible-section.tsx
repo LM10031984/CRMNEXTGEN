@@ -13,8 +13,17 @@ interface CollapsibleSectionProps {
   title: React.ReactNode;
   /** Sous-titre optionnel (ex: count "10 indicateurs"). */
   subtitle?: React.ReactNode;
-  /** Icône optionnelle à gauche du titre. */
-  icon?: React.ComponentType<{ className?: string }>;
+  /**
+   * Icône optionnelle à gauche du titre.
+   *
+   * IMPORTANT : doit être un ReactNode déjà instancié (`<MyIcon className="h-4 w-4 ..." />`),
+   * pas une référence de composant (`MyIcon`). Ce composant est marqué `'use client'`,
+   * et Next.js 14 refuse de sérialiser une fonction-composant à travers la frontière
+   * RSC→Client à moins qu'elle ne soit marquée `'use server'`. Le caller (Server Component)
+   * est responsable d'appliquer le sizing (`h-4 w-4`), la couleur (`text-muted-foreground`)
+   * et `aria-hidden="true"`.
+   */
+  icon?: React.ReactNode;
   /** Affiché ouvert par défaut (sinon utilise localStorage). */
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -30,7 +39,7 @@ export function CollapsibleSection({
   id,
   title,
   subtitle,
-  icon: Icon,
+  icon,
   defaultOpen = false,
   children,
   className,
@@ -79,7 +88,7 @@ export function CollapsibleSection({
         aria-label={ariaLabel}
         className="w-full flex items-center gap-2 text-left mb-3 hover:text-foreground transition-colors group"
       >
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        {icon}
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground group-hover:text-foreground">
           {title}
         </h2>

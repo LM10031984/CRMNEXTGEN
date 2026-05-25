@@ -22,9 +22,11 @@ import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
 import {
-  fillAgeficeAttendancePdf,
-  type AgeficeAttendanceData,
-} from '@/lib/agefice-attendance-fill';
+  renderAgeficeAttendanceHtml,
+  type AgeficeAttendanceTemplateData,
+} from '@/lib/closure/agefice-attendance-template';
+import { renderHtmlToPdf } from '@/lib/pdf-render';
+import { numberToFrenchWords } from '@/lib/number-to-french-words';
 
 // Map TrainingSession.modality → 4 cases AGEFICE (heures).
 // Clone du helper agefice-generator.ts (déduplication possible plus tard).
@@ -59,7 +61,9 @@ export async function generateAgeficeAttendanceForParticipant(
       person: {
         include: {
           legalLinks: {
-            where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] } },
+            // Tous les LegalLinks pertinents : EI (autoentrepreneur) ou
+            // employeur (salarié immobilier sous enseigne).
+            where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL', 'SALARIE'] } },
             include: { organization: true },
           },
         },
@@ -69,9 +73,12 @@ export async function generateAgeficeAttendanceForParticipant(
         include: {
           product: { select: { title: true, durationHours: true } },
           trainers: {
-            include: { person: { select: { firstName: true, lastName: true } } },
+            include: {
+              person: { select: { firstName: true, lastName: true } },
+            },
             orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
           },
+          _count: { select: { participants: true } },
         },
       },
     },
@@ -81,29 +88,42 @@ export async function generateAgeficeAttendanceForParticipant(
 
   const warnings: string[] = [];
 
-  // ── EI / auto-entreprise du stagiaire (raison sociale entreprise) ─
-  // Priorité : sponsorOrg si AGEFICE, sinon 1er LegalLink EI_SELF, sinon
-  // 1er LegalLink, sinon sponsorOrg (en dernier recours).
+  // ── Société du stagiaire (raison sociale entreprise) ──────────
+  // Priorité métier :
+  //   1. sponsorOrg si AGEFICE (cas typique financement)
+  //   2. EI_SELF (autoentrepreneur — sa propre EI)
+  //   3. AGENT_COMMERCIAL (indépendant rattaché enseigne immobilière)
+  //   4. SALARIE (structure employeur)
+  //   5. sponsorOrg fallback
   let eiOrgName: string | null = null;
   if (participant.sponsorOrg?.opcoCode === 'AGEFICE') {
     eiOrgName = participant.sponsorOrg.legalName;
   } else {
-    const eiLink =
-      participant.person.legalLinks.find((l) => l.role === 'EI_SELF') ??
-      participant.person.legalLinks[0];
-    eiOrgName = eiLink?.organization?.legalName ?? participant.sponsorOrg?.legalName ?? null;
+    const orderedRoles = ['EI_SELF', 'AGENT_COMMERCIAL', 'SALARIE'] as const;
+    const link = orderedRoles
+      .map((role) => participant.person.legalLinks.find((l) => l.role === role))
+      .find((l) => l != null);
+    eiOrgName = link?.organization?.legalName ?? participant.sponsorOrg?.legalName ?? null;
   }
   if (!eiOrgName) {
     warnings.push('Aucune entreprise/EI rattachée au stagiaire — champ laissé vide.');
   }
 
   // ── Formateur principal ───────────────────────────────────────
+  // Pas de suffixe "— Formateur" en dur (tautologique avec le label de la
+  // ligne du tableau "Nom et qualité du formateur"). Si `trainer.role` est
+  // renseigné et différent du défaut générique, on l'ajoute après une virgule.
   const primaryTrainer =
     participant.session.trainers.find((t) => t.isPrimary) ??
     participant.session.trainers[0];
-  const formateurNomQualite = primaryTrainer
-    ? `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName} — Formateur`
-    : null;
+  let formateurNomQualite: string | null = null;
+  if (primaryTrainer) {
+    const nom = `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName}`.trim();
+    const role = primaryTrainer.role?.trim();
+    const roleDistinct =
+      role && !/^formateur( principal)?$/i.test(role);
+    formateurNomQualite = roleDistinct ? `${nom}, ${role}` : nom;
+  }
 
   // ── OF config (pre-resolve BDD+ENV) ───────────────────────────
   const of = await loadOfConfig(user.tenantId);
@@ -112,8 +132,11 @@ export async function generateAgeficeAttendanceForParticipant(
       ? `${of.resp.prenom} ${of.resp.nom}`
       : of.name;
   const ofResponsableQualite = of.resp.titre || 'Dirigeant';
-  // Région : pas en BDD pour l'instant — static PACA pour Start Academy.
-  const ofRegion = 'Provence-Alpes-Côte d’Azur';
+  // Le label PDF dit "DREETS/DRIEETS/DEETS de ___" → c'est la ville/UD de
+  // rattachement DREETS, pas la région administrative. Start Academy
+  // (Cagnes sur Mer, NDA 93 06 10481 06) est rattaché à l'UD de Grasse.
+  // V1 hardcoded — futur : ajouter un champ tenant.dreetsCity éditable.
+  const ofDreetsVille = 'Grasse';
 
   // ── Durées (prévues seulement V1 — réalisées vides) ───────────
   const totalHours = participant.session.product.durationHours;
@@ -130,37 +153,51 @@ export async function generateAgeficeAttendanceForParticipant(
     select: { amountTTC: true, paidAt: true },
   });
   const sommeChiffres = invoice ? Number(invoice.amountTTC) : null;
-  // Mode règlement : pas de champ sur Invoice — static default. Le user pourra
-  // l'éditer manuellement dans le PDF si besoin (formulaire éditable).
-  const modeReglement = 'Virement bancaire';
-  const dateReglement = invoice?.paidAt ?? null;
+  // Match wording modèle Kristin AGEFICE : "payés par virement en date(s) du …".
+  const modeReglement = 'virement';
+  // Fallback métier : si pas d'Invoice payée, on considère la date de fin de
+  // formation comme date de règlement (cohérent avec le délai usuel AGEFICE).
+  const dateReglement = invoice?.paidAt ?? participant.session.endDate;
+  const sommeLettres =
+    sommeChiffres != null ? numberToFrenchWords(sommeChiffres) : null;
 
   // ── Compose les données + génère le PDF ───────────────────────
-  const data: AgeficeAttendanceData = {
+  // Durées réalisées : par défaut = prévues (formation supposée intégralement
+  // suivie, cohérent avec modèle Kristin où prévu=réalisé=72). Si le
+  // formateur a besoin d'ajuster, V3 : lire l'Attendance réelle par modalité.
+  const data: AgeficeAttendanceTemplateData = {
+    tenantId: user.tenantId,
     formationIntitule:
       participant.session.name ?? participant.session.product.title,
     formationDateDebut: participant.session.startDate,
     formationDateFin: participant.session.endDate,
     formateurNomQualite,
+    nombreParticipants: participant.session._count.participants,
     ofRaisonSociale: of.name,
     ofNumeroDeclaration: of.rnq,
-    ofRegion,
+    ofDreetsVille,
     ofResponsablePrenomNom,
     ofResponsableQualite,
     ofLieuDelivrance: of.addressVille || '',
-    stagiaireNomPrenom: `${participant.person.firstName} ${participant.person.lastName}`.trim(),
+    // Format Kristin : "M./Mme NOM Prénom" (civilité + NOM en majuscules + Prénom).
+    // Si pas de civilité saisie, on omet (pas de fallback générique).
+    stagiaireNomPrenom: [
+      participant.person.civility?.trim(),
+      `${(participant.person.lastName ?? '').toUpperCase()} ${participant.person.firstName ?? ''}`.trim(),
+    ]
+      .filter(Boolean)
+      .join(' '),
     entrepriseRaisonSociale: eiOrgName,
     prevuePresIndividuel: split.presIndiv,
     prevuePresCollectif: split.presColl,
     prevueFoadSync: split.foadSync,
     prevueFoadAsync: split.foadAsync,
-    // V1 : formateur édite manuellement le PDF pour les réalisées.
-    realiseePresIndividuel: null,
-    realiseePresCollectif: null,
-    realiseeFoadSync: null,
-    realiseeFoadAsync: null,
+    realiseePresIndividuel: split.presIndiv || null,
+    realiseePresCollectif: split.presColl || null,
+    realiseeFoadSync: split.foadSync || null,
+    realiseeFoadAsync: split.foadAsync || null,
     sommeChiffres,
-    sommeLettres: null, // V1 : laissé vide
+    sommeLettres,
     modeReglement,
     dateReglement,
     dateDelivrance: new Date(),
@@ -168,7 +205,8 @@ export async function generateAgeficeAttendanceForParticipant(
 
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await fillAgeficeAttendancePdf(data);
+    const html = renderAgeficeAttendanceHtml(data);
+    pdfBuffer = await renderHtmlToPdf(html);
   } catch (e: any) {
     return { ok: false, error: `Erreur rendu PDF attestation assiduité : ${e?.message ?? e}` };
   }

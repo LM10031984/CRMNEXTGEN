@@ -103,7 +103,7 @@ export function CreateProductButton() {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Thème</label>
                 <input type="text" value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="Ex: IA, Immobilier, Management" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Durée (h) *</label>
                   <input type="number" min="1" step="0.5" value={durationHours} onChange={(e) => updateDuration(e.target.value)} required className="w-full px-3 py-2 border border-border rounded-lg text-sm" />

@@ -36,10 +36,14 @@ const CARDS: Array<{
   key: 'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST';
   title: string;
   shortLabel: string;
+  article: 'le' | 'la';
+  /** Doc généré post-formation seulement (pendant le pack fin). Affiche
+   *  un texte explicite au lieu d'un CTA trompeur. */
+  postFormation?: boolean;
 }> = [
-  { key: 'DEROULE', title: 'Déroulé pédagogique', shortLabel: 'Déroulé' },
-  { key: 'GRILLE_OBS', title: "Grille d'observation formateur", shortLabel: 'Grille observation' },
-  { key: 'CHECKLIST', title: 'Checklist formation', shortLabel: 'Checklist' },
+  { key: 'DEROULE', title: 'Déroulé pédagogique', shortLabel: 'Déroulé', article: 'le' },
+  { key: 'GRILLE_OBS', title: "Grille d'observation formateur", shortLabel: 'Grille observation', article: 'la', postFormation: true },
+  { key: 'CHECKLIST', title: 'Checklist formation', shortLabel: 'Checklist', article: 'la' },
 ];
 
 export function SessionOnlyDocsBlock({
@@ -102,6 +106,16 @@ export function SessionOnlyDocsBlock({
                     </Link>
                   )}
                 </div>
+              ) : card.postFormation ? (
+                <div className="flex flex-col gap-1 mt-auto">
+                  <p className="text-xs text-muted-foreground italic">
+                    Document post-formation
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Généré dans le <strong>Pack fin de formation</strong>, une fois les
+                    apprenants confirmés/présents.
+                  </p>
+                </div>
               ) : (
                 <div className="flex flex-col gap-2 mt-auto">
                   <p className="text-xs text-muted-foreground italic">Pas encore généré</p>
@@ -110,7 +124,7 @@ export function SessionOnlyDocsBlock({
                       href={`/app/sessions/${sessionId}/closure` as Route}
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                     >
-                      <Sparkles className="h-4 w-4" aria-hidden="true" /> Générer le {card.shortLabel}
+                      <Sparkles className="h-4 w-4" aria-hidden="true" /> Générer {card.article} {card.shortLabel}
                     </Link>
                   )}
                 </div>
