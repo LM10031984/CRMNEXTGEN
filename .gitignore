@@ -42,6 +42,9 @@ coverage/
 playwright-report/
 test-results/
 
+# TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
+packages/*/tsconfig.tsbuildinfo
+
 # Python (doc-engine)
 __pycache__/
 *.pyc
