@@ -606,6 +606,10 @@ export async function createProduct(input: {
             accessibility: r.draft.accessibility || null,
             accessConditions: r.draft.accessConditions || null,
             programMd: r.draft.programMd,
+            // BUG-P0-02 — marquer le produit comme brouillon IA tant qu'un
+            // humain n'a pas validé. Bloque la génération de conventions
+            // (via getSessionCompleteness blocker `product_ai_unreviewed`).
+            aiDraftedAt: new Date(),
           },
         });
         revalidatePath('/app/produits');
@@ -769,5 +773,59 @@ export async function deleteTrainingSession(
 
   await prisma.trainingSession.delete({ where: { id: sessionId } });
   revalidatePath('/app/sessions');
+  return { ok: true };
+}
+
+/**
+ * BUG-P0-02 — Validation humaine d'un produit auto-rempli par IA.
+ *
+ * Tant que `aiDraftedAt` est non-null, le produit est considéré comme
+ * brouillon IA non revu : il est marqué dans le tab Programme avec une
+ * bannière, et `getSessionCompleteness` ajoute un blocker
+ * `product_ai_unreviewed` qui empêche la génération du pack fin de formation.
+ *
+ * `validateAiDraftProduct` passe `aiDraftedAt = null` (= validé).
+ *
+ * RBAC : seuls ADMIN et MANAGER peuvent valider (les rôles métier qui
+ * portent la responsabilité Qualiopi du contenu).
+ */
+export async function validateAiDraftProduct(productId: string): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+  if (!['ADMIN', 'MANAGER'].includes(user.role)) {
+    return { ok: false, error: 'Seuls ADMIN et MANAGER peuvent valider un brouillon IA.' };
+  }
+
+  const product = await prisma.trainingProduct.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+    select: { id: true, code: true, aiDraftedAt: true },
+  });
+  if (!product) return { ok: false, error: 'Produit introuvable.' };
+  if (!product.aiDraftedAt) {
+    return { ok: false, error: 'Ce produit n\'est pas un brouillon IA.' };
+  }
+
+  await prisma.trainingProduct.update({
+    where: { id: productId },
+    data: { aiDraftedAt: null },
+  });
+
+  // Audit log — pattern Phase 7+ : convention `products.validate_ai_draft`
+  await prisma.auditLog.create({
+    data: {
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'products.validate_ai_draft',
+      entity: 'TrainingProduct',
+      entityId: productId,
+      diff: { code: product.code, validatedAt: new Date().toISOString() },
+    },
+  });
+
+  revalidatePath('/app/produits');
+  revalidatePath(`/app/produits/${productId}`);
   return { ok: true };
 }

@@ -15,13 +15,24 @@ import { Package, Loader2, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateClosurePack } from '@/server/actions/closure-pack';
 import { CLOSURE_DOC_KINDS, CLOSURE_DOC_KIND_LABELS } from '@/lib/closure/types';
+import type { SessionCompletenessBlocker } from '@/lib/sessions/completeness';
 
 interface Props {
   sessionId: string;
   participantCount: number;
+  /**
+   * BUG-P2-04 — blockers de complétude calculés côté server (page parent).
+   * Si fourni et non vide, la modale affiche les blockers et désactive
+   * "Lancer la génération" (early feedback au lieu de late server error).
+   */
+  blockers?: SessionCompletenessBlocker[];
 }
 
-export function GenerateClosurePackButton({ sessionId, participantCount }: Props) {
+export function GenerateClosurePackButton({
+  sessionId,
+  participantCount,
+  blockers = [],
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -32,6 +43,9 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
   // ~30s/doc IA, concurrency 3 dans le worker BullMQ
   const estSeconds = Math.ceil((totalDocs * 30) / 3);
   const estMinutes = Math.max(1, Math.ceil(estSeconds / 60));
+
+  const hasBlockers = blockers.length > 0;
+  const launchDisabled = pending || participantCount === 0 || hasBlockers;
 
   function handleLaunch() {
     setError(null);
@@ -82,6 +96,46 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
           </button>
         </div>
 
+        {hasBlockers && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 mb-4">
+            <div className="flex items-start gap-2 mb-2">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+              <div className="text-sm font-medium text-amber-900">
+                Session incomplète — génération impossible
+              </div>
+            </div>
+            <ul className="text-sm text-amber-800 space-y-1 ml-6 list-disc">
+              {blockers.map((b) => (
+                <li key={b.key}>
+                  <span className="font-medium">{b.label}</span>
+                  {b.fix.href.startsWith('#') ? (
+                    <>
+                      {' — '}
+                      <a
+                        href={b.fix.href}
+                        onClick={() => setOpen(false)}
+                        className="underline hover:text-amber-900"
+                      >
+                        {b.fix.label}
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      {' — '}
+                      <a
+                        href={b.fix.href}
+                        className="underline hover:text-amber-900"
+                      >
+                        {b.fix.label}
+                      </a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground mb-4">
           Cette action va générer en parallèle, pour chaque apprenant éligible,
           les {docsPerParticipant} documents Qualiopi de fin de formation :
@@ -125,8 +179,9 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
           <button
             type="button"
             onClick={handleLaunch}
-            disabled={pending || participantCount === 0}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 disabled:opacity-60"
+            disabled={launchDisabled}
+            title={hasBlockers ? 'Corriger les blockers ci-dessus avant de lancer' : undefined}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             Lancer la génération

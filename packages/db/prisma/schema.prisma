@@ -350,6 +350,12 @@ model TrainingProduct {
   bpfLevel           String?
   capacityMin        Int               @default(1)
   capacityMax        Int               @default(12)
+  // BUG-P0-02 — quand le produit a été auto-rempli par l'IA (createProduct
+  // avec autoFillWithAI=true), on horodate ici. Tant que non-null, le
+  // contenu est considéré "Brouillon IA" → bannière dans le tab Programme,
+  // blocker `product_ai_unreviewed` dans getSessionCompleteness, action
+  // "Valider" (set null) ou "Réviser" (édition manuelle = set null aussi).
+  aiDraftedAt        DateTime?
   modules            TrainingModule[]
   trainingSessions   TrainingSession[]
   leads              Lead[]

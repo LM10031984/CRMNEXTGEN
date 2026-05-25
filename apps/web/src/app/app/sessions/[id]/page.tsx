@@ -377,7 +377,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     locationId: session.locationId,
     modality: session.modality,
     trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
-    product: session.product ? { programMd: session.product.programMd } : null,
+    product: session.product
+      ? { programMd: session.product.programMd, aiDraftedAt: session.product.aiDraftedAt }
+      : null,
     participantsCount: session.participants.length,
     productId: session.product?.id ?? null,
   });
@@ -470,6 +472,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <GenerateClosurePackButton
             sessionId={session.id}
             participantCount={session.participants.length}
+            blockers={sessionCompleteness.blockers}
           />
 
           {/* Kebab — uniquement les actions destructives ou rarement utilisées

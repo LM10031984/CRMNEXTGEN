@@ -208,6 +208,8 @@ export default async function ProductDetailPage({
             markdown={product.programMd}
             pdfId={programmePdfId}
             productId={product.id}
+            aiDraftedAt={product.aiDraftedAt}
+            canValidateAiDraft={['ADMIN', 'MANAGER'].includes(user.role)}
           />
         )}
       </div>

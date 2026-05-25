@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 13 closed — Veille Qualiopi intégrée 6/6 plans + bookkeeping (smoke réels validés)
-last_updated: "2026-05-25T15:00:00.000Z"
-last_activity: 2026-05-25
+stopped_at: Phase 12 context gathered (renommer preinscriptions→inscriptions + templates read-only)
+last_updated: "2026-05-25T16:00:21.646Z"
+last_activity: "2026-05-25 — Completed quick task 260525-kl5: auto-trigger préparation pédagogique complète Convention AuditLog `regulatoryWatch.*` 7e instance one-helper-per-entity (8 verbes COMPLETS : created/updated/exploitation_updated/approved/rejected/archived/auto_inserted/exported). Worker safety pattern `lib/veille/core.ts` vérifié (0 imports React/auth/server-actions). Smoke réels validés : import xlsx 103 inserted idempotence ✓, worker dry-run 728→37 RSS+Ollama mistral-small:24b, BDD 140 RegulatoryWatch (103 IMPORT + 37 AUTO). Page /app/veille 5 onglets dont inbox masqué LECTEUR D-03 (3 niveaux defense-in-depth). Export PDF stocké MinIO comme Document VEILLE_AUDIT. 5 D-13-A..E figées. Pending : validation visuelle Laurent (Flow 3 UI 3 rôles + Flow 4b PDF audit)."
 progress:
   total_phases: 14
-  completed_phases: 11
-  total_plans: 59
-  completed_plans: 51
+  completed_phases: 8
+  total_plans: 58
+  completed_plans: 46
 ---
 
 # STATE — QualiOF
@@ -195,13 +195,14 @@ Next: /gsd:plan-phase 12 (Modules stub Inscriptions et Modèles) OU /gsd:plan-ph
 | 260525-j9d | Fix RSC error page Paramètres : SettingsSection.icon de LucideIcon → ReactNode (11 call sites adaptés avec ICON_CLASS const). Page /app/parametres fonctionnait plus à cause de Next.js 14 RSC qui refuse les fonctions Lucide passées d'un Server Component vers un Client Component. | 2026-05-25 | dde5d41 | [260525-j9d-fix-rsc-error-page-param-tres-settingsse](./quick/260525-j9d-fix-rsc-error-page-param-tres-settingsse/) |
 | 260525-jpq | Fix bugs I+J fiche session sidebar Documents partagés : SessionOnlyDocsBlock devient Client Component avec useTransition + sonner ; CTAs inline appellent directement generateDerouleForProduct / generateGrilleObsSessionForSession / generateChecklistForSession (au lieu de rediriger vers /closure) ; sidebar prend en compte PedagogicalAsset.kind=GRILLE_OBS comme proxy de présence (résout incohérence avec matrice) ; bloc postFormation retiré sur grille obs. Chantier 1 backlog partiellement livré (G IMAGIMO Drive en attente screenshot). | 2026-05-25 | c8cf4b6 | [260525-jpq-fix-bugs-i-j-fiche-session-sidebar-docum](./quick/260525-jpq-fix-bugs-i-j-fiche-session-sidebar-docum/) |
 | 260525-kl5 | Auto-trigger préparation pédagogique complète à la création session + nouveau bloc UI PreparationPedagogiqueBlock + retrait bouton "Préparer la formation". Server action `prepareSession(sessionId)` idempotente orchestre les 6 docs (programme/déroulé/checklist partagés + convention/convocation/analyse besoin par participant). Hook fire-and-forget dans createSessionFull. Composant Client avec polling 5s pour les analyses besoin BullMQ. AuditLog `session.prepare`. Chantier 4 backlog (E+F+H étendu). | 2026-05-25 | 261bf93 | [260525-kl5-auto-trigger-pr-paration-p-dagogique-com](./quick/260525-kl5-auto-trigger-pr-paration-p-dagogique-com/) |
+| 260525-pb5 | Dropdowns Diplôme (6 options exactes PDF AGEFICE) + Expérience pro (4 tranches) ajoutés aux formulaires création + édition apprenant. Constante partagée `lib/agefice-options.ts` consommée par 4 fichiers. Simplification `inferExperience` (check exact avant heuristique). Rétro-compat 291 fiches texte libre préservée. Audit AGEFICE complet sauvegardé dans `.planning/quick/_audit-agefice-260525.md` (60 champs analysés). Chantier 5 backlog (BUG-K). | 2026-05-25 | 46cf38e | [260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro](./quick/260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro/) |
 
 ## Last session
 
-Stopped at: Chantier 4 backlog (auto-trigger préparation pédagogique) livré. Bouton "Préparer la formation" retiré, remplacé par bloc visuel auto-refresh. Restent : G (screenshot IMAGIMO), A (horaires pause midi), C+D (création inline), K (AGEFICE champs), B (programmes détaillés).
-Last commit: 261bf93 — feat(quick/260525-kl5): replace PrepareTrainingButton by PreparationPedagogiqueBlock
-Last completed plan: 260525-kl5 (auto-trigger préparation pédagogique complète + bloc UI)
-Next plan: validation Laurent (créer session test) puis chantier 2 horaires pause midi (BUG-A) OU G screenshot puis chantier suivant
+Stopped at: Chantier 5 backlog (AGEFICE champs Person) livré. Restent : G (screenshot IMAGIMO), A (horaires pause midi), C+D (création inline apprenant/formateur depuis wizard session), B (programmes multi-jours détaillés).
+Last commit: 46cf38e — feat(quick-260525-pb5-01): dropdowns Diplôme + Expérience pro dans édition apprenant
+Last completed plan: 260525-pb5 (dropdowns AGEFICE création + édition apprenant)
+Next plan: validation Laurent (créer apprenant test + générer PDF AGEFICE) puis chantier 2 horaires pause midi (BUG-A) OU G screenshot
 
 Last activity: 2026-05-25 — Completed quick task 260525-kl5: auto-trigger préparation pédagogique complète Convention AuditLog `regulatoryWatch.*` 7e instance one-helper-per-entity (8 verbes COMPLETS : created/updated/exploitation_updated/approved/rejected/archived/auto_inserted/exported). Worker safety pattern `lib/veille/core.ts` vérifié (0 imports React/auth/server-actions). Smoke réels validés : import xlsx 103 inserted idempotence ✓, worker dry-run 728→37 RSS+Ollama mistral-small:24b, BDD 140 RegulatoryWatch (103 IMPORT + 37 AUTO). Page /app/veille 5 onglets dont inbox masqué LECTEUR D-03 (3 niveaux defense-in-depth). Export PDF stocké MinIO comme Document VEILLE_AUDIT. 5 D-13-A..E figées. Pending : validation visuelle Laurent (Flow 3 UI 3 rôles + Flow 4b PDF audit).
 
