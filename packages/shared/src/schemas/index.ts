@@ -8,3 +8,4 @@ export * from './lead';
 export * from './qualiopi-matrix';
 export * from './invoice';
 export * from './session';
+export * from './veille';
