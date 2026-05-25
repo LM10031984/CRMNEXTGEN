@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
-import { generateConventionForParticipant } from './convention-generator';
+import { prepareSession } from './prepare-training';
 
 export interface CreateSessionInput {
   productId: string;
@@ -215,14 +215,14 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     return { created, createdParticipantIds };
   });
 
-  // Auto-génère 1 convention par participant ajouté à la création de session.
-  // Fire-and-forget : si une génération échoue, la session est quand même créée.
-  // Template pur (pas Ollama) → ~1s/convention.
-  for (const pid of session.createdParticipantIds) {
-    generateConventionForParticipant(pid).catch((e) => {
-      console.warn(`[createSessionWithParticipants] convention auto-gen failed for ${pid}:`, e?.message ?? e);
-    });
-  }
+  // Auto-trigger préparation pédagogique complète (programme + déroulé +
+  // checklist + convention/convocation/analyse besoin par participant).
+  // Fire-and-forget : la création de session reste rapide côté UX, la
+  // préparation tourne en arrière-plan (analyse besoin = jobs BullMQ).
+  // Idempotente : les generators sont find-or-create.
+  void prepareSession(session.created.id).catch((e) =>
+    console.warn(`[createSessionFull] prepareSession failed for ${session.created.id}:`, e?.message ?? e),
+  );
 
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');
