@@ -279,6 +279,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
 
+  // Bug I — proxy de présence aligné sur deriveCellState (derive-cell-state.ts L70-71).
+  // La matrice considère la grille obs comme générée dès qu'un PedagogicalAsset existe
+  // par participant ; on reflète ça côté sidebar pour cohérence visuelle.
+  const grilleObsAssetCount = pedAssetsRaw.filter((a) => a.kind === 'GRILLE_OBS').length;
+
   // Derniers batches pack fin de formation pour cette session (audit trail)
   const closureBatches = await prisma.closureBatch.findMany({
     where: { tenantId: user.tenantId, sessionId: session.id },
@@ -572,9 +577,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       {/* Phase 9.1 Plan 03 — Documents session (3 cards horizontales D-04 bloc séparé) */}
       <SessionOnlyDocsBlock
         sessionId={session.id}
+        productId={session.productId}
         deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
         grilleObsPdfRef={sessionDocsMap.get('GRILLE_OBS_SESSION')}
         checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
+        grilleObsAssetCount={grilleObsAssetCount}
         canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
       />
 
