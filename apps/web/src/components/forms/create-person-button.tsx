@@ -7,6 +7,7 @@ import { createPerson } from '@/server/actions/crud-edits';
 import { extractApprenantDocs } from '@/server/actions/extract-apprenant-docs';
 import { uploadApprenantDocs } from '@/server/actions/upload-apprenant-docs';
 import { addParticipant } from '@/server/actions/sessions';
+import { DIPLOME_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/agefice-options';
 import { EnseignePicker } from './enseigne-picker';
 
 type ExtractedExtras = {
@@ -48,6 +49,8 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
   const [addressPostalCode, setAddressPostalCode] = useState('');
   const [addressCity, setAddressCity] = useState('');
   const [professionalStatus, setProfessionalStatus] = useState('');
+  const [diplomas, setDiplomas] = useState('');
+  const [professionalExperience, setProfessionalExperience] = useState('');
   const [siret, setSiret] = useState('');
   const [activityCode, setActivityCode] = useState('');
   const [socialSecurityNb, setSocialSecurityNb] = useState('');
@@ -65,6 +68,7 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
     setFirstName(''); setLastName(''); setCivility(''); setEmail(''); setPhone('');
     setBirthDate(''); setBirthName(''); setAddressStreet(''); setAddressPostalCode(''); setAddressCity('');
     setProfessionalStatus(''); setSiret(''); setActivityCode(''); setSocialSecurityNb('');
+    setDiplomas(''); setProfessionalExperience('');
     setCniFile(null); setRibFile(null); setCfpFile(null);
     setExtras(null); setError(null); setWarnings([]);
     setEnseigneOrgId(null); setEnseigneLabel(null); setEnseigneNewName(null);
@@ -141,6 +145,8 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
         email: email.trim() || null,
         phone: phone.trim() || null,
         professionalStatus: professionalStatus.trim() || null,
+        diplomas: diplomas || null,
+        professionalExperience: professionalExperience || null,
         birthName: birthName.trim() || null,
         birthDate: birthDate || null,
         addressStreet: addressStreet.trim() || null,
@@ -359,6 +365,34 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Statut professionnel</label>
                 <input type="text" value={professionalStatus} onChange={(e) => setProfessionalStatus(e.target.value)} placeholder="Ex: Agent commercial" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Dernier diplôme (AGEFICE)</label>
+                  <select
+                    value={diplomas}
+                    onChange={(e) => setDiplomas(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                  >
+                    <option value="">— Choisir —</option>
+                    {DIPLOME_OPTIONS.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Expérience pro (AGEFICE)</label>
+                  <select
+                    value={professionalExperience}
+                    onChange={(e) => setProfessionalExperience(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                  >
+                    <option value="">— Choisir —</option>
+                    {EXPERIENCE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

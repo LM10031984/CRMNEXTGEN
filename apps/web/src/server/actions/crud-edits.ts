@@ -283,6 +283,10 @@ export async function createPerson(input: {
   email?: string | null;
   phone?: string | null;
   professionalStatus?: string | null;
+  // Valeurs canoniques DIPLOME_OPTIONS / EXPERIENCE_OPTIONS saisies via dropdowns,
+  // persistées telles quelles sur Person (alignées AGEFICE PDF).
+  diplomas?: string | null;
+  professionalExperience?: string | null;
   // Champs étendus alimentés par le wizard auto-fill (extraction CFP/CNI/RIB).
   civility?: string | null;
   birthName?: string | null;
@@ -339,6 +343,8 @@ export async function createPerson(input: {
         email: input.email?.trim() || null,
         phone: input.phone?.trim() || null,
         professionalStatus: input.professionalStatus?.trim() || null,
+        diplomas: input.diplomas?.trim() || null,
+        professionalExperience: input.professionalExperience?.trim() || null,
         civility: input.civility?.trim() || null,
         birthName: input.birthName?.trim() || null,
         birthDate: input.birthDate ? new Date(input.birthDate) : null,
