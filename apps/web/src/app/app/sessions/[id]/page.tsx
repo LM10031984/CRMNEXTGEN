@@ -11,7 +11,8 @@ import { ParticipantActionsMenu } from '@/components/sessions/participant-action
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
-import { PrepareTrainingButton } from '@/components/sessions/prepare-training-button';
+import { PreparationPedagogiqueBlock } from '@/components/sessions/preparation-pedagogique-block';
+import { getSessionPreparationStatus } from '@/server/actions/prepare-training';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
 import { EditSessionDetailsDialog } from '@/components/sessions/edit-session-details-dialog';
@@ -381,6 +382,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     productId: session.product?.id ?? null,
   });
 
+  // Quick task 260525-kl5 — état agrégé des 6 catégories de docs de préparation
+  // pédagogique pour le bloc PreparationPedagogiqueBlock. La server action est
+  // tenant-scopée via validateRequest (déjà résolue ci-dessus).
+  const preparationStatus = await getSessionPreparationStatus(session.id);
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -420,21 +426,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* Action contextuelle selon le statut — guide l'utilisateur sur la
-              "prochaine étape logique" (Préparer / Marquer terminée / Voir).
-              Pour COMPLETED avec batch déjà généré, on affiche un lien direct
-              vers la page de progression à la place de Préparer. */}
+              "prochaine étape logique" (Marquer terminée / Voir le pack).
+              Le bouton "Préparer la formation" a été retiré (quick task
+              260525-kl5) : la préparation est désormais auto-déclenchée à
+              la création de la session et le bloc PreparationPedagogiqueBlock
+              en bas de fiche montre l'état + CTA "Compléter" si besoin. */}
           {(() => {
             switch (session.status) {
               case 'DRAFT':
               case 'PLANNED':
               case 'OPEN':
               case 'VALIDATED':
-                return (
-                  <PrepareTrainingButton
-                    sessionId={session.id}
-                    participantCount={session.participants.length}
-                  />
-                );
+                return null;
               case 'IN_PROGRESS':
                 return (
                   <MarkCompletedButton
@@ -583,6 +586,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
         grilleObsAssetCount={grilleObsAssetCount}
         canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
+      />
+
+      {/* Quick task 260525-kl5 — bloc agrégé "Préparation pédagogique" :
+          remplace le bouton "Préparer la formation" retiré de la barre
+          d'action. Affiche l'état des 6 catégories de docs pré-formation
+          (3 partagés + 3 par stagiaire) + CTA "Compléter" idempotent. */}
+      <PreparationPedagogiqueBlock
+        sessionId={session.id}
+        initialStatus={preparationStatus}
+        canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
       />
 
       {/* Phase 9.1 Plan 03 — Matrice Documents participants (CENTRAL-01 / CENTRAL-02) */}

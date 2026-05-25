@@ -4,10 +4,10 @@
  * Menu kebab "⋮" pour les actions secondaires d'une session — réduit l'encombrement
  * visuel du header (avant : 4 boutons côte-à-côte, maintenant : 1 primaire + 1 kebab).
  *
- * Reçoit les composants d'action en `children` (PrepareTrainingButton,
- * GenerateClosurePackButton, DuplicateSessionButton, DeleteSessionButton…) et
- * les empile dans un popover. Chaque enfant conserve son propre modal/dialog,
- * le menu ne fait que les regrouper visuellement.
+ * Reçoit les composants d'action en `children` (DuplicateSessionButton,
+ * DeleteSessionButton…) et les empile dans un popover. Chaque enfant
+ * conserve son propre modal/dialog, le menu ne fait que les regrouper
+ * visuellement.
  */
 
 import { useEffect, useRef, useState } from 'react';
