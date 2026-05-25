@@ -34,6 +34,17 @@ vi.mock('@qualiof/db', () => ({
     COMPTABLE: 'COMPTABLE',
     LECTEUR: 'LECTEUR',
   },
+  LegalForm: {
+    SAS: 'SAS',
+    SARL: 'SARL',
+    SASU: 'SASU',
+    EURL: 'EURL',
+    SA: 'SA',
+    EI: 'EI',
+    EIRL: 'EIRL',
+    AUTO_ENTREPRENEUR: 'AUTO_ENTREPRENEUR',
+    AUTRE: 'AUTRE',
+  },
 }));
 
 vi.mock('@/lib/auth', () => ({
