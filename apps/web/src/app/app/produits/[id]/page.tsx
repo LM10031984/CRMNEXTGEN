@@ -191,7 +191,7 @@ export default async function ProductDetailPage({
       >
         {activeTab === 'stats' && stats && (
           <div className="space-y-5">
-            <ProductStatsTab stats={stats} />
+            <ProductStatsTab stats={stats} productId={product.id} />
             {/* Satisfaction agrégée toutes sessions confondues — Qualiopi 2026 :
                 indicateur 30 ouvert au niveau produit en plus du niveau session */}
             <ProductSatisfactionPanel productId={product.id} tenantId={user.tenantId} />

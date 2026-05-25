@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { BookOpen, Users, Clock, Euro } from 'lucide-react';
 import type { ProductStats } from '@/lib/product-stats';
 
@@ -19,6 +20,7 @@ import type { ProductStats } from '@/lib/product-stats';
 
 interface Props {
   stats: ProductStats;
+  productId: string;
 }
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', {
@@ -27,7 +29,7 @@ const fmtEUR = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 });
 
-export function ProductStatsTab({ stats }: Props) {
+export function ProductStatsTab({ stats, productId }: Props) {
   const noSessions = stats.sessionsRealisees === 0;
 
   return (
@@ -37,12 +39,16 @@ export function ProductStatsTab({ stats }: Props) {
         label="SESSIONS RÉALISÉES"
         value={String(stats.sessionsRealisees)}
         subtitle={noSessions ? 'aucune session terminée' : `depuis ${stats.firstYear}`}
+        href={`/app/produits/${productId}?tab=sessions`}
+        hint="Voir la liste des sessions"
       />
       <PrioCardLocal
         icon={Users}
         label="APPRENANTS FORMÉS"
         value={String(stats.apprenantsFormesTotal)}
         subtitle={noSessions ? 'aucune session terminée' : 'tous temps'}
+        href={`/app/produits/${productId}?tab=apprenants`}
+        hint="Voir la liste des apprenants formés"
       />
       <PrioCardLocal
         icon={Clock}
@@ -65,14 +71,18 @@ function PrioCardLocal({
   label,
   value,
   subtitle,
+  href,
+  hint,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   subtitle?: string;
+  href?: string;
+  hint?: string;
 }) {
-  return (
-    <div className="rounded-lg border border-border bg-white p-5">
+  const inner = (
+    <>
       <div className="flex items-center gap-3 mb-2">
         <span className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted text-foreground">
           <Icon className="h-4 w-4" />
@@ -85,6 +95,20 @@ function PrioCardLocal({
       {subtitle && (
         <div className="text-xs text-muted-foreground mt-1">{subtitle}</div>
       )}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href as any}
+        title={hint}
+        className="rounded-lg border border-border bg-white p-5 block hover:border-primary hover:bg-primary-50/30 transition-colors cursor-pointer"
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return <div className="rounded-lg border border-border bg-white p-5">{inner}</div>;
 }
