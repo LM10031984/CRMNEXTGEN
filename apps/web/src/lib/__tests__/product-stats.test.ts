@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  - Test 2 : sessionsRealisees = count `TrainingSession where productId AND status='COMPLETED' AND tenantId`
  *  - Test 3 : apprenantsFormesTotal = count DISTINCT `SessionParticipant.personId where session.productId AND tenantId`
  *  - Test 4 : heuresTotales = `sessionsRealisees * product.durationHours`
- *  - Test 5 : caCumule = sum `Invoice.amountHT where participant.session.productId AND status='PAID' AND tenantId` (Decimal → Number)
+ *  - Test 5 : caCumule = sum `SessionParticipant.priceHT where session.productId AND session.tenantId` (Decimal → Number) — refactor 2026-05-23 : Invoice.amountHT PAID inopérant (peu d'Invoices PAID en BDD), SP.priceHT = source de vérité prix négocié, aligné Tréso AGEFICE
  *  - Test 6 : `listProductSessions` retourne liste triée desc startDate
  *  - Test 7 : `listProductLearners` retourne liste DISTINCT personId + sessionsCount
  *  - Test 8 : Cross-tenant — toutes queries scopent par tenantId (filtre tenantId présent dans where)
@@ -31,6 +31,7 @@ vi.mock('@qualiof/db', () => {
       sessionParticipant: {
         findMany: vi.fn(),
         groupBy: vi.fn(),
+        aggregate: vi.fn(),
       },
       invoice: {
         aggregate: vi.fn(),
@@ -59,6 +60,7 @@ const sessionFindFirst = prisma.trainingSession.findFirst as unknown as ReturnTy
 const participantFindMany = prisma.sessionParticipant.findMany as unknown as ReturnType<typeof vi.fn>;
 const participantGroupBy = prisma.sessionParticipant.groupBy as unknown as ReturnType<typeof vi.fn>;
 const invoiceAggregate = prisma.invoice.aggregate as unknown as ReturnType<typeof vi.fn>;
+const participantAggregate = prisma.sessionParticipant.aggregate as unknown as ReturnType<typeof vi.fn>;
 const productFindUnique = prisma.trainingProduct.findUnique as unknown as ReturnType<typeof vi.fn>;
 const personFindMany = prisma.person.findMany as unknown as ReturnType<typeof vi.fn>;
 
@@ -69,6 +71,7 @@ beforeEach(() => {
   participantFindMany.mockReset();
   participantGroupBy.mockReset();
   invoiceAggregate.mockReset();
+  participantAggregate.mockReset();
   productFindUnique.mockReset();
   personFindMany.mockReset();
 });
@@ -81,7 +84,7 @@ describe('getProductStats', () => {
       { personId: 'p2' },
       { personId: 'p3' },
     ]);
-    invoiceAggregate.mockResolvedValueOnce({ _sum: { amountHT: 28500 } });
+    participantAggregate.mockResolvedValueOnce({ _sum: { priceHT: 28500 } });
     sessionFindFirst.mockResolvedValueOnce({ startDate: new Date('2024-03-15T00:00:00Z') });
     productFindUnique.mockResolvedValueOnce({ durationHours: 14 });
   }
@@ -126,23 +129,24 @@ describe('getProductStats', () => {
     expect(stats.heuresTotales).toBe(12 * 14);
   });
 
-  it('Test 5 — caCumule = sum Invoice.amountHT (status=PAID, scope tenant + product), converti en Number', async () => {
+  it('Test 5 — caCumule = sum SessionParticipant.priceHT (scope session.tenant + session.product), converti en Number', async () => {
     setupHappyPath();
     const stats = await getProductStats('prod1', 'tenant1');
 
     expect(stats.caCumule).toBe(28500);
     expect(typeof stats.caCumule).toBe('number'); // pas un Decimal
-    const args = invoiceAggregate.mock.calls[0]?.[0];
-    expect(args?._sum).toEqual({ amountHT: true });
-    expect(args?.where).toMatchObject({ tenantId: 'tenant1', status: 'PAID' });
-    // Le filtre product passe par participant.session.productId
-    expect(args?.where?.participant?.session?.productId).toBe('prod1');
+    const args = participantAggregate.mock.calls[0]?.[0];
+    expect(args?._sum).toEqual({ priceHT: true });
+    // Scope croisé tenant + product via session relation (pas de filtre status — SP = prix négocié)
+    expect(args?.where).toMatchObject({
+      session: { tenantId: 'tenant1', productId: 'prod1' },
+    });
   });
 
-  it('Test 6 — caCumule = 0 quand aucune facture (sum null)', async () => {
+  it('Test 6 — caCumule = 0 quand aucun participant facturable (sum null)', async () => {
     sessionCount.mockResolvedValueOnce(0);
     participantFindMany.mockResolvedValueOnce([]);
-    invoiceAggregate.mockResolvedValueOnce({ _sum: { amountHT: null } });
+    participantAggregate.mockResolvedValueOnce({ _sum: { priceHT: null } });
     sessionFindFirst.mockResolvedValueOnce(null);
     productFindUnique.mockResolvedValueOnce({ durationHours: 7 });
 
@@ -167,7 +171,7 @@ describe('getProductStats', () => {
   it("Test 8 — firstYear = année courante si pas de session jamais créée (fallback)", async () => {
     sessionCount.mockResolvedValueOnce(0);
     participantFindMany.mockResolvedValueOnce([]);
-    invoiceAggregate.mockResolvedValueOnce({ _sum: { amountHT: null } });
+    participantAggregate.mockResolvedValueOnce({ _sum: { priceHT: null } });
     sessionFindFirst.mockResolvedValueOnce(null);
     productFindUnique.mockResolvedValueOnce({ durationHours: 7 });
 
