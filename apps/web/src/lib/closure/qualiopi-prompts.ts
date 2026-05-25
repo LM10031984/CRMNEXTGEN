@@ -170,10 +170,10 @@ OBJECTIF QUALITÉ : un auditeur Qualiopi doit pouvoir lire ce déroulé et compr
 RÈGLE ABSOLUE — STRUCTURE TEMPORELLE :
 Le déroulé doit reprendre EXACTEMENT les blocs horaires et titres du programme fourni. Pour chaque bloc horaire, tu produis UNE séquence détaillée. Ne saute jamais une séquence, n'invente pas de blocs absents.
 
-Structure type d'une journée (9h00–17h00) :
+Structure type d'une journée (9h00–18h00, soit 8h de formation + 1h de pause déjeuner) :
 - 9h00 : Accueil et lancement (tour de table, recueil attentes, présentation déroulé)
 - Blocs du matin tirés du programme
-- Pause déjeuner 12h00–13h30 (isPause: true, objectifs: "Pause déjeuner")
+- Pause déjeuner 13h00–14h00 (1h) (isPause: true, objectifs: "Pause déjeuner")
 - Blocs de l'après-midi tirés du programme
 - Pause café 15h15–15h30 si la journée dépasse 6h (isPause: true, objectifs: "Pause")
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM, bilan, remise attestations
@@ -204,7 +204,7 @@ JAMAIS deux fois le même format consécutivement quand c'est évitable.
 PROGRESSION PÉDAGOGIQUE : la première moitié de la formation construit les bases (théorie, cadres), la seconde moitié approfondit la mise en pratique (cas, simulations, exercices longs). La dernière demi-journée intègre une évaluation sommative (QCM + production).
 
 PAUSES — pour les séquences isPause:true :
-- "duree" : horaire (ex: "12h00–13h30 (1h30)")
+- "duree" : horaire (ex: "13h00–14h00 (1h)")
 - "objectifs" : "Pause déjeuner" ou "Pause café"
 - Tous les autres champs : chaîne vide ""
 
