@@ -169,6 +169,19 @@ export async function generateAgeficeForParticipant(
 
   const session = participant.session;
   const product = session.product;
+
+  const participantPrice = Number(participant.priceHT);
+  const productPrice = Number(product.priceHT);
+  const effectivePrice = participantPrice > 0 ? participantPrice : productPrice;
+  if (effectivePrice <= 0) {
+    return {
+      ok: false,
+      error:
+        "Prix HT non défini : ni sur l'inscription (fiche session, bouton Éditer) ni sur le produit (/app/produits). Renseignez l'un des deux avant de générer le formulaire AGEFICE.",
+      warnings,
+    };
+  }
+
   const paFields = (agefice?.paFields ?? {}) as Record<string, any>;
   const of = await loadOfConfig(user.tenantId);
 
@@ -255,7 +268,7 @@ export async function generateAgeficeForParticipant(
         (session.location?.address as any)?.postalCode ?? of.addressCp,
       lieuVille: (session.location?.address as any)?.city ?? of.addressVille,
       lieuAdresseComplete,
-      prixHT: Number(participant.priceHT) || Number(product.priceHT),
+      prixHT: effectivePrice,
       enEntreprise: false,
       deroulementPedago,
     },
