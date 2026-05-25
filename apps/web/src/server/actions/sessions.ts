@@ -8,7 +8,11 @@ import { Prisma, prisma, SessionStatus, Modality, EnrollmentStatus, LinkRole } f
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { sessionCode } from '@qualiof/shared';
+import {
+  sessionCode,
+  UpdateSessionDetailsInputSchema,
+  type UpdateSessionDetailsInput,
+} from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { generateClosurePack } from './closure-pack';
@@ -492,6 +496,43 @@ const VALID_SESSION_STATUSES: SessionStatus[] = [
   'CANCELLED',
 ];
 
+/**
+ * Met à jour les dates startDate / endDate d'une session.
+ * Validations : dates valides, endDate >= startDate.
+ */
+export async function updateSessionDates(input: {
+  sessionId: string;
+  startDate: string;
+  endDate: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+  const start = new Date(input.startDate);
+  const end = new Date(input.endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return { ok: false, error: 'Dates invalides' };
+  }
+  if (end < start) {
+    return { ok: false, error: 'La date de fin ne peut pas être antérieure à la date de début' };
+  }
+  const result = await prisma.trainingSession.updateMany({
+    where: { id: input.sessionId, tenantId: user.tenantId },
+    data: { startDate: start, endDate: end },
+  });
+  if (result.count === 0) {
+    return { ok: false, error: 'Session introuvable' };
+  }
+  revalidatePath(`/app/sessions/${input.sessionId}`);
+  return { ok: true };
+}
+
 export async function updateSessionStatus(input: {
   sessionId: string;
   newStatus: SessionStatus;
@@ -870,4 +911,199 @@ export async function searchTrainerCandidates(query: string) {
     take: 20,
     select: { id: true, firstName: true, lastName: true, email: true },
   });
+}
+
+/**
+ * Édite les champs scalaires d'une session depuis la modale "Modifier la session"
+ * (Quick task 260523-oze). 9 champs gérés : name, startDate, endDate, capacityMin,
+ * capacityMax, modality, pricePerLearner, language, internalNotes.
+ *
+ * Hors-scope (couverts par d'autres éditeurs inline déjà existants) :
+ *  - status → SessionStatusSelect / updateSessionStatus
+ *  - location → SessionLocationPicker / updateSessionLocation
+ *  - trainers → SessionTrainerPicker / addSessionTrainer / removeSessionTrainer
+ *  - logistique formateur → SessionLogisticsEditor / updateSessionLogistics
+ *  - slots → sous-modèle multi-lignes, backlog séparé
+ *
+ * Pattern strict cloné de `unenrollParticipant` (quick task 260523-eyi) :
+ *  - Zod validation en premier (refuse avant tout I/O)
+ *  - RBAC ADMIN+MANAGER (édition de champs structurants : prix, dates, capacité)
+ *  - Tenant scoping via findFirst({ id, tenantId })
+ *  - Transaction Prisma `update + auditLog.create` atomique
+ *  - Convention AuditLog `sessions.update` (entity=[entity].[verb])
+ *  - Discriminated return `{ ok: true } | { ok: false; error: string }`
+ *
+ * Préservation horaire (décision plan 260523-oze) : `<input type="date">` envoie
+ * 'YYYY-MM-DD'. Si la session existante a startDate=2026-05-15T09:30:00Z, et que
+ * l'utilisateur change la date pour 2026-06-01, on reconstruit le DateTime en
+ * combinant la nouvelle date avec l'heure d'origine (09:30 UTC). Évite que toute
+ * édition de "juste le nom" remette les dates à T00:00:00.
+ *
+ * Diff AuditLog : ne capture que les champs effectivement modifiés (no-op si
+ * rien ne change → return ok:true sans toucher BDD ni écrire d'AuditLog vide).
+ */
+export async function updateSessionDetails(
+  input: UpdateSessionDetailsInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // 1) Validation Zod en premier (avant tout I/O)
+  const parsed = UpdateSessionDetailsInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Entrée invalide.',
+    };
+  }
+  const data = parsed.data;
+
+  // 2) RBAC ADMIN+MANAGER (édition de champs structurants)
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  // 3) Récupération + tenant scoping
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: data.sessionId, tenantId: user.tenantId },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
+
+  // 4) Construction du payload update + diff (only changed fields)
+  const updateData: Prisma.TrainingSessionUpdateInput = {};
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+
+  // Helper : reconstruit un DateTime en préservant l'horaire de la session
+  // d'origine. Évite que changer "juste le nom" décale les dates à T00:00:00Z.
+  const mergeDateKeepTime = (newDateStr: string, oldDate: Date): Date => {
+    const parts = newDateStr.split('-').map((s) => parseInt(s, 10));
+    const y = parts[0]!;
+    const m = parts[1]!;
+    const d = parts[2]!;
+    const merged = new Date(oldDate);
+    merged.setUTCFullYear(y, m - 1, d);
+    return merged;
+  };
+
+  // name (nullable)
+  if (data.name !== undefined) {
+    const newName = data.name === null || data.name === '' ? null : data.name;
+    if (newName !== session.name) {
+      updateData.name = newName;
+      before.name = session.name;
+      after.name = newName;
+    }
+  }
+
+  // startDate / endDate avec préservation horaire
+  if (data.startDate !== undefined) {
+    const newStart = mergeDateKeepTime(data.startDate, session.startDate);
+    if (newStart.getTime() !== session.startDate.getTime()) {
+      updateData.startDate = newStart;
+      before.startDate = session.startDate.toISOString();
+      after.startDate = newStart.toISOString();
+    }
+  }
+  if (data.endDate !== undefined) {
+    const newEnd = mergeDateKeepTime(data.endDate, session.endDate);
+    if (newEnd.getTime() !== session.endDate.getTime()) {
+      updateData.endDate = newEnd;
+      before.endDate = session.endDate.toISOString();
+      after.endDate = newEnd.toISOString();
+    }
+  }
+
+  // Cross-field validation après merge : refine Zod opère sur les strings du
+  // payload, mais ici on doit aussi vérifier vs l'autre date qui n'est PAS
+  // dans le payload (ex: user change uniquement endDate, on doit s'assurer
+  // que la nouvelle endDate ≥ session.startDate stockée).
+  const finalStart = (updateData.startDate as Date | undefined) ?? session.startDate;
+  const finalEnd = (updateData.endDate as Date | undefined) ?? session.endDate;
+  if (finalEnd < finalStart) {
+    return { ok: false, error: 'Date de fin doit être ≥ date de début.' };
+  }
+
+  // capacités avec cross-field final
+  if (data.capacityMin !== undefined && data.capacityMin !== session.capacityMin) {
+    updateData.capacityMin = data.capacityMin;
+    before.capacityMin = session.capacityMin;
+    after.capacityMin = data.capacityMin;
+  }
+  if (data.capacityMax !== undefined && data.capacityMax !== session.capacityMax) {
+    updateData.capacityMax = data.capacityMax;
+    before.capacityMax = session.capacityMax;
+    after.capacityMax = data.capacityMax;
+  }
+  const finalMin = (updateData.capacityMin as number | undefined) ?? session.capacityMin;
+  const finalMax = (updateData.capacityMax as number | undefined) ?? session.capacityMax;
+  if (finalMax < finalMin) {
+    return { ok: false, error: 'Capacité max doit être ≥ capacité min.' };
+  }
+
+  // modality
+  if (data.modality !== undefined && data.modality !== session.modality) {
+    updateData.modality = data.modality as Modality;
+    before.modality = session.modality;
+    after.modality = data.modality;
+  }
+
+  // pricePerLearner (nullable Decimal). Comparaison via Number() pour éviter
+  // les égalités Decimal vs number qui sont toujours différentes.
+  if (data.pricePerLearner !== undefined) {
+    const newPrice =
+      data.pricePerLearner === null ? null : new Prisma.Decimal(data.pricePerLearner);
+    const oldNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
+    const newNum = data.pricePerLearner;
+    if (oldNum !== newNum) {
+      updateData.pricePerLearner = newPrice;
+      before.pricePerLearner = oldNum;
+      after.pricePerLearner = newNum;
+    }
+  }
+
+  // language
+  if (data.language !== undefined && data.language !== session.language) {
+    updateData.language = data.language;
+    before.language = session.language;
+    after.language = data.language;
+  }
+
+  // internalNotes (nullable)
+  if (data.internalNotes !== undefined) {
+    const newNotes =
+      data.internalNotes === null || data.internalNotes === '' ? null : data.internalNotes;
+    if (newNotes !== session.internalNotes) {
+      updateData.internalNotes = newNotes;
+      before.internalNotes = session.internalNotes;
+      after.internalNotes = newNotes;
+    }
+  }
+
+  // No-op si rien n'a changé (évite AuditLog vide + write inutile)
+  if (Object.keys(updateData).length === 0) return { ok: true };
+
+  // 5) Transaction atomique : update + AuditLog
+  await prisma.$transaction([
+    prisma.trainingSession.update({
+      where: { id: data.sessionId },
+      data: updateData,
+    }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'TrainingSession',
+        entityId: data.sessionId,
+        action: 'sessions.update',
+        diff: { before, after } as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
+
+  revalidatePath(`/app/sessions/${data.sessionId}`);
+  return { ok: true };
 }
