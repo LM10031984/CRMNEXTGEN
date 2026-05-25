@@ -54,6 +54,21 @@ export async function generateConventionForParticipant(
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.product) return { ok: false, error: 'Produit lié à la session manquant' };
 
+  if (Number(participant.session.product.priceHT) <= 0) {
+    return {
+      ok: false,
+      error:
+        'Prix HT manquant sur le produit de formation. Renseignez-le sur la fiche produit avant de générer la convention.',
+    };
+  }
+  if (Number(participant.priceHT) <= 0) {
+    return {
+      ok: false,
+      error:
+        'Prix HT manquant sur cette inscription. Renseignez-le avant de générer la convention.',
+    };
+  }
+
   // Détermine si l'apprenant est rattaché à son sponsorOrg via EI_SELF
   // (= auto-entreprise perso) ou via SALARIE/DIRIGEANT (= structure employeur).
   const linkToSponsor = participant.person.legalLinks.find(

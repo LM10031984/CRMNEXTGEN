@@ -181,6 +181,14 @@ export async function generateProgrammeForProduct(
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
 
+  if (Number(product.priceHT) <= 0) {
+    return {
+      ok: false,
+      error:
+        'Prix HT manquant sur le produit. Renseignez-le sur la fiche produit avant de générer le programme.',
+    };
+  }
+
   // Mode find-or-create par défaut : si un programme existe déjà pour ce
   // produit (peu importe le hash), on le réutilise. Le bouton "Régénérer"
   // sur la fiche produit passe `force: true` pour forcer une nouvelle
@@ -193,9 +201,12 @@ export async function generateProgrammeForProduct(
         entityType: 'product',
         entityId: productId,
       },
+      select: { id: true, pdfUrl: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
-    if (existing) {
+    // Invalidation cache : si le produit a été modifié APRÈS la dernière
+    // génération (ex : priceHT renseigné après coup), on régénère.
+    if (existing && product.updatedAt <= existing.createdAt) {
       return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
     }
   }
