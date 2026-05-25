@@ -846,6 +846,11 @@ enum DocType {
   CGV
   REGLEMENT_INTERIEUR
   CUSTOM
+  /// Phase 13 Plan 04 — Export PDF audit veille Qualiopi (VEILLE-03 / critère 6
+  /// indicateurs 23/24/25/26). Un PDF par thème, entityType='RegulatoryWatch',
+  /// entityId={theme}, persisté en MinIO (D-02), traçable AuditLog
+  /// `regulatoryWatch.exported`.
+  VEILLE_AUDIT
 }
 
 // Référentiel des types de documents Qualiopi (issu de la table Airtable Documents_Qualiopi)
