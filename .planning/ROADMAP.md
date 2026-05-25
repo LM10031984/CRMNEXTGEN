@@ -235,7 +235,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
 | 10. Audit Qualiopi blanc | 0/TBD | Not started | - |
 | 11. Factures cycle complet | 10/10 | Complete    | 2026-05-21 |
 | 12. Modules stub Inscriptions et Modèles | 0/TBD | Not started | - |
-| 13. Veille Qualiopi intégrée | 5/6 | In Progress|  |
+| 13. Veille Qualiopi intégrée | 6/6 | Complete    | 2026-05-25 |
 
 ### Phase 13: Veille Qualiopi intégrée
 
@@ -249,10 +249,15 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
   4. Export PDF audit (Gotenberg) : un PDF par thème avec sources/dates/exploitations, prêt à présenter à l'auditeur Qualiopi.
   5. Worker BullMQ cron hebdo : RSS aggregator des sources connues + Ollama (mistral-small:24b) pour classifier le thème et proposer un brouillon d'exploitation, INSERT en `status=draft` `suggestedBy=auto`.
   6. RBAC : ADMIN + MANAGER pour CRUD veille, LECTEUR pour consultation. AuditLog convention `regulatoryWatch.[verb]`.
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 13 to break down)
+- [x] 13-01-PLAN.md — Foundation : migration `RegulatoryWatch` + 3 enums + 3 indexes + `parseFlexibleDate` + `logRegulatoryWatchEvent` (7e helper) + import xlsx idempotent (103 entrées au smoke réel) — 18 tests verts
+- [x] 13-02-PLAN.md — Server actions + RBAC + AuditLog : 6 actions ADMIN+MANAGER (create/update/updateExploitation/approve/reject/archive) + 4 Zod schemas + helper daysSince — 23 tests verts
+- [x] 13-03-PLAN.md — Page UI /app/veille : Server Component + 8 composants client + helper `shouldShowInbox` D-03 (3 niveaux defense-in-depth) + sidebar enrichie — 15 tests verts
+- [x] 13-04-PLAN.md — Export PDF audit : DocType += VEILLE_AUDIT + template HTML WeasyPrint + Document MinIO + AuditLog `regulatoryWatch.exported` — 13 tests verts
+- [x] 13-05-PLAN.md — Worker BullMQ : 8 modules `lib/veille/*` (worker safety pattern, grep 0 imports interdits) + cron hebdo + Ollama `mistral-small:24b` + 3 scripts dev + AuditLog `regulatoryWatch.auto_inserted` (convention COMPLÈTE 8/8) — 16 tests verts
+- [x] 13-06-PLAN.md — Bookkeeping : SMOKE.md (4 flows + résultats réels) + SUMMARY.md (récap phase) + STATE/REQUIREMENTS/ROADMAP — pending Laurent validation UI
 
 ---
 
