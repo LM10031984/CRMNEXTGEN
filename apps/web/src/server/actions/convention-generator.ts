@@ -54,18 +54,14 @@ export async function generateConventionForParticipant(
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.product) return { ok: false, error: 'Produit lié à la session manquant' };
 
-  if (Number(participant.session.product.priceHT) <= 0) {
+  const participantPrice = Number(participant.priceHT);
+  const productPrice = Number(participant.session.product.priceHT);
+  const effectivePrice = participantPrice > 0 ? participantPrice : productPrice;
+  if (effectivePrice <= 0) {
     return {
       ok: false,
       error:
-        'Prix HT manquant sur le produit de formation. Renseignez-le sur la fiche produit avant de générer la convention.',
-    };
-  }
-  if (Number(participant.priceHT) <= 0) {
-    return {
-      ok: false,
-      error:
-        'Prix HT manquant sur cette inscription. Renseignez-le avant de générer la convention.',
+        "Prix HT non défini : ni sur l'inscription (fiche session, bouton Éditer) ni sur le produit (/app/produits). Renseignez l'un des deux avant de générer la convention.",
     };
   }
 
@@ -123,7 +119,7 @@ export async function generateConventionForParticipant(
     produitObjectifs: objectives,
     produitProgrammeMd: typeof participant.session.product.programMd === 'string' ? participant.session.product.programMd : '',
     produitTrainerProfile: participant.session.product.trainerProfile,
-    produitPriceHTPerStagiaire: Number(participant.priceHT),
+    produitPriceHTPerStagiaire: effectivePrice,
     // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
     tenantId: user.tenantId,
   };
