@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  3. Items sans title ou sans link → filtrés out.
  */
 
-const parseURL = vi.fn();
+const { parseURL } = vi.hoisted(() => ({ parseURL: vi.fn() }));
 vi.mock('rss-parser', () => ({
   default: class {
     parseURL = parseURL;

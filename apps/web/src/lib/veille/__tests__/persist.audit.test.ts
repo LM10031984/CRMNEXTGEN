@@ -12,9 +12,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * D-08 (CONTEXT.md) : toujours DRAFT, jamais auto-accept même si confidence>=90.
  */
 
-const regulatoryWatchFindFirst = vi.fn();
-const regulatoryWatchCreate = vi.fn();
-const auditLogCreate = vi.fn();
+const { regulatoryWatchFindFirst, regulatoryWatchCreate, auditLogCreate } = vi.hoisted(() => ({
+  regulatoryWatchFindFirst: vi.fn(),
+  regulatoryWatchCreate: vi.fn(),
+  auditLogCreate: vi.fn(),
+}));
 vi.mock('@qualiof/db', () => ({
   prisma: {
     regulatoryWatch: { findFirst: regulatoryWatchFindFirst, create: regulatoryWatchCreate },

@@ -16,12 +16,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Acceptance : modèle figé `mistral-small:24b` (D-06) — testable via mock.calls.
  */
 
-const callOllamaMock = vi.fn();
+const { callOllamaMock, aiGenJobCreate } = vi.hoisted(() => ({
+  callOllamaMock: vi.fn(),
+  aiGenJobCreate: vi.fn().mockResolvedValue({ id: 'gen-1' }),
+}));
 vi.mock('@/lib/ai-ollama', () => ({
   callOllama: callOllamaMock,
 }));
-
-const aiGenJobCreate = vi.fn().mockResolvedValue({ id: 'gen-1' });
 vi.mock('@qualiof/db', () => ({
   prisma: {
     aIGenerationJob: { create: aiGenJobCreate },
