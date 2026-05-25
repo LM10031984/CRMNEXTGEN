@@ -8,7 +8,7 @@
  * Format QG (5 prompts ref) : pour chaque jour, 7 séquences fixes :
  *   1. Accueil (30 min)
  *   2. Séquence principale matin (2h30)
- *   3. Pause déjeuner (90 min)
+ *   3. Pause déjeuner (60 min — règle Start Academy 13h-14h)
  *   4. Séquence après-midi 1 (1h10)
  *   5. Pause (10 min)
  *   6. Séquence après-midi 2 (1h10)
