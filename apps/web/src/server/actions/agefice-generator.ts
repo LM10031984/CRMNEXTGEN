@@ -13,6 +13,7 @@ import {
   type ExperienceTranche,
   type EvaluationType,
 } from '@/lib/agefice-form-fill';
+import { isCanonicalExperience } from '@/lib/agefice-options';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -26,6 +27,7 @@ function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null
 // Map "1-3 ans" / "4 ans" / "Plus de 10 ans" → tranche AGEFICE
 function inferExperience(raw: string | null | undefined): ExperienceTranche | null {
   if (!raw) return null;
+  if (isCanonicalExperience(raw)) return raw as ExperienceTranche;
   const s = raw.toLowerCase();
   if (s.includes('moins') || s.match(/<\s*1/) || s.includes('< 1')) return 'MOINS_1_AN';
   if (s.includes('plus de 10') || s.match(/\+\s*10/) || s.includes('> 10')) return 'PLUS_10_ANS';
