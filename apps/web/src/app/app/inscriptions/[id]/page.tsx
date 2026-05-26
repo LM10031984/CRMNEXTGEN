@@ -57,7 +57,7 @@ export default async function PreEnrollmentDetailPage({
     <div className="space-y-6">
       <div>
         <Link
-          href="/app/preinscriptions"
+          href="/app/inscriptions"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary mb-2"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Toutes les pré-inscriptions
