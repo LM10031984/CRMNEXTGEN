@@ -32,6 +32,21 @@ const nextConfig = {
         destination: '/app/preinscriptions/:path*',
         permanent: true,
       },
+      // Phase 12 D-02 reverse alias : route admin renommée
+      // `/app/preinscriptions(/:path*)` → `/app/inscriptions(/:path*)`.
+      // La chaîne `pre-inscriptions → preinscriptions → inscriptions` est OK
+      // pour le browser (Next.js résout les redirect chains en double-hop ;
+      // les bookmarks utilisateurs aboutissent à `/app/inscriptions` au final).
+      {
+        source: '/app/preinscriptions',
+        destination: '/app/inscriptions',
+        permanent: true,
+      },
+      {
+        source: '/app/preinscriptions/:path*',
+        destination: '/app/inscriptions/:path*',
+        permanent: true,
+      },
       {
         source: '/app/modeles',
         destination: '/app/templates',

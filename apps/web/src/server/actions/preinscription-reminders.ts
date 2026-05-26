@@ -116,8 +116,8 @@ export async function sendPreEnrollmentReminder(
     },
   });
 
-  revalidatePath('/app/preinscriptions');
-  revalidatePath(`/app/preinscriptions/${preEnrollmentId}`);
+  revalidatePath('/app/inscriptions');
+  revalidatePath(`/app/inscriptions/${preEnrollmentId}`);
 
   return {
     ok: true,
@@ -141,7 +141,7 @@ export interface BulkRemindersResult {
 /**
  * Envoie en bulk les relances pour TOUTES les pré-inscriptions PENDING_FORM
  * éligibles (selon les règles définies en haut). Utilisée par le bouton manuel
- * sur /app/preinscriptions et par le scheduler BullMQ quotidien.
+ * sur /app/inscriptions et par le scheduler BullMQ quotidien.
  */
 export async function sendBulkPreEnrollmentReminders(): Promise<BulkRemindersResult> {
   const { user } = await validateRequest();

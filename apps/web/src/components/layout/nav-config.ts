@@ -9,7 +9,6 @@ import {
   Megaphone,
   Settings,
   LayoutDashboard,
-  ListChecks,
   Landmark,
   ClipboardCheck,
   Inbox,
@@ -68,10 +67,13 @@ export const NAV: NavSection[] = [
       { label: 'Tableau de bord', href: '/app', icon: LayoutDashboard },
       { label: 'Sessions', href: '/app/sessions', icon: Calendar },
       { label: 'Apprenants', href: '/app/apprenants', icon: Users },
-      // Pré-inscriptions : ADMIN/MANAGER/COMMERCIAL uniquement (D-02 preenrollments)
+      // Inscriptions (ex-Pré-inscriptions, Phase 12 D-01) : ADMIN/MANAGER/COMMERCIAL
+      // uniquement (D-02 preenrollments — RBAC héritée). Le rename de la route
+      // /app/preinscriptions → /app/inscriptions a remplacé l'ancien stub
+      // Placeholder par le vrai listing admin (cf. Phase 12 Plan 01).
       {
-        label: 'Pré-inscriptions',
-        href: '/app/preinscriptions',
+        label: 'Inscriptions',
+        href: '/app/inscriptions',
         icon: Inbox,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
@@ -155,7 +157,6 @@ export const NAV: NavSection[] = [
         icon: Landmark,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'],
       },
-      { label: 'Inscriptions', href: '/app/inscriptions', icon: ListChecks },
       // Paramètres OF : ADMIN only (D-02 tenantSettings)
       {
         label: 'Paramètres',

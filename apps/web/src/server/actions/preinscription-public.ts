@@ -103,7 +103,7 @@ export async function submitPreEnrollmentForm(
     },
   });
 
-  revalidatePath('/app/preinscriptions');
+  revalidatePath('/app/inscriptions');
 
   // Déclenche l'extraction IA en background (fire-and-forget)
   // L'utilisateur reçoit la confirmation immédiatement, l'IA tourne en parallèle.
@@ -133,7 +133,7 @@ export async function retriggerExtraction(preEnrollmentId: string): Promise<{ ok
       console.error('Re-extraction échouée', err);
     }),
   );
-  revalidatePath('/app/preinscriptions');
-  revalidatePath(`/app/preinscriptions/${preEnrollmentId}`);
+  revalidatePath('/app/inscriptions');
+  revalidatePath(`/app/inscriptions/${preEnrollmentId}`);
   return { ok: true };
 }

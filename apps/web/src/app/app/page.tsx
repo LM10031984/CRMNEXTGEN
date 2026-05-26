@@ -74,7 +74,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Calendar className="h-4 w-4" /> Nouvelle session
           </Link>
           <Link
-            href="/app/preinscriptions"
+            href="/app/inscriptions"
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors"
           >
             <Inbox className="h-4 w-4" /> Pré-inscription
@@ -236,7 +236,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </h2>
           <ul className="space-y-2 text-sm">
             <PipelineRow icon={Megaphone} label="Leads à relancer / qualifier" value={stats.pipeline.leadsToFollowup} href="/app/leads" />
-            <PipelineRow icon={Inbox} label="Pré-inscriptions à valider" value={stats.pipeline.preEnrollmentsToValidate} href="/app/preinscriptions" />
+            <PipelineRow icon={Inbox} label="Pré-inscriptions à valider" value={stats.pipeline.preEnrollmentsToValidate} href="/app/inscriptions" />
             <PipelineRow icon={Calendar} label={`Sessions à venir (${fmtNb.format(stats.alerts.sessionsNext7Days)} dans 7 jours)`} value={stats.pipeline.upcomingSessions} href="/app/sessions" />
             <PipelineRow
               icon={Wallet}

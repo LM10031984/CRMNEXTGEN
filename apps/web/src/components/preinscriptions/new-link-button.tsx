@@ -168,7 +168,7 @@ export function NewLinkButton() {
                   </button>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  💡 Une fois le formulaire rempli, l'IA analysera les pièces et tu recevras une notification dans <strong>/app/preinscriptions</strong>.
+                  💡 Une fois le formulaire rempli, l'IA analysera les pièces et tu recevras une notification dans <strong>/app/inscriptions</strong>.
                 </div>
                 <div className="flex justify-end pt-2">
                   <button
