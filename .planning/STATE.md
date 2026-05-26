@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 12 context gathered (renommer preinscriptions→inscriptions + templates read-only)
-last_updated: "2026-05-25T16:00:21.646Z"
-last_activity: "2026-05-25 — Completed quick task 260525-kl5: auto-trigger préparation pédagogique complète Convention AuditLog `regulatoryWatch.*` 7e instance one-helper-per-entity (8 verbes COMPLETS : created/updated/exploitation_updated/approved/rejected/archived/auto_inserted/exported). Worker safety pattern `lib/veille/core.ts` vérifié (0 imports React/auth/server-actions). Smoke réels validés : import xlsx 103 inserted idempotence ✓, worker dry-run 728→37 RSS+Ollama mistral-small:24b, BDD 140 RegulatoryWatch (103 IMPORT + 37 AUTO). Page /app/veille 5 onglets dont inbox masqué LECTEUR D-03 (3 niveaux defense-in-depth). Export PDF stocké MinIO comme Document VEILLE_AUDIT. 5 D-13-A..E figées. Pending : validation visuelle Laurent (Flow 3 UI 3 rôles + Flow 4b PDF audit)."
+stopped_at: Completed quick-260525-pzl-PLAN.md (fix horaires formation pause 13h-14h, 8 commits)
+last_updated: "2026-05-25T16:55:24.056Z"
+last_activity: 2026-05-25
 progress:
   total_phases: 14
   completed_phases: 8
-  total_plans: 58
+  total_plans: 61
   completed_plans: 46
 ---
 
@@ -21,14 +21,14 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 13 — veille-qualiopi-integree
+**Current focus:** Phase 12 — modules-stub-inscriptions-et-modeles
 
 ---
 
 ## Current Position
 
-Phase: 13 (veille-qualiopi-integree) — COMPLETE (closed 2026-05-25, 6/6 plans, 4/4 VEILLE-* requirements, 86 tests Wave 0 verts, 8/8 verbes AuditLog `regulatoryWatch.*` instanciés)
-Next: /gsd:plan-phase 12 (Modules stub Inscriptions et Modèles) OU /gsd:plan-phase 10 (Audit Qualiopi blanc) — selon priorité Laurent
+Phase: 12 (modules-stub-inscriptions-et-modeles) — EXECUTING
+Plan: 1 of 3
 
 ## Accumulated Context
 
@@ -199,12 +199,12 @@ Next: /gsd:plan-phase 12 (Modules stub Inscriptions et Modèles) OU /gsd:plan-ph
 
 ## Last session
 
-Stopped at: Chantier 5 backlog (AGEFICE champs Person) livré. Restent : G (screenshot IMAGIMO), A (horaires pause midi), C+D (création inline apprenant/formateur depuis wizard session), B (programmes multi-jours détaillés).
+Stopped at: Completed quick-260525-pzl-PLAN.md (fix horaires formation pause 13h-14h, 8 commits)
 Last commit: 46cf38e — feat(quick-260525-pb5-01): dropdowns Diplôme + Expérience pro dans édition apprenant
 Last completed plan: 260525-pb5 (dropdowns AGEFICE création + édition apprenant)
 Next plan: validation Laurent (créer apprenant test + générer PDF AGEFICE) puis chantier 2 horaires pause midi (BUG-A) OU G screenshot
 
-Last activity: 2026-05-25 — Completed quick task 260525-kl5: auto-trigger préparation pédagogique complète Convention AuditLog `regulatoryWatch.*` 7e instance one-helper-per-entity (8 verbes COMPLETS : created/updated/exploitation_updated/approved/rejected/archived/auto_inserted/exported). Worker safety pattern `lib/veille/core.ts` vérifié (0 imports React/auth/server-actions). Smoke réels validés : import xlsx 103 inserted idempotence ✓, worker dry-run 728→37 RSS+Ollama mistral-small:24b, BDD 140 RegulatoryWatch (103 IMPORT + 37 AUTO). Page /app/veille 5 onglets dont inbox masqué LECTEUR D-03 (3 niveaux defense-in-depth). Export PDF stocké MinIO comme Document VEILLE_AUDIT. 5 D-13-A..E figées. Pending : validation visuelle Laurent (Flow 3 UI 3 rôles + Flow 4b PDF audit).
+Last activity: 2026-05-25
 
 ### Roadmap Evolution
 

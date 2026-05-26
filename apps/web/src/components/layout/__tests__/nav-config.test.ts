@@ -48,14 +48,30 @@ describe('filterNavForRole (Plan 08-04 — D-07 sidebar filter)', () => {
     }
   });
 
-  it('hides Pré-inscriptions for non-(ADMIN/MANAGER/COMMERCIAL) roles', () => {
+  it('hides Inscriptions (ex Pré-inscriptions) for non-(ADMIN/MANAGER/COMMERCIAL) roles', () => {
     for (const role of ['FORMATEUR', 'COMPTABLE', 'LECTEUR'] as const) {
       const filtered = filterNavForRole(NAV, role);
       const allItems = filtered.flatMap((s) => s.items.map((i) => i.href));
-      expect(allItems, `Préinscriptions should be hidden for ${role}`).not.toContain(
-        '/app/preinscriptions',
+      expect(allItems, `Inscriptions should be hidden for ${role}`).not.toContain(
+        '/app/inscriptions',
       );
     }
+  });
+
+  it('contient exactement 1 entrée Inscriptions (post Phase 12 rename)', () => {
+    const all = NAV.flatMap((s) => s.items);
+    const inscriptions = all.filter((i) => i.label === 'Inscriptions');
+    expect(inscriptions).toHaveLength(1);
+    expect(inscriptions[0]!.href).toBe('/app/inscriptions');
+    expect(inscriptions[0]!.allowedRoles).toEqual(
+      expect.arrayContaining(['ADMIN', 'MANAGER', 'COMMERCIAL']),
+    );
+  });
+
+  it('ne contient plus aucune trace de Pré-inscriptions ou /app/preinscriptions', () => {
+    const all = NAV.flatMap((s) => s.items);
+    expect(all.find((i) => i.label === 'Pré-inscriptions')).toBeUndefined();
+    expect(all.find((i) => i.href === '/app/preinscriptions')).toBeUndefined();
   });
 
   it('drops sections that become empty after filtering (no zombie titles)', () => {
