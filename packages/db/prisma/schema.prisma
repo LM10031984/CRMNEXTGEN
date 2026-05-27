@@ -822,6 +822,82 @@ model InvoicePayment {
   createdAt  DateTime @default(now())
 }
 
+/// Devis commercial — workflow hybride : champs destinataire 100% libres
+/// (recipientName, recipientEmail, recipientAddress) MAIS possibilité
+/// de pré-remplir depuis un Person/Organization existant (productId, personId,
+/// organizationId stockés en mémoire pour traçabilité, pas pour binding fort).
+///
+/// `headerCustomMd` permet d'override l'entête tenant par défaut (logo + raison
+/// sociale + SIRET tenant) avec un markdown libre — utile pour les devis en
+/// marque blanche ou avec entête spécifique commanditaire.
+///
+/// Numérotation DEV-NNNN (cohérente avec PROD-NNNN, INV-NNNN, SES-NNNN).
+/// Statuts : DRAFT → SENT → ACCEPTED | REJECTED | EXPIRED.
+model Quote {
+  id                String      @id @default(uuid())
+  tenantId          String
+  number            String      @unique // DEV-NNNN
+  status            QuoteStatus @default(DRAFT)
+  // Destinataire — champs libres (peuvent être pré-remplis depuis un Person/Org existant)
+  recipientName     String // "Dupont SARL" ou "Marie Dupont" si particulier
+  recipientContact  String? // "À l'attention de Marie Dupont" — optionnel si recipientName est déjà un nom propre
+  recipientAddress  String? // adresse multilignes
+  recipientEmail    String?
+  recipientSiret    String?
+  // Traçabilité du pré-remplissage (informatif, pas FK strict pour rester souple)
+  sourceProductId   String?
+  sourcePersonId    String?
+  sourceOrgId       String?
+  // Personnalisation entête
+  headerCustomMd    String? // si null → header tenant par défaut (logo + raison sociale + SIRET)
+  // Métadonnées commerciales
+  title             String      @default("Devis de formation") // titre affiché sur le PDF
+  notes             String? // notes internes ou bas de devis (conditions, mentions)
+  validUntil        DateTime? // date de validité du devis
+  // Montants — calculés depuis les QuoteLine, persistés pour rapidité liste
+  amountHT          Decimal     @default(0) @db.Decimal(10, 2)
+  amountVAT         Decimal     @default(0) @db.Decimal(10, 2)
+  amountTTC         Decimal     @default(0) @db.Decimal(10, 2)
+  // Dates statut
+  issuedAt          DateTime? // passage DRAFT → SENT
+  acceptedAt        DateTime? // passage SENT → ACCEPTED
+  rejectedAt        DateTime? // passage SENT → REJECTED
+  // PDF
+  pdfUrl            String? // MinIO key, null tant que non généré
+  // Relations
+  lines             QuoteLine[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+/// Ligne d'un devis. Description libre, quantité décimale (heures, jours,
+/// apprenants), prix unitaire HT, taux TVA. `lineTotalHT` = quantité × prix unit
+/// (recalculé côté server à chaque update, jamais saisi à la main).
+model QuoteLine {
+  id          String  @id @default(uuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  order       Int // position dans le devis (0-indexé)
+  description String
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPriceHT Decimal @default(0) @db.Decimal(10, 2)
+  vatRate     Decimal @default(0) @db.Decimal(5, 2) // 20.00 = 20% (0 = exonéré formation FR)
+  lineTotalHT Decimal @default(0) @db.Decimal(10, 2)
+
+  @@index([quoteId, order])
+}
+
 // =====================================================
 // === Documents (Qualiopi)
 // =====================================================
