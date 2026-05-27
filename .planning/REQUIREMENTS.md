@@ -74,7 +74,7 @@
 
 ### 📦 Modules stub à clarifier
 
-- [ ] **MOD-01** : Module "Inscriptions" — décider du périmètre (vs Sessions+Participants existant). Soit vue agrégée par produit, soit module à supprimer.
+- [x] **MOD-01** : Module "Inscriptions" — décider du périmètre (vs Sessions+Participants existant). Soit vue agrégée par produit, soit module à supprimer.
 - [ ] **MOD-02** : Module "Modèles de documents" — décider entre éditeur de templates customisables vs simple liste lecture seule des templates existants.
 
 ### 🟢 Veille Qualiopi intégrée (Phase 13 — INSERTED 2026-05-23)

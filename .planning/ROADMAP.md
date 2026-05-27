@@ -234,7 +234,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
 | 9.1. Centralisation Qualiopi 360° (INSERTED) | 6/6 | Complete    | 2026-05-18 |
 | 10. Audit Qualiopi blanc | 0/TBD | Not started | - |
 | 11. Factures cycle complet | 10/10 | Complete    | 2026-05-21 |
-| 12. Modules stub Inscriptions et Modèles | 0/TBD | Not started | - |
+| 12. Modules stub Inscriptions et Modèles | 1/3 | In Progress|  |
 | 13. Veille Qualiopi intégrée | 6/6 | Complete    | 2026-05-25 |
 
 ### Phase 13: Veille Qualiopi intégrée
@@ -249,7 +249,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
   4. Export PDF audit (Gotenberg) : un PDF par thème avec sources/dates/exploitations, prêt à présenter à l'auditeur Qualiopi.
   5. Worker BullMQ cron hebdo : RSS aggregator des sources connues + Ollama (mistral-small:24b) pour classifier le thème et proposer un brouillon d'exploitation, INSERT en `status=draft` `suggestedBy=auto`.
   6. RBAC : ADMIN + MANAGER pour CRUD veille, LECTEUR pour consultation. AuditLog convention `regulatoryWatch.[verb]`.
-**Plans:** 6/6 plans complete
+**Plans:** 1/3 plans executed
 
 Plans:
 - [x] 13-01-PLAN.md — Foundation : migration `RegulatoryWatch` + 3 enums + 3 indexes + `parseFlexibleDate` + `logRegulatoryWatchEvent` (7e helper) + import xlsx idempotent (103 entrées au smoke réel) — 18 tests verts

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed quick-260525-pzl-PLAN.md (fix horaires formation pause 13h-14h, 8 commits)
-last_updated: "2026-05-25T16:55:24.056Z"
-last_activity: 2026-05-25
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-05-26T06:15:28.983Z"
+last_activity: 2026-05-26
 progress:
   total_phases: 14
   completed_phases: 8
   total_plans: 61
-  completed_plans: 46
+  completed_plans: 47
 ---
 
 # STATE — QualiOF
@@ -28,7 +28,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 12 (modules-stub-inscriptions-et-modeles) — EXECUTING
-Plan: 1 of 3
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -196,15 +196,16 @@ Plan: 1 of 3
 | 260525-jpq | Fix bugs I+J fiche session sidebar Documents partagés : SessionOnlyDocsBlock devient Client Component avec useTransition + sonner ; CTAs inline appellent directement generateDerouleForProduct / generateGrilleObsSessionForSession / generateChecklistForSession (au lieu de rediriger vers /closure) ; sidebar prend en compte PedagogicalAsset.kind=GRILLE_OBS comme proxy de présence (résout incohérence avec matrice) ; bloc postFormation retiré sur grille obs. Chantier 1 backlog partiellement livré (G IMAGIMO Drive en attente screenshot). | 2026-05-25 | c8cf4b6 | [260525-jpq-fix-bugs-i-j-fiche-session-sidebar-docum](./quick/260525-jpq-fix-bugs-i-j-fiche-session-sidebar-docum/) |
 | 260525-kl5 | Auto-trigger préparation pédagogique complète à la création session + nouveau bloc UI PreparationPedagogiqueBlock + retrait bouton "Préparer la formation". Server action `prepareSession(sessionId)` idempotente orchestre les 6 docs (programme/déroulé/checklist partagés + convention/convocation/analyse besoin par participant). Hook fire-and-forget dans createSessionFull. Composant Client avec polling 5s pour les analyses besoin BullMQ. AuditLog `session.prepare`. Chantier 4 backlog (E+F+H étendu). | 2026-05-25 | 261bf93 | [260525-kl5-auto-trigger-pr-paration-p-dagogique-com](./quick/260525-kl5-auto-trigger-pr-paration-p-dagogique-com/) |
 | 260525-pb5 | Dropdowns Diplôme (6 options exactes PDF AGEFICE) + Expérience pro (4 tranches) ajoutés aux formulaires création + édition apprenant. Constante partagée `lib/agefice-options.ts` consommée par 4 fichiers. Simplification `inferExperience` (check exact avant heuristique). Rétro-compat 291 fiches texte libre préservée. Audit AGEFICE complet sauvegardé dans `.planning/quick/_audit-agefice-260525.md` (60 champs analysés). Chantier 5 backlog (BUG-K). | 2026-05-25 | 46cf38e | [260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro](./quick/260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro/) |
+| 260525-pzl | Fix horaires formation pause midi (BUG-A) : 8h = 9h-13h + 14h-18h (pause 1h). Helper centralisé `lib/formation-horaires.ts` consommé par ollama-generators + qualiopi-prompts + ai-fill-product + parse-programme-to-deroule. Pause harmonisée 13h00-14h00 (1h) au lieu de 12h-13h30 (1h30). Parser élargi 11h30-14h30 pour rétro-compat. 8 commits TDD (RED+GREEN), 692/692 tests verts. Chantier 2 backlog. | 2026-05-25 | 3fc594c | [260525-pzl-fix-horaires-formation-pause-midi-8h-9h-](./quick/260525-pzl-fix-horaires-formation-pause-midi-8h-9h-/) |
 
 ## Last session
 
-Stopped at: Completed quick-260525-pzl-PLAN.md (fix horaires formation pause 13h-14h, 8 commits)
-Last commit: 46cf38e — feat(quick-260525-pb5-01): dropdowns Diplôme + Expérience pro dans édition apprenant
-Last completed plan: 260525-pb5 (dropdowns AGEFICE création + édition apprenant)
-Next plan: validation Laurent (créer apprenant test + générer PDF AGEFICE) puis chantier 2 horaires pause midi (BUG-A) OU G screenshot
+Stopped at: Completed 12-01-PLAN.md
+Last commit: 3fc594c — fix(quick/260525-pzl): cleanup commentaire deroule-template (1h pause)
+Last completed plan: 260525-pzl (horaires formation pause midi 13h-14h, helper centralisé)
+Next plan: validation Laurent (créer produit test 8h) puis chantier 3 création inline (C+D) OU 6 programmes détaillés (B) OU G screenshot
 
-Last activity: 2026-05-25
+Last activity: 2026-05-26
 
 ### Roadmap Evolution
 
