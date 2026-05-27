@@ -18,6 +18,7 @@ import {
   TrendingUp,
   Sliders,
   Newspaper,
+  FilePlus,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -96,6 +97,15 @@ export const NAV: NavSection[] = [
         icon: Receipt,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMPTABLE', 'LECTEUR'],
       },
+      // Devis commerciaux : ADMIN/MANAGER/COMMERCIAL (les rôles qui prospectent).
+      // COMPTABLE et LECTEUR n'ont pas besoin (le devis devient une facture une
+      // fois accepté, et c'est la facture qui est visible côté compta).
+      {
+        label: 'Devis',
+        href: '/app/devis',
+        icon: FilePlus,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
+      },
       // Budget AGEFICE : ADMIN/MANAGER/COMMERCIAL/COMPTABLE/LECTEUR (FORMATEUR exclu)
       {
         label: 'Budget AGEFICE',
@@ -147,9 +157,17 @@ export const NAV: NavSection[] = [
         icon: GraduationCap,
         allowedRoles: ['ADMIN', 'MANAGER', 'FORMATEUR', 'LECTEUR'],
       },
-      // Produits, Modèles, Inscriptions : 6 rôles — pas de filtre
+      // Produits : 6 rôles — pas de filtre
       { label: 'Produits de formation', href: '/app/produits', icon: BookOpen },
-      { label: 'Modèles de documents', href: '/app/templates', icon: FileText },
+      // Modèles de documents (Phase 12 Plan 02 D-09) : ADMIN/MANAGER/LECTEUR
+      // (FORMATEUR/COMMERCIAL/COMPTABLE exclus — pas utile pour leur métier).
+      // Sécurité réelle : requireRole côté page.tsx + filtre visuel sidebar.
+      {
+        label: 'Modèles de documents',
+        href: '/app/templates',
+        icon: FileText,
+        allowedRoles: ['ADMIN', 'MANAGER', 'LECTEUR'],
+      },
       // Financeurs : ADMIN/MANAGER/COMMERCIAL/COMPTABLE (FORMATEUR et LECTEUR exclus)
       {
         label: 'Financeurs',
