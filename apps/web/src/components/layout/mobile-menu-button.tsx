@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { MobileNavDrawer } from './mobile-nav-drawer';
-import type { NavSection } from './nav-config';
+import type { UserRole } from '@qualiof/db';
 
 interface MobileMenuButtonProps {
-  /** Sections de navigation déjà filtrées par rôle (D-07), transmises au drawer. */
-  nav: NavSection[];
+  /** Rôle utilisateur — transmis au drawer qui filtre NAV côté client. */
+  role: UserRole;
 }
 
 /**
@@ -15,7 +15,7 @@ interface MobileMenuButtonProps {
  * Encapsule le state du drawer pour que la TopBar puisse rester un
  * Server Component (le state est interne à ce composant client).
  */
-export function MobileMenuButton({ nav }: MobileMenuButtonProps) {
+export function MobileMenuButton({ role }: MobileMenuButtonProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -27,7 +27,7 @@ export function MobileMenuButton({ nav }: MobileMenuButtonProps) {
       >
         <Menu className="h-5 w-5" />
       </button>
-      <MobileNavDrawer open={open} onOpenChange={setOpen} nav={nav} />
+      <MobileNavDrawer open={open} onOpenChange={setOpen} role={role} />
     </>
   );
 }

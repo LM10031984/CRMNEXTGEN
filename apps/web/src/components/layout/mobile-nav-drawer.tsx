@@ -6,17 +6,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { SidebarNav } from './sidebar-nav';
-import type { NavSection } from './nav-config';
+import { NAV, filterNavForRole } from './nav-config';
+import type { UserRole } from '@qualiof/db';
 
 interface MobileNavDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /**
-   * Sections de navigation déjà filtrées par rôle (D-07). Passées en prop par
-   * `MobileMenuButton` qui les reçoit lui-même de `TopBar` (Server Component
-   * qui calcule `filterNavForRole(NAV, user.role)` une seule fois dans le layout).
-   */
-  nav: NavSection[];
+  /** Rôle utilisateur — le drawer filtre NAV côté client. */
+  role: UserRole;
 }
 
 /**
@@ -24,8 +21,9 @@ interface MobileNavDrawerProps {
  * Caché >= md par construction (le bouton qui l'ouvre est md:hidden).
  * Réutilise <SidebarNav /> pour ne pas dupliquer la config NAV.
  */
-export function MobileNavDrawer({ open, onOpenChange, nav }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ open, onOpenChange, role }: MobileNavDrawerProps) {
   const pathname = usePathname();
+  const nav = filterNavForRole(NAV, role);
 
   // Ferme le drawer automatiquement quand l'utilisateur navigue (clic sur item).
   // Sécurité : si pathname change pour une raison externe (Cmd+K, lien depuis

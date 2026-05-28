@@ -4,7 +4,6 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { TopBar } from '@/components/layout/top-bar';
 import { MainContent } from '@/components/layout/main-content';
 import { CommandPalette } from '@/components/command-palette/command-palette';
-import { NAV, filterNavForRole } from '@/components/layout/nav-config';
 import type { UserRole } from '@qualiof/db';
 
 /**
@@ -24,13 +23,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { user } = await validateRequest();
   if (!user) redirect('/login');
 
-  const visibleNav = filterNavForRole(NAV, user.role as UserRole);
+  const role = user.role as UserRole;
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar nav={visibleNav} />
+      <Sidebar role={role} />
       <MainContent>
-        <TopBar user={user} nav={visibleNav} />
+        <TopBar user={user} role={role} />
         <main className="flex-1 p-4 md:p-8 max-w-screen-2xl w-full mx-auto">{children}</main>
       </MainContent>
       <CommandPalette />
