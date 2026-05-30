@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ShieldCheck, Mail, Phone, MapPin, GraduationCap } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { loadOfConfig } from '@/lib/of-config';
+import { getQualiopiBilan } from '@/lib/qualiopi-bilan-stats';
 import {
   DELAI_ACCES,
   ACCESSIBILITE_PSH,
@@ -67,6 +68,13 @@ export default async function CataloguePage() {
 
   const of = await loadOfConfig(tenant.id);
 
+  const currentYear = new Date().getFullYear();
+  let bilan = await getQualiopiBilan(tenant.id, currentYear);
+  if (bilan.total.nbSessions === 0 && bilan.availableYears.length > 0) {
+    bilan = await getQualiopiBilan(tenant.id, bilan.availableYears[0]!);
+  }
+  const showBilan = bilan.total.nbSessions > 0;
+
   const dateLong = new Date().toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'long',
@@ -105,6 +113,87 @@ export default async function CataloguePage() {
             Tous nos programmes sont éligibles aux financements OPCO / AGEFICE / CPF.
           </p>
         </section>
+
+        {showBilan ? (
+          <section className="mb-10" aria-labelledby="resultats-title">
+            <h2
+              id="resultats-title"
+              className="text-2xl font-bold tracking-tight text-slate-900"
+            >
+              Nos résultats {bilan.year}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Indicateurs de résultats annuels — Qualiopi indicateur 2.
+            </p>
+
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-3xl font-bold text-slate-900">
+                  {bilan.total.nbStagiairesPresents}
+                </div>
+                <div className="mt-1 text-sm font-medium text-slate-800">
+                  Stagiaires formés
+                </div>
+                <div className="text-xs text-slate-500">
+                  ont suivi nos formations
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-3xl font-bold text-slate-900">
+                  {bilan.total.nbHeures} h
+                </div>
+                <div className="mt-1 text-sm font-medium text-slate-800">
+                  Heures de formation
+                </div>
+                <div className="text-xs text-slate-500">
+                  dispensées cette année
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-3xl font-bold text-slate-900">
+                  {bilan.total.noteMoyenneSatisfaction != null ? (
+                    `${bilan.total.noteMoyenneSatisfaction.toFixed(1)} / 5`
+                  ) : (
+                    <span className="text-base font-medium text-slate-500">
+                      Données en cours de consolidation
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-sm font-medium text-slate-800">
+                  Satisfaction moyenne
+                </div>
+                <div className="text-xs text-slate-500">
+                  satisfaction stagiaires à chaud
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-3xl font-bold text-slate-900">
+                  {bilan.total.tauxRecommandation != null ? (
+                    `${Math.round(bilan.total.tauxRecommandation)}%`
+                  ) : (
+                    <span className="text-base font-medium text-slate-500">
+                      Données en cours de consolidation
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-sm font-medium text-slate-800">
+                  Taux de recommandation
+                </div>
+                <div className="text-xs text-slate-500">
+                  stagiaires nous recommandent
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Données mises à jour automatiquement depuis notre système de gestion
+              Qualiopi. Période : année {bilan.year}.
+            </p>
+          </section>
+        ) : null}
 
         {products.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
