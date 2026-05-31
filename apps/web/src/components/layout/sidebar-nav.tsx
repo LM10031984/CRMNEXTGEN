@@ -59,7 +59,7 @@ export function SidebarNav({ nav, collapsed, onNavigate }: SidebarNavProps) {
   };
 
   return (
-    <nav className="h-full overflow-y-auto py-4 pb-10">
+    <nav className="h-full overflow-y-auto py-3 pb-10">
       {nav.map((section, sIdx) => {
         const isCollapsibleSection = section.collapsible && section.id;
         const sectionExpanded = isCollapsibleSection
@@ -67,24 +67,24 @@ export function SidebarNav({ nav, collapsed, onNavigate }: SidebarNavProps) {
           : true;
         const showItems = !isCollapsibleSection || sectionExpanded;
         return (
-          <div key={sIdx} className="mb-6">
+          <div key={sIdx} className="mb-5">
             {section.title && !collapsed && (
               isCollapsibleSection ? (
                 <button
                   type="button"
                   onClick={() => toggleSection(section.id!)}
-                  className="w-full px-6 mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  className="w-full px-5 mb-2 flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-slate-400 hover:text-slate-700 transition-colors"
                 >
                   <span>{section.title}</span>
                   <ChevronDown
                     className={cn(
-                      'h-3 w-3 transition-transform',
+                      'h-3 w-3 transition-transform duration-200',
                       sectionExpanded ? 'rotate-0' : '-rotate-90',
                     )}
                   />
                 </button>
               ) : (
-                <div className="px-6 mb-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                <div className="px-5 mb-2 text-[10px] uppercase tracking-wider font-semibold text-slate-400">
                   {section.title}
                 </div>
               )
@@ -108,14 +108,25 @@ export function SidebarNav({ nav, collapsed, onNavigate }: SidebarNavProps) {
                         title={collapsed ? item.label : undefined}
                         onClick={onNavigate}
                         className={cn(
-                          'flex items-center gap-2.5 rounded-lg text-sm transition-colors',
-                          collapsed ? 'justify-center p-2' : 'px-3 py-2',
+                          'group flex items-center gap-3 rounded-lg text-sm transition-all duration-200 ease-in-out relative',
+                          collapsed ? 'justify-center p-2.5' : 'px-3 py-2',
                           active
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-foreground hover:bg-muted',
+                            // Active : carte blanche flottante + accent bleu marine + rail gauche.
+                            ? 'bg-white text-primary font-semibold shadow-card ring-1 ring-slate-200/60'
+                            : 'text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-soft',
                         )}
                       >
-                        <Icon className="h-4 w-4 shrink-0" />
+                        {/* Pastille active discrète à gauche (sidebar non-collapsed seulement) */}
+                        {active && !collapsed && (
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-primary" aria-hidden />
+                        )}
+                        <Icon
+                          className={cn(
+                            'h-[18px] w-[18px] shrink-0 transition-colors',
+                            active ? 'text-primary' : 'text-slate-400 group-hover:text-slate-700',
+                          )}
+                          strokeWidth={active ? 2.2 : 1.75}
+                        />
                         {!collapsed && <span className="truncate">{item.label}</span>}
                       </Link>
                     </li>

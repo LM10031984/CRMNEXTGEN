@@ -111,11 +111,13 @@ export default async function FacturesPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Factures</h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Suivi de trésorerie · {total} facture{total > 1 ? 's' : ''}
+      <header className="flex items-center justify-between flex-wrap gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Factures</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Suivi de trésorerie
+            <span className="text-slate-300 mx-1.5">·</span>
+            <span className="tabular-nums font-medium text-slate-700">{total}</span> facture{total > 1 ? 's' : ''}
           </p>
         </div>
         <InvoicesExportButton currentRole={user.role} />

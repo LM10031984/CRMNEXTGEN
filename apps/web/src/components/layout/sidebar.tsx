@@ -56,24 +56,27 @@ export function Sidebar({ role }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'hidden md:flex shrink-0 border-r border-border bg-white h-screen fixed top-0 left-0 z-30 flex-col transition-[width] duration-200',
-        collapsed ? 'w-[64px]' : 'w-64',
+        'hidden md:flex shrink-0 bg-slate-50/80 h-screen fixed top-0 left-0 z-30 flex-col transition-[width] duration-200 ease-in-out',
+        // Bordure 1px gris très clair côté droit — invisible mais sépare net du contenu.
+        'border-r border-slate-200/60',
+        collapsed ? 'w-[68px]' : 'w-64',
       )}
     >
+      {/* Header logo — pas de border-bottom, l'aération suffit */}
       <div
         className={cn(
-          'border-b border-border flex items-center',
-          collapsed ? 'px-3 py-5 justify-center' : 'px-6 py-5',
+          'flex items-center',
+          collapsed ? 'px-3 py-5 justify-center' : 'px-5 py-5',
         )}
       >
-        <Link href="/app" className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-primary text-white font-bold inline-flex items-center justify-center shrink-0">
+        <Link href="/app" className="flex items-center gap-3 group">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary via-primary-600 to-primary-800 text-white font-bold inline-flex items-center justify-center shrink-0 shadow-card ring-1 ring-white/20 transition-all duration-200 group-hover:scale-105 group-hover:shadow-card-hover">
             Q
           </div>
           {!collapsed && (
-            <div>
-              <div className="font-semibold text-sm leading-tight">QualiOF</div>
-              <div className="text-[11px] text-muted-foreground">Start Academy</div>
+            <div className="min-w-0">
+              <div className="font-semibold text-sm leading-tight text-slate-900">QualiOF</div>
+              <div className="text-[11px] text-slate-500">Start Academy</div>
             </div>
           )}
         </Link>
@@ -83,26 +86,27 @@ export function Sidebar({ role }: SidebarProps) {
       <div className="flex-1 relative overflow-hidden">
         <SidebarNav nav={nav} collapsed={collapsed} />
         {/* Gradient bas — signale que la zone scrolle si contenu débordant */}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50/80 to-transparent" />
       </div>
 
       {/* Badge "génération de pack en cours" — affiché uniquement si batch actif */}
       <ActiveBatchesBadge collapsed={collapsed} />
 
+      {/* Footer collapse toggle — pas de border, séparation via espacement */}
       <div
         className={cn(
-          'border-t border-border flex items-center',
-          collapsed ? 'p-2 justify-center' : 'px-6 py-3 justify-between',
+          'flex items-center',
+          collapsed ? 'p-2 justify-center' : 'px-5 py-3 justify-between',
         )}
       >
         {!collapsed && (
-          <span className="text-[11px] text-muted-foreground">v0.1.0</span>
+          <span className="text-[10px] uppercase tracking-wider font-medium text-slate-400">v0.1.0</span>
         )}
         <button
           type="button"
           onClick={toggle}
           title={collapsed ? 'Déplier la sidebar' : 'Replier la sidebar'}
-          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white hover:shadow-soft transition-all duration-200"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>

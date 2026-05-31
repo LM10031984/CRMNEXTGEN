@@ -61,7 +61,7 @@ export function CreateProductButton() {
         if (autoFillWithAI && r.aiFilled) {
           toast.success(`Produit ${r.code} créé + auto-rempli par IA`);
         } else if (autoFillWithAI && !r.aiFilled) {
-          toast.warning(`Produit ${r.code} créé. Auto-fill IA a échoué : ${r.aiError ?? 'Ollama'}. Tu peux retenter via Éditer.`);
+          toast.warning(`Produit ${r.code} créé. Auto-fill IA a échoué : ${r.aiError ?? 'Mistral'}. Tu peux retenter via Éditer.`);
         } else {
           toast.success(`Produit ${r.code} créé`);
         }
@@ -83,7 +83,7 @@ export function CreateProductButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
+        className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97]"
       >
         <Plus className="h-4 w-4" /> Nouveau produit
       </button>
@@ -151,7 +151,7 @@ export function CreateProductButton() {
                     Auto-remplir avec l'IA
                   </span>
                   <span className="block text-[11px] text-muted-foreground mt-0.5">
-                    Génère automatiquement objectifs / public / pré-requis / programme détaillé via Ollama (≈ 10–30 s). Tu pourras tout éditer ensuite.
+                    Génère automatiquement objectifs / public / pré-requis / programme détaillé via Mistral (≈ 3–10 s). Tu pourras tout éditer ensuite.
                   </span>
                 </span>
               </label>

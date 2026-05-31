@@ -119,7 +119,7 @@ export function ParticipantDocMatrix({
   return (
     <section
       aria-labelledby="participant-doc-matrix-heading"
-      className="rounded-2xl border border-border bg-white overflow-hidden"
+      className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden"
     >
       <div className="flex items-center justify-between p-5 border-b border-border gap-3 flex-wrap">
         <div>

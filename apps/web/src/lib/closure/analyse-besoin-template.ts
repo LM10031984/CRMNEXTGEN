@@ -3,7 +3,7 @@
  *
  * Document Qualiopi indicateur 4 (recueil amont). Sert de "recueil rétroactif"
  * pour les sessions où le besoin n'a pas été formalisé en amont. Pré-rempli
- * par Ollama (Day 3) en s'appuyant sur Person.professionalStatus, legalLinks,
+ * par Mistral en s'appuyant sur Person.professionalStatus, legalLinks,
  * product.targetAudience et programMd.
  *
  * Données attendues :

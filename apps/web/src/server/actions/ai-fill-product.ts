@@ -2,18 +2,18 @@
 
 /**
  * Pré-remplit les champs Qualiopi d'un produit de formation Start Academy
- * via Ollama (mistral-small:24b par défaut).
+ * via Mistral (mistral-large-latest par défaut).
  *
  * Utilise un prompt few-shot calibré sur les 3 modèles DOCX réels de
  * Laurent (Maitrisez l'IA en 3 jours, Management & performance, Immobilier
  * 2h/jour) pour reproduire le style, les sections, le ton et les phrases
  * récurrentes spécifiques à Start Academy.
  *
- * Coût : ~10-30 sec sur M5 Pro.
+ * Coût : ~3-10 sec via l'API Mistral cloud.
  */
 
 import { validateRequest } from '@/lib/auth';
-import { callOllama } from '@/lib/ai-ollama';
+import { callMistral } from '@/lib/ai-mistral';
 
 export interface AiProductDraft {
   objectives: string[];
@@ -218,8 +218,8 @@ export async function aiPreFillProduct(input: {
     .replace('{{PRICE}}', String(input.priceHT ?? 0));
 
   try {
-    const r = await callOllama({
-      model: process.env.OLLAMA_MODEL_FAST,
+    const r = await callMistral({
+      model: process.env.MISTRAL_MODEL_TEXT,
       systemPrompt: SYSTEM_PROMPT + '\n\n' + FEW_SHOT,
       prompt: userPrompt,
       jsonOutput: true,
@@ -291,6 +291,6 @@ export async function aiPreFillProduct(input: {
 
     return { ok: true, draft, durationMs: r.durationMs };
   } catch (e: any) {
-    return { ok: false, error: `Erreur Ollama : ${e?.message ?? e}` };
+    return { ok: false, error: `Erreur Mistral : ${e?.message ?? e}` };
   }
 }

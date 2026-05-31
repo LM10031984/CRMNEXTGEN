@@ -63,7 +63,7 @@ export default async function FormateursPage() {
       />
 
       {allTrainers.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-white p-12 text-center text-sm text-muted-foreground">
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-12 text-center text-sm text-muted-foreground">
           Aucun formateur. L'import SmartOF en a importé 5 — vérifie que le seed est passé.
         </div>
       ) : (
@@ -75,7 +75,7 @@ export default async function FormateursPage() {
               <Link
                 key={t.id}
                 href={`/app/formateurs/${t.id}`}
-                className="rounded-2xl border border-border bg-white p-5 hover:border-primary/40 hover:shadow-sm transition-all"
+                className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5 hover:border-primary/40 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className="h-10 w-10 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center font-semibold text-sm shrink-0">

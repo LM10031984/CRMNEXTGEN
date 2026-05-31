@@ -127,7 +127,7 @@ export function UserRowActions({
           <button
             type="button"
             disabled={pending}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50"
             aria-label={`Actions pour ${userEmail}`}
           >
             <MoreVertical className="h-4 w-4" />
@@ -244,7 +244,7 @@ export function UserRowActions({
                 <button
                   type="button"
                   disabled={pending}
-                  className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                  className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50"
                 >
                   Annuler
                 </button>
@@ -253,7 +253,7 @@ export function UserRowActions({
                 type="button"
                 onClick={handleResetConfirmed}
                 disabled={pending}
-                className="h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {pending ? 'Envoi…' : 'Envoyer l\'email'}
               </button>
@@ -287,7 +287,7 @@ export function UserRowActions({
                 <button
                   type="button"
                   disabled={pending}
-                  className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+                  className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50"
                 >
                   Annuler
                 </button>
@@ -296,7 +296,7 @@ export function UserRowActions({
                 type="button"
                 onClick={handleDisableConfirmed}
                 disabled={pending}
-                className="h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {pending ? 'Désactivation…' : 'Désactiver'}
               </button>

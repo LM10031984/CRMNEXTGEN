@@ -132,7 +132,7 @@ export function ParticipantActionsMenu({
           <button
             type="button"
             disabled={pending}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 ease-out active:scale-[0.97]"
             aria-label={`Actions pour ${participantName}`}
             title="Actions"
           >
@@ -220,7 +220,7 @@ export function ParticipantActionsMenu({
               <button
                 type="button"
                 disabled={pending}
-                className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
+                className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-60"
               >
                 Annuler
               </button>
@@ -229,7 +229,7 @@ export function ParticipantActionsMenu({
               type="button"
               disabled={pending}
               onClick={handleUnenroll}
-              className="h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
+              className="h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-60 inline-flex items-center gap-2"
             >
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Désinscrire

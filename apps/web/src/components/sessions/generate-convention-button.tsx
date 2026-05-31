@@ -57,7 +57,7 @@ export function GenerateConventionButton({
       onClick={handleGenerate}
       disabled={pending}
       className={cn(
-        'inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-sky-700 text-white text-xs font-medium hover:bg-sky-800 transition-colors',
+        'inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-sky-700 text-white text-xs font-medium hover:bg-sky-800 transition-all duration-300 ease-out active:scale-[0.97]',
         pending && 'opacity-70 cursor-wait',
       )}
       title="Génère la convention de formation professionnelle (Articles L.6353-1 et D.6353-1)"

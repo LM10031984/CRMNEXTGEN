@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  ArrowLeft, FileText, CreditCard, Building2, Sparkles, Clock, Check, X,
+  ArrowLeft, FileText, Building2, Sparkles, Check,
   Inbox, AlertTriangle, AlertCircle, Loader2,
 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { PreEnrollmentActions } from '@/components/preinscriptions/detail-actions';
 import { RetryExtractionButton } from '@/components/preinscriptions/retry-extraction-button';
 import { IdentityCheckPanel } from '@/components/preinscriptions/identity-check-panel';
+import { DocsCompletionBadge } from '@/components/preinscriptions/docs-completion-badge';
+import { FilesPreviewSection } from '@/components/preinscriptions/files-preview-section';
+import { SignatureProofPanel } from '@/components/preinscriptions/signature-proof-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,16 +86,43 @@ export default async function PreEnrollmentDetailPage({
       </div>
 
       {/* Métadonnées */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Meta label="Émis le" value={fmtDateTime.format(pe.createdAt)} />
         <Meta label="Soumis le" value={pe.submittedAt ? fmtDateTime.format(pe.submittedAt) : '—'} />
         <Meta label="Expire le" value={fmtDateTime.format(pe.expiresAt)} />
-        <Meta label="Pièces" value={[
-          pe.cniKey && 'CNI',
-          pe.ribKey && 'RIB',
-          pe.cfpKey && 'CFP',
-        ].filter(Boolean).join(' · ') || 'Aucune'} />
       </section>
+
+      {/* Pièces justificatives — download via URL pré-signée (TTL 5 min). */}
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+            Pièces justificatives
+          </h2>
+          <DocsCompletionBadge
+            cni={!!pe.cniKey}
+            rib={!!pe.ribKey}
+            cfp={!!pe.cfpKey}
+            variant="full"
+          />
+        </div>
+        <FilesPreviewSection
+          preEnrollmentId={pe.id}
+          cni={{ present: !!pe.cniKey, ext: extractExt(pe.cniKey) }}
+          rib={{ present: !!pe.ribKey, ext: extractExt(pe.ribKey) }}
+          cfp={{ present: !!pe.cfpKey, ext: extractExt(pe.cfpKey) }}
+        />
+      </section>
+
+      {/* Signature électronique — visible uniquement si signée */}
+      {pe.signatureKey && pe.signatureHash && pe.signatureSignedAt && (
+        <SignatureProofPanel
+          preEnrollmentId={pe.id}
+          signatureHash={pe.signatureHash}
+          signatureSignedAt={pe.signatureSignedAt}
+          signatureIp={pe.signatureIp}
+          signatureUserAgent={pe.signatureUserAgent}
+        />
+      )}
 
       {/* Banner IA en cours */}
       {pe.status === 'SUBMITTED' && (
@@ -148,7 +178,7 @@ export default async function PreEnrollmentDetailPage({
       )}
 
       {/* Données déclaratives */}
-      <section className="rounded-2xl border border-border bg-white p-6">
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
         <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
           Données saisies par le contact
         </h2>
@@ -203,7 +233,7 @@ export default async function PreEnrollmentDetailPage({
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-3">
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm p-3">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{label}</div>
       <div className="text-sm font-medium">{value}</div>
     </div>
@@ -221,6 +251,11 @@ function Row({ label, value }: { label: string; value: string | null | undefined
   );
 }
 
+function extractExt(key: string | null): string | null {
+  if (!key) return null;
+  return key.split('.').pop()?.toLowerCase() ?? null;
+}
+
 function ExtractCard({
   title,
   icon: Icon,
@@ -231,7 +266,7 @@ function ExtractCard({
   data: any;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white p-5">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
       <h3 className="font-semibold text-sm inline-flex items-center gap-2 mb-3">
         <Icon className="h-4 w-4 text-primary" /> {title}
         <Sparkles className="h-3 w-3 text-purple-500 ml-auto" />

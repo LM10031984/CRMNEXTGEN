@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Inbox, Clock, Sparkles, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Inbox, Clock, Sparkles, CheckCircle2, XCircle, AlertCircle, ChevronRight, Mail } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { NewLinkButton } from '@/components/preinscriptions/new-link-button';
+import { DocsCompletionBadge } from '@/components/preinscriptions/docs-completion-badge';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,9 @@ export default async function PreinscriptionsPage() {
         createdAt: true,
         validatedAt: true,
         convertedAt: true,
+        cniKey: true,
+        ribKey: true,
+        cfpKey: true,
       },
     }),
     prisma.preEnrollment.groupBy({
@@ -63,93 +67,99 @@ export default async function PreinscriptionsPage() {
         actions={<NewLinkButton />}
       />
 
-      {/* Bandeau KPI */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Bandeau KPI — cartes icône cercle, cohérent avec PrioCard du dashboard */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiPill icon={Clock} label="Liens envoyés" value={counter('PENDING_FORM')} tone="default" />
         <KpiPill icon={AlertCircle} label="À valider" value={counter('SUBMITTED') + counter('EXTRACTING') + counter('EXTRACTED')} tone="warning" />
         <KpiPill icon={CheckCircle2} label="Convertis" value={counter('CONVERTED')} tone="success" />
         <KpiPill icon={XCircle} label="Expirés / rejetés" value={counter('EXPIRED') + counter('REJECTED')} tone="muted" />
       </section>
 
-      {/* Liste */}
-      <section className="rounded-2xl border border-border bg-white overflow-hidden">
+      {/* Liste — cartes empilées avec avatar initiales, plus humain qu'un tableau dense */}
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
-            <Inbox className="h-10 w-10 text-muted-foreground mx-auto" />
-            <h3 className="font-semibold">Aucune pré-inscription pour l'instant</h3>
-            <p className="text-sm text-muted-foreground">
-              Clique sur <strong>Nouveau formulaire</strong> pour générer un lien à partager
-              avec un contact.
+          <div className="py-16 text-center">
+            <div className="inline-flex h-10 w-10 mb-3 rounded-lg bg-slate-100 text-slate-400 items-center justify-center">
+              <Inbox className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <h3 className="text-sm font-medium text-slate-900">Aucune pré-inscription</h3>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              Clique sur <span className="font-medium text-slate-700">Nouveau formulaire</span> pour générer un lien à partager avec un contact.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <Th>Statut</Th>
-                  <Th>Contact</Th>
-                  <Th>Email</Th>
-                  <Th>Émis le</Th>
-                  <Th>Soumis le</Th>
-                  <Th>Expire le</Th>
-                  <Th>{' '}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const s = STATUS_LABEL[r.status];
-                  const Icon = s?.icon ?? Inbox;
-                  const expired = r.status === 'PENDING_FORM' && r.expiresAt < new Date();
-                  return (
-                    <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <Badge variant={expired ? 'danger' : (s?.variant ?? 'muted')}>
-                          <Icon className="h-3 w-3" /> {expired ? 'Expiré' : (s?.label ?? r.status)}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5">
+          <ul className="divide-y divide-slate-100">
+            {rows.map((r) => {
+              const s = STATUS_LABEL[r.status];
+              const Icon = s?.icon ?? Inbox;
+              const expired = r.status === 'PENDING_FORM' && r.expiresAt < new Date();
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/app/preinscriptions/${r.id}`}
+                    className="group flex items-center gap-4 py-3 px-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    {/* Avatar initiales avec couleur déterministe (hash sur seed) */}
+                    <div className={cardAvatar(r.firstName, r.lastName)}>
+                      {initials(r.firstName, r.lastName)}
+                    </div>
+
+                    {/* Nom + email */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900 truncate">
                         {r.firstName || r.lastName ? (
-                          <div className="font-medium">{r.firstName} {r.lastName}</div>
+                          <>{r.firstName} {r.lastName}</>
                         ) : (
-                          <span className="text-xs text-muted-foreground italic">— anonyme —</span>
+                          <span className="text-slate-400 italic">— anonyme —</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2.5">
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
                         {r.email ? (
-                          <span className="text-xs">{r.email}</span>
+                          <>
+                            <Mail className="h-3 w-3 shrink-0 text-slate-400" strokeWidth={1.75} />
+                            <span className="truncate">{r.email}</span>
+                          </>
                         ) : (
-                          <span className="text-xs text-muted-foreground italic">—</span>
+                          <span className="italic text-slate-400">pas d&apos;email</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                        {fmtDate.format(r.createdAt)}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                        {r.submittedAt ? fmtDate.format(r.submittedAt) : <span className="text-muted-foreground italic">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs whitespace-nowrap">
-                        {fmtDate.format(r.expiresAt)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <Link
-                          href={`/app/preinscriptions/${r.id}`}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          Voir →
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+
+                    {/* Documents — masqué sur mobile */}
+                    <div className="hidden md:block shrink-0">
+                      <DocsCompletionBadge
+                        cni={!!r.cniKey}
+                        rib={!!r.ribKey}
+                        cfp={!!r.cfpKey}
+                        variant="compact"
+                      />
+                    </div>
+
+                    {/* Date contextuelle — texte simple sans label uppercase */}
+                    <div className="hidden lg:block text-right shrink-0 min-w-[120px]">
+                      <div className="text-xs text-slate-500">
+                        {r.submittedAt ? 'Reçu' : 'Émis'} <span className="tabular-nums text-slate-700">{fmtDate.format(r.submittedAt ?? r.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    {/* Statut */}
+                    <div className="shrink-0">
+                      <Badge variant={expired ? 'danger' : (s?.variant ?? 'muted')}>
+                        <Icon className="h-3 w-3" /> {expired ? 'Expiré' : (s?.label ?? r.status)}
+                      </Badge>
+                    </div>
+
+                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" strokeWidth={1.75} />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
       {rows.length > 0 && (
-        <p className="text-xs text-muted-foreground italic">
+        <p className="text-xs text-slate-500 italic">
           💡 Un lien expiré peut être régénéré par sécurité. Une pré-inscription validée crée
           automatiquement un Person + une Organization EI + un AgeficeProfile pré-rempli.
         </p>
@@ -158,12 +168,33 @@ export default async function PreinscriptionsPage() {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-      {children}
-    </th>
-  );
+// ───────── helpers locaux ─────────
+
+function initials(firstName?: string | null, lastName?: string | null): string {
+  const a = (firstName ?? '').trim().charAt(0).toUpperCase();
+  const b = (lastName ?? '').trim().charAt(0).toUpperCase();
+  return (a + b) || '?';
+}
+
+/** Avatar circulaire avec couleur déterministe (hash sur initiales). */
+function cardAvatar(firstName?: string | null, lastName?: string | null): string {
+  const base = 'inline-flex items-center justify-center h-11 w-11 rounded-full text-sm font-bold shrink-0 shadow-card ring-2 ring-white text-white bg-gradient-to-br';
+  const seed = ((firstName ?? '') + (lastName ?? '')).toLowerCase();
+  if (!seed) return `${base} from-slate-300 to-slate-400`;
+  // Palette pastel cohérente avec le reste du CRM.
+  const palettes = [
+    'from-blue-400 to-blue-600',
+    'from-violet-400 to-violet-600',
+    'from-emerald-400 to-emerald-600',
+    'from-rose-400 to-rose-600',
+    'from-amber-400 to-amber-600',
+    'from-sky-400 to-sky-600',
+    'from-fuchsia-400 to-fuchsia-600',
+    'from-teal-400 to-teal-600',
+  ];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return `${base} ${palettes[Math.abs(h) % palettes.length]}`;
 }
 
 function KpiPill({
@@ -172,26 +203,28 @@ function KpiPill({
   value,
   tone,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
   value: number;
   tone: 'default' | 'success' | 'warning' | 'muted';
 }) {
-  const toneClass =
-    tone === 'success'
-      ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
-      : tone === 'warning'
-        ? 'border-amber-200 bg-amber-50/50 text-amber-900'
-        : tone === 'muted'
-          ? 'border-slate-200 bg-slate-50/50 text-slate-700'
-          : 'border-border bg-white';
+  // KPI Folk-style : carte sobre border-slate-200 + shadow-sm, icône en haut
+  // à droite, chiffre dominant, label discret. Tone ne change que la couleur
+  // d'icône (cohérent avec le minimalisme Folk).
+  const iconColor = {
+    success: 'text-green-600',
+    warning: 'text-amber-600',
+    muted: 'text-slate-400',
+    default: 'text-blue-600',
+  }[tone];
+
   return (
-    <div className={`rounded-xl border p-4 flex items-center gap-3 ${toneClass}`}>
-      <Icon className="h-5 w-5 shrink-0 opacity-70" />
-      <div>
-        <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
-        <div className="text-[11px] uppercase tracking-wide opacity-80 mt-1">{label}</div>
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-500">{label}</span>
+        <Icon className={`h-4 w-4 ${iconColor}`} strokeWidth={1.75} />
       </div>
+      <div className="text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
     </div>
   );
 }

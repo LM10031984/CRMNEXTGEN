@@ -155,7 +155,7 @@ export function PreEnrollmentActions({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-white p-6 space-y-5">
+      <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-5">
         <h2 className="font-semibold text-base">Identité à créer</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Prénom" required>
@@ -194,7 +194,7 @@ export function PreEnrollmentActions({
       </div>
 
       {isEi && (
-        <div className="rounded-2xl border border-border bg-white p-6 space-y-5">
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-5">
           <h2 className="font-semibold text-base inline-flex items-center gap-3">
             Auto-entreprise / Org EI à créer
             <label className="text-xs font-normal inline-flex items-center gap-1.5 ml-auto">
@@ -257,7 +257,7 @@ export function PreEnrollmentActions({
           onClick={handleConvert}
           disabled={pending}
           className={cn(
-            'inline-flex items-center gap-2 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors',
+            'inline-flex items-center gap-2 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all duration-300 ease-out active:scale-[0.97]',
             pending && 'opacity-70 cursor-wait',
           )}
         >
@@ -268,7 +268,7 @@ export function PreEnrollmentActions({
           type="button"
           onClick={handleReExtract}
           disabled={pending}
-          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-white text-sm hover:bg-muted/30 transition-colors"
+          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-white text-sm hover:bg-muted/30 transition-all duration-300 ease-out active:scale-[0.97]"
         >
           <RefreshCw className="h-4 w-4" /> Re-extraire avec l'IA
         </button>
@@ -276,7 +276,7 @@ export function PreEnrollmentActions({
           type="button"
           onClick={handleReject}
           disabled={pending}
-          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-red-200 bg-white text-sm text-red-700 hover:bg-red-50 transition-colors ml-auto"
+          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-red-200 bg-white text-sm text-red-700 hover:bg-red-50 transition-all duration-300 ease-out active:scale-[0.97] ml-auto"
         >
           <X className="h-4 w-4" /> Rejeter
         </button>

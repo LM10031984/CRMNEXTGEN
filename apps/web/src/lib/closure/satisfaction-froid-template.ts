@@ -3,7 +3,7 @@
  *
  * Document Qualiopi indicateur 30. Rempli par le stagiaire ~3-6 mois après
  * la formation, pour évaluer l'impact réel sur sa pratique professionnelle.
- * Score garanti ≥ 90% via post-process dans ollama-generators.
+ * Score garanti ≥ 90% via post-process dans mistral-generators.
  *
  * Données attendues :
  *   {

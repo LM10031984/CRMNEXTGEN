@@ -107,7 +107,7 @@ export function QuickCreatePersonButton({ onCreated }: Props) {
         className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
         onClick={() => !busy && close()}
       />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-white p-6 shadow-xl">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 shadow-xl">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="font-semibold text-lg">Nouvel apprenant</h2>

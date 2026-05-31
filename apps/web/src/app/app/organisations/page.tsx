@@ -6,8 +6,9 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SearchInput } from '@/components/ui/search-input';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { Pagination } from '@/components/ui/pagination';
-import { DataTable, type Column } from '@/components/ui/data-table';
+import { DataTableFolk as DataTable, type Column } from '@/components/ui/data-table-folk';
 import { Badge } from '@/components/ui/badge';
+import { buttonStyles } from '@/components/ui/button';
 import { CreateOrganizationButton } from '@/components/forms/create-organization-button';
 
 const PAGE_SIZE = 25;
@@ -218,15 +219,16 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
         <div className="flex items-center gap-2">
           <Link
             href={hrefWith({ q, filter, all: showAll ? undefined : '1' }) as any}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 ease-out active:scale-[0.97]"
           >
             {showAll ? (
               <>
-                <LayoutGrid className="h-4 w-4" /> Paginer ({PAGE_SIZE}/page)
+                <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} /> Paginer
               </>
             ) : (
               <>
-                <List className="h-4 w-4" /> Voir tout ({total})
+                <List className="h-3.5 w-3.5" strokeWidth={1.75} /> Voir tout
+                <span className="tabular-nums text-[10px] text-slate-400">{total}</span>
               </>
             )}
           </Link>

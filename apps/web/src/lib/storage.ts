@@ -1,9 +1,30 @@
 /**
- * Storage adapter MinIO/S3 pour QualiOF.
- * Tous les buckets sont créés à la volée si absents.
+ * Storage adapter QualiOF — façade unique exposant `uploadFile`,
+ * `downloadFile`, `getFileSignedUrl`, `ensureBucket`.
+ *
+ * Driver sélectionné via `STORAGE_DRIVER` :
+ *  - `s3` (default) : MinIO en dev, S3 AWS / Cloudflare R2 / Wasabi en prod.
+ *  - `supabase`     : Supabase Storage via SDK natif (Plan B Mai 2026 — Mr Marx
+ *                     centralisation facturation). Implémenté dans
+ *                     `storage-supabase.ts`. Le "bucket logique" passé en
+ *                     argument devient un préfixe folder dans le bucket
+ *                     physique `SUPABASE_STORAGE_BUCKET` (default `learner-documents`).
+ *
+ * L'API publique est identique pour les deux drivers → aucun changement
+ * dans les consommateurs (preinscription-public.ts, closure-pack.ts, etc.).
  */
 
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  ensureBucketSupabase,
+  uploadFileSupabase,
+  downloadFileSupabase,
+  getFileSignedUrlSupabase,
+} from './storage-supabase';
+
+type StorageDriver = 's3' | 'supabase';
+const DRIVER: StorageDriver = (process.env.STORAGE_DRIVER as StorageDriver) ?? 's3';
 
 const ENDPOINT = process.env.S3_ENDPOINT ?? 'http://localhost:9000';
 const REGION = process.env.S3_REGION ?? 'us-east-1';
@@ -29,6 +50,7 @@ function client(): S3Client {
 const _ensuredBuckets = new Set<string>();
 
 export async function ensureBucket(bucket: string): Promise<void> {
+  if (DRIVER === 'supabase') return ensureBucketSupabase(bucket);
   if (_ensuredBuckets.has(bucket)) return;
   const c = client();
   try {
@@ -51,6 +73,9 @@ export async function uploadFile(
   body: Buffer | Uint8Array,
   contentType?: string,
 ): Promise<{ key: string; bucket: string; size: number }> {
+  if (DRIVER === 'supabase') {
+    return uploadFileSupabase(bucket, key, body, contentType);
+  }
   await ensureBucket(bucket);
   await client().send(
     new PutObjectCommand({
@@ -64,6 +89,9 @@ export async function uploadFile(
 }
 
 export async function downloadFile(bucket: string, key: string): Promise<Buffer> {
+  if (DRIVER === 'supabase') {
+    return downloadFileSupabase(bucket, key);
+  }
   const r = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!r.Body) throw new Error('Fichier vide ou introuvable');
   const chunks: Uint8Array[] = [];
@@ -72,4 +100,24 @@ export async function downloadFile(bucket: string, key: string): Promise<Buffer>
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+// URL pré-signée pour téléchargement direct par le navigateur (TTL court).
+export async function getFileSignedUrl(
+  bucket: string,
+  key: string,
+  opts?: { expiresIn?: number; downloadFilename?: string },
+): Promise<string> {
+  if (DRIVER === 'supabase') {
+    return getFileSignedUrlSupabase(bucket, key, opts);
+  }
+  const expiresIn = opts?.expiresIn ?? 300; // 5 min
+  const cmd = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentDisposition: opts?.downloadFilename
+      ? `attachment; filename="${opts.downloadFilename.replace(/"/g, '')}"`
+      : undefined,
+  });
+  return getSignedUrl(client(), cmd, { expiresIn });
 }

@@ -13,8 +13,11 @@ interface CollapsibleSectionProps {
   title: React.ReactNode;
   /** Sous-titre optionnel (ex: count "10 indicateurs"). */
   subtitle?: React.ReactNode;
-  /** Icône optionnelle à gauche du titre. */
-  icon?: React.ComponentType<{ className?: string }>;
+  /** Icône optionnelle à gauche du titre. Passer un élément JSX déjà rendu
+   * (ex: `<BarChart3 className="..." />`), PAS une référence de composant —
+   * sinon la prop traverse la frontière Server→Client RSC comme une fonction
+   * (les icônes Lucide sont des forwardRef) et plante. */
+  icon?: React.ReactNode;
   /** Affiché ouvert par défaut (sinon utilise localStorage). */
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -30,7 +33,7 @@ export function CollapsibleSection({
   id,
   title,
   subtitle,
-  icon: Icon,
+  icon,
   defaultOpen = false,
   children,
   className,
@@ -79,7 +82,7 @@ export function CollapsibleSection({
         aria-label={ariaLabel}
         className="w-full flex items-center gap-2 text-left mb-3 hover:text-foreground transition-colors group"
       >
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
+        {icon}
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground group-hover:text-foreground">
           {title}
         </h2>

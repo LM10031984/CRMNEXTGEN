@@ -226,13 +226,13 @@ export function SessionWizard({
   return (
     <div className="space-y-6">
       {/* Progress */}
-      <div className="rounded-2xl border border-border bg-white p-5">
+      <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
         <ol className="flex items-center gap-2">
           {STEPS.map(({ n, label, icon: Icon }, i) => (
             <li key={n} className="flex items-center gap-2 flex-1">
               <div
                 className={cn(
-                  'h-9 w-9 rounded-full inline-flex items-center justify-center shrink-0 transition-colors',
+                  'h-9 w-9 rounded-full inline-flex items-center justify-center shrink-0 transition-all duration-300 ease-out active:scale-[0.97]',
                   step > n ? 'bg-emerald-500 text-white' : step === n ? 'bg-primary text-white' : 'bg-muted text-muted-foreground',
                 )}
               >
@@ -249,7 +249,7 @@ export function SessionWizard({
               {i < STEPS.length - 1 && (
                 <div
                   className={cn(
-                    'h-0.5 w-full mx-2 transition-colors',
+                    'h-0.5 w-full mx-2 transition-all duration-300 ease-out active:scale-[0.97]',
                     step > n ? 'bg-emerald-500' : 'bg-muted',
                   )}
                 />
@@ -261,7 +261,7 @@ export function SessionWizard({
 
       {/* Étape 1 — Produit */}
       {step === 1 && (
-        <section className="rounded-2xl border border-border bg-white p-6 space-y-5">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-5">
           <div>
             <h2 className="font-semibold text-lg">1. Choisis le produit de formation</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -339,7 +339,7 @@ export function SessionWizard({
 
       {/* Étape 2 — Dates / lieu / formateurs */}
       {step === 2 && selectedProduct && (
-        <section className="rounded-2xl border border-border bg-white p-6 space-y-6">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-6">
           <div>
             <h2 className="font-semibold text-lg">2. Dates, lieu et formateurs</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -459,7 +459,7 @@ export function SessionWizard({
                         );
                       }}
                       className={cn(
-                        'flex items-center gap-2 px-3 h-10 rounded-md border text-sm transition-colors',
+                        'flex items-center gap-2 px-3 h-10 rounded-md border text-sm transition-all duration-300 ease-out active:scale-[0.97]',
                         selected
                           ? 'border-primary-300 bg-primary-50 text-primary-800'
                           : 'border-border bg-white hover:border-primary-200',
@@ -491,7 +491,7 @@ export function SessionWizard({
 
       {/* Étape 3 — Participants */}
       {step === 3 && (
-        <section className="rounded-2xl border border-border bg-white p-6 space-y-5">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-5">
           <div>
             <h2 className="font-semibold text-lg">3. Inscrits — apprenants & casquettes</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -577,7 +577,7 @@ export function SessionWizard({
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
-              className="w-full h-12 rounded-lg border-2 border-dashed border-border hover:border-primary-300 hover:bg-primary-50/30 inline-flex items-center justify-center gap-2 text-sm font-medium text-primary transition-colors"
+              className="w-full h-12 rounded-lg border-2 border-dashed border-border hover:border-primary-300 hover:bg-primary-50/30 inline-flex items-center justify-center gap-2 text-sm font-medium text-primary transition-all duration-300 ease-out active:scale-[0.97]"
             >
               <Plus className="h-4 w-4" /> Ajouter un apprenant
             </button>
@@ -599,7 +599,7 @@ export function SessionWizard({
 
       {/* Étape 4 — Récap */}
       {step === 4 && selectedProduct && (
-        <section className="rounded-2xl border border-border bg-white p-6 space-y-5">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 space-y-5">
           <div>
             <h2 className="font-semibold text-lg">4. Récapitulatif</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -687,7 +687,7 @@ export function SessionWizard({
             onClick={goPrev}
             disabled={step === 1 || pending}
             className={cn(
-              'inline-flex items-center gap-1.5 h-10 px-4 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-colors',
+              'inline-flex items-center gap-1.5 h-10 px-4 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-all duration-300 ease-out active:scale-[0.97]',
               (step === 1 || pending) && 'opacity-50 cursor-not-allowed',
             )}
           >
@@ -703,7 +703,7 @@ export function SessionWizard({
               type="button"
               onClick={goNext}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97] shadow-sm"
             >
               Suivant <ChevronRight className="h-4 w-4" />
             </button>
@@ -713,7 +713,7 @@ export function SessionWizard({
               onClick={handleSubmit}
               disabled={pending}
               className={cn(
-                'inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm',
+                'inline-flex items-center gap-1.5 h-10 px-5 rounded-md bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all duration-300 ease-out active:scale-[0.97] shadow-sm',
                 pending && 'opacity-70 cursor-wait',
               )}
             >

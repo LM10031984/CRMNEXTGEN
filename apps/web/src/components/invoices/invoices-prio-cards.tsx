@@ -1,4 +1,5 @@
 import { TrendingUp, AlertCircle, Clock, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { InvoicesListKpis } from '@/server/actions/invoices-list';
 
 /**
@@ -32,24 +33,28 @@ export function InvoicesPrioCards({ kpis }: Props) {
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
     >
       <PrioCardLocal
-        icon={<TrendingUp className="h-5 w-5 text-emerald-600" aria-hidden="true" />}
+        Icon={TrendingUp}
+        tone="success"
         label="CA facturé ce mois"
         value={fmtEUR.format(kpis.caMois)}
       />
       <PrioCardLocal
-        icon={<AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />}
+        Icon={AlertCircle}
+        tone="danger"
         label="Impayés"
         value={fmtEUR.format(kpis.impayesAmount)}
         sub={`${kpis.impayesCount} facture${kpis.impayesCount > 1 ? 's' : ''}`}
       />
       <PrioCardLocal
-        icon={<Clock className="h-5 w-5 text-sky-600" aria-hidden="true" />}
+        Icon={Clock}
+        tone="primary"
         label="DSO moyen"
         value={kpis.dsoMoyen != null ? `${kpis.dsoMoyen} j` : '—'}
         sub="Délai moyen d'encaissement (mois)"
       />
       <PrioCardLocal
-        icon={<FileText className="h-5 w-5 text-amber-600" aria-hidden="true" />}
+        Icon={FileText}
+        tone="warning"
         label="À facturer"
         value={String(kpis.aFacturerCount)}
         sub="Inscriptions terminées sans facture"
@@ -58,28 +63,35 @@ export function InvoicesPrioCards({ kpis }: Props) {
   );
 }
 
+type Tone = 'primary' | 'success' | 'warning' | 'danger';
+
 function PrioCardLocal({
-  icon,
+  Icon,
+  tone,
   label,
   value,
   sub,
 }: {
-  icon: React.ReactNode;
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  tone: Tone;
   label: string;
   value: string;
   sub?: string;
 }) {
+  // KPI Folk-style : carte sobre, icône discrète à droite, chiffre dominant.
+  const iconColor: Record<Tone, string> = {
+    success: 'text-green-600',
+    danger: 'text-red-600',
+    primary: 'text-blue-600',
+    warning: 'text-amber-600',
+  };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-primary-200 hover:shadow-sm transition-all">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-600">
-          {label}
-        </span>
-        {icon}
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-500">{label}</span>
+        <Icon className={cn('h-4 w-4', iconColor[tone])} strokeWidth={1.75} />
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
-        {value}
-      </div>
+      <div className="text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
       {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
     </div>
   );

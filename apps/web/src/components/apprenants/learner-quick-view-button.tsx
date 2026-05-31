@@ -45,7 +45,7 @@ export function LearnerQuickViewButton({ personId }: { personId: string }) {
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 ease-out active:scale-[0.97]"
           aria-label="Vue rapide"
           title="Vue rapide"
         >

@@ -81,7 +81,7 @@ export default async function ClosureHubPage({
       />
 
       {batches.length === 0 ? (
-        <section className="rounded-2xl border border-border bg-white p-8 text-center">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-8 text-center">
           <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm text-muted-foreground mb-1">
             Aucun pack généré pour cette session pour l&apos;instant.

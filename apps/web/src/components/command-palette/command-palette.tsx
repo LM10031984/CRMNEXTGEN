@@ -123,7 +123,7 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-2xl rounded-xl border border-border bg-white shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl rounded-2xl bg-white ring-1 ring-slate-200 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <Command shouldFilter={false} loop>

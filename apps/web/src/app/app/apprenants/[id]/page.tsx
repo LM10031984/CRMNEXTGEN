@@ -555,7 +555,7 @@ export default async function ApprenantDetailPage({
       {tab === 'info' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
                 Coordonnées
               </h2>
@@ -580,7 +580,7 @@ export default async function ApprenantDetailPage({
               </dl>
             </section>
 
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                   Liens juridiques ({person.legalLinks.length})
@@ -594,7 +594,7 @@ export default async function ApprenantDetailPage({
           </div>
 
           <div className="space-y-6">
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
                 Profil pédagogique
               </h2>
@@ -639,7 +639,7 @@ export default async function ApprenantDetailPage({
             )}
 
             {person.sensitiveData?.socialSecurityNb && (
-              <section className="rounded-2xl border border-border bg-white p-6">
+              <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
                 <h2 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
                   Données sensibles (RGPD)
                 </h2>
@@ -698,7 +698,7 @@ export default async function ApprenantDetailPage({
           </div>
 
           {/* Historique sessions — id pour anchor des KPI cliquables (UX-05) */}
-          <section id="inscriptions-list" className="rounded-2xl border border-border bg-white overflow-hidden scroll-mt-20">
+          <section id="inscriptions-list" className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden scroll-mt-20">
             <div className="p-5 border-b border-border">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Toutes les inscriptions ({totalParticipations})
@@ -783,7 +783,7 @@ export default async function ApprenantDetailPage({
         // UX-03 : CTA pour générer un document si l'apprenant a au moins une participation
         const hasParticipations = person.participations.length > 0;
         return (
-          <section className="rounded-2xl border border-border bg-white overflow-hidden">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
             <div className="p-5 border-b border-border flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
@@ -796,7 +796,7 @@ export default async function ApprenantDetailPage({
               {hasParticipations && (
                 <Link
                   href={`/app/apprenants/${person.id}?tab=activity#inscriptions-list`}
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-primary/40 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-primary/40 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-all duration-300 ease-out active:scale-[0.97]"
                   title="Aller à l'onglet Activité — chaque session a un menu Actions pour générer ses documents"
                 >
                   <FileText className="h-4 w-4" />

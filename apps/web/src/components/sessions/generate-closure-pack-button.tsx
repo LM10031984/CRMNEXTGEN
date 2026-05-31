@@ -49,7 +49,7 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
         type="button"
         onClick={() => setOpen(true)}
         disabled={participantCount === 0}
-        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
         title={participantCount === 0 ? 'Aucun apprenant inscrit' : 'Génère 5 documents Qualiopi pour chaque apprenant'}
       >
         <Package className="h-4 w-4" /> Pack fin de formation
@@ -63,7 +63,7 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
         className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
         onClick={() => !pending && setOpen(false)}
       />
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-white p-6 shadow-xl">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 shadow-xl">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
@@ -125,7 +125,7 @@ export function GenerateClosurePackButton({ sessionId, participantCount }: Props
             type="button"
             onClick={handleLaunch}
             disabled={pending || participantCount === 0}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] disabled:opacity-60"
           >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             Lancer la génération

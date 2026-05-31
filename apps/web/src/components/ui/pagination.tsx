@@ -25,35 +25,39 @@ export function Pagination({ total, page, pageSize, basePath, searchParams = {} 
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
 
+  // Bouton SaaS Premium — bordure + shadow-soft, hover élévation.
+  const btn = (disabled: boolean) =>
+    cn(
+      'inline-flex h-9 items-center gap-1 px-3 rounded-xl text-xs font-semibold',
+      'bg-white text-slate-700 ring-1 ring-slate-200 shadow-soft transition-all duration-200',
+      'hover:ring-slate-300 hover:shadow-card hover:text-slate-900 hover:-translate-y-0.5',
+      disabled && 'opacity-40 pointer-events-none',
+    );
+
   return (
-    <div className="flex items-center justify-between px-1">
-      <div className="text-xs text-muted-foreground">
-        Affichage <span className="font-medium text-foreground">{start}–{end}</span> sur{' '}
-        <span className="font-medium text-foreground">{total}</span>
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="text-xs text-slate-500">
+        <span className="font-semibold text-slate-900 tabular-nums">{start}–{end}</span>
+        <span className="text-slate-300 mx-1.5">·</span>
+        sur <span className="font-semibold text-slate-900 tabular-nums">{total}</span>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <Link
           href={buildHref(Math.max(1, page - 1)) as never}
           aria-disabled={page === 1}
-          className={cn(
-            'inline-flex h-8 items-center gap-1 px-2.5 rounded-md text-xs font-medium border border-border bg-white hover:bg-muted/40 transition-colors',
-            page === 1 && 'opacity-50 pointer-events-none',
-          )}
+          className={btn(page === 1)}
         >
-          <ChevronLeft className="h-3.5 w-3.5" /> Préc.
+          <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} /> Préc.
         </Link>
-        <span className="text-xs text-muted-foreground px-2">
-          page {page} / {totalPages}
+        <span className="text-xs text-slate-500 font-semibold px-2.5 tabular-nums">
+          {page} <span className="text-slate-300">/</span> {totalPages}
         </span>
         <Link
           href={buildHref(Math.min(totalPages, page + 1)) as never}
           aria-disabled={page === totalPages}
-          className={cn(
-            'inline-flex h-8 items-center gap-1 px-2.5 rounded-md text-xs font-medium border border-border bg-white hover:bg-muted/40 transition-colors',
-            page === totalPages && 'opacity-50 pointer-events-none',
-          )}
+          className={btn(page === totalPages)}
         >
-          Suiv. <ChevronRight className="h-3.5 w-3.5" />
+          Suiv. <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
         </Link>
       </div>
     </div>

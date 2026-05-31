@@ -1,11 +1,11 @@
 /**
  * Extraction texte de PDF / images.
  * - PDFs natifs (avec couche texte) : pdf-parse (rapide, gratuit)
- * - Images JPG/PNG/WebP : Ollama vision (qwen2.5vl) — OCR local
+ * - Images JPG/PNG/WebP : Pixtral vision (Mistral cloud) — OCR
  * - PDF scan sans couche texte : fallback vision via rendu pdfjs (TODO)
  */
 
-import { callOllamaVision } from './ai-ollama';
+import { callMistralVision } from './ai-mistral';
 
 export interface ExtractedDoc {
   text: string;
@@ -27,7 +27,13 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> 
   try {
     const { extractText, getDocumentProxy } = await import('unpdf');
     const uint8 = new Uint8Array(buffer);
-    const doc = await getDocumentProxy(uint8);
+    // On extrait uniquement le texte → pas besoin de charger les polices standard
+    // pdf.js (qui warnent "standardFontDataUrl missing" si non fourni). Désactiver
+    // le rendu de polices garde les logs propres et accélère légèrement le parse.
+    const doc = await getDocumentProxy(uint8, {
+      useSystemFonts: false,
+      disableFontFace: true,
+    });
     const pages = doc.numPages;
     const result = await extractText(doc, { mergePages: true });
     const t: unknown = result.text;
@@ -43,14 +49,15 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> 
 }
 
 /**
- * OCR d'une image via Ollama vision. Retourne la transcription brute du
- * texte visible. Lent (2-15 s selon le modèle / la taille image), à
- * appeler en fire-and-forget côté pipeline.
+ * OCR d'une image via Pixtral (Mistral vision). Retourne la transcription
+ * brute du texte visible. Latence typique 2-10s, à appeler en fire-and-forget
+ * côté pipeline.
  */
-export async function extractTextFromImage(buffer: Buffer): Promise<ExtractedDoc> {
+export async function extractTextFromImage(buffer: Buffer, mimeType = 'image/jpeg'): Promise<ExtractedDoc> {
   try {
-    const r = await callOllamaVision({
+    const r = await callMistralVision({
       imageBuffer: buffer,
+      mimeType,
       prompt: VISION_OCR_PROMPT,
       temperature: 0,
       maxTokens: 1500,
@@ -66,8 +73,8 @@ export async function extractTextFromImage(buffer: Buffer): Promise<ExtractedDoc
       text: '',
       pages: 0,
       warnings: [
-        `Échec OCR Ollama vision : ${e?.message ?? e}. ` +
-          `Vérifier que le modèle est installé (\`ollama pull qwen2.5vl:7b\`) et que Ollama tourne sur ${process.env.OLLAMA_HOST ?? 'http://localhost:11434'}.`,
+        `Échec OCR Pixtral vision : ${e?.message ?? e}. ` +
+          `Vérifier OPENROUTER_API_KEY et la connectivité vers openrouter.ai.`,
       ],
     };
   }
@@ -78,7 +85,7 @@ export async function extractTextFromFile(buffer: Buffer, contentType: string): 
     return extractTextFromPdf(buffer);
   }
   if (contentType.startsWith('image/')) {
-    return extractTextFromImage(buffer);
+    return extractTextFromImage(buffer, contentType);
   }
   return {
     text: '',

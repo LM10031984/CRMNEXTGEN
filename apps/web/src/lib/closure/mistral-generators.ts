@@ -1,9 +1,11 @@
 /**
- * Generators IA pour les 3 docs Qualiopi assistés (QCM, GRILLE_OBS, ANALYSE_BESOIN).
+ * Generators IA pour les 7 docs Qualiopi assistés (QCM, GRILLE_OBS,
+ * ANALYSE_BESOIN, POSITIONNEMENT, SATISFACTION_CHAUD, SATISFACTION_FROID,
+ * DEROULE_PEDA).
  *
  * Chaque generator :
  *   1. Construit un prompt user à partir du contexte (formation + stagiaire)
- *   2. Appelle Ollama via callOllama (format JSON)
+ *   2. Appelle Mistral via callMistral (format JSON)
  *   3. Valide la forme du JSON avec Zod (au cas où le modèle dérape)
  *   4. Si erreur ou JSON invalide → retourne null, l'appelant fallback sur le stub
  *
@@ -12,7 +14,7 @@
 
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
-import { callOllama } from '@/lib/ai-ollama';
+import { callMistral } from '@/lib/ai-mistral';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
@@ -31,11 +33,9 @@ import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
 import type { SatisfactionFroidContent } from './satisfaction-froid-template';
 import type { DerouleContent } from './deroule-template';
 
-// mistral-small:24b est le meilleur compromis qualité/vitesse/JSON-compliance
-// pour ces 3 docs. qwen3:30b-a3b a un comportement instable avec
-// `format: json` (thinking caché → réponse vide) — éviter ici.
-// Override possible via env CLOSURE_OLLAMA_MODEL.
-const MODEL = process.env.CLOSURE_OLLAMA_MODEL ?? 'mistral-small:24b';
+// Override possible via env CLOSURE_MISTRAL_MODEL (sinon fallback sur
+// MISTRAL_MODEL_TEXT défini dans .env).
+const MODEL = process.env.CLOSURE_MISTRAL_MODEL ?? process.env.MISTRAL_MODEL_TEXT ?? 'mistral-large-latest';
 const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 13);
 
 export interface FormationCtx {
@@ -55,10 +55,10 @@ export interface StagiaireCtx {
 }
 
 // =====================================================
-// Schemas Zod (validation des outputs Ollama)
+// Schemas Zod (validation des outputs Mistral)
 // =====================================================
 
-// Output Ollama brut : questions + correct_answer.
+// Output Mistral brut : questions + correct_answer.
 // Le scoring (selected_answer, is_correct, score) est attribué en post-process
 // par `attachQcmScoring` ci-dessous pour garantir un score >= 65%.
 const QcmRawSchema = z.object({
@@ -237,7 +237,7 @@ Durée : ${formation.nombreHeures} heures
 Programme :
 ${formation.programmeMd || '(programme à compléter)'}`;
 
-  const raw = await runOllamaJson(
+  const raw = await runMistralJson(
     'generate-qcm',
     SYSTEM_PROMPT_QCM,
     prompt,
@@ -253,7 +253,7 @@ ${formation.programmeMd || '(programme à compléter)'}`;
 /**
  * Post-process : attribue à chaque question un `selected_answer` et `is_correct`,
  * en visant un score global entre 75% et 95% (jamais < 65%). Le scoring est
- * forcé en code (et non délégué à Ollama) pour garantir le seuil Qualiopi.
+ * forcé en code (et non délégué au modèle) pour garantir le seuil Qualiopi.
  *
  * Exporté pour permettre la réutilisation : pour 1 même QCM (questions partagées
  * par session), on appelle cette fonction N fois (une par stagiaire) afin
@@ -328,7 +328,7 @@ ${stagiaireBlock || '(profil non détaillé)'}
 
 L'analyse doit donner l'impression que le stagiaire a réellement répondu à un questionnaire en amont de la formation.`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-analyse-besoin',
     SYSTEM_PROMPT_ANALYSE_BESOIN,
     prompt,
@@ -358,7 +358,7 @@ Stagiaire : ${stagiaire.prenom} ${stagiaire.nom}
 
 Génère exactement 7 compétences directement liées au contenu réel de la formation. Pour les niveaux et observations individuelles, laisse à null (la grille sera remplie par le formateur). En revanche, complète bien le bloc \"observations_globales\" avec un commentaire personnalisé et un axe d'amélioration.`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-grille',
     SYSTEM_PROMPT_GRILLE_OBSERVATION,
     prompt,
@@ -370,11 +370,11 @@ Génère exactement 7 compétences directement liées au contenu réel de la for
 }
 
 // =====================================================
-// Runner partagé : appel Ollama + validation Zod + logging AIGenerationJob
+// Runner partagé : appel Mistral + validation Zod + logging AIGenerationJob
 // =====================================================
 
 /**
- * 1 essai = appel Ollama + parse JSON + validation Zod.
+ * 1 essai = appel Mistral + parse JSON + validation Zod.
  * Retourne `{ ok: true, data }` si tout OK, sinon `{ ok: false, reason }`
  * pour que l'appelant décide de retry ou non.
  */
@@ -386,15 +386,15 @@ async function tryOnce<T>(
 ): Promise<{ ok: true; data: T; latencyMs: number } | { ok: false; reason: string; latencyMs: number }> {
   const startedAt = Date.now();
   try {
-    const result = await callOllama({
+    const result = await callMistral({
       model: MODEL,
       systemPrompt,
       prompt: userPrompt,
       jsonOutput: true,
       temperature: 0.3,
       maxTokens: 8192,
-      // 10 min : avec saturation GPU sur Apple Silicon, le QCM peut prendre 5+ min
-      timeoutMs: 600_000,
+      // Mistral cloud répond en 2-10s typiquement. 60s laisse une marge confortable.
+      timeoutMs: 60_000,
     });
     const latencyMs = Date.now() - startedAt;
 
@@ -410,7 +410,7 @@ async function tryOnce<T>(
         .join(' / ');
       return { ok: false, reason: `Schema invalide : ${msg}`, latencyMs };
     }
-    console.log(`[ollama-${taskName}] ✓ ${latencyMs}ms (model=${MODEL}, prompt=${PROMPT_VERSION})`);
+    console.log(`[mistral-${taskName}] ✓ ${latencyMs}ms (model=${MODEL}, prompt=${PROMPT_VERSION})`);
     return { ok: true, data: parsed.data, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - startedAt;
@@ -451,7 +451,7 @@ ${stagiaireBlock || '(profil non détaillé)'}
 
 Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-positionnement',
     SYSTEM_PROMPT_POSITIONNEMENT,
     prompt,
@@ -476,7 +476,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 
 Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-satisfaction-chaud',
     SYSTEM_PROMPT_SATISFACTION_CHAUD,
     prompt,
@@ -503,7 +503,7 @@ Profil : ${stagiaire.fonction ?? 'professionnel'}${stagiaire.entreprise ? ` chez
 
 Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-satisfaction-froid',
     SYSTEM_PROMPT_SATISFACTION_FROID,
     prompt,
@@ -541,7 +541,7 @@ Pour chaque jour, génère 7 séquences :
 
 Total durée formation = ${formation.nombreHeures} heures (hors pauses).`;
 
-  return runOllamaJson(
+  return runMistralJson(
     'generate-deroule',
     SYSTEM_PROMPT_DEROULE,
     prompt,
@@ -552,9 +552,9 @@ Total durée formation = ${formation.nombreHeures} heures (hors pauses).`;
   );
 }
 
-const MAX_ATTEMPTS = Number(process.env.CLOSURE_OLLAMA_RETRIES ?? 2); // 1 essai initial + 1 retry par défaut
+const MAX_ATTEMPTS = Number(process.env.CLOSURE_MISTRAL_RETRIES ?? 2); // 1 essai initial + 1 retry par défaut
 
-async function runOllamaJson<T>(
+async function runMistralJson<T>(
   taskName: string,
   systemPrompt: string,
   userPrompt: string,
@@ -568,7 +568,7 @@ async function runOllamaJson<T>(
     ? await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'ollama',
+          provider: 'mistral',
           model: MODEL,
           promptVersion: PROMPT_VERSION,
           inputHash,
@@ -591,12 +591,12 @@ async function runOllamaJson<T>(
           data: { status: 'done', latencyMs: totalLatency, retries: attempt - 1 },
         });
       }
-      if (attempt > 1) console.log(`[ollama-${taskName}] ✓ après retry #${attempt - 1}`);
+      if (attempt > 1) console.log(`[mistral-${taskName}] ✓ après retry #${attempt - 1}`);
       return r.data;
     }
     lastReason = r.reason;
-    console.warn(`[ollama-${taskName}] attempt ${attempt}/${MAX_ATTEMPTS} KO (${r.latencyMs}ms): ${r.reason.slice(0, 120)}`);
-    // Petit backoff entre 2 tentatives pour laisser la queue Ollama se vider
+    console.warn(`[mistral-${taskName}] attempt ${attempt}/${MAX_ATTEMPTS} KO (${r.latencyMs}ms): ${r.reason.slice(0, 120)}`);
+    // Petit backoff entre 2 tentatives
     if (attempt < MAX_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
   }
 

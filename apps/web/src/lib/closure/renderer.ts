@@ -1,9 +1,9 @@
 /**
  * Dispatch principal des 5 templates HTML→PDF du pack fin de formation.
  *
- * Day 3 : QCM/GRILLE_OBS/ANALYSE_BESOIN passent par Ollama via les generators
- * de `ollama-generators.ts`. Si Ollama échoue (timeout, modèle KO, JSON
- * invalide), on fallback sur les stubs Day 2 — le doc reste produit, mais
+ * QCM/GRILLE_OBS/ANALYSE_BESOIN passent par Mistral via les generators
+ * de `mistral-generators.ts`. Si Mistral échoue (timeout, JSON invalide,
+ * quota), on fallback sur les stubs — le doc reste produit, mais
  * le `rawJson` est marqué `{ source: 'stub' }` pour qu'on puisse régénérer
  * plus tard.
  */
@@ -42,9 +42,9 @@ import {
   attachQcmScoring,
   type FormationCtx,
   type StagiaireCtx,
-} from './ollama-generators';
+} from './mistral-generators';
 
-const USE_OLLAMA = process.env.CLOSURE_USE_OLLAMA !== '0';
+const USE_MISTRAL = process.env.CLOSURE_USE_MISTRAL !== '0';
 
 function buildFormationCtx(ctx: ClosureContext): FormationCtx {
   return {
@@ -61,7 +61,7 @@ function buildFormationCtx(ctx: ClosureContext): FormationCtx {
  * sur le stagiaire courant avec un scoring propre.
  *
  * Retourne null si aucun QCM n'existe encore pour la session — l'appelant
- * doit alors générer un nouveau QCM via Ollama.
+ * doit alors générer un nouveau QCM via Mistral.
  */
 async function loadSessionQcm(sessionId: string): Promise<{ questions: Omit<QcmQuestion, 'selected_answer' | 'is_correct'>[] } | null> {
   if (!sessionId || sessionId === 'mock-session-id') return null;
@@ -130,20 +130,20 @@ export async function renderClosureDoc(
       // Règle métier : 1 SEUL QCM par session (mêmes questions+correct_answer
       // pour tous les stagiaires), seul le scoring (selected_answer/score) varie.
       // On cherche d'abord un QCM déjà généré pour la session ; sinon on en
-      // génère un nouveau via Ollama.
+      // génère un nouveau via Mistral.
       const existingQcm = await loadSessionQcm(ctx.sessionId);
       let content: QcmContent;
-      let source: 'ollama' | 'stub' | 'shared' = 'stub';
+      let source: 'mistral' | 'stub' | 'shared' = 'stub';
 
       if (existingQcm) {
         // Réutilisation des questions, scoring spécifique à ce stagiaire.
         content = attachQcmScoring(existingQcm.questions);
         source = 'shared';
-      } else if (USE_OLLAMA) {
+      } else if (USE_MISTRAL) {
         const ai = await generateQcmContent(buildFormationCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubQcmContent(ctx);
         }
@@ -156,12 +156,12 @@ export async function renderClosureDoc(
     }
     case 'GRILLE_OBS': {
       let content: GrilleContent;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'mistral' | 'stub' = 'stub';
+      if (USE_MISTRAL) {
         const ai = await generateGrilleContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubGrilleContent(ctx);
         }
@@ -174,12 +174,12 @@ export async function renderClosureDoc(
     }
     case 'ANALYSE_BESOIN': {
       let content: AnalyseBesoinContent;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'mistral' | 'stub' = 'stub';
+      if (USE_MISTRAL) {
         const ai = await generateAnalyseBesoinContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubAnalyseBesoinContent(ctx);
         }
@@ -192,12 +192,12 @@ export async function renderClosureDoc(
     }
     case 'POSITIONNEMENT': {
       let content;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'mistral' | 'stub' = 'stub';
+      if (USE_MISTRAL) {
         const ai = await generatePositionnementContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubPositionnementContent(ctx);
         }
@@ -210,12 +210,12 @@ export async function renderClosureDoc(
     }
     case 'SATISFACTION_CHAUD': {
       let content;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'mistral' | 'stub' = 'stub';
+      if (USE_MISTRAL) {
         const ai = await generateSatisfactionChaudContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubSatisfactionChaudContent(ctx);
         }
@@ -228,12 +228,12 @@ export async function renderClosureDoc(
     }
     case 'SATISFACTION_FROID': {
       let content;
-      let source: 'ollama' | 'stub' = 'stub';
-      if (USE_OLLAMA) {
+      let source: 'mistral' | 'stub' = 'stub';
+      if (USE_MISTRAL) {
         const ai = await generateSatisfactionFroidContent(buildFormationCtx(ctx), buildStagiaireCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubSatisfactionFroidContent(ctx);
         }
@@ -246,18 +246,18 @@ export async function renderClosureDoc(
     }
     case 'DEROULE_PEDA': {
       // Partagé par session : 1) si un déroulé existe déjà pour la session
-      // → on le réutilise. 2) Sinon Ollama. 3) Sinon stub.
+      // → on le réutilise. 2) Sinon Mistral. 3) Sinon stub.
       const existing = await loadSessionDeroule(ctx.sessionId);
       let content;
-      let source: 'shared' | 'ollama' | 'stub' = 'stub';
+      let source: 'shared' | 'mistral' | 'stub' = 'stub';
       if (existing) {
         content = existing;
         source = 'shared';
-      } else if (USE_OLLAMA) {
+      } else if (USE_MISTRAL) {
         const ai = await generateDerouleContent(buildFormationCtx(ctx), 'PedagogicalAsset', null, ctx.tenantId ?? null);
         if (ai) {
           content = ai;
-          source = 'ollama';
+          source = 'mistral';
         } else {
           content = stubDerouleContent(ctx);
         }

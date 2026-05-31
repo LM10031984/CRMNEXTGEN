@@ -162,7 +162,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
   return (
     <div className="space-y-5">
       {/* Header status + actions */}
-      <div className="rounded-2xl border border-border bg-white p-5">
+      <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
@@ -189,7 +189,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                 type="button"
                 onClick={() => handleRetry(true)}
                 disabled={retrying}
-                title="Relance la génération IA pour les docs où Ollama avait échoué (contenu générique). Indispensable avant un audit Qualiopi."
+                title="Relance la génération IA pour les docs où Mistral avait échoué (contenu générique). Indispensable avant un audit Qualiopi."
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100 disabled:opacity-60"
               >
                 {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
@@ -218,7 +218,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       </div>
 
       {/* Liste des participants */}
-      <div className="rounded-2xl border border-border bg-white overflow-hidden">
+      <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/30">
           <h2 className="font-semibold text-sm">{groups.size} apprenant(s)</h2>
         </div>
@@ -245,7 +245,7 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                         onClick={() => handleRegenSingle(j)}
                         disabled={retrying}
                         className="shrink-0 inline-flex items-center gap-1 text-amber-700 text-[10px] font-semibold uppercase tracking-wide hover:bg-amber-100 hover:text-amber-900 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                        title="Ce document a été généré avec un contenu de remplacement (l'IA Ollama a échoué ou répondu invalide). Cliquez pour relancer la génération IA. À faire avant tout audit Qualiopi."
+                        title="Ce document a été généré avec un contenu de remplacement (l'IA Mistral a échoué ou répondu invalide). Cliquez pour relancer la génération IA. À faire avant tout audit Qualiopi."
                       >
                         <AlertTriangle className="h-3 w-3" aria-hidden="true" /> À régénérer
                       </button>

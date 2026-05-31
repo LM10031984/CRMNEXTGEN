@@ -572,8 +572,8 @@ export async function createProduct(input: {
   });
 
   // Auto-fill IA : objectifs / public / prerequis / programme detaille via
-  // Ollama. Lent (~10-30s sur Mac M5) mais rempli toute la fiche en un coup.
-  // Si Ollama plante, on garde le produit basique cree au-dessus + on remonte
+  // Mistral. ~3-10s via l'API cloud, rempli toute la fiche en un coup.
+  // Si Mistral plante, on garde le produit basique cree au-dessus + on remonte
   // l'erreur a l'UI pour que Laurent puisse retenter "Editer > Auto-remplir IA"
   // depuis la fiche produit.
   if (input.autoFillWithAI !== false) {

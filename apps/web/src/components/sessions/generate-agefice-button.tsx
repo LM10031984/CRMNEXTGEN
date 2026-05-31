@@ -73,7 +73,7 @@ export function GenerateAgeficeButton({
           onClick={handleGenerate}
           disabled={pending}
           className={cn(
-            'inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors',
+            'inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-all duration-300 ease-out active:scale-[0.97]',
             pending && 'opacity-70 cursor-wait',
           )}
           title="Génère le récapitulatif AGEFICE pré-rempli (54+ champs depuis Person + Org EI + AgeficeProfile + Session)"

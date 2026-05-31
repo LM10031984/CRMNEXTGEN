@@ -29,6 +29,12 @@ Thumbs.db
 .idea/
 *.swp
 
+# Claude Code local config (mémoire, hooks, settings utilisateur)
+.claude/
+
+# Lockfile npm parasite (le projet utilise pnpm)
+/package-lock.json
+
 # Prisma
 packages/db/prisma/migrations/dev.db*
 

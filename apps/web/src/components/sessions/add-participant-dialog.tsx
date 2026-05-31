@@ -48,7 +48,7 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
+        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97]"
       >
         <Plus className="h-4 w-4" /> Inscrire un apprenant
       </button>
@@ -133,7 +133,7 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
               type="button"
               onClick={handleSubmit}
               disabled={!selection || pending}
-              className="h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 disabled:opacity-50"
+              className="h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] disabled:opacity-50"
             >
               {pending ? 'Inscription…' : 'Inscrire'}
             </button>

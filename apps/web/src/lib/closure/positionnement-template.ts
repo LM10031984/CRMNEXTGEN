@@ -9,7 +9,7 @@
  *   4 = Je maîtrise complètement
  *
  * Rendu en double colonne "Avant la formation" / "Après la formation" pour
- * matérialiser la progression. Cases pré-cochées par Ollama (avant = niveaux
+ * matérialiser la progression. Cases pré-cochées par Mistral (avant = niveaux
  * 1-2, après = niveaux 3-4 majoritairement).
  *
  * Données attendues :

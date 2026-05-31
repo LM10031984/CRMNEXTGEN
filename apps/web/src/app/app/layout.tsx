@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const role = user.role as UserRole;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-50/30">
       <Sidebar role={role} />
       <MainContent>
         <TopBar user={user} role={role} />

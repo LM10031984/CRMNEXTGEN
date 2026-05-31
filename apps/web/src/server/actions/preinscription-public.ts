@@ -1,5 +1,7 @@
 'use server';
 
+import { createHash } from 'node:crypto';
+import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -25,6 +27,8 @@ interface SubmitInput {
     contentType: string;
     base64: string; // contenu encodé base64
   }>;
+  /** Signature électronique PNG en data URL (sans préfixe data:image/png;base64,). */
+  signatureBase64?: string;
 }
 
 const MAX_FILE_SIZE_MB = 10;
@@ -57,6 +61,24 @@ export async function submitPreEnrollmentForm(
   if (input.files.length === 0) {
     return { ok: false, error: 'Au moins une pièce justificative est requise' };
   }
+  if (!input.signatureBase64) {
+    return { ok: false, error: 'La signature électronique est obligatoire pour valider ta demande' };
+  }
+  // Date de naissance : refuse les dates invalides ou hors-bornes raisonnables.
+  // Sans cette garde, une saisie type "20/01/275760" produit un `Invalid Date`
+  // et Prisma plante au moment du UPDATE → "Erreur technique" générique côté client.
+  let parsedBirthDate: Date | null = null;
+  if (input.birthDate) {
+    const d = new Date(input.birthDate);
+    if (isNaN(d.getTime())) {
+      return { ok: false, error: 'Date de naissance invalide' };
+    }
+    const year = d.getUTCFullYear();
+    if (year < 1900 || year > new Date().getUTCFullYear()) {
+      return { ok: false, error: `Date de naissance hors-bornes (année ${year})` };
+    }
+    parsedBirthDate = d;
+  }
 
   // 3) Upload des fichiers vers MinIO
   const uploadedKeys: Record<'CNI' | 'RIB' | 'CFP', string | null> = {
@@ -80,28 +102,66 @@ export async function submitPreEnrollmentForm(
     }
   }
 
+  // 3-bis) Upload + hash de la signature électronique
+  let signatureKey: string | null = pe.signatureKey ?? null;
+  let signatureHash: string | null = pe.signatureHash ?? null;
+  let signatureSignedAt: Date | null = pe.signatureSignedAt ?? null;
+  let signatureIp: string | null = pe.signatureIp ?? null;
+  let signatureUserAgent: string | null = pe.signatureUserAgent ?? null;
+  if (input.signatureBase64) {
+    try {
+      const sigBuffer = Buffer.from(input.signatureBase64, 'base64');
+      if (sigBuffer.length < 200) {
+        return { ok: false, error: 'Signature trop courte / vide' };
+      }
+      if (sigBuffer.length > 2 * 1024 * 1024) {
+        return { ok: false, error: 'Signature trop volumineuse (>2 Mo)' };
+      }
+      signatureHash = createHash('sha256').update(sigBuffer).digest('hex');
+      signatureKey = `${input.token}/signature-${Date.now()}.png`;
+      await uploadFile(PREENROLLMENT_BUCKET, signatureKey, sigBuffer, 'image/png');
+      signatureSignedAt = new Date();
+      const h = await headers();
+      signatureIp = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
+      signatureUserAgent = h.get('user-agent') ?? null;
+    } catch (e) {
+      console.error('Signature upload failed', e);
+      return { ok: false, error: 'Échec de l\'enregistrement de la signature' };
+    }
+  }
+
   // 4) Mise à jour de la pré-inscription
-  await prisma.preEnrollment.update({
-    where: { id: pe.id },
-    data: {
-      firstName: input.firstName.trim(),
-      lastName: input.lastName.trim(),
-      email: input.email.trim().toLowerCase(),
-      phone: input.phone?.trim() || null,
-      birthDate: input.birthDate ? new Date(input.birthDate) : null,
-      birthPlace: input.birthPlace?.trim() || null,
-      professionalStatus: input.professionalStatus?.trim() || null,
-      diploma: input.diploma?.trim() || null,
-      educationLevel: input.educationLevel?.trim() || null,
-      professionalExperience: input.professionalExperience?.trim() || null,
-      cniKey: uploadedKeys.CNI,
-      ribKey: uploadedKeys.RIB,
-      cfpKey: uploadedKeys.CFP,
-      rgpdAcceptedAt: new Date(),
-      submittedAt: new Date(),
-      status: 'SUBMITTED',
-    },
-  });
+  try {
+    await prisma.preEnrollment.update({
+      where: { id: pe.id },
+      data: {
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
+        email: input.email.trim().toLowerCase(),
+        phone: input.phone?.trim() || null,
+        birthDate: parsedBirthDate,
+        birthPlace: input.birthPlace?.trim() || null,
+        professionalStatus: input.professionalStatus?.trim() || null,
+        diploma: input.diploma?.trim() || null,
+        educationLevel: input.educationLevel?.trim() || null,
+        professionalExperience: input.professionalExperience?.trim() || null,
+        cniKey: uploadedKeys.CNI,
+        ribKey: uploadedKeys.RIB,
+        cfpKey: uploadedKeys.CFP,
+        signatureKey,
+        signatureHash,
+        signatureSignedAt,
+        signatureIp,
+        signatureUserAgent,
+        rgpdAcceptedAt: new Date(),
+        submittedAt: new Date(),
+        status: 'SUBMITTED',
+      },
+    });
+  } catch (e: any) {
+    console.error('PreEnrollment update failed', e);
+    return { ok: false, error: `Échec de l'enregistrement : ${e?.message ?? 'erreur inconnue'}` };
+  }
 
   revalidatePath('/app/preinscriptions');
 

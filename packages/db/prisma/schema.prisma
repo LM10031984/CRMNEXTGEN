@@ -1181,6 +1181,14 @@ model PreEnrollment {
   cniKey                 String?
   ribKey                 String?
   cfpKey                 String? // Attestation CFP AGEFICE
+  // Signature électronique simple (eIDAS niveau "simple") — Mai 2026
+  // PNG stocké dans le storage S3/Supabase + métadonnées de preuve sur la ligne
+  // (hash SHA-256, horodatage, IP, User-Agent) pour valeur probante.
+  signatureKey           String?
+  signatureHash          String?
+  signatureSignedAt      DateTime?
+  signatureIp            String?
+  signatureUserAgent     String?
   rgpdAcceptedAt         DateTime?
   submittedAt            DateTime?
   // Relances email auto pour les pré-inscriptions PENDING_FORM trop anciennes

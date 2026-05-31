@@ -22,10 +22,15 @@ export function MobileMenuButton({ role }: MobileMenuButtonProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="md:hidden -ml-1 p-2 rounded-md hover:bg-muted text-foreground"
+        className="
+          md:hidden -ml-1 inline-flex items-center justify-center h-10 w-10 rounded-xl
+          text-slate-500 hover:text-slate-900 hover:bg-slate-100/80
+          transition-all duration-200 ease-in-out
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200
+        "
         aria-label="Ouvrir le menu"
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="h-5 w-5" strokeWidth={1.75} />
       </button>
       <MobileNavDrawer open={open} onOpenChange={setOpen} role={role} />
     </>

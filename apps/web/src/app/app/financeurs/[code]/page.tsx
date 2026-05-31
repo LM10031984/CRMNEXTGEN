@@ -15,7 +15,7 @@ import {
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
-import { DataTable, type Column } from '@/components/ui/data-table';
+import { DataTableFolk as DataTable, type Column } from '@/components/ui/data-table-folk';
 import { formatFunderCode } from '@/lib/funder-codes';
 
 export const dynamic = 'force-dynamic';
@@ -307,7 +307,7 @@ export default async function FinanceurDetailPage({
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-border bg-white p-5">
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
           <h2 className="font-semibold text-sm mb-3">Conditions de prise en charge</h2>
           <dl className="space-y-2.5 text-sm">
             <Row icon={Clock} label="Délai moyen" value={opco.averageDelayDays != null ? `${opco.averageDelayDays} jours` : null} />
@@ -322,7 +322,7 @@ export default async function FinanceurDetailPage({
           </dl>
         </div>
 
-        <div className="rounded-2xl border border-border bg-white p-5">
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
           <h2 className="font-semibold text-sm mb-3">Documents requis</h2>
           {requiredDocs.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">Aucun document spécifique référencé.</p>
@@ -405,7 +405,7 @@ function KpiCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white p-5">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground mb-2">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>

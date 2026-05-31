@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { sendMail } from '@/lib/mailer';
+import { loadOfConfig } from '@/lib/of-config';
+import { renderPreinscriptionLinkEmail } from '@/lib/mailer-templates/preinscription-link';
 
 const DEFAULT_VALIDITY_DAYS = 30;
 
@@ -13,7 +16,7 @@ export async function createPreEnrollmentLink(input: {
   lastName?: string;
   intendedSessionId?: string;
   validityDays?: number;
-}): Promise<{ ok: boolean; url?: string; token?: string; preEnrollmentId?: string; error?: string }> {
+}): Promise<{ ok: boolean; url?: string; token?: string; preEnrollmentId?: string; emailSent?: boolean; emailDryRun?: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
@@ -48,8 +51,33 @@ export async function createPreEnrollmentLink(input: {
     process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
   const url = `${baseUrl}/preinscription/${token}`;
 
+  // Envoi email auto si un email a été fourni. Best-effort : si SMTP échoue,
+  // on retourne quand même ok:true avec emailSent:false pour que Laurent
+  // copie/colle le lien manuellement en fallback.
+  let emailSent = false;
+  let emailDryRun = false;
+  if (input.email?.trim()) {
+    try {
+      const of = await loadOfConfig(user.tenantId);
+      const { subject, html, text } = renderPreinscriptionLinkEmail(
+        {
+          firstName: input.firstName?.trim() ?? null,
+          lastName: input.lastName?.trim() ?? null,
+          formUrl: url,
+          expiresAt,
+        },
+        of,
+      );
+      const r = await sendMail({ to: input.email.trim(), subject, html, text });
+      emailSent = r.ok && !r.dryRun;
+      emailDryRun = !!r.dryRun;
+    } catch (e) {
+      console.error('[createPreEnrollmentLink] sendMail failed (non-blocking)', e);
+    }
+  }
+
   revalidatePath('/app/preinscriptions');
-  return { ok: true, url, token, preEnrollmentId: created.id };
+  return { ok: true, url, token, preEnrollmentId: created.id, emailSent, emailDryRun };
 }
 
 export async function deletePreEnrollment(id: string): Promise<{ ok: boolean; error?: string }> {

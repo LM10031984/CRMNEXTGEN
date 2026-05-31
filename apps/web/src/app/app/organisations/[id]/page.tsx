@@ -114,7 +114,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Identité juridique
             </h2>
@@ -129,7 +129,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
             </dl>
           </section>
 
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Coordonnées
             </h2>
@@ -148,7 +148,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
             </dl>
           </section>
 
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Personnes rattachées ({org.legalLinks.length})
@@ -221,7 +221,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
           )}
 
           {org.opcoCatalog && (
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
                 {org.opcoCatalog.name}
               </h2>

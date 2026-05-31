@@ -6,6 +6,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
+import { buttonStyles } from '@/components/ui/button';
 import { formatFunderCode } from '@/lib/funder-codes';
 import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
@@ -442,7 +443,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   return (
                     <Link
                       href={`/app/sessions/${session.id}/closure/${latestBatch.id}` as Route}
-                      className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
+                      className={buttonStyles({ variant: 'outline' })}
                     >
                       <Package className="h-4 w-4" /> Voir le pack
                     </Link>
@@ -611,7 +612,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <section className="rounded-2xl border border-border bg-white overflow-hidden">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
             <div className="flex items-center justify-between p-5 border-b border-border gap-3">
               <h2 className="font-semibold inline-flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" /> Inscrits ({session.participants.length})
@@ -776,7 +777,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               contenu visible — sinon le scroll arrive sur du vide. */}
           <section
             id="section-formateurs"
-            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20 target:ring-2 target:ring-primary target:ring-offset-2"
+            className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5 scroll-mt-20 target:ring-2 target:ring-primary target:ring-offset-2"
           >
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
               Formateurs
@@ -834,7 +835,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               actionnable (BUG-18). */}
           <section
             id="section-lieu"
-            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20"
+            className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5 scroll-mt-20"
           >
             <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
               Lieu de formation
@@ -903,7 +904,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               (cf docCompletionByParticipant) — utilisées aussi dans les
               badges par-ligne de la liste des inscrits. */}
           {session.participants.length > 0 && (
-            <details className="rounded-2xl border border-border bg-white overflow-hidden group">
+            <details className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden group">
               <summary className="flex items-center justify-between p-5 border-b border-border cursor-pointer hover:bg-muted/20 transition-colors list-none [&::-webkit-details-marker]:hidden">
                 <h2 className="font-semibold inline-flex items-center gap-2">
                   <ClipboardCheck className="h-5 w-5 text-primary" /> Conformité Qualiopi
@@ -1039,7 +1040,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               </Link>
             );
             return (
-              <section className="rounded-2xl border border-border bg-white overflow-hidden">
+              <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
                 <div className="p-5 border-b border-border flex items-center justify-between gap-3 flex-wrap">
                   <h2 className="font-semibold inline-flex items-center gap-2">
                     <Package className="h-5 w-5 text-primary" /> Pack fin de formation
@@ -1074,7 +1075,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-6">
           {/* BUG-17 anchor — completeness badge link vers la section Produit (fallback si pas de productId) */}
           <div id="section-produit" className="scroll-mt-20" />
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Produit de formation
             </h2>
@@ -1099,7 +1100,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               dans la matrice 17-col).
               Programme + Déroulé = niveau PRODUIT
               Grille obs session + Check-list = niveau SESSION */}
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
               <FileText className="h-4 w-4" /> Documents partagés
             </h2>
@@ -1134,7 +1135,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </section>
 
           {session.internalNotes && (
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
                 Notes internes
               </h2>

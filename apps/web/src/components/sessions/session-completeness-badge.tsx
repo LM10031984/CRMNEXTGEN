@@ -46,7 +46,7 @@ export function SessionCompletenessBadge({ completeness }: Props) {
         {completeness.blockers.length > 1 ? 's' : ''} manquant
         {completeness.blockers.length > 1 ? 's' : ''})
       </summary>
-      <div className="absolute z-10 mt-2 w-80 rounded-xl border border-border bg-white p-4 shadow-lg space-y-2">
+      <div className="absolute z-10 mt-2 w-80 rounded-lg border border-slate-200 bg-white shadow-sm p-4 shadow-lg space-y-2">
         <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
           À compléter avant de générer le pack
         </p>

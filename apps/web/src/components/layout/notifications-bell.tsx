@@ -17,9 +17,10 @@ const ICONS: Record<NotificationKind, React.ComponentType<{ className?: string }
 };
 
 const SEVERITY_CLASSES: Record<NotificationItem['severity'], string> = {
-  info: 'text-sky-700 bg-sky-50 border-sky-200',
-  warning: 'text-amber-800 bg-amber-50 border-amber-200',
-  danger: 'text-red-700 bg-red-50 border-red-200',
+  // Pastel doux, sans bordure — l'icône cercle se pose sur fond blanc.
+  info: 'text-blue-700 bg-blue-50',
+  warning: 'text-amber-700 bg-amber-50',
+  danger: 'text-red-700 bg-red-50',
 };
 
 export function NotificationsBell() {
@@ -52,12 +53,23 @@ export function NotificationsBell() {
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="relative inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="
+            relative inline-flex items-center justify-center h-10 w-10 rounded-xl
+            text-slate-500 hover:text-slate-900 hover:bg-slate-100/80
+            transition-all duration-200 ease-in-out
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200
+          "
           aria-label="Notifications"
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
           {total > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold tabular-nums">
+            <span
+              className="
+                absolute top-1 right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1
+                rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-bold tabular-nums
+                ring-2 ring-white shadow-soft
+              "
+            >
               {total > 99 ? '99+' : total}
             </span>
           )}
@@ -66,20 +78,32 @@ export function NotificationsBell() {
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
-          sideOffset={6}
-          className="z-50 min-w-[320px] max-w-[380px] rounded-lg border border-border bg-white shadow-xl p-1 animate-in fade-in zoom-in-95"
+          sideOffset={8}
+          className="
+            z-50 min-w-[340px] max-w-[400px] rounded-2xl bg-white p-1.5
+            ring-1 ring-slate-200/70 shadow-card-hover
+            animate-in fade-in zoom-in-95 duration-150
+          "
         >
-          <div className="px-3 py-2 border-b border-border">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Notifications {total > 0 ? `· ${total}` : ''}
+          <div className="px-3 py-2.5 mb-1 border-b border-slate-100 flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">
+              Notifications
             </div>
+            {total > 0 && (
+              <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                {total}
+              </span>
+            )}
           </div>
           {items.length === 0 ? (
-            <div className="px-3 py-6 text-sm text-muted-foreground text-center italic">
-              Tout est en règle, rien à faire dans l'immédiat.
+            <div className="px-3 py-8 text-sm text-slate-500 text-center">
+              <div className="inline-flex h-10 w-10 mb-2 rounded-full bg-green-50 text-green-600 items-center justify-center">
+                <Bell className="h-4 w-4" strokeWidth={1.75} />
+              </div>
+              <div>Tout est en règle, rien à faire dans l'immédiat.</div>
             </div>
           ) : (
-            <ul className="py-1">
+            <ul className="space-y-0.5">
               {items.map((item, idx) => {
                 const Icon = ICONS[item.kind];
                 // Phase 9 Plan 09-04 — la cle doit etre unique : plusieurs items
@@ -101,18 +125,21 @@ export function NotificationsBell() {
                           }
                           setOpen(false);
                         }}
-                        className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer outline-none data-[highlighted]:bg-muted text-sm"
+                        className="
+                          group flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer outline-none
+                          data-[highlighted]:bg-slate-50 transition-colors text-sm text-slate-700
+                        "
                       >
                         <span
                           className={cn(
-                            'inline-flex items-center justify-center h-7 w-7 rounded-full border shrink-0',
+                            'inline-flex items-center justify-center h-9 w-9 rounded-xl shrink-0',
                             SEVERITY_CLASSES[item.severity],
                           )}
                         >
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-4 w-4" strokeWidth={2} />
                         </span>
                         <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-data-[highlighted]:text-slate-500 group-data-[highlighted]:translate-x-0.5 shrink-0 transition-all duration-200" />
                       </Link>
                     </DropdownMenu.Item>
                   </li>

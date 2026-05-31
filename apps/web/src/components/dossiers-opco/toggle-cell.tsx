@@ -36,7 +36,7 @@ export function ToggleCell({
       onClick={handle}
       disabled={pending}
       className={cn(
-        'inline-flex items-center justify-center h-6 w-12 rounded-full text-[10px] font-semibold transition-colors',
+        'inline-flex items-center justify-center h-6 w-12 rounded-full text-[10px] font-semibold transition-all duration-300 ease-out active:scale-[0.97]',
         state
           ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
           : 'bg-slate-100 text-slate-500 hover:bg-slate-200',

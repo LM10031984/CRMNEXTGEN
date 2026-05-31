@@ -99,7 +99,7 @@ export default async function BudgetAgeficePage({
       <FilterChips chips={filterChips} />
 
       {/* Liste */}
-      <section className="rounded-2xl border border-border bg-white overflow-hidden">
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
             {rows.length} apprenant{rows.length > 1 ? 's' : ''} {filter === 'has_budget_left' ? 'avec budget restant' : filter === 'no_consumption' ? "n'ayant rien consommé" : filter === 'near_limit' ? 'proches du plafond' : filter === 'over' ? 'au plafond ou au-delà' : 'éligibles'}

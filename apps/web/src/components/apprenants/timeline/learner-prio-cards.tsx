@@ -62,7 +62,7 @@ function PrioCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white p-6">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
       <div className="flex items-center gap-3 mb-2">
         <span className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-muted text-foreground">
           <Icon className="h-4 w-4" />

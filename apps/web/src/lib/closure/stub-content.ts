@@ -1,9 +1,8 @@
 /**
- * Contenu stub Day 2 pour les 3 docs IA-assistés (QCM, GRILLE_OBS, ANALYSE_BESOIN).
+ * Contenu stub pour les docs IA-assistés (QCM, GRILLE_OBS, ANALYSE_BESOIN, …).
  *
- * Permet de valider le rendu HTML+Gotenberg sans dépendance Ollama. Day 3
- * remplacera ces fonctions par des appels `callOllama(...)` paramétrés par
- * le programme et le profil du stagiaire.
+ * Permet de valider le rendu HTML+Gotenberg sans dépendance Mistral, et
+ * sert de fallback si l'appel IA échoue (timeout, JSON invalide, quota).
  *
  * NB : les stubs sont volontairement génériques mais "lisibles" (pas de
  * Lorem Ipsum) pour repérer rapidement un problème de rendu en dev.

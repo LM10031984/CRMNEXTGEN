@@ -26,7 +26,7 @@ export interface PrepareTrainingResult {
  * Selon process Qualiopi Start Academy (cf process_startacademy.docx) :
  *  - Programme de formation (indic 1 + 6 — produit-level, idempotent)
  *  - Convention de formation (indic 6, 8 — par participant, idempotent)
- *  - Déroulé pédagogique (indic 10 — produit-level, IA Ollama, idempotent
+ *  - Déroulé pédagogique (indic 10 — produit-level, IA Mistral, idempotent
  *    via hash sha256)
  *  - Check-list formation (indic 17 — session-level, fire & forget)
  *
@@ -92,7 +92,7 @@ export async function prepareTrainingForSession(
   if (prog.ok) programmesGenerated = 1;
   else errors.push({ participantName: '(produit)', doc: 'PROGRAMME', message: prog.error ?? 'Erreur inconnue' });
 
-  // Déroulé pédagogique = asset PRODUIT (1 seul appel, IA Ollama, idempotent
+  // Déroulé pédagogique = asset PRODUIT (1 seul appel, IA Mistral, idempotent
   // via hash sha256). BUG-6 — couvre indic 10 Qualiopi (preuve adaptation).
   const der = await generateDerouleForProduct(session.productId);
   if (der.ok) derouleGenerated = true;

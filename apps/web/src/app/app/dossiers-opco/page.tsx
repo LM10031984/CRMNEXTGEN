@@ -198,7 +198,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
       </div>
 
       {/* Tableau */}
-      <section className="rounded-2xl border border-border bg-white overflow-hidden">
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

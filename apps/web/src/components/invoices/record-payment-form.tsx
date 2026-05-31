@@ -61,7 +61,7 @@ export function RecordPaymentForm({
         onClick={() => setOpen(true)}
         disabled={remaining <= 0}
         className={cn(
-          'inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium transition-colors',
+          'inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium transition-all duration-300 ease-out active:scale-[0.97]',
           remaining <= 0
             ? 'bg-emerald-100 text-emerald-700 cursor-default'
             : 'bg-emerald-600 text-white hover:bg-emerald-700',
@@ -130,7 +130,7 @@ export function RecordPaymentForm({
           onClick={handle}
           disabled={pending}
           className={cn(
-            'inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors',
+            'inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-all duration-300 ease-out active:scale-[0.97]',
             pending && 'opacity-70 cursor-wait',
           )}
         >

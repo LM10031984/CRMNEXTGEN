@@ -4,7 +4,7 @@
  * Pour chaque pré-inscription SUBMITTED :
  *   1. Charge les fichiers depuis MinIO
  *   2. Extrait le texte (pdf-parse pour PDFs natifs)
- *   3. Appelle Ollama qwen3 avec un prompt par type de doc
+ *   3. Appelle Mistral avec un prompt par type de doc
  *   4. Stocke les données structurées dans PreEnrollment.extractedData
  *   5. Met à jour le statut → EXTRACTED ou EXTRACTING en cas d'échec
  *
@@ -15,7 +15,7 @@
 import { prisma } from '@qualiof/db';
 import { downloadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/pdf-extract';
-import { callOllama } from '@/lib/ai-ollama';
+import { callMistral } from '@/lib/ai-mistral';
 
 const PROMPT_VERSION = 'v1-2026-04';
 
@@ -141,11 +141,8 @@ interface ExtractionResult {
 async function extractOne<T>(text: string, kind: keyof typeof PROMPTS): Promise<T | null> {
   if (text.trim().length < 20) return null;
   const prompt = PROMPTS[kind].replace('{TEXT}', text.slice(0, 6000));
-  // mistral-small:24b est ~3-5x plus rapide que qwen3:30b-a3b sur extraction
-  // structurée et tout aussi fiable sur les docs URSSAF/RIB courts. On le
-  // garde par défaut, override possible via OLLAMA_MODEL_FAST.
-  const r = await callOllama({
-    model: process.env.OLLAMA_MODEL_FAST,
+  const r = await callMistral({
+    model: process.env.MISTRAL_MODEL_TEXT,
     systemPrompt: SYSTEM_PROMPT,
     prompt,
     jsonOutput: true,
@@ -218,7 +215,7 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
         status: 'EXTRACTED',
         extractedData: result as any,
         aiExtractedAt: new Date(),
-        aiModel: 'qwen3:30b-a3b',
+        aiModel: process.env.MISTRAL_MODEL_TEXT ?? 'mistral-large-latest',
       },
     });
   } catch (e: any) {
@@ -244,7 +241,7 @@ function guessContentType(key: string): string {
  * Extraction réutilisable hors flux PreEnrollment.
  *
  * Prend des fichiers en mémoire (Buffer + contentType) pour CNI / RIB / CFP
- * et renvoie les données extraites par Ollama. Utilisé par le wizard de
+ * et renvoie les données extraites par Mistral. Utilisé par le wizard de
  * création apprenant manuel : l'admin upload les 3 docs → extraction →
  * pré-remplit le formulaire avant validation.
  *

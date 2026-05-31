@@ -226,8 +226,8 @@ export function formatHours(hours: number): string {
   return `${hours} heures`;
 }
 
-/** Données métier additionnelles consommées par les generators Ollama
- *  (cf ollama-generators.ts). Optionnel pour les templates statiques. */
+/** Données métier additionnelles consommées par les generators Mistral
+ *  (cf mistral-generators.ts). Optionnel pour les templates statiques. */
 export interface ClosureFormationMeta {
   programmeMd: string;
 }

@@ -8,7 +8,7 @@
  *
  * Données attendues : `{ competences: [{ nom, niveau?, observation? }],
  * observations_globales?: { commentaire, axe_amelioration } }`.
- * Day 2 : compétences générées par stub. Day 3 : Ollama.
+ * Compétences générées par Mistral, fallback stub si l'IA échoue.
  */
 
 import {

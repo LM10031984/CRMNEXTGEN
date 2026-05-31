@@ -33,7 +33,7 @@ export function GenerateProductProgrammeButton({ productId }: { productId: strin
         onClick={handleGenerate}
         disabled={pending}
         className={cn(
-          'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors',
+          'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97]',
           pending && 'opacity-70 cursor-wait',
         )}
         title="Génère le programme PDF prêt pour Qualiopi à partir des champs ci-dessous"

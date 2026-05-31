@@ -3,7 +3,7 @@
  *
  * Document Qualiopi indicateur 30. Rempli par le stagiaire en fin de
  * formation. Score garanti ≥ 90% (ratings "Très bien"/"Bien" majoritaires)
- * via le post-process dans ollama-generators.
+ * via le post-process dans mistral-generators.
  *
  * Données attendues :
  *   {

@@ -51,8 +51,8 @@ export function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        'flex flex-col min-h-screen transition-[margin-left] duration-200',
-        collapsed ? 'ml-[64px]' : 'ml-64',
+        'flex flex-col min-h-screen transition-[margin-left] duration-200 ease-in-out',
+        collapsed ? 'ml-[68px]' : 'ml-64',
       )}
     >
       {children}

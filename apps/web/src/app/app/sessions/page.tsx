@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Calendar, Users, Euro, AlertTriangle, Sparkles } from 'lucide-react';
+import { Plus, Calendar, Users, Euro, AlertTriangle, Sparkles, ChevronRight, Clock } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -7,6 +7,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
+import { buttonStyles } from '@/components/ui/button';
 import { SessionStatusBadgeMenu } from '@/components/sessions/session-status-badge-menu';
 import type { SessionStatus } from '@/server/actions/sessions-create';
 
@@ -146,15 +147,15 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
           <div className="flex items-center gap-2">
             <Link
               href="/app/sessions/rattrapage"
-              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium text-amber-700 hover:bg-amber-50 transition-all duration-300 ease-out active:scale-[0.97]"
             >
-              <Sparkles className="h-4 w-4" /> Rattraper les inscriptions
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} /> Rattraper
             </Link>
             <Link
               href="/app/sessions/nouvelle"
-              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.35),0_0_20px_rgba(15,23,42,0.18)] transition-all duration-300 ease-out active:scale-[0.97]"
             >
-              <Plus className="h-4 w-4" /> Nouvelle session
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} /> Nouvelle session
             </Link>
           </div>
         }
@@ -166,61 +167,94 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-white p-12 text-center text-sm text-muted-foreground">
-          {q ? `Aucune session ne correspond à « ${q} ».` : 'Aucune session.'}
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card py-16 text-center">
+          <div className="inline-flex h-10 w-10 mb-3 rounded-lg bg-slate-100 text-slate-400 items-center justify-center">
+            <Calendar className="h-5 w-5" strokeWidth={1.75} />
+          </div>
+          <h3 className="text-sm font-medium text-slate-900">
+            {q ? 'Aucun résultat' : 'Aucune session pour le moment'}
+          </h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            {q ? (
+              <>Aucune session ne correspond à <span className="font-medium text-slate-700">« {q} »</span>.</>
+            ) : (
+              <>Crée ta première session de formation via le bouton <span className="font-medium text-slate-700">Nouvelle session</span>.</>
+            )}
+          </p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-white divide-y divide-border overflow-hidden">
+        <ul className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card divide-y divide-slate-100 overflow-hidden">
           {rows.map((s) => {
             const start = new Date(s.startDate);
             const end = new Date(s.endDate);
             const sameDay = start.toDateString() === end.toDateString();
             const isPast = end < now;
+            const dateLabel = sameDay
+              ? start.toLocaleDateString('fr-FR')
+              : `${start.toLocaleDateString('fr-FR')} → ${end.toLocaleDateString('fr-FR')}`;
+            const code = s.code ?? '';
             return (
-              <Link
-                key={s.id}
-                href={`/app/sessions/${s.id}`}
-                className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors"
-              >
-                <div className="shrink-0">
-                  <Badge variant="muted" className="font-mono">{s.code}</Badge>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{s.name ?? '(sans nom)'}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {sameDay
-                        ? start.toLocaleDateString('fr-FR')
-                        : `${start.toLocaleDateString('fr-FR')} → ${end.toLocaleDateString('fr-FR')}`}
+              <li key={s.id}>
+                <Link
+                  href={`/app/sessions/${s.id}`}
+                  className="group flex items-center gap-4 py-3 px-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  {/* Code session — pill mono Folk discrète */}
+                  <div className="shrink-0">
+                    <span className="inline-flex items-center justify-center font-mono text-[11px] font-medium text-slate-600 bg-slate-50 rounded px-2 py-0.5">
+                      {code}
                     </span>
-                    {s.product?.durationHours ? <span>· {s.product.durationHours}h</span> : null}
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="h-3 w-3" /> {s._count.participants} inscrit{s._count.participants > 1 ? 's' : ''}
-                    </span>
-                    {Number(s.pricePerLearner ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Euro className="h-3 w-3" /> {Number(s.pricePerLearner).toFixed(0)} €
-                      </span>
-                    )}
                   </div>
-                </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  {isPast && s.status !== 'COMPLETED' && s.status !== 'CANCELLED' && (
-                    <Badge variant="warning">
-                      <AlertTriangle className="h-3 w-3" /> à clore
-                    </Badge>
-                  )}
-                  <SessionStatusBadgeMenu
-                    sessionId={s.id}
-                    sessionCode={s.code}
-                    status={s.status as SessionStatus}
-                  />
-                </div>
-              </Link>
+
+                  {/* Nom + métadonnées */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900 truncate">
+                      {s.name ?? <span className="text-slate-400 italic">(sans nom)</span>}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3 flex-wrap">
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+                        <span className="tabular-nums">{dateLabel}</span>
+                      </span>
+                      {s.product?.durationHours ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+                          <span className="tabular-nums">{s.product.durationHours}h</span>
+                        </span>
+                      ) : null}
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+                        <span className="tabular-nums">{s._count.participants}</span> inscrit{s._count.participants > 1 ? 's' : ''}
+                      </span>
+                      {Number(s.pricePerLearner ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                          <Euro className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
+                          <span className="tabular-nums">{Number(s.pricePerLearner).toFixed(0)} €</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Statut + alerte "à clore" */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {isPast && s.status !== 'COMPLETED' && s.status !== 'CANCELLED' && (
+                      <Badge variant="warning">
+                        <AlertTriangle className="h-3 w-3" /> à clore
+                      </Badge>
+                    )}
+                    <SessionStatusBadgeMenu
+                      sessionId={s.id}
+                      sessionCode={s.code}
+                      status={s.status as SessionStatus}
+                    />
+                  </div>
+
+                  <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-all duration-300 ease-out active:scale-[0.97] shrink-0" strokeWidth={1.75} />
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
       <Pagination

@@ -121,7 +121,7 @@ export default async function LeadsPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-border bg-white overflow-hidden">
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
         {leads.length === 0 ? (
           <div className="p-12 text-center space-y-2">
             <Megaphone className="h-10 w-10 text-muted-foreground mx-auto" />

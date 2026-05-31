@@ -512,7 +512,7 @@ function slugify(s: string): string {
  * erreurs / les stubs"). Idempotent : un job en cours n'est pas touché.
  *
  * @param includeStubs si true, inclut aussi les jobs DONE avec usedStub=true
- *   (cas où Ollama avait échoué et qu'on veut re-tenter pour avoir un
+ *   (cas où Mistral avait échoué et qu'on veut re-tenter pour avoir un
  *   contenu IA personnalisé avant audit Qualiopi).
  */
 export async function retryClosureBatchErrors(

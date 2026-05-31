@@ -27,11 +27,10 @@ import { loadOfConfig } from '@/lib/of-config';
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
-// Concurrency 3 par défaut : sur Apple Silicon avec mistral-small:24b en
-// local, 5 contextes en parallèle saturent le GPU et font traîner toutes
-// les requêtes (latence moyenne 4-5 min, timeouts en cascade). 3 workers
-// laissent assez de bande passante pour que chaque génération se termine
-// en ~2 min. À monter jusqu'à 8 quand on bascule sur Claude API.
+// Concurrency 3 par défaut. Avec Mistral cloud (API HTTP), on peut
+// monter plus haut (jusqu'à 8) car il n'y a pas de saturation GPU
+// locale ; la limite vient des rate-limits Mistral plutôt que des
+// ressources matérielles.
 const CONCURRENCY = Number(process.env.CLOSURE_WORKER_CONCURRENCY ?? 3);
 
 // Mapping kind → DocType pour les documents écrits dans `Document`
@@ -168,7 +167,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       },
     };
 
-    // 3. Render PDF via le dispatch real (Day 2 avec stubs IA, Day 3 avec Ollama)
+    // 3. Render PDF via le dispatch real (IA Mistral + fallback stubs)
     const { pdfBuffer, rawJson, usedStub } = await renderClosureDoc(payload.kind, ctx);
 
     // 4. Upload MinIO

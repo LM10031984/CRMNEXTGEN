@@ -56,7 +56,7 @@ const FINANCING_LABELS: Record<MatrixFilterState['financingFilter'], string> = {
 };
 
 const CHIP_BASE =
-  'inline-flex items-center gap-2 px-3 h-8 rounded-full border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none';
+  'inline-flex items-center gap-2 px-3 h-8 rounded-full border text-xs font-medium transition-all duration-300 ease-out active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none';
 const CHIP_INACTIVE = 'bg-white text-foreground border-border hover:bg-muted/40';
 const CHIP_ACTIVE = 'bg-primary-50 text-primary-700 border-primary-100';
 

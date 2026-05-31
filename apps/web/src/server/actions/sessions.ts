@@ -96,7 +96,7 @@ export async function addParticipant(input: {
     });
 
     // Auto-génère la convention de formation (Code du Travail L6353-1) si elle
-    // n'existe pas déjà pour ce participant. Template pur (pas Ollama) → ~1s.
+    // n'existe pas déjà pour ce participant. Template pur (pas d'IA) → ~1s.
     // Fire-and-forget pour ne pas bloquer l'inscription si génération échoue.
     const existingConvention = await prisma.document.findFirst({
       where: {
@@ -578,7 +578,7 @@ export async function updateSessionStatus(input: {
   //   - Skip si un batch RUNNING/PENDING existe déjà (évite les doublons en cas
   //     de toggle rapide IN_PROGRESS ↔ COMPLETED par l'utilisateur).
   //   - Fire-and-forget (`void`) : la pré-génération du déroulé/grille obs
-  //     session peut prendre 5-10 min via Ollama. Ne pas bloquer la réponse
+  //     session peut prendre 30-60 s via Mistral. Ne pas bloquer la réponse
   //     du toggle de statut.
   //   - Erreurs swallowed : un échec d'enqueue ne doit pas casser le change
   //     de statut. L'utilisateur pourra retrigger manuellement depuis la

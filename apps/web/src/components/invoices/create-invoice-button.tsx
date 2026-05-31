@@ -44,7 +44,7 @@ export function CreateInvoiceButton({ participantId, alreadyInvoiced }: { partic
         onClick={handle}
         disabled={pending}
         className={cn(
-          'inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium transition-colors',
+          'inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium transition-all duration-300 ease-out active:scale-[0.97]',
           alreadyInvoiced
             ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             : 'bg-violet-600 text-white hover:bg-violet-700',

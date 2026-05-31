@@ -26,19 +26,34 @@ export function SearchInput({ placeholder = 'Rechercher…' }: { placeholder?: s
   }, [value]);
 
   return (
-    <div className="relative w-full max-w-sm">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <div className="relative w-full max-w-xs">
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"
+        strokeWidth={1.75}
+      />
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-9 pl-9 pr-9 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="
+          w-full h-10 pl-9 pr-9 rounded-xl
+          bg-white text-sm text-slate-900 placeholder:text-slate-400
+          ring-1 ring-slate-200 shadow-soft
+          transition-all duration-200
+          hover:ring-slate-300 hover:shadow-card
+          focus:outline-none focus:ring-2 focus:ring-primary-200 focus:shadow-card
+        "
       />
       {value && (
         <button
           type="button"
           onClick={() => setValue('')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
+          className="
+            absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md
+            inline-flex items-center justify-center
+            text-slate-400 hover:text-slate-700 hover:bg-slate-100
+            transition-colors
+          "
           aria-label="Effacer"
         >
           <X className="h-3.5 w-3.5" />

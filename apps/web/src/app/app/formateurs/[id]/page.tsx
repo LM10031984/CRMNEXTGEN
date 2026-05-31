@@ -118,7 +118,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Coordonnées */}
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Coordonnées
             </h2>
@@ -140,7 +140,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
           </section>
 
           {/* Sessions animées */}
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Sessions animées ({totalSessions})
             </h2>
@@ -186,7 +186,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
         {/* Sidebar */}
         <div className="space-y-6">
           {topThemes.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
                 <Award className="h-4 w-4" /> Expertise
               </h2>
@@ -218,7 +218,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
           )}
 
           {subOrg && (
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
                 <Briefcase className="h-4 w-4" /> Structure de sous-traitance
               </h2>
@@ -240,7 +240,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
           )}
 
           {/* Profil pédagogique */}
-          <section className="rounded-2xl border border-border bg-white p-6">
+          <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
             <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
               Profil pédagogique
             </h2>
@@ -266,7 +266,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
           {/* Disponibilités */}
           {trainer.trainerAvailabilities.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-6">
+            <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
               <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
                 Prochaines disponibilités
               </h2>
@@ -297,7 +297,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
 function StatBlock({ label, value, hint, suffix }: { label: string; value: number; hint?: string; suffix?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-white p-5">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </div>

@@ -217,7 +217,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
 
   // Auto-génère 1 convention par participant ajouté à la création de session.
   // Fire-and-forget : si une génération échoue, la session est quand même créée.
-  // Template pur (pas Ollama) → ~1s/convention.
+  // Template pur (pas d'IA) → ~1s/convention.
   for (const pid of session.createdParticipantIds) {
     generateConventionForParticipant(pid).catch((e) => {
       console.warn(`[createSessionWithParticipants] convention auto-gen failed for ${pid}:`, e?.message ?? e);

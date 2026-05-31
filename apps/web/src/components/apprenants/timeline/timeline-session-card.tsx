@@ -70,7 +70,7 @@ export function TimelineSessionCard({ session }: Props) {
       href={`/app/sessions/${id}` as any}
       aria-label={`Voir la session ${productTitle} du ${fmtDate(startDate)}`}
       className={cn(
-        'block rounded-2xl border border-border bg-white p-4 hover:shadow-md hover:border-primary-200 transition-all max-w-2xl',
+        'block rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-4 hover:shadow-md hover:border-primary-200 transition-all max-w-2xl',
         cancelled && 'bg-muted/30 opacity-70',
       )}
       id={`session-${id}`}

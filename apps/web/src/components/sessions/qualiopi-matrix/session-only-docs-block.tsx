@@ -58,7 +58,7 @@ export function SessionOnlyDocsBlock({
   return (
     <section
       aria-labelledby="session-only-docs-heading"
-      className="rounded-2xl border border-border bg-white p-5"
+      className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5"
     >
       <h2
         id="session-only-docs-heading"
@@ -74,7 +74,7 @@ export function SessionOnlyDocsBlock({
           return (
             <article
               key={card.key}
-              className="rounded-xl border border-border bg-white p-4 flex flex-col gap-3"
+              className="rounded-lg border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-base font-semibold leading-tight">{card.title}</h3>

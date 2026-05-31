@@ -11,9 +11,10 @@
 
 html, body {
   height: 100%;
+  /* La police vient de Tailwind via la classe `font-sans` (chaînée à
+     `var(--font-inter)`). On laisse Tailwind appliquer pour bénéficier du
+     swap + preload de next/font. */
   background: #FAFBFC;
   color: #0F172A;
-  font-family: 'Inter', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
 }
 

@@ -26,7 +26,7 @@ export function GapRow({ gap }: { gap: SessionGap }) {
   const [resolved, setResolved] = useState<Set<string>>(new Set());
 
   return (
-    <div className="rounded-2xl border border-border bg-white overflow-hidden">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(!open)}

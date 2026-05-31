@@ -13,12 +13,18 @@ interface TopBarProps {
 
 export function TopBar({ user, role }: TopBarProps) {
   return (
-    <header className="h-14 border-b border-border bg-white flex items-center px-4 md:px-8 sticky top-0 z-10 gap-3">
+    <header
+      className="
+        h-16 sticky top-0 z-10 flex items-center gap-3 px-4 md:px-8
+        bg-white/70 backdrop-blur-md backdrop-saturate-150
+        border-b border-slate-200/60
+      "
+    >
       <MobileMenuButton role={role} />
       <div className="flex-1 max-w-md">
         <CmdkTrigger />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <NotificationsBell />
         <UserMenuButton user={user} />
       </div>

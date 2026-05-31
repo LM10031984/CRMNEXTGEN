@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { Upload, Check, X, Loader2, FileText, CreditCard, Building2, Sparkles, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import { Upload, Check, Loader2, FileText, CreditCard, Building2, Sparkles, AlertCircle, FileIcon, PenTool, Trash2, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { submitPreEnrollmentForm } from '@/server/actions/preinscription-public';
+import { SignaturePad } from './signature-pad';
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 Mo
+const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
 
 type FileKind = 'CNI' | 'RIB' | 'CFP';
 
@@ -46,6 +50,7 @@ export function PublicPreEnrollmentForm({
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressStep, setProgressStep] = useState<'idle' | 'encoding' | 'uploading' | 'done'>('idle');
 
   const [firstName, setFirstName] = useState(prefillFirstName ?? '');
   const [lastName, setLastName] = useState(prefillLastName ?? '');
@@ -58,6 +63,7 @@ export function PublicPreEnrollmentForm({
   const [educationLevel, setEducationLevel] = useState('');
   const [experience, setExperience] = useState('');
   const [rgpd, setRgpd] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
 
   const [slots, setSlots] = useState<FileSlot[]>([
     {
@@ -118,9 +124,14 @@ export function PublicPreEnrollmentForm({
       setError('Dépose au moins une pièce justificative');
       return;
     }
+    if (!signatureDataUrl) {
+      setError('Tu dois signer ta demande pour la valider');
+      return;
+    }
 
     startTransition(async () => {
       try {
+        setProgressStep('encoding');
         const fileData = await Promise.all(
           filesToUpload.map(async (s) => ({
             kind: s.kind,
@@ -129,6 +140,12 @@ export function PublicPreEnrollmentForm({
             base64: await fileToBase64(s.file!),
           })),
         );
+
+        setProgressStep('uploading');
+        // Extrait la partie base64 du data URL signature (sans préfixe data:image/png;base64,)
+        const signatureBase64 = signatureDataUrl
+          ? signatureDataUrl.split(',')[1] ?? undefined
+          : undefined;
 
         const r = await submitPreEnrollmentForm({
           token,
@@ -144,16 +161,21 @@ export function PublicPreEnrollmentForm({
           professionalExperience: experience.trim() || undefined,
           rgpdAccepted: true,
           files: fileData,
+          signatureBase64,
         });
 
         if (r.ok) {
+          setProgressStep('done');
           setDone(true);
         } else {
+          setProgressStep('idle');
           setError(r.error ?? 'Erreur lors de l\'envoi');
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        setError('Erreur technique lors de l\'envoi des fichiers');
+        setProgressStep('idle');
+        const msg = e?.message ? `Erreur : ${e.message}` : 'Erreur technique lors de l\'envoi des fichiers';
+        setError(msg);
       }
     });
   };
@@ -186,7 +208,7 @@ export function PublicPreEnrollmentForm({
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
             />
           </Field>
           <Field label="Nom" required>
@@ -194,7 +216,7 @@ export function PublicPreEnrollmentForm({
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
             />
           </Field>
           <Field label="Email" required>
@@ -202,7 +224,7 @@ export function PublicPreEnrollmentForm({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
             />
           </Field>
           <Field label="Téléphone">
@@ -210,7 +232,7 @@ export function PublicPreEnrollmentForm({
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
               placeholder="06 XX XX XX XX"
             />
           </Field>
@@ -219,7 +241,7 @@ export function PublicPreEnrollmentForm({
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
             />
           </Field>
           <Field label="Lieu de naissance">
@@ -227,7 +249,7 @@ export function PublicPreEnrollmentForm({
               type="text"
               value={birthPlace}
               onChange={(e) => setBirthPlace(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
               placeholder="Ville"
             />
           </Field>
@@ -238,14 +260,14 @@ export function PublicPreEnrollmentForm({
       <Section title="Ta situation professionnelle" icon={Building2}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Statut professionnel">
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full h-10 px-3 rounded-md border border-input bg-white">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className={INPUT_CLASS}>
               {STATUS_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </Field>
           <Field label="Niveau d'étude">
-            <select value={diploma} onChange={(e) => setDiploma(e.target.value)} className="w-full h-10 px-3 rounded-md border border-input bg-white">
+            <select value={diploma} onChange={(e) => setDiploma(e.target.value)} className={INPUT_CLASS}>
               {DIPLOMA_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
@@ -256,7 +278,7 @@ export function PublicPreEnrollmentForm({
               type="text"
               value={educationLevel}
               onChange={(e) => setEducationLevel(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
               placeholder="Ex: BTS Professions immobilières, Master Marketing…"
             />
           </Field>
@@ -265,7 +287,7 @@ export function PublicPreEnrollmentForm({
               type="text"
               value={experience}
               onChange={(e) => setExperience(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input"
+              className={INPUT_CLASS}
               placeholder="Ex: 5 ans, 1-3 ans, Plus de 10 ans…"
             />
           </Field>
@@ -288,16 +310,31 @@ export function PublicPreEnrollmentForm({
         </div>
       </Section>
 
+      {/* Signature électronique */}
+      <Section title="Ta signature" icon={PenTool}>
+        <p className="text-sm text-muted-foreground -mt-1 mb-3">
+          Signe ta demande de pré-inscription pour la valider. Ta signature est horodatée
+          et enregistrée avec une valeur probante (hash cryptographique + IP + date).
+        </p>
+        <SignaturePad
+          onChange={setSignatureDataUrl}
+          disabled={pending}
+        />
+      </Section>
+
       {/* RGPD */}
-      <div className="rounded-xl border border-border bg-muted/30 p-4">
+      <div className={cn(
+        'rounded-xl border bg-white shadow-sm p-4 transition-colors',
+        rgpd ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 hover:border-gray-300',
+      )}>
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
             checked={rgpd}
             onChange={(e) => setRgpd(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-input"
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-100 focus:ring-offset-0"
           />
-          <span className="text-xs leading-relaxed">
+          <span className="text-xs leading-relaxed text-gray-700">
             J'accepte que Start Academy traite ces informations dans le cadre de ma pré-inscription
             à une formation, conformément au RGPD. Mes données seront conservées pendant la durée
             nécessaire au traitement de mon dossier et à mes obligations légales (Qualiopi, OPCO).
@@ -307,21 +344,27 @@ export function PublicPreEnrollmentForm({
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 inline-flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span className="leading-relaxed">{error}</span>
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground italic">
-          🔒 Tes données sont stockées en France sur les serveurs de Start Academy
+      {pending && progressStep !== 'idle' && (
+        <UploadProgress step={progressStep} />
+      )}
+
+      <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-200 flex-wrap">
+        <p className="text-xs text-gray-500 inline-flex items-center gap-1.5">
+          <span aria-hidden>🔒</span> Tes données sont stockées en France sur les serveurs de Start Academy
         </p>
         <button
           type="button"
           onClick={handleSubmit}
           disabled={pending}
           className={cn(
-            'inline-flex items-center gap-2 h-11 px-6 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors',
+            'inline-flex items-center gap-2 h-12 px-6 rounded-xl bg-emerald-600 text-white font-semibold shadow-sm transition-all',
+            'hover:bg-emerald-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-emerald-200',
             pending && 'opacity-70 cursor-wait',
           )}
         >
@@ -342,18 +385,26 @@ export function PublicPreEnrollmentForm({
 
 function Section({
   title,
+  subtitle,
   icon: Icon,
   children,
 }: {
   title: string;
+  subtitle?: string;
   icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-white p-6">
-      <h2 className="font-semibold text-base inline-flex items-center gap-2 mb-4">
-        <Icon className="h-4 w-4 text-primary" /> {title}
-      </h2>
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 inline-flex items-center justify-center shrink-0">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-base text-gray-900 leading-tight">{title}</h2>
+          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
       {children}
     </section>
   );
@@ -371,8 +422,8 @@ function Field({
   className?: string;
 }) {
   return (
-    <div className={cn('space-y-1', className)}>
-      <label className="text-xs font-medium">
+    <div className={cn('space-y-1.5', className)}>
+      <label className="text-xs font-medium text-gray-700">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
@@ -380,55 +431,209 @@ function Field({
   );
 }
 
+// Classes Tailwind partagées par tous les <input>/<select>/<textarea> du formulaire.
+// Centralisées ici pour garantir la cohérence : bordure gray-300 → focus bleu avec ring.
+const INPUT_CLASS = 'w-full h-11 px-3.5 rounded-lg border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+
 function FileDrop({ slot, onChange }: { slot: FileSlot; onChange: (f: File | null) => void }) {
   const Icon = slot.icon;
   const inputId = `file-${slot.kind}`;
+  const [dragOver, setDragOver] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Object URL pour preview image — recréé à chaque nouveau fichier, libéré au démontage
+  useEffect(() => {
+    if (slot.file && slot.file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(slot.file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPreviewUrl(null);
+  }, [slot.file]);
+
+  const handleFile = (file: File | null) => {
+    setLocalError(null);
+    if (!file) {
+      onChange(null);
+      return;
+    }
+    if (!ACCEPTED_MIME.includes(file.type)) {
+      setLocalError('Format non accepté. PDF, JPG ou PNG uniquement.');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setLocalError(`Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo, max 10 Mo).`);
+      return;
+    }
+    onChange(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  };
+
+  const isPdf = slot.file?.type === 'application/pdf';
+
+  // Card "FileDrop" — style SaaS moderne (Shadcn / Stripe / Linear).
+  // - Bordure SOLIDE par défaut (gray-200), passe en DASHED + bleue uniquement
+  //   au hover ou en drag&drop → moins de bruit visuel au repos.
+  // - Icône dans un cercle (h-12 w-12) avec fond doux bleu (vide) ou vert (rempli).
+  // - Faux bouton "Parcourir" (badge gris) qui s'illumine bleu au hover de la carte.
+  // - Rempli → check vert + nom/poids + bouton corbeille rouge pour reset rapide.
   return (
-    <label
-      htmlFor={inputId}
-      className={cn(
-        'flex items-center gap-4 p-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
-        slot.file
-          ? 'border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50'
-          : 'border-border hover:border-primary-300 hover:bg-muted/30',
-      )}
-    >
-      <div className={cn(
-        'h-10 w-10 rounded-lg inline-flex items-center justify-center shrink-0',
-        slot.file ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground',
-      )}>
-        {slot.file ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm">
-          {slot.label}{' '}
-          {slot.required && <span className="text-red-500">*</span>}
-        </div>
-        {slot.file ? (
-          <div className="text-xs text-emerald-700 truncate">{slot.file.name} ({(slot.file.size / 1024).toFixed(0)} ko)</div>
-        ) : (
-          <div className="text-xs text-muted-foreground">{slot.description}</div>
+    <div className="space-y-1.5">
+      <label
+        htmlFor={inputId}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className={cn(
+          'group flex items-center gap-4 p-4 rounded-xl bg-white shadow-sm cursor-pointer transition-all duration-150',
+          slot.file
+            ? 'border border-green-200 bg-green-50/40 hover:bg-green-50'
+            : dragOver
+              ? 'border-2 border-dashed border-blue-500 bg-blue-50 scale-[1.01] shadow-md'
+              : 'border border-gray-200 hover:border-2 hover:border-dashed hover:border-blue-400 hover:bg-blue-50/40 hover:shadow',
         )}
-      </div>
-      {slot.file ? (
-        <button
-          type="button"
-          onClick={(e) => { e.preventDefault(); onChange(null); }}
-          className="h-7 w-7 rounded-md hover:bg-red-50 text-red-600 inline-flex items-center justify-center shrink-0"
-          title="Retirer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      ) : (
-        <span className="text-xs text-primary font-medium shrink-0">Choisir</span>
+      >
+        {/* Thumbnail / icône — cercle, fond doux qui passe au vert quand rempli */}
+        <div className={cn(
+          'h-12 w-12 rounded-full inline-flex items-center justify-center shrink-0 overflow-hidden transition-colors duration-150',
+          slot.file
+            ? 'bg-green-100 text-green-600'
+            : 'bg-blue-100 text-blue-600 group-hover:bg-blue-500 group-hover:text-white',
+        )}>
+          {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="Aperçu" className="h-full w-full object-cover" />
+          ) : isPdf ? (
+            <FileIcon className="h-5 w-5" />
+          ) : slot.file ? (
+            <Check className="h-5 w-5" strokeWidth={2.5} />
+          ) : (
+            <Icon className="h-5 w-5" />
+          )}
+        </div>
+
+        {/* Titre + état (description ou nom+taille) */}
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm text-gray-900">
+            {slot.label}{' '}
+            {slot.required && <span className="text-red-500">*</span>}
+          </div>
+          {slot.file ? (
+            <div className="text-xs text-green-700 truncate flex items-center gap-1.5 mt-0.5">
+              <Check className="h-3 w-3 shrink-0" />
+              <span className="truncate font-medium">{slot.file.name}</span>
+              <span className="text-green-600/70 shrink-0">· {formatFileSize(slot.file.size)}</span>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500 mt-0.5">{slot.description}</div>
+          )}
+        </div>
+
+        {/* CTA droit : corbeille rouge (rempli) OU badge "Parcourir" (vide) */}
+        {slot.file ? (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); handleFile(null); }}
+            className="h-9 w-9 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 inline-flex items-center justify-center shrink-0 transition-colors"
+            title="Retirer le fichier"
+            aria-label="Retirer le fichier"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        ) : (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 transition-colors duration-150',
+              dragOver
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 group-hover:bg-blue-600 group-hover:text-white',
+            )}
+          >
+            <UploadCloud className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{dragOver ? 'Déposer ici' : 'Parcourir'}</span>
+          </span>
+        )}
+
+        <input
+          id={inputId}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          className="hidden"
+        />
+      </label>
+
+      {localError && (
+        <p className="text-xs text-red-600 inline-flex items-center gap-1 pl-1">
+          <AlertCircle className="h-3 w-3" /> {localError}
+        </p>
       )}
-      <input
-        id={inputId}
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-    </label>
+    </div>
   );
+}
+
+function UploadProgress({ step }: { step: 'encoding' | 'uploading' | 'done' }) {
+  const steps = [
+    { id: 'encoding' as const, label: 'Préparation des fichiers' },
+    { id: 'uploading' as const, label: 'Envoi sécurisé à Start Academy' },
+    { id: 'done' as const, label: "Traitement IA des pièces" },
+  ];
+  const order: Array<'encoding' | 'uploading' | 'done'> = ['encoding', 'uploading', 'done'];
+  const currentIdx = order.indexOf(step);
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/60 shadow-sm p-5">
+      <ul className="space-y-3">
+        {steps.map((s, idx) => {
+          const isDone = idx < currentIdx;
+          const isActive = idx === currentIdx;
+          return (
+            <li key={s.id} className="flex items-center gap-3 text-sm">
+              <span
+                className={cn(
+                  'h-7 w-7 rounded-full inline-flex items-center justify-center shrink-0 transition-colors',
+                  isDone
+                    ? 'bg-emerald-500 text-white'
+                    : isActive
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-200 text-gray-400',
+                )}
+              >
+                {isDone ? (
+                  <Check className="h-4 w-4" strokeWidth={2.5} />
+                ) : isActive ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span className="text-[11px] font-bold">{idx + 1}</span>
+                )}
+              </span>
+              <span
+                className={cn(
+                  'transition-colors',
+                  isDone && 'text-emerald-800 line-through opacity-70',
+                  isActive && 'text-blue-900 font-medium',
+                  !isDone && !isActive && 'text-gray-500',
+                )}
+              >
+                {s.label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }

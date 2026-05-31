@@ -4,7 +4,7 @@
  * Modale "Nouveau produit" depuis le wizard nouvelle session.
  *
  * Aligne tous les champs Qualiopi sur la modale d'édition (cohérence)
- * et propose un bouton "✨ Pré-remplir avec IA" qui appelle Ollama avec
+ * et propose un bouton "✨ Pré-remplir avec IA" qui appelle Mistral avec
  * un prompt few-shot calibré sur les modèles Start Academy réels.
  */
 
@@ -200,7 +200,7 @@ export function QuickCreateProductButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-colors"
+        className="inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-all duration-300 ease-out active:scale-[0.97]"
       >
         <Plus className="h-4 w-4" /> Nouveau produit
       </button>

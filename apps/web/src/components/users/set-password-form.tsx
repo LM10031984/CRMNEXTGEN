@@ -77,7 +77,7 @@ export function SetPasswordForm({ token, email, firstName, role }: SetPasswordFo
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white p-8 max-w-md mx-auto shadow-sm">
+    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-8 max-w-md mx-auto shadow-sm">
       <h1 className="text-xl font-bold mb-1">
         Bienvenue{firstName ? ` ${firstName}` : ''} 👋
       </h1>

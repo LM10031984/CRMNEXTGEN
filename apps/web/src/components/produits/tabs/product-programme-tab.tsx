@@ -65,7 +65,7 @@ export function ProductProgrammeTab({ markdown, pdfId, productId }: Props) {
       )}
 
       {markdown && markdown.trim().length > 0 && (
-        <section className="rounded-2xl border border-border bg-white p-6">
+        <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
           <h3 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
             Programme détaillé
           </h3>

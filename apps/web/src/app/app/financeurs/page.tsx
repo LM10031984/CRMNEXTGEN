@@ -109,7 +109,7 @@ export default async function FinanceursPage() {
             <Link
               key={opco.id}
               href={`/app/financeurs/${opco.code}`}
-              className="group rounded-2xl border border-border bg-white p-6 hover:border-primary-300 hover:shadow-sm transition-all"
+              className="group rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6 hover:border-primary-300 hover:shadow-sm transition-all"
             >
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div className="flex items-start gap-3 min-w-0">
@@ -182,7 +182,7 @@ export default async function FinanceursPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
+      <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
         <h2 className="font-semibold mb-2">À propos des financeurs</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Les financeurs (OPCO et FAF) sont des <strong>attributs des organisations</strong>, jamais directement des apprenants.

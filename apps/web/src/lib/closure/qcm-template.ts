@@ -11,7 +11,7 @@
  *                   selected_answer, is_correct }],
  *     score: number  // 0..100 }
  *
- * Le scoring est forcé en post-process (ollama-generators.ts) — Ollama
+ * Le scoring est forcé en post-process (mistral-generators.ts) — Mistral
  * génère uniquement les questions, le code attribue `selected_answer` de
  * façon à viser un score entre 75% et 95%.
  */

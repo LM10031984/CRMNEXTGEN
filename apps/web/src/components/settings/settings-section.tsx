@@ -55,7 +55,7 @@ export function SettingsSection({
   return (
     <section
       className={cn(
-        'rounded-2xl border border-border bg-white p-6',
+        'rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6',
         className,
       )}
     >

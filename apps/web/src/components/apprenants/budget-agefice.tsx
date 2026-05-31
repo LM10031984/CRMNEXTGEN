@@ -43,7 +43,7 @@ export function BudgetAgefice({
         : 'bg-emerald-500';
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-6">
+    <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
           <Wallet className="h-4 w-4" /> Budget AGEFICE {year}

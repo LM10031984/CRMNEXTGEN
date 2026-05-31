@@ -128,7 +128,7 @@ export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
       <Dialog.Trigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-all duration-300 ease-out active:scale-[0.97]"
           aria-label="Modifier les détails de la session"
         >
           <Pencil className="h-4 w-4" /> Modifier

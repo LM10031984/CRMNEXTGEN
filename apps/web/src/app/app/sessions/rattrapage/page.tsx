@@ -75,7 +75,7 @@ export default async function RattrapagePage() {
       )}
 
       {data.sessions.length > 0 && (
-        <div className="rounded-2xl border border-border bg-white p-6">
+        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
           <h3 className="font-semibold mb-2 inline-flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-600" />
             Apprenants candidats absents ?
