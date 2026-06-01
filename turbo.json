@@ -13,10 +13,10 @@
     "GOTENBERG_URL",
     "DOC_ENGINE_URL",
     "AI_PROVIDER",
-    "OLLAMA_URL",
-    "OLLAMA_MODEL_FAST",
-    "OLLAMA_MODEL_REASONING",
-    "OLLAMA_MODEL_EMBED",
+    "MISTRAL_API_KEY",
+    "MISTRAL_MODEL_TEXT",
+    "MISTRAL_MODEL_VISION",
+    "OPENROUTER_API_KEY",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_MODEL",
     "QUALIOPI_GEN_URL",
@@ -39,6 +39,14 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@qualiof/db#build": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    "@qualiof/shared#build": {
+      "dependsOn": [],
+      "outputs": []
     },
     "dev": {
       "cache": false,
