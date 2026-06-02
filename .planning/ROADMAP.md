@@ -21,7 +21,7 @@ Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l
 - [x] **Phase 9: Distribution leads automatique** - Auto-assignation Lead→Commercial + vue de charge
 - [ ] **Phase 10: Audit Qualiopi blanc** - Simulation pré-audit 32 indicateurs + alertes dossiers incomplets
 - [x] **Phase 11: Factures cycle complet** - Numérotation, paiements, relances, export comptable (completed 2026-05-21)
-- [ ] **Phase 12: Modules stub Inscriptions et Modèles** - Trancher périmètre, livrer ou retirer
+- [x] **Phase 12: Modules stub Inscriptions et Modèles** - Trancher périmètre, livrer ou retirer
 
 ## Phase Details
 
@@ -209,11 +209,15 @@ Plans:
 **Goal**: Trancher périmètre des 2 modules placeholder, livrer ou retirer.
 **Depends on**: Nothing
 **Requirements**: [MOD-01, MOD-02]
+**Plans:** 3/3 plans complete
 **Success Criteria** (what must be TRUE):
-  1. Inscriptions : décision documentée (vue agrégée OU retrait avec redirect).
-  2. Modèles de documents : décision documentée (éditeur templates OU liste read-only OU retrait).
-  3. Plus aucun item de sidebar ne renvoie sur une page placeholder.
-**Plans**: TBD
+  1. Inscriptions : décision documentée (vue agrégée OU retrait avec redirect). ✅ rename + redirect 308 (Plan 12-01)
+  2. Modèles de documents : décision documentée (éditeur templates OU liste read-only OU retrait). ✅ liste read-only catalogue centralisé (Plan 12-02)
+  3. Plus aucun item de sidebar ne renvoie sur une page placeholder. ✅ 0 placeholder restant
+**Plans**:
+- [x] 12-01-PLAN.md — MOD-01 : rename `/app/preinscriptions` → `/app/inscriptions` + redirect 308 + sidebar D-04 + 17 refs migrées D-05 (route publique D-03 préservée)
+- [x] 12-02-PLAN.md — MOD-02 : catalogue centralisé `lib/templates-catalog.ts` (27 entries D-07/D-10) + Server Component listing /app/templates + RBAC ADMIN+MANAGER+LECTEUR D-09 (V1 sans preview D-11)
+- [x] 12-03-PLAN.md — Bookkeeping : REQUIREMENTS/STATE/ROADMAP + SUMMARY/SMOKE + checkpoint Laurent
 
 ## Progress
 
@@ -234,7 +238,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
 | 9.1. Centralisation Qualiopi 360° (INSERTED) | 6/6 | Complete    | 2026-05-18 |
 | 10. Audit Qualiopi blanc | 0/TBD | Not started | - |
 | 11. Factures cycle complet | 10/10 | Complete    | 2026-05-21 |
-| 12. Modules stub Inscriptions et Modèles | 1/3 | In Progress|  |
+| 12. Modules stub Inscriptions et Modèles | 3/3 | Complete    | 2026-06-01 |
 | 13. Veille Qualiopi intégrée | 6/6 | Complete    | 2026-05-25 |
 
 ### Phase 13: Veille Qualiopi intégrée
@@ -249,7 +253,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
   4. Export PDF audit (Gotenberg) : un PDF par thème avec sources/dates/exploitations, prêt à présenter à l'auditeur Qualiopi.
   5. Worker BullMQ cron hebdo : RSS aggregator des sources connues + Ollama (mistral-small:24b) pour classifier le thème et proposer un brouillon d'exploitation, INSERT en `status=draft` `suggestedBy=auto`.
   6. RBAC : ADMIN + MANAGER pour CRUD veille, LECTEUR pour consultation. AuditLog convention `regulatoryWatch.[verb]`.
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 13-01-PLAN.md — Foundation : migration `RegulatoryWatch` + 3 enums + 3 indexes + `parseFlexibleDate` + `logRegulatoryWatchEvent` (7e helper) + import xlsx idempotent (103 entrées au smoke réel) — 18 tests verts

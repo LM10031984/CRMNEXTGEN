@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-05-26T06:15:28.983Z"
-last_activity: 2026-05-26
+stopped_at: Phase 12 complete (MOD-01 rename /app/preinscriptions → /app/inscriptions + MOD-02 catalogue templates read-only)
+last_updated: "2026-06-01T12:00:00Z"
+last_activity: 2026-06-01 — Phase 12 close : MOD-01 rename route admin /app/preinscriptions → /app/inscriptions (move git mv + redirect 308 + sidebar 1 entrée + 17 refs migrées + route publique /preinscription/[token] préservée D-03 + constante MinIO bucket préservée) + MOD-02 catalogue lib/templates-catalog.ts (27 entries 3 catégories qualiopi/agefice/email + Server Component listing /app/templates + RBAC ADMIN+MANAGER+LECTEUR D-09). V1 sans preview Gotenberg (D-11 décision planner). Convention « renommage de route » établie (1ère application projet : move + redirect 308 + grep update systématique). Convention « catalogue centralisé code-driven lib/<feature>-catalog.ts » établie (1ère application projet). 15 tests Wave 0 verts (5 redirect-308/nav-config + 6 catalogue + 4 page smoke), 707/707 tests verts global. Build Next.js clean. Plus aucun placeholder dans la sidebar. Composant <Placeholder> orphelin (0 import restant) — décision : supprimer.
 progress:
   total_phases: 14
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 61
-  completed_plans: 47
+  completed_plans: 51
 ---
 
 # STATE — QualiOF
@@ -21,14 +21,14 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 12 — modules-stub-inscriptions-et-modeles
+**Current focus:** Phase 10 — Audit Qualiopi blanc (seule phase v5 restante)
 
 ---
 
 ## Current Position
 
-Phase: 12 (modules-stub-inscriptions-et-modeles) — EXECUTING
-Plan: 2 of 3
+Phase: 12 (Modules stub Inscriptions et Modèles) — COMPLETE (closed 2026-06-01, 3/3 plans, 2/2 MOD-* requirements, 15 tests Wave 0 verts, 0 placeholder restant dans sidebar)
+Next: /gsd:plan-phase 10 (Audit Qualiopi blanc — seule phase v5 restante : QBLANC-01/02/03)
 
 ## Accumulated Context
 
@@ -143,6 +143,44 @@ Plan: 2 of 3
 - 2026-05-25 — **D-13-D PDF audit stocké en MinIO comme Document (D-02 figée)** : chaque export PDF crée 1 row Document (type=VEILLE_AUDIT, entityType='RegulatoryWatch', entityId={theme}, pdfUrl=MinIO key, hashSha256=sha256(pdfBuffer)) — pas de génération volatile. Upload MinIO AVANT `prisma.document.create` (pas de row orpheline si MinIO down). Traçabilité Qualiopi : auditeur peut revoir la version exportée à date X. AuditLog `regulatoryWatch.exported` référence `documentId`. Clé objet : `veille-audit/{tenantId}/{theme}-{timestamp}-{sha8}.pdf`. PAS de cache idempotence sha256 (contrastant avec legal-docs) — chaque export = snapshot daté unique, l'auditeur Qualiopi veut toute la timeline. Audit Plan 13-04.
 - 2026-05-25 — **D-13-E DocType += VEILLE_AUDIT (extension enum additive)** : 21e valeur ajoutée à enum `DocType` (Postgres safe extension, sans casser les 20 existantes). Convention `entityType='RegulatoryWatch'` + `entityId={theme}` plutôt que linker sur 1 ligne RegulatoryWatch précise (l'export est un agrégat par thème, pas une fiche par source). Cohérent avec Phase 9.1 D-09.1-D pattern entity-namespaced. Migration appliquée localement via `prisma db push --skip-generate` + `prisma generate` (mémoire `feedback_prisma_db_push_sandbox.md`). Avant prod : créer vraie migration `phase13_doctype_veille_audit` via `prisma migrate dev` (mémoire `feedback_prisma_migrate_deploy.md`). Audit Plan 13-04.
 - 2026-05-18 — Phase 9.1 closed : CENTRAL-01/02/03/04/05 livrés. 6 plans exécutés. (1) Plan 09.1-01 Foundation : migration Prisma `phase091_participant_doc_status` additive + schémas Zod `qualiopi-matrix.ts` + helpers purs lib/doc-scope.ts (16 DocTypes figés D-04) + lib/derive-cell-state.ts (priorité participant > pedagogical > session > product, Bug P0 anti-régression test ciblé) + lib/document-audit.ts (logDocumentEvent clone strict logLeadEvent Phase 9). (2) Plan 09.1-02 Server actions + Worker : 5 actions tenant-scoped (markDocStatus/uploadSignedDoc/regenerateParticipantDoc/regenerateBatchParticipantDocs/deleteDocument) avec requireRole(['ADMIN','MANAGER']) D-11 + jsonb_set raw query Pitfall 2 + AuditLog `documents.*` ; extension `generateClosurePack(sessionId, { participantIds?, kinds?, force? })` mode single-participant Pitfall 1 ; 3 composants atomiques DocStatusBadge (6 variants) + DocCellMenu (5 actions filtrées) + UploadSignedDocDialog (RHF + 10 Mo). (3) Plan 09.1-03 Fiche session refondue : ParticipantDocMatrix Server orchestrateur + MatrixRow client + MatrixFilters useLocalStorageState key sessionId-scoped (R5) + BatchRegenBar slide-in + AttendanceDetailDrawer Radix Dialog centrée (Finding 3 Option B) + SessionOnlyDocsBlock 3 cards + Promise.all 4 queries bulk. (4) Plan 09.1-04 Fiche apprenant refondue : LearnerTimeline verticale années + LearnerPrioCards 3 cards + LearnerAlertsBanner early return null si 0 (Phase 5 UX-09) + TimelineSessionCard Link cross-nav D-05 + helper lib/learner-stats.ts. (5) Plan 09.1-05 Fiche produit refondue : ProductTabs URL-state ?tab=stats|sessions|apprenants|programme + 4 panels Server Components + helper lib/product-stats.ts (Promise.all tenantId scope) + cross-nav D-05 vers sessions + apprenants. (6) Plan 09.1-06 Bookkeeping + 09.1-SMOKE.md 8 flows DevTools + 09.1-SUMMARY.md. Conventions AuditLog complétées : `documents.*` (4 actions) en plus de Phase 7/8/9. **Bug P0** résolu structurellement (1 PDF session-wide + N statuts par-participant) — anti-régression test unitaire ciblé. Total nouveaux fichiers : ~25 production + 13 tests. Tests Vitest verts : 421/421 apps/web + 56/56 shared. tsc clean. next build OK (3 routes refondues compilent : sessions/[id] 17.4 kB, apprenants/[id] 7.56 kB, produits/[id] 5.18 kB). Phase 10 (Audit Qualiopi blanc) débloquée.
+- 2026-06-01 — Phase 12 closed : MOD-01 + MOD-02 livrés. Plan 12-01 rename `/app/preinscriptions` → `/app/inscriptions` (move git mv 2 fichiers + stub Placeholder supprimé + redirect 308 reverse next.config.mjs + sidebar 1 entrée Inscriptions section Essentiel D-04 + doublon stub Configuration supprimé + 17 refs hardcodées migrées (hrefs/redirects/router.push/revalidatePath) D-05 + route publique /preinscription/[token] PRÉSERVÉE D-03 + constante MinIO PREENROLLMENT_BUCKET préservée). Plan 12-02 catalogue read-only : `lib/templates-catalog.ts` source unique D-10 (27 entries TemplateCatalogEntry typed = 19 qualiopi + 3 agefice + 5 email) + Server Component /app/templates listing par catégorie qualiopi/agefice/email + helpers getTemplatesByCategory/getTemplateById/countByCategory + RBAC `requireRole(['ADMIN','MANAGER','LECTEUR'])` D-09 + sidebar `allowedRoles` miroir + V1 sans preview Gotenberg (D-11 décision planner, ROI insuffisant, screenshots statiques v2 possible) + note V1 affichée dans page pour transparence. Plan 12-03 bookkeeping : REQUIREMENTS/ROADMAP/STATE + 12-SUMMARY/12-SMOKE + composant `<Placeholder>` orphelin **supprimé** (`apps/web/src/components/ui/placeholder.tsx` — 0 import restant après Plans 12-01/02, success criterion #3 « zéro placeholder dans la sidebar » → composant n'a plus de raison d'être). 2 conventions établies (1ère application projet) : « renommage de route » (move git mv + redirect 308 + grep update systématique) + « catalogue centralisé code-driven `lib/<feature>-catalog.ts` » (1 source de vérité typée, helpers filter/find/count, réutilisable Phase 10 audit Qualiopi blanc). 15 tests Wave 0 verts. Build Next clean. **707/707 tests verts** global. Phase v5 restante : Phase 10 (Audit Qualiopi blanc QBLANC-01/02/03).
+
+## Workflow Conventions
+
+### Renommage de route (convention — 1ère application Phase 12)
+
+Quand on renomme une route Next.js (ex : `/app/foo` → `/app/bar`) :
+
+1. **Move physique** : `git mv apps/web/src/app/app/foo/page.tsx apps/web/src/app/app/bar/page.tsx` (et tous les fichiers du dossier). Préserve le blame.
+2. **Stub remplacement** : si la nouvelle route avait un stub Placeholder, le supprimer AVANT le `git mv`.
+3. **Redirect 308 reverse** : ajouter dans `apps/web/next.config.mjs` `async redirects()` :
+   ```js
+   { source: '/app/foo', destination: '/app/bar', permanent: true },
+   { source: '/app/foo/:path*', destination: '/app/bar/:path*', permanent: true },
+   ```
+   (Convention CLAUDE.md > Routes — toujours `:path*` pour les sous-routes.)
+4. **Grep update systématique** : `grep -rn "/app/foo" apps/web/src/` puis migrer tous les `href`, `redirect()`, `router.push()`, `revalidatePath()`. Les noms de dossiers internes (`components/foo/`, `server/actions/foo*.ts`) et les constantes MinIO peuvent garder leur nom (D-05 Phase 12).
+5. **Sidebar nav-config** : si l'item existait, renommer `label` + `href`. Si doublon stub, supprimer.
+6. **Tests Wave 0** : test redirect-308 (vérifie le tableau retourné par `nextConfig.redirects()`) + test snapshot sidebar (vérifie 1 seule entrée du nouveau label, 0 entrée de l'ancien).
+7. **Préservations explicites** : lister dans le plan les fichiers à NE PAS toucher (ex Phase 12 : route publique `/preinscription/[token]`, constante MinIO `PREENROLLMENT_BUCKET = 'preinscriptions'`).
+8. **Smoke build** : `pnpm --filter @qualiof/web build` doit passer.
+9. **Grep defense-in-depth** : `grep -rn "/app/foo" apps/web/src/` doit retourner 0 résultat hors exceptions explicitement documentées (tests, commentaires JSdoc, constantes externes).
+
+Cf. Phase 12 (`/app/preinscriptions` → `/app/inscriptions`) pour exemple complet.
+
+### Catalogue centralisé code-driven `lib/<feature>-catalog.ts` (convention — 1ère application Phase 12)
+
+Quand un feature expose une liste statique connue à l'avance (templates, rôles, statuts, codes financeurs, indicateurs Qualiopi, etc.), on centralise dans `apps/web/src/lib/<feature>-catalog.ts` :
+
+1. **Interface typée** : `interface <Feature>CatalogEntry { id: string; label: string; category: Category; ...autres champs ... }` exportée.
+2. **ReadonlyArray** : `export const <FEATURE>_CATALOG: ReadonlyArray<<Feature>CatalogEntry> = [ ... ] as const`. `as const` garantit l'immutabilité au type-level.
+3. **Helpers** : `getByCategory(cat)`, `getById(id)`, `countByCategory()` exportés à côté.
+4. **Pas de BDD** : valeurs hardcodées dans le code. Le catalogue est la source de vérité. Modifier le catalogue = PR + revue Git.
+5. **Server Component consommateur** : page `app/<route>/page.tsx` Server Component qui appelle `requireRole([...])` + map sur le catalogue.
+6. **Tests Wave 0** : tests structurels (length ≥ N, ids uniques, schéma `{ id, label, category, ... }` respecté, helpers retournent les bonnes entrées).
+7. **Réutilisable** : helpers exportés consommables ailleurs (export PDF, dashboard, audit).
+
+Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Qualiopi/AGEFICE/Email) pour exemple complet. Pattern reproductible : `lib/qualiopi-indicators-catalog.ts` (Phase 10 future, 32 indicateurs).
 
 ### Workflow Config Snapshot
 
@@ -197,15 +235,17 @@ Plan: 2 of 3
 | 260525-kl5 | Auto-trigger préparation pédagogique complète à la création session + nouveau bloc UI PreparationPedagogiqueBlock + retrait bouton "Préparer la formation". Server action `prepareSession(sessionId)` idempotente orchestre les 6 docs (programme/déroulé/checklist partagés + convention/convocation/analyse besoin par participant). Hook fire-and-forget dans createSessionFull. Composant Client avec polling 5s pour les analyses besoin BullMQ. AuditLog `session.prepare`. Chantier 4 backlog (E+F+H étendu). | 2026-05-25 | 261bf93 | [260525-kl5-auto-trigger-pr-paration-p-dagogique-com](./quick/260525-kl5-auto-trigger-pr-paration-p-dagogique-com/) |
 | 260525-pb5 | Dropdowns Diplôme (6 options exactes PDF AGEFICE) + Expérience pro (4 tranches) ajoutés aux formulaires création + édition apprenant. Constante partagée `lib/agefice-options.ts` consommée par 4 fichiers. Simplification `inferExperience` (check exact avant heuristique). Rétro-compat 291 fiches texte libre préservée. Audit AGEFICE complet sauvegardé dans `.planning/quick/_audit-agefice-260525.md` (60 champs analysés). Chantier 5 backlog (BUG-K). | 2026-05-25 | 46cf38e | [260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro](./quick/260525-pb5-ajouter-dropdowns-dipl-me-exp-rience-pro/) |
 | 260525-pzl | Fix horaires formation pause midi (BUG-A) : 8h = 9h-13h + 14h-18h (pause 1h). Helper centralisé `lib/formation-horaires.ts` consommé par ollama-generators + qualiopi-prompts + ai-fill-product + parse-programme-to-deroule. Pause harmonisée 13h00-14h00 (1h) au lieu de 12h-13h30 (1h30). Parser élargi 11h30-14h30 pour rétro-compat. 8 commits TDD (RED+GREEN), 692/692 tests verts. Chantier 2 backlog. | 2026-05-25 | 3fc594c | [260525-pzl-fix-horaires-formation-pause-midi-8h-9h-](./quick/260525-pzl-fix-horaires-formation-pause-midi-8h-9h-/) |
+| 260530-eoy | Page publique `/catalogue` Qualiopi Ind 1 — résout Top 1 risque audit RNQ V9 du 03/07/2026 (NC majeure probable site web). Server Component Next.js, route publique sans auth, indexable Google. 11 items obligatoires Ind 1 exposés par produit (prérequis, objectifs, durée, modalités, délais accès, tarifs HT, contacts, méthodes péda, modalités éval, accessibilité PSH). Constantes partagées `lib/catalogue-constants.ts` (délai accès + accessibilité PSH + mention TVA). Laurent inclura via iframe ou mirror statique sur start-academy.fr avant 20 juin 2026. | 2026-05-30 | 3b58366 | [260530-eoy-page-publique-catalogue-qualiopi-ind-1-r](./quick/260530-eoy-page-publique-catalogue-qualiopi-ind-1-r/) |
+| 260530-f0l | Bloc "Nos résultats {année}" ajouté sur /catalogue — résout Top 2 risque audit Qualiopi Ind 2 (indicateurs de résultats chiffrés). Réutilise `getQualiopiBilan(tenantId, year)` existant. 4 KPI cards : stagiaires formés, heures formation, satisfaction moyenne (/5), taux recommandation (%). Double fallback année (currentYear → availableYears[0]). Null-safety "Données en cours de consolidation" si pas de satisfaction. Style aligné cards produits. 1 fichier modifié (+89 lignes). | 2026-05-30 | 05c0abc | [260530-f0l-bloc-r-sultats-ann-e-sur-catalogue-r-sou](./quick/260530-f0l-bloc-r-sultats-ann-e-sur-catalogue-r-sou/) |
 
 ## Last session
 
-Stopped at: Completed 12-01-PLAN.md
-Last commit: 3fc594c — fix(quick/260525-pzl): cleanup commentaire deroule-template (1h pause)
-Last completed plan: 260525-pzl (horaires formation pause midi 13h-14h, helper centralisé)
-Next plan: validation Laurent (créer produit test 8h) puis chantier 3 création inline (C+D) OU 6 programmes détaillés (B) OU G screenshot
+Stopped at: Top 2 risques audit Qualiopi résolus (Ind 1 + Ind 2 via page /catalogue). Restent : Ind 11 procédure évaluation, Ind 21 CV formateurs, Ind 26 réseau handicap, Ind 27 contrats sous-traitance.
+Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
+Last completed plan: 260530-f0l (bloc Résultats Ind 2)
+Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-05-26
+Last activity: 2026-05-30 — Audit Qualiopi : Top 1 + Top 2 risques résolus via page publique /catalogue (Ind 1 + Ind 2)
 
 ### Roadmap Evolution
 
