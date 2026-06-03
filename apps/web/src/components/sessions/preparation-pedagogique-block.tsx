@@ -45,7 +45,9 @@ function countMissing(s: SessionPreparationStatus): number {
   const conv = Math.max(0, N - s.conventionsCount);
   const convoc = Math.max(0, N - s.convocationsCount);
   const ab = Math.max(0, N - s.analyseBesoinDone);
-  return sharedMissing + conv + convoc + ab;
+  // AGEFICE compté sur les éligibles uniquement (TNS), pas tous les participants.
+  const agefice = Math.max(0, s.ageficeEligibleCount - s.ageficeCount);
+  return sharedMissing + conv + convoc + ab + agefice;
 }
 
 function isComplete(s: SessionPreparationStatus): boolean {
@@ -57,7 +59,8 @@ function isComplete(s: SessionPreparationStatus): boolean {
     s.checklist &&
     s.conventionsCount >= N &&
     s.convocationsCount >= N &&
-    s.analyseBesoinDone >= N
+    s.analyseBesoinDone >= N &&
+    s.ageficeCount >= s.ageficeEligibleCount
   );
 }
 
@@ -71,6 +74,7 @@ function isEmpty(s: SessionPreparationStatus): boolean {
     s.analyseBesoinDone === 0 &&
     s.analyseBesoinInProgress === 0 &&
     s.analyseBesoinPending === 0 &&
+    s.ageficeCount === 0 &&
     N >= 0
   );
 }
@@ -150,8 +154,11 @@ export function PreparationPedagogiqueBlock({ sessionId, initialStatus, canWrite
       if (fresh.ok) setStatus(fresh);
       const errorCount = r.errors.length;
       if (errorCount === 0) {
+        const ageficeMsg = r.ageficeEligible > 0
+          ? ` · ${r.ageficeGenerated}/${r.ageficeEligible} demande(s) AGEFICE`
+          : '';
         toast.success(
-          `Préparation OK : ${r.programmesGenerated} programme · ${r.derouleGenerated ? 'déroulé' : 'pas de déroulé'} · ${r.checklistGenerated ? 'checklist' : 'pas de checklist'} · ${r.conventionsGenerated}/${r.total} convention(s) · ${r.convocationsGenerated}/${r.total} convocation(s) · ${r.analyseBesoinEnqueued} analyse(s) besoin en cours`,
+          `Préparation OK : ${r.programmesGenerated} programme · ${r.derouleGenerated ? 'déroulé' : 'pas de déroulé'} · ${r.checklistGenerated ? 'checklist' : 'pas de checklist'} · ${r.conventionsGenerated}/${r.total} convention(s) · ${r.convocationsGenerated}/${r.total} convocation(s) · ${r.analyseBesoinEnqueued} analyse(s) besoin en cours${ageficeMsg}`,
         );
       } else {
         toast.warning(
@@ -256,7 +263,21 @@ export function PreparationPedagogiqueBlock({ sessionId, initialStatus, canWrite
               label="Analyse besoin"
               spinning={analyseBesoinInflight > 0}
             />
+            {status.ageficeEligibleCount > 0 && (
+              <ParticipantDocRow
+                doneCount={status.ageficeCount}
+                total={status.ageficeEligibleCount}
+                label="Demande AGEFICE"
+              />
+            )}
           </ul>
+          {status.ageficeEligibleCount > 0 && status.ageficeEligibleCount < N && (
+            <p className="text-[11px] text-muted-foreground mt-1.5 italic">
+              AGEFICE générée pour les {status.ageficeEligibleCount} stagiaire
+              {status.ageficeEligibleCount > 1 ? 's' : ''} TNS uniquement
+              (salariés OPCO ignorés).
+            </p>
+          )}
         </div>
       </div>
 

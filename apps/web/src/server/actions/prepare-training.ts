@@ -8,6 +8,7 @@ import { generateConventionForParticipant } from './convention-generator';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
+import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue';
 
 export interface PrepareTrainingResult {
@@ -191,6 +192,10 @@ export interface PrepareSessionResult {
   convocationsGenerated: number;
   analyseBesoinEnqueued: number;
   analyseBesoinSkipped: number;
+  // Demande de prise en charge AGEFICE — TNS uniquement (sponsorOrg AGEFICE
+  // ou EI_SELF/AGENT_COMMERCIAL avec AgeficeProfile). Salariés OPCO ignorés.
+  ageficeGenerated: number;
+  ageficeEligible: number;
   batchId?: string;
   errors: { participantName: string; doc: string; message: string }[];
   error?: string;
@@ -206,6 +211,9 @@ export interface SessionPreparationStatus {
   analyseBesoinDone: number;
   analyseBesoinInProgress: number;
   analyseBesoinPending: number;
+  // Demande AGEFICE — affichée uniquement si ageficeEligibleCount > 0.
+  ageficeCount: number;
+  ageficeEligibleCount: number;
   participantsCount: number;
   batchId?: string;
   error?: string;
@@ -237,6 +245,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated: 0,
     analyseBesoinEnqueued: 0,
     analyseBesoinSkipped: 0,
+    ageficeGenerated: 0,
+    ageficeEligible: 0,
     errors: [],
   };
 
@@ -370,6 +380,56 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     }),
   );
 
+  // 2bis. Demande de prise en charge AGEFICE — TNS uniquement.
+  //       Règle métier : auto-entrepreneur cotise à l'AGEFICE (CFP), salarié
+  //       cotise à un OPCO d'entreprise (pas AGEFICE). Donc on filtre sur :
+  //         - sponsorOrg.opcoCode = 'AGEFICE' (cas typique)
+  //         - OU legalLink EI_SELF/AGENT_COMMERCIAL avec AgeficeProfile
+  let ageficeGenerated = 0;
+  let ageficeEligible = 0;
+  const ageficeEligibleParticipants =
+    participantIds.length > 0
+      ? await prisma.sessionParticipant.findMany({
+          where: {
+            sessionId,
+            OR: [
+              { sponsorOrg: { opcoCode: 'AGEFICE' } },
+              {
+                person: {
+                  legalLinks: {
+                    some: {
+                      role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] },
+                      organization: { ageficeProfile: { isNot: null } },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+            person: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : [];
+  ageficeEligible = ageficeEligibleParticipants.length;
+  await Promise.all(
+    ageficeEligibleParticipants.map(async (p) => {
+      const name = `${p.person.firstName} ${p.person.lastName}`;
+      const r = await generateAgeficeForParticipant(p.id).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      if (r.ok) ageficeGenerated++;
+      else
+        errors.push({
+          participantName: name,
+          doc: 'AGEFICE',
+          message: r.error ?? 'Erreur inconnue',
+        });
+    }),
+  );
+
   // 3. Analyse besoin (IA Ollama) — batch BullMQ.
   //    Skip les participants qui ont déjà un PedagogicalAsset.ANALYSE_BESOIN
   //    rendu (pdfUrl != null) → idempotent.
@@ -445,6 +505,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           convocationsGenerated,
           analyseBesoinEnqueued,
           analyseBesoinSkipped,
+          ageficeGenerated,
+          ageficeEligible,
           errors: errors.length,
         },
       },
@@ -465,6 +527,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated,
     analyseBesoinEnqueued,
     analyseBesoinSkipped,
+    ageficeGenerated,
+    ageficeEligible,
     batchId,
     errors,
   };
@@ -490,6 +554,8 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone: 0,
     analyseBesoinInProgress: 0,
     analyseBesoinPending: 0,
+    ageficeCount: 0,
+    ageficeEligibleCount: 0,
     participantsCount: 0,
   };
 
@@ -513,9 +579,10 @@ export async function getSessionPreparationStatus(
     'CHECKLIST_FORMATION',
     'CONVENTION',
     'CONVOCATION',
+    'AGEFICE',
   ];
 
-  const [docs, abAssets, latestBatch] = await Promise.all([
+  const [docs, abAssets, latestBatch, ageficeEligibleCount] = await Promise.all([
     prisma.document.findMany({
       where: {
         tenantId: user.tenantId,
@@ -524,7 +591,11 @@ export async function getSessionPreparationStatus(
           { entityType: 'product', entityId: session.productId, type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] } },
           { entityType: 'session', entityId: session.id, type: 'CHECKLIST_FORMATION' },
           ...(participantIds.length > 0
-            ? [{ entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } }]
+            ? [
+                { entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } },
+                // Demande AGEFICE — stockée avec participantId (cf agefice-generator).
+                { participantId: { in: participantIds }, type: 'AGEFICE' as DocType },
+              ]
             : []),
         ],
       },
@@ -559,6 +630,28 @@ export async function getSessionPreparationStatus(
         },
       },
     }),
+    // Compte des participants éligibles AGEFICE (TNS) — pour piloter
+    // l'affichage conditionnel de la ligne "Demande AGEFICE" dans l'UI.
+    participantIds.length > 0
+      ? prisma.sessionParticipant.count({
+          where: {
+            sessionId: session.id,
+            OR: [
+              { sponsorOrg: { opcoCode: 'AGEFICE' } },
+              {
+                person: {
+                  legalLinks: {
+                    some: {
+                      role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] },
+                      organization: { ageficeProfile: { isNot: null } },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        })
+      : Promise.resolve(0),
   ]);
 
   const programme = docs.some((d) => d.type === 'PROGRAMME');
@@ -569,6 +662,13 @@ export async function getSessionPreparationStatus(
   );
   const convocationsSet = new Set(
     docs.filter((d) => d.type === 'CONVOCATION').map((d) => d.entityId),
+  );
+  // Demande AGEFICE indexée par participantId (et non entityId — cf
+  // agefice-generator où Document.participantId est l'identifiant métier).
+  const ageficeSet = new Set(
+    docs
+      .filter((d) => d.type === 'AGEFICE' && d.participantId != null)
+      .map((d) => d.participantId as string),
   );
 
   const analyseBesoinDone = abAssets.length;
@@ -591,6 +691,8 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone,
     analyseBesoinInProgress,
     analyseBesoinPending,
+    ageficeCount: ageficeSet.size,
+    ageficeEligibleCount,
     participantsCount: participantIds.length,
     batchId: latestBatch?.id,
   };
