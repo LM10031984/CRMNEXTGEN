@@ -113,6 +113,14 @@ export const NAV: NavSection[] = [
         icon: Wallet,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE', 'LECTEUR'],
       },
+      // Audit Trésorerie : réplique vue Excel Tréso AGEFICE avec les 2 formules
+      // statut Airtable (Statut_Opco + Statut_encaissement).
+      {
+        label: 'Audit Tréso',
+        href: '/app/audit-treso',
+        icon: Wallet,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMPTABLE', 'LECTEUR'],
+      },
       // Leads : ADMIN/MANAGER/COMMERCIAL uniquement
       {
         label: 'Leads',
