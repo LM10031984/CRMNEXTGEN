@@ -26,7 +26,6 @@ import {
   type AgeficeAttendanceTemplateData,
 } from '@/lib/closure/agefice-attendance-template';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
-import { numberToFrenchWords } from '@/lib/number-to-french-words';
 
 // Map TrainingSession.modality → 4 cases AGEFICE (heures).
 // Clone du helper agefice-generator.ts (déduplication possible plus tard).
@@ -71,7 +70,7 @@ export async function generateAgeficeAttendanceForParticipant(
       sponsorOrg: true,
       session: {
         include: {
-          product: { select: { title: true, durationHours: true } },
+          product: { select: { title: true, durationHours: true, priceHT: true } },
           trainers: {
             include: {
               person: { select: { firstName: true, lastName: true } },
@@ -142,24 +141,24 @@ export async function generateAgeficeAttendanceForParticipant(
   const totalHours = participant.session.product.durationHours;
   const split = splitDureeByModality(participant.session.modality, totalHours);
 
-  // ── Règlement (Invoice du participant si trouvée) ─────────────
-  const invoice = await prisma.invoice.findFirst({
-    where: {
-      tenantId: user.tenantId,
-      participantId,
-      status: { in: ['PAID', 'PARTIAL'] },
-    },
-    orderBy: { paidAt: 'desc' },
-    select: { amountTTC: true, paidAt: true },
-  });
-  const sommeChiffres = invoice ? Number(invoice.amountTTC) : null;
-  // Match wording modèle Kristin AGEFICE : "payés par virement en date(s) du …".
-  const modeReglement = 'virement';
-  // Fallback métier : si pas d'Invoice payée, on considère la date de fin de
-  // formation comme date de règlement (cohérent avec le délai usuel AGEFICE).
-  const dateReglement = invoice?.paidAt ?? participant.session.endDate;
-  const sommeLettres =
-    sommeChiffres != null ? numberToFrenchWords(sommeChiffres) : null;
+  // ── Règlement ────────────────────────────────────────────────
+  // Source : priceHT du participant (Decimal en euros, schéma 553).
+  // Fallback product.priceHT si participant à 0 (cas import SmartOF avant
+  // propagation). Si toujours 0 → bloc masqué côté template.
+  const priceParticipant = Number(participant.priceHT ?? 0);
+  const priceProduct = Number(
+    (participant.session.product as { priceHT?: unknown }).priceHT ?? 0,
+  );
+  const montant = priceParticipant > 0 ? priceParticipant : priceProduct;
+  const sommeChiffres: number | null = montant > 0 ? montant : null;
+  const sommeLettres: string | null = null;
+  const modeReglement = 'Virement bancaire';
+  const dateReglement = participant.session.endDate;
+  if (sommeChiffres == null) {
+    warnings.push(
+      'Montant HT à 0 € — bloc règlement masqué. Renseigne le tarif sur la session ou le produit.',
+    );
+  }
 
   // ── Compose les données + génère le PDF ───────────────────────
   // Durées réalisées : par défaut = prévues (formation supposée intégralement

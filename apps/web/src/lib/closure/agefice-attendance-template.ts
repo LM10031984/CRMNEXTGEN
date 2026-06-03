@@ -333,7 +333,9 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
     suivi de l'action, de l'accompagnement et de l'assistance du stagiaire.
   </p>
 
-  <div class="reglement">
+  ${
+    d.sommeChiffres != null
+      ? `<div class="reglement">
     <h3>Si la facture acquittée n'est pas transmise :</h3>
     <p style="margin:0;">
       J'atteste également que le bénéficiaire de cette action a bien réglé la totalité du coût
@@ -343,7 +345,9 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
       payés par <span class="val">${escapeHtml(d.modeReglement)}</span>
       en date(s) du <span class="val">${fmtDateFr(d.dateReglement)}</span>.
     </p>
-  </div>
+  </div>`
+      : ''
+  }
 
   <p class="clause">
     L'AGEFICE se réserve le droit de suspendre les paiements en cas de non-conformité, de procéder
