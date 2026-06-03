@@ -20,20 +20,34 @@ import {
   renderStagiaireBlock,
   wrapHtml,
 } from './shared-template';
+import { isBusinessDayISO } from '@/lib/business-days';
+
+// Horaires Start Academy figés (Laurent 2026-06-03) : journée standard 8h
+// = 9h00–13h00 (matin) + 14h00–18h00 (après-midi). Convention métier
+// non-négociable. Si une session particulière a des horaires différents,
+// utiliser SessionSlot — non géré V1.
+const HORAIRE_MATIN = '9h00–13h00' as const;
+const HORAIRE_APREM = '14h00–18h00' as const;
 
 /**
  * Calcule la liste des jours de formation entre startDate et endDate.
- * Si endDate < startDate, retombe sur 1 seul jour.
+ * Skip samedi, dimanche et jours fériés français (Start Academy ne forme
+ * pas le week-end ni les fériés). Si endDate < startDate, retombe sur
+ * 1 seul jour (la startDate, même si non ouvré — cas pathologique).
  */
 function computeFormationDays(start: Date, end: Date): Date[] {
   const days: Date[] = [];
   const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
   const cursor = new Date(startDay);
-  const safetyMax = 60; // évite boucle infinie sur date corrompue
+  const safetyMax = 90; // formation longue OK (ex: 72h sur 12 sem.)
   let i = 0;
   while (cursor <= endDay && i < safetyMax) {
-    days.push(new Date(cursor));
+    // YYYY-MM-DD local (computeFormationDays travaille en heure locale)
+    const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+    if (isBusinessDayISO(iso)) {
+      days.push(new Date(cursor));
+    }
     cursor.setDate(cursor.getDate() + 1);
     i++;
   }
@@ -75,8 +89,8 @@ ${renderBrandHeader()}
     <thead>
       <tr>
         <th style="text-align: center; vertical-align: middle;">Date</th>
-        <th style="text-align: center;">Signature stagiaire — Matin</th>
-        <th style="text-align: center;">Signature stagiaire — Après-midi</th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Matin · ${HORAIRE_MATIN}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Après-midi · ${HORAIRE_APREM}</span></th>
       </tr>
     </thead>
     <tbody>
@@ -88,7 +102,7 @@ ${renderBrandHeader()}
   <div style="margin-top: 14mm; display: flex; gap: 12mm;">
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Matin
+        Signature formateur — Matin · ${HORAIRE_MATIN}
       </div>
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}
@@ -97,7 +111,7 @@ ${renderBrandHeader()}
     </div>
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Après-midi
+        Signature formateur — Après-midi · ${HORAIRE_APREM}
       </div>
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}
