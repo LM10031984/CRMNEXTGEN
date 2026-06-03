@@ -510,7 +510,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             ) : null}
             {Number(session.pricePerLearner ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Euro className="h-3.5 w-3.5" /> {Number(session.pricePerLearner).toFixed(0)} € total session
+                <Euro className="h-3.5 w-3.5" /> {Number(session.pricePerLearner).toFixed(0)} € par stagiaire
               </span>
             )}
           </span>
