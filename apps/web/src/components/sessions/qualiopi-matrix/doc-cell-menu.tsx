@@ -216,7 +216,11 @@ export function DocCellMenu({
             {showDownload && (
               <DropdownMenu.Item asChild>
                 <a
-                  href={`/api/documents/${pdfRef!.id}`}
+                  href={
+                    pdfRef!.kind === 'asset'
+                      ? `/api/pedagogical-assets/${pdfRef!.id}`
+                      : `/api/documents/${pdfRef!.id}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className={ITEM_CLS}

@@ -107,7 +107,11 @@ export function MatrixRow({
             <div className="inline-flex items-center gap-0.5">
               {cell.state === 'GENERATED' && pdfRef ? (
                 <a
-                  href={`/api/documents/${pdfRef.id}`}
+                  href={
+                    pdfRef.kind === 'asset'
+                      ? `/api/pedagogical-assets/${pdfRef.id}`
+                      : `/api/documents/${pdfRef.id}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
@@ -117,7 +121,11 @@ export function MatrixRow({
                 </a>
               ) : cell.state === 'MANUAL_OK' && pdfRef ? (
                 <a
-                  href={`/api/documents/${pdfRef.id}`}
+                  href={
+                    pdfRef.kind === 'asset'
+                      ? `/api/pedagogical-assets/${pdfRef.id}`
+                      : `/api/documents/${pdfRef.id}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
