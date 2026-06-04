@@ -77,18 +77,45 @@ export function startClosureWorker(): Worker<ClosureJobPayload> {
 }
 
 async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
-  const payload = job.data;
-
-  // 1. Marque le job en PROCESSING dans Postgres
-  await prisma.closureJob.update({
-    where: { id: payload.jobId },
-    data: {
-      status: 'PROCESSING',
-      attempts: { increment: 1 },
-      startedAt: new Date(),
-      errorMessage: null,
-    },
+  // Wrap BullMQ : délègue à la version payload-only réutilisable côté
+  // driver Postgres (cf lib/closure/queue-postgres.ts).
+  await processClosureJobPayload(job.data, {
+    attemptsMade: job.attemptsMade,
+    maxAttempts: job.opts.attempts ?? 1,
+    markProcessing: true,
   });
+}
+
+export interface ProcessJobOptions {
+  attemptsMade: number;
+  maxAttempts: number;
+  /** Si true, marque ClosureJob.status='PROCESSING' avant de traiter.
+   *  Postgres driver le fait dans claim → false côté Postgres. */
+  markProcessing?: boolean;
+}
+
+/**
+ * Logique métier d'un job closure — agnostique du driver de queue.
+ * Utilisée par :
+ *   - worker BullMQ (legacy, local dev avec Redis)
+ *   - worker Postgres `FOR UPDATE SKIP LOCKED` (cloud, Vercel Cron)
+ */
+export async function processClosureJobPayload(
+  payload: ClosureJobPayload,
+  opts: ProcessJobOptions,
+): Promise<void> {
+  // 1. Marque le job en PROCESSING dans Postgres si pas déjà fait (BullMQ path).
+  if (opts.markProcessing) {
+    await prisma.closureJob.update({
+      where: { id: payload.jobId },
+      data: {
+        status: 'PROCESSING',
+        attempts: { increment: 1 },
+        startedAt: new Date(),
+        errorMessage: null,
+      },
+    });
+  }
   await markBatchRunningIfNeeded(payload.batchId);
 
   try {
@@ -251,8 +278,8 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
     if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Si BullMQ va retry, on garde le job en PROCESSING (pas ERROR définitif)
-    const isFinalAttempt = (job.attemptsMade + 1) >= (job.opts.attempts ?? 1);
+    // Si le driver va retry, on remet le job en QUEUED (pas ERROR définitif).
+    const isFinalAttempt = opts.attemptsMade + 1 >= opts.maxAttempts;
     await prisma.closureJob.update({
       where: { id: payload.jobId },
       data: {
@@ -264,7 +291,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       const finalized = await bumpAndFinalize(payload.batchId, 'error');
       if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
     }
-    throw err; // BullMQ doit voir l'erreur pour gérer retry
+    throw err; // Le caller doit voir l'erreur (BullMQ retry, Postgres log).
   }
 }
 
