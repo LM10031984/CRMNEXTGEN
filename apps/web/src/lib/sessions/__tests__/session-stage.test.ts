@@ -1,0 +1,253 @@
+/**
+ * Tests sessionStage() — source UNIQUE de vérité étape courante.
+ *
+ * Garde-fou Laurent 2026-06-05 : "ajoute un 6e cas de test blocked. Ton type
+ * StageStatus inclut 'blocked', mais tes 5 cas ne l'exercent jamais. Un
+ * contrat non testé finit par pourrir."
+ *
+ * 7 scénarios couvrent l'arbre de décision complet :
+ *   1. BLOCKED — aucun apprenant inscrit
+ *   2. BLOCKED — formateur principal manquant (inscrits OK)
+ *   3. BLOCKED — programme IA non validé (inscrits + formateur OK)
+ *   4. ACTIVE — DRAFT prêt à lancer la préparation (rien généré)
+ *   5. ACTIVE — DRAFT prép partielle (manque convention/convocation)
+ *   6. TODO   — PLANNED prép complète, en attente démarrage
+ *   7. ACTIVE — IN_PROGRESS formation en cours
+ *   8. ACTIVE — COMPLETED pack incomplet → générer pack fin
+ *   9. ACTIVE — COMPLETED pack complet → facturation
+ */
+
+import { describe, expect, it } from 'vitest';
+import { sessionStage, type SessionStageInput } from '../session-stage';
+import type { SessionPreparationStatus } from '@/server/actions/prepare-training';
+import type { SessionClosureStatus } from '@/server/actions/closure-status';
+
+function emptyPrep(participantsCount: number): SessionPreparationStatus {
+  return {
+    ok: true,
+    programme: false,
+    deroule: false,
+    checklist: false,
+    conventionsCount: 0,
+    convocationsCount: 0,
+    analyseBesoinDone: 0,
+    analyseBesoinInProgress: 0,
+    analyseBesoinPending: 0,
+    ageficeCount: 0,
+    ageficeEligibleCount: 0,
+    participantsCount,
+  };
+}
+
+function completePrep(participantsCount: number): SessionPreparationStatus {
+  return {
+    ok: true,
+    programme: true,
+    deroule: true,
+    checklist: true,
+    conventionsCount: participantsCount,
+    convocationsCount: participantsCount,
+    analyseBesoinDone: participantsCount,
+    analyseBesoinInProgress: 0,
+    analyseBesoinPending: 0,
+    ageficeCount: 0,
+    ageficeEligibleCount: 0,
+    participantsCount,
+  };
+}
+
+function emptyClosure(participantsCount: number): SessionClosureStatus {
+  return {
+    ok: true,
+    participantsCount,
+    grilleObsSession: false,
+    bilanSatisfaction: false,
+    emargements: 0,
+    assiduites: 0,
+    ageficeEligibleCount: 0,
+    attestations: 0,
+    certificats: 0,
+    qcm: 0,
+    positionnements: 0,
+    satisfactionChaud: 0,
+    satisfactionFroid: 0,
+  };
+}
+
+function completeClosure(participantsCount: number): SessionClosureStatus {
+  return {
+    ok: true,
+    participantsCount,
+    grilleObsSession: true,
+    bilanSatisfaction: true,
+    emargements: participantsCount,
+    assiduites: 0,
+    ageficeEligibleCount: 0,
+    attestations: participantsCount,
+    certificats: participantsCount,
+    qcm: participantsCount,
+    positionnements: participantsCount,
+    satisfactionChaud: participantsCount,
+    satisfactionFroid: participantsCount,
+  };
+}
+
+function baseInput(overrides: Partial<SessionStageInput> = {}): SessionStageInput {
+  return {
+    status: 'DRAFT',
+    startDate: new Date('2026-07-15T09:00:00Z'),
+    endDate: new Date('2026-07-15T18:00:00Z'),
+    participantsCount: 1,
+    primaryTrainerName: 'Jean Dupont',
+    productAiDraftPending: false,
+    prep: emptyPrep(1),
+    closure: emptyClosure(1),
+    ...overrides,
+  };
+}
+
+describe('sessionStage — arbre de décision étape courante', () => {
+  /* ── Catégorie 1 : BLOCKED (3 scénarios) ──────────────────────────── */
+
+  it('1. BLOCKED — aucun apprenant inscrit → étape 1', () => {
+    const result = sessionStage(
+      baseInput({ participantsCount: 0, prep: emptyPrep(0), closure: emptyClosure(0) }),
+    );
+    expect(result.status).toBe('blocked');
+    expect(result.current).toBe(1);
+    expect(result.blocker).toBe('Aucun apprenant inscrit');
+    expect(result.cta).toBeDefined();
+    expect(result.cta!.primary).toBe(true);
+    expect(result.cta!.href).toBe('#section-participants');
+    expect(result.stagesState).toEqual({ 1: 'active', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo' });
+  });
+
+  it('2. BLOCKED — formateur principal manquant → étape 1', () => {
+    const result = sessionStage(baseInput({ primaryTrainerName: null }));
+    expect(result.status).toBe('blocked');
+    expect(result.current).toBe(1);
+    expect(result.blocker).toBe('Formateur principal manquant');
+    expect(result.cta!.href).toBe('#section-formateurs');
+  });
+
+  it('3. BLOCKED — programme IA non validé → étape 1', () => {
+    const result = sessionStage(baseInput({ productAiDraftPending: true }));
+    expect(result.status).toBe('blocked');
+    expect(result.current).toBe(1);
+    expect(result.blocker).toBe('Programme IA non validé');
+    expect(result.cta!.label).toBe('Valider en 1 clic');
+  });
+
+  /* ── Catégorie 2 : ACTIVE — préparation à lancer/compléter ────────── */
+
+  it('4. ACTIVE — DRAFT prêt à lancer la préparation → étape 2', () => {
+    const result = sessionStage(baseInput()); // prep vide
+    expect(result.status).toBe('active');
+    expect(result.current).toBe(2);
+    expect(result.cta!.label).toBe('Lancer la préparation');
+    expect(result.stagesState[1]).toBe('done');
+    expect(result.stagesState[2]).toBe('active');
+  });
+
+  it('5. ACTIVE — préparation partielle (programme OK, convention manquante) → étape 2', () => {
+    const partialPrep = emptyPrep(1);
+    partialPrep.programme = true;
+    partialPrep.deroule = true;
+    partialPrep.checklist = true;
+    // convention/convocation/analyse manquent
+    const result = sessionStage(baseInput({ prep: partialPrep }));
+    expect(result.status).toBe('active');
+    expect(result.current).toBe(2);
+    expect(result.cta!.label).toBe('Compléter');
+    expect(result.reason).toMatch(/document\(s\) restant/i);
+  });
+
+  /* ── Catégorie 3 : TODO — wait / progression naturelle ────────────── */
+
+  it('6. TODO — PLANNED prép complète, en attente du démarrage → étape 3', () => {
+    const result = sessionStage(
+      baseInput({ status: 'PLANNED', prep: completePrep(1) }),
+    );
+    expect(result.status).toBe('todo');
+    expect(result.current).toBe(3);
+    expect(result.cta).toBeUndefined(); // pas de CTA en wait
+    expect(result.stagesState[1]).toBe('done');
+    expect(result.stagesState[2]).toBe('done');
+    expect(result.stagesState[3]).toBe('active');
+  });
+
+  it('7. ACTIVE — IN_PROGRESS formation en cours → étape 3', () => {
+    const result = sessionStage(
+      baseInput({ status: 'IN_PROGRESS', prep: completePrep(1) }),
+    );
+    expect(result.status).toBe('active');
+    expect(result.current).toBe(3);
+    expect(result.reason).toMatch(/cours/i);
+  });
+
+  /* ── Catégorie 4 : ACTIVE — pack fin + facturation ───────────────── */
+
+  it('8. ACTIVE — COMPLETED pack incomplet → étape 4', () => {
+    const result = sessionStage(
+      baseInput({
+        status: 'COMPLETED',
+        prep: completePrep(1),
+        closure: emptyClosure(1),
+      }),
+    );
+    expect(result.status).toBe('active');
+    expect(result.current).toBe(4);
+    expect(result.cta!.label).toBe('Générer le pack fin');
+    expect(result.stagesState[4]).toBe('active');
+  });
+
+  it('9. ACTIVE — COMPLETED pack complet → étape 5 facturation', () => {
+    const result = sessionStage(
+      baseInput({
+        status: 'COMPLETED',
+        prep: completePrep(2),
+        closure: completeClosure(2),
+        participantsCount: 2,
+      }),
+    );
+    expect(result.status).toBe('active');
+    expect(result.current).toBe(5);
+    expect(result.cta!.label).toBe('Voir les factures');
+    expect(result.cta!.primary).toBe(false);
+    expect(result.stagesState[1]).toBe('done');
+    expect(result.stagesState[4]).toBe('done');
+    expect(result.stagesState[5]).toBe('active');
+  });
+
+  /* ── Garde-fou : priorité des blockers ───────────────────────────── */
+
+  it('priorité — un blocker (formateur) gagne sur préparation déjà complète', () => {
+    const result = sessionStage(
+      baseInput({
+        primaryTrainerName: null, // bloqueur
+        prep: completePrep(1),    // pourtant tout est prêt côté docs
+      }),
+    );
+    expect(result.status).toBe('blocked');
+    expect(result.current).toBe(1);
+    expect(result.blocker).toBe('Formateur principal manquant');
+  });
+
+  /* ── Cohérence stagesState : 1 seule étape 'active' à la fois ─────── */
+
+  it('stagesState — exactement 1 seule étape "active" sauf si done complet', () => {
+    const scenarios = [
+      baseInput({ participantsCount: 0, prep: emptyPrep(0), closure: emptyClosure(0) }),
+      baseInput({ primaryTrainerName: null }),
+      baseInput(),
+      baseInput({ status: 'PLANNED', prep: completePrep(1) }),
+      baseInput({ status: 'IN_PROGRESS', prep: completePrep(1) }),
+      baseInput({ status: 'COMPLETED', prep: completePrep(1), closure: emptyClosure(1) }),
+    ];
+    for (const s of scenarios) {
+      const result = sessionStage(s);
+      const activeCount = Object.values(result.stagesState).filter((v) => v === 'active').length;
+      expect(activeCount).toBe(1);
+    }
+  });
+});
