@@ -21,6 +21,9 @@ import { DocDock } from '@/components/sessions/doc-dock';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
 import { ParticipantDocsCards } from '@/components/sessions/participant-docs-cards';
 import { buildParticipantCards } from '@/lib/sessions/build-participant-cards';
+import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
+import { NextActionHero } from '@/components/sessions/next-action-hero';
+import { sessionStage } from '@/lib/sessions/session-stage';
 import { getSessionClosureStatus } from '@/server/actions/closure-status';
 import { getSessionPreparationStatus } from '@/server/actions/prepare-training';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
@@ -501,6 +504,20 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     analyseBesoinPending: preparationStatus.analyseBesoinPending,
   });
 
+  // Source UNIQUE pour l'étape courante — header + hero + timeline + drawer
+  // lisent tous depuis ici (commit ui-a 2026-06-05).
+  const stage = sessionStage({
+    status: session.status,
+    startDate: session.startDate,
+    endDate: session.endDate,
+    participantsCount: session.participants.length,
+    primaryTrainerName,
+    productAiDraftPending: Boolean(session.product?.aiDraftedAt),
+    prep: preparationStatus,
+    closure: closureStatus,
+  });
+  const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -510,85 +527,77 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         subtitle={`${session.code} · ${start.toLocaleDateString('fr-FR')}`}
         href={`/app/sessions/${session.id}`}
       />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
-          <SessionCompletenessBadge completeness={sessionCompleteness} />
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Quick task 260523-oze — Bouton "Modifier" (icône Pencil) pour
-              ADMIN+MANAGER : modale d'édition des 9 champs scalaires
-              (name, dates, capacités, modalité, prix HT, langue, notes).
-              Les autres champs (statut, lieu, formateurs, logistique) restent
-              éditables individuellement depuis la fiche. */}
-          {['ADMIN', 'MANAGER'].includes(user.role) && (
-            <EditSessionDetailsDialog
+      {/* Refonte UI V2 — Header hiérarchisé sticky + NextActionHero, tous
+          deux pilotés par sessionStage() (source unique). Remplace l'ancien
+          PageHeader + actions toolbar. Commit ui-b 2026-06-05. */}
+      <SessionHeaderBar
+        title={session.name ?? '(session sans nom)'}
+        code={session.code}
+        status={session.status}
+        startDate={session.startDate}
+        endDate={session.endDate}
+        durationHours={session.product?.durationHours ?? null}
+        pricePerLearner={pricePerLearnerNum}
+        locationLabel={locationLabel}
+        participantsCount={session.participants.length}
+        backLink={
+          <div className="flex items-center gap-3">
+            <BackToListLink fallbackHref="/app/sessions" label="Retour aux sessions" />
+            <SessionCompletenessBadge completeness={sessionCompleteness} />
+          </div>
+        }
+        actionsSecondary={
+          <>
+            {['ADMIN', 'MANAGER'].includes(user.role) && (
+              <EditSessionDetailsDialog
+                sessionId={session.id}
+                initial={{
+                  name: session.name,
+                  startDate: session.startDate,
+                  endDate: session.endDate,
+                  capacityMin: session.capacityMin,
+                  capacityMax: session.capacityMax,
+                  modality: session.modality,
+                  pricePerLearner:
+                    session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+                  language: session.language,
+                  internalNotes: session.internalNotes,
+                }}
+              />
+            )}
+            {session.status === 'IN_PROGRESS' && (
+              <MarkCompletedButton
+                sessionId={session.id}
+                participantCount={session.participants.length}
+              />
+            )}
+          </>
+        }
+        actionPrimary={
+          /* Action primaire — toujours pilotée par sessionStage.cta.
+             Le GenerateClosurePackButton est conservé pour COMPLETED car
+             c'est le seul cas où on lance le worker BullMQ ; pour les autres,
+             on rend le CTA dynamique du stage (lien anchor scroll). */
+          session.status === 'COMPLETED' ? (
+            <GenerateClosurePackButton
               sessionId={session.id}
-              initial={{
-                name: session.name,
-                startDate: session.startDate,
-                endDate: session.endDate,
-                capacityMin: session.capacityMin,
-                capacityMax: session.capacityMax,
-                modality: session.modality,
-                pricePerLearner:
-                  session.pricePerLearner === null ? null : Number(session.pricePerLearner),
-                language: session.language,
-                internalNotes: session.internalNotes,
-              }}
+              participantCount={session.participants.length}
+              blockers={sessionCompleteness.blockers}
             />
-          )}
-
-          {/* Action contextuelle selon le statut — guide l'utilisateur sur la
-              "prochaine étape logique" (Marquer terminée / Voir le pack).
-              Le bouton "Préparer la formation" a été retiré (quick task
-              260525-kl5) : la préparation est désormais auto-déclenchée à
-              la création de la session et le bloc PreparationPedagogiqueBlock
-              en bas de fiche montre l'état + CTA "Compléter" si besoin. */}
-          {(() => {
-            switch (session.status) {
-              case 'DRAFT':
-              case 'PLANNED':
-              case 'OPEN':
-              case 'VALIDATED':
-                return null;
-              case 'IN_PROGRESS':
-                return (
-                  <MarkCompletedButton
-                    sessionId={session.id}
-                    participantCount={session.participants.length}
-                  />
-                );
-              case 'COMPLETED':
-                if (latestBatch) {
-                  return (
-                    <Link
-                      href={`/app/sessions/${session.id}/closure/${latestBatch.id}` as Route}
-                      className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
-                    >
-                      <Package className="h-4 w-4" /> Voir le pack
-                    </Link>
-                  );
-                }
-                return null;
-              case 'CANCELLED':
-              default:
-                return null;
-            }
-          })()}
-
-          {/* 📦 Pack fin de formation — TOUJOURS visible, c'est le bouton
-              le plus utilisé de la fiche session. Le cacher dans le kebab
-              cassait la mémoire musculaire ; on le garde en primaire bleu
-              en permanence. Disabled si pas d'apprenant éligible. */}
-          <GenerateClosurePackButton
-            sessionId={session.id}
-            participantCount={session.participants.length}
-            blockers={sessionCompleteness.blockers}
-          />
-
-          {/* Kebab — uniquement les actions destructives ou rarement utilisées
-              (dupliquer / supprimer) pour ne pas encombrer la barre d'action. */}
+          ) : stage.cta && canWrite ? (
+            <a
+              href={stage.cta.href}
+              className={
+                stage.cta.primary
+                  ? 'inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm'
+                  : 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors'
+              }
+            >
+              {stage.cta.label}
+            </a>
+          ) : null
+        }
+        kebab={
           <SessionActionsMenu>
             <DuplicateSessionButton
               sessionId={session.id}
@@ -601,33 +610,24 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               participantCount={session.participants.length}
             />
           </SessionActionsMenu>
-        </div>
-      </div>
-
-      <PageHeader
-        title={session.name ?? '(session sans nom)'}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2 mt-1">
-            <Badge variant="muted" className="font-mono">{session.code}</Badge>
-            <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
-            <SessionDatesEditor
-              sessionId={session.id}
-              initialStart={session.startDate}
-              initialEnd={session.endDate}
-            />
-            {session.product?.durationHours ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" /> {session.product.durationHours}h
-              </span>
-            ) : null}
-            {Number(session.pricePerLearner ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Euro className="h-3.5 w-3.5" /> {Number(session.pricePerLearner).toFixed(0)} € par stagiaire
-              </span>
-            )}
-          </span>
         }
       />
+
+      {/* NextActionHero — point focal qui re-énonce la prochaine action.
+          Lit la MÊME sessionStage.cta que le bouton primaire de la sticky
+          bar (re-atteignable après scroll). Pas de duplication, juste mirror. */}
+      <NextActionHero stage={stage} canWrite={canWrite} />
+
+      {/* Status select + dates editor — gardés sous le hero pour édition
+          rapide sans ouvrir la modale Modifier. Discrets. */}
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
+        <SessionDatesEditor
+          sessionId={session.id}
+          initialStart={session.startDate}
+          initialEnd={session.endDate}
+        />
+      </div>
 
       {/* Auto-refresh + progress bar visible quand un pack closure tourne */}
       {latestBatch && (

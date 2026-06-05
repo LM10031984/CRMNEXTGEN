@@ -53,26 +53,25 @@ export function SessionWorkflowTimeline({
   canWrite,
   children,
 }: Props) {
-  // ─── 1. Détection de la prochaine étape attendue ────────────────────
-  const nextStep = detectNextStep({
-    sessionStatus,
-    prep,
-    closure,
-    participantsCount,
-    primaryTrainerName,
-    canLaunchPack,
-    productAiDraftPending,
-  });
+  // NextStepHero interne SUPPRIMÉ (commit ui-b 2026-06-05) — remplacé par
+  // <NextActionHero> au-dessus de la timeline, qui lit la source unique
+  // sessionStage(). Ne plus dupliquer la détection ici. Les paramètres
+  // sessionStatus/prep/closure/participantsCount/primaryTrainerName/
+  // canLaunchPack/productAiDraftPending sont conservés temporairement
+  // pour compat — ils ne servent plus qu'à computeQualiopiPillars.
+  void sessionStatus;
+  void participantsCount;
+  void primaryTrainerName;
+  void canLaunchPack;
+  void productAiDraftPending;
+  void canWrite;
 
-  // ─── 2. Calcul conformité Qualiopi (9 piliers) ──────────────────────
+  // Conformité Qualiopi (9 piliers) — sera mis derrière toggle en commit ui-e
   const pillars = computeQualiopiPillars(prep, closure);
   const okCount = pillars.filter((p) => p.done).length;
 
   return (
     <div className="space-y-6">
-      {/* Hero "Prochaine étape" — appel à l'action principal */}
-      <NextStepHero step={nextStep} canWrite={canWrite} />
-
       {/* Barre conformité Qualiopi — vue audit en un coup d'œil */}
       <QualiopiPillarBar pillars={pillars} okCount={okCount} />
 
