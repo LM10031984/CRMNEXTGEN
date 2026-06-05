@@ -166,10 +166,14 @@ export function loadSignatureDataUrl(
   role: 'pedago' | 'dirigeant' = 'pedago',
 ): string {
   const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
+  // Laurent 2026-06-04 : "sur le certificat il y a la signature de Julien il
+  // faut la mienne". Le tampon-signature-fusion contenait Julien — on le
+  // retire des fallbacks. signature-laurent.png devient la source unique
+  // de vérité tant qu'un tenant n'a pas uploadé son signature-{role}.png.
   const fallbacks =
     role === 'pedago'
-      ? [filename, 'signature-laurent.png', 'tampon-signature-fusion.png']
-      : [filename, 'tampon-signature-fusion.png', 'tampon-signature.png'];
+      ? [filename, 'signature-laurent.png']
+      : [filename, 'signature-laurent.png'];
   return loadAssetDataUrl(fallbacks, tenantId);
 }
 

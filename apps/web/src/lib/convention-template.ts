@@ -15,7 +15,7 @@
 
 import { marked } from 'marked';
 import type { OfConfig } from './of-config';
-import { loadLogoColorDataUrl } from './closure/shared-template';
+import { loadLogoColorDataUrl, loadSignatureDataUrl } from './closure/shared-template';
 import {
   OF_PAGED_FOOTER_STYLES,
   OF_PAGED_PAGE_RULE,
@@ -316,6 +316,15 @@ ${renderOfPagedFooter()}
     <div class="name">${escapeHtml(respFullName)}${of.resp.titre ? ', ' + escapeHtml(of.resp.titre) : ''}</div>
     <div style="font-size: 9.5pt; color: #475569;">${escapeHtml(of.name)}</div>
     <div style="margin-top: 10px; font-size: 9pt; color: #64748B;">Date et signature :</div>
+    ${(() => {
+      // Laurent 2026-06-04 : "ajoute ma signature sur la convention tu l'as déjà".
+      // Pose la signature dirigeant auto. Fallback sur signature-laurent.png
+      // si pas de signature-dirigeant.png uploadée pour ce tenant.
+      const sig = loadSignatureDataUrl(data.tenantId, 'dirigeant');
+      return sig
+        ? `<img src="${sig}" alt="Signature" style="max-height: 22mm; max-width: 60mm; margin-top: 4px;" />`
+        : '';
+    })()}
   </div>
 </div>
 
