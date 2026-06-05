@@ -21,6 +21,7 @@
     "import:airtable": "dotenv -e ../../.env -- tsx scripts/import-airtable.ts",
     "import:treso": "dotenv -e ../../.env -- tsx scripts/import-treso-agefice.ts",
     "import:veille": "dotenv -e ../../.env -- tsx scripts/import-veille-from-xlsx.ts",
+    "backfill:trainer-treso": "dotenv -e ../../.env -- tsx scripts/backfill-trainer-from-treso.ts",
     "lint": "tsc --noEmit",
     "test": "vitest run"
   },
