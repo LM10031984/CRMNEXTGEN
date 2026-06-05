@@ -33,9 +33,16 @@ const MODALITY_LABELS: Record<string, string> = {
 
 export async function generateConvocationForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
+
+  if (options?.force) {
+    await prisma.document.deleteMany({
+      where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId },
+    });
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },

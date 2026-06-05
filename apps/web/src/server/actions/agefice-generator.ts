@@ -12,6 +12,10 @@ import {
   type AgeficeFormData,
   type ExperienceTranche,
   type EvaluationType,
+  type FormationType,
+  type FormationNiveau,
+  type FormationCertif,
+  type AttestationType,
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
 
@@ -65,9 +69,24 @@ function splitDureeByModality(
 
 export async function generateAgeficeForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; warnings?: string[] }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
+
+  // Force regen : delete les Document AGEFICE existants pour ce participant
+  // AVANT de générer, sinon le hash SHA256 idempotent renvoie l'ancien doc
+  // (avec adresse buggée ou prix faux). Laurent 2026-06-04 : "je ne peux pas
+  // régénérer un doc".
+  if (options?.force) {
+    await prisma.document.deleteMany({
+      where: {
+        tenantId: user.tenantId,
+        type: 'AGEFICE',
+        participantId,
+      },
+    });
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -203,8 +222,16 @@ export async function generateAgeficeForParticipant(
     theme: product.theme,
     title: product.title,
   });
+  // Format "Raison sociale — Nom du lieu\nadresse\nCP Ville" (cf demande Laurent
+  // 2026-06-03 : Cerfa AGEFICE exige SARL X — Agence Y + adresse).
   const lieuAdresseComplete = session.location
     ? [
+        [
+          (session.location as { legalName?: string | null }).legalName,
+          session.location.name,
+        ]
+          .filter(Boolean)
+          .join(' — '),
         (session.location.address as any)?.street,
         [(session.location.address as any)?.postalCode, (session.location.address as any)?.city]
           .filter(Boolean)
@@ -213,6 +240,28 @@ export async function generateAgeficeForParticipant(
         .filter(Boolean)
         .join('\n')
     : of.addressFull;
+
+  // ── Conformité Cerfa (Section C/D) ───────────────────────────
+  // Lit les valeurs depuis TrainingProduct si renseignées, sinon fallback
+  // sur les défauts V1 (= comportement historique avant la Section C).
+  const pAny = product as Record<string, unknown>;
+  const ageficeFormationType =
+    ((pAny.ageficeFormationType as FormationType | null | undefined) ?? 'ACTION') as FormationType;
+  const ageficeNiveau =
+    ((pAny.ageficeNiveau as FormationNiveau | null | undefined) ?? 'PERFECTIONNEMENT') as FormationNiveau;
+  const ageficeCertif =
+    ((pAny.ageficeCertif as FormationCertif | null | undefined) ?? 'SANS_QUALIFICATION') as FormationCertif;
+  const ageficeAttestation =
+    ((pAny.ageficeAttestation as AttestationType | null | undefined) ?? 'ATTESTATION_STAGE') as AttestationType;
+  const productEvals = pAny.ageficeEvaluations as string[] | null | undefined;
+  const ageficeEvaluations: EvaluationType[] =
+    productEvals && productEvals.length > 0
+      ? (productEvals as EvaluationType[])
+      : (['QUIZ', 'FEUILLES_PRESENCE'] satisfies EvaluationType[]);
+  const ageficeObligatoire = (pAny.ageficeObligatoire as boolean | null | undefined) ?? false;
+  const ageficeReconversion = (pAny.ageficeReconversion as boolean | null | undefined) ?? false;
+  const ageficeEnEntreprise = (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? false;
+  const ageficeMandat = (pAny.ageficeMandat as boolean | null | undefined) ?? true;
 
   const data: AgeficeFormData = {
     pa: {
@@ -234,7 +283,10 @@ export async function generateAgeficeForParticipant(
       siret: eiOrg.siret,
       activite: eiOrg.activityDescription,
       formeJuridique: eiOrg.legalForm,
-      address: orgAddress?.street ?? null,
+      // AGEFICE refuse les dossiers si la raison sociale n'apparaît pas dans
+      // le champ "Adresse Entreprise" du Cerfa. Laurent 2026-06-04 (retour
+      // terrain). On force le format "Raison Sociale — Rue".
+      address: [eiOrg.legalName, orgAddress?.street].filter(Boolean).join(' — ') || null,
       postalCode: orgAddress?.postalCode ?? null,
       city: orgAddress?.city ?? null,
     },
@@ -251,14 +303,14 @@ export async function generateAgeficeForParticipant(
       experience: inferExperience(participant.person.professionalExperience),
     },
     of,
-    formationType: 'ACTION',
-    obligatoire: false,
-    reconversion: false,
+    formationType: ageficeFormationType,
+    obligatoire: ageficeObligatoire,
+    reconversion: ageficeReconversion,
     formation: {
       intitule: product.title,
       thematique: product.theme ?? 'immobilier',
-      niveau: 'PERFECTIONNEMENT',
-      certif: 'SANS_QUALIFICATION',
+      niveau: ageficeNiveau,
+      certif: ageficeCertif,
       dateDebut: session.startDate,
       dateFin: session.endDate,
       dureePresentielIndividuel: duree.presIndiv,
@@ -271,13 +323,13 @@ export async function generateAgeficeForParticipant(
       lieuVille: (session.location?.address as any)?.city ?? of.addressVille,
       lieuAdresseComplete,
       prixHT: effectivePrice,
-      enEntreprise: false,
+      enEntreprise: ageficeEnEntreprise,
       deroulementPedago,
     },
-    evaluations: ['QUIZ', 'FEUILLES_PRESENCE'] satisfies EvaluationType[],
+    evaluations: ageficeEvaluations,
     evaluationAutreDetail: null,
-    attestation: 'ATTESTATION_STAGE',
-    mandat: true,
+    attestation: ageficeAttestation,
+    mandat: ageficeMandat,
     signature: {
       lieu: of.addressVille || null,
       // Date du jour : on génère le PDF juste avant la signature, donc c'est la date réelle

@@ -95,7 +95,7 @@ export function AiDraftValidationBanner({ productId, aiDraftedAt, canValidate }:
               Valider le programme
             </button>
             <a
-              href={`/app/produits/${productId}/edit`}
+              href={`/app/produits/${productId}?tab=programme`}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-amber-300 bg-white text-amber-900 text-sm font-medium hover:bg-amber-50"
             >
               Réviser le contenu

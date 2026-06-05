@@ -95,23 +95,59 @@ export async function addParticipant(input: {
       },
     });
 
-    // Auto-génère la convention de formation (Code du Travail L6353-1) si elle
-    // n'existe pas déjà pour ce participant. Template pur (pas Ollama) → ~1s.
-    // Fire-and-forget pour ne pas bloquer l'inscription si génération échoue.
-    const existingConvention = await prisma.document.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        type: 'CONVENTION',
-        participantId: part.id,
-      },
-      select: { id: true },
-    });
+    // Auto-génération en parallèle des docs pré-formation pour CE participant.
+    // Tous fire-and-forget pour ne pas bloquer l'inscription si une génération
+    // échoue. Idempotent : skip si déjà existant.
+    // 1) Convention (Code du Travail L6353-1) — template pur ~1s
+    // 2) Convocation
+    // 3) Demande AGEFICE — uniquement si TNS éligible (sponsor AGEFICE OU
+    //    LegalLink EI_SELF/AGENT_COMMERCIAL sur une org rattachée AGEFICE).
+    //    Bug remonté Laurent 2026-06-04 : "AGEFICE doit se créer automatiquement
+    //    sans que je clique sur un bouton".
+    const [existingConvention, existingConvocation, existingAgefice] = await Promise.all([
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'CONVENTION', participantId: part.id },
+        select: { id: true },
+      }),
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId: part.id },
+        select: { id: true },
+      }),
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'AGEFICE', participantId: part.id },
+        select: { id: true },
+      }),
+    ]);
+
     if (!existingConvention) {
       generateConventionForParticipant(part.id).catch((e) => {
-        console.warn(
-          `[addParticipant] auto-gen convention failed for ${part.id}:`,
-          e?.message ?? e,
-        );
+        console.warn(`[addParticipant] auto-gen convention failed for ${part.id}:`, e?.message ?? e);
+      });
+    }
+    if (!existingConvocation) {
+      const { generateConvocationForParticipant } = await import('./convocation-generator');
+      generateConvocationForParticipant(part.id).catch((e) => {
+        console.warn(`[addParticipant] auto-gen convocation failed for ${part.id}:`, e?.message ?? e);
+      });
+    }
+    // Eligibilité AGEFICE : sponsor AGEFICE OU EI/AGENT_COMMERCIAL sur org AGEFICE
+    const isAgeficeEligible =
+      sponsor.opcoCode === 'AGEFICE' ||
+      (await prisma.legalLink.findFirst({
+        where: {
+          personId: input.personId,
+          OR: [
+            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { opcoCode: 'AGEFICE' } },
+            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { ageficeProfile: { isNot: null } } },
+          ],
+        },
+        select: { id: true },
+      })) !== null;
+
+    if (isAgeficeEligible && !existingAgefice) {
+      const { generateAgeficeForParticipant } = await import('./agefice-generator');
+      generateAgeficeForParticipant(part.id).catch((e) => {
+        console.warn(`[addParticipant] auto-gen AGEFICE failed for ${part.id}:`, e?.message ?? e);
       });
     }
 
@@ -712,6 +748,7 @@ export async function updateSessionLocation(input: {
 export async function createLocationAndAttachToSession(input: {
   sessionId: string;
   name: string;
+  legalName?: string | null;
   city?: string | null;
   street?: string | null;
   postalCode?: string | null;
@@ -754,6 +791,7 @@ export async function createLocationAndAttachToSession(input: {
       data: {
         tenantId: user.tenantId,
         name,
+        legalName: input.legalName?.trim() || null,
         address: Object.keys(address).length > 0 ? address : Prisma.JsonNull,
       },
       select: { id: true },

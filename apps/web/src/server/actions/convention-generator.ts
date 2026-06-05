@@ -29,9 +29,16 @@ import { loadOfConfig } from '@/lib/of-config';
 
 export async function generateConventionForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
+
+  if (options?.force) {
+    await prisma.document.deleteMany({
+      where: { tenantId: user.tenantId, type: 'CONVENTION', participantId },
+    });
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -86,16 +93,26 @@ export async function generateConventionForParticipant(
     },
   ];
 
-  // Lieu : on prend l'adresse de la session si elle existe, sinon le siège OF
+  // Lieu : "Raison sociale — Nom du lieu, adresse" si dispo, sinon siège OF.
+  // legalName ajouté 2026-06-03 (cf demande Laurent : ex "SARL XYZ — Agence
+  // Nice Centre, 12 rue X, 06000 Nice").
   const of = await loadOfConfig(user.tenantId);
+  const locName = participant.session.location
+    ? [
+        (participant.session.location as { legalName?: string | null }).legalName,
+        participant.session.location.name,
+      ]
+        .filter(Boolean)
+        .join(' — ')
+    : null;
   const locAddress = participant.session.location?.address as Record<string, string> | string | null;
   let lieu: string;
-  if (typeof locAddress === 'string') lieu = locAddress;
+  if (typeof locAddress === 'string') lieu = [locName, locAddress].filter(Boolean).join(', ') || locAddress;
   else if (locAddress && typeof locAddress === 'object') {
     const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = parts.length ? parts.join(', ') : (participant.session.location?.name ?? of.addressFull);
+    lieu = [locName, parts.join(', ')].filter(Boolean).join(', ') || (locName ?? of.addressFull);
   } else {
-    lieu = participant.session.location?.name ?? of.addressFull;
+    lieu = locName ?? of.addressFull;
   }
 
   // RCS ville : heuristique depuis le code postal de l'org si possible

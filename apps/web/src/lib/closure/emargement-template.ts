@@ -98,11 +98,13 @@ ${renderBrandHeader()}
     </tbody>
   </table>
 
-  <!-- 2 cases signature formateur en bas de page (matin + après-midi) -->
+  <!-- 2 cases signature formateur en bas de page (matin + après-midi).
+       Horaires retirés des libellés à la demande de Laurent 2026-06-04 :
+       "une signature le matin et l'aprem sans les horaires". -->
   <div style="margin-top: 14mm; display: flex; gap: 12mm;">
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Matin · ${HORAIRE_MATIN}
+        Signature formateur — Matin
       </div>
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}
@@ -111,7 +113,7 @@ ${renderBrandHeader()}
     </div>
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Après-midi · ${HORAIRE_APREM}
+        Signature formateur — Après-midi
       </div>
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}

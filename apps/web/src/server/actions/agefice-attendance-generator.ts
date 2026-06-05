@@ -50,9 +50,16 @@ function splitDureeByModality(
 
 export async function generateAgeficeAttendanceForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; warnings?: string[] }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
+
+  if (options?.force) {
+    await prisma.document.deleteMany({
+      where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
+    });
+  }
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -119,9 +126,11 @@ export async function generateAgeficeAttendanceForParticipant(
   if (primaryTrainer) {
     const nom = `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName}`.trim();
     const role = primaryTrainer.role?.trim();
-    const roleDistinct =
-      role && !/^formateur( principal)?$/i.test(role);
-    formateurNomQualite = roleDistinct ? `${nom}, ${role}` : nom;
+    // Ne jamais afficher les codes internes (LEAD / CO / FORMATEUR…).
+    // Laurent 2026-06-04 : "LEAD ne sert à rien dans Nom et qualité".
+    const isInternalCode =
+      !role || /^(lead|co|formateur( principal)?)$/i.test(role);
+    formateurNomQualite = isInternalCode ? nom : `${nom}, ${role}`;
   }
 
   // ── OF config (pre-resolve BDD+ENV) ───────────────────────────
