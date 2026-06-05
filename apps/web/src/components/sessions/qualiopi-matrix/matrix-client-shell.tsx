@@ -161,14 +161,20 @@ export function MatrixClientShell({
                   <th
                     key={docType}
                     scope="col"
-                    className="px-1 py-2 font-semibold text-center border-b min-w-[48px]"
+                    className="px-1 py-2 font-semibold text-center border-b min-w-[44px] h-32 align-bottom"
                   >
-                    <abbr
+                    {/* Header vertical pour lisibilité sans hover.
+                        Bug remonté Laurent 2026-06-04 : "Pg/Cv/Cn cryptique". */}
+                    <div
+                      className="inline-flex items-end justify-center h-full"
                       title={lbl?.long ?? docType}
-                      className="no-underline cursor-help"
                     >
-                      {lbl?.short ?? docType}
-                    </abbr>
+                      <span
+                        className="[writing-mode:vertical-rl] rotate-180 text-[11px] font-medium text-foreground/80 leading-tight tabular-nums whitespace-nowrap"
+                      >
+                        {lbl?.long ?? docType}
+                      </span>
+                    </div>
                   </th>
                 );
               })}

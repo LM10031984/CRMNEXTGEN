@@ -54,7 +54,10 @@ export function SessionCompletenessBadge({ completeness }: Props) {
           {completeness.blockers.map((b) => {
             // Si l'URL commence par '#' c'est un anchor sur la même page → <a> natif
             // pour préserver le scroll. Sinon Next <Link> avec typedRoutes.
+            // Si external=true → <a target="_blank"> pour préserver le contexte
+            // session pendant la correction (ex: validation IA produit).
             const isAnchor = b.fix.href.startsWith('#');
+            const isExternal = b.fix.external === true;
             const content = (
               <>
                 <span
@@ -77,6 +80,15 @@ export function SessionCompletenessBadge({ completeness }: Props) {
               <li key={b.key}>
                 {isAnchor ? (
                   <a href={b.fix.href} className={cls}>
+                    {content}
+                  </a>
+                ) : isExternal ? (
+                  <a
+                    href={b.fix.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cls}
+                  >
                     {content}
                   </a>
                 ) : (

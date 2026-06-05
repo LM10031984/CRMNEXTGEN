@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus, ExternalLink } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -12,6 +12,16 @@ import { GenerateClosurePackButton } from '@/components/sessions/generate-closur
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
 import { PreparationPedagogiqueBlock } from '@/components/sessions/preparation-pedagogique-block';
+import { ClosureFormationBlock } from '@/components/sessions/closure-formation-block';
+import { SessionWorkflowTimeline } from '@/components/sessions/session-workflow-timeline';
+import { StepCreation } from '@/components/sessions/step-creation';
+import { StepPendantFormation } from '@/components/sessions/step-pendant-formation';
+import { StepFacturation } from '@/components/sessions/step-facturation';
+import { DocDock } from '@/components/sessions/doc-dock';
+import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
+import { ParticipantDocsCards } from '@/components/sessions/participant-docs-cards';
+import { buildParticipantCards } from '@/lib/sessions/build-participant-cards';
+import { getSessionClosureStatus } from '@/server/actions/closure-status';
 import { getSessionPreparationStatus } from '@/server/actions/prepare-training';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
@@ -32,11 +42,8 @@ import { DeleteSessionButton } from '@/components/sessions/delete-session-button
 import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
-import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
 import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
 import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
-// Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche session.
-import { SessionInvoicesBlock } from '@/components/sessions/session-invoices-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
 
@@ -388,6 +395,111 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   // pédagogique pour le bloc PreparationPedagogiqueBlock. La server action est
   // tenant-scopée via validateRequest (déjà résolue ci-dessus).
   const preparationStatus = await getSessionPreparationStatus(session.id);
+  const closureStatus = await getSessionClosureStatus(session.id);
+
+  // ─── Données complémentaires pour la timeline 5 étapes ─────────────────
+  // SessionSlot : pour step 3 "Pendant la formation" (créneaux + émargements signés)
+  // Invoices détaillées : pour step 5 (table compacte CA / facturé / encaissé)
+  const [sessionSlotsAgg, timelineInvoices, latestOpcoSubmission] = await Promise.all([
+    prisma.sessionSlot.findMany({
+      where: { sessionId: session.id, session: { tenantId: user.tenantId } },
+      select: {
+        id: true,
+        attendances: { select: { signedAt: true }, take: 1 },
+      },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        tenantId: user.tenantId,
+        OR: [{ sessionId: session.id }, { participant: { sessionId: session.id } }],
+      },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        issueDate: true,
+        amountTTC: true,
+        amountPaid: true,
+        originalInvoiceId: true,
+        participant: { select: { person: { select: { firstName: true, lastName: true } } } },
+        payerOrg: { select: { legalName: true } },
+      },
+      orderBy: [{ issueDate: 'desc' }, { number: 'desc' }],
+    }),
+    prisma.opcoSubmission.findFirst({
+      where: { tenantId: user.tenantId, participant: { sessionId: session.id } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    }),
+  ]);
+
+  const totalSlots = sessionSlotsAgg.length;
+  const signedSlots = sessionSlotsAgg.filter((s) => s.attendances.length > 0).length;
+
+  const primaryTrainer = session.trainers.find((t) => t.isPrimary) ?? null;
+  const primaryTrainerName = primaryTrainer
+    ? `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName}`
+    : null;
+  const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
+  const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
+  const caTotalHT = (pricePerLearnerNum ?? 0) * session.participants.length;
+
+  const timelineInvoiceRows = timelineInvoices.map((inv) => ({
+    id: inv.id,
+    number: inv.number,
+    status: inv.status,
+    amountTTC: Number(inv.amountTTC),
+    amountPaid: Number(inv.amountPaid),
+    issueDate: inv.issueDate,
+    beneficiary:
+      inv.participant?.person
+        ? `${inv.participant.person.firstName} ${inv.participant.person.lastName}`
+        : (inv.payerOrg?.legalName ?? '—'),
+    isCreditNote: inv.status === 'CREDIT_NOTE',
+  }));
+
+  const locationLabel = session.location?.name ?? null;
+  const productLabel = session.product?.title ?? null;
+  const productCode = session.product?.code ?? null;
+  const productDuration = session.product?.durationHours ?? null;
+
+  // 🎯 Cards apprenant (solution ULTIME demandée Laurent 2026-06-04 :
+  // "un apprenant je trouve ses docs, améliore ça de 100%"). Remplace la
+  // matrice cryptique par 1 card visuelle par stagiaire avec ses 11 docs.
+  const participantCards = buildParticipantCards({
+    participants: matrixParticipants.map((p) => ({
+      id: p.id,
+      personId: p.personId,
+      fullName: p.fullName,
+      sponsorOrgLabel: p.sponsorOrgLabel,
+      sponsorOrgOpcoCode: p.sponsorOrgOpcoCode,
+      financingMode: p.financingMode,
+      isAgefice: p.isAgefice,
+    })),
+    docsByParticipant,
+    assetsByParticipant,
+    analyseBesoinInflight:
+      preparationStatus.analyseBesoinInProgress + preparationStatus.analyseBesoinPending,
+  });
+
+  // 🪄 Items du DocDock — bouton magique bas-droite pour générer/télécharger
+  // n'importe quel doc pré-formation Qualiopi en 1 clic. Résout Laurent
+  // 2026-06-04 : "il manque le doc AGEFICE SES-0094, je ne vois pas comment
+  // la générer · trouver les docs c'est compliqué".
+  const docDockItems = buildDocDockItems({
+    programmeProductDocId,
+    derouleProductDocId,
+    checklistDocId,
+    participants: matrixParticipants.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      isAgefice: p.isAgefice,
+    })),
+    docsByParticipant,
+    assetsByParticipant,
+    analyseBesoinInProgress: preparationStatus.analyseBesoinInProgress,
+    analyseBesoinPending: preparationStatus.analyseBesoinPending,
+  });
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -530,285 +642,173 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       {/* Tasks TODO sur cette session (signalisation 🔴 formateur, etc.) */}
       <SessionTasksPanel sessionId={session.id} tenantId={user.tenantId} />
 
-      {/* Vue d'ensemble dossier Qualiopi — % complétion + ce qui manque le plus */}
-      {totalP > 0 && (
-        <section className={`rounded-2xl border-2 p-5 ${
-          completionPct >= 90 ? 'border-emerald-200 bg-emerald-50/30'
-          : completionPct >= 50 ? 'border-amber-200 bg-amber-50/30'
-          : 'border-red-200 bg-red-50/30'
-        }`}>
-          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <div>
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4" /> Dossier Qualiopi
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                {totalCompleted}/{totalExpected} docs ({totalP} apprenant{totalP > 1 ? 's' : ''} × {PERSONAL_DOC_TOTAL} docs)
-              </p>
-            </div>
-            <div className="text-3xl font-bold tabular-nums" style={{
-              color: completionPct >= 90 ? '#059669' : completionPct >= 50 ? '#D97706' : '#DC2626',
-            }}>
-              {completionPct}%
-            </div>
-          </div>
-          <div className="h-2 rounded-full bg-white border border-border overflow-hidden mb-4">
-            <div
-              className={`h-full transition-all ${completionPct >= 90 ? 'bg-emerald-500' : completionPct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-              style={{ width: `${completionPct}%` }}
-            />
-          </div>
-          {docsMissingMost.length > 0 ? (
-            <div>
-              <p className="text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wide">
-                ⚠ Ce qui manque le plus
-              </p>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {docsMissingMost.map((d) => (
-                  <li key={d.type} className="bg-white border border-border rounded-md px-3 py-2 text-xs flex items-center justify-between">
-                    <span className="font-medium">{d.label}</span>
-                    <span className={`font-semibold tabular-nums ${d.count === 0 ? 'text-red-600' : 'text-amber-700'}`}>
-                      {d.count}/{d.total}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="text-xs text-emerald-700 font-medium">✓ Dossier complet pour tous les apprenants</p>
-          )}
-        </section>
-      )}
+      {/* Bloc "Dossier Qualiopi %" supprimé — redondant avec la barre conformité
+          Qualiopi du Hero (9 indicateurs) qui couvre déjà cette info, et son
+          calcul X/N était bugué après refonte (Laurent 2026-06-04 : "il dit 0/3
+          alors que les docs ont été générés"). */}
 
-      {/* Phase 9.1 Plan 03 — Documents session (3 cards horizontales D-04 bloc séparé) */}
-      <SessionOnlyDocsBlock
-        sessionId={session.id}
-        productId={session.productId}
-        deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
-        grilleObsPdfRef={sessionDocsMap.get('GRILLE_OBS_SESSION')}
-        checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
-        grilleObsAssetCount={grilleObsAssetCount}
-        canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
-      />
-
-      {/* Quick task 260525-kl5 — bloc agrégé "Préparation pédagogique" :
-          remplace le bouton "Préparer la formation" retiré de la barre
-          d'action. Affiche l'état des 6 catégories de docs pré-formation
-          (3 partagés + 3 par stagiaire) + CTA "Compléter" idempotent. */}
-      <PreparationPedagogiqueBlock
-        sessionId={session.id}
-        initialStatus={preparationStatus}
+      {/* ════════════════════════════════════════════════════════════════
+          Refonte UX 2026-06-04 — Timeline 5 étapes process Qualiopi
+          Remplace : SessionOnlyDocsBlock + PreparationPedagogiqueBlock +
+          ClosureFormationBlock + TresoStatusBlock + SessionInvoicesBlock
+          (qui étaient juxtaposés sans cohérence). Tout est désormais sous
+          un axe linéaire unique : Création → Préparation → Pendant →
+          Pack fin → Facturation. Avec Hero "Prochaine étape" intelligent
+          et barre conformité Qualiopi en haut.
+          ════════════════════════════════════════════════════════════════ */}
+      <div id="section-formateurs" className="scroll-mt-20" />
+      <SessionWorkflowTimeline
+        sessionStatus={session.status}
+        prep={preparationStatus}
+        closure={closureStatus}
+        canLaunchPack={sessionCompleteness.ready}
+        participantsCount={session.participants.length}
+        primaryTrainerName={primaryTrainerName}
+        productAiDraftPending={Boolean(session.product?.aiDraftedAt)}
         canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
-      />
-
-      {/* Phase 9.1 Plan 03 — Matrice Documents participants (CENTRAL-01 / CENTRAL-02) */}
-      {/* BUG-17 anchor — completeness badge link vers cette section */}
-      <div id="section-participants" className="scroll-mt-20" />
-      <ParticipantDocMatrix
-        sessionId={session.id}
-        userRole={user.role}
-        hasAgeficeParticipant={hasAgeficeParticipant}
-        participants={matrixParticipants}
-        productDocs={productDocsMap}
-        sessionDocs={sessionDocsMap}
-      />
-
-      {/* Audit 2026-05-23 — Bloc Trésorerie : 4 statuts encaissement importés
-          depuis l'Excel "Tréso AGEFICE" (source de vérité, SmartOF est faux). */}
-      <TresoStatusBlock
-        participants={session.participants.map((p) => ({
-          id: p.id,
-          personName: `${p.person.firstName} ${p.person.lastName}`,
-          factureEnvoyee: p.factureEnvoyee,
-          validationOpco: p.validationOpco,
-          remboursementOpco: p.remboursementOpco,
-          paiementClient: p.paiementClient,
-        }))}
-      />
-
-      {/* Phase 11 Plan 11-09 — Cross-nav D-07 : factures liées à cette session
-          (sessionId direct OU via participant.sessionId). Placé après la
-          matrice docs Phase 9.1 (anti-régression CENTRAL-01/02 : matrice +
-          SessionOnlyDocsBlock + Inscrits préservés). */}
-      <SessionInvoicesBlock sessionId={session.id} tenantId={user.tenantId} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <section className="rounded-2xl border border-border bg-white overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-border gap-3">
-              <h2 className="font-semibold inline-flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" /> Inscrits ({session.participants.length})
-              </h2>
-              <div className="flex items-center gap-2">
-                {eiCount > 0 && (
-                  <Badge variant="primary">
-                    {eiCount} auto-entrepreneur{eiCount > 1 ? 's' : ''}
-                  </Badge>
-                )}
-                <CreatePersonButton
-                  enrollInSessionId={session.id}
-                  defaultPrice={Number(session.pricePerLearner ?? 0)}
-                  buttonLabel="Nouvel apprenant"
+      >
+        <div id="step-1" className="scroll-mt-20" />
+        <StepCreation
+          state="done"
+          productId={session.product?.id ?? null}
+          productLabel={productLabel}
+          productCode={productCode}
+          productAiDraftedAt={session.product?.aiDraftedAt ?? null}
+          productProgrammePdfId={programmeProductDocId ?? null}
+          canValidateAi={['ADMIN', 'MANAGER'].includes(user.role)}
+          durationHours={productDuration}
+          startDate={session.startDate}
+          endDate={session.endDate}
+          locationLabel={locationLabel}
+          primaryTrainerName={primaryTrainerName}
+          coTrainerCount={coTrainerCount}
+          participantsCount={session.participants.length}
+          pricePerLearner={pricePerLearnerNum}
+          actions={
+            <>
+              {['ADMIN', 'MANAGER'].includes(user.role) && (
+                <EditSessionDetailsDialog
+                  sessionId={session.id}
+                  initial={{
+                    name: session.name,
+                    startDate: session.startDate,
+                    endDate: session.endDate,
+                    capacityMin: session.capacityMin,
+                    capacityMax: session.capacityMax,
+                    modality: session.modality,
+                    pricePerLearner:
+                      session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+                    language: session.language,
+                    internalNotes: session.internalNotes,
+                  }}
                 />
+              )}
+              {['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role) && (
                 <AddParticipantDialog
                   sessionId={session.id}
                   defaultPrice={Number(session.pricePerLearner ?? 0)}
                   excludePersonIds={session.participants.map((p) => p.personId)}
                 />
-              </div>
-            </div>
-            {session.participants.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                Aucun apprenant inscrit. Probablement non matché à l'import (homonymie ou nom tronqué dans l'export Excel).
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {(() => {
-                  // Groupement par sponsorOrg : 1 facture = 1 sponsor (EI = 1 ligne, SARL = N salariés)
-                  const groups = new Map<string, { sponsor: typeof session.participants[number]['sponsorOrg']; participants: typeof session.participants }>();
-                  for (const p of session.participants) {
-                    const k = p.sponsorOrg.id;
-                    if (!groups.has(k)) groups.set(k, { sponsor: p.sponsorOrg, participants: [] });
-                    groups.get(k)!.participants.push(p);
-                  }
-                  return Array.from(groups.values()).map((g) => {
-                    const isEi = SOLO_FORMS.includes(g.sponsor.legalForm);
-                    const totalHT = g.participants.reduce((s, p) => s + Number(p.priceHT), 0);
-                    const allInvoiced = g.participants.every((p) => p.invoiceSent);
-                    return (
-                      <div key={g.sponsor.id} className="p-4 hover:bg-muted/30 transition-colors">
-                        {/* Header sponsor */}
-                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                          <div className="text-xs text-muted-foreground inline-flex items-center gap-2">
-                            <Briefcase className="h-3 w-3" />
-                            <span>Sponsor :</span>
-                            <Link
-                              href={`/app/organisations/${g.sponsor.id}`}
-                              className="text-foreground font-medium hover:text-primary"
-                            >
-                              {g.sponsor.legalName}
-                            </Link>
-                            <Badge variant={isEi ? 'primary' : 'muted'}>
-                              {isEi ? 'Auto-entrepreneur' : g.sponsor.legalForm}
-                            </Badge>
-                            {g.sponsor.opcoCode && <Badge variant="info">{formatFunderCode(g.sponsor.opcoCode)}</Badge>}
-                            {g.participants.length > 1 && (
-                              <Badge variant="warning">{g.participants.length} salariés groupés</Badge>
-                            )}
-                          </div>
-                          <div className="inline-flex items-center gap-3">
-                            <span className="text-sm font-medium tabular-nums">{totalHT.toFixed(2)} € HT</span>
-                            <CreateSponsorInvoiceButton
-                              sessionId={session.id}
-                              sponsorOrgId={g.sponsor.id}
-                              sponsorName={g.sponsor.legalName}
-                              participantCount={g.participants.length}
-                              totalHT={totalHT}
-                              allInvoiced={allInvoiced}
-                            />
-                          </div>
-                        </div>
+              )}
+            </>
+          }
+        />
 
-                        {/* Lignes participants du groupe */}
-                        <ul className="space-y-2">
-                          {g.participants.map((p) => (
-                            <li key={p.id} className="flex items-start gap-3 ml-2">
-                              <div className="h-7 w-7 rounded-full bg-primary-100 text-primary-700 inline-flex items-center justify-center font-semibold text-[10px] shrink-0">
-                                {p.person.firstName.charAt(0)}
-                                {p.person.lastName.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <Link
-                                  href={`/app/apprenants/${p.person.id}`}
-                                  className="text-sm font-medium hover:text-primary transition-colors"
-                                >
-                                  {p.person.firstName} {p.person.lastName.toUpperCase()}
-                                </Link>
-                                <div className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-2 flex-wrap">
-                                  <span className="tabular-nums">{Number(p.priceHT).toFixed(2)} €</span>
-                                  <span>·</span>
-                                  <span>{p.enrollmentStatus}</span>
-                                  {(() => {
-                                    // Badge "X/11 docs prêts" — couleur progressive (rouge < 30%, ambre < 80%, vert sinon).
-                                    // Permet de voir d'un coup d'œil quels apprenants nécessitent encore une génération
-                                    // sans dérouler la matrice détaillée.
-                                    const n = docCompletionByParticipant.get(p.id) ?? 0;
-                                    const ratio = n / PERSONAL_DOC_TOTAL;
-                                    const cls =
-                                      ratio >= 0.8
-                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                        : ratio >= 0.3
-                                          ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                          : 'border-slate-200 bg-slate-50 text-slate-600';
-                                    return (
-                                      <Link
-                                        href={`/app/apprenants/${p.person.id}?tab=documents` as Route}
-                                        title={`${n}/${PERSONAL_DOC_TOTAL} documents personnels générés — cliquer pour ouvrir la fiche apprenant`}
-                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-medium tabular-nums hover:bg-opacity-80 ${cls}`}
-                                      >
-                                        {n}/{PERSONAL_DOC_TOTAL} docs
-                                      </Link>
-                                    );
-                                  })()}
-                                  {invoiceByParticipant.get(p.id) ? (
-                                    <Link
-                                      href={`/app/factures/${invoiceByParticipant.get(p.id)!.id}` as Route}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-medium hover:bg-emerald-100"
-                                      title="Ouvrir la facture"
-                                    >
-                                      Facture {invoiceByParticipant.get(p.id)!.number}
-                                    </Link>
-                                  ) : p.invoiceSent ? (
-                                    <Badge variant="success">Facturé</Badge>
-                                  ) : null}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <ParticipantActionsMenu
-                                  participantId={p.id}
-                                  participantName={`${p.person.firstName} ${p.person.lastName}`}
-                                  showAgefice={isEi || g.sponsor.opcoCode === 'AGEFICE'}
-                                  initialDocs={{
-                                    CONVENTION: docsByParticipant.get(p.id)?.get('CONVENTION') ?? null,
-                                    PROGRAMME: docsByParticipant.get(p.id)?.get('PROGRAMME') ?? null,
-                                    AGEFICE: docsByParticipant.get(p.id)?.get('AGEFICE') ?? null,
-                                  }}
-                                />
-                                <EditParticipantButton
-                                  participantId={p.id}
-                                  currentPriceHT={Number(p.priceHT)}
-                                  currentStatus={p.enrollmentStatus}
-                                  currentFinancingRequestDate={p.financingRequestDate}
-                                />
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            )}
-          </section>
+        <div id="step-2" className="scroll-mt-20" />
+        <PreparationPedagogiqueBlock
+          sessionId={session.id}
+          initialStatus={preparationStatus}
+          canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+          isActive={
+            session.status === 'DRAFT' || session.status === 'PLANNED' || session.status === 'OPEN'
+          }
+        />
 
-          {/* Formateurs de la session — étoile = formateur principal qui signe les docs Qualiopi */}
-          {/* BUG-17 anchor — completeness badge link vers cette section.
-              BUG-18 (suite) : on rend TOUJOURS la section (avec un état vide
-              actionnable) pour que l'anchor #section-formateurs mène à du
-              contenu visible — sinon le scroll arrive sur du vide. */}
-          <section
-            id="section-formateurs"
-            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20 target:ring-2 target:ring-primary target:ring-offset-2"
-          >
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
+        <div id="step-3" className="scroll-mt-20" />
+        <StepPendantFormation
+          state={
+            session.status === 'IN_PROGRESS'
+              ? 'active'
+              : session.status === 'COMPLETED'
+                ? 'done'
+                : 'inactive'
+          }
+          participantsCount={session.participants.length}
+          emargementsGenerated={closureStatus.emargements}
+          totalSlots={totalSlots}
+          signedSlots={signedSlots}
+          startDateISO={session.startDate.toISOString()}
+          endDateISO={session.endDate.toISOString()}
+        />
+
+        <div id="step-4" className="scroll-mt-20" />
+        <ClosureFormationBlock
+          sessionId={session.id}
+          status={closureStatus}
+          isActive={session.status === 'COMPLETED'}
+          programmeProductDocId={programmeProductDocId ?? null}
+        />
+
+        <div id="step-5" className="scroll-mt-20" />
+        <StepFacturation
+          state={
+            timelineInvoiceRows.length === 0
+              ? 'todo'
+              : timelineInvoiceRows.every((i) => i.status === 'PAID')
+                ? 'done'
+                : 'active'
+          }
+          invoices={timelineInvoiceRows}
+          caTotalHT={caTotalHT}
+          opcoSubmissionId={latestOpcoSubmission?.id ?? null}
+        />
+      </SessionWorkflowTimeline>
+
+      {/* 🎯 Vue ULTIME : 1 card par apprenant — clic = ouvrir doc OU générer.
+          Remplace la matrice cryptique. Laurent 2026-06-04 : "trouve la
+          solution ultime · un apprenant je trouve ses docs · 100%". */}
+      <section id="section-participants" className="rounded-2xl border border-border bg-white p-5 scroll-mt-20">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold text-base">Documents par apprenant</h2>
+            <Badge variant="muted" className="text-[10px]">
+              {session.participants.length} apprenant{session.participants.length > 1 ? 's' : ''}
+            </Badge>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            ✓ vert = doc prêt, clic ouvre PDF · ◯ ambre = clic génère
+          </p>
+        </div>
+        <ParticipantDocsCards
+          sessionId={session.id}
+          participants={participantCards}
+          canGenerate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+        />
+      </section>
+
+      {/* Paramètres avancés — replié par défaut. Contient : changer formateur
+          principal, changer lieu, modifier logistique (PSH/hébergement), voir
+          panel satisfaction. Tout regroupé en UN endroit pour ne pas polluer la
+          vue principale (Laurent 2026-06-04 : "trop d'infos brouillon"). */}
+      <details className="group rounded-2xl border border-border bg-white overflow-hidden">
+        <summary className="cursor-pointer list-none p-4 flex items-center gap-2 hover:bg-muted/20 transition-colors [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Paramètres avancés · formateurs · lieu · satisfaction · logistique · notes
+          </span>
+        </summary>
+        <div className="border-t border-border p-4 sm:p-6 bg-muted/10 space-y-5">
+          {/* Formateurs */}
+          <section id="section-formateurs" className="rounded-xl border border-border bg-white p-5 scroll-mt-20">
+            <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
               Formateurs
-            </h2>
+            </h3>
             {session.trainers.length === 0 ? (
               <div className="space-y-3 py-2">
                 <p className="text-sm text-orange-700">
                   <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
-                  Aucun formateur rattaché. Qualiopi indic 21 — formateur identifié obligatoire pour générer les docs.
+                  Aucun formateur rattaché. Indispensable pour générer les docs Qualiopi.
                 </p>
                 <SessionTrainerPicker sessionId={session.id} setAsPrimary />
               </div>
@@ -827,13 +827,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                         <span className="font-medium text-sm">
                           {t.person.firstName} {t.person.lastName}
                         </span>
-                        {t.role && (
-                          <span className="text-xs text-muted-foreground ml-2">· {t.role}</span>
-                        )}
                       </div>
                       {t.isPrimary && (
                         <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                          Principal — signe les docs Qualiopi
+                          Principal — signe les docs
                         </span>
                       )}
                       <RemoveTrainerButton
@@ -852,16 +849,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             )}
           </section>
 
-          {/* Lieu de formation — visible toujours pour permettre à l'anchor
-              #section-lieu du blocker no_location de mener vers du contenu
-              actionnable (BUG-18). */}
-          <section
-            id="section-lieu"
-            className="rounded-2xl border border-border bg-white p-5 scroll-mt-20"
-          >
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
+          {/* Lieu */}
+          <section id="section-lieu" className="rounded-xl border border-border bg-white p-5 scroll-mt-20">
+            <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
               Lieu de formation
-            </h2>
+            </h3>
             {session.location ? (
               <div className="space-y-3">
                 <div className="text-sm">
@@ -880,14 +872,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                     );
                   })()}
                 </div>
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-                    Changer de lieu
-                  </summary>
-                  <div className="mt-2">
-                    <SessionLocationPicker sessionId={session.id} />
-                  </div>
-                </details>
+                <div className="pt-2 border-t border-border/60">
+                  <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
+                  <SessionLocationPicker sessionId={session.id} />
+                </div>
               </div>
             ) : (
               <div className="space-y-3 py-2">
@@ -895,18 +883,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
                   {session.modality === 'DISTANCIEL'
                     ? 'Aucun lieu défini (distanciel — facultatif).'
-                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles (Qualiopi indic 17).'}
+                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles.'}
                 </p>
                 <SessionLocationPicker sessionId={session.id} />
               </div>
             )}
           </section>
 
-          {/* Satisfaction agrégée — calcul live à partir des satisfactions chaud individuelles */}
+          {/* Satisfaction (post-formation) */}
           <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
 
-          {/* Logistique session (C4.i17 Qualiopi) */}
-          {/* BUG-17 anchor — completeness badge link vers cette section (tarif/dates/lieu) */}
+          {/* Logistique session (Qualiopi C4.i17 — PSH + hébergement formateur) */}
           <div id="section-logistique" className="scroll-mt-20" />
           <SessionLogisticsEditor
             sessionId={session.id}
@@ -919,256 +906,27 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             }}
           />
 
-          {/* Conformité Qualiopi : matrice apprenant × document.
-              Repliable par défaut via <details> HTML5 (zéro JS, accessible).
-              Les compteurs agrégés viennent des variables `totalCompleted`,
-              `totalExpected`, `completionPct` calculés en haut du composant
-              (cf docCompletionByParticipant) — utilisées aussi dans les
-              badges par-ligne de la liste des inscrits. */}
-          {session.participants.length > 0 && (
-            <details className="rounded-2xl border border-border bg-white overflow-hidden group">
-              <summary className="flex items-center justify-between p-5 border-b border-border cursor-pointer hover:bg-muted/20 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                <h2 className="font-semibold inline-flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5 text-primary" /> Conformité Qualiopi
-                  <span className="text-xs font-normal text-muted-foreground ml-2 tabular-nums">
-                    {totalCompleted}/{totalExpected} docs · {completionPct}%
-                  </span>
-                </h2>
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <span className="hidden group-open:inline">Replier</span>
-                  <span className="inline group-open:hidden">Voir la matrice détaillée</span>
-                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                </span>
-              </summary>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/30">
-                    <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="px-4 py-2 font-semibold">Apprenant</th>
-                      <th className="px-2 py-2 font-semibold text-center">Check-list (C4.i17)</th>
-                      <th className="px-2 py-2 font-semibold text-center">Convention</th>
-                      <th className="px-2 py-2 font-semibold text-center">Programme</th>
-                      <th className="px-2 py-2 font-semibold text-center">AGEFICE</th>
-                      <th className="px-2 py-2 font-semibold text-center">Analyse besoin</th>
-                      <th className="px-2 py-2 font-semibold text-center">Positionnement</th>
-                      <th className="px-2 py-2 font-semibold text-center">Émargement</th>
-                      <th className="px-2 py-2 font-semibold text-center">Déroulé péda</th>
-                      <th className="px-2 py-2 font-semibold text-center">Grille obs.</th>
-                      <th className="px-2 py-2 font-semibold text-center">Grille session (C3.i11)</th>
-                      <th className="px-2 py-2 font-semibold text-center">QCM</th>
-                      <th className="px-2 py-2 font-semibold text-center">Sat. chaud</th>
-                      <th className="px-2 py-2 font-semibold text-center">Sat. froid</th>
-                      <th className="px-2 py-2 font-semibold text-center">Attestation</th>
-                      <th className="px-2 py-2 font-semibold text-center">Certificat</th>
-                      <th className="px-2 py-2 font-semibold text-center">Facture</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {session.participants.map((p) => {
-                      const docs = docsByParticipant.get(p.id);
-                      const assets = assetsByParticipant.get(p.id);
-                      const invoice = invoiceByParticipant.get(p.id);
-                      const cells: { label: string; href?: string }[] = [
-                        { label: 'Check-list session', href: checklistDocId ? `/api/documents/${checklistDocId}` : undefined },
-                        { label: 'Convention', href: docs?.get('CONVENTION') ? `/api/documents/${docs.get('CONVENTION')}` : undefined },
-                        // Programme + Déroulé pédagogique = assets PRODUIT partagés
-                        // par tous les apprenants (1 lien identique sur toutes les lignes).
-                        { label: 'Programme (produit)', href: programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined },
-                        { label: 'AGEFICE', href: docs?.get('AGEFICE') ? `/api/documents/${docs.get('AGEFICE')}` : undefined },
-                        { label: 'Analyse besoin', href: assets?.get('ANALYSE_BESOIN') ? `/api/pedagogical-assets/${assets.get('ANALYSE_BESOIN')}` : undefined },
-                        { label: 'Positionnement', href: assets?.get('POSITIONNEMENT') ? `/api/pedagogical-assets/${assets.get('POSITIONNEMENT')}` : undefined },
-                        { label: 'Émargement', href: assets?.get('EMARGEMENT') ? `/api/pedagogical-assets/${assets.get('EMARGEMENT')}` : undefined },
-                        { label: 'Déroulé péda. (produit)', href: derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined },
-                        { label: 'Grille observation (formateur)', href: assets?.get('GRILLE_OBS') ? `/api/pedagogical-assets/${assets.get('GRILLE_OBS')}` : undefined },
-                        { label: 'Grille session (C3.i11)', href: grilleSessionDocId ? `/api/documents/${grilleSessionDocId}` : undefined },
-                        { label: 'QCM', href: assets?.get('QCM') ? `/api/pedagogical-assets/${assets.get('QCM')}` : undefined },
-                        { label: 'Satisfaction à chaud', href: assets?.get('SATISFACTION_CHAUD') ? `/api/pedagogical-assets/${assets.get('SATISFACTION_CHAUD')}` : undefined },
-                        { label: 'Satisfaction à froid', href: assets?.get('SATISFACTION_FROID') ? `/api/pedagogical-assets/${assets.get('SATISFACTION_FROID')}` : undefined },
-                        { label: 'Attestation', href: docs?.get('ATTESTATION_FIN') ? `/api/documents/${docs.get('ATTESTATION_FIN')}` : undefined },
-                        { label: 'Certificat', href: docs?.get('CERTIFICAT_REALISATION') ? `/api/documents/${docs.get('CERTIFICAT_REALISATION')}` : undefined },
-                        { label: invoice?.number ?? 'Facture', href: invoice ? `/app/factures/${invoice.id}` : undefined },
-                      ];
-                      return (
-                        <tr key={p.id} className="hover:bg-muted/20">
-                          <td className="px-4 py-2">
-                            <Link
-                              href={`/app/apprenants/${p.person.id}?tab=documents`}
-                              className="text-sm hover:text-primary"
-                            >
-                              {p.person.firstName} {p.person.lastName.toUpperCase()}
-                            </Link>
-                          </td>
-                          {cells.map((c, i) => (
-                            <td key={i} className="px-2 py-2 text-center">
-                              {c.href ? (
-                                <a
-                                  href={c.href}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={`${c.label} — clic pour ouvrir`}
-                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                </a>
-                              ) : (
-                                <span
-                                  title={`${c.label} — non généré`}
-                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-400"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </span>
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          )}
-
-          {/* Pack fin de formation — dernier en exergue + historique replié
-              (BUG-4 : éviter l'accumulation visuelle des anciens batches qui
-              prêtait à confusion). Lien vers la page hub pour voir tous. */}
-          {closureBatches.length > 0 && (() => {
-            const [latest, ...previous] = closureBatches;
-            if (!latest) return null;
-            const variantOf = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'muted' =>
-              status === 'COMPLETED'
-                ? 'success'
-                : status === 'PARTIAL'
-                  ? 'warning'
-                  : status === 'FAILED'
-                    ? 'danger'
-                    : status === 'RUNNING'
-                      ? 'info'
-                      : 'muted';
-            const renderRow = (b: typeof latest) => (
-              <Link
-                href={`/app/sessions/${session.id}/closure/${b.id}` as Route}
-                className="flex items-center gap-3 p-4 hover:bg-muted/20 transition-colors"
-              >
-                <Badge variant={variantOf(b.status)}>{b.status}</Badge>
-                <span className="text-sm flex-1">
-                  {b.doneDocs} / {b.totalDocs} docs
-                  {b.errorDocs > 0 && <span className="text-red-600"> · {b.errorDocs} erreur(s)</span>}
-                </span>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </Link>
-            );
-            return (
-              <section className="rounded-2xl border border-border bg-white overflow-hidden">
-                <div className="p-5 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-                  <h2 className="font-semibold inline-flex items-center gap-2">
-                    <Package className="h-5 w-5 text-primary" /> Pack fin de formation
-                  </h2>
-                  <Link
-                    href={`/app/sessions/${session.id}/closure` as Route}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
-                  >
-                    Voir l&apos;historique complet <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </div>
-                <ul className="divide-y divide-border">
-                  <li key={latest.id}>{renderRow(latest)}</li>
-                </ul>
-                {previous.length > 0 && (
-                  <details className="border-t border-border">
-                    <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground transition-colors px-5 py-3 list-none [&::-webkit-details-marker]:hidden">
-                      ▸ Historique ({previous.length} pack{previous.length > 1 ? 's' : ''} précédent{previous.length > 1 ? 's' : ''})
-                    </summary>
-                    <ul className="divide-y divide-border bg-muted/10">
-                      {previous.map((b) => (
-                        <li key={b.id}>{renderRow(b)}</li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </section>
-            );
-          })()}
-        </div>
-
-        <div className="space-y-6">
-          {/* BUG-17 anchor — completeness badge link vers la section Produit (fallback si pas de productId) */}
-          <div id="section-produit" className="scroll-mt-20" />
-          <section className="rounded-2xl border border-border bg-white p-6">
-            <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground">
-              Produit de formation
-            </h2>
-            {session.product ? (
-              <Link
-                href={`/app/produits/${session.product.id}`}
-                className="block p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
-              >
-                <div className="font-medium">{session.product.title}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  <Badge variant="muted" className="font-mono mr-2">{session.product.code}</Badge>
-                  {session.product.durationHours}h · {session.product.modality}
-                </div>
-              </Link>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">—</p>
-            )}
-          </section>
-
-          {/* Documents partagés par TOUS les apprenants (un seul PDF par
-              session/produit, accessible en un clic — évite de chercher
-              dans la matrice 17-col).
-              Programme + Déroulé = niveau PRODUIT
-              Grille obs session + Check-list = niveau SESSION */}
-          <section className="rounded-2xl border border-border bg-white p-6">
-            <h2 className="font-semibold mb-4 text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Documents partagés
-            </h2>
-            <ul className="space-y-1.5 text-sm">
-              {[
-                { label: 'Programme de formation', href: programmeProductDocId ? `/api/documents/${programmeProductDocId}` : null, scope: 'Produit' },
-                { label: 'Déroulé pédagogique', href: derouleProductDocId ? `/api/documents/${derouleProductDocId}` : null, scope: 'Produit' },
-                { label: 'Grille observation (C3.i11)', href: grilleSessionDocId ? `/api/documents/${grilleSessionDocId}` : null, scope: 'Session' },
-                { label: 'Check-list formation (C4.i17)', href: checklistDocId ? `/api/documents/${checklistDocId}` : null, scope: 'Session' },
-              ].map((d) => (
-                <li key={d.label} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0 border-border/50">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-foreground truncate">{d.label}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{d.scope}</div>
-                  </div>
-                  {d.href ? (
-                    <a
-                      href={d.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
-                    >
-                      Ouvrir
-                      <ChevronRight className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground italic shrink-0">Non généré</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-
+          {/* Notes internes (anciennement sidebar) */}
           {session.internalNotes && (
-            <section className="rounded-2xl border border-border bg-white p-6">
-              <h2 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
+            <section className="rounded-xl border border-border bg-white p-5">
+              <h3 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
                 Notes internes
-              </h2>
+              </h3>
               <p className="text-xs text-muted-foreground whitespace-pre-line">
                 {session.internalNotes}
               </p>
             </section>
           )}
-
         </div>
-      </div>
+      </details>
+
+      {/* 🪄 DocDock — bouton magique floating bas-droite. Trouve + génère +
+          télécharge n'importe quel doc Qualiopi en 1 clic. */}
+      <DocDock
+        sessionId={session.id}
+        items={docDockItems}
+        canGenerate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+      />
     </div>
   );
 }

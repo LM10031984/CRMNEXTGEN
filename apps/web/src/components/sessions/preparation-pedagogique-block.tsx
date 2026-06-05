@@ -19,24 +19,21 @@
  */
 
 import { useEffect, useState, useTransition } from 'react';
-import {
-  AlertCircle,
-  Check,
-  ClipboardList,
-  Loader2,
-  Minus,
-} from 'lucide-react';
+import { AlertCircle, ClipboardList, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   getSessionPreparationStatus,
   prepareSession,
   type SessionPreparationStatus,
 } from '@/server/actions/prepare-training';
+import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
 
 interface Props {
   sessionId: string;
   initialStatus: SessionPreparationStatus;
   canWrite: boolean;
+  /** Visuel : si cette étape est l'action attendue (statut DRAFT/PLANNED) */
+  isActive?: boolean;
 }
 
 function countMissing(s: SessionPreparationStatus): number {
@@ -79,51 +76,12 @@ function isEmpty(s: SessionPreparationStatus): boolean {
   );
 }
 
-function SharedDocRow({ done, label }: { done: boolean; label: string }) {
-  return (
-    <li className="flex items-center gap-2 text-sm">
-      {done ? (
-        <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-      ) : (
-        <Minus className="h-4 w-4 text-slate-400 shrink-0" />
-      )}
-      <span className={done ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
-    </li>
-  );
-}
-
-function ParticipantDocRow({
-  doneCount,
-  total,
-  label,
-  spinning = false,
-}: {
-  doneCount: number;
-  total: number;
-  label: string;
-  spinning?: boolean;
-}) {
-  const allDone = total > 0 && doneCount >= total;
-  return (
-    <li className="flex items-center gap-2 text-sm">
-      {spinning ? (
-        <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
-      ) : allDone ? (
-        <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-      ) : (
-        <Minus className="h-4 w-4 text-slate-400 shrink-0" />
-      )}
-      <span className={allDone ? 'text-foreground' : 'text-muted-foreground'}>
-        {label}{' '}
-        <span className="tabular-nums text-xs">
-          ({doneCount}/{total})
-        </span>
-      </span>
-    </li>
-  );
-}
-
-export function PreparationPedagogiqueBlock({ sessionId, initialStatus, canWrite }: Props) {
+export function PreparationPedagogiqueBlock({
+  sessionId,
+  initialStatus,
+  canWrite,
+  isActive = false,
+}: Props) {
   const [status, setStatus] = useState<SessionPreparationStatus>(initialStatus);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -173,109 +131,136 @@ export function PreparationPedagogiqueBlock({ sessionId, initialStatus, canWrite
   const complete = isComplete(status);
   const missingCount = countMissing(status);
 
+  const totalExpected =
+    3 + (N > 0 ? N * 3 + (status.ageficeEligibleCount > 0 ? status.ageficeEligibleCount : 0) : 0);
+  const totalDone =
+    (status.programme ? 1 : 0) +
+    (status.deroule ? 1 : 0) +
+    (status.checklist ? 1 : 0) +
+    Math.min(status.conventionsCount, N) +
+    Math.min(status.convocationsCount, N) +
+    Math.min(status.analyseBesoinDone, N) +
+    Math.min(status.ageficeCount, status.ageficeEligibleCount);
+
+  const stepState: StepState = complete
+    ? 'done'
+    : pending || analyseBesoinInflight > 0
+      ? 'active'
+      : isActive
+        ? 'active'
+        : totalDone > 0
+          ? 'active'
+          : 'todo';
+
+  const badge = complete ? (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-medium">
+      Préparation complète · {totalDone}/{totalExpected}
+    </span>
+  ) : analyseBesoinInflight > 0 ? (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-medium">
+      <Loader2 className="h-3 w-3 animate-spin" /> IA en cours · {analyseBesoinInflight} analyse{analyseBesoinInflight > 1 ? 's' : ''}
+    </span>
+  ) : totalDone > 0 ? (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+      {totalDone}/{totalExpected} · {missingCount} manquant{missingCount > 1 ? 's' : ''}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-medium">
+      Non démarrée
+    </span>
+  );
+
+  const action = !canWrite ? (
+    <span className="text-xs text-muted-foreground">Lecture seule</span>
+  ) : complete ? null : empty ? (
+    <button
+      type="button"
+      onClick={handleCompleter}
+      disabled={pending || N === 0}
+      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+      title={N === 0 ? 'Aucun apprenant inscrit' : 'Génère les 7 catégories de docs pré-formation en parallèle'}
+    >
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+      Lancer la préparation
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={handleCompleter}
+      disabled={pending}
+      className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors disabled:opacity-60"
+      title="Régénère uniquement les docs manquants (idempotent)"
+    >
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+      Compléter ({missingCount})
+    </button>
+  );
+
   return (
-    <section className="rounded-2xl border border-border bg-white p-5">
-      <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold inline-flex items-center gap-2">
-            Préparation pédagogique
-          </h2>
-        </div>
-
-        {/* CTA contextualisé selon l'état */}
-        {!canWrite ? (
-          <span className="text-xs text-muted-foreground">Lecture seule</span>
-        ) : complete ? (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
-              <Check className="h-3.5 w-3.5" /> Préparation complète
-            </span>
-            <a
-              href="#section-participants"
-              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-            >
-              Voir les participants
-            </a>
-          </div>
-        ) : empty ? (
-          <button
-            type="button"
-            onClick={handleCompleter}
-            disabled={pending || N === 0}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            title={N === 0 ? 'Aucun apprenant inscrit' : 'Génère les 6 catégories de docs pré-formation'}
-          >
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-            Lancer la préparation
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleCompleter}
-            disabled={pending}
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors disabled:opacity-60"
-            title="Régénère uniquement les docs manquants (idempotent)"
-          >
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-            Compléter ({missingCount} manquant{missingCount > 1 ? 's' : ''})
-          </button>
-        )}
-      </div>
-
+    <TimelineStep
+      number={2}
+      title="Préparation pédagogique"
+      state={stepState}
+      caption="7 documents générés automatiquement par prepareSession() — programme, déroulé IA, conventions, convocations, AGEFICE…"
+      qualiopi="Ind 1 · 6 · 8 · 9 · 10 · 11 · 17 · 27"
+      badge={badge}
+      action={action}
+    >
       {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 mb-4 text-sm text-red-700 flex items-start gap-2">
+        <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 mb-3 text-sm text-red-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-            Documents partagés
+            Partagés (produit / session)
           </h3>
           <ul className="space-y-1.5">
-            <SharedDocRow done={status.programme} label="Programme de formation" />
-            <SharedDocRow done={status.deroule} label="Déroulé pédagogique" />
-            <SharedDocRow done={status.checklist} label="Checklist formation" />
+            <StepDocRow done={status.programme} label="Programme de formation" indic="Ind 1·6" />
+            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic="Ind 10" />
+            <StepDocRow done={status.checklist} label="Check-list formation" indic="Ind 17" />
           </ul>
         </div>
 
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-            Documents par stagiaire ({N})
+            Par stagiaire ({N})
           </h3>
           <ul className="space-y-1.5">
-            <ParticipantDocRow
-              doneCount={status.conventionsCount}
+            <StepDocRow
+              count={status.conventionsCount}
               total={N}
-              label="Convention"
+              label="Convention (1/payeur)"
+              indic="Ind 6·8"
             />
-            <ParticipantDocRow
-              doneCount={status.convocationsCount}
+            <StepDocRow
+              count={status.convocationsCount}
               total={N}
               label="Convocation"
+              indic="Ind 9"
             />
-            <ParticipantDocRow
-              doneCount={status.analyseBesoinDone}
+            <StepDocRow
+              count={status.analyseBesoinDone}
               total={N}
-              label="Analyse besoin"
-              spinning={analyseBesoinInflight > 0}
+              label="Analyse besoin (IA)"
+              indic="Ind 11"
+              pending={analyseBesoinInflight > 0}
             />
             {status.ageficeEligibleCount > 0 && (
-              <ParticipantDocRow
-                doneCount={status.ageficeCount}
+              <StepDocRow
+                count={status.ageficeCount}
                 total={status.ageficeEligibleCount}
-                label="Demande AGEFICE"
+                label="Demande prise en charge AGEFICE"
+                indic="Ind 27"
               />
             )}
           </ul>
           {status.ageficeEligibleCount > 0 && status.ageficeEligibleCount < N && (
             <p className="text-[11px] text-muted-foreground mt-1.5 italic">
-              AGEFICE générée pour les {status.ageficeEligibleCount} stagiaire
-              {status.ageficeEligibleCount > 1 ? 's' : ''} TNS uniquement
-              (salariés OPCO ignorés).
+              AGEFICE : {status.ageficeEligibleCount} TNS éligibles sur {N}.
             </p>
           )}
         </div>
@@ -283,9 +268,9 @@ export function PreparationPedagogiqueBlock({ sessionId, initialStatus, canWrite
 
       {analyseBesoinInflight > 0 && (
         <p className="text-[11px] text-muted-foreground mt-3 italic">
-          Analyse besoin générée par Ollama en arrière-plan ({analyseBesoinInflight} restant{analyseBesoinInflight > 1 ? 's' : ''}) · rafraîchissement auto toutes les 5s.
+          Analyse besoin générée par Ollama en arrière-plan · rafraîchissement auto 5s.
         </p>
       )}
-    </section>
+    </TimelineStep>
   );
 }
