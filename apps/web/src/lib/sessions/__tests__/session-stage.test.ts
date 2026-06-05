@@ -187,7 +187,7 @@ describe('sessionStage — arbre de décision étape courante', () => {
 
   /* ── Catégorie 4 : ACTIVE — pack fin + facturation ───────────────── */
 
-  it('8. ACTIVE — COMPLETED pack incomplet → étape 4', () => {
+  it('8. ACTIVE — COMPLETED pack incomplet → étape 4 + cta.kind=generate_pack', () => {
     const result = sessionStage(
       baseInput({
         status: 'COMPLETED',
@@ -198,10 +198,11 @@ describe('sessionStage — arbre de décision étape courante', () => {
     expect(result.status).toBe('active');
     expect(result.current).toBe(4);
     expect(result.cta!.label).toBe('Générer le pack fin');
+    expect(result.cta!.kind).toBe('generate_pack');
     expect(result.stagesState[4]).toBe('active');
   });
 
-  it('9. ACTIVE — COMPLETED pack complet → étape 5 facturation', () => {
+  it('9. ACTIVE — COMPLETED pack complet → étape 5 facturation + cta.kind=anchor', () => {
     const result = sessionStage(
       baseInput({
         status: 'COMPLETED',
@@ -214,6 +215,10 @@ describe('sessionStage — arbre de décision étape courante', () => {
     expect(result.current).toBe(5);
     expect(result.cta!.label).toBe('Voir les factures');
     expect(result.cta!.primary).toBe(false);
+    // Garde-fou Laurent 2026-06-05 : COMPLETED + pack complet ne doit PAS
+    // continuer à proposer "Générer le pack" — sessionStage doit basculer
+    // sur "Émettre la facture" (kind=anchor, pas generate_pack).
+    expect(result.cta!.kind).toBe('anchor');
     expect(result.stagesState[1]).toBe('done');
     expect(result.stagesState[4]).toBe('done');
     expect(result.stagesState[5]).toBe('active');

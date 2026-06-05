@@ -575,26 +575,29 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         }
         actionPrimary={
           /* Action primaire — toujours pilotée par sessionStage.cta.
-             Le GenerateClosurePackButton est conservé pour COMPLETED car
-             c'est le seul cas où on lance le worker BullMQ ; pour les autres,
-             on rend le CTA dynamique du stage (lien anchor scroll). */
-          session.status === 'COMPLETED' ? (
-            <GenerateClosurePackButton
-              sessionId={session.id}
-              participantCount={session.participants.length}
-              blockers={sessionCompleteness.blockers}
-            />
-          ) : stage.cta && canWrite ? (
-            <a
-              href={stage.cta.href}
-              className={
-                stage.cta.primary
-                  ? 'inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm'
-                  : 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors'
-              }
-            >
-              {stage.cta.label}
-            </a>
+             L'exception "vrai bouton vs anchor" porte sur l'IDENTITÉ du CTA
+             (cta.kind), pas sur status === COMPLETED en bloc. Sinon une
+             session COMPLETED avec pack 10/10 afficherait encore "Générer
+             le pack" alors que sessionStage l'a fait passer à étape 5. */
+          stage.cta && canWrite ? (
+            stage.cta.kind === 'generate_pack' ? (
+              <GenerateClosurePackButton
+                sessionId={session.id}
+                participantCount={session.participants.length}
+                blockers={sessionCompleteness.blockers}
+              />
+            ) : (
+              <a
+                href={stage.cta.href}
+                className={
+                  stage.cta.primary
+                    ? 'inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm'
+                    : 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors'
+                }
+              >
+                {stage.cta.label}
+              </a>
+            )
           ) : null
         }
         kebab={
@@ -615,8 +618,21 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
       {/* NextActionHero — point focal qui re-énonce la prochaine action.
           Lit la MÊME sessionStage.cta que le bouton primaire de la sticky
-          bar (re-atteignable après scroll). Pas de duplication, juste mirror. */}
-      <NextActionHero stage={stage} canWrite={canWrite} />
+          bar (re-atteignable après scroll). Si cta.kind='generate_pack',
+          on injecte le vrai <GenerateClosurePackButton> via primaryActionSlot. */}
+      <NextActionHero
+        stage={stage}
+        canWrite={canWrite}
+        primaryActionSlot={
+          stage.cta?.kind === 'generate_pack' ? (
+            <GenerateClosurePackButton
+              sessionId={session.id}
+              participantCount={session.participants.length}
+              blockers={sessionCompleteness.blockers}
+            />
+          ) : null
+        }
+      />
 
       {/* Status select + dates editor — gardés sous le hero pour édition
           rapide sans ouvrir la modale Modifier. Discrets. */}
@@ -669,7 +685,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       >
         <div id="step-1" className="scroll-mt-20" />
         <StepCreation
-          state="done"
+          state={stage.stagesState[1] === 'active' ? 'active' : stage.stagesState[1] === 'done' ? 'done' : 'todo'}
+          expanded={stage.stagesState[1] === 'active'}
+          blockerMessage={stage.status === 'blocked' && stage.current === 1 ? stage.blocker : undefined}
           productId={session.product?.id ?? null}
           productLabel={productLabel}
           productCode={productCode}
@@ -718,21 +736,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <PreparationPedagogiqueBlock
           sessionId={session.id}
           initialStatus={preparationStatus}
-          canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
-          isActive={
-            session.status === 'DRAFT' || session.status === 'PLANNED' || session.status === 'OPEN'
-          }
+          canWrite={canWrite}
+          isActive={stage.stagesState[2] === 'active'}
+          expanded={stage.stagesState[2] === 'active'}
         />
 
         <div id="step-3" className="scroll-mt-20" />
         <StepPendantFormation
-          state={
-            session.status === 'IN_PROGRESS'
-              ? 'active'
-              : session.status === 'COMPLETED'
-                ? 'done'
-                : 'inactive'
-          }
+          state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
+          expanded={stage.stagesState[3] === 'active'}
           participantsCount={session.participants.length}
           emargementsGenerated={closureStatus.emargements}
           totalSlots={totalSlots}
@@ -745,19 +757,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <ClosureFormationBlock
           sessionId={session.id}
           status={closureStatus}
-          isActive={session.status === 'COMPLETED'}
+          isActive={stage.stagesState[4] === 'active'}
+          expanded={stage.stagesState[4] === 'active'}
           programmeProductDocId={programmeProductDocId ?? null}
         />
 
         <div id="step-5" className="scroll-mt-20" />
         <StepFacturation
-          state={
-            timelineInvoiceRows.length === 0
-              ? 'todo'
-              : timelineInvoiceRows.every((i) => i.status === 'PAID')
-                ? 'done'
-                : 'active'
-          }
+          state={stage.stagesState[5] === 'active' ? 'active' : stage.stagesState[5] === 'done' ? 'done' : 'todo'}
+          expanded={stage.stagesState[5] === 'active'}
           invoices={timelineInvoiceRows}
           caTotalHT={caTotalHT}
           opcoSubmissionId={latestOpcoSubmission?.id ?? null}

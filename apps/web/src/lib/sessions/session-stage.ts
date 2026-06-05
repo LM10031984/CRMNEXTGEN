@@ -31,11 +31,25 @@ export type StageNumber = 1 | 2 | 3 | 4 | 5;
 export type StageStatus = 'todo' | 'active' | 'done' | 'blocked';
 export type StageVisualState = 'done' | 'active' | 'todo';
 
+/**
+ * Type du CTA — pilote le RENDU côté UI :
+ *   - 'anchor'        : lien de navigation (#step-N) — rendu par <a> simple
+ *   - 'generate_pack' : déclenche le worker BullMQ closure pack — rendu par
+ *                       <GenerateClosurePackButton> (vrai bouton avec action)
+ *
+ * Garde-fou Laurent 2026-06-05 : l'exception "vrai bouton vs anchor" doit
+ * porter sur l'identité du CTA, pas sur status === 'COMPLETED' en bloc.
+ * Sinon une session COMPLETED avec pack à 10/10 afficherait encore
+ * "Générer le pack" alors que sessionStage l'a fait passer à "Émettre la facture".
+ */
+export type StageCtaKind = 'anchor' | 'generate_pack';
+
 export interface StageCta {
   label: string;
-  /** Anchor "#step-N" ou URL absolue */
+  /** Anchor "#step-N" ou URL absolue (utilisé quand kind='anchor') */
   href: string;
   primary: boolean;
+  kind: StageCtaKind;
 }
 
 export interface SessionStage {
@@ -127,7 +141,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       status: 'blocked',
       reason: 'Inscris au moins un apprenant pour démarrer la préparation.',
       blocker: 'Aucun apprenant inscrit',
-      cta: { label: 'Ajouter un apprenant', href: '#section-participants', primary: true },
+      cta: { label: 'Ajouter un apprenant', href: '#section-participants', primary: true, kind: 'anchor' },
       stagesState: { 1: 'active', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo' },
     };
   }
@@ -138,7 +152,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       status: 'blocked',
       reason: 'Définis le formateur principal — il signe les docs Qualiopi.',
       blocker: 'Formateur principal manquant',
-      cta: { label: 'Choisir le formateur', href: '#section-formateurs', primary: true },
+      cta: { label: 'Choisir le formateur', href: '#section-formateurs', primary: true, kind: 'anchor' },
       stagesState: { 1: 'active', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo' },
     };
   }
@@ -149,7 +163,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       status: 'blocked',
       reason: "Valide le programme IA — sans validation humaine, le pack fin est bloqué.",
       blocker: 'Programme IA non validé',
-      cta: { label: 'Valider en 1 clic', href: '#step-1', primary: true },
+      cta: { label: 'Valider en 1 clic', href: '#step-1', primary: true, kind: 'anchor' },
       stagesState: { 1: 'active', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo' },
     };
   }
@@ -165,7 +179,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       reason: empty
         ? 'Lance la préparation pédagogique — 7 docs générés en 1 clic.'
         : `Complète la préparation — ${missing} document(s) restant(s).`,
-      cta: { label: empty ? 'Lancer la préparation' : 'Compléter', href: '#step-2', primary: true },
+      cta: { label: empty ? 'Lancer la préparation' : 'Compléter', href: '#step-2', primary: true, kind: 'anchor' },
       stagesState: { 1: 'done', 2: 'active', 3: 'todo', 4: 'todo', 5: 'todo' },
     };
   }
@@ -199,7 +213,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       current: 4,
       status: 'active',
       reason: 'Génère le pack fin — 10 docs Qualiopi en 1 clic.',
-      cta: { label: 'Générer le pack fin', href: '#step-4', primary: true },
+      cta: { label: 'Générer le pack fin', href: '#step-4', primary: true, kind: 'generate_pack' },
       stagesState: { 1: 'done', 2: 'done', 3: 'done', 4: 'active', 5: 'todo' },
     };
   }
@@ -210,7 +224,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
       current: 5,
       status: 'active',
       reason: 'Tous les docs Qualiopi sont générés. Émets les factures et suis les encaissements.',
-      cta: { label: 'Voir les factures', href: '#step-5', primary: false },
+      cta: { label: 'Voir les factures', href: '#step-5', primary: false, kind: 'anchor' },
       stagesState: { 1: 'done', 2: 'done', 3: 'done', 4: 'done', 5: 'active' },
     };
   }
@@ -220,7 +234,7 @@ export function sessionStage(input: SessionStageInput): SessionStage {
     current: 4,
     status: 'active',
     reason: 'Session terminée — finalise le pack fin de formation.',
-    cta: { label: 'Compléter le pack', href: '#step-4', primary: true },
+    cta: { label: 'Compléter le pack', href: '#step-4', primary: true, kind: 'generate_pack' },
     stagesState: { 1: 'done', 2: 'done', 3: 'done', 4: 'active', 5: 'todo' },
   };
 }

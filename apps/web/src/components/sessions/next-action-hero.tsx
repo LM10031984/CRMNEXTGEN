@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, Check, Clock, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionStage } from '@/lib/sessions/session-stage';
@@ -21,6 +22,13 @@ interface Props {
   stage: SessionStage;
   /** L'utilisateur peut-il déclencher des actions ? Sinon CTA masqué. */
   canWrite: boolean;
+  /**
+   * Slot optionnel pour les CTA "vrai bouton" (kind='generate_pack' → vrai
+   * <GenerateClosurePackButton> qui enqueue BullMQ). Si fourni ET que
+   * stage.cta.kind === 'generate_pack', il est rendu à la place du lien anchor.
+   * Garantie : même cta.label = même action quel que soit le rendu.
+   */
+  primaryActionSlot?: ReactNode;
 }
 
 const STATE_STYLES = {
@@ -62,7 +70,7 @@ const STATE_STYLES = {
   },
 } as const;
 
-export function NextActionHero({ stage, canWrite }: Props) {
+export function NextActionHero({ stage, canWrite, primaryActionSlot }: Props) {
   const style = STATE_STYLES[stage.status];
 
   return (
@@ -95,16 +103,22 @@ export function NextActionHero({ stage, canWrite }: Props) {
           )}
         </div>
         {stage.cta && canWrite && (
-          <a
-            href={stage.cta.href}
-            className={cn(
-              'inline-flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold shadow-sm transition-all hover:shadow-md shrink-0',
-              style.btnClass,
-            )}
-          >
-            {stage.cta.label}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </a>
+          stage.cta.kind === 'generate_pack' && primaryActionSlot ? (
+            // Vrai bouton fourni par la page (GenerateClosurePackButton).
+            // Pas de styling forcé pour préserver l'apparence du bouton réel.
+            <div className="shrink-0">{primaryActionSlot}</div>
+          ) : (
+            <a
+              href={stage.cta.href}
+              className={cn(
+                'inline-flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold shadow-sm transition-all hover:shadow-md shrink-0',
+                style.btnClass,
+              )}
+            >
+              {stage.cta.label}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </a>
+          )
         )}
       </div>
     </section>

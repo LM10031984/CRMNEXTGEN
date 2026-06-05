@@ -11,6 +11,8 @@ interface Props {
   isActive?: boolean;
   /** Programme produit = doc Support pédagogique (10e doc du process). */
   programmeProductDocId?: string | null;
+  /** Expansion initiale (dérivée de stagesState[4] === 'active'). */
+  expanded?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function ClosureFormationBlock({
   status,
   isActive = false,
   programmeProductDocId,
+  expanded,
 }: Props) {
   const N = status.participantsCount;
 
@@ -110,7 +113,8 @@ export function ClosureFormationBlock({
       number={4}
       title="Pack fin de formation"
       state={state}
-      caption="10 documents Qualiopi générés en 1 clic (BullMQ, ~12 min pour 5 stagiaires)"
+      expanded={expanded}
+      caption="10 documents Qualiopi générés en 1 clic"
       qualiopi="Ind 11 · 27 · 30"
       badge={badge}
       action={action}

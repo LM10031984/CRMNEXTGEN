@@ -22,6 +22,10 @@ interface Props {
   pricePerLearner: number | null;
   /** Actions à afficher en footer (Modifier session, Ajouter participant…) */
   actions?: ReactNode;
+  /** Expansion initiale (dérivée de stagesState[1] === 'active'). */
+  expanded?: boolean;
+  /** Message bloqueur remonté par sessionStage (si current=1 + blocked). */
+  blockerMessage?: string;
 }
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', {
@@ -56,6 +60,8 @@ export function StepCreation(props: Props) {
     participantsCount,
     pricePerLearner,
     actions,
+    expanded,
+    blockerMessage,
   } = props;
 
   const totalHT = pricePerLearner ? pricePerLearner * participantsCount : 0;
@@ -65,6 +71,8 @@ export function StepCreation(props: Props) {
       number={1}
       title="Création de la session"
       state={state}
+      expanded={expanded}
+      blockerMessage={blockerMessage}
       caption="Wizard session : produit, lieu, dates, formateur principal, inscriptions"
       badge={
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-medium">

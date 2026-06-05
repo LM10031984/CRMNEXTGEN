@@ -11,6 +11,8 @@ interface Props {
   signedSlots: number;
   startDateISO: string | null;
   endDateISO: string | null;
+  /** Expansion initiale (dérivée de stagesState[3] === 'active'). */
+  expanded?: boolean;
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', {
@@ -27,6 +29,7 @@ export function StepPendantFormation({
   signedSlots,
   startDateISO,
   endDateISO,
+  expanded,
 }: Props) {
   const startD = startDateISO ? new Date(startDateISO) : null;
   const endD = endDateISO ? new Date(endDateISO) : null;
@@ -66,6 +69,7 @@ export function StepPendantFormation({
       number={3}
       title="Pendant la formation"
       state={state}
+      expanded={expanded}
       caption={periodLabel}
       qualiopi="Ind 12"
       badge={badge}

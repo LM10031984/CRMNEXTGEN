@@ -34,6 +34,8 @@ interface Props {
   canWrite: boolean;
   /** Visuel : si cette étape est l'action attendue (statut DRAFT/PLANNED) */
   isActive?: boolean;
+  /** Expansion initiale (dérivée de stagesState[2] === 'active'). */
+  expanded?: boolean;
 }
 
 function countMissing(s: SessionPreparationStatus): number {
@@ -81,6 +83,7 @@ export function PreparationPedagogiqueBlock({
   initialStatus,
   canWrite,
   isActive = false,
+  expanded,
 }: Props) {
   const [status, setStatus] = useState<SessionPreparationStatus>(initialStatus);
   const [pending, startTransition] = useTransition();
@@ -201,7 +204,8 @@ export function PreparationPedagogiqueBlock({
       number={2}
       title="Préparation pédagogique"
       state={stepState}
-      caption="7 documents générés automatiquement par prepareSession() — programme, déroulé IA, conventions, convocations, AGEFICE…"
+      expanded={expanded}
+      caption="Programme · Déroulé · Check-list · Convention · Convocation · Analyse besoin · AGEFICE"
       qualiopi="Ind 1 · 6 · 8 · 9 · 10 · 11 · 17 · 27"
       badge={badge}
       action={action}

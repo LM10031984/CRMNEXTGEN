@@ -21,6 +21,8 @@ interface Props {
   caTotalHT: number;
   /** Lien vers le dossier OPCO si applicable */
   opcoSubmissionId?: string | null;
+  /** Expansion initiale (dérivée de stagesState[5] === 'active'). */
+  expanded?: boolean;
 }
 
 const STATUS_PALETTE: Record<string, { bg: string; label: string }> = {
@@ -45,7 +47,7 @@ const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 });
 
-export function StepFacturation({ state, invoices, caTotalHT, opcoSubmissionId }: Props) {
+export function StepFacturation({ state, invoices, caTotalHT, opcoSubmissionId, expanded }: Props) {
   const billed = invoices
     .filter((i) => !i.isCreditNote && i.status !== 'DRAFT' && i.status !== 'CANCELLED')
     .reduce((acc, i) => acc + i.amountTTC, 0);
@@ -79,6 +81,7 @@ export function StepFacturation({ state, invoices, caTotalHT, opcoSubmissionId }
       number={5}
       title="Facturation & encaissement"
       state={state}
+      expanded={expanded}
       caption="Émission facture sponsor, suivi paiement, dossier OPCO / AGEFICE"
       badge={badge}
       action={
