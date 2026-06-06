@@ -59,10 +59,18 @@ export function PreparationPedagogiqueBlock({
     if (analyseBesoinInflight <= 0) return;
     const id = setInterval(async () => {
       const fresh = await getSessionPreparationStatus(sessionId);
-      if (fresh.ok) setStatus(fresh);
-      // Le drawer et la matrice lisent depuis docDockItems côté serveur :
-      // on refresh aussi le RSC pour propager l'avancement IA partout.
-      router.refresh();
+      if (!fresh.ok) return;
+      // Conditionne router.refresh() au CHANGEMENT réel — sinon on
+      // refetch tout l'arbre RSC toutes les 5s pour rien (risque flicker).
+      // Feedback Laurent ui-e1 2026-06-06.
+      setStatus((prev) => {
+        const changed =
+          prev.analyseBesoinDone !== fresh.analyseBesoinDone ||
+          prev.analyseBesoinInProgress !== fresh.analyseBesoinInProgress ||
+          prev.analyseBesoinPending !== fresh.analyseBesoinPending;
+        if (changed) router.refresh();
+        return fresh;
+      });
     }, 5000);
     return () => clearInterval(id);
   }, [analyseBesoinInflight, sessionId, router]);

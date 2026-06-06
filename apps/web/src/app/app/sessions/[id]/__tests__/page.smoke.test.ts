@@ -2,18 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-// Smoke test pour BUG-01 (audit 2026-05-12) :
-// l'audit signalait "FileText is not defined" sur cette page. L'analyse code montre
-// que l'import est présent (cache `.next` stale probable). Ce test ancre une protection
-// contre toute régression future où un symbole lucide-react serait utilisé en JSX
-// sans être déclaré dans la liste d'import.
+/**
+ * Smoke test page fiche session — filet de sécurité refactor ui-e.
+ *
+ * Origine : BUG-01 (audit 2026-05-12, "FileText is not defined"). Évolué
+ * Phase 9.1 (matrice + bug P0). Réécrit ui-e1 (2026-06-06) pour refléter
+ * la nouvelle structure post-(d) : SessionOnlyDocsBlock supprimé,
+ * DocDockDrawer + DocsButton dans le SessionHeaderBar, matrice repliable
+ * dans `<details id="section-doc-matrix">` (cible du lien "Vue tableau"
+ * du drawer footer).
+ *
+ * Ce test doit attraper : un composant clé retiré sans intention, un
+ * symbole lucide-react utilisé sans import, l'oubli d'une query Prisma
+ * critique.
+ */
 
 const pageSrc = readFileSync(
   path.join(__dirname, '..', 'page.tsx'),
   'utf8',
 );
 
-describe('sessions/[id] page — smoke (BUG-01 + Phase 9.1 Plan 03)', () => {
+describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
   it('imports FileText from lucide-react', () => {
     const importMatch = pageSrc.match(
       /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/,
@@ -25,18 +34,56 @@ describe('sessions/[id] page — smoke (BUG-01 + Phase 9.1 Plan 03)', () => {
     expect(importedNames.has('FileText')).toBe(true);
   });
 
-  // Phase 9.1 Plan 03 — anti-régression : la fiche session enrichie doit
-  // monter <ParticipantDocMatrix> + <SessionOnlyDocsBlock> et charger
-  // productDocs (Bug P0 anti-régression) + AGEFICE conditionnel.
-  it('mounts ParticipantDocMatrix component (Phase 9.1 Plan 03)', () => {
+  // ─── Architecture refonte (e) — composants pivots ──────────────────────
+
+  it('header zone : <SessionHeaderBar> + <NextActionHero> (refonte (b))', () => {
+    expect(pageSrc).toMatch(/<SessionHeaderBar/);
+    expect(pageSrc).toMatch(/<NextActionHero/);
+  });
+
+  it('hub documents : <DocsButton> dans la barre actions (refonte (d))', () => {
+    // DocsButton ouvre <DocDockDrawer>. Sans ce composant en haut, plus
+    // aucun accès au drawer depuis la fiche.
+    expect(pageSrc).toMatch(/<DocsButton/);
+  });
+
+  it('timeline 5 étapes : <SessionWorkflowTimeline> + step blocks', () => {
+    expect(pageSrc).toMatch(/<SessionWorkflowTimeline/);
+    expect(pageSrc).toMatch(/<PreparationPedagogiqueBlock/);
+    expect(pageSrc).toMatch(/<ClosureFormationBlock/);
+    expect(pageSrc).toMatch(/<StepCreation/);
+    expect(pageSrc).toMatch(/<StepPendantFormation/);
+    expect(pageSrc).toMatch(/<StepFacturation/);
+  });
+
+  it('matrice repliable : <ParticipantDocMatrix> sous anchor #section-doc-matrix', () => {
+    // Anchor obligatoire : c'est la cible du lien "Vue tableau" du
+    // <DocDockDrawer> footer. Si l'anchor disparaît, le lien casse.
+    expect(pageSrc).toMatch(/id=["']section-doc-matrix["']/);
     expect(pageSrc).toMatch(/<ParticipantDocMatrix/);
   });
 
-  it('mounts SessionOnlyDocsBlock component (Phase 9.1 Plan 03)', () => {
-    expect(pageSrc).toMatch(/<SessionOnlyDocsBlock/);
+  it('cards apprenant : <ParticipantDocsCards> sous anchor #section-participants', () => {
+    // Anchor obligatoire : cible de la sessionStage CTA "Ajouter un
+    // apprenant" quand participantsCount === 0.
+    expect(pageSrc).toMatch(/id=["']section-participants["']/);
+    expect(pageSrc).toMatch(/<ParticipantDocsCards/);
   });
 
-  it("loads Document entityType='product' (Bug P0 anti-régression — 1 PDF / N statuts)", () => {
+  it('plus de DocDock floating (supprimé en (d))', () => {
+    // Anti-régression : si quelqu'un remonte <DocDock> sans <DocsButton>,
+    // on a deux hubs concurrents. Le drawer est la seule porte d'entrée.
+    expect(pageSrc).not.toMatch(/<DocDock\s/);
+    expect(pageSrc).not.toMatch(/<DocDock>/);
+  });
+
+  it('plus de SessionOnlyDocsBlock (supprimé en (d), remplacé par timeline)', () => {
+    expect(pageSrc).not.toMatch(/<SessionOnlyDocsBlock/);
+  });
+
+  // ─── Bug P0 anti-régression — Phase 9.1 ────────────────────────────────
+
+  it("loads Document entityType='product' (Bug P0 — 1 PDF / N statuts)", () => {
     expect(pageSrc).toMatch(/entityType:\s*['"]product['"]/);
   });
 
@@ -48,6 +95,17 @@ describe('sessions/[id] page — smoke (BUG-01 + Phase 9.1 Plan 03)', () => {
     expect(pageSrc).toMatch(/pedagogicalAsset\.findMany/);
   });
 
+  // ─── Étape courante : sessionStage() source unique (commit (a)) ────────
+
+  it('uses sessionStage() helper as single source of truth', () => {
+    expect(pageSrc).toMatch(/sessionStage\(/);
+    // Le CTA primaire doit dériver de stage.cta.kind, pas d'un switch
+    // sur status === 'COMPLETED'. Anti-régression (c) cta.kind fix.
+    expect(pageSrc).toMatch(/stage\.cta\.kind/);
+  });
+
+  // ─── Hygiène imports lucide-react (BUG-01 d'origine) ────────────────────
+
   it('uses no lucide-react symbol that is not imported', () => {
     const importMatch = pageSrc.match(
       /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/,
@@ -55,8 +113,9 @@ describe('sessions/[id] page — smoke (BUG-01 + Phase 9.1 Plan 03)', () => {
     const imported = new Set(
       (importMatch?.[1] ?? '').split(',').map((s) => s.trim()),
     );
-    // Symboles JSX (PascalCase tags) effectivement utilisés dans page.tsx.
-    // Liste figée à la date du test — élargir manuellement si la page évolue.
+    // Liste des candidats lucide-react potentiellement utilisés ici. Si
+    // tu importes un nouveau symbole lucide qui n'est pas listé, ajoute-le
+    // pour bénéficier de l'anti-régression.
     const lucideCandidates = new Set([
       'ArrowLeft',
       'Calendar',
@@ -70,6 +129,9 @@ describe('sessions/[id] page — smoke (BUG-01 + Phase 9.1 Plan 03)', () => {
       'Package',
       'ChevronRight',
       'FileText',
+      'AlertCircle',
+      'Plus',
+      'ExternalLink',
     ]);
     const jsxOpeningTags = [
       ...pageSrc.matchAll(/<([A-Z][A-Za-z0-9_]*)\b/g),
