@@ -3,6 +3,8 @@ import type { Route } from 'next';
 import { ExternalLink, Loader2, Package } from 'lucide-react';
 import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
 import type { SessionClosureStatus } from '@/server/actions/closure-status';
+import { docCompletion } from '@/lib/sessions/doc-completion';
+import { buildClosureCompletionItems } from '@/lib/sessions/build-closure-completion-items';
 
 interface Props {
   sessionId: string;
@@ -61,13 +63,29 @@ export function ClosureFormationBlock({
   ];
 
   const visiblePer = perParticipantItems.filter((p) => !p.hide);
-  const sharedDone = sharedItems.filter((s) => s.done).length;
-  const sharedTotal = sharedItems.length;
-  const perDone = visiblePer.reduce((acc, p) => acc + Math.min(p.count, p.total), 0);
-  const perTotal = visiblePer.reduce((acc, p) => acc + p.total, 0);
-  const totalDone = sharedDone + perDone;
-  const totalExpected = sharedTotal + perTotal;
-  const missing = Math.max(0, totalExpected - totalDone);
+
+  // Source UNIQUE — items "closure" comptés par `docCompletion`, même fonction
+  // que <DocDockDrawer> et <PreparationPedagogiqueBlock>. Garde-fou Laurent
+  // 2026-06-05 : "compteur step = état drawer = matrice".
+  const completion = docCompletion(
+    buildClosureCompletionItems({
+      participantsCount: N,
+      ageficeEligibleCount: status.ageficeEligibleCount,
+      programmeProductDocId,
+      grilleObsSession: status.grilleObsSession,
+      bilanSatisfaction: status.bilanSatisfaction,
+      attestations: status.attestations,
+      certificats: status.certificats,
+      qcm: status.qcm,
+      positionnements: status.positionnements,
+      satisfactionChaud: status.satisfactionChaud,
+      satisfactionFroid: status.satisfactionFroid,
+      assiduites: status.assiduites,
+    }),
+  );
+  const totalDone = completion.ready;
+  const totalExpected = completion.total;
+  const missing = completion.missing;
   const complete = totalExpected > 0 && missing === 0;
   const inProgress =
     status.latestBatchStatus === 'PROCESSING' || status.latestBatchStatus === 'QUEUED';

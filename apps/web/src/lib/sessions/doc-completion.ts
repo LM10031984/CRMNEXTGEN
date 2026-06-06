@@ -13,7 +13,16 @@
  * par buildDocDockItems / buildParticipantCards et retourne les agrégats.
  */
 
-import type { DocDockItem } from '@/components/sessions/doc-dock';
+export type DocState = 'generated' | 'pending' | 'missing';
+
+/**
+ * Structurel : n'importe quel objet exposant un `state` peut être compté.
+ * Couvre `DocDockItem` (drawer) ET les listes minimales internes aux step
+ * blocks (commit ui-e #1). Évite de coupler ce helper à l'UI.
+ */
+export interface CompletionItem {
+  state: DocState;
+}
 
 export interface DocCompletion {
   /** Total docs comptés (hors notApplicable). */
@@ -26,7 +35,7 @@ export interface DocCompletion {
   missing: number;
 }
 
-export function docCompletion(items: DocDockItem[]): DocCompletion {
+export function docCompletion(items: ReadonlyArray<CompletionItem>): DocCompletion {
   let total = 0;
   let ready = 0;
   let pending = 0;
@@ -41,8 +50,6 @@ export function docCompletion(items: DocDockItem[]): DocCompletion {
 }
 
 /** Sous-ensemble : items pré-formation uniquement (section 'shared' + 'participant' + 'ai'). */
-export function docCompletionPrePack(items: DocDockItem[]): DocCompletion {
-  // Tous les items actuels sont pré-formation. À adapter quand on étendra
-  // aux items post-pack côté drawer (commit ui-e).
+export function docCompletionPrePack(items: ReadonlyArray<CompletionItem>): DocCompletion {
   return docCompletion(items);
 }

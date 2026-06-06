@@ -18,7 +18,8 @@
  * toute la page).
  */
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, ClipboardList, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -26,6 +27,8 @@ import {
   prepareSession,
   type SessionPreparationStatus,
 } from '@/server/actions/prepare-training';
+import { docCompletion } from '@/lib/sessions/doc-completion';
+import { buildPrepCompletionItems } from '@/lib/sessions/build-prep-completion-items';
 import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
 
 interface Props {
@@ -38,46 +41,6 @@ interface Props {
   expanded?: boolean;
 }
 
-function countMissing(s: SessionPreparationStatus): number {
-  const N = s.participantsCount;
-  const sharedMissing = (s.programme ? 0 : 1) + (s.deroule ? 0 : 1) + (s.checklist ? 0 : 1);
-  const conv = Math.max(0, N - s.conventionsCount);
-  const convoc = Math.max(0, N - s.convocationsCount);
-  const ab = Math.max(0, N - s.analyseBesoinDone);
-  // AGEFICE compté sur les éligibles uniquement (TNS), pas tous les participants.
-  const agefice = Math.max(0, s.ageficeEligibleCount - s.ageficeCount);
-  return sharedMissing + conv + convoc + ab + agefice;
-}
-
-function isComplete(s: SessionPreparationStatus): boolean {
-  const N = s.participantsCount;
-  if (N === 0) return s.programme && s.deroule && s.checklist;
-  return (
-    s.programme &&
-    s.deroule &&
-    s.checklist &&
-    s.conventionsCount >= N &&
-    s.convocationsCount >= N &&
-    s.analyseBesoinDone >= N &&
-    s.ageficeCount >= s.ageficeEligibleCount
-  );
-}
-
-function isEmpty(s: SessionPreparationStatus): boolean {
-  const N = s.participantsCount;
-  const sharedDone = (s.programme ? 1 : 0) + (s.deroule ? 1 : 0) + (s.checklist ? 1 : 0);
-  return (
-    sharedDone === 0 &&
-    s.conventionsCount === 0 &&
-    s.convocationsCount === 0 &&
-    s.analyseBesoinDone === 0 &&
-    s.analyseBesoinInProgress === 0 &&
-    s.analyseBesoinPending === 0 &&
-    s.ageficeCount === 0 &&
-    N >= 0
-  );
-}
-
 export function PreparationPedagogiqueBlock({
   sessionId,
   initialStatus,
@@ -85,6 +48,7 @@ export function PreparationPedagogiqueBlock({
   isActive = false,
   expanded,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState<SessionPreparationStatus>(initialStatus);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -96,9 +60,12 @@ export function PreparationPedagogiqueBlock({
     const id = setInterval(async () => {
       const fresh = await getSessionPreparationStatus(sessionId);
       if (fresh.ok) setStatus(fresh);
+      // Le drawer et la matrice lisent depuis docDockItems côté serveur :
+      // on refresh aussi le RSC pour propager l'avancement IA partout.
+      router.refresh();
     }, 5000);
     return () => clearInterval(id);
-  }, [analyseBesoinInflight, sessionId]);
+  }, [analyseBesoinInflight, sessionId, router]);
 
   function handleCompleter() {
     setError(null);
@@ -113,6 +80,9 @@ export function PreparationPedagogiqueBlock({
       // (les generators sync auront mis à jour les Document/PedagogicalAsset).
       const fresh = await getSessionPreparationStatus(sessionId);
       if (fresh.ok) setStatus(fresh);
+      // Refresh RSC : sans ça, le drawer + le badge X/Y dérivé de
+      // docDockItems restent figés sur le snapshot SSR initial.
+      router.refresh();
       const errorCount = r.errors.length;
       if (errorCount === 0) {
         const ageficeMsg = r.ageficeEligible > 0
@@ -130,20 +100,18 @@ export function PreparationPedagogiqueBlock({
   }
 
   const N = status.participantsCount;
-  const empty = isEmpty(status);
-  const complete = isComplete(status);
-  const missingCount = countMissing(status);
 
-  const totalExpected =
-    3 + (N > 0 ? N * 3 + (status.ageficeEligibleCount > 0 ? status.ageficeEligibleCount : 0) : 0);
-  const totalDone =
-    (status.programme ? 1 : 0) +
-    (status.deroule ? 1 : 0) +
-    (status.checklist ? 1 : 0) +
-    Math.min(status.conventionsCount, N) +
-    Math.min(status.convocationsCount, N) +
-    Math.min(status.analyseBesoinDone, N) +
-    Math.min(status.ageficeCount, status.ageficeEligibleCount);
+  // Source UNIQUE — items dérivés du status local, comptés par `docCompletion`.
+  // Garde-fou Laurent 2026-06-05 : "compteur step = état drawer = matrice".
+  const completion = useMemo(
+    () => docCompletion(buildPrepCompletionItems(status)),
+    [status],
+  );
+  const totalDone = completion.ready;
+  const totalExpected = completion.total;
+  const missingCount = completion.missing;
+  const complete = totalExpected > 0 && missingCount === 0;
+  const empty = totalDone === 0 && completion.pending === 0;
 
   const stepState: StepState = complete
     ? 'done'
