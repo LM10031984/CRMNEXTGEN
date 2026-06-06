@@ -17,7 +17,7 @@ import { SessionWorkflowTimeline } from '@/components/sessions/session-workflow-
 import { StepCreation } from '@/components/sessions/step-creation';
 import { StepPendantFormation } from '@/components/sessions/step-pendant-formation';
 import { StepFacturation } from '@/components/sessions/step-facturation';
-import { DocDock } from '@/components/sessions/doc-dock';
+import { DocsButton } from '@/components/sessions/docs-button';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
 import { ParticipantDocsCards } from '@/components/sessions/participant-docs-cards';
 import { buildParticipantCards } from '@/lib/sessions/build-participant-cards';
@@ -565,6 +565,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 }}
               />
             )}
+            {/* Hub Documents — ouvre <DocDockDrawer> avec compteur manquants */}
+            <DocsButton
+              sessionId={session.id}
+              items={docDockItems}
+              canGenerate={canWrite}
+            />
             {session.status === 'IN_PROGRESS' && (
               <MarkCompletedButton
                 sessionId={session.id}
@@ -928,13 +934,33 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         </div>
       </details>
 
-      {/* 🪄 DocDock — bouton magique floating bas-droite. Trouve + génère +
-          télécharge n'importe quel doc Qualiopi en 1 clic. */}
-      <DocDock
-        sessionId={session.id}
-        items={docDockItems}
-        canGenerate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
-      />
+      {/* Vue tableau Qualiopi — matrice ParticipantDocMatrix réintroduite ici
+          (commit ui-d). Cible du lien "Vue tableau" du DocDockDrawer footer.
+          Repliée par défaut pour ne pas polluer la vue principale — ouverte
+          via le drawer ou un anchor direct. */}
+      <details id="section-doc-matrix" className="group rounded-2xl border border-border bg-white overflow-hidden scroll-mt-20">
+        <summary className="cursor-pointer list-none p-4 flex items-center gap-2 hover:bg-muted/20 transition-colors [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Vue tableau Qualiopi · matrice apprenant × document
+          </span>
+        </summary>
+        <div className="border-t border-border p-4 sm:p-5 bg-muted/10">
+          <ParticipantDocMatrix
+            sessionId={session.id}
+            userRole={user.role}
+            hasAgeficeParticipant={hasAgeficeParticipant}
+            participants={matrixParticipants}
+            productDocs={productDocsMap}
+            sessionDocs={sessionDocsMap}
+          />
+        </div>
+      </details>
+
+      {/* DocDock floating SUPPRIMÉ (commit ui-d). Remplacé par <DocsButton>
+          dans la barre actions du SessionHeaderBar qui ouvre <DocDockDrawer>
+          (drawer side panel z-60 avec backdrop / ESC / scroll-lock / focus-trap).
+          Fichier doc-dock.tsx encore présent — sera supprimé en commit ui-e. */}
     </div>
   );
 }
