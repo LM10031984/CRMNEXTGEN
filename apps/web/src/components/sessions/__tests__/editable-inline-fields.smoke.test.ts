@@ -80,17 +80,13 @@ describe('inline editors — même schéma que la modale (source UNIQUE)', () =>
 });
 
 describe('normalisation "champ vidé" — source UNIQUE côté action (ui-e2 garde-fou #1)', () => {
+  // Le COMPORTEMENT est verrouillé par update-session-details.test.ts
+  // (10 cas behavioural sur prisma.trainingSession.update). Ici on
+  // garde uniquement l'invariant structurel : le helper est bien
+  // importé là où il doit vivre.
   it('updateSessionDetails importe normalizeNullableText', () => {
     expect(actionSrc).toMatch(/normalizeNullableText/);
     expect(actionSrc).toMatch(/from\s+['"]@\/lib\/sessions\/normalize-nullable-text['"]/);
-  });
-
-  it('aucun wrapper inline ne fait sa propre coercion "" → null', () => {
-    // Anti-régression : si quelqu'un remet `raw === '' ? null : raw` côté
-    // wrapper, la modale et l'inline divergent à nouveau sur le vide.
-    expect(titleSrc).not.toMatch(/raw\.trim\(\)\s*===\s*['"]{2}/);
-    expect(titleSrc).not.toMatch(/raw\s*===\s*['"]{2}\s*\?\s*null/);
-    expect(notesSrc).not.toMatch(/raw\s*===\s*['"]{2}\s*\?\s*null/);
   });
 });
 
