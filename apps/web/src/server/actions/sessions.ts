@@ -666,14 +666,23 @@ export async function updateSessionLogistics(input: {
   });
   if (!session) return { ok: false, error: 'Session introuvable.' };
 
+  // Normalisation "champ vidé" via helper unique partagé avec
+  // updateSessionDetails (commit ui-e2). Pattern '?.trim() || null'
+  // remplacé pour garder un seul chemin de normalisation.
   await prisma.trainingSession.update({
     where: { id: input.sessionId },
     data: {
       ...(input.needsTrainerLodging !== undefined ? { needsTrainerLodging: input.needsTrainerLodging } : {}),
-      ...(input.trainerLodgingPlace !== undefined ? { trainerLodgingPlace: input.trainerLodgingPlace?.trim() || null } : {}),
-      ...(input.trainerLodgingDates !== undefined ? { trainerLodgingDates: input.trainerLodgingDates?.trim() || null } : {}),
+      ...(input.trainerLodgingPlace !== undefined
+        ? { trainerLodgingPlace: normalizeNullableText(input.trainerLodgingPlace) }
+        : {}),
+      ...(input.trainerLodgingDates !== undefined
+        ? { trainerLodgingDates: normalizeNullableText(input.trainerLodgingDates) }
+        : {}),
       ...(input.hasDisabledLearner !== undefined ? { hasDisabledLearner: input.hasDisabledLearner } : {}),
-      ...(input.disabilityAdaptations !== undefined ? { disabilityAdaptations: input.disabilityAdaptations?.trim() || null } : {}),
+      ...(input.disabilityAdaptations !== undefined
+        ? { disabilityAdaptations: normalizeNullableText(input.disabilityAdaptations) }
+        : {}),
     },
   });
   revalidatePath(`/app/sessions/${input.sessionId}`);
