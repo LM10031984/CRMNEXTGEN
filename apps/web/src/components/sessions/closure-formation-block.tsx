@@ -185,8 +185,8 @@ export function ClosureFormationBlock({
 
       {!inProgress && !complete && N > 0 && (
         <p className="text-[11px] text-muted-foreground mt-4">
-          → Utilise le bouton <strong>« Pack fin de formation »</strong> en haut de page pour
-          générer les documents manquants.
+          → Utilise le bouton <strong>« Pack fin de formation »</strong> dans la barre actions
+          en haut (à côté de « Documents ») pour générer les documents manquants en lot.
         </p>
       )}
     </TimelineStep>

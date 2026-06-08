@@ -76,6 +76,14 @@ export interface SessionStageInput {
   productAiDraftPending: boolean;
   prep: SessionPreparationStatus;
   closure: SessionClosureStatus;
+  /**
+   * Référence "maintenant" — injectable pour tests reproductibles.
+   * Défaut côté impl : `new Date()`. Préserve la pureté du helper.
+   * Ajouté ui-e3 (Laurent test 2026-06-08) : bug NextActionHero qui
+   * affichait "ÉTAPE 3 · EN ATTENTE — à J0" à J+7 parce que sessionStage
+   * lisait le `status` BDD seul, sans vérifier si la date était passée.
+   */
+  now?: Date;
 }
 
 /* ── Helpers privés ──────────────────────────────────────────────────── */
@@ -126,11 +134,13 @@ function countMissingPrep(s: SessionPreparationStatus): number {
 export function sessionStage(input: SessionStageInput): SessionStage {
   const {
     status,
+    endDate,
     participantsCount,
     primaryTrainerName,
     productAiDraftPending,
     prep,
     closure,
+    now = new Date(),
   } = input;
 
   // ── Étape 1. BLOCKERS (priorité absolue) ──────────────────────────
@@ -185,6 +195,28 @@ export function sessionStage(input: SessionStageInput): SessionStage {
   }
 
   // ── Étape 3. PENDANT LA FORMATION ─────────────────────────────────
+
+  // Garde-fou date dépassée (Laurent ui-e3) : si endDate < now et le
+  // status BDD est encore pré-COMPLETED (utilisateur n'a pas cliqué
+  // « Marquer comme terminée »), on signale explicitement plutôt
+  // que d'afficher le message stale « À J0 le formateur démarre ».
+  const isAfterEnd = endDate < now;
+  if (isAfterEnd && status !== 'COMPLETED' && status !== 'CANCELLED') {
+    return {
+      current: 3,
+      status: 'active',
+      reason:
+        'Formation passée — passe la session en « Terminée » pour pouvoir générer le pack fin.',
+      cta: {
+        label: 'Marquer comme terminée',
+        href: '#section-status',
+        primary: true,
+        kind: 'anchor',
+      },
+      stagesState: { 1: 'done', 2: 'done', 3: 'active', 4: 'todo', 5: 'todo' },
+    };
+  }
+
   // Pré-formation : DRAFT/PLANNED/OPEN/VALIDATED + prep complète → wait J0
   const isBeforeStart =
     status === 'DRAFT' || status === 'PLANNED' || status === 'OPEN' || status === 'VALIDATED';

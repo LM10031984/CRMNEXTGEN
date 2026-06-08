@@ -102,6 +102,10 @@ function baseInput(overrides: Partial<SessionStageInput> = {}): SessionStageInpu
     productAiDraftPending: false,
     prep: emptyPrep(1),
     closure: emptyClosure(1),
+    // `now` figé en pré-session par défaut → isAfterEnd reste faux pour
+    // tous les tests existants même si on les lance après 2026-07-15.
+    // Les nouveaux tests "session passée" overrident avec un now postérieur.
+    now: new Date('2026-07-14T08:00:00Z'),
     ...overrides,
   };
 }
@@ -254,5 +258,104 @@ describe('sessionStage — arbre de décision étape courante', () => {
       const activeCount = Object.values(result.stagesState).filter((v) => v === 'active').length;
       expect(activeCount).toBe(1);
     }
+  });
+
+  /* ── Catégorie 5 : SESSION PASSÉE (date dépassée, status pré-COMPLETED) ───
+     Bug Laurent test visuel ui-e3 2026-06-08 : NextActionHero affichait
+     « ÉTAPE 3 · EN ATTENTE — à J0 » à J+7 alors que la session est terminée
+     côté agenda. sessionStage doit signaler le décalage entre la date et
+     le status BDD plutôt que de mentir. ─────────────────────────────── */
+
+  it("10. SESSION PASSÉE — PLANNED + endDate < now → étape 3 active + CTA 'Marquer'", () => {
+    const result = sessionStage(
+      baseInput({
+        status: 'PLANNED',
+        prep: completePrep(1),
+        now: new Date('2026-07-22T08:00:00Z'), // J+7
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/passée/i);
+    expect(result.cta).toBeDefined();
+    expect(result.cta!.label).toBe('Marquer comme terminée');
+    expect(result.cta!.href).toBe('#section-status');
+    expect(result.cta!.kind).toBe('anchor');
+    expect(result.cta!.primary).toBe(true);
+  });
+
+  it('11. SESSION PASSÉE — IN_PROGRESS + endDate < now → idem (override le branch IN_PROGRESS)', () => {
+    const result = sessionStage(
+      baseInput({
+        status: 'IN_PROGRESS',
+        prep: completePrep(1),
+        now: new Date('2026-07-22T08:00:00Z'),
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/passée/i);
+    // Cas typique du bug Laurent : IN_PROGRESS + date dépassée doit
+    // afficher "Formation passée", PAS "Formation en cours".
+    expect(result.reason).not.toMatch(/Formation en cours/);
+  });
+
+  it('12. SESSION PASSÉE — DRAFT + endDate < now → idem (DRAFT non bloqué)', () => {
+    const result = sessionStage(
+      baseInput({
+        status: 'DRAFT',
+        prep: completePrep(1),
+        now: new Date('2026-07-22T08:00:00Z'),
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/passée/i);
+  });
+
+  it('13. SESSION PASSÉE n\'override PAS COMPLETED → continue vers étape 4', () => {
+    // Garde-fou : un status COMPLETED reste prioritaire — on ne veut
+    // pas régresser vers "Marquer comme terminée" après que l'utilisateur
+    // l'a déjà fait.
+    const result = sessionStage(
+      baseInput({
+        status: 'COMPLETED',
+        prep: completePrep(1),
+        closure: emptyClosure(1),
+        now: new Date('2026-07-22T08:00:00Z'),
+      }),
+    );
+    expect(result.current).toBe(4);
+    expect(result.cta!.label).toBe('Générer le pack fin');
+  });
+
+  it('14. SESSION PASSÉE n\'override PAS CANCELLED → fallback', () => {
+    // Une session annulée doit rester annulée même si la date est passée.
+    // Pour CANCELLED, sessionStage tombe en fallback (étape 4 Compléter
+    // le pack) — pas idéal mais inchangé par ce fix.
+    const result = sessionStage(
+      baseInput({
+        status: 'CANCELLED',
+        prep: completePrep(1),
+        closure: emptyClosure(1),
+        now: new Date('2026-07-22T08:00:00Z'),
+      }),
+    );
+    expect(result.reason).not.toMatch(/passée/i);
+  });
+
+  it("15. SESSION FUTURE — PLANNED + endDate > now → branche 'À J0' préservée", () => {
+    // Anti-régression : ne casse pas le cas heureux (la session n'a pas
+    // encore commencé).
+    const result = sessionStage(
+      baseInput({
+        status: 'PLANNED',
+        prep: completePrep(1),
+        now: new Date('2026-07-10T08:00:00Z'), // avant startDate
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('todo');
+    expect(result.reason).toMatch(/À J0/);
   });
 });

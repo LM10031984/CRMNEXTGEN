@@ -818,8 +818,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       />
 
       {/* Status select + dates editor — gardés sous le hero pour édition
-          rapide sans ouvrir la modale Modifier. Discrets. */}
-      <div className="flex items-center gap-2 flex-wrap text-xs">
+          rapide sans ouvrir la modale Modifier. Discrets.
+          Anchor #section-status : cible du CTA sessionStage "Marquer comme
+          terminée" quand endDate < now et status pré-COMPLETED. */}
+      <div id="section-status" className="flex items-center gap-2 flex-wrap text-xs scroll-mt-20">
         <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
         <SessionDatesEditor
           sessionId={session.id}
