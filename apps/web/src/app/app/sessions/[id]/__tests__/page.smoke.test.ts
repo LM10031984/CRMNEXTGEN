@@ -90,11 +90,19 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).toMatch(/<ParticipantDocMatrix/);
   });
 
-  it('cards apprenant : <ParticipantDocsCards> sous anchor #section-participants', () => {
+  it('anchor #section-participants conservé (cible CTA "Ajouter un apprenant")', () => {
     // Anchor obligatoire : cible de la sessionStage CTA "Ajouter un
-    // apprenant" quand participantsCount === 0.
+    // apprenant" quand participantsCount === 0. Survit à la suppression
+    // de <ParticipantDocsCards> (commit ui-e3 #5) sous forme de ghost div.
     expect(pageSrc).toMatch(/id=["']section-participants["']/);
-    expect(pageSrc).toMatch(/<ParticipantDocsCards/);
+  });
+
+  it('plus de <ParticipantDocsCards> inline (supprimé ui-e3 #5)', () => {
+    // Anti-régression : la génération à l'unité vit désormais dans
+    // <DocDockDrawer> (filet attesté par doc-dock-drawer.smoke.test.ts).
+    // Réintroduire ParticipantDocsCards crée deux UI concurrentes.
+    expect(pageSrc).not.toMatch(/<ParticipantDocsCards/);
+    expect(pageSrc).not.toMatch(/buildParticipantCards/);
   });
 
   it('plus de DocDock floating (supprimé en (d))', () => {

@@ -19,8 +19,6 @@ import { StepPendantFormation } from '@/components/sessions/step-pendant-formati
 import { StepFacturation } from '@/components/sessions/step-facturation';
 import { DocsButton } from '@/components/sessions/docs-button';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
-import { ParticipantDocsCards } from '@/components/sessions/participant-docs-cards';
-import { buildParticipantCards } from '@/lib/sessions/build-participant-cards';
 import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
 import { NextActionHero } from '@/components/sessions/next-action-hero';
 import { sessionStage } from '@/lib/sessions/session-stage';
@@ -470,25 +468,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const productLabel = session.product?.title ?? null;
   const productCode = session.product?.code ?? null;
   const productDuration = session.product?.durationHours ?? null;
-
-  // 🎯 Cards apprenant (solution ULTIME demandée Laurent 2026-06-04 :
-  // "un apprenant je trouve ses docs, améliore ça de 100%"). Remplace la
-  // matrice cryptique par 1 card visuelle par stagiaire avec ses 11 docs.
-  const participantCards = buildParticipantCards({
-    participants: matrixParticipants.map((p) => ({
-      id: p.id,
-      personId: p.personId,
-      fullName: p.fullName,
-      sponsorOrgLabel: p.sponsorOrgLabel,
-      sponsorOrgOpcoCode: p.sponsorOrgOpcoCode,
-      financingMode: p.financingMode,
-      isAgefice: p.isAgefice,
-    })),
-    docsByParticipant,
-    assetsByParticipant,
-    analyseBesoinInflight:
-      preparationStatus.analyseBesoinInProgress + preparationStatus.analyseBesoinPending,
-  });
 
   // 🪄 Items du DocDock — bouton magique bas-droite pour générer/télécharger
   // n'importe quel doc pré-formation Qualiopi en 1 clic. Résout Laurent
@@ -958,28 +937,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         />
       </SessionWorkflowTimeline>
 
-      {/* 🎯 Vue ULTIME : 1 card par apprenant — clic = ouvrir doc OU générer.
-          Remplace la matrice cryptique. Laurent 2026-06-04 : "trouve la
-          solution ultime · un apprenant je trouve ses docs · 100%". */}
-      <section id="section-participants" className="rounded-2xl border border-border bg-white p-5 scroll-mt-20">
-        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold text-base">Documents par apprenant</h2>
-            <Badge variant="muted" className="text-[10px]">
-              {session.participants.length} apprenant{session.participants.length > 1 ? 's' : ''}
-            </Badge>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            ✓ vert = doc prêt, clic ouvre PDF · ◯ ambre = clic génère
-          </p>
-        </div>
-        <ParticipantDocsCards
-          sessionId={session.id}
-          participants={participantCards}
-          canGenerate={canWrite}
-        />
-      </section>
+      {/* <ParticipantDocsCards> supprimé (commit ui-e3 #5) — le DocDockDrawer
+          porte la même affordance "clic génère ce doc" (smoke gate
+          doc-dock-drawer.smoke.test.ts : 6 tests verts l'attestent).
+          L'anchor #section-participants est conservé en ghost pour les
+          CTAs sessionStage qui pointent ici ("Ajouter un apprenant"). */}
+      <div id="section-participants" className="scroll-mt-20" />
 
       {/* <details> "Paramètres avancés" supprimé (commit ui-e3) — tout le
           contenu (Formateurs/Lieu/Logistique/Notes/Satisfaction/Tasks) vit
