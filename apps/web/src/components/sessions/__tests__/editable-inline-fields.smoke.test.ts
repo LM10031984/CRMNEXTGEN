@@ -130,4 +130,17 @@ describe('EditableField — UX garde-fous (commit ui-e2 #3)', () => {
     // diverger de l'état serveur.
     expect(editableSrc).toMatch(/setOptimistic\(null\)/);
   });
+
+  it('rollback raw + reselect sur validation client échouée (bug Laurent ui-e2)', () => {
+    // Sans ça, l'input garde la valeur invalide ('-5') quand zod.safeParse
+    // échoue côté client — l'utilisateur doit effacer à la main avant de
+    // retaper. Le helper rollbackRawAndReselect (a) remet la valeur
+    // précédente, (b) refocus + select pour ré-écraser en une frappe.
+    expect(editableSrc).toMatch(/rollbackRawAndReselect/);
+    // Doit être appelé dans LES DEUX branches d'échec côté commit() :
+    // (a) parse() throws, (b) schema.safeParse échoue.
+    const callSites = editableSrc.match(/rollbackRawAndReselect\(\)/g) ?? [];
+    // Définition + 2 call sites = 3 occurrences min.
+    expect(callSites.length).toBeGreaterThanOrEqual(2);
+  });
 });

@@ -110,17 +110,39 @@ export function EditableField<T>({
     setEditing(false);
   }
 
+  // Rollback "raw" sur validation client échouée — l'input revient à
+  // l'ancienne valeur valide + select all pour qu'une retape l'écrase
+  // en une frappe. Sans ça, l'input garde la valeur invalide ('-5') et
+  // l'utilisateur doit l'effacer à la main avant de retaper. Bug remonté
+  // Laurent ui-e2 test visuel 2026-06-08.
+  function rollbackRawAndReselect() {
+    setRaw(serialize(optimistic ?? value));
+    // Differ la sélection pour que React commit le setRaw avant.
+    setTimeout(() => {
+      const el = inputRef.current;
+      if (el instanceof HTMLInputElement) {
+        el.focus();
+        el.select();
+      } else if (el instanceof HTMLTextAreaElement) {
+        el.focus();
+        el.select();
+      }
+    }, 0);
+  }
+
   function commit() {
     let parsed: T;
     try {
       parsed = parse(raw);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Valeur invalide');
+      rollbackRawAndReselect();
       return;
     }
     const check = schema.safeParse(parsed);
     if (!check.success) {
       toast.error(check.error.issues[0]?.message ?? 'Valeur invalide');
+      rollbackRawAndReselect();
       return;
     }
     // Pas de save si rien n'a changé.
