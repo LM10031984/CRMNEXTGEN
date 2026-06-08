@@ -81,6 +81,44 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).not.toMatch(/<SessionOnlyDocsBlock/);
   });
 
+  // ─── Paramètres session (zone qui sera migrée vers SettingsDrawer en ui-e3) ──
+  // Assertions posées AVANT la transformation pour préserver le filet.
+  // Discipline Laurent ui-e3 : "le smoke doit rester vert avant la première
+  // suppression, pas après". Ces 5 composants doivent rester MONTÉS — qu'ils
+  // soient sous <details> ou dans <SettingsDrawer>, peu importe pour le filet.
+
+  it('monte <SessionTrainerPicker> (gestion formateurs)', () => {
+    expect(pageSrc).toMatch(/<SessionTrainerPicker/);
+  });
+
+  it('monte <SessionLocationPicker> (gestion lieu)', () => {
+    expect(pageSrc).toMatch(/<SessionLocationPicker/);
+  });
+
+  it('monte <SessionLogisticsEditor> (PSH + hébergement)', () => {
+    expect(pageSrc).toMatch(/<SessionLogisticsEditor/);
+  });
+
+  it('monte <SessionSatisfactionPanel> (post-formation)', () => {
+    expect(pageSrc).toMatch(/<SessionSatisfactionPanel/);
+  });
+
+  it('monte <SessionTasksPanel> (tâches signalées sur la session)', () => {
+    expect(pageSrc).toMatch(/<SessionTasksPanel/);
+  });
+
+  it('monte <SessionNotesInline> (notes internes éditables — ui-e2)', () => {
+    expect(pageSrc).toMatch(/<SessionNotesInline/);
+  });
+
+  it('anchors préservés #section-formateurs + #section-lieu + #section-logistique', () => {
+    // Ces anchors sont des cibles potentielles de liens hash (CTAs sessionStage,
+    // erreurs SessionCompleteness). Ils doivent survivre à toute migration UI.
+    expect(pageSrc).toMatch(/id=["']section-formateurs["']/);
+    expect(pageSrc).toMatch(/id=["']section-lieu["']/);
+    expect(pageSrc).toMatch(/id=["']section-logistique["']/);
+  });
+
   // ─── Bug P0 anti-régression — Phase 9.1 ────────────────────────────────
 
   it("loads Document entityType='product' (Bug P0 — 1 PDF / N statuts)", () => {
