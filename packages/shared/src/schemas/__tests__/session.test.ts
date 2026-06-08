@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   UpdateSessionDetailsInputSchema,
   ModalityEnum,
+  SessionNameSchema,
+  SessionPricePerLearnerSchema,
+  SessionInternalNotesSchema,
   type UpdateSessionDetailsInput,
 } from '../session';
 
@@ -188,5 +191,89 @@ describe('UpdateSessionDetailsInputSchema', () => {
 describe('ModalityEnum', () => {
   it('expose les 4 valeurs PRESENTIEL/DISTANCIEL/MIXTE/ELEARNING', () => {
     expect(ModalityEnum.options).toEqual(['PRESENTIEL', 'DISTANCIEL', 'MIXTE', 'ELEARNING']);
+  });
+});
+
+// ─── Per-field schemas (commit ui-e2) ────────────────────────────────────
+// Source UNIQUE de validation : modale (UpdateSessionDetailsInputSchema)
+// ET éditeurs inline (`EditableField`) consomment ces mêmes schemas.
+// Garde-fou Laurent ui-e2 : "même action ET même schéma. Sinon la modale
+// refuse un tarif négatif et l'inline le laisse passer."
+
+describe('SessionNameSchema (per-field)', () => {
+  it('accepte une chaîne valide', () => {
+    expect(SessionNameSchema.parse('Formation IA')).toBe('Formation IA');
+  });
+
+  it('trim avant validation', () => {
+    expect(SessionNameSchema.parse('   Formation IA   ')).toBe('Formation IA');
+  });
+
+  it('accepte null (champ vidé)', () => {
+    expect(SessionNameSchema.parse(null)).toBeNull();
+  });
+
+  it('rejette > 200 chars', () => {
+    expect(SessionNameSchema.safeParse('a'.repeat(201)).success).toBe(false);
+  });
+
+  it('équivalent au champ name du bulk schema (mêmes règles)', () => {
+    // Tarif négatif rejeté côté inline ET côté bulk — anti-régression.
+    const longName = 'a'.repeat(201);
+    const inlineRejected = !SessionNameSchema.safeParse(longName).success;
+    const bulkRejected = !UpdateSessionDetailsInputSchema.safeParse({
+      sessionId: VALID_UUID,
+      name: longName,
+    }).success;
+    expect(inlineRejected).toBe(bulkRejected);
+  });
+});
+
+describe('SessionPricePerLearnerSchema (per-field)', () => {
+  it('accepte un nombre positif', () => {
+    expect(SessionPricePerLearnerSchema.parse(1500.5)).toBe(1500.5);
+  });
+
+  it('accepte 0 (formation gratuite)', () => {
+    expect(SessionPricePerLearnerSchema.parse(0)).toBe(0);
+  });
+
+  it('accepte null (champ vidé)', () => {
+    expect(SessionPricePerLearnerSchema.parse(null)).toBeNull();
+  });
+
+  it('rejette les nombres négatifs', () => {
+    const r = SessionPricePerLearnerSchema.safeParse(-1);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toMatch(/Prix HT ≥ 0/);
+    }
+  });
+
+  it('même règle que la modale (inline et bulk refusent tous les deux -10)', () => {
+    const inlineOk = SessionPricePerLearnerSchema.safeParse(-10).success;
+    const bulkOk = UpdateSessionDetailsInputSchema.safeParse({
+      sessionId: VALID_UUID,
+      pricePerLearner: -10,
+    }).success;
+    expect(inlineOk).toBe(false);
+    expect(bulkOk).toBe(false);
+  });
+});
+
+describe('SessionInternalNotesSchema (per-field)', () => {
+  it('accepte une chaîne', () => {
+    expect(SessionInternalNotesSchema.parse('Note libre')).toBe('Note libre');
+  });
+
+  it('accepte null', () => {
+    expect(SessionInternalNotesSchema.parse(null)).toBeNull();
+  });
+
+  it('accepte une chaîne vide (vide ≠ null)', () => {
+    // Choix wrapper inline : raw === '' → parse retourne null. Le schema
+    // accepte les deux. Ce test garantit qu'on ne casse pas la modale
+    // qui peut envoyer '' depuis un textarea.
+    expect(SessionInternalNotesSchema.parse('')).toBe('');
   });
 });

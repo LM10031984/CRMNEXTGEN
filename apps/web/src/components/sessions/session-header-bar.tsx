@@ -44,13 +44,16 @@ function fmtDateRange(s: Date, e: Date): string {
 }
 
 interface Props {
-  title: string;
+  /** ReactNode pour permettre l'édition inline (commit ui-e2). String OK. */
+  title: ReactNode;
   code: string;
   status: SessionStatus | string;
   startDate: Date;
   endDate: Date;
   durationHours: number | null;
   pricePerLearner: number | null;
+  /** Si fourni, remplace le rendu par défaut du tarif (inline edit). */
+  priceSlot?: ReactNode;
   locationLabel: string | null;
   participantsCount: number;
   /** Slot CTA primaire — vient de sessionStage.cta, rendu par la page */
@@ -71,6 +74,7 @@ export function SessionHeaderBar({
   endDate,
   durationHours,
   pricePerLearner,
+  priceSlot,
   locationLabel,
   participantsCount,
   actionPrimary,
@@ -102,10 +106,15 @@ export function SessionHeaderBar({
             </Badge>
           </div>
 
-          {/* H1 nom formation */}
+          {/* H1 nom formation (édition inline si un composant client est passé) */}
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight truncate">
             {title}
           </h1>
+          {/*
+            <h1> accepte string OU composant client (ex: <SessionTitleInline>).
+            Le `truncate` reste appliqué — l'input inline override la largeur
+            via inputClassName si besoin.
+          */}
 
           {/* Sous-titre : date · lieu · inscrits */}
           <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap">
@@ -124,8 +133,8 @@ export function SessionHeaderBar({
             </span>
           </p>
 
-          {/* Méta discrète : durée + tarif */}
-          {(durationHours || pricePerLearner) && (
+          {/* Méta discrète : durée + tarif (édition inline si priceSlot fourni). */}
+          {(durationHours || pricePerLearner !== null || priceSlot) && (
             <p className="text-[11px] text-muted-foreground mt-1 inline-flex items-center gap-x-2 gap-y-0.5 flex-wrap">
               {durationHours && (
                 <span className="inline-flex items-center gap-1">
@@ -133,13 +142,17 @@ export function SessionHeaderBar({
                   {durationHours}h
                 </span>
               )}
-              {durationHours && pricePerLearner ? <span>·</span> : null}
-              {pricePerLearner && (
-                <span className="inline-flex items-center gap-1">
-                  <Euro className="h-3 w-3" aria-hidden="true" />
-                  {fmtEUR.format(pricePerLearner)} / stagiaire
-                </span>
-              )}
+              {durationHours && (priceSlot || pricePerLearner !== null) ? (
+                <span>·</span>
+              ) : null}
+              {priceSlot
+                ? priceSlot
+                : pricePerLearner !== null && (
+                    <span className="inline-flex items-center gap-1">
+                      <Euro className="h-3 w-3" aria-hidden="true" />
+                      {fmtEUR.format(pricePerLearner)} / stagiaire
+                    </span>
+                  )}
             </p>
           )}
         </div>

@@ -49,6 +49,9 @@ import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/part
 import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
+import { SessionTitleInline } from '@/components/sessions/session-title-inline';
+import { SessionPriceInline } from '@/components/sessions/session-price-inline';
+import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -531,13 +534,28 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           deux pilotés par sessionStage() (source unique). Remplace l'ancien
           PageHeader + actions toolbar. Commit ui-b 2026-06-05. */}
       <SessionHeaderBar
-        title={session.name ?? '(session sans nom)'}
+        title={
+          ['ADMIN', 'MANAGER'].includes(user.role) ? (
+            <SessionTitleInline
+              sessionId={session.id}
+              value={session.name}
+              displayClassName="block min-w-0"
+            />
+          ) : (
+            session.name ?? '(session sans nom)'
+          )
+        }
         code={session.code}
         status={session.status}
         startDate={session.startDate}
         endDate={session.endDate}
         durationHours={session.product?.durationHours ?? null}
         pricePerLearner={pricePerLearnerNum}
+        priceSlot={
+          ['ADMIN', 'MANAGER'].includes(user.role) ? (
+            <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />
+          ) : undefined
+        }
         locationLabel={locationLabel}
         participantsCount={session.participants.length}
         backLink={
@@ -920,17 +938,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             }}
           />
 
-          {/* Notes internes (anciennement sidebar) */}
-          {session.internalNotes && (
-            <section className="rounded-xl border border-border bg-white p-5">
-              <h3 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
-                Notes internes
-              </h3>
-              <p className="text-xs text-muted-foreground whitespace-pre-line">
-                {session.internalNotes}
-              </p>
-            </section>
-          )}
+          {/* Notes internes — éditables inline (commit ui-e2). La section
+              reste visible même vide pour permettre l'ajout d'une note. */}
+          <section className="rounded-xl border border-border bg-white p-5">
+            <h3 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
+              Notes internes
+            </h3>
+            <SessionNotesInline
+              sessionId={session.id}
+              value={session.internalNotes}
+              disabled={!['ADMIN', 'MANAGER'].includes(user.role)}
+            />
+          </section>
         </div>
       </details>
 
