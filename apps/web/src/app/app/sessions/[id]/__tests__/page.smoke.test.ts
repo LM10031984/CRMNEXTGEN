@@ -64,6 +64,16 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).toMatch(/<SettingsDrawerSection/);
   });
 
+  it('bulk pack visible : <GenerateClosurePackButton> en actionsSecondary (P1 conformité)', () => {
+    // Garde-fou : GRILLE_OBS_SESSION + SATISFACTION_SESSION ne sont PAS
+    // dans DispatchableDocType — ingénérables à l'unité. Sans ce bouton
+    // visible, ces 2 docs Qualiopi deviennent un trou conformité.
+    // Le composant doit apparaître AU MOINS 2 fois dans la page :
+    // 1× en actionPrimary (slot sessionStage), 1× en actionsSecondary.
+    const matches = pageSrc.match(/<GenerateClosurePackButton/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('timeline 5 étapes : <SessionWorkflowTimeline> + step blocks', () => {
     expect(pageSrc).toMatch(/<SessionWorkflowTimeline/);
     expect(pageSrc).toMatch(/<PreparationPedagogiqueBlock/);

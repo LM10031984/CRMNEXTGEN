@@ -732,6 +732,22 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
               </SettingsDrawerSection>
             </SettingsButton>
+            {/* GenerateClosurePackButton toujours accessible en actionsSecondary
+                (P1 conformité ui-e3, Laurent test 2026-06-08) : les docs
+                niveau session (GRILLE_OBS_SESSION ind 11 + SATISFACTION_SESSION
+                ind 30) ne sont PAS dans DispatchableDocType — donc ingénérables
+                à l'unité. Sans cette affordance bulk visible, ces 2 docs
+                deviennent un trou conformité Qualiopi. Conditionné : on évite
+                le doublon quand sessionStage l'élit déjà en actionPrimary. */}
+            {canWrite
+              && session.participants.length > 0
+              && stage.cta?.kind !== 'generate_pack' && (
+              <GenerateClosurePackButton
+                sessionId={session.id}
+                participantCount={session.participants.length}
+                blockers={sessionCompleteness.blockers}
+              />
+            )}
             {session.status === 'IN_PROGRESS' && (
               <MarkCompletedButton
                 sessionId={session.id}
