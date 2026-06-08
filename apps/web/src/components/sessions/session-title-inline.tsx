@@ -4,6 +4,11 @@
  * Édition inline du nom de la session. Wrap <EditableField>.
  * Schema : SessionNameSchema (source unique partagée avec la modale).
  * Pas de router.refresh() — le titre ne touche pas sessionStage.
+ *
+ * Normalisation "champ vidé" → délégué à `updateSessionDetails`
+ * (normalizeNullableText). Le wrapper envoie le raw string ; l'action
+ * trim et bascule en null si vide. Garde-fou Laurent ui-e2 : "source
+ * unique de normalisation, pas par-wrapper".
  */
 
 import { SessionNameSchema } from '@qualiof/shared/schemas';
@@ -30,7 +35,9 @@ export function SessionTitleInline({
     <EditableField<string | null>
       value={value}
       schema={SessionNameSchema}
-      parse={(raw) => (raw.trim() === '' ? null : raw.trim())}
+      // Pas de coercion '' → null ici : l'action `updateSessionDetails`
+      // s'en charge (normalizeNullableText). Cohérence avec la modale.
+      parse={(raw) => raw}
       serialize={(v) => v ?? ''}
       onSave={async (name) => {
         const r = await updateSessionDetails({ sessionId, name });

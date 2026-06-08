@@ -15,6 +15,7 @@ import {
 } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { normalizeNullableText } from '@/lib/sessions/normalize-nullable-text';
 import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
 
@@ -1027,9 +1028,13 @@ export async function updateSessionDetails(
     return merged;
   };
 
+  // Normalisation "champ vidé" — SOURCE UNIQUE importée depuis
+  // `lib/sessions/normalize-nullable-text.ts`. Consommée par CHAQUE chemin
+  // d'écriture (modale, inline, futur SettingsDrawer).
+
   // name (nullable)
   if (data.name !== undefined) {
-    const newName = data.name === null || data.name === '' ? null : data.name;
+    const newName = normalizeNullableText(data.name);
     if (newName !== session.name) {
       updateData.name = newName;
       before.name = session.name;
@@ -1110,10 +1115,9 @@ export async function updateSessionDetails(
     after.language = data.language;
   }
 
-  // internalNotes (nullable)
+  // internalNotes (nullable) — normalisation via normalizeNullableText.
   if (data.internalNotes !== undefined) {
-    const newNotes =
-      data.internalNotes === null || data.internalNotes === '' ? null : data.internalNotes;
+    const newNotes = normalizeNullableText(data.internalNotes);
     if (newNotes !== session.internalNotes) {
       updateData.internalNotes = newNotes;
       before.internalNotes = session.internalNotes;

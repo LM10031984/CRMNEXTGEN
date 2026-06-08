@@ -520,6 +520,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+  // canEdit : seuls ADMIN/MANAGER éditent les champs structurants (titre,
+  // tarif, notes, capacités, dates). COMMERCIAL peut écrire (inscrire,
+  // générer docs) mais pas modifier la structure de la session.
+  const canEdit = ['ADMIN', 'MANAGER'].includes(user.role);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -535,7 +539,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           PageHeader + actions toolbar. Commit ui-b 2026-06-05. */}
       <SessionHeaderBar
         title={
-          ['ADMIN', 'MANAGER'].includes(user.role) ? (
+          canEdit ? (
             <SessionTitleInline
               sessionId={session.id}
               value={session.name}
@@ -552,7 +556,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         durationHours={session.product?.durationHours ?? null}
         pricePerLearner={pricePerLearnerNum}
         priceSlot={
-          ['ADMIN', 'MANAGER'].includes(user.role) ? (
+          canEdit ? (
             <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />
           ) : undefined
         }
@@ -566,7 +570,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         }
         actionsSecondary={
           <>
-            {['ADMIN', 'MANAGER'].includes(user.role) && (
+            {canEdit && (
               <EditSessionDetailsDialog
                 sessionId={session.id}
                 initial={{
@@ -705,7 +709,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         participantsCount={session.participants.length}
         primaryTrainerName={primaryTrainerName}
         productAiDraftPending={Boolean(session.product?.aiDraftedAt)}
-        canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+        canWrite={canWrite}
       >
         <div id="step-1" className="scroll-mt-20" />
         <StepCreation
@@ -717,7 +721,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           productCode={productCode}
           productAiDraftedAt={session.product?.aiDraftedAt ?? null}
           productProgrammePdfId={programmeProductDocId ?? null}
-          canValidateAi={['ADMIN', 'MANAGER'].includes(user.role)}
+          canValidateAi={canEdit}
           durationHours={productDuration}
           startDate={session.startDate}
           endDate={session.endDate}
@@ -728,7 +732,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           pricePerLearner={pricePerLearnerNum}
           actions={
             <>
-              {['ADMIN', 'MANAGER'].includes(user.role) && (
+              {canEdit && (
                 <EditSessionDetailsDialog
                   sessionId={session.id}
                   initial={{
@@ -745,7 +749,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   }}
                 />
               )}
-              {['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role) && (
+              {canWrite && (
                 <AddParticipantDialog
                   sessionId={session.id}
                   defaultPrice={Number(session.pricePerLearner ?? 0)}
@@ -815,7 +819,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <ParticipantDocsCards
           sessionId={session.id}
           participants={participantCards}
-          canGenerate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+          canGenerate={canWrite}
         />
       </section>
 
@@ -947,7 +951,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <SessionNotesInline
               sessionId={session.id}
               value={session.internalNotes}
-              disabled={!['ADMIN', 'MANAGER'].includes(user.role)}
+              disabled={!canEdit}
             />
           </section>
         </div>

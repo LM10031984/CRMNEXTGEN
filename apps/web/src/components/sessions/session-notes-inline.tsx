@@ -4,6 +4,10 @@
  * Édition inline des notes internes (textarea multiligne).
  * Pas de router.refresh() — les notes n'impactent ni sessionStage ni les
  * calculs dérivés. Cmd/Ctrl + Entrée = sauve (Entrée seule = newline).
+ *
+ * Normalisation "champ vidé" → délégué à `updateSessionDetails`
+ * (normalizeNullableText). Le wrapper envoie le raw string ; l'action
+ * trim et bascule en null si vide. Cohérence avec la modale.
  */
 
 import { SessionInternalNotesSchema } from '@qualiof/shared/schemas';
@@ -21,7 +25,8 @@ export function SessionNotesInline({ sessionId, value, disabled }: Props) {
     <EditableField<string | null>
       value={value}
       schema={SessionInternalNotesSchema}
-      parse={(raw) => (raw === '' ? null : raw)}
+      // Pas de coercion '' → null ici : `updateSessionDetails` normalise.
+      parse={(raw) => raw}
       serialize={(v) => v ?? ''}
       onSave={async (internalNotes) => {
         const r = await updateSessionDetails({ sessionId, internalNotes });

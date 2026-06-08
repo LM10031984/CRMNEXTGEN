@@ -30,6 +30,12 @@ const priceSrc = stripComments(read('session-price-inline.tsx'));
 const notesSrc = stripComments(read('session-notes-inline.tsx'));
 const editableSrc = stripComments(read('editable-field.tsx'));
 const modalSrc = stripComments(read('edit-session-details-dialog.tsx'));
+const actionSrc = stripComments(
+  readFileSync(
+    path.join(__dirname, '..', '..', '..', 'server', 'actions', 'sessions.ts'),
+    'utf8',
+  ),
+);
 
 describe('inline editors — même action que la modale', () => {
   it('SessionTitleInline appelle updateSessionDetails', () => {
@@ -70,6 +76,21 @@ describe('inline editors — même schéma que la modale (source UNIQUE)', () =>
     // Discipline : ne PAS attendre le round-trip serveur pour rejeter un
     // tarif négatif. Le schema par-champ tourne côté client.
     expect(editableSrc).toMatch(/schema\.safeParse\(/);
+  });
+});
+
+describe('normalisation "champ vidé" — source UNIQUE côté action (ui-e2 garde-fou #1)', () => {
+  it('updateSessionDetails importe normalizeNullableText', () => {
+    expect(actionSrc).toMatch(/normalizeNullableText/);
+    expect(actionSrc).toMatch(/from\s+['"]@\/lib\/sessions\/normalize-nullable-text['"]/);
+  });
+
+  it('aucun wrapper inline ne fait sa propre coercion "" → null', () => {
+    // Anti-régression : si quelqu'un remet `raw === '' ? null : raw` côté
+    // wrapper, la modale et l'inline divergent à nouveau sur le vide.
+    expect(titleSrc).not.toMatch(/raw\.trim\(\)\s*===\s*['"]{2}/);
+    expect(titleSrc).not.toMatch(/raw\s*===\s*['"]{2}\s*\?\s*null/);
+    expect(notesSrc).not.toMatch(/raw\s*===\s*['"]{2}\s*\?\s*null/);
   });
 });
 

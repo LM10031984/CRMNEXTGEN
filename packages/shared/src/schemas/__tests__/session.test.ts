@@ -270,10 +270,12 @@ describe('SessionInternalNotesSchema (per-field)', () => {
     expect(SessionInternalNotesSchema.parse(null)).toBeNull();
   });
 
-  it('accepte une chaîne vide (vide ≠ null)', () => {
-    // Choix wrapper inline : raw === '' → parse retourne null. Le schema
-    // accepte les deux. Ce test garantit qu'on ne casse pas la modale
-    // qui peut envoyer '' depuis un textarea.
+  it('accepte une chaîne vide — la normalisation vit côté action, pas côté schema', () => {
+    // Choix architectural ui-e2 : modale ET inline envoient leur raw au
+    // serveur. La server action (updateSessionDetails) appelle
+    // `normalizeNullableText` qui transforme '' / '   ' / null en null
+    // canonique. Le schema accepte '' pour que les deux chemins
+    // d'écriture compilent sans coercion par-wrapper.
     expect(SessionInternalNotesSchema.parse('')).toBe('');
   });
 });
