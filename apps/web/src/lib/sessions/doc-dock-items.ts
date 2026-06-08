@@ -6,7 +6,7 @@
  * génération pour chaque doc pré-formation Qualiopi.
  */
 
-import type { DocDockItem } from '@/components/sessions/doc-dock';
+import type { DocDockItem } from './dispatch-doc-types';
 
 interface BuildInput {
   // Partagés produit/session

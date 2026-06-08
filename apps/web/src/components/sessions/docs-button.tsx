@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { DocDockDrawer } from './doc-dock-drawer';
-import type { DocDockItem } from './doc-dock';
+import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
 
 interface Props {
   sessionId: string;

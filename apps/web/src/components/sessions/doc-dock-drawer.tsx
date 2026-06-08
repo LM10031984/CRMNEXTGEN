@@ -47,7 +47,7 @@ import {
   dispatchGenerateMissing,
 } from '@/server/actions/dispatch-generate-doc';
 import { docCompletion } from '@/lib/sessions/doc-completion';
-import type { DocDockItem } from '@/components/sessions/doc-dock';
+import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
 
 interface Props {
   open: boolean;
