@@ -17,9 +17,18 @@ import path from 'node:path';
  * critique.
  */
 
-const pageSrc = readFileSync(
-  path.join(__dirname, '..', 'page.tsx'),
-  'utf8',
+/** Strippe les commentaires JSDoc + // pour éviter les faux positifs sur
+ *  des termes documentés dans des commentaires (ex: "<details> 'Paramètres
+ *  avancés' supprimé"). */
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
+const pageSrc = stripComments(
+  readFileSync(path.join(__dirname, '..', 'page.tsx'), 'utf8'),
 );
 
 describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
@@ -45,6 +54,14 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     // DocsButton ouvre <DocDockDrawer>. Sans ce composant en haut, plus
     // aucun accès au drawer depuis la fiche.
     expect(pageSrc).toMatch(/<DocsButton/);
+  });
+
+  it('hub paramètres : <SettingsButton> dans la barre actions (ui-e3)', () => {
+    // SettingsButton ouvre <SettingsDrawer> qui contient les 6 sections
+    // (Tâches, Formateurs, Lieu, Logistique, Notes, Satisfaction).
+    expect(pageSrc).toMatch(/<SettingsButton/);
+    // Et les sections sont passées en children via <SettingsDrawerSection>.
+    expect(pageSrc).toMatch(/<SettingsDrawerSection/);
   });
 
   it('timeline 5 étapes : <SessionWorkflowTimeline> + step blocks', () => {
@@ -81,6 +98,13 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).not.toMatch(/<SessionOnlyDocsBlock/);
   });
 
+  it('plus de <details> "Paramètres avancés" (migré en SettingsDrawer ui-e3)', () => {
+    // Anti-régression : si quelqu'un ré-ajoute ce <details>, on a deux
+    // hubs paramètres concurrents (drawer + accordeon). Le drawer est la
+    // seule porte d'entrée maintenant.
+    expect(pageSrc).not.toMatch(/Paramètres avancés/);
+  });
+
   // ─── Paramètres session (zone qui sera migrée vers SettingsDrawer en ui-e3) ──
   // Assertions posées AVANT la transformation pour préserver le filet.
   // Discipline Laurent ui-e3 : "le smoke doit rester vert avant la première
@@ -113,10 +137,17 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
 
   it('anchors préservés #section-formateurs + #section-lieu + #section-logistique', () => {
     // Ces anchors sont des cibles potentielles de liens hash (CTAs sessionStage,
-    // erreurs SessionCompleteness). Ils doivent survivre à toute migration UI.
-    expect(pageSrc).toMatch(/id=["']section-formateurs["']/);
-    expect(pageSrc).toMatch(/id=["']section-lieu["']/);
-    expect(pageSrc).toMatch(/id=["']section-logistique["']/);
+    // erreurs SessionCompleteness). Ils doivent survivre à toute migration UI —
+    // que ce soit un `id="..."` direct OU `anchorId="..."` propagé au runtime
+    // par <SettingsDrawerSection>.
+    for (const anchor of ['section-formateurs', 'section-lieu', 'section-logistique']) {
+      const idMatch = new RegExp(`id=["']${anchor}["']`).test(pageSrc);
+      const anchorIdMatch = new RegExp(`anchorId=["']${anchor}["']`).test(pageSrc);
+      expect(
+        idMatch || anchorIdMatch,
+        `anchor #${anchor} doit exister via id="${anchor}" ou anchorId="${anchor}"`,
+      ).toBe(true);
+    }
   });
 
   // ─── Bug P0 anti-régression — Phase 9.1 ────────────────────────────────

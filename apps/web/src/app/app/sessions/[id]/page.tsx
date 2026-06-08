@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -52,6 +52,8 @@ import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
 import { SessionTitleInline } from '@/components/sessions/session-title-inline';
 import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
+import { SettingsButton } from '@/components/sessions/settings-button';
+import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -593,6 +595,143 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               items={docDockItems}
               canGenerate={canWrite}
             />
+            {/* Hub Paramètres — ouvre <SettingsDrawer> (commit ui-e3).
+                Remplace le <details> "Paramètres avancés" en bas de page. */}
+            <SettingsButton>
+              <SettingsDrawerSection
+                title="Tâches session"
+                anchorId="section-tasks"
+                icon={<ListChecks className="h-3 w-3" aria-hidden="true" />}
+              >
+                <SessionTasksPanel sessionId={session.id} tenantId={user.tenantId} />
+              </SettingsDrawerSection>
+
+              <SettingsDrawerSection
+                title="Formateurs"
+                anchorId="section-formateurs"
+                icon={<Users className="h-3 w-3" aria-hidden="true" />}
+              >
+                {session.trainers.length === 0 ? (
+                  <div className="space-y-3 py-2">
+                    <p className="text-sm text-orange-700">
+                      <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                      Aucun formateur rattaché. Indispensable pour générer les docs Qualiopi.
+                    </p>
+                    <SessionTrainerPicker sessionId={session.id} setAsPrimary />
+                  </div>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-border">
+                      {session.trainers.map((t) => (
+                        <li key={t.id} className="flex items-center gap-3 py-2">
+                          <PrimaryTrainerToggle
+                            sessionId={session.id}
+                            personId={t.person.id}
+                            personName={`${t.person.firstName} ${t.person.lastName}`}
+                            isPrimary={t.isPrimary}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-sm truncate">
+                              {t.person.firstName} {t.person.lastName}
+                            </span>
+                          </div>
+                          {t.isPrimary && (
+                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded shrink-0">
+                              Principal
+                            </span>
+                          )}
+                          <RemoveTrainerButton
+                            sessionId={session.id}
+                            personId={t.person.id}
+                            personName={`${t.person.firstName} ${t.person.lastName}`}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-muted-foreground mb-2">Ajouter un autre formateur :</p>
+                      <SessionTrainerPicker sessionId={session.id} setAsPrimary={false} />
+                    </div>
+                  </>
+                )}
+              </SettingsDrawerSection>
+
+              <SettingsDrawerSection
+                title="Lieu de formation"
+                anchorId="section-lieu"
+                icon={<MapPin className="h-3 w-3" aria-hidden="true" />}
+              >
+                {session.location ? (
+                  <div className="space-y-3">
+                    <div className="text-sm">
+                      <div className="font-medium">{session.location.name}</div>
+                      {(() => {
+                        const addr = session.location.address as
+                          | { street?: string; postalCode?: string; city?: string }
+                          | null;
+                        if (!addr) return null;
+                        return (
+                          <div className="text-muted-foreground text-xs mt-1">
+                            {[addr.street, [addr.postalCode, addr.city].filter(Boolean).join(' ')]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="pt-2 border-t border-border/60">
+                      <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
+                      <SessionLocationPicker sessionId={session.id} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 py-2">
+                    <p className="text-sm text-orange-700">
+                      <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                      {session.modality === 'DISTANCIEL'
+                        ? 'Aucun lieu défini (distanciel — facultatif).'
+                        : 'Aucun lieu défini. Indispensable en présentiel.'}
+                    </p>
+                    <SessionLocationPicker sessionId={session.id} />
+                  </div>
+                )}
+              </SettingsDrawerSection>
+
+              <SettingsDrawerSection
+                title="Logistique (PSH + hébergement)"
+                anchorId="section-logistique"
+                icon={<ClipboardList className="h-3 w-3" aria-hidden="true" />}
+              >
+                <SessionLogisticsEditor
+                  sessionId={session.id}
+                  initial={{
+                    needsTrainerLodging: session.needsTrainerLodging,
+                    trainerLodgingPlace: session.trainerLodgingPlace,
+                    trainerLodgingDates: session.trainerLodgingDates,
+                    hasDisabledLearner: session.hasDisabledLearner,
+                    disabilityAdaptations: session.disabilityAdaptations,
+                  }}
+                />
+              </SettingsDrawerSection>
+
+              <SettingsDrawerSection
+                title="Notes internes"
+                icon={<StickyNote className="h-3 w-3" aria-hidden="true" />}
+              >
+                <SessionNotesInline
+                  sessionId={session.id}
+                  value={session.internalNotes}
+                  disabled={!canEdit}
+                />
+              </SettingsDrawerSection>
+
+              <SettingsDrawerSection
+                title="Satisfaction (post-formation)"
+                icon={<SmilePlus className="h-3 w-3" aria-hidden="true" />}
+              >
+                <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
+              </SettingsDrawerSection>
+            </SettingsButton>
             {session.status === 'IN_PROGRESS' && (
               <MarkCompletedButton
                 sessionId={session.id}
@@ -683,8 +822,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         />
       )}
 
-      {/* Tasks TODO sur cette session (signalisation 🔴 formateur, etc.) */}
-      <SessionTasksPanel sessionId={session.id} tenantId={user.tenantId} />
+      {/* SessionTasksPanel migré dans le <SettingsDrawer> (commit ui-e3).
+          Le badge tasks reste accessible via le bouton "Paramètres" du
+          SessionHeaderBar. */}
 
       {/* Bloc "Dossier Qualiopi %" supprimé — redondant avec la barre conformité
           Qualiopi du Hero (9 indicateurs) qui couvre déjà cette info, et son
@@ -823,139 +963,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         />
       </section>
 
-      {/* Paramètres avancés — replié par défaut. Contient : changer formateur
-          principal, changer lieu, modifier logistique (PSH/hébergement), voir
-          panel satisfaction. Tout regroupé en UN endroit pour ne pas polluer la
-          vue principale (Laurent 2026-06-04 : "trop d'infos brouillon"). */}
-      <details className="group rounded-2xl border border-border bg-white overflow-hidden">
-        <summary className="cursor-pointer list-none p-4 flex items-center gap-2 hover:bg-muted/20 transition-colors [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Paramètres avancés · formateurs · lieu · satisfaction · logistique · notes
-          </span>
-        </summary>
-        <div className="border-t border-border p-4 sm:p-6 bg-muted/10 space-y-5">
-          {/* Formateurs */}
-          <section id="section-formateurs" className="rounded-xl border border-border bg-white p-5 scroll-mt-20">
-            <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
-              Formateurs
-            </h3>
-            {session.trainers.length === 0 ? (
-              <div className="space-y-3 py-2">
-                <p className="text-sm text-orange-700">
-                  <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
-                  Aucun formateur rattaché. Indispensable pour générer les docs Qualiopi.
-                </p>
-                <SessionTrainerPicker sessionId={session.id} setAsPrimary />
-              </div>
-            ) : (
-              <>
-                <ul className="divide-y divide-border">
-                  {session.trainers.map((t) => (
-                    <li key={t.id} className="flex items-center gap-3 py-2">
-                      <PrimaryTrainerToggle
-                        sessionId={session.id}
-                        personId={t.person.id}
-                        personName={`${t.person.firstName} ${t.person.lastName}`}
-                        isPrimary={t.isPrimary}
-                      />
-                      <div className="flex-1">
-                        <span className="font-medium text-sm">
-                          {t.person.firstName} {t.person.lastName}
-                        </span>
-                      </div>
-                      {t.isPrimary && (
-                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                          Principal — signe les docs
-                        </span>
-                      )}
-                      <RemoveTrainerButton
-                        sessionId={session.id}
-                        personId={t.person.id}
-                        personName={`${t.person.firstName} ${t.person.lastName}`}
-                      />
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-xs text-muted-foreground mb-2">Ajouter un autre formateur :</p>
-                  <SessionTrainerPicker sessionId={session.id} setAsPrimary={false} />
-                </div>
-              </>
-            )}
-          </section>
-
-          {/* Lieu */}
-          <section id="section-lieu" className="rounded-xl border border-border bg-white p-5 scroll-mt-20">
-            <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground mb-3">
-              Lieu de formation
-            </h3>
-            {session.location ? (
-              <div className="space-y-3">
-                <div className="text-sm">
-                  <div className="font-medium">{session.location.name}</div>
-                  {(() => {
-                    const addr = session.location.address as
-                      | { street?: string; postalCode?: string; city?: string }
-                      | null;
-                    if (!addr) return null;
-                    return (
-                      <div className="text-muted-foreground mt-1">
-                        {[addr.street, [addr.postalCode, addr.city].filter(Boolean).join(' ')]
-                          .filter(Boolean)
-                          .join(', ')}
-                      </div>
-                    );
-                  })()}
-                </div>
-                <div className="pt-2 border-t border-border/60">
-                  <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
-                  <SessionLocationPicker sessionId={session.id} />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 py-2">
-                <p className="text-sm text-orange-700">
-                  <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
-                  {session.modality === 'DISTANCIEL'
-                    ? 'Aucun lieu défini (distanciel — facultatif).'
-                    : 'Aucun lieu de formation défini. Indispensable pour les sessions présentielles.'}
-                </p>
-                <SessionLocationPicker sessionId={session.id} />
-              </div>
-            )}
-          </section>
-
-          {/* Satisfaction (post-formation) */}
-          <SessionSatisfactionPanel sessionId={session.id} tenantId={user.tenantId} />
-
-          {/* Logistique session (Qualiopi C4.i17 — PSH + hébergement formateur) */}
-          <div id="section-logistique" className="scroll-mt-20" />
-          <SessionLogisticsEditor
-            sessionId={session.id}
-            initial={{
-              needsTrainerLodging: session.needsTrainerLodging,
-              trainerLodgingPlace: session.trainerLodgingPlace,
-              trainerLodgingDates: session.trainerLodgingDates,
-              hasDisabledLearner: session.hasDisabledLearner,
-              disabilityAdaptations: session.disabilityAdaptations,
-            }}
-          />
-
-          {/* Notes internes — éditables inline (commit ui-e2). La section
-              reste visible même vide pour permettre l'ajout d'une note. */}
-          <section className="rounded-xl border border-border bg-white p-5">
-            <h3 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
-              Notes internes
-            </h3>
-            <SessionNotesInline
-              sessionId={session.id}
-              value={session.internalNotes}
-              disabled={!canEdit}
-            />
-          </section>
-        </div>
-      </details>
+      {/* <details> "Paramètres avancés" supprimé (commit ui-e3) — tout le
+          contenu (Formateurs/Lieu/Logistique/Notes/Satisfaction/Tasks) vit
+          désormais dans <SettingsDrawer>, ouvert via le bouton "Paramètres"
+          du SessionHeaderBar (à côté de "Documents"). Les CTAs sessionStage
+          pointant vers #section-formateurs/lieu/logistique ouvrent le drawer
+          automatiquement via hash-detection (SettingsButton useEffect). */}
 
       {/* Vue tableau Qualiopi — matrice ParticipantDocMatrix réintroduite ici
           (commit ui-d). Cible du lien "Vue tableau" du DocDockDrawer footer.
