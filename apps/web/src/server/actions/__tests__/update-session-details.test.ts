@@ -284,4 +284,39 @@ describe('updateSessionDetails — normalisation "champ vidé" (ui-e2)', () => {
     expect(audit.data.diff.before.internalNotes).toBe('Old notes');
     expect(audit.data.diff.after.internalNotes).toBeNull();
   });
+
+  // ─── Contre-test "filet réel, pas vert creux" (Laurent ui-e2 gate) ─────
+  // Si la normalisation est court-circuitée, l'action écrit `'   '` brut
+  // dans updateData (différent de session.internalNotes === null) →
+  // prisma.trainingSession.update appelé. Ce test pète immédiatement
+  // dans ce cas.
+
+  it("baseline internalNotes === null + input '   ' → no-op (la normalisation TIENT)", async () => {
+    findFirst.mockReset();
+    findFirst.mockResolvedValueOnce({ ...EXISTING_SESSION, internalNotes: null });
+
+    const res = await updateSessionDetails({
+      sessionId: SESSION_ID,
+      internalNotes: '   ',
+    });
+
+    expect(res.ok).toBe(true);
+    // Sans normalisation : updateData.internalNotes = '   ' ≠ null → update CALLED.
+    // Avec normalisation : '   ' → null === session.internalNotes → no-op.
+    expect(updateSession).not.toHaveBeenCalled();
+    expect(auditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("baseline name === null + input '' → no-op (la normalisation TIENT)", async () => {
+    findFirst.mockReset();
+    findFirst.mockResolvedValueOnce({ ...EXISTING_SESSION, name: null });
+
+    const res = await updateSessionDetails({
+      sessionId: SESSION_ID,
+      name: '',
+    });
+
+    expect(res.ok).toBe(true);
+    expect(updateSession).not.toHaveBeenCalled();
+  });
 });
