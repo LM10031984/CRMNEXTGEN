@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from 'lucide-react';
 import type { SessionPreparationStatus } from '@/server/actions/prepare-training';
 import type { SessionClosureStatus } from '@/server/actions/closure-status';
 
@@ -9,8 +9,10 @@ import type { SessionClosureStatus } from '@/server/actions/closure-status';
  * 3 zones coordonnées :
  *   1. Hero "Prochaine étape" — détecte l'étape attendue selon statut session
  *      + état préparation + état pack closure. Affiche un CTA contextuel énorme.
- *   2. Barre conformité Qualiopi — 9 indicateurs métier (1, 6, 8, 9, 10, 11,
- *      17, 27, 30), score X/9, vert/ambre/gris par indic.
+ *   2. Conformité Qualiopi — 9 indicateurs métier (1, 6, 8, 9, 10, 11, 17,
+ *      27, 30), score X/9. **Collapsée par défaut (commit ui-e3)** — chip
+ *      score visible en summary, détail par indic révélé au clic. Évite la
+ *      surcharge visuelle hors-audit.
  *   3. Timeline 5 étapes (children) — passés en props pour que la page session
  *      composer ait la main sur les blocks à afficher.
  *
@@ -66,14 +68,17 @@ export function SessionWorkflowTimeline({
   void productAiDraftPending;
   void canWrite;
 
-  // Conformité Qualiopi (9 piliers) — sera mis derrière toggle en commit ui-e
+  // Conformité Qualiopi (9 piliers) — collapsée par défaut depuis ui-e3.
+  // Score X/9 reste visible en summary pour la lecture audit, le détail
+  // par indicateur est révélé au clic. Évite la surcharge visuelle quand
+  // l'audit n'est pas en cours.
   const pillars = computeQualiopiPillars(prep, closure);
   const okCount = pillars.filter((p) => p.done).length;
 
   return (
     <div className="space-y-6">
-      {/* Barre conformité Qualiopi — vue audit en un coup d'œil */}
-      <QualiopiPillarBar pillars={pillars} okCount={okCount} />
+      {/* Conformité Qualiopi — vue audit collapsée par défaut (ui-e3) */}
+      <ConformityToggle pillars={pillars} okCount={okCount} />
 
       {/* Timeline 5 étapes — les blocks sont composés par la page session */}
       <div className="space-y-4">{children}</div>
@@ -161,7 +166,17 @@ function NextStepHero({ step, canWrite }: { step: NextStep; canWrite: boolean })
   );
 }
 
-function QualiopiPillarBar({
+/**
+ * ConformityToggle — encapsule QualiopiPillarBar derrière un <details>
+ * fermé par défaut (commit ui-e3 #4).
+ *
+ * Le score "X/9 ✓" reste visible dans le summary (lecture audit en un
+ * coup d'œil sans ouvrir). Le détail par indicateur est révélé au clic.
+ *
+ * Pattern <details> natif HTML : pas de state React, fonctionne sans JS,
+ * cohérent avec les autres collapsibles de la page (matrice doc, etc.).
+ */
+function ConformityToggle({
   pillars,
   okCount,
 }: {
@@ -170,49 +185,64 @@ function QualiopiPillarBar({
 }) {
   const total = pillars.length;
   const pct = total > 0 ? Math.round((okCount / total) * 100) : 0;
-  return (
-    <section
-      aria-labelledby="qualiopi-pillars"
-      className="rounded-2xl border border-border bg-white p-5"
-    >
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-          <h2
-            id="qualiopi-pillars"
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-          >
-            Conformité Qualiopi — 9 indicateurs clés
-          </h2>
-        </div>
-        <div className="text-sm">
-          <span className="tabular-nums font-bold text-foreground">{okCount}</span>
-          <span className="text-muted-foreground">/{total} couverts</span>
-          <span className="ml-2 text-xs text-muted-foreground">({pct}%)</span>
-        </div>
-      </div>
+  // Tonalité du chip score : verte si complet, ambre si partiel, gris si vide.
+  const chipClass =
+    okCount === 0
+      ? 'bg-slate-50 border-slate-200 text-slate-600'
+      : okCount === total
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        : 'bg-amber-50 border-amber-200 text-amber-700';
 
-      {/* Barre par indicateur — visuellement claire pour audit */}
-      <ul
-        className="grid grid-cols-3 sm:grid-cols-9 gap-1.5"
-        aria-label="Indicateurs Qualiopi"
+  return (
+    <details className="group rounded-2xl border border-border bg-white overflow-hidden">
+      <summary className="cursor-pointer list-none p-4 flex items-center gap-3 hover:bg-muted/20 transition-colors [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90 shrink-0"
+          aria-hidden="true"
+        />
+        <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" aria-hidden="true" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex-1">
+          Conformité Qualiopi — 9 indicateurs clés
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border tabular-nums ${chipClass}`}
+        >
+          {okCount}/{total}
+          <span className="text-[10px] font-normal opacity-70">({pct}%)</span>
+        </span>
+      </summary>
+
+      <section
+        aria-labelledby="qualiopi-pillars"
+        className="border-t border-border p-4 sm:p-5 bg-muted/10"
       >
-        {pillars.map((p) => (
-          <li
-            key={p.ind}
-            title={`${p.ind} — ${p.label}${p.hint ? ' · ' + p.hint : ''}`}
-            className={`rounded-md px-2 py-1.5 text-center border transition-colors ${
-              p.done
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-slate-50 border-slate-200 text-slate-500'
-            }`}
-          >
-            <div className="text-[10px] font-mono font-semibold leading-tight">{p.ind}</div>
-            <div className="text-[9px] leading-tight mt-0.5 truncate">{p.label}</div>
-          </li>
-        ))}
-      </ul>
-    </section>
+        <h2
+          id="qualiopi-pillars"
+          className="sr-only"
+        >
+          Conformité Qualiopi — 9 indicateurs clés
+        </h2>
+        <ul
+          className="grid grid-cols-3 sm:grid-cols-9 gap-1.5"
+          aria-label="Indicateurs Qualiopi"
+        >
+          {pillars.map((p) => (
+            <li
+              key={p.ind}
+              title={`${p.ind} — ${p.label}${p.hint ? ' · ' + p.hint : ''}`}
+              className={`rounded-md px-2 py-1.5 text-center border transition-colors ${
+                p.done
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-slate-50 border-slate-200 text-slate-500'
+              }`}
+            >
+              <div className="text-[10px] font-mono font-semibold leading-tight">{p.ind}</div>
+              <div className="text-[9px] leading-tight mt-0.5 truncate">{p.label}</div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </details>
   );
 }
 
