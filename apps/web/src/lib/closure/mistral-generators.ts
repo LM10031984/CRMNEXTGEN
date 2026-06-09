@@ -13,6 +13,9 @@
  */
 
 import { z } from 'zod';
+import { childLogger } from '@/lib/logger';
+
+const log = childLogger('mistral');
 import { prisma } from '@qualiof/db';
 import { callMistral } from '@/lib/ai-mistral';
 import {
@@ -410,7 +413,7 @@ async function tryOnce<T>(
         .join(' / ');
       return { ok: false, reason: `Schema invalide : ${msg}`, latencyMs };
     }
-    console.log(`[mistral-${taskName}] ✓ ${latencyMs}ms (model=${MODEL}, prompt=${PROMPT_VERSION})`);
+    log.info({ taskName, latencyMs, model: MODEL, promptVersion: PROMPT_VERSION }, 'mistral.ok');
     return { ok: true, data: parsed.data, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - startedAt;
@@ -591,11 +594,14 @@ async function runMistralJson<T>(
           data: { status: 'done', latencyMs: totalLatency, retries: attempt - 1 },
         });
       }
-      if (attempt > 1) console.log(`[mistral-${taskName}] ✓ après retry #${attempt - 1}`);
+      if (attempt > 1) log.info({ taskName, attempt }, 'mistral.retry.ok');
       return r.data;
     }
     lastReason = r.reason;
-    console.warn(`[mistral-${taskName}] attempt ${attempt}/${MAX_ATTEMPTS} KO (${r.latencyMs}ms): ${r.reason.slice(0, 120)}`);
+    log.warn(
+      { taskName, attempt, maxAttempts: MAX_ATTEMPTS, latencyMs: r.latencyMs, reason: r.reason.slice(0, 120) },
+      'mistral.attempt.failed',
+    );
     // Petit backoff entre 2 tentatives
     if (attempt < MAX_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
   }

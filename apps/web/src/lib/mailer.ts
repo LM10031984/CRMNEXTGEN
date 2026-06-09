@@ -18,6 +18,9 @@
 
 import nodemailer, { type Transporter } from 'nodemailer';
 import { getOfConfig } from './of-config';
+import { childLogger } from './logger';
+
+const log = childLogger('mailer');
 
 export interface SendMailInput {
   to: string;
@@ -76,7 +79,7 @@ function getTransporter(): Transporter {
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const from = getFromAddress();
   if (isDryRun()) {
-    console.log(`[mailer:dry-run] to=${input.to} subject="${input.subject}" (no SMTP_HOST configuré)`);
+    log.info({ to: input.to, subject: input.subject }, 'dry-run');
     return { ok: true, dryRun: true };
   }
   try {
@@ -89,9 +92,10 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       replyTo: process.env.MAIL_REPLY_TO,
       attachments: input.attachments,
     });
+    log.info({ to: input.to, messageId: info.messageId }, 'sent');
     return { ok: true, messageId: info.messageId };
   } catch (e: any) {
-    console.error('[mailer] send failed', e?.message ?? e);
+    log.error({ to: input.to, err: { message: e?.message ?? String(e) } }, 'send.failed');
     return { ok: false, error: e?.message ?? String(e) };
   }
 }

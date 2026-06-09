@@ -20,12 +20,15 @@
 
 import { Worker, type Job } from 'bullmq';
 import { prisma } from '@qualiof/db';
+import { childLogger } from '@/lib/logger';
 import { getWorkerRedis } from '../closure/redis';
 import { sendInvoiceReminder } from '@/server/actions/invoices';
 import {
   getInvoiceReminderQueue,
   INVOICE_REMINDER_QUEUE_NAME,
 } from './queue';
+
+const log = childLogger('invoice-reminder-worker');
 
 /**
  * R2 (RESEARCH §Risques) — Date de mise en service Phase 11.
@@ -49,9 +52,7 @@ const REMINDER_DEDUP_MS = 24 * 60 * 60 * 1000;
 export async function processReminderJob(
   job: Job<ReminderJobPayload>,
 ): Promise<{ processed: number }> {
-  console.log('[invoice-reminder-worker] tick', {
-    triggered_by: job.data.triggered_by,
-  });
+  log.info({ triggered_by: job.data.triggered_by }, 'tick');
 
   const tenants = await prisma.tenant.findMany({
     select: { id: true, invoiceReminderDays: true },
@@ -106,7 +107,7 @@ export async function processReminderJob(
     }
   }
 
-  console.log('[invoice-reminder-worker] processed', { processed });
+  log.info({ processed }, 'processed');
   return { processed };
 }
 
@@ -121,24 +122,19 @@ export function startInvoiceReminderWorker(): Worker<ReminderJobPayload> {
   );
 
   worker.on('completed', (job, result) => {
-    console.log('[invoice-reminder-worker] completed', {
-      jobId: job.id,
-      result,
-    });
+    log.info({ jobId: job.id, result }, 'job.completed');
   });
   worker.on('failed', (job, err) => {
-    console.error('[invoice-reminder-worker] failed', {
-      jobId: job?.id,
-      err: err.message,
-    });
+    log.error(
+      { jobId: job?.id, err: { message: err.message, stack: err.stack } },
+      'job.failed',
+    );
   });
   worker.on('error', (err) => {
-    console.error('[invoice-reminder-worker] error', err);
+    log.error({ err: { message: err.message, stack: err.stack } }, 'worker.error');
   });
 
-  console.log(
-    `[invoice-reminder-worker] started (queue="${INVOICE_REMINDER_QUEUE_NAME}")`,
-  );
+  log.info({ queueName: INVOICE_REMINDER_QUEUE_NAME }, 'worker.started');
   return worker;
 }
 
@@ -158,7 +154,5 @@ export async function scheduleDailyReminders(): Promise<void> {
       jobId: 'daily-reminders-cron',
     },
   );
-  console.log(
-    '[invoice-reminder-worker] daily cron registered (08:00 Europe/Paris)',
-  );
+  log.info({ cron: '0 8 * * *', tz: 'Europe/Paris' }, 'cron.registered');
 }
