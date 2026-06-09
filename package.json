@@ -7,7 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "pnpm --filter @qualiof/db exec prisma generate",
     "build": "turbo run build",
+    "build:vercel": "pnpm --filter @qualiof/db exec prisma generate && pnpm --filter @qualiof/web build",
     "dev": "turbo run dev --parallel",
     "dev:full": "pnpm --filter @qualiof/web dev:full",
     "clean": "pnpm --filter @qualiof/web clean",
