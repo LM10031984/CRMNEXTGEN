@@ -9,10 +9,41 @@
  * fournies (les autres restent inchangées).
  */
 
-import { Prisma, prisma, encryptSensitive } from '@qualiof/db';
+import { Prisma, prisma, encryptSensitive, type UserRole } from '@qualiof/db';
+import type { User as LuciaUser } from 'lucia';
 import { revalidatePath } from 'next/cache';
-import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+
+/**
+ * Sprint 3 — Helper RBAC local pour les server actions CRUD.
+ *
+ * Avant ce sprint, toutes les fonctions du fichier utilisaient
+ * `validateRequest()` sans aucun check de rôle → tout utilisateur
+ * authentifié (même LECTEUR ou COMPTABLE) pouvait éditer Person /
+ * Organization / Product. C'est une faille critique corrigée ici.
+ *
+ * Les 4 fonctions `delete*` avaient déjà `requireRole(['ADMIN', 'MANAGER'])` —
+ * on aligne le reste sur le même pattern, avec des matrices de rôles
+ * adaptées par type d'entité.
+ */
+async function authWithRole(
+  roles: UserRole[],
+): Promise<{ ok: true; user: LuciaUser } | { ok: false; error: string }> {
+  try {
+    const user = await requireRole(roles);
+    return { ok: true, user };
+  } catch (e) {
+    if (e instanceof UnauthorizedError) return { ok: false, error: 'Non authentifié.' };
+    if (e instanceof ForbiddenError) return { ok: false, error: 'Accès refusé pour ce rôle.' };
+    throw e;
+  }
+}
+
+/** Édition de personnes physiques + organisations clientes. */
+const PERSON_ORG_EDIT_ROLES: UserRole[] = ['ADMIN', 'MANAGER', 'COMMERCIAL'];
+
+/** Édition du catalogue produits + formateurs (back-office formation). */
+const PRODUCT_TRAINER_EDIT_ROLES: UserRole[] = ['ADMIN', 'MANAGER'];
 
 // ── Person ────────────────────────────────────────────────────────────────
 export async function updatePerson(input: {
@@ -30,8 +61,9 @@ export async function updatePerson(input: {
   professionalStatus?: string | null;
   bpfDefaultStatus?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PERSON_ORG_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
 
   const person = await prisma.person.findFirst({
     where: { id: input.personId, tenantId: user.tenantId },
@@ -80,8 +112,9 @@ export async function updateOrganization(input: {
   network?: string | null;
   activityDescription?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PERSON_ORG_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
 
   const org = await prisma.organization.findFirst({
     where: { id: input.organizationId, tenantId: user.tenantId },
@@ -127,8 +160,9 @@ export async function updateTrainingProduct(input: {
   accessibility?: string | null;
   accessConditions?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PRODUCT_TRAINER_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
 
   const product = await prisma.trainingProduct.findFirst({
     where: { id: input.productId, tenantId: user.tenantId },
@@ -188,8 +222,9 @@ export async function createTrainingProduct(input: {
   accessibility?: string | null;
   accessConditions?: string | null;
 }): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PRODUCT_TRAINER_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
   const title = input.title.trim();
   if (!title) return { ok: false, error: 'Intitulé obligatoire.' };
   if (!input.durationHours || input.durationHours <= 0) {
@@ -244,8 +279,9 @@ export async function createTrainer(input: {
   email?: string | null;
   phone?: string | null;
 }): Promise<{ ok: boolean; personId?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PRODUCT_TRAINER_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
   if (!input.firstName.trim() || !input.lastName.trim()) {
     return { ok: false, error: 'Nom et prénom requis.' };
   }
@@ -311,8 +347,9 @@ export async function createPerson(input: {
   // Pour créer une enseigne à la volée si elle n'existe pas (UX wizard).
   enseigneNewName?: string | null;
 }): Promise<{ ok: boolean; personId?: string; primaryOrgId?: string; enseigneOrgId?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PERSON_ORG_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
   if (!input.firstName.trim() || !input.lastName.trim()) {
     return { ok: false, error: 'Nom et prénom requis.' };
   }
@@ -490,8 +527,9 @@ export async function createOrganization(input: {
   siret?: string | null;
   opcoCode?: string | null;
 }): Promise<{ ok: boolean; orgId?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PERSON_ORG_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
   if (!input.legalName.trim()) return { ok: false, error: 'Raison sociale requise.' };
   if (!VALID_LEGAL_FORMS.includes(input.legalForm)) return { ok: false, error: 'Forme juridique invalide.' };
   const siret = input.siret?.replace(/\s+/g, '') || null;
@@ -524,8 +562,9 @@ export async function createProduct(input: {
   capacityMax?: number | null;
   autoFillWithAI?: boolean;
 }): Promise<{ ok: boolean; productId?: string; code?: string; aiFilled?: boolean; aiError?: string; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
+  const auth = await authWithRole(PRODUCT_TRAINER_EDIT_ROLES);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { user } = auth;
   if (!input.title.trim()) return { ok: false, error: 'Titre requis.' };
   if (!input.durationHours || input.durationHours <= 0) return { ok: false, error: 'Durée invalide.' };
   if (!VALID_MODALITIES.includes(input.modality)) return { ok: false, error: 'Modalité invalide.' };
