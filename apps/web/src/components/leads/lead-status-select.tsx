@@ -1,20 +1,20 @@
 'use client';
 
-import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import type { LeadStatus } from '@qualiof/db';
 import { updateLeadStatus } from '@/server/actions/leads';
+import { useServerAction } from '@/lib/hooks/use-server-action';
 
 /**
  * Select inline statut Lead (Phase 9 Plan 09-03 — LEAD-02).
  *
- * 9 statuts (LeadStatus enum Prisma). Au changement :
- *  1. `updateLeadStatus(leadId, newStatus)` (server action Plan 09-02).
- *  2. `wonAt` est set/reset automatiquement par la server action (Pitfall 3).
- *  3. Toast confirmation + `router.refresh()` (revalidate fiche).
+ * 9 statuts (LeadStatus enum Prisma). P3.1 — Migré sur `useServerAction`
+ * avec optimistic UI : le label du statut change INSTANTANÉMENT au
+ * onChange, sans attendre la résolution serveur. Si la server action
+ * retourne `{ ok: false }`, useOptimistic rollback automatiquement à la
+ * fermeture de la transition (et un toast d'erreur s'affiche).
  *
- * Pendant la transition, le select est `disabled` pour éviter une double-soumission.
+ * `wonAt` est set/reset automatiquement par la server action (Pitfall 3
+ * Plan 09-02).
  */
 
 const STATUS_LABELS: Record<LeadStatus, string> = {
@@ -36,26 +36,19 @@ export function LeadStatusSelect({
   leadId: string;
   current: LeadStatus;
 }) {
-  const [pending, startTransition] = useTransition();
-  const router = useRouter();
+  const { execute, pending, optimistic } = useServerAction({
+    action: (newStatus: LeadStatus) => updateLeadStatus(leadId, newStatus),
+    optimisticInitial: current,
+    optimisticReducer: (_state, [newStatus]) => newStatus,
+    successMessage: ([newStatus]) => `Statut : ${STATUS_LABELS[newStatus]}`,
+  });
 
   return (
     <select
-      defaultValue={current}
+      value={optimistic}
       disabled={pending}
       aria-label="Statut du lead"
-      onChange={(e) => {
-        const v = e.target.value as LeadStatus;
-        startTransition(async () => {
-          const r = await updateLeadStatus(leadId, v);
-          if (r.ok) {
-            toast.success(`Statut : ${STATUS_LABELS[v]}`);
-            router.refresh();
-          } else {
-            toast.error(r.error ?? 'Erreur');
-          }
-        });
-      }}
+      onChange={(e) => execute(e.target.value as LeadStatus)}
       className="px-2 py-1 rounded-md border border-border bg-white text-sm disabled:opacity-50"
     >
       {(Object.keys(STATUS_LABELS) as LeadStatus[]).map((s) => (
