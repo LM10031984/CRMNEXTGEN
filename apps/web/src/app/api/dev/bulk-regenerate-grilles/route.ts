@@ -11,8 +11,9 @@ import { NextResponse } from 'next/server';
 import { bulkRegenerateEmptyGrilles } from '@/server/actions/bulk-regenerate-grilles';
 
 export const dynamic = 'force-dynamic';
-// Pas de timeout strict côté Vercel/Next — on attend que tous tournent
-export const maxDuration = 600; // 10 min max
+// Vercel Hobby plafonne à 300s (5 min). Pro = 900s. Cet endpoint dev est
+// rarement utilisé en prod ; si besoin de >5 min, déclencher via worker BullMQ.
+export const maxDuration = 300;
 
 export async function GET() {
   const r = await bulkRegenerateEmptyGrilles();
