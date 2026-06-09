@@ -223,13 +223,18 @@ export function DocDockDrawer({
         aria-hidden="true"
       />
 
-      {/* Drawer side panel — z-60 au-dessus topbar/header sticky */}
+      {/* Drawer side panel — z-60 au-dessus topbar/header sticky.
+          A9 2026-06-09 — `overflow-hidden` ajouté pour que la liste interne
+          (flex-1 overflow-y-auto) puisse réellement scroller. Sans ça,
+          en flex-col, le child flex-1 a `min-height: auto` par défaut et
+          peut grossir au-delà du parent fixed (bug Laurent : seul le
+          Programme épinglé visible, le reste de la liste masquée). */}
       <aside
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Documents Qualiopi"
-        className="fixed top-0 right-0 bottom-0 z-[60] w-full sm:w-[480px] max-w-full bg-white shadow-2xl border-l border-border flex flex-col animate-in slide-in-from-right duration-200"
+        className="fixed top-0 right-0 bottom-0 z-[60] w-full sm:w-[480px] max-w-full bg-white shadow-2xl border-l border-border flex flex-col overflow-hidden animate-in slide-in-from-right duration-200"
       >
         {/* Header */}
         <header className="p-4 border-b border-border bg-gradient-to-r from-violet-50/40 via-white to-primary-50/30">
@@ -304,8 +309,9 @@ export function DocDockDrawer({
           </div>
         )}
 
-        {/* Liste scroll */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Liste scroll — `min-h-0` requis pour que flex-1 + overflow-y-auto
+            cohabitent en flex-col (cf. A9 commentaire sur l'aside). */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground italic text-center py-8">
               Aucun document ne correspond à « {query} ».
