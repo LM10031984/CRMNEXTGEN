@@ -20,7 +20,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { renderReminderHtml } from '@/lib/preinscription-reminder-template';
 import { loadOfConfig } from '@/lib/of-config';
 
@@ -103,7 +103,16 @@ export async function sendPreEnrollmentReminder(
     of,
   );
 
-  const r = await sendMail({ to: recipient, subject, html, text });
+  // Sprint 4 — Queue mailer. Idempotence par preEnrollmentId × reminderNumber :
+  // si le N-ième rappel est déjà queue/active, le re-déclencher ne crée pas
+  // un 2e job.
+  const r = await enqueueMail({
+    to: recipient,
+    subject,
+    html,
+    text,
+    idempotencyKey: `preinscription-reminder:${preEnrollmentId}:${reminderNumber}`,
+  });
   if (!r.ok) {
     return { ok: false, preEnrollmentId, to: recipient, error: r.error };
   }
@@ -124,7 +133,7 @@ export async function sendPreEnrollmentReminder(
     preEnrollmentId,
     to: recipient,
     reminderNumber,
-    dryRun: r.dryRun,
+    dryRun: r.mode === 'dry-run',
   };
 }
 

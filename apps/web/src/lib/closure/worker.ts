@@ -17,13 +17,16 @@ import { createHash } from 'node:crypto';
 import { Worker, type Job } from 'bullmq';
 import { prisma, type ClosureBatchStatus, type ClosureDocKind, type DocType, type PedagogicalKind } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
+import { childLogger } from '@/lib/logger';
 import { getWorkerRedis } from './redis';
 import { CLOSURE_QUEUE_NAME } from './queue';
 import { renderClosureDoc } from './renderer';
 import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
 import { loadOfConfig } from '@/lib/of-config';
+
+const log = childLogger('closure-worker');
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -62,16 +65,22 @@ export function startClosureWorker(): Worker<ClosureJobPayload> {
   );
 
   worker.on('completed', (job) => {
-    console.log(`[closure-worker] ✓ ${job.id} (${job.data.kind} for ${job.data.participantId})`);
+    log.info(
+      { jobId: job.id, kind: job.data.kind, participantId: job.data.participantId },
+      'job.completed',
+    );
   });
   worker.on('failed', (job, err) => {
-    console.error(`[closure-worker] ✗ ${job?.id} — ${err.message}`);
+    log.error(
+      { jobId: job?.id, err: { message: err.message, stack: err.stack } },
+      'job.failed',
+    );
   });
   worker.on('error', (err) => {
-    console.error('[closure-worker] error:', err);
+    log.error({ err: { message: err.message, stack: err.stack } }, 'worker.error');
   });
 
-  console.log(`[closure-worker] started (concurrency=${CONCURRENCY}, queue="${CLOSURE_QUEUE_NAME}")`);
+  log.info({ concurrency: CONCURRENCY, queueName: CLOSURE_QUEUE_NAME }, 'worker.started');
   return worker;
 }
 
@@ -405,12 +414,27 @@ ${batch.doneDocs} / ${batch.totalDocs} documents générés${batch.errorDocs > 0
 Ouvrir le pack : ${link}
 `;
 
-    const r = await sendMail({ to: user.email, subject, html, text });
-    if (r.ok && !r.dryRun) {
-      console.log(`[closure-worker] ✉ notif sent to ${user.email} (batch=${batch.id}, status=${finalStatus})`);
+    // Sprint 4 — Queue mailer. Idempotence par batch × statut final :
+    // si le worker repasse sur le batch (concurrence ou retry), une seule
+    // notif part par utilisateur.
+    const r = await enqueueMail({
+      to: user.email,
+      subject,
+      html,
+      text,
+      idempotencyKey: `closure-notif:${batch.id}:${user.id}:${finalStatus}`,
+    });
+    if (r.ok && r.mode !== 'dry-run') {
+      log.info(
+        { to: user.email, batchId: batch.id, status: finalStatus },
+        'notif.sent',
+      );
     }
   } catch (e) {
     // Une erreur d'email ne doit jamais casser le worker.
-    console.error('[closure-worker] notifyBatchCompletion error:', (e as Error).message);
+    log.error(
+      { err: { message: (e as Error).message, stack: (e as Error).stack } },
+      'notif.error',
+    );
   }
 }

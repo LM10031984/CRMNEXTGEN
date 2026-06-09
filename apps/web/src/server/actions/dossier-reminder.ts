@@ -13,7 +13,7 @@
 
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { loadOfConfig } from '@/lib/of-config';
 
 const dateFmt = new Intl.DateTimeFormat('fr-FR', {
@@ -136,7 +136,17 @@ export async function sendDossierReminderEmail(
 
   const text = `Bonjour,\n\n${body}\n\nStagiaire : ${stagiaire}\nFormation : ${formationTitre}\nSession : ${p.session.code} (${sessionDates})\nMontant HT : ${montant}\n\nCordialement,\n${of.name}`;
 
-  const r = await sendMail({ to: recipient, subject, html, text });
+  // Sprint 4 — Queue mailer. Idempotence : 1 mail par participant × type × jour.
+  // Empêche les double-clics et permet de relancer le même jour pour le même
+  // motif sans spam.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const r = await enqueueMail({
+    to: recipient,
+    subject,
+    html,
+    text,
+    idempotencyKey: `dossier-reminder:${participantId}:${reminderType}:${todayKey}`,
+  });
   if (!r.ok) return { ok: false, to: recipient, error: r.error };
-  return { ok: true, to: recipient, reminderType, dryRun: r.dryRun };
+  return { ok: true, to: recipient, reminderType, dryRun: r.mode === 'dry-run' };
 }

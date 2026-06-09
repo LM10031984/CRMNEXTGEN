@@ -11,7 +11,7 @@ import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
 import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
 
@@ -792,9 +792,18 @@ export async function sendInvoiceReminder(input: {
     of,
   );
 
-  // Send mail (dry-run automatique si SMTP_HOST vide — cf mailer.ts)
-  const mailResult = await sendMail({ to: recipientEmail, subject, html, text });
-  const dryRun = mailResult.dryRun === true;
+  // Sprint 4 — Queue mailer. Idempotence par invoice × niveau de relance :
+  // le worker BullMQ déduplique si le job est déjà en wait/active, empêche
+  // les double-envois sur double-clic ou retry cron.
+  const nextLevel = (invoice.reminderCount ?? 0) + 1;
+  const mailResult = await enqueueMail({
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+    idempotencyKey: `invoice-reminder:${invoice.id}:${nextLevel}`,
+  });
+  const dryRun = mailResult.mode === 'dry-run';
 
   // Update tracking invoice
   await prisma.invoice.update({

@@ -38,7 +38,7 @@ import {
   type InviteUserInput,
   type ChangeUserRoleInput,
 } from '@qualiof/shared';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { renderInvitationEmail } from '@/lib/mailer-templates/user-invitation';
 import { renderPasswordResetEmail } from '@/lib/mailer-templates/user-password-reset';
 import { loadOfConfig } from '@/lib/of-config';
@@ -158,7 +158,15 @@ export async function inviteUser(
       },
       of,
     );
-    const mailResult = await sendMail({ to: email, subject, html, text });
+    // Sprint 4 — Queue mailer. Idempotence par invitation pour empêcher
+    // qu'un double-clic Admin envoie 2 mails au futur user.
+    const mailResult = await enqueueMail({
+      to: email,
+      subject,
+      html,
+      text,
+      idempotencyKey: `user-invitation:${invitation.id}`,
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,
@@ -169,7 +177,7 @@ export async function inviteUser(
     });
 
     revalidatePath(REVAL_PATH);
-    return { ok: true, data: { userId: newUser.id, dryRun: mailResult.dryRun } };
+    return { ok: true, data: { userId: newUser.id, dryRun: mailResult.mode === 'dry-run' } };
   } catch (e) {
     if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
       return { ok: false, error: e.message };
@@ -318,7 +326,15 @@ export async function resetUserPassword(
       },
       of,
     );
-    const mailResult = await sendMail({ to: target.email, subject, html, text });
+    // Sprint 4 — Queue mailer + idempotence par invitation (1 reset = 1 token
+    // unique côté admin, donc invitation.id est stable et déduplicant).
+    const mailResult = await enqueueMail({
+      to: target.email,
+      subject,
+      html,
+      text,
+      idempotencyKey: `user-password-reset:${invitation.id}`,
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,
@@ -329,7 +345,7 @@ export async function resetUserPassword(
     });
 
     revalidatePath(REVAL_PATH);
-    return { ok: true, data: { dryRun: mailResult.dryRun } };
+    return { ok: true, data: { dryRun: mailResult.mode === 'dry-run' } };
   } catch (e) {
     if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
       return { ok: false, error: e.message };
@@ -442,7 +458,16 @@ export async function resendInvitation(
       },
       of,
     );
-    const mailResult = await sendMail({ to: target.email, subject, html, text });
+    // Sprint 4 — Queue mailer + idempotence sur le resend : la rotation de
+    // token côté admin crée un nouvel invitation.id à chaque renvoi voulu,
+    // donc on n'introduit pas de blocage involontaire.
+    const mailResult = await enqueueMail({
+      to: target.email,
+      subject,
+      html,
+      text,
+      idempotencyKey: `user-invitation-resend:${invitation.id}`,
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,
@@ -452,7 +477,7 @@ export async function resendInvitation(
     });
 
     revalidatePath(REVAL_PATH);
-    return { ok: true, data: { dryRun: mailResult.dryRun } };
+    return { ok: true, data: { dryRun: mailResult.mode === 'dry-run' } };
   } catch (e) {
     if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
       return { ok: false, error: e.message };

@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { renderReminderHtml } from '@/lib/preinscription-reminder-template';
 import { loadOfConfig } from '@/lib/of-config';
 
@@ -101,7 +101,15 @@ export async function GET(req: Request) {
       of,
     );
 
-    const r = await sendMail({ to: recipient, subject, html, text });
+    // Sprint 4 — Queue mailer. Idempotence pour qu'un cron répété (Vercel
+    // schedule peut overlapper) ne déclenche pas 2 jobs pour le même rappel.
+    const r = await enqueueMail({
+      to: recipient,
+      subject,
+      html,
+      text,
+      idempotencyKey: `preinscription-reminder-cron:${pre.id}:${reminderNumber}`,
+    });
     if (!r.ok) {
       errors++;
       continue;
