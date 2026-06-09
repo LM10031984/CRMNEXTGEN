@@ -38,6 +38,19 @@ vi.mock('@qualiof/db', () => ({
     },
     $queryRaw: vi.fn(),
   },
+  // P1.1 — Zod runtime nécessite l'enum InvoiceStatus comme valeur, pas
+  // juste un type. On mappe key=value pour matcher la forme générée par
+  // Prisma client.
+  InvoiceStatus: {
+    DRAFT: 'DRAFT',
+    ISSUED: 'ISSUED',
+    PAID: 'PAID',
+    PARTIAL: 'PARTIAL',
+    OVERDUE: 'OVERDUE',
+    CANCELLED: 'CANCELLED',
+    CREDIT_NOTE: 'CREDIT_NOTE',
+  },
+  Prisma: { Decimal: class {} },
   LegalForm: {
     SAS: 'SAS',
     SARL: 'SARL',
@@ -268,14 +281,16 @@ describe('getInvoicesListData — Filtres + Tri + Pagination', () => {
   });
 
   it("Test 8 — filtre payerOrgId appliqué", async () => {
+    // P1.1 — payerOrgId est désormais validé comme UUID en amont
+    const VALID_PAYER_ORG_ID = '33333333-3333-3333-3333-333333333333';
     await getInvoicesListData({
-      filters: { payerOrgId: 'org-42' },
+      filters: { payerOrgId: VALID_PAYER_ORG_ID },
       page: 1,
       pageSize: 50,
     });
     expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ payerOrgId: 'org-42' }),
+        where: expect.objectContaining({ payerOrgId: VALID_PAYER_ORG_ID }),
       }),
     );
   });
@@ -356,5 +371,61 @@ describe('getInvoicesListData — Filtres + Tri + Pagination', () => {
     expect(row.originalNumber).toBe('FAC-000010');
     expect(row.payerLabel).toBe('Jean Martin');
     expect(row.amountTtc).toBe(-300);
+  });
+});
+
+describe('getInvoicesListData — validation Zod en amont (P1.1)', () => {
+  it('Test 12 — statut invalide → ZodError, aucune query Prisma envoyée', async () => {
+    const { ZodError } = await import('zod');
+
+    await expect(
+      getInvoicesListData({
+        filters: {
+          // Cast forcé : simule un appelant qui injecte une querystring brute
+          statuses: ['FOO_BAR'] as unknown as Array<
+            'DRAFT' | 'ISSUED' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'CANCELLED' | 'CREDIT_NOTE'
+          >,
+        },
+        page: 1,
+        pageSize: 20,
+      }),
+    ).rejects.toBeInstanceOf(ZodError);
+
+    // Aucune des 6 queries ne doit avoir été déclenchée si la validation rejette
+    expect(findManyMock).not.toHaveBeenCalled();
+    expect(invoiceCountMock).not.toHaveBeenCalled();
+    expect(aggregateMock).not.toHaveBeenCalled();
+    expect(queryRawMock).not.toHaveBeenCalled();
+    expect(spCountMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 13 — payerOrgId non-UUID → ZodError, aucune query Prisma envoyée', async () => {
+    const { ZodError } = await import('zod');
+
+    await expect(
+      getInvoicesListData({
+        filters: { payerOrgId: 'pas-un-uuid' },
+        page: 1,
+        pageSize: 20,
+      }),
+    ).rejects.toBeInstanceOf(ZodError);
+
+    expect(findManyMock).not.toHaveBeenCalled();
+    expect(invoiceCountMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 14 — onlyUnpaid: true force le where.status à [ISSUED, PARTIAL, OVERDUE] (override statuses)', async () => {
+    findManyMock.mockResolvedValueOnce([]);
+    invoiceCountMock.mockResolvedValueOnce(0);
+
+    await getInvoicesListData({
+      filters: { onlyUnpaid: true, statuses: ['DRAFT'] },
+      page: 1,
+      pageSize: 20,
+    });
+
+    const whereArg = findManyMock.mock.calls[0]![0].where;
+    expect(whereArg.status).toEqual({ in: ['ISSUED', 'PARTIAL', 'OVERDUE'] });
+    expect(whereArg.status.in).not.toContain('DRAFT');
   });
 });

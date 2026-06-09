@@ -32,17 +32,28 @@
  *    par la page Server Component qui passera le filtre adéquat, pas par ce helper.
  */
 
-import { prisma } from '@qualiof/db';
-import type { InvoiceStatus } from '@qualiof/db';
+import { prisma, InvoiceStatus, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { z } from 'zod';
 
-export interface InvoicesListFilters {
-  statuses?: InvoiceStatus[];
-  from?: Date;
-  to?: Date;
-  payerOrgId?: string;
-  onlyUnpaid?: boolean;
-}
+/**
+ * Validation Zod runtime des filtres (P1.1).
+ *
+ * Auparavant, `InvoicesListFilters` n'était qu'une interface TypeScript :
+ * un appelant qui castait depuis une querystring (`statuses: searchParams.statuses as InvoiceStatus[]`)
+ * pouvait injecter n'importe quelle chaîne dans le `where` Prisma, qui
+ * partait alors en erreur runtime à la BDD (statut hors enum). Zod rejette
+ * désormais en amont avec un message explicite.
+ */
+const InvoicesListFiltersSchema = z.object({
+  statuses: z.array(z.nativeEnum(InvoiceStatus)).optional(),
+  from: z.date().optional(),
+  to: z.date().optional(),
+  payerOrgId: z.string().uuid().optional(),
+  onlyUnpaid: z.boolean().optional(),
+});
+
+export type InvoicesListFilters = z.infer<typeof InvoicesListFiltersSchema>;
 
 export interface InvoiceRow {
   id: string;
@@ -67,12 +78,18 @@ export interface InvoicesListKpis {
   aFacturerCount: number;
 }
 
-// Cast `as never` : les chaînes brutes sont des littéraux InvoiceStatus mais
-// TypeScript ne dérive pas l'union depuis un `as const` ici (interop avec
-// Prisma generated types). Cohérent avec le pattern utilisé dans le worker
-// `invoice-reminders/worker.ts`.
-const UNPAID_STATUSES: InvoiceStatus[] = ['ISSUED', 'PARTIAL', 'OVERDUE'] as never;
-const REVENUE_STATUSES: InvoiceStatus[] = ['ISSUED', 'PAID', 'PARTIAL'] as never;
+// P1.1 — les littéraux passent par l'enum runtime Prisma (InvoiceStatus.ISSUED)
+// pour que TypeScript infère naturellement `InvoiceStatus[]`. Plus de cast.
+const UNPAID_STATUSES: InvoiceStatus[] = [
+  InvoiceStatus.ISSUED,
+  InvoiceStatus.PARTIAL,
+  InvoiceStatus.OVERDUE,
+];
+const REVENUE_STATUSES: InvoiceStatus[] = [
+  InvoiceStatus.ISSUED,
+  InvoiceStatus.PAID,
+  InvoiceStatus.PARTIAL,
+];
 
 function startOfCurrentMonth(): Date {
   const d = new Date();
@@ -108,15 +125,19 @@ export async function getInvoicesListData(input: {
   const monthStart = startOfCurrentMonth();
   const monthEnd = endOfCurrentMonth();
 
+  // P1.1 — Zod en amont : statut hors enum, payerOrgId non-UUID, etc. sont
+  // rejetés ICI avec un ZodError clair, plutôt que de partir en P2000 Prisma
+  // ou en silencieusement bypass d'index.
+  const filters = InvoicesListFiltersSchema.parse(input.filters);
+
   // Build WHERE pour la list query (factures affichées)
-  const filters = input.filters;
   const effectiveStatuses = filters.onlyUnpaid
     ? UNPAID_STATUSES
     : filters.statuses ?? undefined;
-  const baseWhere: Record<string, unknown> = { tenantId };
+  const baseWhere: Prisma.InvoiceWhereInput = { tenantId };
   if (effectiveStatuses) baseWhere.status = { in: effectiveStatuses };
   if (filters.from || filters.to) {
-    const dateRange: Record<string, Date> = {};
+    const dateRange: Prisma.DateTimeFilter = {};
     if (filters.from) dateRange.gte = filters.from;
     if (filters.to) dateRange.lte = filters.to;
     baseWhere.issueDate = dateRange;
@@ -159,7 +180,7 @@ export async function getInvoicesListData(input: {
     }),
     // Rows paginées (avec relations pour map)
     prisma.invoice.findMany({
-      where: baseWhere as never,
+      where: baseWhere,
       include: {
         payerOrg: { select: { legalName: true } },
         participant: {
@@ -174,7 +195,7 @@ export async function getInvoicesListData(input: {
       take: input.pageSize,
     }),
     // Total pour pagination UI
-    prisma.invoice.count({ where: baseWhere as never }),
+    prisma.invoice.count({ where: baseWhere }),
   ]);
 
   const impayesAmountTtc = Number(impayesAgg._sum?.amountTTC ?? 0);
