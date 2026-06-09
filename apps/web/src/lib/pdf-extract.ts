@@ -1,11 +1,49 @@
 /**
  * Extraction texte de PDF / images.
- * - PDFs natifs (avec couche texte) : pdf-parse (rapide, gratuit)
- * - Images JPG/PNG/WebP : modèle vision (Pixtral via OpenRouter) — OCR
- * - PDF scan sans couche texte : fallback vision via rendu pdfjs (TODO)
+ * - PDFs natifs (avec couche texte) : unpdf (rapide, gratuit)
+ * - Images JPG/PNG/WebP : `callLlmVision` (route via OpenRouter pour cloud,
+ *   Ollama vision local pour Phase 13 Veille). Modèle résolu par profile.
+ * - PDF scan sans couche texte : fallback automatique pdftoppm
+ *   (poppler-utils, brew) + vision sur chaque page rastérisée.
  */
 
 import { callLlmVision } from './ai-llm';
+
+/**
+ * Rastérise un PDF en PNG via `pdftoppm` (poppler-utils, CLI brew).
+ *
+ * Choix d'implémentation : CLI plutôt que lib Node native parce que les libs
+ * type `pdf-to-png-converter` / `pdfjs-dist + canvas` pullent un binaire
+ * `canvas.node` que webpack ne sait pas bundler (crash Next.js build) et qui
+ * a régulièrement des problèmes de prebuilt sur ARM64. `pdftoppm` est un
+ * binaire système (`brew install poppler`), aucune dep Node, marche partout.
+ *
+ * 144 DPI : compromis lisibilité MRZ / taille — assez pour qu'un vision model
+ * lise une CNI, sans alourdir inutilement la requête Ollama.
+ */
+async function rasterizePdfPagesToPng(pdfBuffer: Buffer): Promise<Buffer[]> {
+  const { execFile } = await import('node:child_process');
+  const { mkdtemp, readFile, readdir, rm, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+
+  const dir = await mkdtemp(path.join(tmpdir(), 'qualiof-pdf-'));
+  try {
+    const pdfPath = path.join(dir, 'in.pdf');
+    await writeFile(pdfPath, pdfBuffer);
+    await run('pdftoppm', ['-r', '144', '-png', pdfPath, path.join(dir, 'page')], {
+      timeout: 60_000,
+    });
+    const files = (await readdir(dir))
+      .filter((f) => f.endsWith('.png'))
+      .sort(); // page-1.png, page-2.png, …
+    return Promise.all(files.map((f) => readFile(path.join(dir, f))));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
 
 export interface ExtractedDoc {
   text: string;
@@ -82,7 +120,42 @@ export async function extractTextFromImage(buffer: Buffer, mimeType = 'image/jpe
 
 export async function extractTextFromFile(buffer: Buffer, contentType: string): Promise<ExtractedDoc> {
   if (contentType === 'application/pdf' || contentType.endsWith('/pdf')) {
-    return extractTextFromPdf(buffer);
+    const parsed = await extractTextFromPdf(buffer);
+    // Fallback PDF scanné : si la couche texte est quasi-vide, on rastérise
+    // chaque page et on appelle l'OCR vision dessus. Cas typique : CNI/RIB
+    // scannés via iPhone "Scanner un document" — 1-2 images JPEG dans un PDF.
+    if (parsed.text.trim().length >= 30) return parsed;
+    try {
+      const pngs = await rasterizePdfPagesToPng(buffer);
+      if (pngs.length === 0) {
+        return {
+          ...parsed,
+          warnings: [...parsed.warnings, 'Rasterisation pdftoppm a produit 0 image.'],
+        };
+      }
+      const warnings = [
+        ...parsed.warnings,
+        `PDF sans couche texte — OCR vision sur ${pngs.length} page(s) rastérisée(s) (pdftoppm 144dpi).`,
+      ];
+      const texts: string[] = [];
+      for (const [i, png] of pngs.entries()) {
+        const ocr = await extractTextFromImage(png);
+        warnings.push(...ocr.warnings.map((w) => `[page ${i + 1}] ${w}`));
+        if (ocr.text) texts.push(ocr.text);
+      }
+      return { text: texts.join('\n\n'), pages: pngs.length, warnings };
+    } catch (e: any) {
+      const isNotFound = /ENOENT|not found|spawn pdftoppm/i.test(String(e?.message ?? e));
+      return {
+        ...parsed,
+        warnings: [
+          ...parsed.warnings,
+          isNotFound
+            ? "Rasterisation impossible : `pdftoppm` introuvable (installer poppler-utils via `brew install poppler`)."
+            : `Rasterisation pdftoppm échouée : ${e?.message ?? e}`,
+        ],
+      };
+    }
   }
   if (contentType.startsWith('image/')) {
     return extractTextFromImage(buffer, contentType);

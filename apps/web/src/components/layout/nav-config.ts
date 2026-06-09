@@ -9,7 +9,6 @@ import {
   Megaphone,
   Settings,
   LayoutDashboard,
-  ListChecks,
   Landmark,
   ClipboardCheck,
   Inbox,
@@ -18,6 +17,8 @@ import {
   UserCog,
   TrendingUp,
   Sliders,
+  Newspaper,
+  FilePlus,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -67,10 +68,13 @@ export const NAV: NavSection[] = [
       { label: 'Tableau de bord', href: '/app', icon: LayoutDashboard },
       { label: 'Sessions', href: '/app/sessions', icon: Calendar },
       { label: 'Apprenants', href: '/app/apprenants', icon: Users },
-      // Pré-inscriptions : ADMIN/MANAGER/COMMERCIAL uniquement (D-02 preenrollments)
+      // Inscriptions (ex-Pré-inscriptions, Phase 12 D-01) : ADMIN/MANAGER/COMMERCIAL
+      // uniquement (D-02 preenrollments — RBAC héritée). Le rename de la route
+      // /app/preinscriptions → /app/inscriptions a remplacé l'ancien stub
+      // Placeholder par le vrai listing admin (cf. Phase 12 Plan 01).
       {
-        label: 'Pré-inscriptions',
-        href: '/app/preinscriptions',
+        label: 'Inscriptions',
+        href: '/app/inscriptions',
         icon: Inbox,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
@@ -92,6 +96,15 @@ export const NAV: NavSection[] = [
         href: '/app/factures',
         icon: Receipt,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMPTABLE', 'LECTEUR'],
+      },
+      // Devis commerciaux : ADMIN/MANAGER/COMMERCIAL (les rôles qui prospectent).
+      // COMPTABLE et LECTEUR n'ont pas besoin (le devis devient une facture une
+      // fois accepté, et c'est la facture qui est visible côté compta).
+      {
+        label: 'Devis',
+        href: '/app/devis',
+        icon: FilePlus,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
       // Budget AGEFICE : ADMIN/MANAGER/COMMERCIAL/COMPTABLE/LECTEUR (FORMATEUR exclu)
       {
@@ -116,6 +129,18 @@ export const NAV: NavSection[] = [
         icon: TrendingUp,
         allowedRoles: ['ADMIN', 'MANAGER'],
       },
+      // Veille Qualiopi (Phase 13 Plan 13-03) : ADMIN/MANAGER/LECTEUR visualisent
+      // — LECTEUR consulte les 4 onglets thématiques (sans inbox D-03 — masquage
+      // strict côté server page.tsx + côté client VeilleTabsClient prop canSeeInbox).
+      // Les autres rôles (COMMERCIAL/COMPTABLE/FORMATEUR) ne voient PAS le lien
+      // (la sidebar est filtre VISUEL uniquement — server actions guardées par
+      // requireRole(['ADMIN','MANAGER']) cf. veille.ts Plan 02).
+      {
+        label: 'Veille Qualiopi',
+        href: '/app/veille',
+        icon: Newspaper,
+        allowedRoles: ['ADMIN', 'MANAGER', 'LECTEUR'],
+      },
     ],
   },
   {
@@ -132,9 +157,17 @@ export const NAV: NavSection[] = [
         icon: GraduationCap,
         allowedRoles: ['ADMIN', 'MANAGER', 'FORMATEUR', 'LECTEUR'],
       },
-      // Produits, Modèles, Inscriptions : 6 rôles — pas de filtre
+      // Produits : 6 rôles — pas de filtre
       { label: 'Produits de formation', href: '/app/produits', icon: BookOpen },
-      { label: 'Modèles de documents', href: '/app/templates', icon: FileText },
+      // Modèles de documents (Phase 12 Plan 02 D-09) : ADMIN/MANAGER/LECTEUR
+      // (FORMATEUR/COMMERCIAL/COMPTABLE exclus — pas utile pour leur métier).
+      // Sécurité réelle : requireRole côté page.tsx + filtre visuel sidebar.
+      {
+        label: 'Modèles de documents',
+        href: '/app/templates',
+        icon: FileText,
+        allowedRoles: ['ADMIN', 'MANAGER', 'LECTEUR'],
+      },
       // Financeurs : ADMIN/MANAGER/COMMERCIAL/COMPTABLE (FORMATEUR et LECTEUR exclus)
       {
         label: 'Financeurs',
@@ -142,7 +175,6 @@ export const NAV: NavSection[] = [
         icon: Landmark,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'],
       },
-      { label: 'Inscriptions', href: '/app/inscriptions', icon: ListChecks },
       // Paramètres OF : ADMIN only (D-02 tenantSettings)
       {
         label: 'Paramètres',

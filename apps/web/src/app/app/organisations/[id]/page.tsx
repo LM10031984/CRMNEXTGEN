@@ -9,6 +9,7 @@ import { EditOrganizationButton } from '@/components/forms/edit-organization-but
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { formatFunderCode } from '@/lib/funder-codes';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 
 // Auto-entrepreneur = EI au régime micro depuis 2016, fusionnés dans l'UI
@@ -71,7 +72,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
         kind="org"
         id={org.id}
         title={org.legalName}
-        subtitle={org.legalForm + (org.opcoCode ? ` · ${org.opcoCode}` : '')}
+        subtitle={org.legalForm + (org.opcoCode ? ` · ${formatFunderCode(org.opcoCode)}` : '')}
         href={`/app/organisations/${org.id}`}
       />
       <BackToListLink fallbackHref="/app/organisations" label="Retour à la liste" />
@@ -82,7 +83,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
             <span className="flex items-center gap-3">
               {org.legalName}
               <Badge variant="muted">{FORM_LABEL[org.legalForm] ?? org.legalForm}</Badge>
-              {org.opcoCode && <Badge variant="info">OPCO {org.opcoCode}</Badge>}
+              {org.opcoCode && <Badge variant="info">{formatFunderCode(org.opcoCode)}</Badge>}
               {org.requiresCleanup && (
                 <Badge variant="warning">
                   <AlertTriangle className="h-3 w-3" /> à corriger
@@ -209,7 +210,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                   </summary>
                   <dl className="mt-3 space-y-1 text-xs max-h-64 overflow-auto">
                     {Object.entries(ageficeFields).map(([k, v]) => (
-                      <div key={k} className="grid grid-cols-2 gap-2">
+                      <div key={k} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <dt className="text-sky-700 truncate">{k}</dt>
                         <dd className="text-sky-900 truncate">{v || '—'}</dd>
                       </div>

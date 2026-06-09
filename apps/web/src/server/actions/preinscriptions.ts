@@ -84,7 +84,7 @@ export async function createPreEnrollmentLink(input: {
     }
   }
 
-  revalidatePath('/app/preinscriptions');
+  revalidatePath('/app/inscriptions');
   return { ok: true, url, token, preEnrollmentId: created.id, emailSent, emailDryRun };
 }
 
@@ -98,6 +98,6 @@ export async function deletePreEnrollment(id: string): Promise<{ ok: boolean; er
     return { ok: false, error: 'Pré-inscription déjà convertie en apprenant — impossible à supprimer' };
   }
   await prisma.preEnrollment.delete({ where: { id } });
-  revalidatePath('/app/preinscriptions');
+  revalidatePath('/app/inscriptions');
   return { ok: true };
 }

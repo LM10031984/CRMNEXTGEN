@@ -20,8 +20,9 @@
     "import:agefice-pa": "dotenv -e ../../.env -- tsx scripts/import-agefice-pa.ts",
     "import:airtable": "dotenv -e ../../.env -- tsx scripts/import-airtable.ts",
     "import:treso": "dotenv -e ../../.env -- tsx scripts/import-treso-agefice.ts",
-    "encrypt:sensitive": "dotenv -e ../../.env -- tsx scripts/encrypt-existing-sensitive-data.ts",
-    "lint": "tsc --noEmit"
+    "import:veille": "dotenv -e ../../.env -- tsx scripts/import-veille-from-xlsx.ts",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -35,7 +36,8 @@
     "typescript": "^5.7.2",
     "@types/node": "^22.10.0",
     "argon2": "^0.41.1",
-    "dotenv-cli": "^7.4.2"
+    "dotenv-cli": "^7.4.2",
+    "vitest": "^2.1.8"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

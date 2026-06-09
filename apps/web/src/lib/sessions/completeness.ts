@@ -18,7 +18,8 @@ export type SessionCompletenessBlockerKey =
   | 'no_dates'
   | 'no_location'
   | 'no_program'
-  | 'no_participants';
+  | 'no_participants'
+  | 'product_ai_unreviewed';
 
 export type SessionCompletenessBlocker = {
   /** Identifiant stable pour cibler (analytics, deep link) */
@@ -49,7 +50,7 @@ export interface SessionCompletenessInput {
   locationId: string | null;
   modality: string | null;
   trainers: { isPrimary: boolean }[];
-  product: { programMd: string | null } | null;
+  product: { programMd: string | null; aiDraftedAt?: Date | null } | null;
   participantsCount: number;
 }
 
@@ -135,6 +136,21 @@ export function getSessionCompleteness(
     });
   }
 
+  // BUG-P0-02 — produit auto-rempli par IA et pas encore validé humainement.
+  // Bloque la génération du pack : un programme IA non revu peut contenir
+  // du markdown brut, des sections Qualiopi manquantes, ou des verbes Bloom
+  // absents — risque audit Qualiopi direct.
+  if (s.product?.aiDraftedAt) {
+    blockers.push({
+      key: 'product_ai_unreviewed',
+      label: 'Programme IA en attente de validation humaine',
+      hint: 'Un humain doit relire et valider le programme généré par IA avant de l\'utiliser pour des conventions Qualiopi',
+      fix: s.productId
+        ? { href: `/app/produits/${s.productId}?tab=programme`, label: 'Valider le brouillon IA' }
+        : { href: '#section-produit', label: 'Voir le produit' },
+    });
+  }
+
   if (s.participantsCount === 0) {
     blockers.push({
       key: 'no_participants',
@@ -144,7 +160,9 @@ export function getSessionCompleteness(
     });
   }
 
-  const totalCriteria = 6;
+  // 7 critères = 6 originaux + product_ai_unreviewed (BUG-P0-02).
+  // Le ratio reste cohérent : si tous les critères sont OK, ratio = 1.
+  const totalCriteria = 7;
   const okCount = totalCriteria - blockers.length;
   const ratio = okCount / totalCriteria;
 

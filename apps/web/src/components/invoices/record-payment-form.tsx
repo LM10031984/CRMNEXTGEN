@@ -80,7 +80,7 @@ export function RecordPaymentForm({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-medium">Montant (€)</label>
           <input

@@ -10,6 +10,7 @@ import { DataTableFolk as DataTable, type Column } from '@/components/ui/data-ta
 import { Badge } from '@/components/ui/badge';
 import { buttonStyles } from '@/components/ui/button';
 import { CreateOrganizationButton } from '@/components/forms/create-organization-button';
+import { formatFunderCode } from '@/lib/funder-codes';
 
 const PAGE_SIZE = 25;
 
@@ -166,7 +167,7 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
       key: 'opco',
       header: 'OPCO',
       cell: (row) =>
-        row.opcoCode ? <Badge variant="default">{row.opcoCode}</Badge> : <span className="text-xs text-muted-foreground italic">—</span>,
+        row.opcoCode ? <Badge variant="default">{formatFunderCode(row.opcoCode)}</Badge> : <span className="text-xs text-muted-foreground italic">—</span>,
     },
     {
       key: 'links',
@@ -236,13 +237,15 @@ export default async function OrganisationsPage({ searchParams }: { searchParams
         </div>
       </div>
 
-      <DataTable<OrgRow>
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        rowHref={(r) => `/app/organisations/${r.id}`}
-        empty={q ? `Aucune organisation ne correspond à « ${q} ».` : 'Aucune organisation.'}
-      />
+      <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <DataTable<OrgRow>
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          rowHref={(r) => `/app/organisations/${r.id}`}
+          empty={q ? `Aucune organisation ne correspond à « ${q} ».` : 'Aucune organisation.'}
+        />
+      </div>
 
       {!showAll && (
         <Pagination

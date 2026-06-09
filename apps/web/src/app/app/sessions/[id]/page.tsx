@@ -12,7 +12,8 @@ import { ParticipantActionsMenu } from '@/components/sessions/participant-action
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
-import { PrepareTrainingButton } from '@/components/sessions/prepare-training-button';
+import { PreparationPedagogiqueBlock } from '@/components/sessions/preparation-pedagogique-block';
+import { getSessionPreparationStatus } from '@/server/actions/prepare-training';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
 import { EditSessionDetailsDialog } from '@/components/sessions/edit-session-details-dialog';
@@ -280,6 +281,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
 
+  // Bug I — proxy de présence aligné sur deriveCellState (derive-cell-state.ts L70-71).
+  // La matrice considère la grille obs comme générée dès qu'un PedagogicalAsset existe
+  // par participant ; on reflète ça côté sidebar pour cohérence visuelle.
+  const grilleObsAssetCount = pedAssetsRaw.filter((a) => a.kind === 'GRILLE_OBS').length;
+
   // Derniers batches pack fin de formation pour cette session (audit trail)
   const closureBatches = await prisma.closureBatch.findMany({
     where: { tenantId: user.tenantId, sessionId: session.id },
@@ -372,10 +378,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     locationId: session.locationId,
     modality: session.modality,
     trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
-    product: session.product ? { programMd: session.product.programMd } : null,
+    product: session.product
+      ? { programMd: session.product.programMd, aiDraftedAt: session.product.aiDraftedAt }
+      : null,
     participantsCount: session.participants.length,
     productId: session.product?.id ?? null,
   });
+
+  // Quick task 260525-kl5 — état agrégé des 6 catégories de docs de préparation
+  // pédagogique pour le bloc PreparationPedagogiqueBlock. La server action est
+  // tenant-scopée via validateRequest (déjà résolue ci-dessus).
+  const preparationStatus = await getSessionPreparationStatus(session.id);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -416,21 +429,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* Action contextuelle selon le statut — guide l'utilisateur sur la
-              "prochaine étape logique" (Préparer / Marquer terminée / Voir).
-              Pour COMPLETED avec batch déjà généré, on affiche un lien direct
-              vers la page de progression à la place de Préparer. */}
+              "prochaine étape logique" (Marquer terminée / Voir le pack).
+              Le bouton "Préparer la formation" a été retiré (quick task
+              260525-kl5) : la préparation est désormais auto-déclenchée à
+              la création de la session et le bloc PreparationPedagogiqueBlock
+              en bas de fiche montre l'état + CTA "Compléter" si besoin. */}
           {(() => {
             switch (session.status) {
               case 'DRAFT':
               case 'PLANNED':
               case 'OPEN':
               case 'VALIDATED':
-                return (
-                  <PrepareTrainingButton
-                    sessionId={session.id}
-                    participantCount={session.participants.length}
-                  />
-                );
+                return null;
               case 'IN_PROGRESS':
                 return (
                   <MarkCompletedButton
@@ -463,6 +473,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <GenerateClosurePackButton
             sessionId={session.id}
             participantCount={session.participants.length}
+            blockers={sessionCompleteness.blockers}
           />
 
           {/* Kebab — uniquement les actions destructives ou rarement utilisées
@@ -573,10 +584,22 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       {/* Phase 9.1 Plan 03 — Documents session (3 cards horizontales D-04 bloc séparé) */}
       <SessionOnlyDocsBlock
         sessionId={session.id}
+        productId={session.productId}
         deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
         grilleObsPdfRef={sessionDocsMap.get('GRILLE_OBS_SESSION')}
         checklistPdfRef={sessionDocsMap.get('CHECKLIST_FORMATION')}
+        grilleObsAssetCount={grilleObsAssetCount}
         canWrite={['ADMIN', 'MANAGER'].includes(user.role)}
+      />
+
+      {/* Quick task 260525-kl5 — bloc agrégé "Préparation pédagogique" :
+          remplace le bouton "Préparer la formation" retiré de la barre
+          d'action. Affiche l'état des 6 catégories de docs pré-formation
+          (3 partagés + 3 par stagiaire) + CTA "Compléter" idempotent. */}
+      <PreparationPedagogiqueBlock
+        sessionId={session.id}
+        initialStatus={preparationStatus}
+        canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
       />
 
       {/* Phase 9.1 Plan 03 — Matrice Documents participants (CENTRAL-01 / CENTRAL-02) */}

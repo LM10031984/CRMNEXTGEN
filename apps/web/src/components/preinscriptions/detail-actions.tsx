@@ -129,7 +129,7 @@ export function PreEnrollmentActions({
     startTransition(async () => {
       const r = await rejectPreEnrollment(preEnrollmentId, reason);
       if (r.ok) {
-        router.push('/app/preinscriptions');
+        router.push('/app/inscriptions');
       } else {
         setError(r.error ?? 'Erreur');
       }

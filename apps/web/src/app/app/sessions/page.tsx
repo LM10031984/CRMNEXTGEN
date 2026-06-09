@@ -138,11 +138,16 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         startDate: true,
         endDate: true,
         pricePerLearner: true,
-        product: { select: { code: true, durationHours: true } },
+        product: { select: { code: true, durationHours: true, title: true } },
         _count: { select: { participants: true } },
         participants: {
           take: 1,
           select: { sponsorOrg: { select: { legalForm: true } } },
+        },
+        trainers: {
+          where: { isPrimary: true },
+          take: 1,
+          include: { person: { select: { firstName: true, lastName: true } } },
         },
       },
     }),
@@ -231,78 +236,90 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
           </p>
         </div>
       ) : (
-        <ul className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card divide-y divide-slate-100 overflow-hidden">
-          {rows.map((s) => {
-            const start = new Date(s.startDate);
-            const end = new Date(s.endDate);
-            const sameDay = start.toDateString() === end.toDateString();
-            const isPast = end < now;
-            const dateLabel = sameDay
-              ? start.toLocaleDateString('fr-FR')
-              : `${start.toLocaleDateString('fr-FR')} → ${end.toLocaleDateString('fr-FR')}`;
-            const code = s.code ?? '';
-            return (
-              <li key={s.id}>
-                <Link
-                  href={`/app/sessions/${s.id}`}
-                  className="group flex items-center gap-4 py-3 px-4 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  {/* Code session — pill mono Folk discrète */}
-                  <div className="shrink-0">
-                    <span className="inline-flex items-center justify-center font-mono text-[11px] font-medium text-slate-600 bg-slate-50 rounded px-2 py-0.5">
-                      {code}
-                    </span>
-                  </div>
-
-                  {/* Nom + métadonnées */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-900 truncate">
-                      {s.name ?? <span className="text-slate-400 italic">(sans nom)</span>}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3 flex-wrap">
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-                        <span className="tabular-nums">{dateLabel}</span>
-                      </span>
-                      {s.product?.durationHours ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-                          <span className="tabular-nums">{s.product.durationHours}h</span>
-                        </span>
-                      ) : null}
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-                        <span className="tabular-nums">{s._count.participants}</span> inscrit{s._count.participants > 1 ? 's' : ''}
-                      </span>
-                      {Number(s.pricePerLearner ?? 0) > 0 && (
-                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                          <Euro className="h-3 w-3 text-slate-400" strokeWidth={1.75} />
-                          <span className="tabular-nums">{Number(s.pricePerLearner).toFixed(0)} €</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Statut + alerte "à clore" */}
-                  <div className="shrink-0 flex items-center gap-2">
-                    {isPast && s.status !== 'COMPLETED' && s.status !== 'CANCELLED' && (
-                      <Badge variant="warning">
-                        <AlertTriangle className="h-3 w-3" /> à clore
-                      </Badge>
-                    )}
-                    <SessionStatusBadgeMenu
-                      sessionId={s.id}
-                      sessionCode={s.code}
-                      status={s.status as SessionStatus}
-                    />
-                  </div>
-
-                  <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-all duration-300 ease-out active:scale-[0.97] shrink-0" strokeWidth={1.75} />
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-5">
+          {(() => {
+            // Groupage par mois pour visibilité (les sessions sont triées startDate DESC)
+            const monthFormatter = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+            const grouped = new Map<string, typeof rows>();
+            for (const s of rows) {
+              const key = monthFormatter.format(new Date(s.startDate));
+              const list = grouped.get(key) ?? [];
+              list.push(s);
+              grouped.set(key, list);
+            }
+            return Array.from(grouped.entries()).map(([month, items]) => (
+              <div key={month}>
+                <h2 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2 px-2">
+                  {month} <span className="text-foreground/40">— {items.length} session{items.length > 1 ? 's' : ''}</span>
+                </h2>
+                <div className="rounded-2xl border border-border bg-white divide-y divide-border overflow-hidden">
+                  {items.map((s) => {
+                    const start = new Date(s.startDate);
+                    const end = new Date(s.endDate);
+                    const sameDay = start.toDateString() === end.toDateString();
+                    const isPast = end < now;
+                    const noLearners = s._count.participants === 0;
+                    const primaryTrainer = s.trainers[0]?.person;
+                    const rowBg = noLearners ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-muted/30';
+                    return (
+                      <Link
+                        key={s.id}
+                        href={`/app/sessions/${s.id}`}
+                        className={`flex items-center gap-4 px-5 py-4 transition-colors ${rowBg}`}
+                      >
+                        <div className="shrink-0">
+                          <Badge variant="muted" className="font-mono">{s.code}</Badge>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{s.name ?? s.product?.title ?? '(sans nom)'}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3 flex-wrap">
+                            <span className="inline-flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {sameDay
+                                ? start.toLocaleDateString('fr-FR')
+                                : `${start.toLocaleDateString('fr-FR')} → ${end.toLocaleDateString('fr-FR')}`}
+                            </span>
+                            {s.product?.durationHours ? <span>· {s.product.durationHours}h</span> : null}
+                            <span className={`inline-flex items-center gap-1 ${noLearners ? 'text-amber-700 font-semibold' : ''}`}>
+                              <Users className="h-3 w-3" /> {s._count.participants} inscrit{s._count.participants > 1 ? 's' : ''}
+                            </span>
+                            {primaryTrainer && (
+                              <span className="inline-flex items-center gap-1">
+                                · 🎓 {primaryTrainer.firstName} {primaryTrainer.lastName}
+                              </span>
+                            )}
+                            {Number(s.pricePerLearner ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1">
+                                <Euro className="h-3 w-3" /> {Number(s.pricePerLearner).toFixed(0)} €
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2">
+                          {noLearners && (
+                            <Badge variant="warning" className="text-[10px]">
+                              0 inscrit
+                            </Badge>
+                          )}
+                          {isPast && s.status !== 'COMPLETED' && s.status !== 'CANCELLED' && (
+                            <Badge variant="warning">
+                              <AlertTriangle className="h-3 w-3" /> à clore
+                            </Badge>
+                          )}
+                          <SessionStatusBadgeMenu
+                            sessionId={s.id}
+                            sessionCode={s.code}
+                            status={s.status as SessionStatus}
+                          />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
       )}
 
       <Pagination

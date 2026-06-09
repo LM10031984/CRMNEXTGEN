@@ -1,106 +1,119 @@
 /**
- * Classification d'une entrée de veille réglementaire (P0.1).
+ * Phase 13 Plan 13-05 — Classifier Ollama RSS → thème Qualiopi.
  *
- * Entrée  : un texte court (titre + résumé d'article, communication OPCO,
- *           extrait de décret).
- * Sortie  : `{ topic, urgency, summary }` validé par Zod, ou erreur typée.
+ * D-06 : modèle figé `mistral-small:24b` (pas de switch dynamique qwen3:30b-a3b
+ * en V1). Si on change : bump PROMPT_VERSION_VEILLE + tracer dans AIGenerationJob.
  *
- * Passe par `callLlm({ profile: 'classify' })` — le modèle est résolu par
- * `ai-config.ts` (env var `OPENROUTER_MODEL_CLASSIFY`, défaut packagé). Le
- * littéral de modèle n'apparaît PAS dans ce fichier — c'est l'objectif P0.1.
+ * Guard-rails (RESEARCH §6.4) :
+ *  - Zod validation stricte (theme enum + confidence 0-100 + exploitation 10-500).
+ *  - JSON malformé / Zod fail → return null + AIGenerationJob status='error'.
+ *  - theme=OTHER → return ClassifyOutput + AIGenerationJob status='skipped_other'
+ *    (la décision skip est prise dans persist.ts).
+ *  - Exception (timeout, HTTP error) → return null + AIGenerationJob status='error'.
+ *
+ * Worker safety : 0 import React / server-action / rbac. Importable depuis
+ * scripts/veille-worker.ts (tsx) sans crash "react cache".
  */
 
-import { z } from 'zod';
-import { callLlm } from '../ai-llm';
-import { PROMPT_VERSION, SYSTEM_PROMPT_CLASSIFY } from './prompts';
+import { createHash } from 'node:crypto';
+import { prisma } from '@qualiof/db';
+import { callOllama } from '@/lib/ai-ollama';
+import {
+  PROMPT_VERSION_VEILLE,
+  SYSTEM_PROMPT_VEILLE_CLASSIFY,
+  buildVeilleClassifyUserPrompt,
+  VeilleClassifyOutputSchema,
+} from './prompts';
 
-const VeilleTopicEnum = z.enum([
-  'qualiopi',
-  'opco',
-  'mcf',
-  'rgpd',
-  'metier',
-  'autre',
-]);
-const VeilleUrgencyEnum = z.enum(['haute', 'moyenne', 'basse']);
+const OLLAMA_MODEL_VEILLE = 'mistral-small:24b' as const;
 
-export const VeilleClassificationSchema = z.object({
-  topic: VeilleTopicEnum,
-  urgency: VeilleUrgencyEnum,
-  summary: z.string().trim().min(1).max(280),
-});
-
-export type VeilleClassification = z.infer<typeof VeilleClassificationSchema>;
-
-export interface VeilleClassifyResult {
-  classification: VeilleClassification;
-  /** Provider + modèle effectivement utilisés (tracking AIGenerationJob). */
-  provider: string;
-  model: string;
-  promptVersion: string;
-  latencyMs: number;
+export interface ClassifyInput {
+  title: string;
+  snippet: string;
+  source: string;
 }
 
-export class VeilleClassifyError extends Error {
-  // Préfixe `reason` plutôt que `cause` pour ne pas collisionner avec
-  // `Error.cause` (ES2022) — sinon TS4115 sur la parameter property.
-  constructor(
-    message: string,
-    public readonly reason: 'llm_failed' | 'schema_invalid',
-    public readonly raw?: string,
-  ) {
-    super(message);
-    this.name = 'VeilleClassifyError';
-  }
+export interface ClassifyOutput {
+  theme: 'INDIC_23' | 'INDIC_24' | 'INDIC_25' | 'INDIC_26' | 'OTHER';
+  confidence: number;
+  exploitation_draft: string;
 }
 
-export interface ClassifyOptions {
-  text: string;
-  /** Timeout en ms ; défaut hérité de `callLlm` (60 s). */
-  timeoutMs?: number;
-}
+/**
+ * Classifie un item RSS via Ollama mistral-small:24b.
+ * Trace le résultat dans `AIGenerationJob` pour audit (provider/model/promptVersion/status/latency).
+ *
+ * @returns `ClassifyOutput` si JSON valide ET Zod-compliant (incluant theme=OTHER),
+ *          `null` si JSON malformé OU exception (timeout, HTTP error).
+ */
+export async function classifyItem(
+  input: ClassifyInput,
+  tenantId: string,
+): Promise<ClassifyOutput | null> {
+  const start = Date.now();
+  // inputHash sert d'idempotence côté AIGenerationJob (clé pour ré-explorer un audit).
+  const inputHash = createHash('sha256')
+    .update(`${input.title}::${input.snippet}::${input.source}`)
+    .digest('hex')
+    .slice(0, 32);
 
-export async function classifyVeilleEntry(
-  opts: ClassifyOptions,
-): Promise<VeilleClassifyResult> {
-  const text = opts.text.trim();
-  if (!text) {
-    throw new VeilleClassifyError(
-      'Texte de classification vide.',
-      'schema_invalid',
-    );
+  try {
+    const r = await callOllama({
+      model: OLLAMA_MODEL_VEILLE,
+      systemPrompt: SYSTEM_PROMPT_VEILLE_CLASSIFY,
+      prompt: buildVeilleClassifyUserPrompt(input),
+      jsonOutput: true,
+      temperature: 0.1,
+      timeoutMs: 60_000,
+    });
+    const parsed = VeilleClassifyOutputSchema.safeParse(r.parsedJson);
+    if (!parsed.success) {
+      await prisma.aIGenerationJob.create({
+        data: {
+          tenantId,
+          provider: 'ollama',
+          model: OLLAMA_MODEL_VEILLE,
+          promptVersion: PROMPT_VERSION_VEILLE,
+          inputHash,
+          status: 'error',
+          latencyMs: Date.now() - start,
+          errorMsg:
+            'JSON parse / Zod fail: ' +
+            JSON.stringify(parsed.error.flatten()).slice(0, 400),
+          refTable: 'RegulatoryWatch',
+        },
+      });
+      return null;
+    }
+
+    await prisma.aIGenerationJob.create({
+      data: {
+        tenantId,
+        provider: 'ollama',
+        model: OLLAMA_MODEL_VEILLE,
+        promptVersion: PROMPT_VERSION_VEILLE,
+        inputHash,
+        status: parsed.data.theme === 'OTHER' ? 'skipped_other' : 'ok',
+        latencyMs: Date.now() - start,
+        refTable: 'RegulatoryWatch',
+      },
+    });
+    return parsed.data;
+  } catch (e) {
+    const msg = (e as Error).message ?? String(e);
+    await prisma.aIGenerationJob.create({
+      data: {
+        tenantId,
+        provider: 'ollama',
+        model: OLLAMA_MODEL_VEILLE,
+        promptVersion: PROMPT_VERSION_VEILLE,
+        inputHash,
+        status: 'error',
+        latencyMs: Date.now() - start,
+        errorMsg: msg.slice(0, 500),
+        refTable: 'RegulatoryWatch',
+      },
+    });
+    return null;
   }
-
-  const result = await callLlm({
-    profile: 'classify',
-    systemPrompt: SYSTEM_PROMPT_CLASSIFY,
-    prompt: text,
-    jsonOutput: true,
-    temperature: 0,
-    timeoutMs: opts.timeoutMs,
-  }).catch((err) => {
-    throw new VeilleClassifyError(
-      `Échec appel LLM : ${(err as Error).message}`,
-      'llm_failed',
-    );
-  });
-
-  const parsed = VeilleClassificationSchema.safeParse(result.parsedJson);
-  if (!parsed.success) {
-    throw new VeilleClassifyError(
-      `Réponse LLM hors schéma : ${parsed.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join(' / ')}`,
-      'schema_invalid',
-      result.raw,
-    );
-  }
-
-  return {
-    classification: parsed.data,
-    provider: result.provider,
-    model: result.model,
-    promptVersion: PROMPT_VERSION,
-    latencyMs: result.durationMs,
-  };
 }

@@ -92,7 +92,7 @@ export async function getNotifications(): Promise<{
     items.push({
       kind: 'preinscription',
       label: `${preinscriptionsToValidate} pré-inscription${preinscriptionsToValidate > 1 ? 's' : ''} à valider`,
-      href: '/app/preinscriptions',
+      href: '/app/inscriptions',
       count: preinscriptionsToValidate,
       severity: 'warning',
     });

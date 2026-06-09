@@ -1,18 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import type { UserRole } from '@qualiof/db';
 import { SidebarNav } from './sidebar-nav';
 import { NAV, filterNavForRole } from './nav-config';
-import type { UserRole } from '@qualiof/db';
 
 interface MobileNavDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Rôle utilisateur — le drawer filtre NAV côté client. */
+  /**
+   * Rôle utilisateur (string sérialisable). Le drawer importe `NAV` localement
+   * et applique `filterNavForRole` côté client — évite de sérialiser
+   * `NavSection[]` (qui contient des fonctions Lucide non sérialisables) à
+   * travers la frontière RSC→Client. Cf. debug `dashboard-rsc-icon-prop`
+   * 2026-05-16.
+   */
   role: UserRole;
 }
 
@@ -23,7 +29,7 @@ interface MobileNavDrawerProps {
  */
 export function MobileNavDrawer({ open, onOpenChange, role }: MobileNavDrawerProps) {
   const pathname = usePathname();
-  const nav = filterNavForRole(NAV, role);
+  const nav = useMemo(() => filterNavForRole(NAV, role), [role]);
 
   // Ferme le drawer automatiquement quand l'utilisateur navigue (clic sur item).
   // Sécurité : si pathname change pour une raison externe (Cmd+K, lien depuis

@@ -2,11 +2,16 @@
 
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
-import { MobileNavDrawer } from './mobile-nav-drawer';
 import type { UserRole } from '@qualiof/db';
+import { MobileNavDrawer } from './mobile-nav-drawer';
 
 interface MobileMenuButtonProps {
-  /** Rôle utilisateur — transmis au drawer qui filtre NAV côté client. */
+  /**
+   * Rôle utilisateur (string sérialisable). Transmis au drawer qui filtre `NAV`
+   * lui-même côté client. Évite de sérialiser `NavSection[]` (qui contient des
+   * références de fonctions Lucide) à travers la frontière RSC→Client — cf.
+   * debug `dashboard-rsc-icon-prop` 2026-05-16.
+   */
   role: UserRole;
 }
 
@@ -22,15 +27,10 @@ export function MobileMenuButton({ role }: MobileMenuButtonProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="
-          md:hidden -ml-1 inline-flex items-center justify-center h-10 w-10 rounded-xl
-          text-slate-500 hover:text-slate-900 hover:bg-slate-100/80
-          transition-all duration-200 ease-in-out
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200
-        "
+        className="md:hidden -ml-1 p-2 rounded-md hover:bg-muted text-foreground"
         aria-label="Ouvrir le menu"
       >
-        <Menu className="h-5 w-5" strokeWidth={1.75} />
+        <Menu className="h-5 w-5" />
       </button>
       <MobileNavDrawer open={open} onOpenChange={setOpen} role={role} />
     </>

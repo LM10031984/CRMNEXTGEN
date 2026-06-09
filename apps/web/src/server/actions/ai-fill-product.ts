@@ -42,21 +42,21 @@ RÈGLES ABSOLUES :
 
 1. **Durée totale respectée à la minute près** : la somme des durées de TOUS les blocs (hors pauses) DOIT être strictement égale au nombre d'heures de la formation. Si tu génères 8h, le programme contient 8h de contenu effectif. Pas 6h, pas 7h, pas 9h. EXACTEMENT le total.
 
-2. **Découpage horaire OBLIGATOIRE pour une journée de 8h (35h/semaine = standard Code du travail FR)** :
+2. **Découpage horaire OBLIGATOIRE pour une journée de 8h (règle Start Academy)** :
    - 9h00 – 10h30 : 1er bloc (1h30)
-   - 10h30 – 10h45 : **pause café matin** (15 min — Art. L3121-33 Code du travail)
-   - 10h45 – 12h15 : 2ème bloc (1h30)
-   - 12h15 – 13h45 : **pause déjeuner** (1h30 — usage formation pro)
-   - 13h45 – 15h15 : 3ème bloc (1h30)
-   - 15h15 – 15h30 : **pause café après-midi** (15 min)
-   - 15h30 – 17h30 : 4ème bloc (2h) — total cumulé 8h00
-   Soit 4 blocs de cours (1h30 × 3 + 2h) = 6h30 ? NON c'est faux. Compte bien : 4 blocs × ~1h30-2h = 8h.
-   Si la durée diffère (4h, 6h, 7h, 14h, 21h, etc.), adapte le découpage en respectant : 1 pause café toutes les 4h max + 1 pause déjeuner si > 5h.
+   - 10h30 – 10h45 : **pause café matin** (15 min)
+   - 10h45 – 13h00 : 2ème bloc (2h15)
+   - 13h00 – 14h00 : **pause déjeuner** (1h pile — règle Start Academy)
+   - 14h00 – 15h30 : 3ème bloc (1h30)
+   - 15h30 – 15h45 : **pause café après-midi** (15 min)
+   - 15h45 – 18h00 : 4ème bloc (2h15) — total cumulé 8h00
+   Soit 4 blocs de cours (1h30 + 2h15 + 1h30 + 2h15) = 7h30 + accueil 30min = 8h.
+   Si la durée diffère (4h, 6h, 7h, 14h, 21h, etc.), adapte le découpage en respectant : 1 pause café toutes les 4h max + 1 pause déjeuner OBLIGATOIRE 13h00-14h00 (1h) dès que la journée >= 5h ; aucune pause déjeuner si <= 4h.
 
 3. **Format obligatoire des blocs horaires** dans \`programMd\` :
    - Bloc cours : \`### 9h00 – 10h30 (1h30) | Titre du bloc\` puis 5-8 puces concrètes
    - Pause : \`### 10h30 – 10h45 | Pause café\` (ligne unique, pas de puces)
-   - Pause déjeuner : \`### 12h15 – 13h45 | Pause déjeuner\` (ligne unique)
+   - Pause déjeuner : \`### 13h00 – 14h00 | Pause déjeuner\` (ligne unique)
    Les pauses DOIVENT apparaître explicitement avec leur horaire.
 
 4. **Niveau de détail par bloc** scaler avec la durée totale :

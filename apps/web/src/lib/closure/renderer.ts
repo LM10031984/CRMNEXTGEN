@@ -42,7 +42,7 @@ import {
   attachQcmScoring,
   type FormationCtx,
   type StagiaireCtx,
-} from './mistral-generators';
+} from './ollama-generators';
 
 const USE_MISTRAL = process.env.CLOSURE_USE_MISTRAL !== '0';
 

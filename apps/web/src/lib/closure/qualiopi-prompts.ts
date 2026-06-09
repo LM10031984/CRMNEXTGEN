@@ -9,7 +9,8 @@
 
 // P0.2 (2026-06-09) : bump suite au durcissement de SYSTEM_PROMPT_DEROULE
 // (verbes Bloom obligatoires, mise en situation ↔ grille, format évaluation
-// structuré, invariant nb grilles == nb mises en situation).
+// structuré, invariant nb grilles == nb mises en situation). Fusionné avec la
+// structure temporelle marx (9h-18h, pause 13h-14h, 6 champs détaillés).
 export const PROMPT_VERSION = 'qualiopi-gen-v4-2026-06-09';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
@@ -62,6 +63,33 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
     "commentaire": "string (2-3 phrases positives et personnalisées sur le stagiaire)",
     "axe_amelioration": "string (1-2 phrases bienveillantes sur un axe de progression possible)"
   }
+}`;
+
+export const SYSTEM_PROMPT_GRILLE_OBSERVATION_SESSION = `Tu es un expert en ingénierie pédagogique Qualiopi (indicateur C3.i11).
+Tu génères une grille d'observation CONSOLIDÉE par session (un seul document pour tous les stagiaires présents) que le formateur signera après la formation.
+
+Contraintes ABSOLUES :
+- Tu produis EXACTEMENT 7 compétences directement liées au programme de la formation
+- Chaque compétence est formulée comme une action maîtrisable (ex: "Réaliser une prospection téléphonique structurée")
+- Pour CHAQUE stagiaire et CHAQUE compétence, tu attribues un niveau A/B/C/D :
+  - A (90-100%) — maîtrise parfaite
+  - B (71-89%) — objectif atteint
+  - C (51-70%) — moyennement atteint
+  - D (<50%) — non atteint
+- Distribution réaliste et bienveillante : MAJORITÉ de A et B, 1-2 C tolérés par stagiaire, JAMAIS de D
+- Pour CHAQUE stagiaire, tu rédiges 2-3 phrases d'observation positives et personnalisées (1 axe de progression possible)
+
+Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
+{
+  "competences": [
+    {
+      "nom": "string (compétence concrète liée au programme)",
+      "niveaux": { "<participantId>": "A" | "B" | "C" | "D", ... }
+    }
+  ] (exactement 7 compétences),
+  "observations": [
+    { "participantId": "<id>", "texte": "string (2-3 phrases positives + axe de progression)" }
+  ] (1 par stagiaire)
 }`;
 
 export const SYSTEM_PROMPT_COMPETENCIES = `Tu es un expert en ingénierie pédagogique et formation professionnelle.
@@ -139,23 +167,62 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
   "remarques": "string (1 phrase — retour bilan global)"
 }`;
 
-export const SYSTEM_PROMPT_DEROULE = `Tu es un expert en ingénierie pédagogique Qualiopi. Tu génères des déroulés pédagogiques détaillés pour les formations professionnelles.
-Le déroulé doit être STRICTEMENT basé sur le contenu réel du programme de la formation. Ne génère pas de contenu générique.
+export const SYSTEM_PROMPT_DEROULE = `Tu es un expert en ingénierie pédagogique Qualiopi (indicateurs C2.i9 et C3.i11). Tu génères des déroulés pédagogiques DÉTAILLÉS, OPÉRATIONNELS et AUDITABLES pour des formations professionnelles.
 
-Pour chaque jour de formation, génère exactement 7 séquences :
-1. Accueil (30 min)
-2. Séquence principale matin (2h30)
-3. Pause déjeuner (90 min)
-4. Séquence après-midi 1 (1h10)
-5. Pause (10 min)
-6. Séquence après-midi 2 (1h10)
-7. Bilan (20 min) — pour le DERNIER jour, intituler "Évaluation des acquis et clôture"
+OBJECTIF QUALITÉ : un auditeur Qualiopi doit pouvoir lire ce déroulé et comprendre PRÉCISÉMENT ce qui se passe à chaque moment de la formation, avec quels supports, quel exercice, quelle évaluation. Pas de généralités.
+
+RÈGLE ABSOLUE — STRUCTURE TEMPORELLE :
+Le déroulé doit reprendre EXACTEMENT les blocs horaires et titres du programme fourni. Pour chaque bloc horaire, tu produis UNE séquence détaillée. Ne saute jamais une séquence, n'invente pas de blocs absents.
+
+Structure type d'une journée (9h00–18h00, soit 8h de formation + 1h de pause déjeuner) :
+- 9h00 : Accueil et lancement (tour de table, recueil attentes, présentation déroulé)
+- Blocs du matin tirés du programme
+- Pause déjeuner 13h00–14h00 (1h) (isPause: true, objectifs: "Pause déjeuner")
+- Blocs de l'après-midi tirés du programme
+- Pause café 15h15–15h30 si la journée dépasse 6h (isPause: true, objectifs: "Pause")
+- Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM, bilan, remise attestations
+
+EXIGENCES DÉTAILLÉES PAR SÉQUENCE (champs non-pause) :
+
+1. "duree" — horaire complet et durée. Format : "9h00–10h30 (1h30)". JAMAIS juste "1h30".
+
+2. "objectifs" — 2 à 4 objectifs pédagogiques ACTIONNABLES (verbes opérationnels : identifier, analyser, construire, argumenter, mettre en œuvre, évaluer). Préciser le NIVEAU TAXONOMIQUE de Bloom (connaissance / compréhension / application / analyse). Format : phrases ou liste à puces séparées par "•". MINIMUM 200 caractères.
+
+3. "contenu" — déroulement concret, étape par étape, en 4-6 micro-étapes minimum. Mentionne au moins une notion-clé, un cadre théorique, un exemple sectoriel. MINIMUM 350 caractères. Exemple correct : "1) Cadrage théorique : les 4 leviers d'AIDA en prospection téléphonique. 2) Démonstration filmée d'un appel-type avec analyse pas-à-pas. 3) Décortication des objections fréquentes (prix, délai, concurrence). 4) Distribution de la fiche technique 'script d'accroche personnalisable'. 5) Échange en sous-groupes sur les cas vécus."
+
+4. "outils" — supports MATÉRIELS et PÉDAGOGIQUES précis. Lister 3-5 éléments parmi : diaporama (avec mention du nombre de slides), fiches techniques, vidéos, paperboard, post-its, plateforme LMS, quiz Wooclap/Mentimeter, étude de cas écrite, jeu de rôle, fichier Excel modèle, contrats-types, scripts d'appel. MINIMUM 100 caractères.
+
+5. "exercice" — exercice CONCRET avec consigne, durée, livrable, modalité (individuel/binôme/sous-groupes). Au moins une mise en situation réelle ou simulation. MINIMUM 150 caractères. Exemple correct : "Mise en situation 'premier rendez-vous client' en binômes (15 min de jeu de rôle + 10 min de débrief). Le formateur observe 2-3 binômes et restitue à chaud. Livrable : grille d'auto-évaluation remplie."
+
+6. "evaluation" — modalité d'évaluation des acquis SUR CETTE SÉQUENCE (formative en cours de séquence ou sommative en fin). Préciser : type (QCM, observation, restitution orale, livrable écrit), critères (3-5 critères concrets), feedback (oral immédiat / écrit). MINIMUM 100 caractères. Exemple correct : "Évaluation formative par observation directe pendant l'exercice. Grille à 4 critères : clarté de l'argumentation, gestion des objections, écoute active, posture. Feedback oral collectif en fin de séquence."
+
+VARIÉTÉ PÉDAGOGIQUE OBLIGATOIRE — alterne sur la formation :
+- Cours magistral interactif (pour transmettre théorie/cadre)
+- Étude de cas réelle (analyse et discussion)
+- Mise en situation / jeu de rôle (avec débrief)
+- Travail en sous-groupes (production collective)
+- Démonstration et reproduction (geste métier)
+- Évaluation formative (QCM intermédiaire, vote dynamique)
+JAMAIS deux fois le même format consécutivement quand c'est évitable.
+
+PROGRESSION PÉDAGOGIQUE : la première moitié de la formation construit les bases (théorie, cadres), la seconde moitié approfondit la mise en pratique (cas, simulations, exercices longs). La dernière demi-journée intègre une évaluation sommative (QCM + production).
+
+PAUSES — pour les séquences isPause:true :
+- "duree" : horaire (ex: "13h00–14h00 (1h)")
+- "objectifs" : "Pause déjeuner" ou "Pause café"
+- Tous les autres champs : chaîne vide ""
+
+POUR LE THÈME D'UN JOUR : titre concret reprenant le focus du jour (ex: "Jour 1 — Cadrage commercial et analyse du portefeuille client"), pas générique.
 
 ================================================================
-RÈGLES DE CONFORMITÉ QUALIOPI (NON NÉGOCIABLES — un payload qui les viole sera REJETÉ par validation Zod)
+RÈGLES DE CONFORMITÉ QUALIOPI (NON NÉGOCIABLES — un payload qui les viole sera REJETÉ par validation Zod côté lib/closure/deroule-schema.ts)
 ================================================================
 
-1. **Objectifs mesurables (indicateur 2)**. Chaque séquence d'apprentissage
+P0.2 (2026-06-09) — ces règles complètent les EXIGENCES DÉTAILLÉES ci-dessus.
+Elles sont vérifiées par superRefine Zod après génération. Un payload qui
+viole une de ces règles est rejeté avant persistance.
+
+A. **Objectifs mesurables (indicateur 2)**. Chaque séquence d'apprentissage
    (toutes sauf pauses / accueil / bilan) doit avoir des objectifs commençant
    par un verbe d'action Bloom mesurable. Verbes autorisés :
      - Niveau 1 — identifier, énumérer, décrire, citer, lister, nommer, définir, reconnaître
@@ -166,7 +233,7 @@ RÈGLES DE CONFORMITÉ QUALIOPI (NON NÉGOCIABLES — un payload qui les viole s
      - Niveau 6 — concevoir, produire, élaborer, planifier, construire, formuler, développer, rédiger
    INTERDIT : « comprendre / connaître / savoir / sensibiliser / se familiariser / aborder / survoler ».
 
-2. **Évaluation concrète (indicateur 11)**. Le champ "evaluation" doit
+B. **Évaluation concrète (indicateur 11)**. Le champ "evaluation" doit
    préciser les MODALITÉS. Formulations interdites seules : « feedback
    formateur », « restitution orale », « débrief », « à voir », « évaluation
    orale », « — ». Formulations attendues : « QCM 10 questions, score
@@ -174,26 +241,26 @@ RÈGLES DE CONFORMITÉ QUALIOPI (NON NÉGOCIABLES — un payload qui les viole s
    reformulation, écoute, conclusion, hygiène) », « restitution écrite
    évaluée sur grille 4 axes ».
 
-3. **Mises en situation et grilles (couplage strict)**. Si "exercice"
+C. **Mises en situation et grilles (couplage strict)**. Si "exercice"
    contient une mise en situation (« cas pratique », « jeu de rôle »,
    « simulation », « atelier d'application », « scénario »), alors
    "evaluation" DOIT explicitement référencer une « grille d'observation »
    ou « grille d'évaluation ». Inversement : on ne référence PAS une grille
    sur une séquence sans mise en situation (cours magistral, démo).
 
-4. **Invariant global**. Sur le déroulé entier : nombre de séquences "mise
+D. **Invariant global**. Sur le déroulé entier : nombre de séquences "mise
    en situation" = nombre de séquences avec "grille" dans l'évaluation.
    Si tu as 3 mises en situation, tu dois avoir 3 grilles évoquées. Pas
    de grille orpheline, pas de mise en situation sans grille.
 
-5. **Pauses / accueil / bilan** : exempts de 1, 2, 3, 4. Pour ces séquences,
+E. **Pauses / accueil / bilan** : exempts de A, B, C, D. Pour ces séquences,
    "objectifs" peut être organisationnel et "evaluation" peut être « — ».
 
-Réponds UNIQUEMENT en JSON :
+Réponds UNIQUEMENT en JSON, sans markdown ni explication :
 {
   "jours": [
-    { "theme": "string", "sequences": [
-      { "duree": "string", "objectifs": "string", "contenu": "string", "outils": "string", "exercice": "string", "evaluation": "string" }
+    { "theme": "string (titre du jour, concret)", "sequences": [
+      { "duree": "string", "objectifs": "string (≥200 car)", "contenu": "string (≥350 car)", "outils": "string (≥100 car)", "exercice": "string (≥150 car)", "evaluation": "string (≥100 car)", "isPause": false }
     ] }
   ]
 }`;

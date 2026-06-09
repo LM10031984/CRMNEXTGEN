@@ -86,7 +86,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Calendar className="h-4 w-4" strokeWidth={1.75} /> Nouvelle session
           </Link>
           <Link
-            href="/app/preinscriptions"
+            href="/app/inscriptions"
             className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-sm font-medium text-slate-700 bg-white border border-slate-200 shadow-soft transition-all duration-300 ease-out hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(241,245,249,0.8),0_4px_12px_-2px_rgba(15,23,42,0.08)] active:scale-[0.97]"
           >
             <Inbox className="h-4 w-4" strokeWidth={1.75} /> Pré-inscription
@@ -251,7 +251,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </h2>
           <ul className="space-y-1 text-sm">
             <PipelineRow icon={Megaphone} label="Leads à relancer / qualifier" value={stats.pipeline.leadsToFollowup} href="/app/leads" />
-            <PipelineRow icon={Inbox} label="Pré-inscriptions à valider" value={stats.pipeline.preEnrollmentsToValidate} href="/app/preinscriptions" />
+            <PipelineRow icon={Inbox} label="Pré-inscriptions à valider" value={stats.pipeline.preEnrollmentsToValidate} href="/app/inscriptions" />
             <PipelineRow icon={Calendar} label={`Sessions à venir (${fmtNb.format(stats.alerts.sessionsNext7Days)} dans 7 jours)`} value={stats.pipeline.upcomingSessions} href="/app/sessions" />
             <PipelineRow
               icon={Wallet}

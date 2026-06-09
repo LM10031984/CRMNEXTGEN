@@ -134,6 +134,17 @@ export function loadLogoMinistereDataUrl(): string {
   return loadAssetDataUrl(['logo-ministere-travail.png']);
 }
 
+/**
+ * Cachet/tampon de l'OF (sans signature dessus — à superposer avec signature
+ * séparée dans le HTML). Utilisé par l'attestation d'assiduité AGEFICE.
+ *
+ * Cherche d'abord `tampon.png` dans `public/of-assets/{tenantId}/`,
+ * fallback bundled `tampon-start-academy.png`.
+ */
+export function loadStampDataUrl(tenantId?: string): string {
+  return loadAssetDataUrl(['tampon.png', 'tampon-start-academy.png'], tenantId);
+}
+
 /** Logo officiel Qualiopi processus certifié (haut droite docs Qualiopi). */
 export function loadLogoQualiopiDataUrl(): string {
   return loadAssetDataUrl(['logo-qualiopi.png']);

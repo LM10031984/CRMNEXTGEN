@@ -2,6 +2,7 @@
 
 import { EditModal } from './edit-modal';
 import { updatePerson } from '@/server/actions/crud-edits';
+import { DIPLOME_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/agefice-options';
 
 const BPF_OPTIONS = [
   { value: "F.1.a - Salariés d'employeurs privés hors apprentis", label: 'F.1.a Salariés privés' },
@@ -39,6 +40,25 @@ export function EditPersonButton({
     bpfDefaultStatus?: string | null;
   };
 }) {
+  const diplomaCurrentIsLegacy =
+    !!current.diplomas && !DIPLOME_OPTIONS.includes(current.diplomas as (typeof DIPLOME_OPTIONS)[number]);
+  const DIPLOMA_OPTIONS_FOR_EDIT = [
+    ...(diplomaCurrentIsLegacy
+      ? [{ value: current.diplomas!, label: `Valeur actuelle : ${current.diplomas}` }]
+      : []),
+    ...DIPLOME_OPTIONS.map((o) => ({ value: o, label: o })),
+  ];
+
+  const experienceCurrentIsLegacy =
+    !!current.professionalExperience &&
+    !EXPERIENCE_OPTIONS.some((o) => o.value === current.professionalExperience);
+  const EXPERIENCE_OPTIONS_FOR_EDIT = [
+    ...(experienceCurrentIsLegacy
+      ? [{ value: current.professionalExperience!, label: `Valeur actuelle : ${current.professionalExperience}` }]
+      : []),
+    ...EXPERIENCE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+  ];
+
   return (
     <EditModal
       buttonLabel="Éditer la fiche"
@@ -57,9 +77,21 @@ export function EditPersonButton({
         { name: 'email', label: 'Email', defaultValue: current.email },
         { name: 'phone', label: 'Téléphone', defaultValue: current.phone },
         { name: 'professionalStatus', label: 'Statut professionnel', defaultValue: current.professionalStatus, placeholder: 'Agent commercial, Auto-entrepreneur, Salarié…' },
-        { name: 'professionalExperience', label: 'Expérience pro', defaultValue: current.professionalExperience, placeholder: 'Entre 4 et 10 ans' },
+        {
+          name: 'professionalExperience',
+          label: 'Expérience pro (AGEFICE)',
+          type: 'select',
+          options: EXPERIENCE_OPTIONS_FOR_EDIT,
+          defaultValue: current.professionalExperience,
+        },
         { name: 'educationLevel', label: 'Niveau d\'étude', defaultValue: current.educationLevel },
-        { name: 'diplomas', label: 'Diplômes (texte libre)', defaultValue: current.diplomas },
+        {
+          name: 'diplomas',
+          label: 'Dernier diplôme (AGEFICE)',
+          type: 'select',
+          options: DIPLOMA_OPTIONS_FOR_EDIT,
+          defaultValue: current.diplomas,
+        },
         {
           name: 'bpfDefaultStatus',
           label: 'Statut BPF (Bilan Pédagogique)',

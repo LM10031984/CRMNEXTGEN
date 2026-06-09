@@ -212,8 +212,8 @@ export async function convertPreEnrollment(
       return { personId: person.id, orgId };
     });
 
-    revalidatePath('/app/preinscriptions');
-    revalidatePath(`/app/preinscriptions/${input.preEnrollmentId}`);
+    revalidatePath('/app/inscriptions');
+    revalidatePath(`/app/inscriptions/${input.preEnrollmentId}`);
     revalidatePath('/app/apprenants');
 
     return { ok: true, personId: result.personId, orgId: result.orgId ?? undefined };
@@ -240,6 +240,6 @@ export async function rejectPreEnrollment(
       validatedAt: new Date(),
     },
   });
-  revalidatePath('/app/preinscriptions');
+  revalidatePath('/app/inscriptions');
   return { ok: true };
 }

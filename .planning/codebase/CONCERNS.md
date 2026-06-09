@@ -71,39 +71,36 @@ The sidebar uses **the correct routes**. The audit likely tested by typing URLs 
 
 ---
 
-### 4. No responsive (mobile/tablet sidebar covers content) — **CONFIRMED ROOT CAUSE**
+### 4. No responsive (mobile/tablet sidebar covers content) — **FIXED IN PHASE 2**
 
 **Audit claim:** At 768px and 390px viewports, sidebar is full-width and hides content; no hamburger; no breakpoints.
 
-**Root cause identified (`apps/web/tailwind.config.ts`):**
+**Root cause corrigée (2026-05-12 Phase 2 audit) :**
+
+L'analyse initiale supposait que `screens: { '2xl': '1400px' }` était au top-level de `theme` et remplaçait les breakpoints par défaut. **C'était faux.** Lecture précise de `apps/web/tailwind.config.ts` :
 
 ```ts
-screens: { '2xl': '1400px' },
-```
-
-This is **outside** `theme.extend`, which means it **REPLACES** Tailwind's default breakpoints (`sm`, `md`, `lg`, `xl`, `2xl`). The only breakpoint that exists in this project is `2xl: 1400px`. All `sm:*`, `md:*`, `lg:*`, `xl:*` utilities are inactive.
-
-`Sidebar` uses fixed width `w-64` (256px) with no breakpoint variants, and `MainContent` shifts content with `ml-64` always. On a 390px screen, the sidebar covers 65% of the viewport and the content area is 134px wide (off-screen partially).
-
-**Fix:**
-```ts
-// tailwind.config.ts
 theme: {
-  // (remove the top-level `screens` override)
-  extend: {
-    screens: { '2xl': '1400px' }, // overrides ONLY 2xl
-    // ...rest
+  container: {
+    center: true,
+    padding: '2rem',
+    screens: { '2xl': '1400px' },  // ← scope: utility `container` UNIQUEMENT
   },
+  extend: { colors: ..., fontFamily: ... },
 }
 ```
 
-Then add responsive variants in Sidebar (`hidden md:block` for desktop sidebar, `block md:hidden` for hamburger drawer) and in `MainContent` (`ml-0 md:ml-64`).
+Le `screens` est dans **`theme.container.screens`** — il n'affecte que la max-width de la classe `container`. Les breakpoints Tailwind par défaut (`sm: 640`, `md: 768`, `lg: 1024`, `xl: 1280`, `2xl: 1536`) sont intacts.
 
-**Status:** Real bug, root cause clear, fix straightforward.
+**Vraie cause :** Les composants `Sidebar` (`apps/web/src/components/layout/sidebar.tsx`) et `MainContent` (`apps/web/src/components/layout/main-content.tsx`) utilisent des classes fixes (`w-64`, `ml-64`, `fixed`) **sans aucun variant responsive**. Les breakpoints existent, ils ne sont juste pas utilisés.
+
+**Fix Phase 2 (livré 2026-05-12) :** Aucune modification de `tailwind.config.ts`. Ajout de `hidden md:flex` sur `<aside Sidebar>`, création de `<MobileNavDrawer>` (Radix Dialog) + `<MobileMenuButton>` dans TopBar, `ml-0 md:ml-64` sur MainContent. Refactor préalable : extraction de `NAV` dans `nav-config.ts` + `<SidebarNav>` partagé desktop+mobile.
+
+**Status:** ✅ Resolved Phase 2.
 
 ---
 
-### 5. Layout truncated at 1456px viewport — **CONFIRMED**
+### 5. Layout truncated at 1456px viewport — **TO INVESTIGATE PHASE 3**
 
 **Audit claim:** Dashboard blocks (KPI, pipeline, financeurs) cut on right without horizontal scroll.
 
@@ -112,16 +109,11 @@ Then add responsive variants in Sidebar (`hidden md:block` for desktop sidebar, 
 <main className="flex-1 p-8 max-w-screen-2xl w-full mx-auto">
 ```
 
-With Tailwind's `screens: { '2xl': '1400px' }`, `max-w-screen-2xl` resolves to **1400px**. Sidebar is 256px (`ml-64`). Total natural width: 1400 + 256 = **1656px** to fit comfortably.
+**Analyse corrigée (2026-05-12 Phase 2 audit) :** Le `screens` est dans `theme.container.screens` (cf. point #4), donc `max-w-screen-2xl` Tailwind reste à sa valeur par défaut = **1536px** (pas 1400px). Avec sidebar 256px : 1536 + 256 = 1792px nécessaires pour que `<main>` atteigne sa max-width. À viewport 1456px, `<main>` reste à 1200px de largeur, en dessous de sa max-width → pas de tronquage venant de `max-w-screen-2xl` lui-même.
 
-At a viewport of 1456px:
-- Available content width = 1456 - 256 = 1200px
-- `max-w-screen-2xl` (1400px) means content can grow up to 1400px, but `w-full` caps at parent (1200px), so technically no overflow from `<main>` itself
-- The issue is **grid layouts inside the dashboard** using fixed minimum cell widths (`minmax(N, 1fr)`) where N is too big OR using fixed widths instead of fluid. With no `md:` / `lg:` breakpoints active (see point 4), grids can't reflow.
+**Hypothèse à investiguer Phase 3 (RESP-04) :** Les grilles internes (dashboard KPI, pipeline, financeurs) utilisent probablement `grid-cols-N` fixes sans variants responsive (`sm:grid-cols-2`, `lg:grid-cols-4`). À 1200px width, une grille `grid-cols-4` avec des KPI cards minimum 320px chacun déborde. Phase 3 audit chaque grille et ajoute les variants.
 
-**Fix:** Same as point 4 (restore default breakpoints) + audit dashboard grid templates.
-
-**Status:** Same root cause as #4.
+**Status:** À traiter Phase 3 RESP-04 (Responsive content layouts).
 
 ---
 

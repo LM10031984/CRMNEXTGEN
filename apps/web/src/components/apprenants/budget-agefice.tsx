@@ -2,10 +2,14 @@
  * Compteur Budget AGEFICE — montant consommé sur l'année où le dossier a été
  * monté (financingRequestDate) vs plafond 3 000 €. Cf
  * feedback_budget_agefice_annee_dossier.
+ *
+ * Audit 2026-05-13 :
+ * - UX-06 : sélecteur d'année (chips) qui change `?ageficeYear=NNNN`
+ * - UX-04 : CTA "Déposer un dossier AGEFICE" lié au flux existant
  */
 
 import Link from 'next/link';
-import { Wallet, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Wallet, AlertTriangle, CheckCircle2, ChevronRight, FilePlus2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PLAFOND_AGEFICE = 3000;
@@ -19,16 +23,25 @@ interface SessionLine {
   sessionName: string;
   startDate: Date;
   amountHT: number;
+  /** True si une fiche AGEFICE a déjà été générée pour ce participant. */
+  hasFicheAgefice?: boolean;
 }
 
 export function BudgetAgefice({
   year,
   consomme,
   sessions,
+  /** Liste des années où l'apprenant a au moins une participation AGEFICE.
+   *  Utilisée pour rendre le sélecteur d'année (UX-06). */
+  availableYears = [],
+  /** Pathname de la page parent — pour construire les liens du sélecteur d'année. */
+  basePath,
 }: {
   year: number;
   consomme: number;
   sessions: SessionLine[];
+  availableYears?: number[];
+  basePath: string;
 }) {
   const restant = Math.max(0, PLAFOND_AGEFICE - consomme);
   const pct = Math.min(100, Math.round((consomme / PLAFOND_AGEFICE) * 100));
@@ -42,9 +55,16 @@ export function BudgetAgefice({
         ? 'bg-amber-400'
         : 'bg-emerald-500';
 
+  // Inclut l'année courante dans les chips même si pas dans availableYears
+  const currentYear = new Date().getFullYear();
+  const yearsForChips = Array.from(new Set([currentYear, year, ...availableYears])).sort((a, b) => b - a);
+
+  // Sessions sans fiche AGEFICE générée — éligibles pour CTA "Déposer un dossier"
+  const sessionsWithoutFiche = sessions.filter((s) => !s.hasFicheAgefice);
+
   return (
-    <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
-      <div className="flex items-center justify-between mb-3">
+    <section className="rounded-2xl border border-border bg-white p-6">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground inline-flex items-center gap-2">
           <Wallet className="h-4 w-4" /> Budget AGEFICE {year}
         </h2>
@@ -62,6 +82,26 @@ export function BudgetAgefice({
           </span>
         )}
       </div>
+
+      {/* UX-06 : Sélecteur d'année (chips) */}
+      {yearsForChips.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {yearsForChips.map((y) => (
+            <Link
+              key={y}
+              href={`${basePath}?tab=activity&ageficeYear=${y}` as any}
+              className={cn(
+                'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                y === year
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-muted-foreground border-border hover:bg-muted',
+              )}
+            >
+              {y}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-baseline gap-2 mb-2">
         <span className="text-2xl font-bold tabular-nums">{fmtEUR.format(consomme)}</span>
@@ -101,11 +141,38 @@ export function BudgetAgefice({
                   {new Date(s.startDate).toLocaleDateString('fr-FR')}
                 </span>
                 <span className="font-medium tabular-nums">{fmtEUR.format(s.amountHT)}</span>
+                {s.hasFicheAgefice && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] text-emerald-700"
+                    title="Fiche AGEFICE générée"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                  </span>
+                )}
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               </Link>
             </li>
           ))}
         </ul>
+      )}
+
+      {/* UX-04 : CTA "Déposer un dossier AGEFICE" pré-rempli */}
+      {sessionsWithoutFiche.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <Link
+            href={`/app/sessions/${sessionsWithoutFiche[0]!.sessionId}` as any}
+            className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-primary/40 bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 transition-colors"
+            title="Aller à la session pour générer la fiche AGEFICE"
+          >
+            <FilePlus2 className="h-4 w-4" />
+            Déposer un dossier AGEFICE
+            {sessionsWithoutFiche.length > 1 && (
+              <span className="text-xs text-muted-foreground">
+                ({sessionsWithoutFiche.length} sessions éligibles)
+              </span>
+            )}
+          </Link>
+        </div>
       )}
     </section>
   );

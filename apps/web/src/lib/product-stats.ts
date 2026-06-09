@@ -74,14 +74,15 @@ export async function getProductStats(
         select: { personId: true },
         distinct: ['personId'],
       }),
-      // CA HT = sum Invoice.amountHT (PAID) traversant participant.session.productId.
-      // Le filtre tenantId est aussi posé directement (defense-in-depth — Pitfall 3 Phase 9.1-02).
-      prisma.invoice.aggregate({
-        _sum: { amountHT: true },
+      // CA HT = sum SessionParticipant.priceHT (= prix négocié, indépendant
+      // du statut Invoice). Audit 2026-05-23 : avant, on lisait Invoice.amountHT
+      // PAID — mais peu d'Invoices sont PAID en BDD, donc CA toujours à 0 alors
+      // que les SP ont leurs prix corrects (et alignés Tréso AGEFICE qui est
+      // source de vérité encaissement). Cf project_session_23_05_2026_smartof.
+      prisma.sessionParticipant.aggregate({
+        _sum: { priceHT: true },
         where: {
-          tenantId,
-          status: 'PAID',
-          participant: { session: { productId } },
+          session: { tenantId, productId },
         },
       }),
       prisma.trainingSession.findFirst({
@@ -95,7 +96,7 @@ export async function getProductStats(
       }),
     ]);
 
-  const sumHT = sumInvoices?._sum?.amountHT;
+  const sumHT = sumInvoices?._sum?.priceHT;
   return {
     sessionsRealisees: sessionsCompleted,
     apprenantsFormesTotal: distinctLearners.length,

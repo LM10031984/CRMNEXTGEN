@@ -123,7 +123,7 @@ export function DuplicateSessionButton({
             </label>
 
             {recurring && (
-              <div className="grid grid-cols-2 gap-3 pl-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">
                     Nombre d'occurrences

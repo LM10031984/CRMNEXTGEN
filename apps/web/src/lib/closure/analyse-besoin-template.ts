@@ -13,13 +13,16 @@
 
 import {
   type ClosureContext,
+  BRAND_DARK,
   SECTION_BLUE,
   escapeHtml,
+  formatDateFr,
   renderBrandHeader,
   renderInfoBox,
   renderStagiaireBlock,
   wrapHtml,
 } from './shared-template';
+import { computeAnalyseDate, pickResponsablePedagogique } from '@/lib/jours-feries-fr';
 
 export interface AnalyseBesoinContent {
   contexte_professionnel?: string | null;
@@ -82,6 +85,24 @@ ${renderBrandHeader()}
       ? `<p style="color: #94A3B8; font-style: italic;">Données à recueillir auprès du stagiaire avant la formation.</p>`
       : ''
   }
+
+  ${(() => {
+    const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;
+    const responsable = pickResponsablePedagogique(seed);
+    const date = computeAnalyseDate(ctx.sessionStartDate, 15, seed);
+    return `
+  <div style="margin-top: 18mm; padding: 12px 14px; border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC;">
+    <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+      Réalisé par
+    </div>
+    <div style="font-size: 12pt; font-weight: 700; color: ${BRAND_DARK};">
+      ${escapeHtml(responsable)}
+    </div>
+    <div style="font-size: 9.5pt; color: #475569; margin-top: 2px;">
+      Le ${escapeHtml(formatDateFr(date))} — Responsable pédagogique Start Academy
+    </div>
+  </div>`;
+  })()}
 </main>
 `;
 

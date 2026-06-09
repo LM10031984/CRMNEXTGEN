@@ -22,43 +22,44 @@ datasource db {
 // =====================================================
 
 model Tenant {
-  id                      String         @id @default(uuid())
-  name                    String
-  siret                   String?
-  numDA                   String?
-  rcs                     String?
+  id                         String            @id @default(uuid())
+  name                       String
+  siret                      String?
+  numDA                      String?
+  rcs                        String?
   // Phase 7 — paramètres OF éditables (SET-01/02/03). Toutes nullables :
   // null = fallback ENV (D-01 hybrid BDD/ENV). Première sauvegarde fait basculer
   // la source de vérité en BDD.
-  legalForm               String? // forme juridique libre (SAS, EURL, ...) — voir enum LegalForm pour valeurs canoniques
-  legalMentions           String?        @db.Text
-  address                 Json?
-  invoicePrefix           String?        @default("FAC")
+  legalForm                  String? // forme juridique libre (SAS, EURL, ...) — voir enum LegalForm pour valeurs canoniques
+  legalMentions              String?           @db.Text
+  address                    Json?
+  invoicePrefix              String?           @default("FAC")
   // Phase 11 — Avoirs + Relances (D-02, D-10).
   // creditNotePrefix : préfixe séquence avoirs (AVO-NNNNNN), distinct de FAC- (CGI art. 289).
   // invoiceReminderDays : array Postgres Int[] des seuils J+N pour relances impayés (1-3 valeurs croissantes).
-  creditNotePrefix        String?        @default("AVO")
-  invoiceReminderDays     Int[]          @default([30, 45])
+  creditNotePrefix           String?           @default("AVO")
+  invoiceReminderDays        Int[]             @default([30, 45])
   // BUG-15 — Documents légaux statiques tenant (Qualiopi indic 9 — info
   // déroulement prestation, et indic 1 — info site internet).
   // Stockés en markdown, rendus en PDF via marked + paged footer.
-  cgvMarkdown             String?        @db.Text
-  reglementInterieurMarkdown String?     @db.Text
-  iban                    String?
-  bic                     String?
-  emailFrom               String?
-  logoPath                String? // ex "/of-assets/{tenantId}/logo.png"
-  signaturePedagoPath     String?
-  signatureDirigeantPath  String?
+  cgvMarkdown                String?           @db.Text
+  reglementInterieurMarkdown String?           @db.Text
+  iban                       String?
+  bic                        String?
+  emailFrom                  String?
+  logoPath                   String? // ex "/of-assets/{tenantId}/logo.png"
+  signaturePedagoPath        String?
+  signatureDirigeantPath     String?
   // Phase 9 — Distribution leads automatique (LEAD-01 D-06).
   // Par défaut true pour rétro-compat (les tenants existants gardent le comportement actuel).
-  autoAssignLeads         Boolean        @default(true)
-  notifyOnLeadAssignEmail Boolean        @default(true)
-  notifyOnLeadAssignBell  Boolean        @default(true)
-  users                   User[]
-  notifications           Notification[]
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @default(now()) @updatedAt
+  autoAssignLeads            Boolean           @default(true)
+  notifyOnLeadAssignEmail    Boolean           @default(true)
+  notifyOnLeadAssignBell     Boolean           @default(true)
+  users                      User[]
+  notifications              Notification[]
+  regulatoryWatches          RegulatoryWatch[]
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @default(now()) @updatedAt
 }
 
 enum UserRole {
@@ -349,6 +350,12 @@ model TrainingProduct {
   bpfLevel           String?
   capacityMin        Int               @default(1)
   capacityMax        Int               @default(12)
+  // BUG-P0-02 — quand le produit a été auto-rempli par l'IA (createProduct
+  // avec autoFillWithAI=true), on horodate ici. Tant que non-null, le
+  // contenu est considéré "Brouillon IA" → bannière dans le tab Programme,
+  // blocker `product_ai_unreviewed` dans getSessionCompleteness, action
+  // "Valider" (set null) ou "Réviser" (édition manuelle = set null aussi).
+  aiDraftedAt        DateTime?
   modules            TrainingModule[]
   trainingSessions   TrainingSession[]
   leads              Lead[]
@@ -579,25 +586,35 @@ model SessionParticipant {
   paymentStatus PaymentStatus @default(PENDING)
 
   // Checklist Qualiopi (booleans calqués sur Airtable Inscriptions)
-  conventionSigned         Boolean   @default(false)
-  programmeDelivered       Boolean   @default(false)
-  certificateDelivered     Boolean   @default(false)
-  pedagogicalSupportsGiven Boolean   @default(false)
-  attendanceSheetCollected Boolean   @default(false)
-  assiduitySheetCollected  Boolean   @default(false)
-  evaluationCollected      Boolean   @default(false)
-  satisfactionCollected    Boolean   @default(false)
-  closingDocsSent          Boolean   @default(false)
-  invoiceSent              Boolean   @default(false)
-  paymentReceived          Boolean   @default(false)
+  conventionSigned         Boolean @default(false)
+  programmeDelivered       Boolean @default(false)
+  certificateDelivered     Boolean @default(false)
+  pedagogicalSupportsGiven Boolean @default(false)
+  attendanceSheetCollected Boolean @default(false)
+  assiduitySheetCollected  Boolean @default(false)
+  evaluationCollected      Boolean @default(false)
+  satisfactionCollected    Boolean @default(false)
+  closingDocsSent          Boolean @default(false)
+
+  // Statuts trésorerie OPCO (calqués sur le suivi Excel "Tréso AGEFICE" de
+  // Start Academy — source de vérité encaissement, SmartOF étant faux).
+  // 4 booléens linéaires : facture émise → validation organisme → remboursement
+  // OPCO → paiement effectif du client (= AGEFICE rembourse l'apprenant, puis
+  // l'apprenant paye Start Academy).
+  factureEnvoyee    Boolean   @default(false)
+  validationOpco    Boolean   @default(false)
+  remboursementOpco Boolean   @default(false)
+  paiementClient    Boolean   @default(false)
+  invoiceSent       Boolean   @default(false)
+  paymentReceived   Boolean   @default(false)
   // Dates de transition false→true (calcul DSO et delais OPCO)
-  invoiceSentAt            DateTime?
-  paymentReceivedAt        DateTime?
-  opcoApprovedAt           DateTime?
-  opcoReimbursedAt         DateTime?
-  opcoPreApproved          Boolean   @default(false)
-  opcoApproved             Boolean   @default(false)
-  opcoReimbursed           Boolean   @default(false)
+  invoiceSentAt     DateTime?
+  paymentReceivedAt DateTime?
+  opcoApprovedAt    DateTime?
+  opcoReimbursedAt  DateTime?
+  opcoPreApproved   Boolean   @default(false)
+  opcoApproved      Boolean   @default(false)
+  opcoReimbursed    Boolean   @default(false)
 
   // US-008 : type de dossier — par défaut une vraie inscription formation,
   // peut être basculé en "réservation budget" pour les dossiers déposés
@@ -745,45 +762,45 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id               String              @id @default(uuid())
-  tenantId         String
-  number           String              @unique // numérotation continue (FAC-NNNNNN)
-  status           InvoiceStatus       @default(DRAFT)
+  id                String              @id @default(uuid())
+  tenantId          String
+  number            String              @unique // numérotation continue (FAC-NNNNNN)
+  status            InvoiceStatus       @default(DRAFT)
   // Phase 11 — Avoirs (D-01). Self-FK : un avoir pointe vers la facture annulée.
   originalInvoiceId String?
   originalInvoice   Invoice?            @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
   creditNotes       Invoice[]           @relation("InvoiceToCreditNote")
   // Phase 11 — Tracking relances (D-13b). Idempotence + auto-stop.
-  lastReminderAt   DateTime?
-  reminderCount    Int                 @default(0)
+  lastReminderAt    DateTime?
+  reminderCount     Int                 @default(0)
   // Liens métier
-  participantId    String?
-  participant      SessionParticipant? @relation(fields: [participantId], references: [id])
-  participantIds   Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
-  sessionId        String? // session dont sont issus les participants (pour facture groupée)
-  payerOrgId       String?
-  payerOrg         Organization?       @relation(fields: [payerOrgId], references: [id])
-  payerContactId   String? // optionnel : un Contact spécifique
-  billingProfileId String?
-  billingProfile   BillingProfile?     @relation(fields: [billingProfileId], references: [id])
+  participantId     String?
+  participant       SessionParticipant? @relation(fields: [participantId], references: [id])
+  participantIds    Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
+  sessionId         String? // session dont sont issus les participants (pour facture groupée)
+  payerOrgId        String?
+  payerOrg          Organization?       @relation(fields: [payerOrgId], references: [id])
+  payerContactId    String? // optionnel : un Contact spécifique
+  billingProfileId  String?
+  billingProfile    BillingProfile?     @relation(fields: [billingProfileId], references: [id])
   // Montants
-  amountHT         Decimal             @default(0) @db.Decimal(10, 2)
-  vatRate          Decimal             @default(0) @db.Decimal(5, 2)
-  amountTTC        Decimal             @default(0) @db.Decimal(10, 2)
-  amountPaid       Decimal             @default(0) @db.Decimal(10, 2)
+  amountHT          Decimal             @default(0) @db.Decimal(10, 2)
+  vatRate           Decimal             @default(0) @db.Decimal(5, 2)
+  amountTTC         Decimal             @default(0) @db.Decimal(10, 2)
+  amountPaid        Decimal             @default(0) @db.Decimal(10, 2)
   // Dates
-  issueDate        DateTime?
-  dueDate          DateTime?
-  paidAt           DateTime?
+  issueDate         DateTime?
+  dueDate           DateTime?
+  paidAt            DateTime?
   // PDF
-  pdfUrl           String?
-  hashSha256       String?
+  pdfUrl            String?
+  hashSha256        String?
   // Notes
-  notes            String?
+  notes             String?
   // Paiements
-  payments         InvoicePayment[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  payments          InvoicePayment[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, issueDate])
@@ -803,6 +820,82 @@ model InvoicePayment {
   reference  String?
   notes      String?
   createdAt  DateTime @default(now())
+}
+
+/// Devis commercial — workflow hybride : champs destinataire 100% libres
+/// (recipientName, recipientEmail, recipientAddress) MAIS possibilité
+/// de pré-remplir depuis un Person/Organization existant (productId, personId,
+/// organizationId stockés en mémoire pour traçabilité, pas pour binding fort).
+///
+/// `headerCustomMd` permet d'override l'entête tenant par défaut (logo + raison
+/// sociale + SIRET tenant) avec un markdown libre — utile pour les devis en
+/// marque blanche ou avec entête spécifique commanditaire.
+///
+/// Numérotation DEV-NNNN (cohérente avec PROD-NNNN, INV-NNNN, SES-NNNN).
+/// Statuts : DRAFT → SENT → ACCEPTED | REJECTED | EXPIRED.
+model Quote {
+  id                String      @id @default(uuid())
+  tenantId          String
+  number            String      @unique // DEV-NNNN
+  status            QuoteStatus @default(DRAFT)
+  // Destinataire — champs libres (peuvent être pré-remplis depuis un Person/Org existant)
+  recipientName     String // "Dupont SARL" ou "Marie Dupont" si particulier
+  recipientContact  String? // "À l'attention de Marie Dupont" — optionnel si recipientName est déjà un nom propre
+  recipientAddress  String? // adresse multilignes
+  recipientEmail    String?
+  recipientSiret    String?
+  // Traçabilité du pré-remplissage (informatif, pas FK strict pour rester souple)
+  sourceProductId   String?
+  sourcePersonId    String?
+  sourceOrgId       String?
+  // Personnalisation entête
+  headerCustomMd    String? // si null → header tenant par défaut (logo + raison sociale + SIRET)
+  // Métadonnées commerciales
+  title             String      @default("Devis de formation") // titre affiché sur le PDF
+  notes             String? // notes internes ou bas de devis (conditions, mentions)
+  validUntil        DateTime? // date de validité du devis
+  // Montants — calculés depuis les QuoteLine, persistés pour rapidité liste
+  amountHT          Decimal     @default(0) @db.Decimal(10, 2)
+  amountVAT         Decimal     @default(0) @db.Decimal(10, 2)
+  amountTTC         Decimal     @default(0) @db.Decimal(10, 2)
+  // Dates statut
+  issuedAt          DateTime? // passage DRAFT → SENT
+  acceptedAt        DateTime? // passage SENT → ACCEPTED
+  rejectedAt        DateTime? // passage SENT → REJECTED
+  // PDF
+  pdfUrl            String? // MinIO key, null tant que non généré
+  // Relations
+  lines             QuoteLine[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+/// Ligne d'un devis. Description libre, quantité décimale (heures, jours,
+/// apprenants), prix unitaire HT, taux TVA. `lineTotalHT` = quantité × prix unit
+/// (recalculé côté server à chaque update, jamais saisi à la main).
+model QuoteLine {
+  id          String  @id @default(uuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  order       Int // position dans le devis (0-indexé)
+  description String
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPriceHT Decimal @default(0) @db.Decimal(10, 2)
+  vatRate     Decimal @default(0) @db.Decimal(5, 2) // 20.00 = 20% (0 = exonéré formation FR)
+  lineTotalHT Decimal @default(0) @db.Decimal(10, 2)
+
+  @@index([quoteId, order])
 }
 
 // =====================================================
@@ -835,6 +928,11 @@ enum DocType {
   CGV
   REGLEMENT_INTERIEUR
   CUSTOM
+  /// Phase 13 Plan 04 — Export PDF audit veille Qualiopi (VEILLE-03 / critère 6
+  /// indicateurs 23/24/25/26). Un PDF par thème, entityType='RegulatoryWatch',
+  /// entityId={theme}, persisté en MinIO (D-02), traçable AuditLog
+  /// `regulatoryWatch.exported`.
+  VEILLE_AUDIT
 }
 
 // Référentiel des types de documents Qualiopi (issu de la table Airtable Documents_Qualiopi)
@@ -1386,4 +1484,57 @@ model ClosureJob {
 
   @@unique([batchId, participantId, kind])
   @@index([batchId, status])
+}
+
+// =====================================================
+// === Veille Qualiopi (Phase 13 — VEILLE-01)
+// =====================================================
+
+/// Phase 13 — Veille Qualiopi (VEILLE-01).
+/// Couvre le critère 6 Qualiopi : indicateurs 23/24/25/26.
+/// Source : import xlsx one-shot + saisie manuelle + suggestions auto via worker RSS+Ollama (Plan 05).
+model RegulatoryWatch {
+  id               String                @id @default(uuid())
+  tenantId         String
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  theme            RegulatoryWatchTheme
+  title            String
+  url              String?
+  source           String?
+  modeSuivi        String?
+  typeSource       String?
+  responsable      String?
+  frequency        String?
+  exploitation     String?               @db.Text
+  dateAdded        DateTime              @default(now())
+  dateLastReviewed DateTime?
+  status           RegulatoryWatchStatus @default(ACTIVE)
+  suggestedBy      RegulatoryWatchSource @default(USER)
+  rssSourceUrl     String?
+  rawSnippet       String?               @db.Text
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([tenantId, theme, status])
+  @@index([tenantId, status, suggestedBy])
+  @@index([tenantId, dateLastReviewed])
+}
+
+enum RegulatoryWatchTheme {
+  INDIC_23
+  INDIC_24
+  INDIC_25
+  INDIC_26
+}
+
+enum RegulatoryWatchStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum RegulatoryWatchSource {
+  USER
+  IMPORT
+  AUTO
 }

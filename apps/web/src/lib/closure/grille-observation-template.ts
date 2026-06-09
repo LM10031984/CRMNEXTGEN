@@ -114,11 +114,12 @@ ${renderBrandHeader()}
 
   ${obsGlobBlock}
 
-  <div class="signature-block">
+  <div class="signature-block" style="margin-top: 20mm;">
     <div class="col">
-      <div class="label">Formateur</div>
-      <div class="role">${escapeHtml(ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À renseigner')}</div>
-      <div style="margin-top: 30mm; border-top: 1px dashed ${BRAND_DARK}; width: 70mm; padding-top: 4px; font-size: 9pt; color: #64748B;">Signature</div>
+      <div class="label" style="font-size: 9pt; color: #64748B;">Formateur ayant assuré la session</div>
+      <div class="role" style="font-size: 12pt; font-weight: 700; color: ${BRAND_DARK}; margin-top: 4px;">
+        ${escapeHtml(ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers[0]! : 'À renseigner')}
+      </div>
     </div>
   </div>
 </main>

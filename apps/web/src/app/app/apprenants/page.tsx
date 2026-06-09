@@ -1,22 +1,29 @@
 import Link from 'next/link';
-import { AlertTriangle, Briefcase, List, LayoutGrid, Search } from 'lucide-react';
+import { Plus, AlertTriangle, Briefcase, List, LayoutGrid } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { PageHeader } from '@/components/ui/page-header';
 import { SearchInput } from '@/components/ui/search-input';
+import { FilterChips } from '@/components/ui/filter-chips';
 import { Pagination } from '@/components/ui/pagination';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { Badge } from '@/components/ui/badge';
 import { LearnerQuickViewButton } from '@/components/apprenants/learner-quick-view-button';
 import { CreatePersonButton } from '@/components/forms/create-person-button';
 
-/**
- * POC Folk-style — refonte UI uniquement, logique métier identique.
- *
- * Tout est inliné (pas de `<DataTable>` / `<Badge>` / `<PageHeader>` /
- * `<FilterChips>` / `<PageHeader>`) pour que les changements visuels
- * ne contaminent PAS les autres pages tant que la direction n'est pas
- * validée. Si OK, on extraira ces motifs en composants partagés.
- */
-
 const PAGE_SIZE = 25;
+
+interface ApprenantRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  professionalStatus: string | null;
+  requiresCleanup: boolean;
+  cleanupNotes: string | null;
+  legalLinks: { role: string; isPrimary: boolean; organization: { id: string; legalName: string } }[];
+}
 
 interface SearchParams {
   q?: string;
@@ -85,168 +92,120 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
     { label: 'À corriger', href: hrefWith({ q, filter: 'cleanup' }), active: filter === 'cleanup', count: cleanupCount },
   ];
 
-  return (
-    <div className="space-y-5">
-      {/* ── Header sobre Folk-style : titre h1 modéré + meta inline + CTA discret ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Apprenants</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            <span className="tabular-nums font-medium text-slate-700">{allCount}</span> fiches
-            <span className="text-slate-300 mx-1.5">·</span>
-            importées depuis SmartOF
-          </p>
+  const columns: Column<ApprenantRow>[] = [
+    {
+      key: 'name',
+      header: 'Nom',
+      cell: (row) => (
+        <div>
+          <div className="font-medium text-foreground">
+            {row.lastName.toUpperCase()} {row.firstName}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">{row.professionalStatus ?? '—'}</div>
         </div>
-        <CreatePersonButton />
-      </div>
+      ),
+    },
+    {
+      key: 'contact',
+      header: 'Contact',
+      cell: (row) => (
+        <div>
+          <div className={row.email ? 'text-foreground' : 'text-muted-foreground italic'}>
+            {row.email ?? 'email manquant'}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">{row.phone ?? '—'}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'orgs',
+      header: 'Organisation(s)',
+      cell: (row) => {
+        if (row.legalLinks.length === 0) {
+          return <span className="text-xs text-muted-foreground italic">aucune</span>;
+        }
+        return (
+          <div className="flex flex-col gap-1">
+            {row.legalLinks.slice(0, 2).map((link) => (
+              <div key={link.organization.id} className="flex items-center gap-1.5">
+                <Briefcase className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="text-xs truncate max-w-[220px]">{link.organization.legalName}</span>
+                {link.role === 'EI_SELF' && (
+                  <Badge variant="primary" className="text-[10px]">EI</Badge>
+                )}
+              </div>
+            ))}
+            {row.legalLinks.length > 2 && (
+              <span className="text-xs text-muted-foreground">+{row.legalLinks.length - 2} autre(s)</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'flags',
+      header: '',
+      width: '260px',
+      className: 'text-right',
+      noLink: true,
+      cell: (row) => (
+        <div className="flex flex-col items-end gap-1">
+          <div className="inline-flex items-center gap-1.5">
+            {row.requiresCleanup && (
+              <Badge variant="warning" title={row.cleanupNotes ?? undefined}>
+                <AlertTriangle className="h-3 w-3" /> à corriger
+              </Badge>
+            )}
+            <LearnerQuickViewButton personId={row.id} />
+          </div>
+          {row.requiresCleanup && row.cleanupNotes && (
+            <span className="text-[11px] text-amber-700 italic max-w-[240px] truncate" title={row.cleanupNotes}>
+              {row.cleanupNotes}
+            </span>
+          )}
+        </div>
+      ),
+    },
+  ];
 
-      {/* ── Toolbar : search + filter pills + toggle pagination ── */}
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Apprenants"
+        subtitle={`${allCount} fiches importées depuis SmartOF`}
+        actions={<CreatePersonButton />}
+      />
+
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <SearchInput placeholder="Nom, prénom, email…" />
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {filterChips.map((chip) => (
-            <Link
-              key={chip.href}
-              href={chip.href as never}
-              className={
-                chip.active
-                  ? 'inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs font-medium bg-slate-900 text-white transition-all duration-300 ease-out active:scale-[0.97]'
-                  : 'inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 ease-out active:scale-[0.97]'
-              }
-            >
-              {chip.label}
-              {chip.count !== undefined && (
-                <span
-                  className={
-                    chip.active
-                      ? 'tabular-nums text-[10px] text-white/70'
-                      : 'tabular-nums text-[10px] text-slate-400'
-                  }
-                >
-                  {chip.count}
-                </span>
-              )}
-            </Link>
-          ))}
-          {/* Séparateur visuel discret */}
-          <span className="w-px h-5 bg-slate-200 mx-1" aria-hidden />
+        <div className="flex items-center gap-2">
           <Link
             href={hrefWith({ q, filter, all: showAll ? undefined : '1' }) as any}
-            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-300 ease-out active:scale-[0.97]"
-            title={showAll ? `Paginer ${PAGE_SIZE} par page` : `Voir les ${total} résultats`}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors"
           >
             {showAll ? (
               <>
-                <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} /> Paginer
+                <LayoutGrid className="h-4 w-4" /> Paginer ({PAGE_SIZE}/page)
               </>
             ) : (
               <>
-                <List className="h-3.5 w-3.5" strokeWidth={1.75} /> Voir tout
-                <span className="tabular-nums text-[10px] text-slate-400">{total}</span>
+                <List className="h-4 w-4" /> Voir tout ({total})
               </>
             )}
           </Link>
+          <FilterChips chips={filterChips} />
         </div>
       </div>
 
-      {/* ── Tableau Folk-style : blanc pur, border slate-200, shadow-sm, hover slate-50 ── */}
-      {rows.length === 0 ? (
-        <EmptyState query={q} />
-      ) : (
-        <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/50">
-                  <Th>Nom</Th>
-                  <Th>Contact</Th>
-                  <Th>Organisation(s)</Th>
-                  <Th className="text-right">Statut</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="group border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    {/* Nom + statut pro */}
-                    <td className="py-3 px-4 align-top">
-                      <Link href={`/app/apprenants/${row.id}`} className="block">
-                        <div className="text-sm font-medium text-slate-900 truncate max-w-[240px]">
-                          {row.lastName.toUpperCase()} {row.firstName}
-                        </div>
-                        {row.professionalStatus && (
-                          <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[240px]">
-                            {row.professionalStatus}
-                          </div>
-                        )}
-                      </Link>
-                    </td>
-
-                    {/* Contact */}
-                    <td className="py-3 px-4 align-top">
-                      <Link href={`/app/apprenants/${row.id}`} className="block">
-                        <div className={row.email ? 'text-sm text-slate-700 truncate max-w-[260px]' : 'text-sm text-slate-400 italic'}>
-                          {row.email ?? 'email manquant'}
-                        </div>
-                        {row.phone && (
-                          <div className="text-xs text-slate-500 mt-0.5 tabular-nums">{row.phone}</div>
-                        )}
-                      </Link>
-                    </td>
-
-                    {/* Organisations */}
-                    <td className="py-3 px-4 align-top">
-                      <Link href={`/app/apprenants/${row.id}`} className="block">
-                        {row.legalLinks.length === 0 ? (
-                          <span className="text-xs text-slate-400 italic">aucune</span>
-                        ) : (
-                          <div className="flex flex-col gap-1">
-                            {row.legalLinks.slice(0, 2).map((link) => (
-                              <div key={link.organization.id} className="flex items-center gap-1.5 min-w-0">
-                                <Briefcase className="h-3 w-3 text-slate-400 shrink-0" strokeWidth={1.75} />
-                                <span className="text-xs text-slate-700 truncate max-w-[200px]">
-                                  {link.organization.legalName}
-                                </span>
-                                {link.role === 'EI_SELF' && (
-                                  <span className="shrink-0 inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                                    EI
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                            {row.legalLinks.length > 2 && (
-                              <span className="text-[11px] text-slate-400">
-                                +{row.legalLinks.length - 2} autre{row.legalLinks.length - 2 > 1 ? 's' : ''}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </Link>
-                    </td>
-
-                    {/* Statut + actions — `align-top` pour s'aligner avec la 1ère ligne */}
-                    <td className="py-3 px-4 align-top text-right">
-                      <div className="inline-flex items-center gap-2">
-                        {row.requiresCleanup && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-                            title={row.cleanupNotes ?? undefined}
-                          >
-                            <AlertTriangle className="h-3 w-3" strokeWidth={2} /> À corriger
-                          </span>
-                        )}
-                        <LearnerQuickViewButton personId={row.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <DataTable<ApprenantRow>
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          rowHref={(r) => `/app/apprenants/${r.id}`}
+          empty={q ? `Aucun apprenant ne correspond à « ${q} ».` : 'Aucun apprenant.'}
+        />
+      </div>
 
       {!showAll && (
         <Pagination
@@ -257,44 +216,6 @@ export default async function ApprenantsPage({ searchParams }: { searchParams: P
           searchParams={{ q, filter }}
         />
       )}
-    </div>
-  );
-}
-
-// ───────────────────────── helpers locaux ─────────────────────────
-
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <th
-      scope="col"
-      className={
-        'py-2.5 px-4 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 ' +
-        (className ?? '')
-      }
-    >
-      {children}
-    </th>
-  );
-}
-
-function EmptyState({ query }: { query?: string }) {
-  return (
-    <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card py-16 text-center">
-      <div className="inline-flex h-10 w-10 mb-3 rounded-lg bg-slate-100 text-slate-400 items-center justify-center">
-        <Search className="h-5 w-5" strokeWidth={1.75} />
-      </div>
-      <h3 className="text-sm font-medium text-slate-900">
-        {query ? 'Aucun résultat' : 'Aucun apprenant'}
-      </h3>
-      <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-        {query ? (
-          <>
-            Aucun apprenant ne correspond à <span className="font-medium text-slate-700">« {query} »</span>.
-          </>
-        ) : (
-          'Les fiches apparaîtront ici dès qu\'un apprenant sera créé ou importé.'
-        )}
-      </p>
     </div>
   );
 }

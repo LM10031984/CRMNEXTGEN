@@ -13,6 +13,8 @@ interface Tab {
   label: string;
   iconKey: LearnerTabIcon;
   badge?: number;
+  /** Tooltip natif sur le badge — précise le sens du chiffre (audit UX-07). */
+  badgeTitle?: string;
 }
 
 export function LearnerTabs({ tabs }: { tabs: Tab[] }) {
@@ -45,6 +47,8 @@ export function LearnerTabs({ tabs }: { tabs: Tab[] }) {
               {t.label}
               {t.badge !== undefined && t.badge > 0 && (
                 <span
+                  title={t.badgeTitle}
+                  aria-label={t.badgeTitle}
                   className={cn(
                     'inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-semibold',
                     isActive ? 'bg-primary text-white' : 'bg-muted text-muted-foreground',

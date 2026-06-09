@@ -12,6 +12,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 
 import type { OfConfig } from './of-config';
+import { DIPLOME_OPTIONS } from './agefice-options';
 
 const SIGNATURE_FILENAME = 'signature-laurent.png';
 
@@ -156,15 +157,6 @@ function resolveFormeJuridique(v: string | null | undefined): string {
   const up = v.toUpperCase().replace(/[ -]/g, '_');
   return FORME_JURIDIQUE_MAP[up] ?? 'AUTRE';
 }
-
-const DIPLOME_OPTIONS = [
-  'Fin de scolarité obligatoire',
-  'BEP-CAP',
-  'Bac-Bac pro-BT-BP',
-  'Bac+2 : BTS-DUT-DEUG',
-  'Bac+3 : Licence ou maîtrise',
-  'Bac+5 : Supérieur à la maîtrise',
-];
 
 function resolveDiplome(v: string | null | undefined): string {
   if (!v) return '';

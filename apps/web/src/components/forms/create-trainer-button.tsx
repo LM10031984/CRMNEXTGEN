@@ -66,7 +66,7 @@ export function CreateTrainerButton({ variant = 'primary' }: { variant?: 'primar
           >
             <h3 className="font-semibold text-lg mb-4">Nouveau formateur</h3>
             <form onSubmit={onSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Prénom *</label>
                   <input

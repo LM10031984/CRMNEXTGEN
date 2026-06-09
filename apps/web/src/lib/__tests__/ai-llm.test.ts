@@ -131,62 +131,13 @@ describe('ai-llm : callLlm route via la config (aucun littéral de modèle dans 
   });
 });
 
-describe('ai-ollama : shim de dépréciation', () => {
-  it('Test 9 — callOllama throw avec un message qui pointe vers callLlm', async () => {
-    const { callOllama } = await import('../ai-ollama');
-    expect(() => callOllama()).toThrow(/déprécié.*callLlm/);
-  });
+// Tests 9-10 supprimés lors du merge marx (2026-06-09).
+// Ils vérifiaient que ai-ollama.ts était un shim deprecated. Marx Phase 13
+// Veille a besoin de la vraie implémentation callOllama qui est restaurée.
 
-  it('Test 10 — callOllamaVision throw aussi', async () => {
-    const { callOllamaVision } = await import('../ai-ollama');
-    expect(() => callOllamaVision()).toThrow(/déprécié.*callLlm/);
-  });
-});
-
-describe('veille/classify : utilise callLlm avec profil "classify" + valide Zod', () => {
-  it('Test 11 — classifyVeilleEntry persiste provider + model effectifs dans le résultat', async () => {
-    process.env.OPENROUTER_MODEL_CLASSIFY = 'classify-test-model';
-    const fetchSpy = mockFetchOnce({
-      content: JSON.stringify({
-        topic: 'qualiopi',
-        urgency: 'haute',
-        summary: 'Modification indicateur 25 — veille obligatoire renforcée.',
-      }),
-    });
-
-    const { classifyVeilleEntry } = await import('../veille/classify');
-    const { PROMPT_VERSION } = await import('../veille/prompts');
-
-    const r = await classifyVeilleEntry({
-      text: 'Décret n° 2026-X modifiant le référentiel Qualiopi indicateur 25.',
-    });
-
-    expect(r.provider).toBe('openrouter');
-    expect(r.model).toBe('classify-test-model');
-    expect(r.promptVersion).toBe(PROMPT_VERSION);
-    expect(r.classification.topic).toBe('qualiopi');
-    expect(r.classification.urgency).toBe('haute');
-
-    // Le modèle envoyé est bien celui du profil 'classify', pas 'text'
-    const [, fetchInit] = fetchSpy.mock.calls[0]!;
-    const body = JSON.parse((fetchInit as RequestInit).body as string) as { model: string };
-    expect(body.model).toBe('classify-test-model');
-  });
-
-  it('Test 12 — classifyVeilleEntry rejette une réponse LLM hors schéma', async () => {
-    mockFetchOnce({
-      content: JSON.stringify({ topic: 'invalide', urgency: 'haute', summary: 'x' }),
-    });
-    const { classifyVeilleEntry, VeilleClassifyError } = await import('../veille/classify');
-    await expect(
-      classifyVeilleEntry({ text: 'test' }),
-    ).rejects.toBeInstanceOf(VeilleClassifyError);
-  });
-
-  it('Test 13 — classifyVeilleEntry refuse un texte vide en amont du LLM', async () => {
-    const { classifyVeilleEntry, VeilleClassifyError } = await import('../veille/classify');
-    await expect(classifyVeilleEntry({ text: '   ' })).rejects.toBeInstanceOf(
-      VeilleClassifyError,
-    );
-  });
-});
+// Tests 11-13 supprimés lors du merge marx (2026-06-09).
+// Ils testaient les scaffolds P0.1 (classifyVeilleEntry / VeilleClassifyError)
+// qui n'existent plus depuis que la Phase 13 Veille de marx a remplacé ces
+// fichiers par la vraie implémentation (callOllama + 5 indicateurs INDIC_23-26).
+// Follow-up master prompt P0.1 : migrer veille/classify.ts vers callLlm
+// quand on voudra unifier sur OpenRouter.

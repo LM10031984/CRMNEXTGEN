@@ -1,79 +1,95 @@
 /**
  * Templates de déroulement pédagogique par thème — utilisés pour pré-remplir
- * la section "Modalités de déroulement" du formulaire AGEFICE quand le produit
- * n'a pas de description spécifique en base.
+ * la section "Modalités de déroulement, suivi et sanction" du formulaire
+ * AGEFICE (article 6).
  *
- * Logique : choix aléatoire dans le pool correspondant au thème, suivi
- * systématiquement de la phrase générique Start Academy (livret + Canva).
+ * Format imposé par Laurent (cf retour 05/05/2026) :
+ *
+ *   Les formateurs proposeront des mises en situations professionnelles
+ *   <segment court contextualisé au thème>. Un livret de formation sera remis
+ *   à chaque participant en début de formation. Le formateur déroulera sa
+ *   formation avec une présentation Canva projetée.
+ *
+ * Le segment thème change selon la formation (IA, immobilier, management…).
+ * Pas de pool aléatoire : 1 segment cohérent par thème → reproduit fidèlement
+ * le contenu de la formation dans le doc AGEFICE.
  */
 
-export const PEDAGOGY_GENERAL =
+const PEDAGOGY_FIXED_PREFIX =
+  'Les formateurs proposeront des mises en situations professionnelles';
+
+const PEDAGOGY_FIXED_SUFFIX =
   'Un livret de formation sera remis à chaque participant en début de formation. ' +
   'Le formateur déroulera sa formation avec une présentation Canva projetée.';
 
-const TEMPLATES_IA = [
-  "Les formateurs alternent apports théoriques sur l'IA appliquée au métier d'agent immobilier et exercices pratiques avec des outils comme ChatGPT, Midjourney et des assistants no-code.",
-  "Le programme combine démonstrations live d'outils IA, mises en situation de prospection assistée et création d'agents personnalisés pour la relation client.",
-  "Les apprenants découvrent et expérimentent l'IA générative à travers des cas d'usage concrets : rédaction d'annonces, automatisation de campagnes, qualification de prospects.",
-  "Chaque module alterne décryptage des outils IA du marché immobilier, exercices guidés sur prompts personnalisés et création d'assistants IA dédiés aux conseillers.",
-];
+// Phrase héritée du few-shot AI (exemple "immobilier") qui s'est retrouvée
+// copiée à tort dans des produits IA / management. On la détecte pour
+// l'ignorer et regénérer un segment cohérent avec le thème réel.
+const POLLUTING_LEGACY_SEGMENT =
+  'techniques de prospection, les discours et la posture';
 
-const TEMPLATES_IMMOBILIER = [
-  "Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.",
-  "Le programme alterne apports théoriques, retours d'expérience terrain et études de cas tirés du quotidien des agents commerciaux en immobilier.",
-  "Les sessions s'appuient sur des cas pratiques de négociation, prise de mandat, estimation et accompagnement client en agence comme en indépendant.",
-  "Le déroulé combine théorie réglementaire, jeux de rôle commerciaux et analyse de scénarios concrets vécus par les apprenants.",
-];
-
-const TEMPLATES_MANAGEMENT = [
-  "Le programme alterne apports théoriques sur les fondamentaux du management et mises en situation de pilotage d'équipe.",
-  "Les formateurs proposeront des cas pratiques de leadership, de communication managériale et de conduite du changement en environnement immobilier.",
-  "Les sessions combinent ateliers de réflexion stratégique, échanges entre pairs et exercices d'application directe sur les enjeux du quotidien.",
-];
-
-const TEMPLATES_DEFAULT = [
-  "Les formateurs proposeront des apports théoriques, des études de cas et des mises en situation professionnelles adaptées aux pratiques actuelles du secteur.",
-  "Le programme combine théorie, exercices pratiques et échanges entre participants pour ancrer durablement les acquis.",
-  "Les sessions alternent enseignements structurés, ateliers d'application et retours d'expérience entre stagiaires.",
-];
-
-interface ThemePool {
+interface ThemeRule {
   match: (text: string) => boolean;
-  pool: readonly string[];
+  segment: string; // commence par une préposition (sur, autour de, appliquées à…) — concaténé après le préfixe fixe
 }
 
-const POOLS: ThemePool[] = [
+const RULES: ThemeRule[] = [
   {
-    match: (s) => /\b(ia|chatgpt|intelligence artificielle|copilot|gpt|prompt)\b/.test(s),
-    pool: TEMPLATES_IA,
+    match: (s) =>
+      /\b(ia|chat\s*gpt|chatgpt|intelligence\s*artificielle|copilot|gpt|prompt|llm|agent\s*ia|automat)/i.test(
+        s,
+      ),
+    segment:
+      "appliquées aux outils d'intelligence artificielle (ChatGPT, prompts personnalisés, automatisation no-code), avec des cas d'usage concrets adaptés au métier des stagiaires",
   },
   {
-    match: (s) => /\b(management|leader|équipe|recrutement|pilotage|coaching)\b/.test(s),
-    pool: TEMPLATES_MANAGEMENT,
+    match: (s) => /\b(management|leader|équipe|recrutement|pilotage|coaching|managérial)\b/i.test(s),
+    segment:
+      "autour du pilotage d'équipe, de la communication managériale et de la conduite du changement, avec des études de cas et des jeux de rôle adaptés au quotidien des managers",
   },
   {
-    match: (s) => /\b(immobilier|agent|prospection|mandat|vente|n[ée]goci|estimation)\b/.test(s),
-    pool: TEMPLATES_IMMOBILIER,
+    match: (s) =>
+      /\b(prospection|mandat|n[ée]goci|estimation|vente\s*immo|agent\s*commercial)\b/i.test(s),
+    segment:
+      "sur les techniques de prospection, les discours et la posture commerciale, avec des jeux de rôle et des échanges sur les pratiques actuelles du secteur immobilier",
+  },
+  {
+    match: (s) => /\b(immobilier|agence|conseiller\s*immo)\b/i.test(s),
+    segment:
+      "appliquées aux situations courantes du métier de conseiller immobilier (prise de mandat, accompagnement client, négociation), avec des échanges sur les pratiques actuelles",
   },
 ];
 
-export function pickPedagogyTemplate(theme: string | null | undefined, title: string): string {
-  const haystack = `${theme ?? ''} ${title}`.toLowerCase();
-  const pool =
-    POOLS.find((p) => p.match(haystack))?.pool ?? TEMPLATES_DEFAULT;
-  const idx = Math.floor(Math.random() * pool.length);
-  return pool[idx]!;
+const DEFAULT_SEGMENT =
+  'adaptées aux pratiques actuelles du secteur, avec des études de cas et des échanges entre participants';
+
+/**
+ * Renvoie le segment thème court qui s'insère après "Les formateurs
+ * proposeront des mises en situations professionnelles" — sans point final
+ * (la fonction parente l'ajoute).
+ */
+export function pickPedagogyContextSegment(
+  theme: string | null | undefined,
+  title: string,
+): string {
+  const haystack = `${theme ?? ''} ${title}`;
+  for (const rule of RULES) {
+    if (rule.match(haystack)) return rule.segment;
+  }
+  return DEFAULT_SEGMENT;
 }
 
 /**
  * Construit le déroulement pédagogique final pour le formulaire AGEFICE.
  *
  * Stratégie :
- * - Si le produit a déjà du contenu en base (`pedagogicalMethods` ou
- *   `pedagogicalSupport`), on l'utilise tel quel.
- * - Sinon on tire un template au hasard parmi ceux qui matchent le thème.
- * - Dans tous les cas, on garantit que la phrase générique livret/Canva
- *   apparaît à la fin (append uniquement si pas déjà présente).
+ * 1. Si le produit a déjà du contenu pertinent en base (pedagogicalMethods)
+ *    et que ce contenu ne contient PAS la phrase polluante du few-shot
+ *    historique, on garde ce que Laurent a saisi.
+ * 2. Sinon on construit le format propre :
+ *    "<préfixe fixe> <segment thème>. <suffixe fixe>"
+ *
+ * On garantit toujours que la phrase livret/Canva apparaît à la fin.
  */
 export function buildDeroulementPedagogique(opts: {
   productMethods: string | null | undefined;
@@ -81,14 +97,28 @@ export function buildDeroulementPedagogique(opts: {
   theme: string | null | undefined;
   title: string;
 }): string {
-  const parts = [opts.productMethods?.trim(), opts.productSupport?.trim()]
-    .filter((s): s is string => Boolean(s));
+  const productText = [opts.productMethods?.trim(), opts.productSupport?.trim()]
+    .filter((s): s is string => Boolean(s))
+    .join('\n\n');
 
-  const specific =
-    parts.length > 0 ? parts.join('\n\n') : pickPedagogyTemplate(opts.theme, opts.title);
+  const productTextLower = productText.toLowerCase();
+  const isPollutedOrEmpty =
+    !productText || productTextLower.includes(POLLUTING_LEGACY_SEGMENT.toLowerCase());
 
-  // S'assurer que la phrase générique est présente
-  return specific.toLowerCase().includes('livret')
-    ? specific
-    : `${specific}\n\n${PEDAGOGY_GENERAL}`;
+  const main = isPollutedOrEmpty
+    ? `${PEDAGOGY_FIXED_PREFIX} ${pickPedagogyContextSegment(opts.theme, opts.title)}.`
+    : productText;
+
+  // S'assurer que la phrase livret/Canva apparaît
+  const hasCanva = /livret de formation|présentation\s+canva/i.test(main);
+  return hasCanva ? main : `${main}\n\n${PEDAGOGY_FIXED_SUFFIX}`;
+}
+
+// Export pour compatibilité avec d'anciens imports — équivalent au segment
+// "default" si le thème ne match aucune règle.
+export const PEDAGOGY_GENERAL = PEDAGOGY_FIXED_SUFFIX;
+
+/** Compat ancienne signature : renvoie le déroulé complet pour un thème. */
+export function pickPedagogyTemplate(theme: string | null | undefined, title: string): string {
+  return `${PEDAGOGY_FIXED_PREFIX} ${pickPedagogyContextSegment(theme, title)}.`;
 }

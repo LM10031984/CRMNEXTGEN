@@ -1,23 +1,18 @@
-/**
- * Configuration Vitest — résolution de l'alias `@/*` pour les tests.
- *
- * Avant Sprint 3 il n'y avait pas de vitest.config et les tests utilisaient
- * uniquement des imports relatifs (`../foo`). Pour les nouveaux tests qui
- * touchent des modules qui s'appuient sur l'alias `@/`, on doit le résoudre
- * explicitement ici (Vitest ne lit pas tsconfig.json paths par défaut).
- */
-
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
+// Vitest config minimale pour apps/web — environnement node car les tests
+// actuels font de la lecture-source / regex et n'ont pas besoin de DOM.
+// Ajouter `environment: 'jsdom'` au cas par cas via /* @vitest-environment jsdom */
+// si un test futur a besoin de rendre des composants React.
 export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
-  },
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 });

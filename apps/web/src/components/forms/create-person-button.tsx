@@ -2,9 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Upload, Loader2, Check, AlertTriangle, Sparkles } from 'lucide-react';
+import { UserPlus, Upload, Loader2, Check, AlertTriangle, Sparkles, Building2 } from 'lucide-react';
 import { createPerson } from '@/server/actions/crud-edits';
 import { extractApprenantDocs } from '@/server/actions/extract-apprenant-docs';
+import { uploadApprenantDocs } from '@/server/actions/upload-apprenant-docs';
+import { addParticipant } from '@/server/actions/sessions';
+import { DIPLOME_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/agefice-options';
+import { EnseignePicker } from './enseigne-picker';
 
 type ExtractedExtras = {
   iban: string | null;
@@ -17,7 +21,16 @@ type ExtractedExtras = {
   contributionYear: number | null;
 };
 
-export function CreatePersonButton() {
+interface Props {
+  /** Si présent, le wizard inscrit aussi le nouvel apprenant à la session après création. */
+  enrollInSessionId?: string;
+  /** Tarif par défaut utilisé pour l'inscription si enrollInSessionId est défini. */
+  defaultPrice?: number;
+  /** Libellé custom pour le bouton (par défaut "Nouvel apprenant"). */
+  buttonLabel?: string;
+}
+
+export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, buttonLabel }: Props = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,6 +49,8 @@ export function CreatePersonButton() {
   const [addressPostalCode, setAddressPostalCode] = useState('');
   const [addressCity, setAddressCity] = useState('');
   const [professionalStatus, setProfessionalStatus] = useState('');
+  const [diplomas, setDiplomas] = useState('');
+  const [professionalExperience, setProfessionalExperience] = useState('');
   const [siret, setSiret] = useState('');
   const [activityCode, setActivityCode] = useState('');
   const [socialSecurityNb, setSocialSecurityNb] = useState('');
@@ -44,13 +59,19 @@ export function CreatePersonButton() {
   const [ribFile, setRibFile] = useState<File | null>(null);
   const [cfpFile, setCfpFile] = useState<File | null>(null);
   const [extras, setExtras] = useState<ExtractedExtras | null>(null);
+  // Enseigne / réseau immobilier (2e LegalLink AGENT_COMMERCIAL)
+  const [enseigneOrgId, setEnseigneOrgId] = useState<string | null>(null);
+  const [enseigneLabel, setEnseigneLabel] = useState<string | null>(null);
+  const [enseigneNewName, setEnseigneNewName] = useState<string | null>(null);
 
   function reset() {
     setFirstName(''); setLastName(''); setCivility(''); setEmail(''); setPhone('');
     setBirthDate(''); setBirthName(''); setAddressStreet(''); setAddressPostalCode(''); setAddressCity('');
     setProfessionalStatus(''); setSiret(''); setActivityCode(''); setSocialSecurityNb('');
+    setDiplomas(''); setProfessionalExperience('');
     setCniFile(null); setRibFile(null); setCfpFile(null);
     setExtras(null); setError(null); setWarnings([]);
+    setEnseigneOrgId(null); setEnseigneLabel(null); setEnseigneNewName(null);
   }
 
   async function handleExtract() {
@@ -102,12 +123,30 @@ export function CreatePersonButton() {
     setBusy(true);
     setError(null);
     try {
+      // 1) Upload des fichiers fournis sur MinIO (si présents)
+      let docKeys: { CNI?: string; RIB?: string; CFP?: string } = {};
+      if (cniFile || ribFile || cfpFile) {
+        const fd = new FormData();
+        if (cniFile) fd.append('CNI', cniFile);
+        if (ribFile) fd.append('RIB', ribFile);
+        if (cfpFile) fd.append('CFP', cfpFile);
+        const up = await uploadApprenantDocs(fd);
+        if (!up.ok) {
+          setError(up.error ?? 'Upload des documents échoué.');
+          return;
+        }
+        docKeys = up.keys ?? {};
+      }
+
+      // 2) Création de la Person + relations + persistence des keys
       const r = await createPerson({
         firstName, lastName,
         civility: civility || null,
         email: email.trim() || null,
         phone: phone.trim() || null,
         professionalStatus: professionalStatus.trim() || null,
+        diplomas: diplomas || null,
+        professionalExperience: professionalExperience || null,
         birthName: birthName.trim() || null,
         birthDate: birthDate || null,
         addressStreet: addressStreet.trim() || null,
@@ -118,13 +157,42 @@ export function CreatePersonButton() {
         activityCode: activityCode.trim() || null,
         cfpAmount: extras?.contributionAmount ?? null,
         cfpYear: extras?.contributionYear ?? null,
+        cniKey: docKeys.CNI ?? null,
+        ribKey: docKeys.RIB ?? null,
+        cfpKey: docKeys.CFP ?? null,
+        enseigneOrgId: enseigneOrgId ?? null,
+        enseigneNewName: enseigneNewName ?? null,
       });
-      if (r.ok && r.personId) {
+      if (!r.ok || !r.personId) {
+        setError(r.error ?? 'Erreur inconnue.');
+        return;
+      }
+
+      // 3) Si on est dans le mode "inscrire dans la session", enchaîne avec addParticipant
+      if (enrollInSessionId) {
+        if (!r.primaryOrgId) {
+          setError(
+            "Création OK mais pas d'auto-entreprise rattachée — impossible d'inscrire automatiquement. Utilise « Apprenant existant » pour choisir le sponsor.",
+          );
+          return;
+        }
+        const enroll = await addParticipant({
+          sessionId: enrollInSessionId,
+          personId: r.personId,
+          sponsorOrgId: r.primaryOrgId,
+          priceHT: defaultPrice,
+        });
+        if (!enroll.ok) {
+          setError(`Apprenant créé mais inscription échouée : ${enroll.error}`);
+          return;
+        }
+        setOpen(false);
+        reset();
+        router.refresh();
+      } else {
         setOpen(false);
         reset();
         router.push(`/app/apprenants/${r.personId}` as any);
-      } else {
-        setError(r.error ?? 'Erreur inconnue.');
       }
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -163,16 +231,26 @@ export function CreatePersonButton() {
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(0,82,122,0.45),0_0_20px_rgba(0,82,122,0.25)] transition-all duration-300 ease-out active:scale-[0.97]"
       >
-        <UserPlus className="h-4 w-4" /> Nouvel apprenant
+        <UserPlus className="h-4 w-4" /> {buttonLabel ?? 'Nouvel apprenant'}
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto" onClick={() => !busy && !extracting && setOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={() => !busy && !extracting && setOpen(false)}>
           <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-xl my-8" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold text-lg mb-2">Nouvel apprenant</h3>
+            <h3 className="font-semibold text-lg mb-2">
+              {enrollInSessionId ? 'Nouvel apprenant + inscription' : 'Nouvel apprenant'}
+            </h3>
             <p className="text-xs text-muted-foreground mb-4">
               Upload les documents (CFP, CNI, RIB) pour pré-remplir automatiquement le formulaire,
               ou saisis directement à la main.
+              {enrollInSessionId && (
+                <>
+                  <br />
+                  <span className="text-primary-700">
+                    Au submit, l'apprenant sera créé puis inscrit à la session en cours.
+                  </span>
+                </>
+              )}
             </p>
 
             {/* Bloc upload + extraction */}
@@ -232,7 +310,7 @@ export function CreatePersonButton() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Civilité</label>
                   <select value={civility} onChange={(e) => setCivility(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm">
@@ -250,7 +328,7 @@ export function CreatePersonButton() {
                   <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Date de naissance</label>
                   <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
@@ -260,7 +338,7 @@ export function CreatePersonButton() {
                   <input type="text" value={birthName} onChange={(e) => setBirthName(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
@@ -274,7 +352,7 @@ export function CreatePersonButton() {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Adresse — rue</label>
                 <input type="text" value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">CP</label>
                   <input type="text" value={addressPostalCode} onChange={(e) => setAddressPostalCode(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
@@ -288,7 +366,35 @@ export function CreatePersonButton() {
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Statut professionnel</label>
                 <input type="text" value={professionalStatus} onChange={(e) => setProfessionalStatus(e.target.value)} placeholder="Ex: Agent commercial" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Dernier diplôme (AGEFICE)</label>
+                  <select
+                    value={diplomas}
+                    onChange={(e) => setDiplomas(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                  >
+                    <option value="">— Choisir —</option>
+                    {DIPLOME_OPTIONS.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Expérience pro (AGEFICE)</label>
+                  <select
+                    value={professionalExperience}
+                    onChange={(e) => setProfessionalExperience(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                  >
+                    <option value="">— Choisir —</option>
+                    {EXPERIENCE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">SIRET (auto-entreprise)</label>
                   <input type="text" value={siret} onChange={(e) => setSiret(e.target.value)} placeholder="14 chiffres" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
@@ -298,6 +404,30 @@ export function CreatePersonButton() {
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Code NAF</label>
                   <input type="text" value={activityCode} onChange={(e) => setActivityCode(e.target.value)} placeholder="Ex: 6831Z" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
                 </div>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <label className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" /> Enseigne / réseau immobilier (2e LegalLink)
+                </label>
+                <EnseignePicker
+                  selectedOrgId={enseigneOrgId}
+                  selectedLabel={enseigneLabel ?? enseigneNewName}
+                  onPick={(id, name) => {
+                    setEnseigneOrgId(id);
+                    setEnseigneLabel(name);
+                    setEnseigneNewName(null);
+                  }}
+                  onCreate={(name) => {
+                    setEnseigneOrgId(null);
+                    setEnseigneLabel(null);
+                    setEnseigneNewName(name);
+                  }}
+                  onClear={() => {
+                    setEnseigneOrgId(null);
+                    setEnseigneLabel(null);
+                    setEnseigneNewName(null);
+                  }}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">N° de sécurité sociale</label>

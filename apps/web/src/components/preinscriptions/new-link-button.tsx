@@ -132,7 +132,7 @@ export function NewLinkButton() {
                   Renseigne (optionnellement) le contact à qui tu enverras le lien.
                   Tu pourras laisser vide et juste partager le lien généré.
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-foreground">Prénom</label>
                     <input
@@ -285,7 +285,7 @@ export function NewLinkButton() {
                   </button>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  💡 Une fois le formulaire rempli, l'IA analysera les pièces et tu recevras une notification dans <strong>/app/preinscriptions</strong>.
+                  💡 Une fois le formulaire rempli, l'IA analysera les pièces et tu recevras une notification dans <strong>/app/inscriptions</strong>.
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-2">
                   {/* CTA gauche : ouvre le formulaire dans un nouvel onglet (use-case commercial au tel) */}

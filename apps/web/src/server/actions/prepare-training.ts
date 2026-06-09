@@ -1,13 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@qualiof/db';
+import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { generateProgrammeForProduct } from './programme-generator';
 import { generateConventionForParticipant } from './convention-generator';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
+import { enqueueClosureJob } from '@/lib/closure/queue';
 
 export interface PrepareTrainingResult {
   ok: boolean;
@@ -59,6 +60,8 @@ export async function prepareTrainingForSession(
     select: {
       id: true,
       productId: true,
+      pricePerLearner: true,
+      product: { select: { id: true, title: true, priceHT: true } },
       participants: {
         select: {
           id: true,
@@ -78,6 +81,47 @@ export async function prepareTrainingForSession(
       errors: [],
       error: 'Session introuvable',
     };
+  }
+
+  // Garde-fou conformité Qualiopi : tarif obligatoire (jamais 0€ dans un
+  // programme/convention sinon NON CONFORME audit). Cf feedback Laurent
+  // 2026-05-25 — "ça ne doit jamais arriver".
+  const productPriceHT = Number(session.product?.priceHT ?? 0);
+  const sessionPrice = Number(session.pricePerLearner ?? 0);
+  if (productPriceHT === 0 && sessionPrice === 0) {
+    return {
+      ok: false,
+      total: 0,
+      programmesGenerated: 0,
+      conventionsGenerated: 0,
+      convocationsGenerated: 0,
+      derouleGenerated: false,
+      errors: [],
+      error: `Tarif manquant. Le produit "${session.product?.title ?? '(sans titre)'}" a un prix HT à 0 €. Renseigne-le sur /app/produits/${session.productId} avant de préparer la formation. Un programme Qualiopi avec tarif 0 € est non conforme.`,
+    };
+  }
+  // Cas import SmartOF : tarif côté session uniquement, produit resté à 0.
+  // On propage session.pricePerLearner → product.priceHT pour que le générateur
+  // de programme l'utilise (le programme lit product.priceHT). Évite à Laurent
+  // d'avoir à resaisir sur la fiche produit.
+  if (productPriceHT === 0 && sessionPrice > 0) {
+    await prisma.trainingProduct.update({
+      where: { id: session.productId },
+      data: { priceHT: sessionPrice },
+    });
+    console.info(
+      `[prepare-training] product ${session.productId} priceHT 0 → ${sessionPrice} (propagé depuis session ${sessionId})`,
+    );
+    // Supprime aussi le doc Programme obsolète (forcé à 0€) pour forcer regen
+    // avec le bon prix. Document est polymorphique : entityType + entityId.
+    await prisma.document.deleteMany({
+      where: {
+        tenantId: user.tenantId,
+        entityType: 'TrainingProduct',
+        entityId: session.productId,
+        type: 'PROGRAMME',
+      },
+    });
   }
 
   const errors: PrepareTrainingResult['errors'] = [];
@@ -102,6 +146,8 @@ export async function prepareTrainingForSession(
   generateChecklistForSession(sessionId).catch((e) => {
     console.warn('[prepare-training] check-list non générée :', e?.message ?? e);
   });
+  // NB : Grille d'observation formateur (C3.i11) = doc POST-formation, généré
+  // uniquement par closure-pack quand les participants sont CONFIRMED/ATTENDED.
 
   // Convention + Convocation = par participant (idempotentes sha256)
   await Promise.all(
@@ -128,5 +174,424 @@ export async function prepareTrainingForSession(
     convocationsGenerated,
     derouleGenerated,
     errors,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Quick task 260525-kl5 — auto-trigger préparation pédagogique complète
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface PrepareSessionResult {
+  ok: boolean;
+  total: number;
+  programmesGenerated: number;
+  derouleGenerated: boolean;
+  checklistGenerated: boolean;
+  conventionsGenerated: number;
+  convocationsGenerated: number;
+  analyseBesoinEnqueued: number;
+  analyseBesoinSkipped: number;
+  batchId?: string;
+  errors: { participantName: string; doc: string; message: string }[];
+  error?: string;
+}
+
+export interface SessionPreparationStatus {
+  ok: boolean;
+  programme: boolean;
+  deroule: boolean;
+  checklist: boolean;
+  conventionsCount: number;
+  convocationsCount: number;
+  analyseBesoinDone: number;
+  analyseBesoinInProgress: number;
+  analyseBesoinPending: number;
+  participantsCount: number;
+  batchId?: string;
+  error?: string;
+}
+
+/**
+ * Préparation pédagogique idempotente d'une session — 6 catégories de docs
+ * pré-formation orchestrées en parallèle :
+ *  - Programme + Déroulé (produit-level, find-or-create)
+ *  - Checklist (session-level, find-or-create)
+ *  - Convention + Convocation par participant (find-or-create sha256)
+ *  - Analyse besoin par participant via batch BullMQ (kind=ANALYSE_BESOIN)
+ *
+ * Appelée en fire-and-forget depuis createSessionFull (post-transaction)
+ * OU à la demande depuis le bloc UI "Compléter (X manquants)".
+ *
+ * Pas de `requireRole` ici : le contexte d'auth peut être perdu en
+ * fire-and-forget post-transaction. Bail out silencieux si pas d'user. Côté
+ * UI, `canWrite` filtre déjà l'accès au bouton.
+ */
+export async function prepareSession(sessionId: string): Promise<PrepareSessionResult> {
+  const empty: PrepareSessionResult = {
+    ok: false,
+    total: 0,
+    programmesGenerated: 0,
+    derouleGenerated: false,
+    checklistGenerated: false,
+    conventionsGenerated: 0,
+    convocationsGenerated: 0,
+    analyseBesoinEnqueued: 0,
+    analyseBesoinSkipped: 0,
+    errors: [],
+  };
+
+  const { user } = await validateRequest();
+  if (!user) {
+    return { ...empty, error: 'Non authentifié' };
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      productId: true,
+      pricePerLearner: true,
+      product: { select: { id: true, title: true, priceHT: true } },
+      participants: {
+        select: {
+          id: true,
+          person: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  if (!session) {
+    return { ...empty, error: 'Session introuvable' };
+  }
+
+  // Garde-fou tarif (conformité Qualiopi) — identique à prepareTrainingForSession.
+  const productPriceHT = Number(session.product?.priceHT ?? 0);
+  const sessionPrice = Number(session.pricePerLearner ?? 0);
+  if (productPriceHT === 0 && sessionPrice === 0) {
+    return {
+      ...empty,
+      error: `Tarif manquant. Le produit "${session.product?.title ?? '(sans titre)'}" a un prix HT à 0 €. Renseigne-le sur /app/produits/${session.productId} avant de préparer la formation.`,
+    };
+  }
+  // Propage tarif session → produit (cas import SmartOF).
+  if (productPriceHT === 0 && sessionPrice > 0) {
+    await prisma.trainingProduct.update({
+      where: { id: session.productId },
+      data: { priceHT: sessionPrice },
+    });
+    await prisma.document.deleteMany({
+      where: {
+        tenantId: user.tenantId,
+        entityType: 'product',
+        entityId: session.productId,
+        type: 'PROGRAMME',
+      },
+    });
+  }
+
+  const errors: PrepareSessionResult['errors'] = [];
+  const participantIds = session.participants.map((p) => p.id);
+
+  // 1. Produit-level + session-level (Promise.allSettled — chacun reste idempotent
+  //    en interne via find-or-create / hash sha256).
+  const [progRes, derRes, checklistRes] = await Promise.allSettled([
+    generateProgrammeForProduct(session.productId),
+    generateDerouleForProduct(session.productId),
+    generateChecklistForSession(sessionId),
+  ]);
+
+  let programmesGenerated = 0;
+  let derouleGenerated = false;
+  let checklistGenerated = false;
+
+  if (progRes.status === 'fulfilled' && progRes.value.ok) programmesGenerated = 1;
+  else
+    errors.push({
+      participantName: '(produit)',
+      doc: 'PROGRAMME',
+      message:
+        progRes.status === 'fulfilled'
+          ? (progRes.value.error ?? 'Erreur inconnue')
+          : (progRes.reason?.message ?? String(progRes.reason)),
+    });
+
+  if (derRes.status === 'fulfilled' && derRes.value.ok) derouleGenerated = true;
+  else
+    errors.push({
+      participantName: '(produit)',
+      doc: 'DEROULE',
+      message:
+        derRes.status === 'fulfilled'
+          ? (derRes.value.error ?? 'Erreur inconnue')
+          : (derRes.reason?.message ?? String(derRes.reason)),
+    });
+
+  if (checklistRes.status === 'fulfilled' && checklistRes.value.ok) checklistGenerated = true;
+  else
+    errors.push({
+      participantName: '(session)',
+      doc: 'CHECKLIST',
+      message:
+        checklistRes.status === 'fulfilled'
+          ? (checklistRes.value.error ?? 'Erreur inconnue')
+          : (checklistRes.reason?.message ?? String(checklistRes.reason)),
+    });
+
+  // 2. Par-participant : Convention + Convocation en parallèle.
+  let conventionsGenerated = 0;
+  let convocationsGenerated = 0;
+  await Promise.all(
+    session.participants.map(async (p) => {
+      const name = `${p.person.firstName} ${p.person.lastName}`;
+      const [conv, convoc] = await Promise.allSettled([
+        generateConventionForParticipant(p.id),
+        generateConvocationForParticipant(p.id),
+      ]);
+      if (conv.status === 'fulfilled' && conv.value.ok) conventionsGenerated++;
+      else
+        errors.push({
+          participantName: name,
+          doc: 'CONVENTION',
+          message:
+            conv.status === 'fulfilled'
+              ? (conv.value.error ?? 'Erreur inconnue')
+              : (conv.reason?.message ?? String(conv.reason)),
+        });
+      if (convoc.status === 'fulfilled' && convoc.value.ok) convocationsGenerated++;
+      else
+        errors.push({
+          participantName: name,
+          doc: 'CONVOCATION',
+          message:
+            convoc.status === 'fulfilled'
+              ? (convoc.value.error ?? 'Erreur inconnue')
+              : (convoc.reason?.message ?? String(convoc.reason)),
+        });
+    }),
+  );
+
+  // 3. Analyse besoin (IA Ollama) — batch BullMQ.
+  //    Skip les participants qui ont déjà un PedagogicalAsset.ANALYSE_BESOIN
+  //    rendu (pdfUrl != null) → idempotent.
+  let analyseBesoinEnqueued = 0;
+  let analyseBesoinSkipped = 0;
+  let batchId: string | undefined;
+
+  if (participantIds.length > 0) {
+    const existingAB = await prisma.pedagogicalAsset.findMany({
+      where: {
+        tenantId: user.tenantId,
+        sessionId,
+        kind: 'ANALYSE_BESOIN',
+        participantId: { in: participantIds },
+        pdfUrl: { not: null },
+      },
+      select: { participantId: true },
+    });
+    const doneIds = new Set(existingAB.map((a) => a.participantId).filter((id): id is string => !!id));
+    const toEnqueue = session.participants.filter((p) => !doneIds.has(p.id));
+    analyseBesoinSkipped = participantIds.length - toEnqueue.length;
+
+    if (toEnqueue.length > 0) {
+      const batch = await prisma.closureBatch.create({
+        data: {
+          tenantId: user.tenantId,
+          sessionId,
+          status: 'PENDING',
+          totalDocs: toEnqueue.length,
+          createdByUserId: user.id,
+          jobs: {
+            create: toEnqueue.map((p) => ({
+              participantId: p.id,
+              kind: 'ANALYSE_BESOIN' as ClosureDocKind,
+              status: 'QUEUED' as const,
+            })),
+          },
+        },
+        include: { jobs: { select: { id: true, participantId: true, kind: true } } },
+      });
+      batchId = batch.id;
+      analyseBesoinEnqueued = batch.jobs.length;
+      await Promise.all(
+        batch.jobs.map((job) =>
+          enqueueClosureJob({
+            jobId: job.id,
+            batchId: batch.id,
+            tenantId: user.tenantId,
+            sessionId,
+            participantId: job.participantId,
+            kind: job.kind,
+          }),
+        ),
+      );
+    }
+  }
+
+  // 4. AuditLog (skip si pas d'user — déjà bail out plus haut, mais ceinture
+  //    et bretelles si on étend l'usage en dehors d'un contexte requireRole).
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'TrainingSession',
+        entityId: sessionId,
+        action: 'session.prepare',
+        diff: {
+          programmesGenerated,
+          derouleGenerated,
+          checklistGenerated,
+          conventionsGenerated,
+          convocationsGenerated,
+          analyseBesoinEnqueued,
+          analyseBesoinSkipped,
+          errors: errors.length,
+        },
+      },
+    });
+  } catch (e) {
+    console.warn('[prepareSession] auditLog skipped:', (e as Error)?.message ?? e);
+  }
+
+  revalidatePath(`/app/sessions/${sessionId}`);
+
+  return {
+    ok: true,
+    total: session.participants.length,
+    programmesGenerated,
+    derouleGenerated,
+    checklistGenerated,
+    conventionsGenerated,
+    convocationsGenerated,
+    analyseBesoinEnqueued,
+    analyseBesoinSkipped,
+    batchId,
+    errors,
+  };
+}
+
+/**
+ * Lit l'état agrégé des 6 docs de préparation pédagogique pour piloter
+ * l'UI (bloc PreparationPedagogiqueBlock).
+ *
+ * Tenant-scopée via validateRequest. Bulk-query : 3 requêtes Postgres au
+ * total (Document, PedagogicalAsset, ClosureJob).
+ */
+export async function getSessionPreparationStatus(
+  sessionId: string,
+): Promise<SessionPreparationStatus> {
+  const empty: SessionPreparationStatus = {
+    ok: false,
+    programme: false,
+    deroule: false,
+    checklist: false,
+    conventionsCount: 0,
+    convocationsCount: 0,
+    analyseBesoinDone: 0,
+    analyseBesoinInProgress: 0,
+    analyseBesoinPending: 0,
+    participantsCount: 0,
+  };
+
+  const { user } = await validateRequest();
+  if (!user) return { ...empty, error: 'Non authentifié' };
+
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      productId: true,
+      participants: { select: { id: true } },
+    },
+  });
+  if (!session) return { ...empty, error: 'Session introuvable' };
+
+  const participantIds = session.participants.map((p) => p.id);
+  const docTypes: DocType[] = [
+    'PROGRAMME',
+    'DEROULE_PEDAGOGIQUE',
+    'CHECKLIST_FORMATION',
+    'CONVENTION',
+    'CONVOCATION',
+  ];
+
+  const [docs, abAssets, latestBatch] = await Promise.all([
+    prisma.document.findMany({
+      where: {
+        tenantId: user.tenantId,
+        type: { in: docTypes },
+        OR: [
+          { entityType: 'product', entityId: session.productId, type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] } },
+          { entityType: 'session', entityId: session.id, type: 'CHECKLIST_FORMATION' },
+          ...(participantIds.length > 0
+            ? [{ entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } }]
+            : []),
+        ],
+      },
+      select: { type: true, entityId: true, participantId: true },
+    }),
+    participantIds.length > 0
+      ? prisma.pedagogicalAsset.findMany({
+          where: {
+            tenantId: user.tenantId,
+            sessionId: session.id,
+            kind: 'ANALYSE_BESOIN',
+            participantId: { in: participantIds },
+            pdfUrl: { not: null },
+          },
+          select: { participantId: true },
+        })
+      : Promise.resolve([] as Array<{ participantId: string | null }>),
+    // Dernier batch contenant des jobs ANALYSE_BESOIN pour cette session,
+    // pour exposer le batchId (utile pour cross-link batch progress UI).
+    prisma.closureBatch.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        sessionId: session.id,
+        jobs: { some: { kind: 'ANALYSE_BESOIN' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        jobs: {
+          where: { kind: 'ANALYSE_BESOIN' },
+          select: { status: true },
+        },
+      },
+    }),
+  ]);
+
+  const programme = docs.some((d) => d.type === 'PROGRAMME');
+  const deroule = docs.some((d) => d.type === 'DEROULE_PEDAGOGIQUE');
+  const checklist = docs.some((d) => d.type === 'CHECKLIST_FORMATION');
+  const conventionsSet = new Set(
+    docs.filter((d) => d.type === 'CONVENTION').map((d) => d.entityId),
+  );
+  const convocationsSet = new Set(
+    docs.filter((d) => d.type === 'CONVOCATION').map((d) => d.entityId),
+  );
+
+  const analyseBesoinDone = abAssets.length;
+  let analyseBesoinInProgress = 0;
+  let analyseBesoinPending = 0;
+  if (latestBatch) {
+    for (const job of latestBatch.jobs) {
+      if (job.status === 'PROCESSING') analyseBesoinInProgress++;
+      else if (job.status === 'QUEUED') analyseBesoinPending++;
+    }
+  }
+
+  return {
+    ok: true,
+    programme,
+    deroule,
+    checklist,
+    conventionsCount: conventionsSet.size,
+    convocationsCount: convocationsSet.size,
+    analyseBesoinDone,
+    analyseBesoinInProgress,
+    analyseBesoinPending,
+    participantsCount: participantIds.length,
+    batchId: latestBatch?.id,
   };
 }

@@ -48,6 +48,9 @@ coverage/
 playwright-report/
 test-results/
 
+# TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
+packages/*/tsconfig.tsbuildinfo
+
 # Python (doc-engine)
 __pycache__/
 *.pyc
@@ -56,3 +59,6 @@ venv/
 
 # Uploaded user data (palier 1: stays out of git)
 data/uploads/
+
+# GSD planning (local-only)
+.planning/

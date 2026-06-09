@@ -26,6 +26,8 @@ import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-fo
 import { LegalDocsForm } from '@/components/parametres/legal-docs-form';
 import { formatIban } from '@/lib/iban-format';
 
+const ICON_CLASS = 'h-5 w-5 mt-0.5 text-primary shrink-0';
+
 /**
  * Page Paramètres OF (Phase 7 Plan 07-04).
  *
@@ -94,7 +96,7 @@ export default async function ParametresPage() {
       <div className="grid grid-cols-1 gap-6">
         {/* ─── 1. Organisme — Identité légale (SET-01) ──────────────────── */}
         <SettingsSection
-          icon={Building2}
+          icon={<Building2 className={ICON_CLASS} aria-hidden="true" />}
           title="Organisme — Identité légale"
           description="Raison sociale, SIRET, déclaration d'activité, RCS, forme juridique"
           readView={
@@ -123,7 +125,7 @@ export default async function ParametresPage() {
 
         {/* ─── 2. Adresse & mentions légales (SET-02 texte) ─────────────── */}
         <SettingsSection
-          icon={MapPin}
+          icon={<MapPin className={ICON_CLASS} aria-hidden="true" />}
           title="Adresse & mentions légales"
           description="Apparaît dans les conventions, factures et documents Qualiopi"
           readView={
@@ -169,7 +171,7 @@ export default async function ParametresPage() {
 
         {/* ─── 3. Logo & signatures (SET-02 assets) ──────────────────── */}
         <SettingsSection
-          icon={Image}
+          icon={<Image className={ICON_CLASS} aria-hidden="true" />}
           title="Logo & signatures"
           description="Affichés en en-tête / pied des documents Qualiopi générés"
           readView={
@@ -206,7 +208,7 @@ export default async function ParametresPage() {
 
         {/* ─── 4. Numérotation factures (SET-03 préfixe) ─────────────── */}
         <SettingsSection
-          icon={Hash}
+          icon={<Hash className={ICON_CLASS} aria-hidden="true" />}
           title="Numérotation factures"
           description={`Prochain numéro : ${invoicePrefix}-${(invoiceCount + 1).toString().padStart(6, '0')}`}
           readView={
@@ -238,7 +240,7 @@ export default async function ParametresPage() {
 
         {/* ─── 4bis. Facturation — Relances et avoirs (Phase 11 Plan 11-04) ─ */}
         <SettingsSection
-          icon={Receipt}
+          icon={<Receipt className={ICON_CLASS} aria-hidden="true" />}
           title="Facturation — Relances et avoirs"
           description="Préfixe séquence avoirs (CGI art. 289) et délais de relance impayés"
           readView={
@@ -281,7 +283,7 @@ export default async function ParametresPage() {
 
         {/* ─── 4ter. Documents légaux statiques (BUG-15) ───────────── */}
         <SettingsSection
-          icon={FileText}
+          icon={<FileText className={ICON_CLASS} aria-hidden="true" />}
           title="Documents légaux"
           description="CGV (indic 1 Qualiopi) + Règlement intérieur (indic 9) — markdown éditable, PDF à la volée"
           readView={
@@ -326,7 +328,7 @@ export default async function ParametresPage() {
 
         {/* ─── 5. Coordonnées bancaires (SET-03 RIB) ─────────────────── */}
         <SettingsSection
-          icon={CreditCard}
+          icon={<CreditCard className={ICON_CLASS} aria-hidden="true" />}
           title="Coordonnées bancaires"
           description="Apparaissent en bas des factures et conventions"
           readView={
@@ -360,7 +362,7 @@ export default async function ParametresPage() {
 
         {/* ─── 6. Email expéditeur (SET-03 email) ────────────────────── */}
         <SettingsSection
-          icon={Mail}
+          icon={<Mail className={ICON_CLASS} aria-hidden="true" />}
           title="Email expéditeur"
           description="Adresse 'From' des emails envoyés par l'application"
           readView={
@@ -395,7 +397,7 @@ export default async function ParametresPage() {
         {/* ─── Sections legacy read-only ──────────────────────────────── */}
 
         <SettingsSection
-          icon={Users}
+          icon={<Users className={ICON_CLASS} aria-hidden="true" />}
           title={`Utilisateurs (${usersCount})`}
           description="Gestion des accès et des rôles"
           allowEdit={false}
@@ -416,7 +418,7 @@ export default async function ParametresPage() {
         />
 
         <SettingsSection
-          icon={Sparkles}
+          icon={<Sparkles className={ICON_CLASS} aria-hidden="true" />}
           title={`OPCO référencés (${opcos.length})`}
           description="Catalogue des financeurs alimentant le module Dossiers OPCO"
           allowEdit={false}
@@ -445,7 +447,7 @@ export default async function ParametresPage() {
         />
 
         <SettingsSection
-          icon={Settings}
+          icon={<Settings className={ICON_CLASS} aria-hidden="true" />}
           title={`Référentiel documents Qualiopi (${docCatalog.length})`}
           description="32 indicateurs Qualiopi — alimenté par la seed Prisma"
           allowEdit={false}

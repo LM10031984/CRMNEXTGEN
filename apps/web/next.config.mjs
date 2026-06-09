@@ -18,6 +18,47 @@ const nextConfig = {
     },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
+  // Redirects pour URLs "naturelles" tapées à la main par les utilisateurs.
+  // Audit 2026-05-12 BUG-03 — voir CLAUDE.md > Routes (convention naming).
+  async redirects() {
+    return [
+      {
+        source: '/app/pre-inscriptions',
+        destination: '/app/preinscriptions',
+        permanent: true,
+      },
+      {
+        source: '/app/pre-inscriptions/:path*',
+        destination: '/app/preinscriptions/:path*',
+        permanent: true,
+      },
+      // Phase 12 D-02 reverse alias : route admin renommée
+      // `/app/preinscriptions(/:path*)` → `/app/inscriptions(/:path*)`.
+      // La chaîne `pre-inscriptions → preinscriptions → inscriptions` est OK
+      // pour le browser (Next.js résout les redirect chains en double-hop ;
+      // les bookmarks utilisateurs aboutissent à `/app/inscriptions` au final).
+      {
+        source: '/app/preinscriptions',
+        destination: '/app/inscriptions',
+        permanent: true,
+      },
+      {
+        source: '/app/preinscriptions/:path*',
+        destination: '/app/inscriptions/:path*',
+        permanent: true,
+      },
+      {
+        source: '/app/modeles',
+        destination: '/app/templates',
+        permanent: true,
+      },
+      {
+        source: '/app/modeles/:path*',
+        destination: '/app/templates/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
