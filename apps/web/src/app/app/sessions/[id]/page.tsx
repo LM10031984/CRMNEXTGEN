@@ -44,6 +44,7 @@ import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
+import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
 import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
@@ -129,13 +130,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           select: { id: true, type: true },
         }),
         // Assets niveau session partagés par tous les apprenants :
-        // grille observation consolidée (C3.i11), check-list formation (C4.i17)
+        // grille observation consolidée (C3.i11), check-list formation (C4.i17),
+        // bilan satisfaction session (ind. 30 — ajouté A5 pour le rendu carte).
         prisma.document.findMany({
           where: {
             tenantId: user.tenantId,
             entityType: 'session',
             entityId: session.id,
-            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION'] },
+            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION'] },
           },
           orderBy: { createdAt: 'desc' },
           select: { id: true, type: true },
@@ -158,6 +160,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   }
   const grilleSessionDocId = sessionSharedDocByType.get('GRILLE_OBS_SESSION');
   const checklistDocId = sessionSharedDocByType.get('CHECKLIST_FORMATION');
+  const satisfactionSessionDocId = sessionSharedDocByType.get('SATISFACTION_SESSION');
 
   // Indexe par participant pour lookup en O(1) côté rendu
   const docsByParticipant = new Map<string, Map<string, string>>(); // partId → Map(type → docId)
@@ -936,6 +939,26 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           opcoSubmissionId={latestOpcoSubmission?.id ?? null}
         />
       </SessionWorkflowTimeline>
+
+      {/* A5 — SessionOnlyDocsBlock remonté en sidebar de la page. Couvre les
+          4 docs niveau session avec génération à l'unité : Déroulé (produit),
+          Grille obs session (ind. 11 🔴), Checklist formation (ind. 17), et
+          Bilan satisfaction session (ind. 30 — 4ᵉ carte A5). Sans ce bloc,
+          ces 2 docs majeurs ne sont régénérables qu'en relançant le pack
+          complet — trou conformité identifié par le plan. Lot B le
+          déplacera en onglet Clôture, ici interim. */}
+      {canWrite && (
+        <SessionOnlyDocsBlock
+          sessionId={session.id}
+          productId={session.product?.id ?? null}
+          deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
+          grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
+          checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
+          satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
+          grilleObsAssetCount={grilleObsAssetCount}
+          canWrite={canWrite}
+        />
+      )}
 
       {/* <ParticipantDocsCards> supprimé (commit ui-e3 #5) — le DocDockDrawer
           porte la même affordance "clic génère ce doc" (smoke gate

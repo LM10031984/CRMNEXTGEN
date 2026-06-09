@@ -25,10 +25,13 @@ import { DocStatusBadge } from './doc-status-badge';
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateDerouleForProduct } from '@/server/actions/deroule-product-generator';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
+import { generateSatisfactionSessionForSession } from '@/server/actions/generate-satisfaction-session';
 
 interface PdfRef {
   id: string;
 }
+
+type CardKey = 'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST' | 'SATISFACTION_SESSION';
 
 export interface SessionOnlyDocsBlockProps {
   sessionId: string;
@@ -36,12 +39,14 @@ export interface SessionOnlyDocsBlockProps {
   deroulePdfRef?: PdfRef;
   grilleObsPdfRef?: PdfRef;
   checklistPdfRef?: PdfRef;
+  /** A5 — Bilan satisfaction session (ind. 30). */
+  satisfactionPdfRef?: PdfRef;
   grilleObsAssetCount: number;
   canWrite: boolean;
 }
 
 const CARDS: Array<{
-  key: 'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST';
+  key: CardKey;
   title: string;
   shortLabel: string;
   article: 'le' | 'la';
@@ -49,6 +54,11 @@ const CARDS: Array<{
   { key: 'DEROULE', title: 'Déroulé pédagogique', shortLabel: 'Déroulé', article: 'le' },
   { key: 'GRILLE_OBS', title: "Grille d'observation formateur", shortLabel: 'Grille observation', article: 'la' },
   { key: 'CHECKLIST', title: 'Checklist formation', shortLabel: 'Checklist', article: 'la' },
+  // A5 — 4ᵉ carte. L'action `generateSatisfactionSessionForSession` existait
+  // mais la carte manquait : un OF ne pouvait régénérer le bilan
+  // satisfaction session qu'en relançant le pack complet (trou conformité
+  // ind. 30 identifié par le plan A5).
+  { key: 'SATISFACTION_SESSION', title: 'Bilan satisfaction session', shortLabel: 'Bilan satisfaction', article: 'le' },
 ];
 
 export function SessionOnlyDocsBlock({
@@ -57,22 +67,25 @@ export function SessionOnlyDocsBlock({
   deroulePdfRef,
   grilleObsPdfRef,
   checklistPdfRef,
+  satisfactionPdfRef,
   grilleObsAssetCount,
   canWrite,
 }: SessionOnlyDocsBlockProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const pdfRefByKey: Record<'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST', PdfRef | undefined> = {
+  const pdfRefByKey: Record<CardKey, PdfRef | undefined> = {
     DEROULE: deroulePdfRef,
     GRILLE_OBS: grilleObsPdfRef,
     CHECKLIST: checklistPdfRef,
+    SATISFACTION_SESSION: satisfactionPdfRef,
   };
 
-  const hasPdfByKey: Record<'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST', boolean> = {
+  const hasPdfByKey: Record<CardKey, boolean> = {
     DEROULE: !!deroulePdfRef,
     GRILLE_OBS: !!grilleObsPdfRef || grilleObsAssetCount > 0,
     CHECKLIST: !!checklistPdfRef,
+    SATISFACTION_SESSION: !!satisfactionPdfRef,
   };
 
   function runGenerate(
@@ -95,7 +108,7 @@ export function SessionOnlyDocsBlock({
   }
 
   function handleGenerate(
-    key: 'DEROULE' | 'GRILLE_OBS' | 'CHECKLIST',
+    key: CardKey,
     label: string,
     opts: { force?: boolean } = {},
   ) {
@@ -107,8 +120,16 @@ export function SessionOnlyDocsBlock({
       runGenerate(label, () => generateDerouleForProduct(productId, opts));
     } else if (key === 'GRILLE_OBS') {
       runGenerate(label, () => generateGrilleObsSessionForSession(sessionId, opts));
-    } else {
+    } else if (key === 'CHECKLIST') {
       runGenerate(label, () => generateChecklistForSession(sessionId, opts));
+    } else {
+      // SATISFACTION_SESSION — l'action wrappe satisfactionSessionGenerator
+      // sans support de `force` (re-génère systématiquement, le résultat
+      // est déterministe à partir des SessionParticipant satisfactions).
+      // Le bouton "Re-générer" reste fonctionnel : `opts.force` est ignoré
+      // sans erreur.
+      void opts;
+      runGenerate(label, () => generateSatisfactionSessionForSession(sessionId));
     }
   }
 
@@ -124,7 +145,7 @@ export function SessionOnlyDocsBlock({
         <FileText className="h-4 w-4" aria-hidden="true" /> Documents session
       </h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {CARDS.map((card) => {
           const pdf = pdfRefByKey[card.key];
           const hasPdf = hasPdfByKey[card.key];

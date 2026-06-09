@@ -112,8 +112,14 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).not.toMatch(/<DocDock>/);
   });
 
-  it('plus de SessionOnlyDocsBlock (supprimé en (d), remplacé par timeline)', () => {
-    expect(pageSrc).not.toMatch(/<SessionOnlyDocsBlock/);
+  it('monte <SessionOnlyDocsBlock> avec 4 cartes (A5 — réintroduit pour Bilan satisfaction)', () => {
+    // A5 2026-06-09 : la suppression de (d) coupait la génération à
+    // l'unité des 2 docs niveau session (Grille obs ind. 11, Bilan
+    // satisfaction ind. 30). Le bloc est réintroduit avec la 4ᵉ carte
+    // SATISFACTION_SESSION. Lot B le déplacera en onglet Clôture mais
+    // ne doit PAS le re-supprimer.
+    expect(pageSrc).toMatch(/<SessionOnlyDocsBlock/);
+    expect(pageSrc).toMatch(/satisfactionPdfRef/);
   });
 
   it('plus de <details> "Paramètres avancés" (migré en SettingsDrawer ui-e3)', () => {
