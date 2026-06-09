@@ -17,6 +17,34 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Sprint 1 — Backup pg_dump automatisé.
+  # Image populaire (prodrigestivill/postgres-backup-local) qui fait :
+  #   - pg_dump compressé gzip quotidien (02h00 par défaut)
+  #   - Rotation : 7 daily / 4 weekly / 6 monthly (modifiable via env)
+  #   - Healthcheck intégré (fichier marker à la fin de chaque dump)
+  # Restauration : voir scripts/restore-db.sh
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: qualiof_pg_backup
+    restart: unless-stopped
+    user: postgres:postgres
+    volumes:
+      - postgres_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: qualiof
+      POSTGRES_USER: qualiof
+      POSTGRES_PASSWORD: qualiof_dev
+      POSTGRES_EXTRA_OPTS: '-Z6 --schema=public --blobs'
+      SCHEDULE: '@daily'
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+
   redis:
     image: redis:7-alpine
     container_name: qualiof_redis
@@ -91,6 +119,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_backups:
   redis_data:
   minio_data:
   ollama_data:
