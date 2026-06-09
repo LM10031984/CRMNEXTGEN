@@ -209,7 +209,7 @@ export async function updateParticipant(input: {
   // l'année à laquelle s'applique le budget consommé. cf
   // feedback_budget_agefice_annee_dossier. ISO yyyy-mm-dd ou null pour effacer.
   financingRequestDate?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);

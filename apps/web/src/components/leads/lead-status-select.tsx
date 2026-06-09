@@ -36,8 +36,12 @@ export function LeadStatusSelect({
   leadId: string;
   current: LeadStatus;
 }) {
-  const { execute, pending, optimistic } = useServerAction({
-    action: (newStatus: LeadStatus) => updateLeadStatus(leadId, newStatus),
+  const { execute, pending, optimistic } = useServerAction<
+    [LeadStatus],
+    void,
+    LeadStatus
+  >({
+    action: (newStatus) => updateLeadStatus(leadId, newStatus),
     optimisticInitial: current,
     optimisticReducer: (_state, [newStatus]) => newStatus,
     successMessage: ([newStatus]) => `Statut : ${STATUS_LABELS[newStatus]}`,

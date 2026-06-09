@@ -1,42 +1,23 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import { Pencil, Loader2 } from 'lucide-react';
 import {
   UpdateSessionDetailsInputSchema,
   type UpdateSessionDetailsInput,
 } from '@qualiof/shared';
 import { updateSessionDetails } from '@/server/actions/sessions';
+import { useServerAction } from '@/lib/hooks/use-server-action';
 
 /**
  * Quick task 260523-oze — CTA "Modifier la session" + Dialog Radix d'édition.
  *
- * Pattern cloné de `components/invoices/create-credit-note-dialog.tsx` (Phase
- * 11 Plan 11-05) — Radix Dialog + RHF + zodResolver + useTransition + sonner.
- *
- * Flow :
- *  1. Trigger ouvre la Dialog (9 champs pré-remplis depuis `initial`).
- *  2. Submit → server action `updateSessionDetails(data)` (Quick task 260523-oze).
- *  3. Succès → toast vert "Session mise à jour" + `router.refresh()` (fiche).
- *  4. Erreur → toast rouge avec message serveur (Zod ou refine cross-field).
- *
- * RBAC : le bouton est rendu côté Server Component parent (page session)
- * via condition `['ADMIN','MANAGER'].includes(user.role)`. La server action
- * revalide systématiquement via `requireRole(['ADMIN','MANAGER'])`.
- *
- * Décision dates (cf. plan 260523-oze) : `<input type="date">` (YYYY-MM-DD)
- * pour cohérence avec le wizard de création. Le server reconstruit le
- * DateTime en préservant l'heure d'origine de la session.
- *
- * Décision pricePerLearner : props attend `number | null` (le caller convertit
- * `Decimal | null` Prisma via `Number()` côté Server Component, car les
- * Decimals ne traversent pas la frontière server→client — cf. STATE.md
- * feedback Prisma Decimal).
+ * P3.1 — Migré sur `useServerAction` (mode simple). Le hook fournit le
+ * pending, le toast succès/erreur et le router.refresh() ; onSuccess ferme
+ * la Dialog et reset le form.
  */
 
 const MODALITY_LABELS: Record<UpdateSessionDetailsInput['modality'] & string, string> = {
@@ -73,8 +54,6 @@ function toDateInput(d: Date): string {
 
 export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const router = useRouter();
 
   const defaultValues = {
     sessionId,
@@ -99,19 +78,16 @@ export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
     defaultValues: defaultValues as UpdateSessionDetailsInput,
   });
 
-  const onSubmit = handleSubmit((data) => {
-    startTransition(async () => {
-      const res = await updateSessionDetails(data);
-      if (res.ok) {
-        toast.success('Session mise à jour');
-        setOpen(false);
-        reset(defaultValues as UpdateSessionDetailsInput);
-        router.refresh();
-      } else {
-        toast.error(res.error);
-      }
-    });
+  const { execute, pending } = useServerAction({
+    action: (data: UpdateSessionDetailsInput) => updateSessionDetails(data),
+    successMessage: 'Session mise à jour',
+    onSuccess: () => {
+      setOpen(false);
+      reset(defaultValues as UpdateSessionDetailsInput);
+    },
   });
+
+  const onSubmit = handleSubmit((data) => execute(data));
 
   return (
     <Dialog.Root

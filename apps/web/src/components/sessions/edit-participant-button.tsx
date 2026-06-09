@@ -1,10 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Pencil } from 'lucide-react';
-import { toast } from 'sonner';
 import { updateParticipant } from '@/server/actions/sessions';
+import { useServerAction } from '@/lib/hooks/use-server-action';
+
+/**
+ * P3.1 — Migré sur `useServerAction` (mode simple). Plus de toast manuel,
+ * plus de useState busy/setError pour l'erreur serveur : le hook gère le
+ * pending, le toast d'erreur et le router.refresh() après succès.
+ *
+ * L'erreur locale de validation Prix HT (parseFloat NaN) reste en useState
+ * car ce n'est PAS une erreur serveur (rejet pré-appel).
+ */
 
 interface EditParticipantButtonProps {
   participantId: string;
@@ -34,47 +42,38 @@ export function EditParticipantButton({
   currentStatus,
   currentFinancingRequestDate,
 }: EditParticipantButtonProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [priceHT, setPriceHT] = useState<string>(String(currentPriceHT));
   const [status, setStatus] = useState<string>(currentStatus);
   const [financingRequestDate, setFinancingRequestDate] = useState<string>(
     toIsoDate(currentFinancingRequestDate),
   );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  const { execute, pending } = useServerAction({
+    action: (input: Parameters<typeof updateParticipant>[0]) =>
+      updateParticipant(input),
+    successMessage: ([input]) =>
+      `Inscription mise à jour${input.priceHT !== undefined ? ` — ${input.priceHT.toFixed(2)} €` : ''}`,
+    onSuccess: () => setOpen(false),
+  });
+
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
+    setValidationError(null);
 
     const parsedPrice = parseFloat(priceHT.replace(',', '.'));
     if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
-      setError('Prix HT invalide.');
-      setBusy(false);
+      setValidationError('Prix HT invalide.');
       return;
     }
 
-    try {
-      const r = await updateParticipant({
-        participantId,
-        priceHT: parsedPrice,
-        enrollmentStatus: status as any,
-        financingRequestDate: financingRequestDate || null,
-      });
-      if (r.ok) {
-        toast.success(`Inscription mise à jour — ${parsedPrice.toFixed(2)} €`);
-        setOpen(false);
-        router.refresh();
-      } else {
-        setError(r.error ?? 'Erreur inconnue.');
-      }
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
+    execute({
+      participantId,
+      priceHT: parsedPrice,
+      enrollmentStatus: status as Parameters<typeof updateParticipant>[0]['enrollmentStatus'],
+      financingRequestDate: financingRequestDate || null,
+    });
   }
 
   return (
@@ -92,7 +91,7 @@ export function EditParticipantButton({
       {open && (
         <div
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => !busy && setOpen(false)}
+          onClick={() => !pending && setOpen(false)}
         >
           <div
             className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl"
@@ -144,26 +143,26 @@ export function EditParticipantButton({
                   Détermine l'année à laquelle le budget AGEFICE est imputé. Vide = on prend la date de la session par défaut.
                 </p>
               </div>
-              {error && (
+              {validationError && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
-                  {error}
+                  {validationError}
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  disabled={busy}
+                  disabled={pending}
                   className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-muted"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  disabled={busy}
+                  disabled={pending}
                   className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
                 >
-                  {busy ? 'Enregistrement…' : 'Enregistrer'}
+                  {pending ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
               </div>
             </form>
