@@ -116,7 +116,9 @@ Exécuter, dans cet ordre (cf. `QUALIOPI-PLAN-COMPLET.md`), chaque tâche posée
 **T12** (module handicap / réseau, ind. 26 🔴) : charte PSH, guide adaptations, tableau adaptations par session, doc réseau (Agefiph/Cap emploi/MDPH/RHF), référent. Branché au rail handicap de T7. *(Jalon dur : prép Kaïna le 16/06.)*
 
 ### Lot E — Structurel (post-audit)
-**T8** (déroulé réalisé + adaptations liées §1-bis), **T9** (datation/versioning/fraîcheur), **T10** (référentiel RNCQ officiel), **T10b** (espace formateurs ind. 18/21/22), **T11** (module veille ind. 23/24/25), **T13** (appréciations & réclamations ind. 30/31/32). Y inclure le polish UI restant des onglets.
+**E0 — Transition auto `VALIDATED → IN_PROGRESS` à `startDate`** (logué A7 le 2026-06-09 depuis le bug A2). Le patch A2 corrige le symptôme (sessionStage dérive « en cours » sur les dates, pas le seul status) ; la cause racine reste : un statut BDD qui ne reflète pas la réalité physique de la session. Conséquences connues côté UI : `MarkCompletedButton` n'est visible qu'en `IN_PROGRESS` (donc absent sur les sessions VALIDATED en train de tourner), et d'autres branches downstream peuvent se désynchroniser. À trancher à froid en début de Lot E (cron léger ? check au render ? hook server action ?). Risque inverse à prendre en compte : transition auto qui ferait avancer à tort une session annulée/reportée de dernière minute — d'où la décision en E, pas un bricolage en cours de route.
+
+Puis : **T8** (déroulé réalisé + adaptations liées §1-bis), **T9** (datation/versioning/fraîcheur), **T10** (référentiel RNCQ officiel), **T10b** (espace formateurs ind. 18/21/22), **T11** (module veille ind. 23/24/25), **T13** (appréciations & réclamations ind. 30/31/32). Y inclure le polish UI restant des onglets.
 
 ---
 
