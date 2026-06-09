@@ -218,5 +218,12 @@ export async function updateLeadStatus(
   revalidatePath('/app/leads');
   revalidatePath(`/app/leads/${leadId}`);
   revalidatePath('/app/leads/charge');
+  // P3.3 — transition vers/depuis WON impacte les KPI du dashboard
+  // (`leadsWonThisMonth`, `conversionPct`, `avgDaysToWin`). On utilise le
+  // 2e argument 'page' pour ne revalider QUE la page dashboard, pas
+  // l'ensemble du layout `/app/*` (qui re-fetcherait la sidebar/nav).
+  if (becomesWon !== wasWon) {
+    revalidatePath('/app', 'page');
+  }
   return { ok: true };
 }

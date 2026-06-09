@@ -222,7 +222,12 @@ export async function updateParticipant(input: {
 
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: input.participantId },
-    include: { session: { select: { tenantId: true, id: true } } },
+    include: {
+      session: { select: { tenantId: true, id: true } },
+      // P3.3 — on fetch personId pour pouvoir revalider la fiche apprenant
+      // (qui affiche les inscriptions, prix, dates de dossier).
+      person: { select: { id: true } },
+    },
   });
   if (!part || part.session.tenantId !== user.tenantId) {
     return { ok: false, error: 'Inscription introuvable.' };
@@ -257,8 +262,17 @@ export async function updateParticipant(input: {
     where: { id: input.participantId },
     data,
   });
+  // P3.3 — revalidation ciblée des 4 segments qui affichent réellement les
+  // champs modifiés (prix HT, statut inscription, date dépôt dossier) :
+  //   - fiche session (liste des inscrits)
+  //   - budget AGEFICE (impute par année)
+  //   - fiche apprenant (historique inscriptions)
+  //   - liste dossiers OPCO (chips paymentReceived / opcoReimbursed dépendent
+  //     indirectement du statut quand un transfert d'état déclenche une refacto)
   revalidatePath(`/app/sessions/${part.session.id}`);
   revalidatePath('/app/budget-agefice');
+  if (part.person) revalidatePath(`/app/apprenants/${part.person.id}`);
+  revalidatePath('/app/dossiers-opco');
   return { ok: true };
 }
 
