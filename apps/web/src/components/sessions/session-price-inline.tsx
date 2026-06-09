@@ -55,7 +55,10 @@ export function SessionPriceInline({ sessionId, value, disabled }: Props) {
       emptyLabel="Tarif à saisir"
       inputType="number"
       inputClassName="w-24 text-right"
-      suffix={<span className="text-muted-foreground text-[11px]">€ / stagiaire</span>}
+      // A3 — suffix retiré : display contient déjà "X € / stagiaire" via
+      // Intl.NumberFormat currency, donc le suffix dupliquait visuellement
+      // ("3 024 € / stagiaire € / stagiaire"). L'aria-label + le contexte
+      // sticky-header tarif suffisent à conserver l'intention en édition.
       disabled={disabled}
     />
   );
