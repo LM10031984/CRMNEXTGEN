@@ -9,6 +9,7 @@ import { uploadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
 import { validateFileBuffer, type AllowedMime } from '@/lib/file-validation';
 import { buildPreEnrollmentKey } from '@/lib/storage-key';
+import { checkRateLimit, RateLimitProfile } from '@/lib/rate-limit';
 
 interface SubmitInput {
   token: string;
@@ -50,6 +51,24 @@ const MIME_BY_KIND: Record<'CNI' | 'RIB' | 'CFP', AllowedMime[]> = {
 export async function submitPreEnrollmentForm(
   input: SubmitInput,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Sprint 1 — Rate-limit anti-spam : 10 soumissions max / heure par IP sur cet
+  // endpoint public. Évite qu'un attaquant pollue la BDD ou sature le pipeline
+  // d'extraction IA. Le token n'est pas dans la clé : un attaquant qui aurait
+  // 10 tokens valides pourrait quand même les soumettre — mais c'est OK car
+  // ça nécessite déjà 10 liens légitimes émis par l'admin.
+  const h = await headers();
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? 'unknown';
+  const rl = await checkRateLimit({
+    key: `preinscription:submit:${ip}`,
+    ...RateLimitProfile.PREENROLLMENT_SUBMIT,
+  });
+  if (!rl.ok) {
+    return {
+      ok: false,
+      error: `Trop de soumissions depuis cette adresse. Réessayez dans ${Math.ceil(rl.resetIn / 60)} min.`,
+    };
+  }
+
   // 1) Validation token
   const pe = await prisma.preEnrollment.findUnique({ where: { token: input.token } });
   if (!pe) return { ok: false, error: 'Lien invalide' };
