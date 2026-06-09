@@ -9,6 +9,12 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
+  // `native` : binaire pour la machine de dev (Windows/macOS/Linux).
+  // `rhel-openssl-3.0.x` : runtime Vercel serverless (Amazon Linux 2023).
+  // Sans cette ligne, le moteur Prisma n'est pas inclus dans le bundle Vercel
+  // → runtime error "PrismaClient is unable to run in this browser environment,
+  // running in 'unknown'".
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
