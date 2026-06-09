@@ -1,6 +1,7 @@
 'use server';
 
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
@@ -10,29 +11,60 @@ import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
 import { validateFileBuffer, type AllowedMime } from '@/lib/file-validation';
 import { buildPreEnrollmentKey } from '@/lib/storage-key';
 import { checkRateLimit, RateLimitProfile } from '@/lib/rate-limit';
+import { childLogger } from '@/lib/logger';
 
-interface SubmitInput {
-  token: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
-  birthDate?: string;
-  birthPlace?: string;
-  professionalStatus?: string;
-  diploma?: string;
-  educationLevel?: string;
-  professionalExperience?: string;
-  rgpdAccepted: boolean;
-  files: Array<{
-    kind: 'CNI' | 'RIB' | 'CFP';
-    name: string;
-    contentType: string;
-    base64: string; // contenu encodé base64
-  }>;
-  /** Signature électronique PNG en data URL (sans préfixe data:image/png;base64,). */
-  signatureBase64?: string;
-}
+const log = childLogger('preinscription-public');
+
+/**
+ * Sprint 3 — Validation Zod stricte sur l'endpoint PUBLIC.
+ *
+ * C'est notre point d'entrée le plus exposé (pas d'auth, juste un token).
+ * Tout ce qui rentre doit être validé : injection PII, payloads malformés,
+ * tailles abusives. La validation magic-bytes (Sprint 1) couvre déjà le
+ * contenu binaire des pièces ; Zod couvre ici les champs structurés.
+ *
+ * Règles métier :
+ *   - token : 32 hex (généré par preinscriptions.ts via crypto.randomBytes)
+ *   - email : RFC 5321 + max 254 chars
+ *   - firstName/lastName : trim non-vide, max 100 chars (anti-DoS BDD)
+ *   - birthDate : ISO date, refuse si année hors [1900, currentYear]
+ *   - rgpdAccepted : true strict (pas truthy)
+ *   - files : 1 à 4 entrées, base64 ≤ 14 Mo (10 Mo binaire × 1.4 base64)
+ *   - signatureBase64 : optionnel mais ≤ 3 Mo (2 Mo binaire × 1.4)
+ */
+const submitInputSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{32,128}$/, 'Token invalide.'),
+  firstName: z.string().trim().min(1, 'Prénom requis.').max(100),
+  lastName: z.string().trim().min(1, 'Nom requis.').max(100),
+  email: z.string().trim().toLowerCase().email('Email invalide.').max(254),
+  phone: z.string().trim().max(40).optional(),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date de naissance invalide (yyyy-mm-dd).')
+    .optional(),
+  birthPlace: z.string().trim().max(120).optional(),
+  professionalStatus: z.string().trim().max(120).optional(),
+  diploma: z.string().trim().max(500).optional(),
+  educationLevel: z.string().trim().max(120).optional(),
+  professionalExperience: z.string().trim().max(500).optional(),
+  rgpdAccepted: z.literal(true, {
+    errorMap: () => ({ message: 'Acceptation RGPD obligatoire.' }),
+  }),
+  files: z
+    .array(
+      z.object({
+        kind: z.enum(['CNI', 'RIB', 'CFP']),
+        name: z.string().trim().min(1).max(255),
+        contentType: z.string().max(100), // ignoré côté serveur (magic-bytes), mais limité quand même
+        base64: z.string().max(14 * 1024 * 1024),
+      }),
+    )
+    .min(1, 'Au moins une pièce justificative est requise.')
+    .max(4, 'Trop de pièces (4 max).'),
+  signatureBase64: z.string().max(3 * 1024 * 1024).optional(),
+});
+
+type SubmitInput = z.infer<typeof submitInputSchema>;
 
 const MAX_FILE_SIZE_MB = 10;
 
@@ -49,8 +81,20 @@ const MIME_BY_KIND: Record<'CNI' | 'RIB' | 'CFP', AllowedMime[]> = {
 };
 
 export async function submitPreEnrollmentForm(
-  input: SubmitInput,
+  rawInput: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Sprint 3 — Validation Zod stricte avant tout traitement. Le client peut
+  // envoyer n'importe quoi (endpoint public), donc on filtre les types,
+  // longueurs, regex AVANT de toucher la BDD ou le storage.
+  const parsed = submitInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    const path = firstIssue?.path.join('.') ?? '?';
+    log.warn({ issues: parsed.error.issues.slice(0, 3) }, 'validation.failed');
+    return { ok: false, error: `Champ invalide (${path}) : ${firstIssue?.message ?? 'valeur incorrecte.'}` };
+  }
+  const input: SubmitInput = parsed.data;
+
   // Sprint 1 — Rate-limit anti-spam : 10 soumissions max / heure par IP sur cet
   // endpoint public. Évite qu'un attaquant pollue la BDD ou sature le pipeline
   // d'extraction IA. Le token n'est pas dans la clé : un attaquant qui aurait
@@ -78,21 +122,17 @@ export async function submitPreEnrollmentForm(
   }
 
   // 2) Validation champs
-  if (!input.firstName?.trim() || !input.lastName?.trim() || !input.email?.trim()) {
-    return { ok: false, error: 'Nom, prénom et email sont obligatoires' };
-  }
-  if (!input.rgpdAccepted) {
-    return { ok: false, error: 'Tu dois accepter le traitement RGPD pour continuer' };
-  }
-  if (input.files.length === 0) {
-    return { ok: false, error: 'Au moins une pièce justificative est requise' };
-  }
+  // Sprint 3 — Les checks de présence des champs (firstName, lastName, email,
+  // rgpdAccepted, files non vide) sont désormais couverts par submitInputSchema.
+  // Le seul check métier qui reste : signature électronique obligatoire au sens
+  // contractuel (la signature peut être vide dans le schéma — c'est la règle
+  // métier qui l'exige, pas le format).
   if (!input.signatureBase64) {
     return { ok: false, error: 'La signature électronique est obligatoire pour valider ta demande' };
   }
-  // Date de naissance : refuse les dates invalides ou hors-bornes raisonnables.
-  // Sans cette garde, une saisie type "20/01/275760" produit un `Invalid Date`
-  // et Prisma plante au moment du UPDATE → "Erreur technique" générique côté client.
+
+  // Conversion Date après validation Zod (le schéma valide le format YYYY-MM-DD,
+  // mais on doit aussi rejeter les années aberrantes type "275760" → Prisma planterait).
   let parsedBirthDate: Date | null = null;
   if (input.birthDate) {
     const d = new Date(input.birthDate);
@@ -129,7 +169,10 @@ export async function submitPreEnrollmentForm(
       await uploadFile(PREENROLLMENT_BUCKET, key, buffer, check.mime);
       uploadedKeys[file.kind] = key;
     } catch (e) {
-      console.error('Upload error', e);
+      log.error(
+        { fileName: file.name, kind: file.kind, err: { message: (e as Error).message } },
+        'upload.failed',
+      );
       return { ok: false, error: `Échec de l'upload du fichier ${file.name}` };
     }
   }
@@ -161,7 +204,10 @@ export async function submitPreEnrollmentForm(
       signatureIp = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
       signatureUserAgent = h.get('user-agent') ?? null;
     } catch (e) {
-      console.error('Signature upload failed', e);
+      log.error(
+        { err: { message: (e as Error).message } },
+        'signature.upload.failed',
+      );
       return { ok: false, error: 'Échec de l\'enregistrement de la signature' };
     }
   }
@@ -195,7 +241,10 @@ export async function submitPreEnrollmentForm(
       },
     });
   } catch (e: any) {
-    console.error('PreEnrollment update failed', e);
+    log.error(
+      { preEnrollmentId: pe.id, err: { message: e?.message ?? String(e) } },
+      'update.failed',
+    );
     return { ok: false, error: `Échec de l'enregistrement : ${e?.message ?? 'erreur inconnue'}` };
   }
 
@@ -205,7 +254,10 @@ export async function submitPreEnrollmentForm(
   // L'utilisateur reçoit la confirmation immédiatement, l'IA tourne en parallèle.
   Promise.resolve().then(() =>
     extractPreEnrollmentDocuments(pe.id).catch((err) => {
-      console.error('Extraction IA échouée pour', pe.id, err);
+      log.error(
+        { preEnrollmentId: pe.id, err: { message: (err as Error).message } },
+        'extraction.failed',
+      );
     }),
   );
 
@@ -226,7 +278,10 @@ export async function retriggerExtraction(preEnrollmentId: string): Promise<{ ok
   // Lancement non bloquant
   Promise.resolve().then(() =>
     extractPreEnrollmentDocuments(preEnrollmentId).catch((err) => {
-      console.error('Re-extraction échouée', err);
+      log.error(
+        { preEnrollmentId, err: { message: (err as Error).message } },
+        'reextraction.failed',
+      );
     }),
   );
   revalidatePath('/app/preinscriptions');
