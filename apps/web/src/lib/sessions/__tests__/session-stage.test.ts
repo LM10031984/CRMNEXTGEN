@@ -462,4 +462,27 @@ describe('sessionStage — arbre de décision étape courante', () => {
     );
     expect(cancelled.reason).not.toMatch(/cours/i);
   });
+
+  it("21. SESSION PASSÉE — VALIDATED + endDate < now → 'Marquer comme terminée' (raccord A2↔ui-e3)", () => {
+    // Raccord explicite : les tests 10/11/12 couvrent PLANNED/IN_PROGRESS/
+    // DRAFT post-endDate ; VALIDATED manquait à l'appel. Le statut
+    // VALIDATED est précisément celui du bug Laurent A2 — il faut
+    // verrouiller le passage de relais entre la branche in-window A2
+    // (active tant que now ≤ endDate) et la branche post-endDate ui-e3
+    // (active dès que now > endDate, indépendamment du statut BDD).
+    const result = sessionStage(
+      baseInput({
+        status: 'VALIDATED',
+        prep: completePrep(1),
+        now: new Date('2026-07-22T08:00:00Z'), // J+7 — significantly past endDate
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/passée/i);
+    expect(result.reason).not.toMatch(/cours/i);
+    expect(result.cta!.label).toBe('Marquer comme terminée');
+    expect(result.cta!.kind).toBe('anchor');
+    expect(result.cta!.primary).toBe(true);
+  });
 });
