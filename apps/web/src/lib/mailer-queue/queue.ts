@@ -17,11 +17,9 @@
 import { Queue, type JobsOptions } from 'bullmq';
 import { getQueueRedis } from '../closure/redis';
 import type { SendMailInput } from '../mailer';
+import { FAST_JOB_POLICY } from '@/lib/bullmq-policies';
 
 export const MAILER_QUEUE_NAME = 'mailer-outbound';
-
-const ONE_WEEK_SEC = 7 * 24 * 60 * 60;
-const ONE_MONTH_SEC = 30 * 24 * 60 * 60;
 
 export interface MailerJobPayload extends SendMailInput {
   /** Optionnel : clé d'idempotence (préfère un format stable type
@@ -40,17 +38,11 @@ let _queue: Queue<MailerJobPayload> | null = null;
 
 export function getMailerQueue(): Queue<MailerJobPayload> {
   if (_queue) return _queue;
+  // Sprint 4 — Politique FAST partagée (cf lib/bullmq-policies.ts).
+  // Identique au choix Sprint 3, mais centralisé pour cohérence cross-queue.
   _queue = new Queue<MailerJobPayload>(MAILER_QUEUE_NAME, {
     connection: getQueueRedis(),
-    defaultJobOptions: {
-      // 5 tentatives, backoff exponentiel 30s → 1m → 2m → 4m → 8m.
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 30_000 },
-      // Complétés gardés 1000 max OU 7 jours, échoués 500 max OU 30 jours
-      // (audit RGPD : on garde la trace des échecs d'envoi un mois).
-      removeOnComplete: { count: 1000, age: ONE_WEEK_SEC },
-      removeOnFail: { count: 500, age: ONE_MONTH_SEC },
-    },
+    defaultJobOptions: FAST_JOB_POLICY,
   });
   return _queue;
 }

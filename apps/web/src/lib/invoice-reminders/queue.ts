@@ -9,6 +9,7 @@
 
 import { Queue } from 'bullmq';
 import { getQueueRedis } from '../closure/redis';
+import { SLOW_JOB_POLICY } from '@/lib/bullmq-policies';
 
 export const INVOICE_REMINDER_QUEUE_NAME = 'invoice-reminders-daily';
 
@@ -16,14 +17,12 @@ let _queue: Queue | null = null;
 
 export function getInvoiceReminderQueue(): Queue {
   if (_queue) return _queue;
+  // Sprint 4 — Politique SLOW partagée (cron quotidien, retry espacé).
+  // Avant : pas d'âge TTL sur removeOnComplete/Fail.
+  // Après : TTL 1j (complétés) / 7j (échoués) pour éviter l'accumulation.
   _queue = new Queue(INVOICE_REMINDER_QUEUE_NAME, {
     connection: getQueueRedis(),
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 60000 },
-      removeOnComplete: { count: 100 },
-      removeOnFail: { count: 50 },
-    },
+    defaultJobOptions: SLOW_JOB_POLICY,
   });
   return _queue;
 }
