@@ -4,6 +4,11 @@
 
 Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l'audit UX/QA 2026-05-12 + 4 nouvelles features métier en 12 phases (granularity fine), avec couverture 100% des 40 v1 requirements définis dans `REQUIREMENTS.md`. Démarrage par les bugs critiques bloquants démo, puis fondations responsive, puis UX gaps, puis paramètres + RBAC, puis nouvelles features (leads auto, Qualiopi blanc, factures, modules stub).
 
+## Plans Qualiopi (préparation audit BCI 03/07/2026)
+
+- [`QUALIOPI-PLAN-COMPLET.md`](./QUALIOPI-PLAN-COMPLET.md) — plan de mise en conformité Qualiopi (matrice 32 indicateurs + tâches T1→T13). Source de vérité conformité.
+- [`PLAN-FICHE-SESSION-ONGLETS-RECAP.md`](./PLAN-FICHE-SESSION-ONGLETS-RECAP.md) — présentation UI (onglets + récap) + ordonnancement (Lot A→E) + correctifs bugs. Adossé au plan complet.
+
 ## Phases
 
 **Phase Numbering:**

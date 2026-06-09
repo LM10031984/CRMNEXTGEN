@@ -5,6 +5,7 @@
 **Source:** Audit UX/QA 2026-05-12 + memory + codebase verification
 
 > See `PROJECT.md` for project context, Validated requirements (paliers 2.2-4), and Out of Scope.
+> See [`QUALIOPI-PLAN-COMPLET.md`](./QUALIOPI-PLAN-COMPLET.md) (conformité — matrice 32 indicateurs + T1→T13) et [`PLAN-FICHE-SESSION-ONGLETS-RECAP.md`](./PLAN-FICHE-SESSION-ONGLETS-RECAP.md) (UI onglets + Lot A→E) pour la préparation audit BCI 03/07/2026.
 
 ---
 
