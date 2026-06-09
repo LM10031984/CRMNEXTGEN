@@ -368,6 +368,48 @@ describe('regenerateBatchParticipantDocs', () => {
       expect(opts.force).toBe(true);
     }
   });
+
+  it('Test 9ter (P2.1) — user COMMERCIAL → ForbiddenError, generateClosurePack NON appelé', async () => {
+    requireRoleMock.mockRejectedValueOnce(
+      new ForbiddenError('Rôle COMMERCIAL non autorisé'),
+    );
+
+    const r = await regenerateBatchParticipantDocs({
+      sessionId: VALID_SESSION_ID,
+      items: [{ participantId: VALID_PARTICIPANT_ID, docKind: 'CERTIFICAT_REALISATION' }],
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/COMMERCIAL|non autoris/i);
+    expect(generateClosurePackMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 9quater (P2.1) — items filtrés à 0 closureItems → erreur métier + 0 appel generateClosurePack', async () => {
+    // CONVENTION + AGEFICE ne sont PAS dans DOC_TYPE_TO_CLOSURE_KIND.
+    // Le filter doit éliminer les 2 items et lever l'erreur "Aucun document compatible".
+    const r = await regenerateBatchParticipantDocs({
+      sessionId: VALID_SESSION_ID,
+      items: [
+        { participantId: VALID_PARTICIPANT_ID, docKind: 'CONVENTION' },
+        { participantId: VALID_PARTICIPANT_ID, docKind: 'AGEFICE_ATTENDANCE' },
+      ],
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/Aucun document compatible/i);
+    expect(generateClosurePackMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 9quinquies (P2.1) — input invalide (sessionId non-UUID) → ok:false sans appel pack', async () => {
+    const r = await regenerateBatchParticipantDocs({
+      sessionId: 'not-a-uuid' as never,
+      items: [{ participantId: VALID_PARTICIPANT_ID, docKind: 'CERTIFICAT_REALISATION' }],
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/invalide/i);
+    expect(generateClosurePackMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── deleteDocument ─────────────────────────────────────────────────────
