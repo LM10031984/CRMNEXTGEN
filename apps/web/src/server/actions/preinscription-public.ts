@@ -7,6 +7,8 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
+import { validateFileBuffer, type AllowedMime } from '@/lib/file-validation';
+import { buildPreEnrollmentKey } from '@/lib/storage-key';
 
 interface SubmitInput {
   token: string;
@@ -33,12 +35,17 @@ interface SubmitInput {
 
 const MAX_FILE_SIZE_MB = 10;
 
-function safeKey(token: string, kind: string, originalName: string): string {
-  const ext = originalName.split('.').pop()?.toLowerCase() ?? 'bin';
-  const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : 'bin';
-  const stamp = Date.now();
-  return `${token}/${kind.toLowerCase()}-${stamp}.${safeExt}`;
-}
+/**
+ * MIME autorisés par catégorie de pièce. CNI et signature ne tolèrent que
+ * l'image (PDF accepté pour CNI car beaucoup de scans arrivent ainsi). Les
+ * justificatifs RIB et CFP sont quasi toujours PDF mais on accepte l'image
+ * pour les téléphones qui scannent.
+ */
+const MIME_BY_KIND: Record<'CNI' | 'RIB' | 'CFP', AllowedMime[]> = {
+  CNI: ['application/pdf', 'image/jpeg', 'image/png'],
+  RIB: ['application/pdf', 'image/jpeg', 'image/png'],
+  CFP: ['application/pdf', 'image/jpeg', 'image/png'],
+};
 
 export async function submitPreEnrollmentForm(
   input: SubmitInput,
@@ -89,12 +96,18 @@ export async function submitPreEnrollmentForm(
 
   for (const file of input.files) {
     const buffer = Buffer.from(file.base64, 'base64');
-    if (buffer.length > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      return { ok: false, error: `Le fichier ${file.name} dépasse ${MAX_FILE_SIZE_MB} Mo` };
+    // Validation server-side : magic-bytes + taille + MIME liste blanche.
+    // Le `file.contentType` envoyé par le client est ignoré (jamais fiable).
+    const check = validateFileBuffer(buffer, {
+      allowed: MIME_BY_KIND[file.kind],
+      maxBytes: MAX_FILE_SIZE_MB * 1024 * 1024,
+    });
+    if (!check.ok) {
+      return { ok: false, error: `${file.name} : ${check.error}` };
     }
-    const key = safeKey(input.token, file.kind, file.name);
+    const key = buildPreEnrollmentKey(input.token, file.kind.toLowerCase() as 'cni' | 'rib' | 'cfp', file.name);
     try {
-      await uploadFile(PREENROLLMENT_BUCKET, key, buffer, file.contentType);
+      await uploadFile(PREENROLLMENT_BUCKET, key, buffer, check.mime);
       uploadedKeys[file.kind] = key;
     } catch (e) {
       console.error('Upload error', e);
@@ -111,15 +124,19 @@ export async function submitPreEnrollmentForm(
   if (input.signatureBase64) {
     try {
       const sigBuffer = Buffer.from(input.signatureBase64, 'base64');
-      if (sigBuffer.length < 200) {
-        return { ok: false, error: 'Signature trop courte / vide' };
-      }
-      if (sigBuffer.length > 2 * 1024 * 1024) {
-        return { ok: false, error: 'Signature trop volumineuse (>2 Mo)' };
+      // Validation magic-bytes : la signature DOIT être un vrai PNG (sinon le
+      // canvas client a été manipulé). Bornes 200o min / 2 Mo max.
+      const sigCheck = validateFileBuffer(sigBuffer, {
+        allowed: ['image/png'],
+        minBytes: 200,
+        maxBytes: 2 * 1024 * 1024,
+      });
+      if (!sigCheck.ok) {
+        return { ok: false, error: `Signature invalide : ${sigCheck.error}` };
       }
       signatureHash = createHash('sha256').update(sigBuffer).digest('hex');
-      signatureKey = `${input.token}/signature-${Date.now()}.png`;
-      await uploadFile(PREENROLLMENT_BUCKET, signatureKey, sigBuffer, 'image/png');
+      signatureKey = buildPreEnrollmentKey(input.token, 'signature', 'signature.png');
+      await uploadFile(PREENROLLMENT_BUCKET, signatureKey, sigBuffer, sigCheck.mime);
       signatureSignedAt = new Date();
       const h = await headers();
       signatureIp = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
