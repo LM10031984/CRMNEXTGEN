@@ -14,6 +14,7 @@
 
 import { validateRequest } from '@/lib/auth';
 import { callLlm } from '@/lib/ai-llm';
+import { ProgrammeSchema } from '@qualiof/shared';
 
 export interface AiProductDraft {
   objectives: string[];
@@ -288,6 +289,23 @@ export async function aiPreFillProduct(input: {
       accessConditions: typeof j.accessConditions === 'string' ? j.accessConditions : '',
       programMd: stringifyProgramMd(j.programMd),
     };
+
+    // P0.2 — Garde-fou Qualiopi : on REFUSE un brouillon dont les objectifs
+    // ne portent pas de verbe Bloom mesurable (indicateur 2). Le LLM aura
+    // été briefé pour respecter la règle ; ce filet attrape les régressions
+    // silencieuses (changement de modèle, prompt drift, etc.).
+    const validation = ProgrammeSchema.safeParse(draft);
+    if (!validation.success) {
+      const issues = validation.error.issues
+        .slice(0, 3)
+        .map((i) => i.message)
+        .join(' / ');
+      return {
+        ok: false,
+        error: `Brouillon non conforme Qualiopi : ${issues}`,
+        durationMs: r.durationMs,
+      };
+    }
 
     return { ok: true, draft, durationMs: r.durationMs };
   } catch (e: any) {

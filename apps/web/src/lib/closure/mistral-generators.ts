@@ -19,6 +19,7 @@ const log = childLogger('mistral');
 import { prisma } from '@qualiof/db';
 import { callLlm } from '@/lib/ai-llm';
 import { getLlmModel, getLlmProvider } from '@/lib/ai-config';
+import { DerouleSchema } from '@qualiof/shared';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
@@ -199,29 +200,9 @@ const SatisfactionFroidSchema = z.object({
   remarques: z.string().nullable().optional(),
 });
 
-// Déroulé pédagogique : N jours × M séquences (pauses incluses avec isPause).
-const DerouleSchema = z.object({
-  jours: z
-    .array(
-      z.object({
-        theme: z.string().min(5),
-        sequences: z
-          .array(
-            z.object({
-              duree: z.string().min(3),
-              objectifs: z.string(),
-              contenu: z.string(),
-              outils: z.string(),
-              exercice: z.string(),
-              evaluation: z.string(),
-              isPause: z.boolean().optional(),
-            }),
-          )
-          .min(5),
-      }),
-    )
-    .min(1),
-});
+// Le DerouleSchema vit dans @qualiof/shared (P0.2) — il porte les refines
+// Qualiopi (verbes Bloom, mise en situation ↔ grille, invariant nb grilles
+// == nb mises). Importé en tête de fichier.
 
 // =====================================================
 // Generators

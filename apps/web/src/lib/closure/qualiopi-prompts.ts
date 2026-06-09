@@ -7,7 +7,10 @@
  * et tracer dans AIGenerationJob.aiPromptVersion.
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v3-2026-05-04';
+// P0.2 (2026-06-09) : bump suite au durcissement de SYSTEM_PROMPT_DEROULE
+// (verbes Bloom obligatoires, mise en situation ↔ grille, format évaluation
+// structuré, invariant nb grilles == nb mises en situation).
+export const PROMPT_VERSION = 'qualiopi-gen-v4-2026-06-09';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -147,6 +150,44 @@ Pour chaque jour de formation, génère exactement 7 séquences :
 5. Pause (10 min)
 6. Séquence après-midi 2 (1h10)
 7. Bilan (20 min) — pour le DERNIER jour, intituler "Évaluation des acquis et clôture"
+
+================================================================
+RÈGLES DE CONFORMITÉ QUALIOPI (NON NÉGOCIABLES — un payload qui les viole sera REJETÉ par validation Zod)
+================================================================
+
+1. **Objectifs mesurables (indicateur 2)**. Chaque séquence d'apprentissage
+   (toutes sauf pauses / accueil / bilan) doit avoir des objectifs commençant
+   par un verbe d'action Bloom mesurable. Verbes autorisés :
+     - Niveau 1 — identifier, énumérer, décrire, citer, lister, nommer, définir, reconnaître
+     - Niveau 2 — expliquer, résumer, illustrer, interpréter, paraphraser, classer, distinguer
+     - Niveau 3 — appliquer, utiliser, mettre en œuvre, exécuter, réaliser, démontrer, animer, piloter
+     - Niveau 4 — analyser, comparer, organiser, structurer, examiner, diagnostiquer
+     - Niveau 5 — évaluer, justifier, argumenter, recommander, valider, contrôler
+     - Niveau 6 — concevoir, produire, élaborer, planifier, construire, formuler, développer, rédiger
+   INTERDIT : « comprendre / connaître / savoir / sensibiliser / se familiariser / aborder / survoler ».
+
+2. **Évaluation concrète (indicateur 11)**. Le champ "evaluation" doit
+   préciser les MODALITÉS. Formulations interdites seules : « feedback
+   formateur », « restitution orale », « débrief », « à voir », « évaluation
+   orale », « — ». Formulations attendues : « QCM 10 questions, score
+   minimum 65% », « grille d'observation à 6 critères (technique, posture,
+   reformulation, écoute, conclusion, hygiène) », « restitution écrite
+   évaluée sur grille 4 axes ».
+
+3. **Mises en situation et grilles (couplage strict)**. Si "exercice"
+   contient une mise en situation (« cas pratique », « jeu de rôle »,
+   « simulation », « atelier d'application », « scénario »), alors
+   "evaluation" DOIT explicitement référencer une « grille d'observation »
+   ou « grille d'évaluation ». Inversement : on ne référence PAS une grille
+   sur une séquence sans mise en situation (cours magistral, démo).
+
+4. **Invariant global**. Sur le déroulé entier : nombre de séquences "mise
+   en situation" = nombre de séquences avec "grille" dans l'évaluation.
+   Si tu as 3 mises en situation, tu dois avoir 3 grilles évoquées. Pas
+   de grille orpheline, pas de mise en situation sans grille.
+
+5. **Pauses / accueil / bilan** : exempts de 1, 2, 3, 4. Pour ces séquences,
+   "objectifs" peut être organisationnel et "evaluation" peut être « — ».
 
 Réponds UNIQUEMENT en JSON :
 {
