@@ -62,18 +62,68 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     where.participants = { some: { invoices: { none: {} } } };
   }
 
-  const [
-    total,
-    rows,
-    allCount,
-    completedCount,
-    upcomingCount,
-    eiCount,
-    thisWeekCount,
-    noAttendeesCount,
-    toInvoiceCount,
-    totalParticipations,
-  ] = await Promise.all([
+  // P4.1 — Fan-out réduit de 10 round-trips à 3 : 1 seule query agrégée
+  // `chipCounts` (FILTER clauses sur les 8 conditions de chips), + `total`
+  // filtré (paginé) + `rows` paginés. Le `tenantId` est passé en paramètre
+  // à toutes les sous-requêtes pour préserver le scoping (invariant §3).
+  //
+  // NB : on conserve exactement la sémantique pré-existante des chips, y
+  // compris l'incohérence connue entre le count "À venir" (startDate > now)
+  // et le filtre actif qui exclut en plus DRAFT/CANCELLED — c'est un point
+  // métier à régler séparément (cf. backlog).
+  const [chipCountsResult, total, rows] = await Promise.all([
+    prisma.$queryRaw<
+      Array<{
+        all_count: bigint;
+        completed_count: bigint;
+        upcoming_count: bigint;
+        ei_count: bigint;
+        this_week_count: bigint;
+        no_attendees_count: bigint;
+        to_invoice_count: bigint;
+        total_participations: bigint;
+      }>
+    >`
+      SELECT
+        COUNT(*)::bigint AS all_count,
+        COUNT(*) FILTER (WHERE ts."status" = 'COMPLETED')::bigint AS completed_count,
+        COUNT(*) FILTER (WHERE ts."startDate" > ${now})::bigint AS upcoming_count,
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM "SessionParticipant" sp
+            JOIN "Organization" o ON sp."sponsorOrgId" = o."id"
+            WHERE sp."sessionId" = ts."id"
+            AND o."legalForm" IN ('EI', 'EIRL', 'AUTO_ENTREPRENEUR')
+          )
+        )::bigint AS ei_count,
+        COUNT(*) FILTER (
+          WHERE ts."startDate" >= ${now} AND ts."startDate" <= ${weekFromNow}
+        )::bigint AS this_week_count,
+        COUNT(*) FILTER (
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "SessionParticipant" sp
+            WHERE sp."sessionId" = ts."id"
+          )
+        )::bigint AS no_attendees_count,
+        COUNT(*) FILTER (
+          WHERE ts."endDate" < ${now}
+          AND EXISTS (
+            SELECT 1 FROM "SessionParticipant" sp
+            WHERE sp."sessionId" = ts."id"
+            AND NOT EXISTS (
+              SELECT 1 FROM "Invoice" inv WHERE inv."participantId" = sp."id"
+            )
+          )
+        )::bigint AS to_invoice_count,
+        (
+          SELECT COUNT(*)::bigint
+          FROM "SessionParticipant" sp2
+          JOIN "TrainingSession" ts2 ON sp2."sessionId" = ts2."id"
+          WHERE ts2."tenantId" = ${user.tenantId}
+        ) AS total_participations
+      FROM "TrainingSession" ts
+      WHERE ts."tenantId" = ${user.tenantId}
+    `,
     prisma.trainingSession.count({ where }),
     prisma.trainingSession.findMany({
       where,
@@ -96,30 +146,28 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         },
       },
     }),
-    prisma.trainingSession.count({ where: { tenantId: user.tenantId } }),
-    prisma.trainingSession.count({ where: { tenantId: user.tenantId, status: 'COMPLETED' } }),
-    prisma.trainingSession.count({ where: { tenantId: user.tenantId, startDate: { gt: now } } }),
-    prisma.trainingSession.count({
-      where: {
-        tenantId: user.tenantId,
-        participants: { some: { sponsorOrg: { legalForm: { in: ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'] } } } },
-      },
-    }),
-    prisma.trainingSession.count({
-      where: { tenantId: user.tenantId, startDate: { gte: now, lte: weekFromNow } },
-    }),
-    prisma.trainingSession.count({
-      where: { tenantId: user.tenantId, participants: { none: {} } },
-    }),
-    prisma.trainingSession.count({
-      where: {
-        tenantId: user.tenantId,
-        endDate: { lt: now },
-        participants: { some: { invoices: { none: {} } } },
-      },
-    }),
-    prisma.sessionParticipant.count({ where: { session: { tenantId: user.tenantId } } }),
   ]);
+
+  // Postgres COUNT retourne bigint → Number côté JS (les chiffres restent
+  // bien sous Number.MAX_SAFE_INTEGER pour des compteurs métier de sessions).
+  const c = chipCountsResult[0] ?? {
+    all_count: 0n,
+    completed_count: 0n,
+    upcoming_count: 0n,
+    ei_count: 0n,
+    this_week_count: 0n,
+    no_attendees_count: 0n,
+    to_invoice_count: 0n,
+    total_participations: 0n,
+  };
+  const allCount = Number(c.all_count);
+  const completedCount = Number(c.completed_count);
+  const upcomingCount = Number(c.upcoming_count);
+  const eiCount = Number(c.ei_count);
+  const thisWeekCount = Number(c.this_week_count);
+  const noAttendeesCount = Number(c.no_attendees_count);
+  const toInvoiceCount = Number(c.to_invoice_count);
+  const totalParticipations = Number(c.total_participations);
 
   const subtitleParts = [
     `${allCount} session${allCount > 1 ? 's' : ''}`,
