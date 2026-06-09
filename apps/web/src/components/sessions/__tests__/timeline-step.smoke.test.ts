@@ -46,34 +46,6 @@ describe('TimelineStep — A4 default collapsed', () => {
   });
 });
 
-describe('TimelineStep — A10 action slot HORS du <button> header (no nested button)', () => {
-  it("le slot `action` n'est PAS rendu à l'intérieur du <button> header", () => {
-    // Garde-fou hydration HTML invalide. Avant A10, action vivait DANS le
-    // <button> du header → button > div > button = nested button.
-    // Maintenant le header est dans un <div flex> et le slot action est
-    // un sibling, pas un descendant.
-    // Heuristique : entre l'ouverture `<button` du header et son `</button>`,
-    // on ne doit pas trouver `{action}`.
-    const headerStart = src.indexOf('aria-controls={bodyId}');
-    expect(headerStart).toBeGreaterThan(-1);
-    const headerEnd = src.indexOf('</button>', headerStart);
-    const headerBlock = src.slice(headerStart, headerEnd);
-    expect(headerBlock).not.toMatch(/\{action\s*&&/);
-  });
-
-  it("`action` est rendu comme sibling avec son propre conteneur", () => {
-    // Le slot action DOIT être rendu après le </button> du header,
-    // dans son propre <div> flex shrink-0.
-    expect(src).toMatch(/\{action && \(\s*<div className="shrink-0 flex items-center/);
-  });
-
-  it("le header est wrappé dans un <div flex> qui contient button + action", () => {
-    // Anti-régression : si quelqu'un retire le <div> parent et remet le
-    // bouton seul, le slot action retombe DANS un wrap implicit qui peut
-    // re-créer le nesting.
-    expect(src).toMatch(/<div className="w-full flex items-stretch hover:bg-muted/);
-  });
-});
 
 describe('StepDocRow — A8 row cliquable quand done + pdfHref', () => {
   it('expose la prop pdfHref?: string', () => {

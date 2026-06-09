@@ -112,59 +112,64 @@ export function TimelineStep({
       )}
       aria-labelledby={headerId}
     >
-      {/* Header — A10 2026-06-09 : action slot sorti du <button> parent.
-          Le slot `action` reçoit un vrai <button> ("Lancer la préparation",
-          "Compléter") des step blocks. Tant que action vivait à l'intérieur
-          du header <button>, on avait button > div > button → invalide HTML
-          + hydration error React (« <button> cannot be a descendant of
-          <button> »). Structure désormais : <div flex>[zone clic ←button][slot
-          action ←hors button]</div>. Le visuel reste le même, le clic header
-          continue de toggler. */}
-      <div className="w-full flex items-stretch hover:bg-muted/10 transition-colors">
-        <button
-          type="button"
-          onClick={() => setIsOpen((v) => !v)}
-          aria-expanded={isOpen}
-          aria-controls={bodyId}
-          className="flex-1 min-w-0 p-5 sm:p-6 flex items-start gap-4 text-left"
+      {/* Header — A10' 2026-06-09 (révision feedback Laurent) : wrapper
+          en <div role="button"> au lieu de <button> natif. Raison : badge,
+          caption, action peuvent tous trois recevoir un ReactNode contenant
+          un <button> ; tant que le wrapper était un <button>, on rouvrait
+          le risque "nested button" dès qu'un de ces slots évoluait. Le
+          pattern div+role+tabIndex+keyDown est l'idiom standard (Radix,
+          HeadlessUI) pour les zones cliquables qui doivent contenir
+          d'autres contrôles. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setIsOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen((v) => !v);
+          }
+        }}
+        aria-expanded={isOpen}
+        aria-controls={bodyId}
+        className="w-full p-5 sm:p-6 flex items-start gap-4 text-left hover:bg-muted/10 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        <div
+          className={cn(
+            'h-10 w-10 sm:h-11 sm:w-11 rounded-full inline-flex items-center justify-center shrink-0 font-semibold text-sm',
+            s.circle,
+          )}
+          aria-hidden="true"
+          title={qualiopi}
         >
-          <div
-            className={cn(
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full inline-flex items-center justify-center shrink-0 font-semibold text-sm',
-              s.circle,
-            )}
-            aria-hidden="true"
-            title={qualiopi}
-          >
-            {state === 'done' ? <Check className="h-5 w-5" /> : number}
+          {state === 'done' ? <Check className="h-5 w-5" /> : number}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2
+              id={headerId}
+              className={cn('font-semibold text-base sm:text-lg leading-tight', s.titleClass)}
+            >
+              Étape {number} · {title}
+            </h2>
+            {badge}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2
-                id={headerId}
-                className={cn('font-semibold text-base sm:text-lg leading-tight', s.titleClass)}
-              >
-                Étape {number} · {title}
-              </h2>
-              {badge}
-            </div>
-            {caption && (
-              <p className={cn('text-xs mt-1', s.captionClass)}>{caption}</p>
-            )}
-          </div>
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 text-muted-foreground shrink-0 mt-1 transition-transform',
-              isOpen && 'rotate-180',
-            )}
-            aria-hidden="true"
-          />
-        </button>
+          {caption && (
+            <p className={cn('text-xs mt-1', s.captionClass)}>{caption}</p>
+          )}
+        </div>
         {action && (
-          <div className="shrink-0 flex items-center pr-5 sm:pr-6">
+          <div className="shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             {action}
           </div>
         )}
+        <ChevronDown
+          className={cn(
+            'h-4 w-4 text-muted-foreground shrink-0 mt-1 transition-transform',
+            isOpen && 'rotate-180',
+          )}
+          aria-hidden="true"
+        />
       </div>
 
       {/* Encart bloqueur — visible MÊME quand replié (l'utilisateur doit
