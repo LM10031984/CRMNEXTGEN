@@ -12,6 +12,7 @@ import {
   sessionCode,
   UpdateSessionDetailsInputSchema,
   type UpdateSessionDetailsInput,
+  normalizeNullableText,
 } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
@@ -989,9 +990,9 @@ export async function updateSessionDetails(
     return merged;
   };
 
-  // name (nullable)
+  // name (nullable) — convergence '' / '   ' / null → null via helper centralisé (P1.2)
   if (data.name !== undefined) {
-    const newName = data.name === null || data.name === '' ? null : data.name;
+    const newName = normalizeNullableText(data.name);
     if (newName !== session.name) {
       updateData.name = newName;
       before.name = session.name;
@@ -1072,10 +1073,9 @@ export async function updateSessionDetails(
     after.language = data.language;
   }
 
-  // internalNotes (nullable)
+  // internalNotes (nullable) — convergence '' / '   ' / null → null via helper centralisé (P1.2)
   if (data.internalNotes !== undefined) {
-    const newNotes =
-      data.internalNotes === null || data.internalNotes === '' ? null : data.internalNotes;
+    const newNotes = normalizeNullableText(data.internalNotes);
     if (newNotes !== session.internalNotes) {
       updateData.internalNotes = newNotes;
       before.internalNotes = session.internalNotes;

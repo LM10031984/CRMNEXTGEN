@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeName, normalizeEmail, organizationLooksLikePerson, personDedupKey } from '../normalize';
+import {
+  normalizeName,
+  normalizeEmail,
+  organizationLooksLikePerson,
+  personDedupKey,
+  normalizeNullableText,
+} from '../normalize';
+
+describe('normalizeNullableText (P1.2)', () => {
+  it('null / undefined → null', () => {
+    expect(normalizeNullableText(null)).toBeNull();
+    expect(normalizeNullableText(undefined)).toBeNull();
+  });
+  it('chaîne vide → null', () => {
+    expect(normalizeNullableText('')).toBeNull();
+  });
+  it('chaîne whitespace-only → null', () => {
+    expect(normalizeNullableText('   ')).toBeNull();
+    expect(normalizeNullableText('\t\n')).toBeNull();
+    expect(normalizeNullableText('  \t  \n ')).toBeNull();
+  });
+  it('texte non-vide est trimé mais préservé', () => {
+    expect(normalizeNullableText('foo')).toBe('foo');
+    expect(normalizeNullableText('  foo  ')).toBe('foo');
+    expect(normalizeNullableText('foo bar')).toBe('foo bar');
+  });
+  it('préserve les espaces internes du texte (trim externe uniquement)', () => {
+    expect(normalizeNullableText('  hello   world  ')).toBe('hello   world');
+  });
+});
 
 describe('normalizeName', () => {
   it('normalise les accents', () => {

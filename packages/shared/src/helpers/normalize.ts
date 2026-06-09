@@ -2,6 +2,33 @@
  * Helpers de normalisation pour la dédup et le matching à l'import.
  */
 
+/**
+ * Normalise un champ texte optionnel destiné à la BDD : trim + convergence
+ * des chaînes vides / whitespace-only vers `null` (P1.2).
+ *
+ * Use-cases côté Server Action (typiquement les édits dialog où l'utilisateur
+ * peut effacer un champ) :
+ *   - `null` / `undefined`     → `null`  (champ effacé)
+ *   - `''`                     → `null`  (champ effacé)
+ *   - `'   '` (espaces seuls)  → `null`  (champ effacé)
+ *   - `'  foo  '`              → `'foo'` (trim conservé)
+ *   - `'foo'`                  → `'foo'`
+ *
+ * Pourquoi centraliser : avant ce helper, plusieurs Server Actions
+ * (sessions, factures, leads) implémentaient leur propre coercition
+ * inline `=== null || === ''` — mais oubliaient le cas `'   '`, ce qui
+ * laissait passer des chaînes de whitespace dans Postgres. Conséquence :
+ * indexes textuels pollués + comparaisons `!== ''` qui ne matchent pas
+ * un texte "vide" du point de vue utilisateur.
+ */
+export function normalizeNullableText(
+  input: string | null | undefined,
+): string | null {
+  if (input == null) return null;
+  const trimmed = input.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 /** Normalise un nom/prénom : trim, lowercase, supprime accents et espaces multiples. */
 export function normalizeName(input: string | null | undefined): string {
   if (!input) return '';
