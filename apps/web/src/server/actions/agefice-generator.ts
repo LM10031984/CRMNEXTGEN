@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@qualiof/db';
+import { prisma, decryptSensitive } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
@@ -242,7 +242,8 @@ export async function generateAgeficeForParticipant(
       prenom: participant.person.firstName,
       nomNaissance: participant.person.birthName,
       dateNaissance: participant.person.birthDate,
-      securiteSociale: participant.person.sensitiveData?.socialSecurityNb ?? null,
+      // Sprint 1 — Déchiffrement pgcrypto on-demand pour génération PDF AGEFICE.
+      securiteSociale: await decryptSensitive(participant.person.sensitiveData?.socialSecurityNb),
       phone: participant.person.phone,
       email: participant.person.email,
       diplome: participant.person.diplomas ?? participant.person.educationLevel,

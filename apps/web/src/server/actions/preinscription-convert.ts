@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { prisma, Prisma } from '@qualiof/db';
+import { prisma, Prisma, encryptSensitive } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 
 interface ConversionInput {
@@ -81,16 +81,17 @@ export async function convertPreEnrollment(
         });
       }
 
-      // 2. SensitiveData (n° SS)
+      // 2. SensitiveData (n° SS) — chiffré at-rest via pgcrypto (Sprint 1).
       if (input.socialSecurityNb) {
+        const encryptedSsn = await encryptSensitive(input.socialSecurityNb);
         await tx.sensitiveData.upsert({
           where: { personId: person.id },
           create: {
             personId: person.id,
-            socialSecurityNb: input.socialSecurityNb,
+            socialSecurityNb: encryptedSsn,
           },
           update: {
-            socialSecurityNb: input.socialSecurityNb,
+            socialSecurityNb: encryptedSsn,
           },
         });
       }
@@ -154,7 +155,10 @@ export async function convertPreEnrollment(
           'Prénom (Stagiaire)': input.firstName,
           'Date de naissance (Stagiaire)': input.birthDate ?? '',
           'Lieu de naissance (Stagiaire)': input.birthPlace ?? '',
-          'N° Sécurité sociale (Stagiaire)': input.socialSecurityNb ?? '',
+          // Sprint 1 — Sécurité : le N° SS n'est plus dupliqué en clair dans
+          // paFields. La source de vérité est SensitiveData.socialSecurityNb
+          // (chiffré pgcrypto). Le PDF AGEFICE le lit depuis là.
+          'N° Sécurité sociale (Stagiaire)': '',
           'Email (Stagiaire)': emailNormalized,
           'Téléphone (Stagiaire)': input.phone ?? '',
           'N° SIRET (Entreprise)': cleanSiret ?? '',

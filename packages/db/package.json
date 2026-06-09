@@ -20,6 +20,7 @@
     "import:agefice-pa": "dotenv -e ../../.env -- tsx scripts/import-agefice-pa.ts",
     "import:airtable": "dotenv -e ../../.env -- tsx scripts/import-airtable.ts",
     "import:treso": "dotenv -e ../../.env -- tsx scripts/import-treso-agefice.ts",
+    "encrypt:sensitive": "dotenv -e ../../.env -- tsx scripts/encrypt-existing-sensitive-data.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -17,3 +17,12 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Re-export types Prisma pour consommation en aval
 export * from '@prisma/client';
+
+// Sprint 1 — Sécurité : helpers chiffrement at-rest (pgcrypto).
+// Voir crypto.ts pour les détails.
+export {
+  encryptSensitive,
+  decryptSensitive,
+  decryptSensitiveBatch,
+  isEncrypted,
+} from './crypto';

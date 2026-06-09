@@ -4,7 +4,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, GraduationCap, Briefcase, Calendar, FileText, Clock, Wallet,
   ChevronRight,
 } from 'lucide-react';
-import { prisma } from '@qualiof/db';
+import { prisma, decryptSensitive } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -101,6 +101,15 @@ export default async function ApprenantDetailPage({
     },
   });
   if (!person) notFound();
+
+  // Sprint 1 — Sécurité : déchiffrement on-demand du N° SS pour affichage.
+  // Garde RBAC : seuls ADMIN et MANAGER voient la donnée en clair (la section
+  // affichait déjà "visibles uniquement par les administrateurs" mais sans
+  // contrôle réel — bug existant, corrigé ici).
+  const canSeeSensitive = user.role === 'ADMIN' || user.role === 'MANAGER';
+  const decryptedSsn = canSeeSensitive
+    ? await decryptSensitive(person.sensitiveData?.socialSecurityNb)
+    : null;
 
   // Documents liés à cet apprenant via ses participations
   const participantIds = person.participations.map((p) => p.id);
@@ -638,17 +647,17 @@ export default async function ApprenantDetailPage({
               </section>
             )}
 
-            {person.sensitiveData?.socialSecurityNb && (
+            {canSeeSensitive && decryptedSsn && (
               <section className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-6">
                 <h2 className="font-semibold mb-2 text-sm uppercase tracking-wide text-muted-foreground">
                   Données sensibles (RGPD)
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Stockées séparément. Visibles uniquement par les administrateurs.
+                  Chiffrées at-rest (pgcrypto). Accès limité aux rôles ADMIN/MANAGER.
                 </p>
                 <div className="mt-3 text-sm">
                   <span className="text-muted-foreground">N° sécurité sociale : </span>
-                  <code className="font-mono text-xs">{person.sensitiveData.socialSecurityNb}</code>
+                  <code className="font-mono text-xs">{decryptedSsn}</code>
                 </div>
               </section>
             )}

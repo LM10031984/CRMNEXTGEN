@@ -9,7 +9,7 @@
  * fournies (les autres restent inchangées).
  */
 
-import { Prisma, prisma } from '@qualiof/db';
+import { Prisma, prisma, encryptSensitive } from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
@@ -348,10 +348,13 @@ export async function createPerson(input: {
     });
 
     if (ssn || input.cniKey) {
+      // Sprint 1 — Chiffrement at-rest (pgcrypto). Le N° SS ne touche jamais
+      // Postgres en clair après cette ligne.
+      const encryptedSsn = await encryptSensitive(ssn);
       await tx.sensitiveData.create({
         data: {
           personId: person.id,
-          socialSecurityNb: ssn,
+          socialSecurityNb: encryptedSsn,
           idDocumentUrl: input.cniKey ?? null,
         },
       });
