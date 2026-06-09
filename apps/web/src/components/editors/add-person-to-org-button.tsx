@@ -7,6 +7,7 @@
  */
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, X, Search, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { searchPersons } from '@/server/actions/persons';
@@ -36,6 +37,7 @@ export function AddPersonToOrgButton({
   organizationId: string;
   excludePersonIds?: string[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +78,9 @@ export function AddPersonToOrgButton({
         setQuery('');
         setResults([]);
         setRole('SALARIE');
-        if (typeof window !== 'undefined') window.location.reload();
+        // P3.2 — router.refresh() au lieu de window.location.reload() :
+        // revalide le Server Component sans full reload.
+        router.refresh();
       } else {
         setError(r.error ?? 'Erreur inconnue.');
       }

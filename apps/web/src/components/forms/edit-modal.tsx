@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +31,7 @@ export function EditModal({
   onSubmit,
   onSuccess,
 }: EditModalProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +71,10 @@ export function EditModal({
         toast.success('Modifications enregistrées');
         setOpen(false);
         onSuccess?.();
-        // refresh côté serveur via revalidatePath dans l'action
-        if (typeof window !== 'undefined') window.location.reload();
+        // P3.2 — router.refresh() au lieu de window.location.reload() :
+        // revalide le Server Component courant en gardant l'état client
+        // (modales fermées, scroll, focus), sans full reload.
+        router.refresh();
       } else {
         setError(r.error ?? 'Erreur inconnue.');
       }
