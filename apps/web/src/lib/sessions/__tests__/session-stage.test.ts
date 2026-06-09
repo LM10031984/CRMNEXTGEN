@@ -358,4 +358,108 @@ describe('sessionStage — arbre de décision étape courante', () => {
     expect(result.status).toBe('todo');
     expect(result.reason).toMatch(/À J0/);
   });
+
+  /* ── Catégorie 6 : SESSION IN-WINDOW (dates en cours, status pré-IN_PROGRESS) ───
+     Bug Laurent A2 2026-06-08 : session VALIDATED, dates 01→11 juin, on
+     est le 8 → la branche isBeforeStart s'allumait à tort et le hero
+     affichait « ÉTAPE 3 · EN ATTENTE — à J0 » alors qu'on est à J+7 dans
+     la fenêtre. sessionStage doit dériver « en cours » sur les dates,
+     pas le seul status. ───────────────────────────────────────────── */
+
+  it('16. IN-WINDOW — VALIDATED + dates en cours → étape 3 active + "en cours"', () => {
+    // baseInput a startDate=15/07 09:00, endDate=15/07 18:00.
+    // On positionne now au milieu de la fenêtre.
+    const result = sessionStage(
+      baseInput({
+        status: 'VALIDATED',
+        prep: completePrep(1),
+        now: new Date('2026-07-15T13:00:00Z'), // mid-window
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/cours/i);
+    expect(result.reason).not.toMatch(/À J0/);
+    expect(result.reason).not.toMatch(/passée/i);
+    expect(result.stagesState[1]).toBe('done');
+    expect(result.stagesState[2]).toBe('done');
+    expect(result.stagesState[3]).toBe('active');
+  });
+
+  it('17. IN-WINDOW — OPEN/PLANNED/DRAFT + dates en cours → même branche "en cours"', () => {
+    // Couvre tout le set isBeforeStart : aucun pré-status ne doit
+    // retomber sur "À J0" quand on est physiquement dans la fenêtre.
+    for (const status of ['DRAFT', 'PLANNED', 'OPEN', 'VALIDATED'] as const) {
+      const result = sessionStage(
+        baseInput({
+          status,
+          prep: completePrep(1),
+          now: new Date('2026-07-15T13:00:00Z'),
+        }),
+      );
+      expect(result.current).toBe(3);
+      expect(result.status).toBe('active');
+      expect(result.reason).toMatch(/cours/i);
+    }
+  });
+
+  it('18. FRONTIÈRE — VALIDATED + now === endDate → encore in-window (pas de double-CTA)', () => {
+    // À l'instant exact endDate : isAfterEnd=false (strict <), isInWindow=true.
+    // Doit rester "en cours", PAS "Marquer comme terminée".
+    const result = sessionStage(
+      baseInput({
+        status: 'VALIDATED',
+        prep: completePrep(1),
+        now: new Date('2026-07-15T18:00:00Z'), // === endDate
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/cours/i);
+    // Garde-fou : pas de CTA "Marquer" à cette frontière (sinon double-CTA
+    // avec le NextActionHero qui montre déjà "en cours").
+    expect(result.cta).toBeUndefined();
+  });
+
+  it('19. FRONTIÈRE — VALIDATED + now > endDate → bascule sur "Marquer comme terminée"', () => {
+    // 1 milliseconde après endDate : isAfterEnd=true → la branche ui-e3
+    // prend la main. Compose proprement avec le in-window précédent.
+    const result = sessionStage(
+      baseInput({
+        status: 'VALIDATED',
+        prep: completePrep(1),
+        now: new Date('2026-07-15T18:00:00.001Z'), // endDate + 1ms
+      }),
+    );
+    expect(result.current).toBe(3);
+    expect(result.status).toBe('active');
+    expect(result.reason).toMatch(/passée/i);
+    expect(result.cta!.label).toBe('Marquer comme terminée');
+  });
+
+  it('20. IN-WINDOW n\'override PAS COMPLETED / CANCELLED', () => {
+    // Une session COMPLETED dans la fenêtre (utilisateur clic "terminé"
+    // pendant le dernier jour) doit continuer vers étape 4. Une session
+    // CANCELLED dans la fenêtre reste neutre (fallback).
+    const completed = sessionStage(
+      baseInput({
+        status: 'COMPLETED',
+        prep: completePrep(1),
+        closure: emptyClosure(1),
+        now: new Date('2026-07-15T13:00:00Z'),
+      }),
+    );
+    expect(completed.current).toBe(4);
+    expect(completed.cta!.label).toBe('Générer le pack fin');
+
+    const cancelled = sessionStage(
+      baseInput({
+        status: 'CANCELLED',
+        prep: completePrep(1),
+        closure: emptyClosure(1),
+        now: new Date('2026-07-15T13:00:00Z'),
+      }),
+    );
+    expect(cancelled.reason).not.toMatch(/cours/i);
+  });
 });

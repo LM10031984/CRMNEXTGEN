@@ -134,6 +134,7 @@ function countMissingPrep(s: SessionPreparationStatus): number {
 export function sessionStage(input: SessionStageInput): SessionStage {
   const {
     status,
+    startDate,
     endDate,
     participantsCount,
     primaryTrainerName,
@@ -217,7 +218,27 @@ export function sessionStage(input: SessionStageInput): SessionStage {
     };
   }
 
-  // Pré-formation : DRAFT/PLANNED/OPEN/VALIDATED + prep complète → wait J0
+  // Garde-fou « formation en cours » dérivé des dates (Laurent A2 2026-06-08) :
+  // si startDate ≤ now ≤ endDate, on est dans la fenêtre d'exécution même
+  // si le status BDD est resté en pré-IN_PROGRESS (VALIDATED le plus souvent,
+  // mais aussi PLANNED/OPEN/DRAFT). Sans cette branche, la session retombait
+  // dans `isBeforeStart` et le hero affichait « À J0 le formateur démarre »
+  // alors qu'on est déjà à J+N. Le bord supérieur (now === endDate) reste
+  // dans le in-window — la bascule sur « Marquer comme terminée » fire à
+  // l'instant suivant (now > endDate), pas de double-CTA à la frontière.
+  const isInWindow = startDate <= now && now <= endDate;
+  if (isInWindow && status !== 'COMPLETED' && status !== 'CANCELLED') {
+    return {
+      current: 3,
+      status: 'active',
+      reason: 'Formation en cours — émargement à signer chaque demi-journée.',
+      stagesState: { 1: 'done', 2: 'done', 3: 'active', 4: 'todo', 5: 'todo' },
+    };
+  }
+
+  // Pré-formation : DRAFT/PLANNED/OPEN/VALIDATED + prep complète + startDate
+  // toujours dans le futur → wait J0. (Si on arrive ici, isAfterEnd et
+  // isInWindow sont tous deux faux, donc startDate > now par déduction.)
   const isBeforeStart =
     status === 'DRAFT' || status === 'PLANNED' || status === 'OPEN' || status === 'VALIDATED';
   if (isBeforeStart) {
@@ -229,6 +250,8 @@ export function sessionStage(input: SessionStageInput): SessionStage {
     };
   }
 
+  // Filet de sécurité : IN_PROGRESS hors fenêtre (startDate > now — peu
+  // probable mais possible si on a cliqué « Démarrer » trop tôt).
   if (status === 'IN_PROGRESS') {
     return {
       current: 3,
