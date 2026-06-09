@@ -26,7 +26,7 @@
  */
 
 import { prisma } from '@qualiof/db';
-import { sendMail } from './mailer';
+import { enqueueMail } from './mailer-queue/enqueue';
 import { renderLeadAssignedEmail } from './mailer-templates/lead-assigned';
 import { loadOfConfig } from './of-config';
 import { logLeadEvent } from './audit-log';
@@ -99,8 +99,16 @@ export async function notifyLeadAssigned(opts: NotifyLeadAssignedOptions): Promi
       },
       of,
     );
-    await sendMail({ to: owner.email, subject, html, text });
-    // Pitfall 5 (option b) : on ignore volontairement `mailResult.dryRun`.
+    // Sprint 3 — Queue mailer. Idempotency : un lead ne notifie qu'1 fois
+    // son owner pour un événement donné (assignation).
+    await enqueueMail({
+      to: owner.email,
+      subject,
+      html,
+      text,
+      idempotencyKey: `lead-assigned:${opts.leadId}:${owner.id}`,
+    });
+    // Pitfall 5 (option b) : on ignore volontairement le résultat dryRun.
     // L'AuditLog atteste la décision d'envoi, pas la livraison physique.
   }
 

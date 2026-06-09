@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { loadOfConfig } from '@/lib/of-config';
 import { renderPreinscriptionLinkEmail } from '@/lib/mailer-templates/preinscription-link';
 
@@ -68,11 +68,19 @@ export async function createPreEnrollmentLink(input: {
         },
         of,
       );
-      const r = await sendMail({ to: input.email.trim(), subject, html, text });
-      emailSent = r.ok && !r.dryRun;
-      emailDryRun = !!r.dryRun;
+      // Sprint 3 — Queue mailer pour ne pas bloquer l'action sur l'envoi SMTP.
+      // Idempotency key par token : empêche un double-clic de générer 2 mails.
+      const r = await enqueueMail({
+        to: input.email.trim(),
+        subject,
+        html,
+        text,
+        idempotencyKey: `preinscription-link:${token}`,
+      });
+      emailSent = r.ok && r.mode !== 'dry-run';
+      emailDryRun = r.mode === 'dry-run';
     } catch (e) {
-      console.error('[createPreEnrollmentLink] sendMail failed (non-blocking)', e);
+      console.error('[createPreEnrollmentLink] enqueueMail failed (non-blocking)', e);
     }
   }
 

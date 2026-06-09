@@ -27,8 +27,10 @@ vi.mock('@qualiof/db', () => ({
   },
 }));
 
-vi.mock('../mailer', () => ({
-  sendMail: vi.fn().mockResolvedValue({ ok: true, dryRun: true }),
+// Sprint 3 — notifyLeadAssigned est passé à enqueueMail. Le test mock
+// désormais le helper enqueue ; sendMail n'est plus appelé directement.
+vi.mock('../mailer-queue/enqueue', () => ({
+  enqueueMail: vi.fn().mockResolvedValue({ ok: true, mode: 'dry-run' }),
 }));
 
 vi.mock('../of-config', () => ({
@@ -42,7 +44,7 @@ vi.mock('../of-config', () => ({
 }));
 
 import { prisma } from '@qualiof/db';
-import { sendMail } from '../mailer';
+import { enqueueMail } from '../mailer-queue/enqueue';
 import { notifyLeadAssigned } from '../lead-notifications';
 
 const leadFindUnique = prisma.lead.findUnique as unknown as ReturnType<typeof vi.fn>;
@@ -50,7 +52,7 @@ const userFindUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi
 const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeof vi.fn>;
 const notificationCreate = prisma.notification.create as unknown as ReturnType<typeof vi.fn>;
 const auditLogCreate = prisma.auditLog.create as unknown as ReturnType<typeof vi.fn>;
-const sendMailMock = sendMail as unknown as ReturnType<typeof vi.fn>;
+const sendMailMock = enqueueMail as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   leadFindUnique.mockReset();
@@ -59,7 +61,7 @@ beforeEach(() => {
   notificationCreate.mockReset();
   auditLogCreate.mockReset();
   sendMailMock.mockReset();
-  sendMailMock.mockResolvedValue({ ok: true, dryRun: true });
+  sendMailMock.mockResolvedValue({ ok: true, mode: 'dry-run' });
 });
 
 function mockLead(overrides: Record<string, unknown> = {}) {

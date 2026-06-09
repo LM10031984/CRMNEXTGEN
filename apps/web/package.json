@@ -13,6 +13,7 @@
     "test": "vitest run",
     "worker:closure": "dotenv -e ../../.env -- tsx scripts/closure-worker.ts",
     "worker:reminders": "dotenv -e ../../.env -- tsx scripts/invoice-reminder-worker.ts",
+    "worker:mailer": "dotenv -e ../../.env -- tsx scripts/mailer-worker.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
     "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",
