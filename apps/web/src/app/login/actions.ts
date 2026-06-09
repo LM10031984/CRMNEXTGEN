@@ -1,11 +1,12 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import argon2 from 'argon2';
 import { prisma } from '@qualiof/db';
 import { loginSchema, type LoginInput } from '@qualiof/shared';
 import { lucia } from '@/lib/auth';
+import { checkRateLimit, RateLimitProfile } from '@/lib/rate-limit';
 
 /**
  * Login server action — Phase 8 Plan 08-05 (RBAC-05 + D-10 CONTEXT.md).
@@ -67,6 +68,26 @@ export async function loginAction(
   }
   const { email, password } = parsed.data;
   const lcEmail = email.toLowerCase();
+
+  // Sprint 1 — Rate-limit anti-brute force : 5 tentatives par fenêtre de 15 min
+  // sur la combinaison (IP, email). Combine les deux pour limiter à la fois :
+  //   - un attaquant qui essaye plein de mots de passe sur un compte (key = email)
+  //   - un attaquant distribué qui essaye un mot de passe sur plein de comptes
+  //     depuis la même IP (key = IP)
+  // En fail-open : si Redis tombe, on autorise (logué côté rate-limit).
+  const h = await headers();
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? 'unknown';
+  const rl = await checkRateLimit({
+    key: `login:${ip}:${lcEmail}`,
+    ...RateLimitProfile.LOGIN,
+  });
+  if (!rl.ok) {
+    const mins = Math.ceil(rl.resetIn / 60);
+    return {
+      ok: false,
+      error: `Trop de tentatives. Réessayez dans ${mins} min.`,
+    };
+  }
 
   const user = await prisma.user.findUnique({ where: { email: lcEmail } });
   if (!user) {
