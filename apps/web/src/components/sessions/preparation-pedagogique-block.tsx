@@ -39,6 +39,15 @@ interface Props {
   isActive?: boolean;
   /** Expansion initiale (dérivée de stagesState[2] === 'active'). */
   expanded?: boolean;
+  /**
+   * A8 — hrefs PDF des 3 docs partagés (étape 2 cliquable). Les rows
+   * agrégés par stagiaire (Convention/Convocation/Analyse besoin/AGEFICE)
+   * restent non-cliquables : un href unique sur un row de N stagiaires
+   * serait trompeur, le DocDockDrawer reste le hub per-stagiaire.
+   */
+  programmePdfHref?: string;
+  deroulePdfHref?: string;
+  checklistPdfHref?: string;
 }
 
 export function PreparationPedagogiqueBlock({
@@ -47,6 +56,9 @@ export function PreparationPedagogiqueBlock({
   canWrite,
   isActive = false,
   expanded,
+  programmePdfHref,
+  deroulePdfHref,
+  checklistPdfHref,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState<SessionPreparationStatus>(initialStatus);
@@ -199,9 +211,9 @@ export function PreparationPedagogiqueBlock({
             Partagés (produit / session)
           </h3>
           <ul className="space-y-1.5">
-            <StepDocRow done={status.programme} label="Programme de formation" indic="Ind 1·6" />
-            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic="Ind 10" />
-            <StepDocRow done={status.checklist} label="Check-list formation" indic="Ind 17" />
+            <StepDocRow done={status.programme} label="Programme de formation" indic="Ind 1·6" pdfHref={programmePdfHref} />
+            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic="Ind 10" pdfHref={deroulePdfHref} />
+            <StepDocRow done={status.checklist} label="Check-list formation" indic="Ind 17" pdfHref={checklistPdfHref} />
           </ul>
         </div>
 

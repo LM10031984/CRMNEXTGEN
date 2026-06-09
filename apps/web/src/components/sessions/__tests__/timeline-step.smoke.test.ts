@@ -45,3 +45,23 @@ describe('TimelineStep — A4 default collapsed', () => {
     expect(src).toMatch(/\[expanded\]/);
   });
 });
+
+describe('StepDocRow — A8 row cliquable quand done + pdfHref', () => {
+  it('expose la prop pdfHref?: string', () => {
+    expect(src).toMatch(/pdfHref\?:\s*string/);
+  });
+
+  it("rend un <a target=_blank> quand allDone && pdfHref", () => {
+    // Garde-fou : si le wrapping passe en <button> ou <div onClick>, on perd
+    // l'ouvrir-dans-un-nouvel-onglet attendu par les utilisateurs.
+    expect(src).toMatch(/allDone\s*&&\s*pdfHref/);
+    expect(src).toMatch(/target="_blank"/);
+    expect(src).toMatch(/rel="noopener noreferrer"/);
+  });
+
+  it("garde le row non-interactive si !allDone (affordance honnête)", () => {
+    // Pas de fallback href trompeur sur un row missing/partial. Le hub
+    // per-stagiaire reste le DocDockDrawer.
+    expect(src).toMatch(/return\s*\(\s*<li className="flex items-center gap-2 text-sm">/);
+  });
+});

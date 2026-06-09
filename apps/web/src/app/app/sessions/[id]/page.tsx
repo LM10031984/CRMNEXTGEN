@@ -907,6 +907,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           canWrite={canWrite}
           isActive={stage.stagesState[2] === 'active'}
           expanded={stage.stagesState[2] === 'active'}
+          programmePdfHref={programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined}
+          deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
+          checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
         />
 
         <div id="step-3" className="scroll-mt-20" />

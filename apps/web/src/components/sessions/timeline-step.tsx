@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Check, ChevronDown, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ExternalLink, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -183,6 +183,7 @@ export function StepDocRow({
   count,
   total,
   indic,
+  pdfHref,
 }: {
   done?: boolean;
   pending?: boolean;
@@ -190,6 +191,17 @@ export function StepDocRow({
   count?: number;
   total?: number;
   indic?: string;
+  /**
+   * A8 2026-06-09 — Lien PDF du doc. Si fourni ET le row est `done`,
+   * la ligne devient un anchor cliquable « Ouvrir le PDF » (target=_blank).
+   * Si absent ou pas done, la ligne reste non-interactive (affordance honnête).
+   * Bug Laurent runtime SES-0093 : « dans les onglets étape 1/2 je ne peux pas
+   * cliquer et ouvrir les docs ». StepDocRow ressemblait à un lien sans en
+   * être un. Pour les rows agrégés par stagiaire (count/total partiel), on
+   * laisse non-cliquable — un lien aggrégé serait trompeur, le DocDockDrawer
+   * reste le hub per-stagiaire.
+   */
+  pdfHref?: string;
 }) {
   const showCounter = typeof count === 'number' && typeof total === 'number';
   const allDone = showCounter ? total > 0 && count >= total : Boolean(done);
@@ -203,8 +215,9 @@ export function StepDocRow({
       aria-hidden="true"
     />
   );
-  return (
-    <li className="flex items-center gap-2 text-sm">
+
+  const inner = (
+    <>
       {stateNode}
       <span className={cn('flex-1 min-w-0', allDone ? 'text-foreground' : 'text-muted-foreground')}>
         {label}
@@ -214,8 +227,6 @@ export function StepDocRow({
           </span>
         )}
       </span>
-      {/* Ind X — déplacé en `title` hover sur le row entier ailleurs ; ici on
-          garde un petit chip mono très discret pour l'audit Qualiopi. */}
       {indic && (
         <span
           className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-wide shrink-0"
@@ -224,6 +235,32 @@ export function StepDocRow({
           {indic}
         </span>
       )}
+    </>
+  );
+
+  if (allDone && pdfHref) {
+    return (
+      <li>
+        <a
+          href={pdfHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Ouvrir ${label}`}
+          className="group flex items-center gap-2 text-sm rounded-md -mx-1.5 px-1.5 py-1 hover:bg-emerald-50/50 transition-colors"
+        >
+          {inner}
+          <ExternalLink
+            className="h-3 w-3 shrink-0 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-hidden="true"
+          />
+        </a>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-2 text-sm">
+      {inner}
     </li>
   );
 }
