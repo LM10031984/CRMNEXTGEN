@@ -7,11 +7,13 @@ import { cn } from '@/lib/utils';
 /**
  * Wrapper visuel d'une étape du process Qualiopi sur la fiche session.
  *
- * Commit ui-c 2026-06-05 — collapse/expand :
- *   - `expanded` (default true) — valeur INITIALE, dérivée par la page depuis
- *     sessionStage().stagesState[N] === 'active' (jamais d'index en dur).
- *     Si stage active = N, alors expanded=true pour CE step et false pour
- *     les passées/futures.
+ * Commit ui-c 2026-06-05 / A4 2026-06-09 — collapse/expand :
+ *   - `expanded` (default **false** depuis A4) — valeur INITIALE, dérivée par
+ *     la page depuis sessionStage().stagesState[N] === 'active' (jamais
+ *     d'index en dur). Le default `false` est l'invariant A4 : seule l'étape
+ *     active s'ouvre, les passées/futures restent repliées. Si un consumer
+ *     oublie la prop, on retombe sur "replié" — plus safe qu'un opening en
+ *     cascade.
  *   - L'utilisateur peut toggler manuellement en cliquant le header. Cette
  *     interaction "open" est distincte de l'état "active" du helper :
  *     ouvrir l'étape 1 ne la fait PAS paraître active (le visuel state
@@ -85,7 +87,7 @@ export function TimelineStep({
   badge,
   action,
   qualiopi,
-  expanded = true,
+  expanded = false,
   blockerMessage,
   children,
 }: Props) {
