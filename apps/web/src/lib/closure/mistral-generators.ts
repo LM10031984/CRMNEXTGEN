@@ -5,7 +5,7 @@
  *
  * Chaque generator :
  *   1. Construit un prompt user à partir du contexte (formation + stagiaire)
- *   2. Appelle Mistral via callMistral (format JSON)
+ *   2. Appelle le LLM via callLlm (profile 'closure', format JSON)
  *   3. Valide la forme du JSON avec Zod (au cas où le modèle dérape)
  *   4. Si erreur ou JSON invalide → retourne null, l'appelant fallback sur le stub
  *
@@ -17,7 +17,8 @@ import { childLogger } from '@/lib/logger';
 
 const log = childLogger('mistral');
 import { prisma } from '@qualiof/db';
-import { callMistral } from '@/lib/ai-mistral';
+import { callLlm } from '@/lib/ai-llm';
+import { getLlmModel, getLlmProvider } from '@/lib/ai-config';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
@@ -36,9 +37,9 @@ import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
 import type { SatisfactionFroidContent } from './satisfaction-froid-template';
 import type { DerouleContent } from './deroule-template';
 
-// Override possible via env CLOSURE_MISTRAL_MODEL (sinon fallback sur
-// MISTRAL_MODEL_TEXT défini dans .env).
-const MODEL = process.env.CLOSURE_MISTRAL_MODEL ?? process.env.MISTRAL_MODEL_TEXT ?? 'mistral-large-latest';
+// Le modèle est résolu par la couche config (`ai-config.ts`) via le profil
+// 'closure'. Aucun littéral de modèle ne doit apparaître dans ce fichier
+// — c'est la garantie P0.1.
 const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 13);
 
 export interface FormationCtx {
@@ -389,14 +390,14 @@ async function tryOnce<T>(
 ): Promise<{ ok: true; data: T; latencyMs: number } | { ok: false; reason: string; latencyMs: number }> {
   const startedAt = Date.now();
   try {
-    const result = await callMistral({
-      model: MODEL,
+    const result = await callLlm({
+      profile: 'closure',
       systemPrompt,
       prompt: userPrompt,
       jsonOutput: true,
       temperature: 0.3,
       maxTokens: 8192,
-      // Mistral cloud répond en 2-10s typiquement. 60s laisse une marge confortable.
+      // LLM cloud répond en 2-10s typiquement. 60s laisse une marge confortable.
       timeoutMs: 60_000,
     });
     const latencyMs = Date.now() - startedAt;
@@ -413,7 +414,10 @@ async function tryOnce<T>(
         .join(' / ');
       return { ok: false, reason: `Schema invalide : ${msg}`, latencyMs };
     }
-    log.info({ taskName, latencyMs, model: MODEL, promptVersion: PROMPT_VERSION }, 'mistral.ok');
+    log.info(
+      { taskName, latencyMs, provider: result.provider, model: result.model, promptVersion: PROMPT_VERSION },
+      'llm.ok',
+    );
     return { ok: true, data: parsed.data, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - startedAt;
@@ -571,8 +575,10 @@ async function runMistralJson<T>(
     ? await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'mistral',
-          model: MODEL,
+          // Provider + model résolus par la config (P0.1) — reflètent ce
+          // qui sera EFFECTIVEMENT utilisé par callLlm pour ce profil.
+          provider: getLlmProvider(),
+          model: getLlmModel('closure'),
           promptVersion: PROMPT_VERSION,
           inputHash,
           status: 'running',

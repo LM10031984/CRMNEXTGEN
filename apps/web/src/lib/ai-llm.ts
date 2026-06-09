@@ -1,52 +1,47 @@
 /**
- * Adapter IA — appelle les modèles Mistral via OpenRouter (centralisation
- * facturation côté Start Academy). API OpenAI-compatible :
+ * Adapter IA unifié (P0.1). Un seul chemin d'inférence pour TOUT le code
+ * applicatif. Remplace l'ancien `ai-mistral.ts`.
  *
- *   POST https://openrouter.ai/api/v1/chat/completions
- *   Headers: Authorization: Bearer <OPENROUTER_API_KEY>
- *
- * Texte  : mistralai/mistral-large-2411 (override via OPENROUTER_MODEL_TEXT)
- * Vision : mistralai/pixtral-12b        (override via OPENROUTER_MODEL_VISION)
- *
- * Les exports publics (`callMistral`, `callMistralVision`, `MistralResult`,
- * `MistralCallOptions`, `MistralVisionOptions`) gardent la MÊME signature
- * que l'ancien adapter SDK Mistral, donc le reste du code (pdf-extract,
- * extracteurs pré-inscription, etc.) ne change pas.
+ * Le modèle effectif est résolu par `ai-config.ts` à partir du profil
+ * (`text` / `vision` / `classify` / `closure`). AUCUN call site n'embarque
+ * de littéral de modèle.
  *
  * Mode JSON : si `jsonOutput=true` on demande `response_format` à OpenRouter
- * et on injecte "(Réponds uniquement en JSON valide.)" dans le system prompt
- * en sécurité — certains providers (dont Mistral) exigent que "json" figure
+ * et on injecte « (Réponds uniquement en JSON valide.) » dans le system
+ * prompt — certains providers (dont Mistral) exigent que « json » figure
  * dans les messages pour activer le mode strict.
  */
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+import {
+  DEFAULT_TIMEOUT_MS,
+  OPENROUTER_URL,
+  buildHeaders,
+  getLlmModel,
+  getLlmProvider,
+  type LlmProfile,
+} from './ai-config';
 
-const DEFAULT_TEXT_MODEL =
-  process.env.OPENROUTER_MODEL_TEXT ?? 'mistralai/mistral-large-2411';
-const DEFAULT_VISION_MODEL =
-  process.env.OPENROUTER_MODEL_VISION ?? 'mistralai/pixtral-12b';
-
-export interface MistralCallOptions {
-  model?: string;
+export interface LlmCallOptions {
+  /** Profil sémantique — résout le modèle via la config. Défaut: 'text'. */
+  profile?: LlmProfile;
   systemPrompt?: string;
   prompt: string;
   jsonOutput?: boolean;
   temperature?: number;
   maxTokens?: number;
-  /** Timeout en ms ; default 60_000 (1 min). OpenRouter répond en 2-15s typiquement. */
+  /** Timeout en ms ; défaut 60_000 (1 min). Filet anti-worker-pendu. */
   timeoutMs?: number;
 }
 
-export interface MistralResult {
+export interface LlmResult {
   raw: string;
   parsedJson: unknown | null;
+  /** Provider effectivement utilisé (pour tracking AIGenerationJob). */
+  provider: string;
+  /** Modèle effectivement utilisé (pour tracking AIGenerationJob). */
   model: string;
   durationMs: number;
 }
-
-// ============================================================================
-// Helpers privés
-// ============================================================================
 
 type Role = 'system' | 'user' | 'assistant';
 type TextPart = { type: 'text'; text: string };
@@ -63,28 +58,6 @@ interface OpenRouterChatResponse {
     };
   }>;
   error?: { message?: string; code?: number };
-}
-
-function getApiKey(): string {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    throw new Error(
-      'OPENROUTER_API_KEY manquante. Configurer la variable dans .env (https://openrouter.ai/keys).',
-    );
-  }
-  return key;
-}
-
-function buildHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${getApiKey()}`,
-    'Content-Type': 'application/json',
-    // Headers conseillés par OpenRouter pour l'attribution / analytics
-    'X-Title': process.env.NEXT_PUBLIC_APP_NAME ?? 'QualiOF',
-  };
-  const referer = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
-  if (referer) headers['HTTP-Referer'] = referer;
-  return headers;
 }
 
 function extractTextFromMessage(content: unknown): string {
@@ -170,14 +143,12 @@ async function callOpenRouter(opts: {
   return extractTextFromMessage(json.choices?.[0]?.message?.content);
 }
 
-// ============================================================================
-// API publique — signature identique à l'ancien adapter SDK Mistral
-// ============================================================================
-
-export async function callMistral(opts: MistralCallOptions): Promise<MistralResult> {
-  const model = opts.model ?? DEFAULT_TEXT_MODEL;
+export async function callLlm(opts: LlmCallOptions): Promise<LlmResult> {
+  const profile: LlmProfile = opts.profile ?? 'text';
+  const model = getLlmModel(profile);
+  const provider = getLlmProvider();
   const start = Date.now();
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const systemContent = opts.jsonOutput
     ? `${opts.systemPrompt ?? ''}\n\n(Réponds uniquement en JSON valide.)`.trim()
@@ -201,15 +172,15 @@ export async function callMistral(opts: MistralCallOptions): Promise<MistralResu
   return {
     raw,
     parsedJson,
+    provider,
     model,
     durationMs: Date.now() - start,
   };
 }
 
-export interface MistralVisionOptions {
-  model?: string;
+export interface LlmVisionOptions {
   imageBuffer: Buffer;
-  /** MIME type de l'image (image/jpeg, image/png, image/webp). Default: image/jpeg. */
+  /** MIME type de l'image (image/jpeg, image/png, image/webp). Défaut : image/jpeg. */
   mimeType?: string;
   prompt: string;
   systemPrompt?: string;
@@ -220,19 +191,17 @@ export interface MistralVisionOptions {
 }
 
 /**
- * Appelle Pixtral via OpenRouter avec une image en input. L'image est encodée
- * en base64 et passée via le format OpenAI multi-part :
- *   { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,...' } }
+ * Appelle un modèle vision (Pixtral via OpenRouter) avec une image en input.
+ * L'image est encodée en base64 et passée via le format OpenAI multi-part.
  *
- * Cas d'usage : OCR de photos de CNI/RIB envoyées par les apprenants à la
- * place du PDF natif.
+ * Cas d'usage : OCR de photos de CNI / RIB envoyées par les apprenants à
+ * la place du PDF natif.
  */
-export async function callMistralVision(
-  opts: MistralVisionOptions,
-): Promise<MistralResult> {
-  const model = opts.model ?? DEFAULT_VISION_MODEL;
+export async function callLlmVision(opts: LlmVisionOptions): Promise<LlmResult> {
+  const model = getLlmModel('vision');
+  const provider = getLlmProvider();
   const start = Date.now();
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const mimeType = opts.mimeType ?? 'image/jpeg';
 
   const systemContent = opts.jsonOutput
@@ -260,5 +229,5 @@ export async function callMistralVision(
 
   const parsedJson = opts.jsonOutput ? tryParseJson(raw) : null;
 
-  return { raw, parsedJson, model, durationMs: Date.now() - start };
+  return { raw, parsedJson, provider, model, durationMs: Date.now() - start };
 }

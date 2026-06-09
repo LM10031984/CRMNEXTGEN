@@ -2,18 +2,18 @@
 
 /**
  * Pré-remplit les champs Qualiopi d'un produit de formation Start Academy
- * via Mistral (mistral-large-latest par défaut).
+ * via le LLM configuré (profil 'text', cf ai-config.ts).
  *
  * Utilise un prompt few-shot calibré sur les 3 modèles DOCX réels de
  * Laurent (Maitrisez l'IA en 3 jours, Management & performance, Immobilier
  * 2h/jour) pour reproduire le style, les sections, le ton et les phrases
  * récurrentes spécifiques à Start Academy.
  *
- * Coût : ~3-10 sec via l'API Mistral cloud.
+ * Coût : ~3-10 sec via OpenRouter.
  */
 
 import { validateRequest } from '@/lib/auth';
-import { callMistral } from '@/lib/ai-mistral';
+import { callLlm } from '@/lib/ai-llm';
 
 export interface AiProductDraft {
   objectives: string[];
@@ -218,8 +218,8 @@ export async function aiPreFillProduct(input: {
     .replace('{{PRICE}}', String(input.priceHT ?? 0));
 
   try {
-    const r = await callMistral({
-      model: process.env.MISTRAL_MODEL_TEXT,
+    const r = await callLlm({
+      profile: 'text',
       systemPrompt: SYSTEM_PROMPT + '\n\n' + FEW_SHOT,
       prompt: userPrompt,
       jsonOutput: true,

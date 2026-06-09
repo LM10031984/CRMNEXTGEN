@@ -15,7 +15,8 @@
 import { prisma } from '@qualiof/db';
 import { downloadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/pdf-extract';
-import { callMistral } from '@/lib/ai-mistral';
+import { callLlm } from '@/lib/ai-llm';
+import { getLlmModel } from '@/lib/ai-config';
 
 const PROMPT_VERSION = 'v1-2026-04';
 
@@ -141,8 +142,8 @@ interface ExtractionResult {
 async function extractOne<T>(text: string, kind: keyof typeof PROMPTS): Promise<T | null> {
   if (text.trim().length < 20) return null;
   const prompt = PROMPTS[kind].replace('{TEXT}', text.slice(0, 6000));
-  const r = await callMistral({
-    model: process.env.MISTRAL_MODEL_TEXT,
+  const r = await callLlm({
+    profile: 'text',
     systemPrompt: SYSTEM_PROMPT,
     prompt,
     jsonOutput: true,
@@ -215,7 +216,8 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
         status: 'EXTRACTED',
         extractedData: result as any,
         aiExtractedAt: new Date(),
-        aiModel: process.env.MISTRAL_MODEL_TEXT ?? 'mistral-large-latest',
+        // Modèle effectif lu via la couche config (P0.1) — plus de littéral.
+        aiModel: getLlmModel('text'),
       },
     });
   } catch (e: any) {

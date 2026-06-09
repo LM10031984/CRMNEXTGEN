@@ -1,11 +1,11 @@
 /**
  * Extraction texte de PDF / images.
  * - PDFs natifs (avec couche texte) : pdf-parse (rapide, gratuit)
- * - Images JPG/PNG/WebP : Pixtral vision (Mistral cloud) — OCR
+ * - Images JPG/PNG/WebP : modèle vision (Pixtral via OpenRouter) — OCR
  * - PDF scan sans couche texte : fallback vision via rendu pdfjs (TODO)
  */
 
-import { callMistralVision } from './ai-mistral';
+import { callLlmVision } from './ai-llm';
 
 export interface ExtractedDoc {
   text: string;
@@ -49,13 +49,13 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> 
 }
 
 /**
- * OCR d'une image via Pixtral (Mistral vision). Retourne la transcription
- * brute du texte visible. Latence typique 2-10s, à appeler en fire-and-forget
- * côté pipeline.
+ * OCR d'une image via le modèle vision configuré (Pixtral par défaut, profile
+ * 'vision' dans ai-config). Retourne la transcription brute du texte visible.
+ * Latence typique 2-10s, à appeler en fire-and-forget côté pipeline.
  */
 export async function extractTextFromImage(buffer: Buffer, mimeType = 'image/jpeg'): Promise<ExtractedDoc> {
   try {
-    const r = await callMistralVision({
+    const r = await callLlmVision({
       imageBuffer: buffer,
       mimeType,
       prompt: VISION_OCR_PROMPT,
