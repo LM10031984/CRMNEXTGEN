@@ -102,19 +102,32 @@ const baseOptions: LoggerOptions = {
   timestamp: pino.stdTimeFunctions.isoTime,
 };
 
-const transport = IS_PROD
+/**
+ * En prod : JSON pur sur stdout (pas de transport).
+ * En dev : pino-pretty branché EN STREAM DIRECT (pas en transport worker).
+ *
+ * Pourquoi pas `pino.transport({ target: 'pino-pretty' })` ? Le transport
+ * spawne un worker thread (`thread-stream`). Sur Next.js dev, à chaque
+ * recompilation HMR le worker est tué — et le prochain `log.info()`
+ * throw `Error: the worker has exited` (uncaughtException qui crash la
+ * page). Le stream direct n'a pas ce problème : un peu plus lent mais
+ * rock solid en dev.
+ */
+const prettyStream = IS_PROD
   ? undefined
-  : pino.transport({
-      target: 'pino-pretty',
-      options: {
+  : (() => {
+      // Require dynamique pour ne pas embarquer pino-pretty en prod bundle.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pretty = require('pino-pretty') as typeof import('pino-pretty').default;
+      return pretty({
         colorize: true,
         translateTime: 'HH:MM:ss.l',
         ignore: 'pid,hostname',
         singleLine: false,
-      },
-    });
+      });
+    })();
 
-export const logger = pino(baseOptions, transport);
+export const logger = prettyStream ? pino(baseOptions, prettyStream) : pino(baseOptions);
 
 /**
  * Helper : créer un logger enfant avec un préfixe de scope (module name).
