@@ -1,0 +1,12 @@
+-- Sprint 1 — Sécurité & Compliance (2026-06-09).
+--
+-- Active l'extension `pgcrypto` pour le chiffrement at-rest des données
+-- sensibles RGPD (N° Sécurité sociale, à terme aussi CNI URL).
+--
+-- L'extension est disponible nativement sur Postgres 16 et sur Supabase
+-- managé (déjà activée par défaut côté Supabase, mais on idempotent ici).
+--
+-- Aucune donnée n'est migrée par cette migration — voir le script
+-- `packages/db/scripts/encrypt-existing-sensitive-data.ts` pour chiffrer
+-- les valeurs existantes en place.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
