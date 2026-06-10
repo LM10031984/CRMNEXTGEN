@@ -122,23 +122,43 @@ export const DOC_INDICATORS: Record<string, string | null> = {
  *
  * ENJEU (but métier inventaire de génération de masse) : ne PAS mettre tous les
  * docs dans la même benne de génération rétroactive. La famille découpe la
- * worklist en LOTS :
- *  - Lot A (génération de masse OK)   = `descriptif` + `analyse`
- *  - Lot B (NE PAS générer sans aval) = `resultat`  + `presence`
+ * worklist en LOTS (3 buckets — décision Laurent 2026-06-10) :
+ *  - Lot A (génération de masse OK)   = `descriptif` + `analyse` + `presence_derivee`
+ *  - Lot B (NE PAS générer sans aval) = `resultat`
+ *  - Lot DRIVE (HORS worklist)        = `presence_signee`
  *
- * Pourquoi Lot B est interdit en génération automatique : générer rétroactivement
- * un RÉSULTAT (scoring QCM, évaluation des acquis, satisfaction) ou une PREUVE
- * SIGNÉE (émargement, assiduité, certificat, attestation) pour un stagiaire 2024
- * = produire une fausse affirmation devant le financeur AGEFICE / l'auditeur.
+ * CASCADE (décision Laurent 2026-06-10) : les ÉMARGEMENTS SIGNÉS restent au Drive
+ * (lieu de preuve valable pour l'audit ind. 12 — on ne les importe pas, chantier U2).
+ * Du coup la présence étant prouvée par les scans Drive, les docs qui en DÉRIVENT
+ * (assiduité, certificat de réalisation, attestation de fin) deviennent GÉNÉRABLES :
+ * ils ne font que FORMALISER une présence déjà prouvée, ils n'affirment pas un
+ * RÉSULTAT mesuré faux. → famille `presence_derivee`, Lot A.
+ *
+ * Pourquoi Lot B reste interdit en génération automatique : générer rétroactivement
+ * un RÉSULTAT (scoring QCM, évaluation des acquis, positionnement, satisfaction)
+ * pour un stagiaire 2024 = produire une fausse affirmation chiffrée devant le
+ * financeur AGEFICE / l'auditeur.
+ *
+ * Pourquoi Lot DRIVE est HORS worklist : l'émargement signé est la preuve brute ;
+ * il existe au Drive (scan signé). Ni à générer (on n'invente pas une signature),
+ * ni un « trou » (la preuve existe ailleurs). On le comptabilise à part.
  *
  * BIAIS DE SÉCURITÉ (non négociable) : tout docType/kind ABSENT de ce map est
- * traité par défaut comme `resultat` (cf. `docFamilyOf`), JAMAIS `descriptif`.
- * On préfère sur-classer en Lot B (gel) que de générer par erreur une preuve.
+ * traité par défaut comme `resultat` (cf. `docFamilyOf`), JAMAIS un Lot A. On
+ * préfère sur-classer en Lot B (gel) que de générer par erreur un résultat faux.
  *
  * Source UNIQUE (catalogue doc-scope) : le script d'inventaire dérive la famille
- * d'ici, sans map local. Bordures à valider par Laurent (cf. test de couverture).
+ * + le LOT d'ici, sans map local. Bordures à valider par Laurent (test de couverture).
  */
-export type DocFamily = 'descriptif' | 'analyse' | 'resultat' | 'presence';
+export type DocFamily =
+  | 'descriptif'
+  | 'analyse'
+  | 'resultat'
+  | 'presence_signee'
+  | 'presence_derivee';
+
+/** 3 buckets de gouvernance. A = masse OK ; B = gelé (attente Kaïna) ; DRIVE = preuve signée hors worklist. */
+export type DocLot = 'A' | 'B' | 'DRIVE';
 
 export const DOC_FAMILY: Record<string, DocFamily> = {
   // ── descriptif : documents cadres/administratifs, pas de résultat ni de signature
@@ -164,7 +184,8 @@ export const DOC_FAMILY: Record<string, DocFamily> = {
   //    elle reflète un échange amont — à régénérer avec prudence.
   ANALYSE_BESOIN: 'analyse',
 
-  // ── resultat : tout ce qui PORTE UN RÉSULTAT/score/avis du stagiaire. Lot B.
+  // ── resultat : tout ce qui PORTE UN RÉSULTAT/score/avis chiffré du stagiaire.
+  //    Lot B GELÉ (attente Kaïna) — régénérer = fausse affirmation mesurée.
   EVALUATION_ACQUIS: 'resultat',
   QCM: 'resultat',
   POSITIONNEMENT: 'resultat',
@@ -176,26 +197,41 @@ export const DOC_FAMILY: Record<string, DocFamily> = {
   SATISFACTION: 'resultat',
   SATISFACTION_SESSION: 'resultat',
 
-  // ── presence : preuves de présence/réalisation SIGNÉES. Lot B (non régénérables
-  //    rétroactivement — une signature ne s'invente pas).
-  EMARGEMENT: 'presence',
-  ASSIDUITE: 'presence',
-  CERTIFICAT_REALISATION: 'presence',
-  ATTESTATION_FIN: 'presence',
+  // ── presence_signee : la PREUVE SIGNÉE BRUTE de présence (émargement). Reste
+  //    au Drive (scan signé, preuve ind. 12 valable). Lot DRIVE : HORS worklist —
+  //    ni à générer, ni un trou. Comptabilisé à part.
+  EMARGEMENT: 'presence_signee',
+
+  // ── presence_derivee : docs qui DÉRIVENT de la présence déjà prouvée par les
+  //    scans Drive. Ils FORMALISENT (assiduité, certificat de réalisation,
+  //    attestation de fin) sans affirmer un résultat mesuré. → Lot A générable
+  //    (décision Laurent 2026-06-10, cascade émargement-au-Drive).
+  ASSIDUITE: 'presence_derivee',
+  CERTIFICAT_REALISATION: 'presence_derivee',
+  ATTESTATION_FIN: 'presence_derivee',
 };
 
 /**
  * Famille d'un docType/kind avec BIAIS DE SÉCURITÉ : défaut `resultat` (Lot B,
- * gelé) pour tout type inconnu — jamais `descriptif`. Source unique = DOC_FAMILY.
+ * gelé) pour tout type inconnu — jamais un Lot A. Source unique = DOC_FAMILY.
  */
 export function docFamilyOf(docType: string): DocFamily {
   return DOC_FAMILY[docType] ?? 'resultat';
 }
 
-/** Lot de gouvernance dérivé de la famille. Lot A = masse OK ; Lot B = gelé. */
-export function docLotOf(docType: string): 'A' | 'B' {
+/**
+ * Lot de gouvernance dérivé de la famille (3 buckets) :
+ *  - A     = descriptif + analyse + presence_derivee → génération de masse OK.
+ *  - B     = resultat                                → GELÉ (attente Kaïna 16/06).
+ *  - DRIVE = presence_signee (émargement)            → HORS worklist (preuve au Drive).
+ *
+ * Biais de sécurité : tout type inconnu tombe en `resultat` → Lot B, jamais A/DRIVE.
+ */
+export function docLotOf(docType: string): DocLot {
   const fam = docFamilyOf(docType);
-  return fam === 'descriptif' || fam === 'analyse' ? 'A' : 'B';
+  if (fam === 'presence_signee') return 'DRIVE';
+  if (fam === 'resultat') return 'B';
+  return 'A'; // descriptif + analyse + presence_derivee
 }
 
 /** Labels FR — short = 2-3 chars header (UI-SPEC glyph legend), long = aria-label/tooltip. */

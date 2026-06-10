@@ -113,30 +113,53 @@ describe('DOC_FAMILY (audit pré-BCI — gouvernance des lots)', () => {
     expect(missing, `docType non classés dans DOC_FAMILY : ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('biais de sécurité : type inconnu → famille `resultat` (jamais `descriptif`)', () => {
+  it('biais de sécurité : type inconnu → famille `resultat` (jamais un Lot A)', () => {
     expect(docFamilyOf('UN_TYPE_QUI_NEXISTE_PAS')).toBe('resultat');
     expect(docFamilyOf('UN_TYPE_QUI_NEXISTE_PAS')).not.toBe('descriptif');
+    expect(docLotOf('UN_TYPE_QUI_NEXISTE_PAS')).toBe('B'); // jamais A ni DRIVE
   });
 
-  it('mapping Lot : descriptif+analyse → A ; resultat+presence → B', () => {
+  it('mapping Lot (3 buckets, décision Laurent 2026-06-10) : EMARGEMENT→DRIVE, dérivés→A, résultats→B', () => {
+    // Lot A : descriptif + analyse + presence_derivee
     expect(docLotOf('PROGRAMME')).toBe('A'); // descriptif
     expect(docLotOf('ANALYSE_BESOIN')).toBe('A'); // analyse
+    expect(docLotOf('ASSIDUITE')).toBe('A'); // presence_derivee
+    expect(docLotOf('CERTIFICAT_REALISATION')).toBe('A'); // presence_derivee
+    expect(docLotOf('ATTESTATION_FIN')).toBe('A'); // presence_derivee
+    // Lot B : resultat (gelé, attente Kaïna)
     expect(docLotOf('EVALUATION_ACQUIS')).toBe('B'); // resultat
-    expect(docLotOf('EMARGEMENT')).toBe('B'); // presence
     expect(docLotOf('QCM')).toBe('B'); // resultat (kind brut)
-    expect(docLotOf('CERTIFICAT_REALISATION')).toBe('B'); // presence (signé)
+    expect(docLotOf('POSITIONNEMENT')).toBe('B'); // resultat
+    expect(docLotOf('SATISFACTION_CHAUD')).toBe('B'); // resultat
+    expect(docLotOf('GRILLE_OBS_SESSION')).toBe('B'); // resultat
+    // Lot DRIVE : émargement signé (preuve au Drive, hors worklist)
+    expect(docLotOf('EMARGEMENT')).toBe('DRIVE');
   });
 
   it('toute valeur de DOC_FAMILY est une famille valide', () => {
-    const valid = new Set(['descriptif', 'analyse', 'resultat', 'presence']);
+    const valid = new Set([
+      'descriptif',
+      'analyse',
+      'resultat',
+      'presence_signee',
+      'presence_derivee',
+    ]);
     for (const [k, v] of Object.entries(DOC_FAMILY)) {
       expect(valid.has(v), `Famille invalide pour ${k} : ${v}`).toBe(true);
     }
   });
 
-  it('preuves signées non régénérables sont bien en `presence` (Lot B gelé)', () => {
-    for (const t of ['EMARGEMENT', 'ASSIDUITE', 'CERTIFICAT_REALISATION', 'ATTESTATION_FIN']) {
-      expect(DOC_FAMILY[t], `${t} doit être en presence (signé, non régénérable)`).toBe('presence');
+  it('émargement = preuve signée brute → `presence_signee` → Lot DRIVE (hors worklist)', () => {
+    expect(DOC_FAMILY['EMARGEMENT']).toBe('presence_signee');
+    expect(docLotOf('EMARGEMENT')).toBe('DRIVE');
+  });
+
+  it('assiduité/certificat/attestation = dérivés de la présence prouvée → `presence_derivee` → Lot A', () => {
+    for (const t of ['ASSIDUITE', 'CERTIFICAT_REALISATION', 'ATTESTATION_FIN']) {
+      expect(DOC_FAMILY[t], `${t} doit être en presence_derivee (formalise, ne mesure pas)`).toBe(
+        'presence_derivee',
+      );
+      expect(docLotOf(t), `${t} doit être générable (Lot A)`).toBe('A');
     }
   });
 });

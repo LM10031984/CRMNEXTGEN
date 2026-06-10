@@ -12,11 +12,15 @@
  * GOUVERNANCE PAR LOT (structurant — ne PAS tout mettre dans la même benne)
  * ------------------------------------------------------------------------
  * Chaque doc porte une `famille` (DOC_FAMILY, doc-scope.ts, source unique) qui
- * le range dans un LOT :
- *   - Lot A = descriptif + analyse   → génération de masse possible.
- *   - Lot B = resultat   + presence  → NE PAS générer sans aval métier
- *     (régénérer un RÉSULTAT — scoring QCM 2024 — ou une PREUVE SIGNÉE
- *      — émargement, assiduité — = fausse affirmation devant l'AGEFICE/l'auditeur).
+ * le range dans un LOT (3 buckets — décision Laurent 2026-06-10) :
+ *   - Lot A     = descriptif + analyse + presence_derivee → génération de masse OK.
+ *     (assiduité/certificat/attestation FORMALISENT une présence déjà prouvée par
+ *      les scans d'émargement signés au Drive — ils n'affirment pas un résultat faux).
+ *   - Lot B     = resultat → NE PAS générer sans aval métier (attente Kaïna 16/06).
+ *     (régénérer un RÉSULTAT — scoring QCM 2024 — = fausse affirmation chiffrée).
+ *   - Lot DRIVE = presence_signee (émargement) → HORS worklist. La preuve signée
+ *     existe au Drive (scan), on ne l'importe pas (chantier U2) : ni à générer,
+ *     ni un trou. Comptabilisé à part. Worklist réelle = A + B.
  *
  * RÉUTILISATION (pas de duplication de logique)
  * ---------------------------------------------
@@ -58,6 +62,7 @@ import {
   docFamilyOf,
   docLotOf,
   type DocFamily,
+  type DocLot,
 } from '@/lib/doc-scope';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,7 +100,7 @@ interface WorkItem {
   docLabel: string;
   status: WorkStatus;
   family: DocFamily;
-  lot: 'A' | 'B';
+  lot: DocLot;
   indicator: string | null;
 }
 
@@ -112,15 +117,30 @@ function fmtDate(d: Date): string {
   return new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC' }).format(d);
 }
 
-function pushItem(items: WorkItem[], partial: Omit<WorkItem, 'family' | 'lot' | 'indicator' | 'docLabel'>): void {
-  const family = docFamilyOf(partial.docType);
-  items.push({
+function buildItem(partial: Omit<WorkItem, 'family' | 'lot' | 'indicator' | 'docLabel'>): WorkItem {
+  return {
     ...partial,
     docLabel: DOC_TYPE_LABELS[partial.docType]?.long ?? partial.docType,
-    family,
+    family: docFamilyOf(partial.docType),
     lot: docLotOf(partial.docType),
     indicator: DOC_INDICATORS[partial.docType] ?? null,
-  });
+  };
+}
+
+/**
+ * Échantillon de CONTRÔLE PAR SONDAGE — déterministe, reproductible (PAS de
+ * Math.random). Trie les sessions terminées par endDate (déjà fait côté requête)
+ * et prend `count` indices RÉGULIÈREMENT espacés pour couvrir toute la période.
+ */
+function pickSpacedSample<T>(arr: readonly T[], count: number): T[] {
+  if (arr.length <= count) return [...arr];
+  const out: T[] = [];
+  // indices régulièrement espacés sur [0, len-1] inclus (premier, …, dernier).
+  for (let k = 0; k < count; k++) {
+    const idx = Math.round((k * (arr.length - 1)) / (count - 1));
+    out.push(arr[idx]!);
+  }
+  return out;
 }
 
 async function main(): Promise<void> {
@@ -137,9 +157,11 @@ async function main(): Promise<void> {
     select: {
       id: true,
       code: true,
+      name: true,
       startDate: true,
       endDate: true,
       productId: true,
+      product: { select: { title: true } },
       trainers: {
         orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
         select: { person: { select: { firstName: true, lastName: true } } },
@@ -156,15 +178,28 @@ async function main(): Promise<void> {
     },
   } as never);
 
-  const items: WorkItem[] = [];
+  const items: WorkItem[] = []; // worklist réelle = Lot A + Lot B
+  const driveItems: WorkItem[] = []; // Lot DRIVE = émargements (preuve au Drive, hors worklist)
   let sessionsWithGaps = 0;
+
+  // Métadonnées de TOUTES les sessions terminées (pour le contrôle par sondage,
+  // indépendant de la présence de trous). Ordre = endDate asc (cf. requête).
+  const sessionsMeta: Array<{
+    code: string;
+    startDate: Date;
+    endDate: Date;
+    trainer: string | null;
+    productName: string | null;
+  }> = [];
 
   for (const s of sessions as Array<{
     id: string;
     code: string;
+    name: string | null;
     startDate: Date;
     endDate: Date;
     productId: string | null;
+    product: { title: string } | null;
     trainers: Array<{ person: { firstName: string; lastName: string } | null }>;
     participants: Array<{
       id: string;
@@ -239,7 +274,28 @@ async function main(): Promise<void> {
         .map((t) => (t.person ? `${t.person.firstName} ${t.person.lastName.toUpperCase()}` : null))
         .find((n) => !!n) ?? null;
 
+    // Métadonnées sondage (toutes les sessions terminées, indépendamment des trous).
+    sessionsMeta.push({
+      code: s.code,
+      startDate: s.startDate,
+      endDate: s.endDate,
+      trainer,
+      productName: s.product?.title ?? s.name ?? null,
+    });
+
     let sessionHadGap = false;
+
+    // Routeur d'item : Lot DRIVE (émargement signé) → `driveItems`, comptabilisé à
+    // part, HORS worklist (ne déclenche pas `sessionHadGap`). Lot A / B → worklist.
+    const route = (partial: Omit<WorkItem, 'family' | 'lot' | 'indicator' | 'docLabel'>): void => {
+      const item = buildItem(partial);
+      if (item.lot === 'DRIVE') {
+        driveItems.push(item);
+        return;
+      }
+      items.push(item);
+      sessionHadGap = true;
+    };
 
     // ── (participant × MATRIX_DOC_TYPES) ────────────────────────────────────
     for (const p of s.participants) {
@@ -266,8 +322,7 @@ async function main(): Promise<void> {
         const stub = backingKind ? stubKinds.has(backingKind) : false;
 
         if (cell.state === 'MISSING') {
-          sessionHadGap = true;
-          pushItem(items, {
+          route({
             sessionCode: s.code,
             sessionStart: s.startDate,
             sessionEnd: s.endDate,
@@ -277,8 +332,7 @@ async function main(): Promise<void> {
             status: 'missing',
           });
         } else if (stub) {
-          sessionHadGap = true;
-          pushItem(items, {
+          route({
             sessionCode: s.code,
             sessionStart: s.startDate,
             sessionEnd: s.endDate,
@@ -304,8 +358,7 @@ async function main(): Promise<void> {
         new Map(),
       );
       if (cell.state === 'MISSING') {
-        sessionHadGap = true;
-        pushItem(items, {
+        route({
           sessionCode: s.code,
           sessionStart: s.startDate,
           sessionEnd: s.endDate,
@@ -320,15 +373,20 @@ async function main(): Promise<void> {
     if (sessionHadGap) sessionsWithGaps += 1;
   }
 
-  // ─── Agrégats par lot ────────────────────────────────────────────────────
+  // ─── Agrégats par lot (3 buckets) ──────────────────────────────────────────
   const lotA = items.filter((i) => i.lot === 'A');
   const lotB = items.filter((i) => i.lot === 'B');
+  // Lot DRIVE : émargements concernés (preuve signée au Drive, HORS worklist).
+  const driveCount = driveItems.length;
   const sessionsConcerned = new Set(items.map((i) => i.sessionCode));
 
+  // Famille restreinte à la worklist (A + B) — `presence_signee` part dans driveItems.
   const byFamily = (fam: DocFamily) => items.filter((i) => i.family === fam).length;
-  const signedFrozen = items.filter(
-    (i) => i.family === 'presence' && (i.docType === 'EMARGEMENT' || i.docType === 'ASSIDUITE'),
-  ).length;
+
+  // ─── Échantillon de CONTRÔLE PAR SONDAGE (déterministe) ────────────────────
+  // 5 sessions réparties sur toute la période (tri endDate déjà fait), indices
+  // régulièrement espacés — reproductible, PAS de Math.random.
+  const sample = pickSpacedSample(sessionsMeta, 5);
 
   // ─── Rendu Markdown ──────────────────────────────────────────────────────
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -340,50 +398,98 @@ async function main(): Promise<void> {
   md.push(`> Généré le ${fmtDate(now)} · borne basse \`--since=${sinceIso}\` · **read-only**, relançable.`);
   md.push(`> Critère « terminée » : \`SessionStatus.COMPLETED\` · date pertinente : \`endDate >= ${sinceIso}\`.`);
   md.push('');
-  md.push(`## ⚠ Gouvernance — NE PAS tout générer dans la même benne`);
+  md.push(`## ⚠ Gouvernance — 3 buckets, ne PAS tout générer dans la même benne`);
   md.push('');
-  md.push(`- **Lot A = génération de masse possible** (descriptifs + analyses). Relire les analyses avant envoi.`);
-  md.push(`- **Lot B = EN ATTENTE réponse Kaïna (16/06)** — résultats + preuves signées. **NE PAS** générer`);
-  md.push(`  rétroactivement un RÉSULTAT (scoring QCM inventé) ni une PREUVE SIGNÉE (émargement/assiduité) :`);
-  md.push(`  ce serait une fausse affirmation devant l'AGEFICE / l'auditeur.`);
+  md.push(`Décision Laurent (2026-06-10) : les **émargements SIGNÉS restent au Drive** (lieu de`);
+  md.push(`preuve valable pour l'audit ind. 12 — on ne les importe pas, chantier U2). La présence`);
+  md.push(`étant prouvée par les scans Drive, les docs qui en **dérivent** (assiduité, certificat,`);
+  md.push(`attestation) deviennent **générables** : ils ne font que la formaliser.`);
+  md.push('');
+  md.push(`- **Lot A = génération de masse possible** — descriptifs + analyses + dérivés de présence`);
+  md.push(`  (assiduité, certificat de réalisation, attestation de fin). Relire les analyses avant envoi.`);
+  md.push(`- **Lot B = EN ATTENTE réponse Kaïna (16/06)** — RÉSULTATS purs (QCM/évaluation des acquis,`);
+  md.push(`  positionnement, grilles d'observation, satisfaction). **NE PAS** générer un résultat chiffré`);
+  md.push(`  rétroactif : ce serait une fausse affirmation devant l'AGEFICE / l'auditeur.`);
+  md.push(`- **Lot DRIVE = preuves signées (émargement)** — **HORS worklist**. La preuve existe au Drive`);
+  md.push(`  (scan signé) : ni à générer, ni un trou. Comptabilisé à part. **NE PAS générer.**`);
+  md.push('');
+  md.push(`> **Worklist réelle = Lot A + Lot B.** Le Lot DRIVE est informatif (combien d'émargements`);
+  md.push(`> reposent sur les scans Drive), il ne fait pas partie des documents à produire.`);
   md.push('');
   md.push(`## Récapitulatif par LOT`);
   md.push('');
-  md.push(`| Lot | Familles | Docs à produire | Action |`);
-  md.push(`| --- | --- | ---: | --- |`);
-  md.push(`| **A** | descriptif + analyse | **${lotA.length}** | Génération de masse OK (relire analyses) |`);
-  md.push(`| **B** | resultat + presence | **${lotB.length}** | GELÉ — attente aval métier |`);
+  md.push(`| Lot | Périmètre | Items | Sessions | Action |`);
+  md.push(`| --- | --- | ---: | ---: | --- |`);
+  md.push(`| **A** | à générer après T2/T3 (descriptif + analyse + dérivés présence) | **${lotA.length}** | ${new Set(lotA.map((i) => i.sessionCode)).size} | Génération de masse OK (relire analyses) |`);
+  md.push(`| **B** | attente Kaïna 16/06 (résultats purs) | **${lotB.length}** | ${new Set(lotB.map((i) => i.sessionCode)).size} | GELÉ — attente aval métier |`);
+  md.push(`| **DRIVE** | preuves signées au Drive (émargements) | **${driveCount}** | ${new Set(driveItems.map((i) => i.sessionCode)).size} | HORS worklist — NE PAS générer |`);
   md.push('');
-  md.push(`- Sessions terminées depuis ${sinceIso} : **${sessions.length}** · avec docs manquants/stub : **${sessionsWithGaps}**.`);
+  md.push(`- Sessions terminées depuis ${sinceIso} : **${sessions.length}** · avec docs manquants/stub (worklist) : **${sessionsWithGaps}**.`);
   md.push(`- Sessions concernées par la worklist : **${sessionsConcerned.size}**.`);
-  md.push(`- Total items worklist : **${items.length}** (Lot A ${lotA.length} · Lot B ${lotB.length}).`);
-  md.push(`- Dont preuves SIGNÉES non régénérables (émargement + assiduité) : **${signedFrozen}**.`);
+  md.push(`- **Worklist réelle = A + B = ${items.length}** items (Lot A ${lotA.length} · Lot B ${lotB.length}).`);
+  md.push(`- Preuves signées au Drive (Lot DRIVE, hors worklist) : **${driveCount}** émargements.`);
   md.push('');
-  md.push(`### Ventilation par famille`);
+  md.push(`### Ventilation par famille (worklist A + B)`);
   md.push('');
   md.push(`| Famille | Lot | Items |`);
   md.push(`| --- | --- | ---: |`);
   md.push(`| descriptif | A | ${byFamily('descriptif')} |`);
   md.push(`| analyse | A | ${byFamily('analyse')} |`);
+  md.push(`| presence_derivee | A | ${byFamily('presence_derivee')} |`);
   md.push(`| resultat | B | ${byFamily('resultat')} |`);
-  md.push(`| presence | B | ${byFamily('presence')} |`);
+  md.push(`| _presence_signee_ | _DRIVE (hors worklist)_ | _${driveCount}_ |`);
   md.push('');
   md.push(`## Classification \`famille\` utilisée (À VALIDER par Laurent — bordures)`);
   md.push('');
-  md.push(`Bordures sensibles soulignées : émargement, assiduité (signés → \`presence\`, Lot B gelé),`);
-  md.push(`certificat & attestation (preuves de réalisation → \`presence\`), QCM/évaluation (→ \`resultat\`).`);
+  md.push(`Bordures sensibles : émargement (signé → \`presence_signee\`, **Lot DRIVE hors worklist**),`);
+  md.push(`assiduité / certificat / attestation (dérivés de la présence prouvée → \`presence_derivee\`,`);
+  md.push(`**Lot A générable**), QCM / évaluation / positionnement / satisfaction (→ \`resultat\`, **Lot B gelé**).`);
   md.push('');
   md.push(`| Famille | Lot | DocTypes |`);
   md.push(`| --- | --- | --- |`);
-  const familiesOrder: DocFamily[] = ['descriptif', 'analyse', 'resultat', 'presence'];
+  const familiesOrder: DocFamily[] = [
+    'descriptif',
+    'analyse',
+    'presence_derivee',
+    'resultat',
+    'presence_signee',
+  ];
   // On liste depuis le catalogue les types réellement rencontrés + les attendus matrice/session.
   const allKnown = Array.from(
-    new Set([...MATRIX_DOC_TYPES, ...SESSION_ONLY_DOC_TYPES, 'AGEFICE', ...items.map((i) => i.docType)]),
+    new Set([
+      ...MATRIX_DOC_TYPES,
+      ...SESSION_ONLY_DOC_TYPES,
+      'AGEFICE',
+      ...items.map((i) => i.docType),
+      ...driveItems.map((i) => i.docType),
+    ]),
   );
   for (const fam of familiesOrder) {
     const types = allKnown.filter((t) => docFamilyOf(t) === fam).sort();
-    md.push(`| ${fam} | ${fam === 'descriptif' || fam === 'analyse' ? 'A' : 'B'} | ${types.join(', ') || '—'} |`);
+    const lotLabel = fam === 'presence_signee' ? 'DRIVE' : fam === 'resultat' ? 'B' : 'A';
+    md.push(`| ${fam} | ${lotLabel} | ${types.join(', ') || '—'} |`);
   }
+  md.push('');
+  // ── Section CONTRÔLE PAR SONDAGE (pour Laurent) ──────────────────────────
+  md.push(`## Contrôle par sondage (à faire par Laurent)`);
+  md.push('');
+  md.push(`Échantillon **déterministe** de ${sample.length} sessions terminées réparties sur toute la`);
+  md.push(`période (tri par date de fin, indices régulièrement espacés — reproductible).`);
+  md.push('');
+  md.push(`**Objectif** : retrouver l'**émargement signé** de chacune dans le Drive, en se chronométrant.`);
+  md.push('');
+  md.push(`- ✅ **5/5 retrouvés en < 1 min** → archive Drive complète : on généralise la bascule des`);
+  md.push(`  certificats/attestations/assiduités en **Lot A** (présence prouvée par les scans).`);
+  md.push(`- ❌ **1 manquante** → vrai **trou ind. 12** à lister + **recensement complet requis** AVANT`);
+  md.push(`  toute génération des certificats (sinon on formalise une présence non prouvée).`);
+  md.push('');
+  md.push(`| # | Session (SES) | Dates | Formateur | Produit / Session |`);
+  md.push(`| --- | --- | --- | --- | --- |`);
+  sample.forEach((sm, idx) => {
+    md.push(
+      `| ${idx + 1} | \`${sm.code}\` | ${fmtDate(sm.startDate)} → ${fmtDate(sm.endDate)} | ${sm.trainer ?? '—'} | ${sm.productName ?? '—'} |`,
+    );
+  });
   md.push('');
   md.push(`## Worklist détaillée par session`);
   md.push('');
@@ -432,7 +538,8 @@ async function main(): Promise<void> {
     const s = v ?? '';
     return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  for (const it of items) {
+  // Worklist (A + B) puis Lot DRIVE (émargements) — la colonne `lot` permet de filtrer.
+  for (const it of [...items, ...driveItems]) {
     csv.push(
       [
         esc(it.sessionCode),
@@ -453,10 +560,11 @@ async function main(): Promise<void> {
   // ─── Console summary ─────────────────────────────────────────────────────
   console.log(`Sessions terminées (>= ${sinceIso}) : ${sessions.length}`);
   console.log(`Sessions avec manquants/stub        : ${sessionsWithGaps}`);
-  console.log(`Items worklist                      : ${items.length}`);
+  console.log(`Worklist réelle (A + B)             : ${items.length}`);
   console.log(`  Lot A (masse OK)                  : ${lotA.length}`);
-  console.log(`  Lot B (gelé)                      : ${lotB.length}`);
-  console.log(`  dont signés non régénérables      : ${signedFrozen}`);
+  console.log(`  Lot B (gelé, attente Kaïna)       : ${lotB.length}`);
+  console.log(`Lot DRIVE (hors worklist)           : ${driveCount} émargements`);
+  console.log(`Échantillon sondage (déterministe)  : ${sample.map((s) => s.code).join(', ')}`);
   console.log(`\n✓ ${path.relative(ROOT, MD_PATH)}`);
   console.log(`✓ ${path.relative(ROOT, CSV_PATH)}\n`);
 }
