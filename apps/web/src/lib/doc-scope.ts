@@ -61,10 +61,19 @@ export const QUALIOPI_DOC_CATALOG_INDICATORS: Record<string, string | null> = {
   CONVOCATION: 'Indicateur 9',
   EMARGEMENT: 'Indicateur 12',
   SUPPORT_PEDAGOGIQUE: 'Indicateur 19',
-  CERTIFICAT_REALISATION: 'Légal Art. L6353-1',
-  ASSIDUITE: 'Indicateur 12',
+  // CORRECTION 2 (Kaïna audit blanc) : le certificat de réalisation se range
+  // dans l'ind. 11. Stockage au plus simple : qualiopiIndicator = 'Indicateur 11',
+  // la mention légale Art. L6353-1 reste consignée dans le champ description du
+  // seed (et affichée en composite « Indicateur 11 · Légal Art. L6353-1 »).
+  CERTIFICAT_REALISATION: 'Indicateur 11',
+  // CORRECTION 1 (tranché Laurent V9) : l'assiduité AGEFICE n'est PAS une preuve
+  // Qualiopi — la preuve ind. 12 c'est l'ÉMARGEMENT. L'assiduité est un dérivé
+  // administratif financeur, même logique que PRE_ACCORD_OPCO/VALIDATION_OPCO.
+  ASSIDUITE: null,
   EVALUATION_ACQUIS: 'Indicateur 11',
-  ATTESTATION_FIN: 'Indicateur 11',
+  // CORRECTION 2 (swap) : l'attestation de fin devient « Légal » pur — le 11
+  // passe au certificat de réalisation ci-dessus.
+  ATTESTATION_FIN: 'Légal Art. L6353-1',
   VALIDATION_OPCO: null,
   FACTURE: 'Légal',
   AGEFICE: null,
