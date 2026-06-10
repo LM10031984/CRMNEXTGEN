@@ -2,6 +2,20 @@ import type { ReactNode } from 'react';
 import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from 'lucide-react';
 import type { SessionPreparationStatus } from '@/server/actions/prepare-training';
 import type { SessionClosureStatus } from '@/server/actions/closure-status';
+// 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE indicateurs : le pilier « Attestation »
+// lit son indicateur dans le catalogue (CERTIFICAT_REALISATION → « Légal »), plus
+// aucun littéral « Ind 27 » en dur (sous-traitance, NA pour la fin de formation).
+import { DOC_INDICATORS } from '@/lib/doc-scope';
+
+/** « Indicateur 11 » → « Ind 11 » ; « Légal … » → « Légal » ; null → ''. */
+function pillarIndic(docType: string): string {
+  const raw = DOC_INDICATORS[docType] ?? null;
+  if (!raw) return '';
+  const m = raw.match(/^Indicateur\s+(\d+)$/);
+  if (m) return `Ind ${m[1]}`;
+  if (raw.startsWith('Légal')) return 'Légal';
+  return raw;
+}
 
 /**
  * Orchestrateur visuel de la fiche session.
@@ -10,9 +24,9 @@ import type { SessionClosureStatus } from '@/server/actions/closure-status';
  *   1. Hero "Prochaine étape" — détecte l'étape attendue selon statut session
  *      + état préparation + état pack closure. Affiche un CTA contextuel énorme.
  *   2. Conformité Qualiopi — 9 indicateurs métier (1, 6, 8, 9, 10, 11, 17,
- *      27, 30), score X/9. **Collapsée par défaut (commit ui-e3)** — chip
- *      score visible en summary, détail par indic révélé au clic. Évite la
- *      surcharge visuelle hors-audit.
+ *      Légal Art. L6353-1, 30), score X/9. **Collapsée par défaut (commit ui-e3)**
+ *      — chip score visible en summary, détail par indic révélé au clic. Évite la
+ *      surcharge visuelle hors-audit. (09.3-03-fix : « 27 » sous-traitance retiré.)
  *   3. Timeline 5 étapes (children) — passés en props pour que la page session
  *      composer ait la main sur les blocks à afficher.
  *
@@ -459,10 +473,15 @@ function computeQualiopiPillars(
       hint: 'Check-list formation',
     },
     {
-      ind: 'Ind 27',
+      // CORRECTION 1 — « Ind 27 » (sous-traitance) était faux ici. Le pilier
+      // « Attestation » couvre attestation de fin (Ind 11) + certificat de
+      // réalisation (obligation Légal Art. L6353-1). On affiche l'indicateur du
+      // certificat (« Légal », via catalogue) pour ne pas dupliquer l'« Ind 11 »
+      // déjà porté par le pilier « Évaluation » ci-dessus.
+      ind: pillarIndic('CERTIFICAT_REALISATION'),
       label: 'Attestation',
       done: N > 0 && closure.attestations >= N && closure.certificats >= N,
-      hint: 'Attestation + certificat par stagiaire',
+      hint: 'Attestation de fin (Ind 11) + certificat de réalisation (Légal Art. L6353-1)',
     },
     {
       ind: 'Ind 30',

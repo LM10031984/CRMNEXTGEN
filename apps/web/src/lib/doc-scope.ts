@@ -70,6 +70,44 @@ export const QUALIOPI_DOC_CATALOG_INDICATORS: Record<string, string | null> = {
   AGEFICE: null,
 };
 
+/**
+ * 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE des indicateurs pour `resolveDocs`.
+ *
+ * `QUALIOPI_DOC_CATALOG_INDICATORS` ci-dessus est le MIROIR strict du seed
+ * `QualiopiDocCatalog` (recette 0-drift `seed-catalog.test.ts`) : il ne contient
+ * QUE des `DocType` du seed. Mais `resolveDocs` émet aussi `docType = pa.kind`
+ * (enum PedagogicalKind brut : QCM, GRILLE_OBS, DEROULE, POSITIONNEMENT,
+ * ANALYSE_BESOIN, SATISFACTION_CHAUD/FROID…) et les pseudo-types identité/légal
+ * (CNI/RIB/CFP/CGV/REGLEMENT_INTERIEUR). `DOC_INDICATORS` ÉTEND le catalogue avec
+ * ces clés SANS polluer le miroir du seed (sinon le test 0-drift casse). C'est
+ * l'unique table lue par le résolveur — toujours zéro mapping local.
+ */
+export const DOC_INDICATORS: Record<string, string | null> = {
+  ...QUALIOPI_DOC_CATALOG_INDICATORS,
+  // Kinds PedagogicalAsset bruts (docType = pa.kind dans resolveDocs).
+  QCM: 'Indicateur 11', // évaluation des acquis
+  GRILLE_OBS: 'Indicateur 11', // grille d'observation formateur
+  ANALYSE_BESOIN: 'Indicateur 4', // analyse du besoin
+  POSITIONNEMENT: 'Indicateur 8', // positionnement entrée
+  SATISFACTION_CHAUD: 'Indicateur 30',
+  SATISFACTION_FROID: 'Indicateur 30',
+  DEROULE: 'Indicateur 6', // déroulé pédagogique (kind)
+  COMPETENCES: 'Indicateur 11', // référentiel de compétences
+  // DocType session-only non présents dans le seed catalog.
+  DEROULE_PEDAGOGIQUE: 'Indicateur 6',
+  GRILLE_OBS_SESSION: 'Indicateur 11',
+  CHECKLIST_FORMATION: 'Indicateur 17',
+  SATISFACTION: 'Indicateur 30',
+  SATISFACTION_SESSION: 'Indicateur 30',
+  // Sources identité / légales : pas d'indicateur Qualiopi.
+  CNI: null,
+  RIB: null,
+  CFP: null,
+  CGV: null,
+  REGLEMENT_INTERIEUR: null,
+  CUSTOM: null,
+};
+
 /** Labels FR — short = 2-3 chars header (UI-SPEC glyph legend), long = aria-label/tooltip. */
 export const DOC_TYPE_LABELS: Record<string, { short: string; long: string }> = {
   PROGRAMME: { short: 'Pg', long: 'Programme de formation' },
@@ -90,6 +128,21 @@ export const DOC_TYPE_LABELS: Record<string, { short: string; long: string }> = 
   DEROULE_PEDAGOGIQUE: { short: 'Dp', long: 'Déroulé pédagogique' },
   GRILLE_OBS_SESSION: { short: 'Go', long: "Grille d'observation formateur" },
   CHECKLIST_FORMATION: { short: 'Ck', long: 'Checklist formation' },
+  // ── 09.3-03-fix CORRECTION 1 — libellés HUMAINS pour les kinds PedagogicalAsset
+  //    bruts émis par `resolveDocs` (docType = pa.kind enum) + sources identité/légal.
+  //    Sans ça l'UI affichait la CLÉ brute (« GRILLE_OBS », « QCM »…) — interdit.
+  QCM: { short: 'QC', long: "QCM d'évaluation" },
+  GRILLE_OBS: { short: 'Go', long: "Grille d'observation" },
+  DEROULE: { short: 'Dp', long: 'Déroulé pédagogique' },
+  COMPETENCES: { short: 'Cp', long: 'Référentiel de compétences' },
+  SATISFACTION: { short: 'Sa', long: 'Évaluation de satisfaction' },
+  SATISFACTION_SESSION: { short: 'Ss', long: 'Bilan satisfaction session' },
+  CNI: { short: 'Id', long: "Pièce d'identité (CNI)" },
+  RIB: { short: 'Ri', long: 'RIB' },
+  CFP: { short: 'Cf', long: 'Attestation CFP (AGEFICE)' },
+  CGV: { short: 'Cg', long: 'Conditions générales de vente' },
+  REGLEMENT_INTERIEUR: { short: 'RI', long: 'Règlement intérieur' },
+  CUSTOM: { short: 'Do', long: 'Document personnalisé' },
 };
 
 /**

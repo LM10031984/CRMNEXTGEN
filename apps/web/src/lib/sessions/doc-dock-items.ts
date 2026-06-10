@@ -7,6 +7,19 @@
  */
 
 import type { DocDockItem } from './dispatch-doc-types';
+// 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE indicateurs : `indic` dérivé du
+// catalogue à partir du docType, plus aucun littéral « Ind 27 » en dur.
+import { DOC_INDICATORS } from '@/lib/doc-scope';
+
+/** « Indicateur 9 » → « Ind 9 » ; « Légal … » → « Légal » ; null → ''. */
+function indicShort(docType: string): string {
+  const raw = DOC_INDICATORS[docType] ?? null;
+  if (!raw) return '';
+  const m = raw.match(/^Indicateur\s+(\d+)$/);
+  if (m) return `Ind ${m[1]}`;
+  if (raw.startsWith('Légal')) return 'Légal';
+  return raw;
+}
 
 interface BuildInput {
   // Partagés produit/session
@@ -36,7 +49,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
     key: 'programme',
     docType: 'PROGRAMME',
     label: 'Programme de formation',
-    indic: 'Ind 1·6',
+    indic: indicShort('PROGRAMME') || undefined,
     section: 'shared',
     state: input.programmeProductDocId ? 'generated' : 'missing',
     pdfUrl: input.programmeProductDocId
@@ -47,7 +60,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
     key: 'deroule',
     docType: 'DEROULE',
     label: 'Déroulé pédagogique',
-    indic: 'Ind 10',
+    indic: indicShort('DEROULE') || undefined,
     section: 'shared',
     state: input.derouleProductDocId ? 'generated' : 'missing',
     pdfUrl: input.derouleProductDocId
@@ -58,7 +71,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
     key: 'checklist',
     docType: 'CHECKLIST',
     label: 'Check-list formation',
-    indic: 'Ind 17',
+    indic: indicShort('CHECKLIST_FORMATION') || undefined,
     section: 'shared',
     state: input.checklistDocId ? 'generated' : 'missing',
     pdfUrl: input.checklistDocId ? `/api/documents/${input.checklistDocId}` : undefined,
@@ -76,7 +89,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
       label: `Convention — ${p.fullName}`,
       participantName: p.fullName,
       participantId: p.id,
-      indic: 'Ind 6·8',
+      indic: indicShort('CONVENTION') || undefined,
       section: 'participant',
       state: conventionId ? 'generated' : 'missing',
       pdfUrl: conventionId ? `/api/documents/${conventionId}` : undefined,
@@ -89,7 +102,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
       label: `Convocation — ${p.fullName}`,
       participantName: p.fullName,
       participantId: p.id,
-      indic: 'Ind 9',
+      indic: indicShort('CONVOCATION') || undefined,
       section: 'participant',
       state: convocationId ? 'generated' : 'missing',
       pdfUrl: convocationId ? `/api/documents/${convocationId}` : undefined,
@@ -103,7 +116,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
         label: `Demande AGEFICE — ${p.fullName}`,
         participantName: p.fullName,
         participantId: p.id,
-        indic: 'Ind 27',
+        indic: indicShort('AGEFICE') || undefined,
         section: 'participant',
         state: ageficeId ? 'generated' : 'missing',
         pdfUrl: ageficeId ? `/api/documents/${ageficeId}` : undefined,
@@ -119,7 +132,7 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
       label: `Analyse besoin — ${p.fullName}`,
       participantName: p.fullName,
       participantId: p.id,
-      indic: 'Ind 11',
+      indic: indicShort('ANALYSE_BESOIN') || undefined,
       section: 'ai',
       state: analyseId ? 'generated' : isPending ? 'pending' : 'missing',
       pdfUrl: analyseId ? `/api/pedagogical-assets/${analyseId}` : undefined,

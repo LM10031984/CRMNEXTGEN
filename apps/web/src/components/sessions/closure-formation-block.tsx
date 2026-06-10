@@ -5,6 +5,20 @@ import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
 import type { SessionClosureStatus } from '@/server/actions/closure-status';
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { buildClosureCompletionItems } from '@/lib/sessions/build-closure-completion-items';
+// 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE indicateurs : lecture du catalogue,
+// plus aucun littéral « Ind 27 » en dur. `indicLabel` rend la forme courte
+// affichée (« Ind 11 » dérivé de « Indicateur 11 »), null = pas de badge.
+import { DOC_INDICATORS } from '@/lib/doc-scope';
+
+/** « Indicateur 11 » → « Ind 11 » ; « Légal Art. L6353-1 » → « Légal » ; null → ''. */
+function indicShort(docType: string): string {
+  const raw = DOC_INDICATORS[docType] ?? null;
+  if (!raw) return '';
+  const m = raw.match(/^Indicateur\s+(\d+)$/);
+  if (m) return `Ind ${m[1]}`;
+  if (raw.startsWith('Légal')) return 'Légal';
+  return raw;
+}
 
 interface Props {
   sessionId: string;
@@ -35,9 +49,9 @@ export function ClosureFormationBlock({
   const N = status.participantsCount;
 
   const sharedItems: { done: boolean; label: string; indic: string }[] = [
-    { done: status.grilleObsSession, label: "Grille d'observation session", indic: 'Ind 11' },
-    { done: status.bilanSatisfaction, label: 'Bilan satisfaction session', indic: 'Ind 30' },
-    { done: Boolean(programmeProductDocId), label: 'Support pédagogique (programme final)', indic: 'Ind 6' },
+    { done: status.grilleObsSession, label: "Grille d'observation session", indic: indicShort('GRILLE_OBS_SESSION') },
+    { done: status.bilanSatisfaction, label: 'Bilan satisfaction session', indic: indicShort('SATISFACTION_SESSION') },
+    { done: Boolean(programmeProductDocId), label: 'Support pédagogique (programme final)', indic: indicShort('SUPPORT_PEDAGOGIQUE') },
   ];
 
   const perParticipantItems: {
@@ -47,17 +61,17 @@ export function ClosureFormationBlock({
     indic: string;
     hide?: boolean;
   }[] = [
-    { count: status.attestations, total: N, label: 'Attestation de fin de formation', indic: 'Ind 27' },
-    { count: status.certificats, total: N, label: 'Certificat de réalisation', indic: 'Ind 27' },
-    { count: status.qcm, total: N, label: 'QCM final', indic: 'Ind 11' },
-    { count: status.positionnements, total: N, label: 'Évaluation acquis (positionnement)', indic: 'Ind 11' },
-    { count: status.satisfactionChaud, total: N, label: 'Satisfaction à chaud', indic: 'Ind 30' },
-    { count: status.satisfactionFroid, total: N, label: 'Satisfaction à froid', indic: 'Ind 30' },
+    { count: status.attestations, total: N, label: 'Attestation de fin de formation', indic: indicShort('ATTESTATION_FIN') },
+    { count: status.certificats, total: N, label: 'Certificat de réalisation', indic: indicShort('CERTIFICAT_REALISATION') },
+    { count: status.qcm, total: N, label: 'QCM final', indic: indicShort('EVALUATION_ACQUIS') },
+    { count: status.positionnements, total: N, label: 'Évaluation acquis (positionnement)', indic: indicShort('POSITIONNEMENT') },
+    { count: status.satisfactionChaud, total: N, label: 'Satisfaction à chaud', indic: indicShort('SATISFACTION_CHAUD') },
+    { count: status.satisfactionFroid, total: N, label: 'Satisfaction à froid', indic: indicShort('SATISFACTION_FROID') },
     {
       count: status.assiduites,
       total: status.ageficeEligibleCount,
       label: 'Attestation d\'assiduité AGEFICE',
-      indic: 'AGEFICE',
+      indic: indicShort('ASSIDUITE'),
       hide: status.ageficeEligibleCount === 0,
     },
   ];
@@ -133,7 +147,10 @@ export function ClosureFormationBlock({
       state={state}
       expanded={expanded}
       caption="10 documents Qualiopi générés en 1 clic"
-      qualiopi="Ind 11 · 27 · 30"
+      // 09.3-03-fix CORRECTION 1 — « Ind 27 » (sous-traitance) retiré : faux pour
+      // le pack de fin. Indicateurs réels des docs de l'étape 4, dérivés du catalogue :
+      // POSITIONNEMENT→8, ATTESTATION_FIN/QCM/GRILLE_OBS→11, ASSIDUITE→12, SATISFACTION→30.
+      qualiopi="Ind 8 · 11 · 12 · 30"
       badge={badge}
       action={action}
     >

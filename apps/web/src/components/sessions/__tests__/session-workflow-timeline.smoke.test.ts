@@ -49,12 +49,17 @@ describe('SessionWorkflowTimeline — Conformité Qualiopi collapsée par défau
     expect(src).toMatch(/\{okCount\}\/\{total\}/);
   });
 
-  it("9 indicateurs métier listés (1, 6, 8, 9, 10, 11, 17, 27, 30)", () => {
-    // Anti-régression : computeQualiopiPillars doit retourner ces 9
-    // indicateurs précis (Qualiopi métier Start Academy).
-    for (const ind of ['1', '6', '8', '9', '10', '11', '17', '27', '30']) {
-      // Format attendu dans computeQualiopiPillars : `ind: 'Ind X'`
+  it("9 indicateurs métier listés (1, 6, 8, 9, 10, 11, 17, Légal Art. L6353-1, 30)", () => {
+    // 09.3-03-fix CORRECTION 1 — anti-régression mise à jour : le pilier
+    // « Attestation » ne porte PLUS « Ind 27 » (sous-traitance, faux) mais
+    // l'indicateur du certificat de réalisation (« Légal », via catalogue
+    // DOC_INDICATORS['CERTIFICAT_REALISATION']). Les 8 indicateurs numériques
+    // restants sont inchangés.
+    for (const ind of ['1', '6', '8', '9', '10', '11', '17', '30']) {
       expect(src).toMatch(new RegExp(`['"]Ind ${ind}['"]`));
     }
+    // Le 9e pilier dérive du catalogue (certificat → « Légal »), plus aucun « Ind 27 ».
+    expect(src).toMatch(/pillarIndic\(\s*['"]CERTIFICAT_REALISATION['"]\s*\)/);
+    expect(src).not.toMatch(/['"]Ind 27['"]/);
   });
 });

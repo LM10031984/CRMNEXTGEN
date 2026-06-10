@@ -30,6 +30,19 @@ import {
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { buildPrepCompletionItems } from '@/lib/sessions/build-prep-completion-items';
 import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
+// 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE indicateurs : lecture du catalogue
+// (constante pure, OK en Client Component). Plus aucun littéral « Ind 27 ».
+import { DOC_INDICATORS } from '@/lib/doc-scope';
+
+/** « Indicateur 9 » → « Ind 9 » ; « Légal … » → « Légal » ; null → ''. */
+function indicShort(docType: string): string {
+  const raw = DOC_INDICATORS[docType] ?? null;
+  if (!raw) return '';
+  const m = raw.match(/^Indicateur\s+(\d+)$/);
+  if (m) return `Ind ${m[1]}`;
+  if (raw.startsWith('Légal')) return 'Légal';
+  return raw;
+}
 
 interface Props {
   sessionId: string;
@@ -194,7 +207,11 @@ export function PreparationPedagogiqueBlock({
       state={stepState}
       expanded={expanded}
       caption="Programme · Déroulé · Check-list · Convention · Convocation · Analyse besoin · AGEFICE"
-      qualiopi="Ind 1 · 6 · 8 · 9 · 10 · 11 · 17 · 27"
+      // 09.3-03-fix CORRECTION 1 — « Ind 27 » (sous-traitance) retiré + « Ind 10/11 »
+      // corrigés. Indicateurs réels des docs de l'étape, dérivés du catalogue :
+      // PROGRAMME→1, ANALYSE_BESOIN→4, DEROULE→6, POSITIONNEMENT→8,
+      // CONVENTION/CONVOCATION→9, CHECKLIST→17.
+      qualiopi="Ind 1 · 4 · 6 · 8 · 9 · 17"
       badge={badge}
       action={action}
     >
@@ -211,9 +228,9 @@ export function PreparationPedagogiqueBlock({
             Partagés (produit / session)
           </h3>
           <ul className="space-y-1.5">
-            <StepDocRow done={status.programme} label="Programme de formation" indic="Ind 1·6" pdfHref={programmePdfHref} />
-            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic="Ind 10" pdfHref={deroulePdfHref} />
-            <StepDocRow done={status.checklist} label="Check-list formation" indic="Ind 17" pdfHref={checklistPdfHref} />
+            <StepDocRow done={status.programme} label="Programme de formation" indic={indicShort('PROGRAMME')} pdfHref={programmePdfHref} />
+            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic={indicShort('DEROULE')} pdfHref={deroulePdfHref} />
+            <StepDocRow done={status.checklist} label="Check-list formation" indic={indicShort('CHECKLIST_FORMATION')} pdfHref={checklistPdfHref} />
           </ul>
         </div>
 
@@ -226,19 +243,19 @@ export function PreparationPedagogiqueBlock({
               count={status.conventionsCount}
               total={N}
               label="Convention (1/payeur)"
-              indic="Ind 6·8"
+              indic={indicShort('CONVENTION')}
             />
             <StepDocRow
               count={status.convocationsCount}
               total={N}
               label="Convocation"
-              indic="Ind 9"
+              indic={indicShort('CONVOCATION')}
             />
             <StepDocRow
               count={status.analyseBesoinDone}
               total={N}
               label="Analyse besoin (IA)"
-              indic="Ind 11"
+              indic={indicShort('ANALYSE_BESOIN')}
               pending={analyseBesoinInflight > 0}
             />
             {status.ageficeEligibleCount > 0 && (
@@ -246,7 +263,7 @@ export function PreparationPedagogiqueBlock({
                 count={status.ageficeCount}
                 total={status.ageficeEligibleCount}
                 label="Demande prise en charge AGEFICE"
-                indic="Ind 27"
+                indic={indicShort('AGEFICE')}
               />
             )}
           </ul>
