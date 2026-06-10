@@ -36,6 +36,8 @@ import {
   type ParticipationForStats,
 } from '@/lib/learner-stats';
 import { MATRIX_DOC_TYPES } from '@/lib/doc-scope';
+// Phase 9.3 Plan 03 — l'onglet Documents consomme le résolveur UNION 6 sources.
+import { resolveDocs } from '@/lib/resolve-docs';
 // Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche apprenant.
 import { LearnerInvoicesBlock } from '@/components/learners/learner-invoices-block';
 
@@ -115,12 +117,14 @@ export default async function ApprenantDetailPage({
         prisma.document.findMany({
           where: { tenantId: user.tenantId, participantId: { in: participantIds } },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, type: true, createdAt: true, sessionId: true, participantId: true },
+          // Phase 9.3 — entityType/entityId requis par le résolveur resolveDocs.
+          select: { id: true, type: true, createdAt: true, sessionId: true, participantId: true, entityType: true, entityId: true },
         }),
         prisma.pedagogicalAsset.findMany({
           where: { tenantId: user.tenantId, participantId: { in: participantIds } },
           orderBy: { generatedAt: 'desc' },
-          select: { id: true, kind: true, generatedAt: true, sessionId: true, participantId: true, pdfUrl: true },
+          // Phase 9.3 — rawJson requis pour le badge usedStub ('no_proof').
+          select: { id: true, kind: true, generatedAt: true, sessionId: true, participantId: true, pdfUrl: true, rawJson: true },
         }),
         prisma.invoice.findMany({
           where: {
@@ -166,45 +170,21 @@ export default async function ApprenantDetailPage({
     return false;
   });
 
-  // Mapping libellés humains pour les types Qualiopi
-  const DOC_TYPE_LABELS: Record<string, string> = {
-    CONVENTION: 'Convention de formation',
-    PROGRAMME: 'Programme de formation',
-    CONVOCATION: 'Convocation',
-    EMARGEMENT: "Feuille d'émargement",
-    ASSIDUITE: "Attestation d'assiduité",
-    ATTESTATION_FIN: 'Attestation de fin de formation',
-    CERTIFICAT_REALISATION: 'Certificat de réalisation',
-    AGEFICE: 'Demande de prise en charge AGEFICE',
-    EVALUATION_ACQUIS: 'Évaluation des acquis',
-    SATISFACTION: 'Évaluation de satisfaction',
-    SUPPORT_PEDAGOGIQUE: 'Support pédagogique',
-    PRE_ACCORD_OPCO: 'Pré-accord OPCO',
-    VALIDATION_OPCO: 'Validation OPCO',
-    FACTURE: 'Facture',
-    CUSTOM: 'Document personnalisé',
-  };
-  const PEDAGOGICAL_KIND_LABELS: Record<string, string> = {
-    ANALYSE_BESOIN: 'Analyse des besoins',
-    QCM: "QCM d'évaluation",
-    GRILLE_OBS: "Grille d'observation",
-    COMPETENCES: 'Référentiel de compétences',
-    DEROULE: 'Déroulé pédagogique',
-    POSITIONNEMENT: 'Questionnaire de positionnement',
-    SATISFACTION_CHAUD: 'Évaluation de satisfaction à chaud',
-    SATISFACTION_FROID: 'Évaluation de satisfaction à froid',
-    EMARGEMENT: "Fiche d'émargement",
-  };
+  // Phase 9.3 Plan 03 — libellés centralisés dans lib/doc-scope via resolveDocs
+  // (les maps locales DOC_TYPE_LABELS / PEDAGOGICAL_KIND_LABELS sont supprimées).
 
-  // Document unifié pour la liste : type Document + type PedagogicalAsset
+  // Document unifié pour la liste : UnifiedDoc (résolveur) + factures
   type DocItem = {
     key: string;
     label: string;
     href: string;
     sessionId: string | null;
-    createdAt: Date;
+    /** null pour les pièces sans date (CNI / RIB / CFP). */
+    createdAt: Date | null;
     pillarKey: 'qualiopi' | 'admin' | 'pedagogique' | 'finance';
     sortGroup: number;
+    /** Badge 'no_proof' — contenu généré en fallback stub, à régénérer avant audit. */
+    usedStub: boolean;
   };
 
   const QUALIOPI_PILLAR: Record<string, DocItem['pillarKey']> = {
@@ -224,37 +204,55 @@ export default async function ApprenantDetailPage({
     FACTURE: 'finance',
   };
 
-  const documents: DocItem[] = [
-    ...rawDocs.map((d) => ({
-      key: `doc:${d.id}`,
-      label: DOC_TYPE_LABELS[d.type] ?? d.type,
-      href: `/api/documents/${d.id}`,
-      sessionId: d.sessionId,
-      createdAt: d.createdAt,
-      pillarKey: QUALIOPI_PILLAR[d.type] ?? 'admin',
-      sortGroup: 0,
-    })),
-    ...rawAssets
-      .filter((a) => a.pdfUrl)
-      .map((a) => ({
-        key: `asset:${a.id}`,
-        label: PEDAGOGICAL_KIND_LABELS[a.kind] ?? a.kind,
-        href: `/api/pedagogical-assets/${a.id}`,
-        sessionId: a.sessionId,
-        createdAt: a.generatedAt,
-        pillarKey: 'pedagogique' as const,
-        sortGroup: 1,
+  // Phase 9.3 Plan 03 — UNION 6 sources via le résolveur pur (zéro requête
+  // supplémentaire : rows déjà chargées). Pièces CNI/RIB/CFP désormais
+  // visibles dans l'onglet Documents (recette ≤ 2 clics). Les factures,
+  // hors périmètre du résolveur, restent appendées.
+  const unifiedDocs = resolveDocs({
+    documents: rawDocs,
+    pedagogicalAssets: rawAssets.filter((a) => a.pdfUrl),
+    identity: {
+      personId: person.id,
+      ribKey: person.ribKey,
+      idDocumentUrl: person.sensitiveData?.idDocumentUrl ?? null,
+      idDocumentType: person.sensitiveData?.idDocumentType ?? null,
+    },
+    cfpAttestations: person.legalLinks
+      .filter((l) => l.organization.ageficeProfile?.cfpAttestationKey)
+      .map((l) => ({
+        organizationId: l.organization.id,
+        personId: person.id,
+        cfpAttestationKey: l.organization.ageficeProfile?.cfpAttestationKey ?? null,
       })),
+  });
+
+  const documents: DocItem[] = [
+    ...unifiedDocs.map((u) => ({
+      key: `${u.source}:${u.sourceId}`,
+      label: u.label,
+      href: u.href,
+      sessionId: u.sessionId,
+      createdAt: u.generatedAt,
+      pillarKey:
+        u.source === 'pedagogical_asset'
+          ? ('pedagogique' as const)
+          : (QUALIOPI_PILLAR[u.docType ?? ''] ?? ('admin' as const)),
+      sortGroup: u.source === 'pedagogical_asset' ? 1 : 0,
+      usedStub: u.usedStub,
+    })),
     ...filteredInvoices.map((inv) => ({
       key: `invoice:${inv.id}`,
       label: `Facture ${inv.number}${inv.status === 'PAID' ? ' (payée)' : ''}`,
       href: `/app/factures/${inv.id}`,
       sessionId: inv.sessionId,
-      createdAt: inv.createdAt,
+      createdAt: inv.createdAt as Date | null,
       pillarKey: 'finance' as const,
       sortGroup: 2,
+      usedStub: false,
     })),
-  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  ].sort(
+    (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
+  );
 
   // Map sessionId → code+title pour grouper visuellement
   const sessionMeta = sessionIds.length
@@ -787,10 +785,10 @@ export default async function ApprenantDetailPage({
             <div className="p-5 border-b border-border flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                  Documents générés ({documents.length})
+                  Documents ({documents.length})
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Groupés par session — clic sur un document pour l'ouvrir.
+                  Groupés par session — pièces d'identité, RIB et CFP inclus. Clic sur un document pour l'ouvrir.
                 </p>
               </div>
               {hasParticipations && (
@@ -828,7 +826,7 @@ export default async function ApprenantDetailPage({
                             <span className="text-foreground">{meta.product?.title ?? meta.name}</span>
                           </>
                         ) : (
-                          <span className="italic">Hors session</span>
+                          <span className="italic">Pièces apprenant / hors session</span>
                         )}
                         <span className="text-[11px]">· {items.length} doc{items.length > 1 ? 's' : ''}</span>
                       </div>
@@ -845,11 +843,19 @@ export default async function ApprenantDetailPage({
                               >
                                 <FileText className="h-4 w-4 text-primary shrink-0" />
                                 <span className="flex-1 font-medium text-sm truncate">{d.label}</span>
+                                {d.usedStub && (
+                                  <span
+                                    title="Généré en fallback stub (sans IA) — à régénérer avant l'audit"
+                                    className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
+                                  >
+                                    ⚠ no_proof
+                                  </span>
+                                )}
                                 <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${pillar.cls}`}>
                                   {pillar.label}
                                 </span>
                                 <span className="text-xs text-muted-foreground tabular-nums">
-                                  {new Date(d.createdAt).toLocaleDateString('fr-FR')}
+                                  {d.createdAt ? new Date(d.createdAt).toLocaleDateString('fr-FR') : '—'}
                                 </span>
                                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                               </a>

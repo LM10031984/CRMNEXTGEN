@@ -16,6 +16,7 @@ import { ProductSessionsTab } from '@/components/produits/tabs/product-sessions-
 import { ProductLearnersTab } from '@/components/produits/tabs/product-learners-tab';
 import { ProductProgrammeTab } from '@/components/produits/tabs/product-programme-tab';
 import { ProductSatisfactionPanel } from '@/components/produits/product-satisfaction-panel';
+import { ProductDocsBlock } from '@/components/produits/product-docs-block';
 import { PriceMissingBanner } from '@/components/produits/price-missing-banner';
 import {
   getProductStats,
@@ -213,6 +214,9 @@ export default async function ProductDetailPage({
           />
         )}
       </div>
+
+      {/* Phase 9.3 Plan 03 — bloc Docs produit (résolveur UNION, ≤ 2 clics). */}
+      <ProductDocsBlock tenantId={user.tenantId} productId={product.id} />
     </div>
   );
 }

@@ -25,6 +25,8 @@ import { OfEmailForm } from '@/components/settings/of-email-form';
 import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-form';
 import { LegalDocsForm } from '@/components/parametres/legal-docs-form';
 import { formatIban } from '@/lib/iban-format';
+// Phase 9.3 Plan 03 — liens directs vers les PDFs légaux générés (résolveur UNION).
+import { resolveDocsForTenant } from '@/lib/resolve-docs-db';
 
 const ICON_CLASS = 'h-5 w-5 mt-0.5 text-primary shrink-0';
 
@@ -62,6 +64,12 @@ export default async function ParametresPage() {
   const docCatalog = await prisma.qualiopiDocCatalog.findMany({
     orderBy: { phase: 'asc' },
   });
+  // Phase 9.3 Plan 03 — derniers PDFs légaux générés (CGV / RI), 1 par type,
+  // pour liens directs dans la section Documents légaux (recette ≤ 2 clics).
+  const tenantDocs = await resolveDocsForTenant(user.tenantId);
+  const legalPdfDocs = tenantDocs
+    .filter((d) => d.source === 'document')
+    .filter((d, idx, arr) => arr.findIndex((x) => x.docType === d.docType) === idx);
 
   if (!tenant) {
     return (
@@ -312,6 +320,23 @@ export default async function ParametresPage() {
                   )
                 }
               />
+              {legalPdfDocs.length > 0 && (
+                <div className="sm:col-span-2 flex flex-wrap gap-2 pt-1">
+                  {legalPdfDocs.map((d) => (
+                    <a
+                      key={d.sourceId}
+                      href={d.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-700 border border-primary/30 bg-primary-50 hover:bg-primary-100 rounded-md px-2.5 py-1.5 transition-colors"
+                    >
+                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                      {d.label} — PDF
+                      {d.generatedAt ? ` (${d.generatedAt.toLocaleDateString('fr-FR')})` : ''}
+                    </a>
+                  ))}
+                </div>
+              )}
             </dl>
           }
           editView={(onSaved, onCancel) => (
