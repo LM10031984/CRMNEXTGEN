@@ -87,7 +87,7 @@ function DocChip({
 }: {
   kind: string;
   present: boolean;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
 }) {
   return (
     <span
@@ -111,7 +111,7 @@ function DocPill({
 }: {
   kind: string;
   present: boolean;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
 }) {
   return (
     <span

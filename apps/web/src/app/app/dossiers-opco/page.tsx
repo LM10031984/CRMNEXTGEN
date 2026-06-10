@@ -707,7 +707,7 @@ function KpiCard({
   href,
   active,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: string;
   hint: string;

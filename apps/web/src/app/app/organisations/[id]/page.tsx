@@ -287,7 +287,7 @@ function FieldIcon({
   value,
   multiline,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: React.ReactNode;
   multiline?: boolean;

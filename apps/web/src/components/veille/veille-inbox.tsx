@@ -22,7 +22,7 @@
 import { useState, useTransition } from 'react';
 import { Check, X, Loader2, ExternalLink, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import type { RegulatoryWatch } from '@qualiof/db';
+import type { RegulatoryWatch } from '@prisma/client';
 import { approveWatch, rejectWatch } from '@/server/actions/veille';
 import { cn } from '@/lib/utils';
 

@@ -201,7 +201,7 @@ function KpiBlock({
   value,
   sub,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: string;
   sub: string;

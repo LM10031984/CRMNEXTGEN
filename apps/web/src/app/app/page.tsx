@@ -382,7 +382,7 @@ function PrioCard({
   accent = 'default',
   href,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: string;
   sub?: string;
@@ -444,7 +444,7 @@ function CaCard({
   accent,
   href,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: number;
   hint?: string;
@@ -485,7 +485,7 @@ function PerfCard({
   label,
   value,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: string;
 }) {
@@ -526,7 +526,7 @@ function PipelineRow({
   value,
   href,
 }: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: number;
   href: string;
@@ -558,7 +558,7 @@ function TopList({
   rows,
 }: {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   rows: Array<{ href: string; primary: string; secondary: string; value: string }>;
 }) {
   // Couleurs de médailles pour le top 3

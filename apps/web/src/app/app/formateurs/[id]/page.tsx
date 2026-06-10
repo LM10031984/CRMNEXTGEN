@@ -314,7 +314,7 @@ function StatBlock({ label, value, hint, suffix }: { label: string; value: numbe
 function FieldIcon({
   icon: Icon, label, value, multiline,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: React.ReactNode;
   multiline?: boolean;

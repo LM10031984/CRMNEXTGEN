@@ -297,7 +297,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function Block({ icon: Icon, title, children }: { icon: React.ComponentType<{ className?: string }>; title: string; children: React.ReactNode }) {
+function Block({ icon: Icon, title, children }: { icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl ring-1 ring-slate-200/70 bg-white shadow-card p-5">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2.5">

@@ -237,7 +237,7 @@ function ExtractCard({
   data,
 }: {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   data: any;
 }) {
   return (

@@ -273,7 +273,7 @@ function KPICard({
 }: {
   label: string;
   value: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   accent?: 'primary' | 'emerald' | 'amber' | 'default';
   hint?: string;
 }) {

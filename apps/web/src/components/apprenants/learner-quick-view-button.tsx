@@ -180,7 +180,7 @@ export function LearnerQuickViewButton({ personId }: { personId: string }) {
   );
 }
 
-function KPI({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function KPI({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>; label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border p-2.5">
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1">

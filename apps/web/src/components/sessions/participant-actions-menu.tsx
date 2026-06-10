@@ -77,7 +77,7 @@ export function ParticipantActionsMenu({
     });
   }
 
-  const chip = (kind: DocLink['type'], icon: React.ComponentType<{ className?: string }>, color: string) => {
+  const chip = (kind: DocLink['type'], icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>, color: string) => {
     const Icon = icon;
     const docId = docs[kind];
     if (!docId) return null;
@@ -98,7 +98,7 @@ export function ParticipantActionsMenu({
   // Bouton "Générer" inline pour AGEFICE quand le doc n'existe pas encore.
   // Évite que Laurent doive ouvrir le dropdown "···" pour générer (frustration
   // signalée 03/05 — le bouton AGEFICE était devenu invisible après refonte).
-  const generateChip = (kind: DocLink['type'], icon: React.ComponentType<{ className?: string }>, color: string, label: string) => {
+  const generateChip = (kind: DocLink['type'], icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>, color: string, label: string) => {
     const Icon = icon;
     if (docs[kind]) return null; // déjà généré : on affiche le chip de lien à la place
     return (

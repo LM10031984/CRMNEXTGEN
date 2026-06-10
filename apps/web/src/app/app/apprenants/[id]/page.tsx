@@ -885,7 +885,7 @@ function Field({
   muted,
   multiline,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: string;
   muted?: boolean;
@@ -915,7 +915,7 @@ function KPI({
 }: {
   label: string;
   value: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   accent?: 'default' | 'orange' | 'red';
   /** Si fourni : KPI rendu en <a> cliquable (UX-05 — drill-down). */
   href?: string;

@@ -127,7 +127,7 @@ function ProofRow({
   label,
   children,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   children: React.ReactNode;
 }) {

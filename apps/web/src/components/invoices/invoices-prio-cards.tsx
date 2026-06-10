@@ -72,7 +72,7 @@ function PrioCardLocal({
   value,
   sub,
 }: {
-  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   tone: Tone;
   label: string;
   value: string;

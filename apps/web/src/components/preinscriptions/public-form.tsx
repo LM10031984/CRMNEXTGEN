@@ -15,7 +15,7 @@ interface FileSlot {
   kind: FileKind;
   label: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   required: boolean;
   file: File | null;
 }
@@ -391,7 +391,7 @@ function Section({
 }: {
   title: string;
   subtitle?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   children: React.ReactNode;
 }) {
   return (

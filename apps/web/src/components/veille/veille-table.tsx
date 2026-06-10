@@ -18,7 +18,7 @@
  * de revue côté ADMIN/MANAGER hors workflow inbox auto).
  */
 
-import type { RegulatoryWatch } from '@qualiof/db';
+import type { RegulatoryWatch } from '@prisma/client';
 import { ExploitationCell } from './exploitation-cell';
 import { VeilleRowActions } from './veille-row-actions';
 

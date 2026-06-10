@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { getNotifications, type NotificationItem, type NotificationKind } from '@/server/actions/notifications';
 import { markNotificationRead } from '@/server/actions/notification-mark-read';
 
-const ICONS: Record<NotificationKind, React.ComponentType<{ className?: string }>> = {
+const ICONS: Record<NotificationKind, React.ComponentType<{ className?: string; strokeWidth?: number | string }>> = {
   preinscription: Inbox,
   session_no_attendee: AlertTriangle,
   session_to_close: AlertCircle,

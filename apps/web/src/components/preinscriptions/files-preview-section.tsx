@@ -18,7 +18,7 @@ interface FilesPreviewSectionProps {
 
 type Kind = 'cni' | 'rib' | 'cfp';
 
-const KIND_META: Record<Kind, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+const KIND_META: Record<Kind, { label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }> }> = {
   cni: { label: "Pièce d'identité", icon: CreditCard },
   rib: { label: 'RIB', icon: Building2 },
   cfp: { label: 'Attestation CFP', icon: FileText },

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-const STATUS_LABEL: Record<string, { label: string; variant: 'muted' | 'info' | 'warning' | 'success' | 'danger'; icon: React.ComponentType<{ className?: string }> }> = {
+const STATUS_LABEL: Record<string, { label: string; variant: 'muted' | 'info' | 'warning' | 'success' | 'danger'; icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }> }> = {
   PENDING_FORM: { label: 'Lien envoyé · attente', variant: 'muted', icon: Clock },
   SUBMITTED: { label: 'Reçu · à analyser', variant: 'info', icon: Inbox },
   EXTRACTING: { label: 'IA en cours…', variant: 'info', icon: Sparkles },
@@ -178,7 +178,7 @@ function KpiPill({
   value,
   tone,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
   value: number;
   tone: 'default' | 'success' | 'warning' | 'muted';

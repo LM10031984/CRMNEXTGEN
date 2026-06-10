@@ -25,7 +25,7 @@ import type { UserRole } from '@qualiof/db';
 export interface NavItem {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   /**
    * Rôles autorisés à voir cet item dans la sidebar.
    *

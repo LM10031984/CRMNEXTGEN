@@ -18,7 +18,7 @@ import { useState, useTransition } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreVertical, Pencil, Archive } from 'lucide-react';
 import { toast } from 'sonner';
-import type { RegulatoryWatch } from '@qualiof/db';
+import type { RegulatoryWatch } from '@prisma/client';
 import { archiveWatch } from '@/server/actions/veille';
 import { EditVeilleDialog } from './edit-veille-dialog';
 

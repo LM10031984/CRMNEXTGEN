@@ -17,7 +17,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Pencil } from 'lucide-react';
-import type { RegulatoryWatch } from '@qualiof/db';
+import type { RegulatoryWatch } from '@prisma/client';
 import {
   updateWatchSchema,
   type UpdateWatchInput,

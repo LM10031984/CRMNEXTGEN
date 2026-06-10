@@ -32,7 +32,7 @@ import {
 } from '@/server/actions/search-universal';
 import { loadRecents, saveRecent, type RecentItem } from '@/lib/cmdk-recents';
 
-const KIND_ICON: Record<UniversalHit['kind'], React.ComponentType<{ className?: string }>> = {
+const KIND_ICON: Record<UniversalHit['kind'], React.ComponentType<{ className?: string; strokeWidth?: number | string }>> = {
   person: User,
   org: Building2,
   session: Calendar,
@@ -231,7 +231,7 @@ function GroupHeader({
   icon: Icon,
   label,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number | string }>;
   label: string;
 }) {
   return (
