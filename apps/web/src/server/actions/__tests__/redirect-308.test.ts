@@ -13,7 +13,9 @@ import nextConfig from '../../../../next.config.mjs';
  */
 describe('next.config.mjs redirects — Phase 12 D-02 reverse alias', () => {
   it('redirige /app/preinscriptions → /app/inscriptions (308)', async () => {
-    const list = await nextConfig.redirects();
+    // `redirects` est optionnel dans le type NextConfig — on l'assume présent
+    // ici (HOTFIX 4 : retire TS2722/TS18048 sans changer le comportement testé).
+    const list = await nextConfig.redirects!();
     expect(list).toContainEqual(
       expect.objectContaining({
         source: '/app/preinscriptions',
@@ -24,7 +26,9 @@ describe('next.config.mjs redirects — Phase 12 D-02 reverse alias', () => {
   });
 
   it('redirige /app/preinscriptions/:path* → /app/inscriptions/:path*', async () => {
-    const list = await nextConfig.redirects();
+    // `redirects` est optionnel dans le type NextConfig — on l'assume présent
+    // ici (HOTFIX 4 : retire TS2722/TS18048 sans changer le comportement testé).
+    const list = await nextConfig.redirects!();
     expect(list).toContainEqual(
       expect.objectContaining({
         source: '/app/preinscriptions/:path*',
@@ -35,7 +39,9 @@ describe('next.config.mjs redirects — Phase 12 D-02 reverse alias', () => {
   });
 
   it('préserve les redirects historiques BUG-03 (chaîne pre-inscriptions → preinscriptions → inscriptions OK pour browser)', async () => {
-    const list = await nextConfig.redirects();
+    // `redirects` est optionnel dans le type NextConfig — on l'assume présent
+    // ici (HOTFIX 4 : retire TS2722/TS18048 sans changer le comportement testé).
+    const list = await nextConfig.redirects!();
     expect(list).toContainEqual(
       expect.objectContaining({
         source: '/app/pre-inscriptions',
