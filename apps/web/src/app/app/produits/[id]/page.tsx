@@ -15,6 +15,8 @@ import { ProductStatsTab } from '@/components/produits/tabs/product-stats-tab';
 import { ProductSessionsTab } from '@/components/produits/tabs/product-sessions-tab';
 import { ProductLearnersTab } from '@/components/produits/tabs/product-learners-tab';
 import { ProductProgrammeTab } from '@/components/produits/tabs/product-programme-tab';
+// Phase 9.3 Plan 09.3-03 — NAV-02(b)(c) : onglet Documents (liste unifiée toutes sources).
+import { ProductDocsTab } from '@/components/produits/tabs/product-docs-tab';
 import { ProductSatisfactionPanel } from '@/components/produits/product-satisfaction-panel';
 import { PriceMissingBanner } from '@/components/produits/price-missing-banner';
 import {
@@ -58,6 +60,7 @@ const VALID_TABS: readonly ProductTabId[] = [
   'sessions',
   'apprenants',
   'programme',
+  'docs',
 ] as const;
 
 function coerceTab(raw: string | undefined): ProductTabId {
@@ -211,6 +214,10 @@ export default async function ProductDetailPage({
             aiDraftedAt={product.aiDraftedAt}
             canValidateAiDraft={['ADMIN', 'MANAGER'].includes(user.role)}
           />
+        )}
+        {/* Phase 9.3 NAV-02(b)(c) — onglet Documents (lazy : fetch côté ProductDocsTab). */}
+        {activeTab === 'docs' && (
+          <ProductDocsTab productId={product.id} tenantId={user.tenantId} />
         )}
       </div>
     </div>
