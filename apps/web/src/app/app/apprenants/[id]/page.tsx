@@ -36,8 +36,8 @@ import {
   type ParticipationForStats,
 } from '@/lib/learner-stats';
 import { MATRIX_DOC_TYPES } from '@/lib/doc-scope';
-// Phase 9.3 Plan 03 — l'onglet Documents consomme le résolveur UNION 6 sources.
-import { resolveDocs } from '@/lib/resolve-docs';
+// Phase 9.3 Plan 03 — l'onglet Documents consomme le résolveur UNION 6 tables sources.
+import { resolveDocs, unifiedDocKey } from '@/lib/resolve-docs';
 // Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche apprenant.
 import { LearnerInvoicesBlock } from '@/components/learners/learner-invoices-block';
 
@@ -74,7 +74,7 @@ export default async function ApprenantDetailPage({
               legalForm: true,
               siret: true,
               opcoCode: true,
-              ageficeProfile: { select: { cfpAttestationKey: true } },
+              ageficeProfile: { select: { id: true, cfpAttestationKey: true } },
             },
           },
         },
@@ -213,6 +213,7 @@ export default async function ApprenantDetailPage({
     pedagogicalAssets: rawAssets.filter((a) => a.pdfUrl),
     identity: {
       personId: person.id,
+      sensitiveDataId: person.sensitiveData?.id ?? null,
       ribKey: person.ribKey,
       idDocumentUrl: person.sensitiveData?.idDocumentUrl ?? null,
       idDocumentType: person.sensitiveData?.idDocumentType ?? null,
@@ -220,6 +221,7 @@ export default async function ApprenantDetailPage({
     cfpAttestations: person.legalLinks
       .filter((l) => l.organization.ageficeProfile?.cfpAttestationKey)
       .map((l) => ({
+        ageficeProfileId: l.organization.ageficeProfile?.id ?? l.organization.id,
         organizationId: l.organization.id,
         personId: person.id,
         cfpAttestationKey: l.organization.ageficeProfile?.cfpAttestationKey ?? null,
@@ -228,16 +230,16 @@ export default async function ApprenantDetailPage({
 
   const documents: DocItem[] = [
     ...unifiedDocs.map((u) => ({
-      key: `${u.source}:${u.sourceId}`,
+      key: unifiedDocKey(u),
       label: u.label,
       href: u.href,
       sessionId: u.sessionId,
       createdAt: u.generatedAt,
       pillarKey:
-        u.source === 'pedagogical_asset'
+        u.sourceTable === 'PedagogicalAsset'
           ? ('pedagogique' as const)
           : (QUALIOPI_PILLAR[u.docType ?? ''] ?? ('admin' as const)),
-      sortGroup: u.source === 'pedagogical_asset' ? 1 : 0,
+      sortGroup: u.sourceTable === 'PedagogicalAsset' ? 1 : 0,
       usedStub: u.usedStub,
     })),
     ...filteredInvoices.map((inv) => ({

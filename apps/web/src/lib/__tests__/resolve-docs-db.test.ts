@@ -52,12 +52,12 @@ describe('resolveDocsForLearner — scoping tenant (PII)', () => {
     vi.mocked(prisma.person.findFirst).mockResolvedValue({
       id: 'pers-1',
       ribKey: 'rib/pers-1.pdf',
-      sensitiveData: { idDocumentUrl: 'cni/pers-1.pdf', idDocumentType: 'CNI' },
+      sensitiveData: { id: 'sd-1', idDocumentUrl: 'cni/pers-1.pdf', idDocumentType: 'CNI' },
       legalLinks: [
         {
           organization: {
             id: 'org-1',
-            ageficeProfile: { cfpAttestationKey: 'cfp/org-1.pdf' },
+            ageficeProfile: { id: 'agf-1', cfpAttestationKey: 'cfp/org-1.pdf' },
           },
         },
       ],
@@ -89,9 +89,9 @@ describe('resolveDocsForLearner — scoping tenant (PII)', () => {
     const result = await resolveDocsForLearner(TENANT, 'pers-1');
 
     expect(result).not.toBeNull();
-    const sources = result!.map((d) => d.source).sort();
-    expect(sources).toEqual(
-      ['agefice_cfp', 'document', 'pedagogical_asset', 'person_rib', 'sensitive_cni'].sort(),
+    const tables = result!.map((d) => d.sourceTable).sort();
+    expect(tables).toEqual(
+      ['AgeficeProfile', 'Document', 'PedagogicalAsset', 'Person', 'SensitiveData'].sort(),
     );
     expect(result!.find((d) => d.sourceId === 'asset-1')?.usedStub).toBe(true);
 
@@ -114,7 +114,7 @@ describe('resolveDocsForLearner — scoping tenant (PII)', () => {
 
     const result = await resolveDocsForLearner(TENANT, 'pers-2');
 
-    expect(result!.map((d) => d.source)).toEqual(['person_rib']);
+    expect(result!.map((d) => d.sourceTable)).toEqual(['Person']);
     expect(prisma.document.findMany).not.toHaveBeenCalled();
     expect(prisma.pedagogicalAsset.findMany).not.toHaveBeenCalled();
   });
@@ -179,13 +179,13 @@ describe('resolveDocsForTenant', () => {
 
     const result = await resolveDocsForTenant(TENANT);
 
-    const markdown = result.find((d) => d.source === 'tenant_markdown');
-    const pdf = result.find((d) => d.source === 'document');
+    const markdown = result.find((d) => d.sourceTable === 'Tenant');
+    const pdf = result.find((d) => d.sourceTable === 'Document' && d.scope === 'tenant');
     expect(markdown?.docType).toBe('CGV');
     expect(pdf?.scope).toBe('tenant');
     // RI non rédigé → pas d'entrée fantôme
     expect(
-      result.find((d) => d.source === 'tenant_markdown' && d.docType === 'REGLEMENT_INTERIEUR'),
+      result.find((d) => d.sourceTable === 'Tenant' && d.docType === 'REGLEMENT_INTERIEUR'),
     ).toBeUndefined();
   });
 });

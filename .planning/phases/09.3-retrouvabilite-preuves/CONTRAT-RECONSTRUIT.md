@@ -22,15 +22,19 @@ Implémentation concernée :
 
 ---
 
-## R-01 — Contrat UnifiedDoc (≙ D-09.3 contrat figé) ⚠
+## R-01 — Contrat UnifiedDoc (≙ D-09.3 contrat figé) ✅ CORRIGÉ 2026-06-10
 
-Champs implémentés :
+**Verdict Laurent (2026-06-10)** : le contrat verrouillé est `sourceTable` +
+`sourceId` (référence polymorphe, topologie réelle des tables) — l'enum
+métier initial cassait la résolution polymorphe au read-layer. **Correctif
+appliqué** (commit même jour) :
 
 ```ts
 {
-  source: 'document' | 'pedagogical_asset' | 'person_rib' | 'sensitive_cni'
-        | 'agefice_cfp' | 'tenant_markdown';
-  sourceId: string;          // id de row, ou clé synthétique `{source}:{ownerId}`
+  sourceTable: 'Document' | 'PedagogicalAsset' | 'Person' | 'SensitiveData'
+             | 'AgeficeProfile' | 'Tenant';   // tables Prisma réelles
+  sourceId: string;          // id de la ROW source (Person.id, SensitiveData.id,
+                             // AgeficeProfile.id, Tenant.id — plus de clés synthétiques)
   docType: string | null;    // DocType Prisma si applicable
   label: string;             // FR, depuis doc-scope DOC_TYPE_LABELS.long
   scope: 'participant' | 'session' | 'product' | 'invoice' | 'person'
@@ -44,23 +48,33 @@ Champs implémentés :
 }
 ```
 
-⚠ **Divergence suspectée** : la formulation locale parle de
-`sourceTable` + `sourceId` (même paire que la preuve polymorphe de T7).
-J'ai nommé le discriminant `source` (valeurs métier snake_case), pas
-`sourceTable` (noms de tables Prisma). Si le contrat local impose
-`sourceTable: 'Document' | 'PedagogicalAsset' | …`, renommage + remappage
-des valeurs à faire (impact : resolver, 3 surfaces, tests — mécanique).
+Note : (sourceTable, sourceId) n'est pas unique pour Tenant (CGV + RI =
+même row) → helper `unifiedDocKey()` ajoute docType pour les clés UI.
+Même paire polymorphe que la preuve de T7 (`sourceTable` + `sourceId`) —
+cohérence prête pour la check-list de session.
 
-## R-02 — Énumération des sources ⚠
+## R-02 — Énumération des sources ⚠ ARBITRAGE REQUIS (preuve schéma fournie)
 
-Implémenté : **6 sources**, CNI et RIB comptés séparément
-(`sensitive_cni` ← SensitiveData.idDocumentUrl ; `person_rib` ← Person.ribKey).
+**Verdict Laurent** : une source = un emplacement de stockage (table),
+pas un type documentaire. Hypothèse associée : « CNI et RIB vivent
+vraisemblablement tous deux dans la table Document » → compte à 5.
 
-⚠ **Divergence suspectée** : Laurent mentionne « le test cinq sources ».
-Si le découpage local compte 5 (p.ex. « champs CNI/RIB » = 1 source
-"pièces identité", ou markdown tenant hors périmètre du test), le test
-comportemental 6-sources et l'enum doivent être réalignés. À trancher
-contre `MATRICE-NAVIGATION-DOCS.md`.
+**Contre-preuve schéma (`packages/db/prisma/schema.prisma`)** :
+- `Person.ribKey` — **l.155** (RIB scanné MinIO)
+- `SensitiveData.idDocumentUrl` — **l.185** (CNI/pièce d'identité, table 1:1 séparée RGPD)
+- ni l'un ni l'autre ne sont des rows `Document`.
+
+En topologie de tables, l'union couvre donc **6 tables** : Document,
+PedagogicalAsset, Person, SensitiveData, AgeficeProfile, Tenant. Le plan
+directeur (Bloc A, 09.3-01) dit lui-même « test comportemental 6-sources ».
+Le test par mutation garde désormais une assertion **par table** — il
+détecte la disparition d'une table source (le faux-positif type-vs-table
+est éliminé par le correctif R-01).
+
+⚠ Reste à arbitrer contre `MATRICE-NAVIGATION-DOCS.md` locale : si elle
+compte 5, dire laquelle de ces 6 tables n'en fait pas partie (ou si
+PreEnrollment — cniKey/ribKey/cfpKey l.1307-1309, pré-conversion — devait
+y figurer en 7e).
 
 ## R-03 — Règle PII / scoping tenant
 
@@ -151,8 +165,8 @@ corrections explicites du plan directeur sont verrouillées.
 
 ## Checklist de validation (à cocher par Laurent)
 
-- [ ] R-01 vs contrat UnifiedDoc figé (naming `source`/`sourceTable`, champs manquants ?)
-- [ ] R-02 vs découpage officiel des sources (5 ou 6 ? périmètre du test)
+- [x] R-01 vs contrat UnifiedDoc figé — **tranché et corrigé** : `sourceTable` + `sourceId` polymorphe (2026-06-10)
+- [ ] R-02 vs découpage officiel des sources — principe « source = table » appliqué ; compte 6 vs 5 à arbitrer contre MATRICE locale (preuve schéma l.155/185 fournie ci-dessus)
 - [ ] R-03 vs D-09.3 PII
 - [ ] R-04 vs définition usedStub (asset seul ou + ClosureJob ?)
 - [ ] R-05/R-06 vs triage + 7 corrections exactes

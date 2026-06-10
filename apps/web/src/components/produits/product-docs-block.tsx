@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { FileText, ChevronRight } from 'lucide-react';
 import { resolveDocsForProduct } from '@/lib/resolve-docs-db';
+import { unifiedDocKey } from '@/lib/resolve-docs';
 
 /**
  * Phase 9.3 Plan 03 (surface 2/3) — bloc Documents de la fiche produit.
@@ -38,7 +39,7 @@ export async function ProductDocsBlock({
       ) : (
         <ul className="divide-y divide-border">
           {docs.map((d) => (
-            <li key={`${d.source}:${d.sourceId}`}>
+            <li key={unifiedDocKey(d)}>
               <Link
                 href={d.href as never}
                 target={d.href.startsWith('/api/') ? '_blank' : undefined}

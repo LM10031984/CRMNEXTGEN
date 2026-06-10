@@ -44,13 +44,13 @@ export async function resolveDocsForLearner(
     select: {
       id: true,
       ribKey: true,
-      sensitiveData: { select: { idDocumentUrl: true, idDocumentType: true } },
+      sensitiveData: { select: { id: true, idDocumentUrl: true, idDocumentType: true } },
       legalLinks: {
         select: {
           organization: {
             select: {
               id: true,
-              ageficeProfile: { select: { cfpAttestationKey: true } },
+              ageficeProfile: { select: { id: true, cfpAttestationKey: true } },
             },
           },
         },
@@ -87,6 +87,7 @@ export async function resolveDocsForLearner(
     .map((link) => link.organization)
     .filter((org) => org.ageficeProfile?.cfpAttestationKey)
     .map((org) => ({
+      ageficeProfileId: org.ageficeProfile!.id,
       organizationId: org.id,
       personId: person.id,
       cfpAttestationKey: org.ageficeProfile!.cfpAttestationKey,
@@ -97,6 +98,7 @@ export async function resolveDocsForLearner(
     pedagogicalAssets,
     identity: {
       personId: person.id,
+      sensitiveDataId: person.sensitiveData?.id ?? null,
       ribKey: person.ribKey,
       idDocumentUrl: person.sensitiveData?.idDocumentUrl ?? null,
       idDocumentType: person.sensitiveData?.idDocumentType ?? null,
@@ -142,6 +144,7 @@ export async function resolveDocsForTenant(tenantId: string): Promise<UnifiedDoc
     pedagogicalAssets: [],
     tenantLegal: tenant
       ? {
+          tenantId,
           cgvMarkdown: tenant.cgvMarkdown,
           reglementInterieurMarkdown: tenant.reglementInterieurMarkdown,
         }

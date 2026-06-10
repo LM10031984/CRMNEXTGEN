@@ -1,14 +1,19 @@
 /**
  * Phase 9.3 (plan 09.3-01) — résolveur lecture seule `resolveDocs`.
  *
- * Le stockage documentaire est éclaté sur 6 sources (audit
- * MATRICE-NAVIGATION-DOCS, plan directeur Partie 1 §3) :
+ * Le stockage documentaire est éclaté sur 6 tables sources (audit
+ * MATRICE-NAVIGATION-DOCS, plan directeur Partie 1 §3 — schema.prisma) :
  *   1. Document            (entityType participant/session/product/invoice/tenant)
  *   2. PedagogicalAsset    (session-wide ou par participant)
- *   3. Person.ribKey
- *   4. SensitiveData.idDocumentUrl (CNI / pièce d'identité)
- *   5. AgeficeProfile.cfpAttestationKey (attestation CFP)
- *   6. Tenant.cgvMarkdown / reglementInterieurMarkdown
+ *   3. Person              (.ribKey, l.155)
+ *   4. SensitiveData       (.idDocumentUrl — CNI / pièce d'identité, l.185)
+ *   5. AgeficeProfile      (.cfpAttestationKey, l.1267)
+ *   6. Tenant              (.cgvMarkdown / .reglementInterieurMarkdown, l.51-52)
+ *
+ * Contrat verrouillé D-09.3 (correctif 2026-06-10) : la référence est
+ * POLYMORPHE — `sourceTable` (nom de la table Prisma, topologie réelle)
+ * + `sourceId` (id de la row). Pas d'enum métier au read-layer : le
+ * discriminant suit les tables, le type documentaire vit dans `docType`.
  *
  * Ce module est PUR (aucun IO, aucun import Prisma) : il prend des rows
  * pré-chargées et produit l'UNION `UnifiedDoc[]`. Les wrappers Prisma
@@ -21,13 +26,14 @@
 
 import { DOC_TYPE_LABELS } from './doc-scope';
 
-export type UnifiedDocSource =
-  | 'document'
-  | 'pedagogical_asset'
-  | 'person_rib'
-  | 'sensitive_cni'
-  | 'agefice_cfp'
-  | 'tenant_markdown';
+/** Tables sources de l'union — topologie réelle du schéma Prisma. */
+export type UnifiedDocSourceTable =
+  | 'Document'
+  | 'PedagogicalAsset'
+  | 'Person'
+  | 'SensitiveData'
+  | 'AgeficeProfile'
+  | 'Tenant';
 
 export type UnifiedDocScope =
   | 'participant'
@@ -40,8 +46,8 @@ export type UnifiedDocScope =
 
 /** Contrat UnifiedDoc — sortie unique du résolveur, consommée par les 3 surfaces UI (09.3-03). */
 export type UnifiedDoc = {
-  source: UnifiedDocSource;
-  /** id de la row source, ou clé synthétique `{source}:{ownerId}` pour les champs-fichiers. */
+  /** Référence polymorphe : table Prisma source + id de la row. */
+  sourceTable: UnifiedDocSourceTable;
   sourceId: string;
   /** DocType Prisma quand applicable (null pour RIB/CNI/CFP). */
   docType: string | null;
@@ -79,16 +85,22 @@ export type ResolveDocsInput = {
   }>;
   identity?: {
     personId: string;
+    /** id de la row SensitiveData (référence polymorphe CNI). */
+    sensitiveDataId?: string | null;
     ribKey: string | null;
     idDocumentUrl: string | null;
     idDocumentType: string | null;
   } | null;
   cfpAttestations?: Array<{
+    /** id de la row AgeficeProfile (référence polymorphe CFP). */
+    ageficeProfileId: string;
     organizationId: string;
     personId: string;
     cfpAttestationKey: string | null;
   }>;
   tenantLegal?: {
+    /** id de la row Tenant (référence polymorphe docs légaux). */
+    tenantId: string;
     cgvMarkdown: string | null;
     reglementInterieurMarkdown: string | null;
   } | null;
@@ -136,17 +148,22 @@ function hasText(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+/** Clé React/DOM unique — (sourceTable, sourceId) ne suffit pas pour Tenant (CGV + RI = même row). */
+export function unifiedDocKey(doc: UnifiedDoc): string {
+  return `${doc.sourceTable}:${doc.sourceId}:${doc.docType ?? ''}`;
+}
+
 /**
- * UNION lecture seule des 6 sources documentaires → UnifiedDoc[],
+ * UNION lecture seule des 6 tables sources → UnifiedDoc[],
  * triée generatedAt desc, entrées sans date (identité / tenant) en fin.
  */
 export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
   const out: UnifiedDoc[] = [];
 
-  // Source 1 — Document
+  // Table 1 — Document
   for (const doc of input.documents) {
     out.push({
-      source: 'document',
+      sourceTable: 'Document',
       sourceId: doc.id,
       docType: doc.type,
       label: labelForDocType(doc.type),
@@ -160,11 +177,11 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     });
   }
 
-  // Source 2 — PedagogicalAsset
+  // Table 2 — PedagogicalAsset
   for (const asset of input.pedagogicalAssets) {
     const docType = PED_KIND_TO_DOC_TYPE[asset.kind] ?? null;
     out.push({
-      source: 'pedagogical_asset',
+      sourceTable: 'PedagogicalAsset',
       sourceId: asset.id,
       docType,
       label: docType
@@ -182,13 +199,13 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     });
   }
 
-  // Sources 3 + 4 — Person.ribKey / SensitiveData.idDocumentUrl
+  // Tables 3 + 4 — Person.ribKey / SensitiveData.idDocumentUrl
   if (input.identity) {
-    const { personId, ribKey, idDocumentUrl, idDocumentType } = input.identity;
+    const { personId, sensitiveDataId, ribKey, idDocumentUrl, idDocumentType } = input.identity;
     if (hasText(idDocumentUrl)) {
       out.push({
-        source: 'sensitive_cni',
-        sourceId: `sensitive_cni:${personId}`,
+        sourceTable: 'SensitiveData',
+        sourceId: sensitiveDataId ?? personId,
         docType: null,
         label: `Pièce d'identité (${idDocumentType ?? 'CNI'})`,
         scope: 'person',
@@ -202,8 +219,8 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     }
     if (hasText(ribKey)) {
       out.push({
-        source: 'person_rib',
-        sourceId: `person_rib:${personId}`,
+        sourceTable: 'Person',
+        sourceId: personId,
         docType: null,
         label: 'RIB',
         scope: 'person',
@@ -217,12 +234,12 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     }
   }
 
-  // Source 5 — AgeficeProfile.cfpAttestationKey
+  // Table 5 — AgeficeProfile.cfpAttestationKey
   for (const cfp of input.cfpAttestations ?? []) {
     if (!hasText(cfp.cfpAttestationKey)) continue;
     out.push({
-      source: 'agefice_cfp',
-      sourceId: `agefice_cfp:${cfp.organizationId}`,
+      sourceTable: 'AgeficeProfile',
+      sourceId: cfp.ageficeProfileId,
       docType: null,
       label: 'Attestation CFP (AGEFICE)',
       scope: 'organization',
@@ -235,7 +252,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     });
   }
 
-  // Source 6 — markdown tenant (CGV / Règlement intérieur)
+  // Table 6 — Tenant (markdown CGV / Règlement intérieur)
   if (input.tenantLegal) {
     const entries: Array<{ docType: 'CGV' | 'REGLEMENT_INTERIEUR'; markdown: string | null; label: string }> = [
       { docType: 'CGV', markdown: input.tenantLegal.cgvMarkdown, label: 'Conditions Générales de Vente' },
@@ -248,8 +265,8 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     for (const entry of entries) {
       if (!hasText(entry.markdown)) continue;
       out.push({
-        source: 'tenant_markdown',
-        sourceId: `tenant_markdown:${entry.docType}`,
+        sourceTable: 'Tenant',
+        sourceId: input.tenantLegal.tenantId,
         docType: entry.docType,
         label: entry.label,
         scope: 'tenant',

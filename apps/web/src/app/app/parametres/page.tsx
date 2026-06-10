@@ -68,7 +68,7 @@ export default async function ParametresPage() {
   // pour liens directs dans la section Documents légaux (recette ≤ 2 clics).
   const tenantDocs = await resolveDocsForTenant(user.tenantId);
   const legalPdfDocs = tenantDocs
-    .filter((d) => d.source === 'document')
+    .filter((d) => d.sourceTable === 'Document')
     .filter((d, idx, arr) => arr.findIndex((x) => x.docType === d.docType) === idx);
 
   if (!tenant) {
