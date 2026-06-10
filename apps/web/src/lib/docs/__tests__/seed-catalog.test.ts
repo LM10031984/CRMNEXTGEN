@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   MATRIX_DOC_TYPES,
   QUALIOPI_DOC_CATALOG_INDICATORS,
+  DOC_INDICATORS,
 } from '../../doc-scope';
 
 /**
@@ -83,18 +84,25 @@ describe('seed QualiopiDocCatalog — recette 0 drift (NAV-05 / NAV-04)', () => 
   it('Test 1 — AGEFICE → null (administratif)', () => {
     expect(seeded.get('AGEFICE')).toBeNull();
   });
-  it('Test 1 — CERTIFICAT_REALISATION conserve Légal Art. L6353-1', () => {
-    expect(seeded.get('CERTIFICAT_REALISATION')).toBe('Légal Art. L6353-1');
+  // CORRECTION 2 (V9 Kaïna) — le certificat de réalisation se range dans l'ind. 11.
+  it('Test 1 — CERTIFICAT_REALISATION → Indicateur 11 (CORRECTION 2)', () => {
+    expect(seeded.get('CERTIFICAT_REALISATION')).toBe('Indicateur 11');
   });
 
-  // --- Test 2 (NAV-05) : les inchangés ---
-  it('Test 2 — EMARGEMENT / ASSIDUITE → Indicateur 12 (inchangés)', () => {
+  // --- Test 2 (NAV-05) : émargement = seule preuve ind. 12 ---
+  it('Test 2 — EMARGEMENT → Indicateur 12 (seule preuve ind. 12)', () => {
     expect(seeded.get('EMARGEMENT')).toBe('Indicateur 12');
-    expect(seeded.get('ASSIDUITE')).toBe('Indicateur 12');
   });
-  it('Test 2 — EVALUATION_ACQUIS / ATTESTATION_FIN → Indicateur 11 (inchangés)', () => {
+  // CORRECTION 1 (V9 Laurent) — l'assiduité AGEFICE n'est PAS une preuve Qualiopi.
+  it('Test 2 — ASSIDUITE → null (pièce financeur, CORRECTION 1)', () => {
+    expect(seeded.get('ASSIDUITE')).toBeNull();
+  });
+  it('Test 2 — EVALUATION_ACQUIS → Indicateur 11 (inchangé)', () => {
     expect(seeded.get('EVALUATION_ACQUIS')).toBe('Indicateur 11');
-    expect(seeded.get('ATTESTATION_FIN')).toBe('Indicateur 11');
+  });
+  // CORRECTION 2 (swap) — l'attestation de fin devient « Légal » pur.
+  it('Test 2 — ATTESTATION_FIN → Légal Art. L6353-1 (CORRECTION 2 swap)', () => {
+    expect(seeded.get('ATTESTATION_FIN')).toBe('Légal Art. L6353-1');
   });
 
   // --- Test 3 (NAV-04) : triage fantômes ---
@@ -121,5 +129,75 @@ describe('seed QualiopiDocCatalog — recette 0 drift (NAV-05 / NAV-04)', () => 
         `${docType} : seed=${JSON.stringify(seeded.get(docType))} attendu=${JSON.stringify(expected)}`,
       ).toBe(expected);
     }
+  });
+});
+
+/**
+ * CORRECTION V9 (tranchées Laurent / Kaïna audit blanc) — mapping `DOC_INDICATORS`
+ * (table LUE par le résolveur, miroir étendu du catalogue). Verrouille les 3
+ * décisions :
+ *  - ASSIDUITE → null (pièce financeur, la preuve ind. 12 est l'émargement) ;
+ *  - CERTIFICAT_REALISATION → 'Indicateur 11' (rangé ind. 11 par Kaïna) ;
+ *  - ATTESTATION_FIN → 'Légal Art. L6353-1' (swap : 11 part au certificat).
+ */
+describe('DOC_INDICATORS — corrections V9 (résolveur)', () => {
+  it('ASSIDUITE → null (CORRECTION 1)', () => {
+    expect(DOC_INDICATORS.ASSIDUITE).toBeNull();
+  });
+  it('CERTIFICAT_REALISATION → Indicateur 11 (CORRECTION 2)', () => {
+    expect(DOC_INDICATORS.CERTIFICAT_REALISATION).toBe('Indicateur 11');
+  });
+  it('ATTESTATION_FIN → Légal Art. L6353-1 (CORRECTION 2 swap)', () => {
+    expect(DOC_INDICATORS.ATTESTATION_FIN).toBe('Légal Art. L6353-1');
+  });
+  it('EMARGEMENT reste seul porteur de Indicateur 12', () => {
+    expect(DOC_INDICATORS.EMARGEMENT).toBe('Indicateur 12');
+    const ind12 = Object.entries(DOC_INDICATORS)
+      .filter(([, v]) => v === 'Indicateur 12')
+      .map(([k]) => k);
+    expect(ind12).toEqual(['EMARGEMENT']);
+  });
+});
+
+/**
+ * CORRECTION 3 (V9 Laurent) — captions d'étape (curatées EN DUR, prop `qualiopi`).
+ * Lecture source des composants (même pattern de recette que le seed) :
+ *  - Préparation = Ind 1 · 4 · 5 · 6 · 9 · 17 → DOIT contenir « 5 », NE DOIT PAS
+ *    contenir « 8 » ;
+ *  - aucune caption ne doit ré-introduire « 27 » (sous-traitance, hors scope).
+ */
+describe('Captions d’étape — CORRECTION 3 (1·4·5·6·9·17 et pas de 8/27)', () => {
+  const PREP_PATH = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../components/sessions/preparation-pedagogique-block.tsx',
+  );
+  const PACK_PATH = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../components/sessions/closure-formation-block.tsx',
+  );
+
+  /** Extrait la valeur de la prop `qualiopi="…"` du composant. */
+  function readQualiopiCaption(file: string): string {
+    const src = readFileSync(file, 'utf8');
+    const m = src.match(/qualiopi="([^"]+)"/);
+    expect(m, `prop qualiopi="…" introuvable dans ${file}`).not.toBeNull();
+    return m![1]!;
+  }
+
+  it('Préparation = « Ind 1 · 4 · 5 · 6 · 9 · 17 »', () => {
+    expect(readQualiopiCaption(PREP_PATH)).toBe('Ind 1 · 4 · 5 · 6 · 9 · 17');
+  });
+  it('Préparation CONTIENT « 5 » et NE CONTIENT PAS « 8 »', () => {
+    const caption = readQualiopiCaption(PREP_PATH);
+    const nums = caption.match(/\d+/g) ?? [];
+    expect(nums).toContain('5');
+    expect(nums).not.toContain('8');
+  });
+  it('Pack = « Ind 8 · 11 · 12 · 30 » (inchangé, validé Laurent)', () => {
+    expect(readQualiopiCaption(PACK_PATH)).toBe('Ind 8 · 11 · 12 · 30');
+  });
+  it('Aucune caption ne contient « 27 » (sous-traitance hors scope)', () => {
+    expect(readQualiopiCaption(PREP_PATH)).not.toContain('27');
+    expect(readQualiopiCaption(PACK_PATH)).not.toContain('27');
   });
 });

@@ -270,11 +270,13 @@ describe('resolveDocs — indicateurs depuis le catalogue (CORRECTION 1, source 
   it('CONVENTION → "Indicateur 9"', () => {
     expect(docOfType('CONVENTION').qualiopiIndicator).toBe('Indicateur 9');
   });
-  it('ATTESTATION_FIN → "Indicateur 11"', () => {
-    expect(docOfType('ATTESTATION_FIN').qualiopiIndicator).toBe('Indicateur 11');
+  // CORRECTION 2 V9 (swap) — l'attestation de fin devient « Légal » pur,
+  // le certificat de réalisation récupère l'ind. 11.
+  it('ATTESTATION_FIN → "Légal Art. L6353-1" (CORRECTION 2 swap)', () => {
+    expect(docOfType('ATTESTATION_FIN').qualiopiIndicator).toBe('Légal Art. L6353-1');
   });
-  it('CERTIFICAT_REALISATION → "Légal Art. L6353-1" (jamais un numéro nu)', () => {
-    expect(docOfType('CERTIFICAT_REALISATION').qualiopiIndicator).toBe('Légal Art. L6353-1');
+  it('CERTIFICAT_REALISATION → "Indicateur 11" (CORRECTION 2, jamais un numéro nu)', () => {
+    expect(docOfType('CERTIFICAT_REALISATION').qualiopiIndicator).toBe('Indicateur 11');
   });
   it('AGEFICE → null (administratif, PAS « Ind 27 »)', () => {
     expect(docOfType('AGEFICE').qualiopiIndicator).toBeNull();
