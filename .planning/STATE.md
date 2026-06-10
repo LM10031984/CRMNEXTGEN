@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 09.3-02-PLAN.md
-last_updated: "2026-06-10T09:17:41.753Z"
+stopped_at: "09.3-03 — 3 tâches AUTO faites, CHECKPOINT visuel Task 4 EN ATTENTE (vérif :3010 ≤2 clics + stub non conforme)"
+last_updated: "2026-06-10T09:25:26.823Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 16
   completed_phases: 9
   total_plans: 84
-  completed_plans: 51
+  completed_plans: 52
 ---
 
 # STATE — QualiOF
@@ -21,14 +21,14 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 09.3 — navigation-documentaire-unifi-e
+**Current focus:** Phase 09.2 — r-conciliation-base-3-sources-airtable-smartof-tr-so-agefice
 
 ---
 
 ## Current Position
 
-Phase: 09.3 (navigation-documentaire-unifi-e) — EXECUTING
-Plan: 3 of 4
+Phase: 09.2 (r-conciliation-base-3-sources-airtable-smartof-tr-so-agefice) — EXECUTING
+Plan: 1 of 8
 
 ## Accumulated Context
 
@@ -244,7 +244,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 09.3-02-PLAN.md
+Stopped at: 09.3-03 — 3 tâches AUTO faites, CHECKPOINT visuel Task 4 EN ATTENTE (vérif :3010 ≤2 clics + stub non conforme)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
