@@ -5,8 +5,13 @@
  *   +50 si ≥1 stagiaire matché (Person inscrit en SessionParticipant)
  *   +30 si date début ±2 j
  *   +20 si date fin ±2 j
- *   +20 si montant total ±5 %
+ *   +15 si nb stagiaires Tréso == nb participants session (section 4 — remplace le montant)
  *   +10 si organisme OPCO (Organization.opcoCode) cohérent
+ *
+ * Le MONTANT n'est PLUS un critère d'ENTRÉE (correctif 09.2 section 4 : le montant
+ * base est potentiellement faux — 336€×52 — donc un match "réussi" sur le montant
+ * confortait le bug). Il ne sert qu'au DÉPARTAGE entre candidats à score d'entrée
+ * ÉGAL (section 4 étape 3 ; justifié RECONCILE-RULES « Modification de script autorisée »).
  *
  * Score ≥ 70  → match auto
  * Score 40-70 → AMBIGU (à présenter pour décision)
@@ -21,7 +26,7 @@
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as XLSX from 'xlsx';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,10 +38,6 @@ import { prisma, Prisma } from '@qualiof/db';
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const filePath = args.find((a) => !a.startsWith('--'));
-if (!filePath) {
-  console.error('Usage : pnpm tsx scripts/match-treso-agefice.ts <xlsx-path>');
-  process.exit(1);
-}
 
 // ── Helpers parsing ─────────────────────────────────────────────
 
@@ -156,9 +157,128 @@ function parseTresoRow(r: Record<string, unknown>, sheet: string, rowNum: number
   };
 }
 
+// ── Scoring (section 4 — exporté pour testabilité) ──────────────
+
+/** Signature minimale d'une session candidate (objet réel ou mock de test). */
+export interface SigLike {
+  session: {
+    code?: string;
+    id?: string;
+    startDate: Date;
+    endDate: Date;
+    participants: unknown[];
+  };
+  stagNames: Set<string>;
+  total: number;
+  opcos: Set<string>;
+}
+
+/** Champs Tréso lus par le scoring (objet réel ou mock de test). */
+export interface TresoLike {
+  dateRange: { start: Date; end: Date } | null;
+  montant: number | null;
+  nbStagiaires: number | null;
+  stagiairesRaw: string;
+  opcoLabel: string | null;
+}
+
+export interface MatchResult<T extends TresoLike = TresoLike> {
+  treso: T;
+  bestScore: number;
+  bestSession: { code: string; id: string } | null;
+  runnerUp: { code: string; score: number } | null;
+}
+
+/**
+ * Score d'ENTRÉE d'une ligne Tréso contre une session. SANS montant (section 4) :
+ * noms (+50) + dates ±2j (+30/+20) + nb stagiaires égal (+15) + OPCO (+10).
+ * Le montant n'entre JAMAIS ici — il ne sert qu'au départage (cf. matchTresoRows).
+ * AUTO ≥ 70 reste atteignable par noms+date début (+ une autre composante).
+ */
+export function scoreTresoRow(t: TresoLike, sig: SigLike): number {
+  let score = 0;
+  const tStags = splitStagiaires(t.stagiairesRaw).map(normalize);
+  const matchedNames = tStags.filter((n) =>
+    [...sig.stagNames].some((s) => s.includes(n) || n.includes(s)),
+  );
+  if (matchedNames.length > 0) score += 50;
+  if (t.dateRange && dayDiff(t.dateRange.start, sig.session.startDate) <= 2) score += 30;
+  if (t.dateRange && dayDiff(t.dateRange.end, sig.session.endDate) <= 2) score += 20;
+  // Nb stagiaires en ENTRÉE (remplace le montant — section 4 étape 2). Dégradation
+  // explicite : pas de bonus si vide/divergent (jamais de pénalité).
+  if (t.nbStagiaires != null && t.nbStagiaires === sig.session.participants.length) {
+    score += 15;
+  }
+  if (
+    t.opcoLabel &&
+    [...sig.opcos].some(
+      (o) => normalize(t.opcoLabel!).includes(o) || o.includes(normalize(t.opcoLabel!)),
+    )
+  ) {
+    score += 10;
+  }
+  return score;
+}
+
+/**
+ * Pour chaque ligne Tréso : meilleur score d'ENTRÉE, puis DÉPARTAGE par montant
+ * (section 4 étape 3) — entre candidats à score d'entrée ÉGAL, la session dont
+ * |total - montant| est minimal gagne. Le montant ne départage QUE des candidats
+ * déjà qualifiés par noms/dates ; sig.total peut être faux (336) sans fausser le
+ * score d'entrée. Boost d'exclusion : un seul candidat ≥50 → monté à 70.
+ */
+export function matchTresoRows<T extends TresoLike>(
+  tresoRows: T[],
+  sigs: SigLike[],
+): MatchResult<T>[] {
+  const results: MatchResult<T>[] = [];
+  for (const t of tresoRows) {
+    const scored = sigs.map((sig) => ({ sig, score: scoreTresoRow(t, sig) }));
+    let maxScore = 0;
+    for (const x of scored) if (x.score > maxScore) maxScore = x.score;
+    const top = scored.filter((x) => x.score === maxScore && maxScore > 0);
+    // Départage par montant (le plus proche de t.montant) parmi les ex æquo.
+    let bestSig: SigLike | null = top[0]?.sig ?? null;
+    if (top.length > 1 && t.montant != null) {
+      bestSig = top.reduce((a, b) =>
+        Math.abs(b.sig.total - t.montant!) < Math.abs(a.sig.total - t.montant!) ? b : a,
+      ).sig;
+    }
+    // Runner-up : meilleur score parmi les sessions ≠ bestSig (boost + affichage).
+    let runnerScore = 0;
+    let runnerCode = '';
+    for (const x of scored) {
+      if (x.sig === bestSig) continue;
+      if (x.score > runnerScore) {
+        runnerScore = x.score;
+        runnerCode = x.sig.session.code ?? '';
+      }
+    }
+    let bestScore = maxScore;
+    const bestSession = bestSig
+      ? { code: bestSig.session.code ?? '', id: bestSig.session.id ?? '' }
+      : null;
+    // Boost exclusion : 1 seule session candidate ≥ 50 → auto-match implicite (70).
+    if (bestScore === 50 && runnerScore < 50 && bestSession) {
+      bestScore = 70;
+    }
+    results.push({
+      treso: t,
+      bestScore,
+      bestSession,
+      runnerUp: runnerScore > 0 ? { code: runnerCode, score: runnerScore } : null,
+    });
+  }
+  return results;
+}
+
 // ── Main ────────────────────────────────────────────────────────
 
-(async () => {
+async function main(): Promise<void> {
+  if (!filePath) {
+    console.error('Usage : pnpm tsx scripts/match-treso-agefice.ts <xlsx-path>');
+    process.exit(1);
+  }
   console.log(`Fichier : ${filePath}`);
   const buf = fs.readFileSync(filePath);
   const wb = XLSX.read(buf, { type: 'buffer' });
@@ -220,60 +340,10 @@ function parseTresoRow(r: Record<string, unknown>, sheet: string, rowNum: number
     return { session: s, stagNames, total, opcos };
   });
 
-  // 3. Pour chaque ligne Tréso, scorer chaque session
-  interface MatchResult {
-    treso: TresoRow;
-    bestScore: number;
-    bestSession: { code: string; id: string } | null;
-    runnerUp: { code: string; score: number } | null;
-  }
-  const results: MatchResult[] = [];
-  for (const t of tresoRows) {
-    const tStags = splitStagiaires(t.stagiairesRaw).map(normalize);
-    let best = { score: 0, sig: null as (typeof sessionSignatures)[number] | null };
-    let runner = { score: 0, code: '' };
-    for (const sig of sessionSignatures) {
-      let score = 0;
-      // Stagiaires : au moins 1 nom matché
-      const matchedNames = tStags.filter((n) =>
-        [...sig.stagNames].some((s) => s.includes(n) || n.includes(s)),
-      );
-      if (matchedNames.length > 0) score += 50;
-      // Date début ±2j
-      if (t.dateRange && dayDiff(t.dateRange.start, sig.session.startDate) <= 2) score += 30;
-      // Date fin ±2j
-      if (t.dateRange && dayDiff(t.dateRange.end, sig.session.endDate) <= 2) score += 20;
-      // Montant ±5%
-      if (t.montant && sig.total > 0) {
-        const ratio = Math.abs(t.montant - sig.total) / sig.total;
-        if (ratio < 0.05) score += 20;
-      }
-      // OPCO matché
-      if (t.opcoLabel && [...sig.opcos].some((o) => normalize(t.opcoLabel!).includes(o) || o.includes(normalize(t.opcoLabel!)))) {
-        score += 10;
-      }
-      if (score > best.score) {
-        runner = { score: best.score, code: best.sig?.session.code ?? '' };
-        best = { score, sig };
-      } else if (score > runner.score) {
-        runner = { score, code: sig.session.code };
-      }
-    }
-    results.push({
-      treso: t,
-      bestScore: best.score,
-      bestSession: best.sig ? { code: best.sig.session.code, id: best.sig.session.id } : null,
-      runnerUp: runner.score > 0 ? { code: runner.code, score: runner.score } : null,
-    });
-  }
+  // 3. Scoring section 4 (montant en départage, nb stagiaires en entrée) — fn exportée testée.
+  const results = matchTresoRows(tresoRows, sessionSignatures);
 
-  // 4. Synthèse + boost : si stagiaire matché et 1 seule session candidate ≥ 50,
-  //    on monte à 70 (auto-match implicite par exclusion).
-  for (const r of results) {
-    if (r.bestScore === 50 && r.runnerUp && r.runnerUp.score < 50 && r.bestSession) {
-      r.bestScore = 70;
-    }
-  }
+  // 4. Synthèse (le boost d'exclusion ≥50→70 est intégré à matchTresoRows).
   const auto = results.filter((r) => r.bestScore >= 70 && r.bestSession);
   const ambig = results.filter((r) => r.bestScore >= 40 && r.bestScore < 70);
   const noMatch = results.filter((r) => r.bestScore < 40);
@@ -448,7 +518,14 @@ function parseTresoRow(r: Record<string, unknown>, sheet: string, rowNum: number
     }
   }
   process.exit(0);
-})().catch((e) => {
-  console.error('FATAL:', e);
-  process.exit(1);
-});
+}
+
+// Garde : main() (lecture xlsx + accès BDD + APPLY) ne s'exécute que lancé
+// directement, jamais à l'import (le test unitaire importe scoreTresoRow/matchTresoRows).
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (isMain) {
+  main().catch((e) => {
+    console.error('FATAL:', e);
+    process.exit(1);
+  });
+}
