@@ -455,6 +455,154 @@ async function main() {
     console.log();
   }
 
+  // ─── CSV de revue (ajout 09.2 formateurs — REPORTING SEUL) ──────────────
+  // GARDE-FOU : la logique de matching/sélection ci-dessus n'est PAS modifiée
+  // (interdiction d'élargir le matching). Ce bloc est purement lecture : il
+  // construit un CSV de revue par session DEPUIS `results` (= décisions réelles
+  // que --apply exécutera) pour relecture humaine AVANT tout apply. Le CSV
+  // reflète donc exactement ce que l'apply fera.
+  const CSV_PATH = '/tmp/backfill-trainer-review-09.2.csv';
+  const fmtD = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  // Métadonnées des sessions citées dans les résultats (re-query lecture).
+  const sidList = [...new Set(results.map((r) => r.sessionId).filter((x): x is string => !!x))];
+  const sMeta = new Map<
+    string,
+    { code: string; name: string | null; title: string | null; start: Date; end: Date | null }
+  >();
+  if (sidList.length) {
+    const ss = await prisma.trainingSession.findMany({
+      where: { id: { in: sidList } },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        product: { select: { title: true } },
+      },
+    });
+    for (const s of ss)
+      sMeta.set(s.id, {
+        code: s.code,
+        name: s.name,
+        title: s.product?.title ?? null,
+        start: s.startDate,
+        end: s.endDate,
+      });
+  }
+
+  // Confiance indicative : nb de sessions dans la fenêtre ±5j (re-query lecture).
+  // HAUTE = 1 seule session (date non ambiguë). A_VERIFIER = plusieurs (point
+  // fragile = cause des 132 lignes perdues ; à relire en priorité).
+  async function windowCount(row: TresoRow): Promise<number> {
+    if (!row.startDate) return 0;
+    const min = new Date(row.startDate);
+    min.setUTCDate(min.getUTCDate() - 5);
+    const max = new Date(row.startDate);
+    max.setUTCDate(max.getUTCDate() + 5);
+    return prisma.trainingSession.count({
+      where: { tenantId: tenant.id, startDate: { gte: min, lte: max } },
+    });
+  }
+
+  const header = [
+    'action',
+    'confiance',
+    'session_code',
+    'date_debut',
+    'date_fin',
+    'intitule',
+    'formateur_treso',
+    'person_proposee_base',
+    'source_treso',
+  ];
+  const lines: string[] = [header.join(',')];
+
+  for (const r of results) {
+    const meta = r.sessionId ? sMeta.get(r.sessionId) : undefined;
+    const person = r.treso.formateur ? personCache.get(r.treso.formateur) : null;
+    const personName = person ? `${person.firstName} ${person.lastName}` : '';
+    const src = `Tréso ${r.treso.year} L${r.treso.rowNum}`;
+    let action: string;
+    if (r.reason === 'created') action = 'CREER_TRAINER';
+    else if (r.reason === 'promoted-primary') action = 'PROMOUVOIR_PRIMARY';
+    else if (r.reason === 'already-has-trainer') action = 'DEJA_OK';
+    else if (r.reason === 'person-not-found') action = 'FORMATEUR_INTROUVABLE_BASE';
+    else if (r.reason === 'no-session') action = 'TRESO_SANS_SESSION';
+    else action = r.reason;
+
+    let conf = '';
+    if (action === 'CREER_TRAINER' || action === 'PROMOUVOIR_PRIMARY' || action === 'DEJA_OK') {
+      const n = await windowCount(r.treso);
+      conf = n <= 1 ? 'HAUTE' : 'A_VERIFIER';
+    }
+    lines.push(
+      [
+        action,
+        conf,
+        esc(meta?.code ?? r.sessionCode ?? ''),
+        fmtD(meta?.start ?? r.treso.startDate),
+        fmtD(meta?.end ?? r.treso.endDate),
+        esc(meta?.title ?? meta?.name ?? r.treso.formation ?? ''),
+        esc(r.treso.formateur ?? ''),
+        esc(personName),
+        esc(src),
+      ].join(','),
+    );
+  }
+
+  // Sessions sans formateur primary NON couvertes par un match Tréso.
+  const coveredIds = new Set(
+    results.map((r) => r.sessionId).filter((x): x is string => !!x),
+  );
+  const orphanSessions = await prisma.trainingSession.findMany({
+    where: { tenantId: tenant.id, trainers: { none: { isPrimary: true } } },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      product: { select: { title: true } },
+      trainers: { select: { id: true }, take: 1 },
+    },
+    orderBy: { startDate: 'asc' },
+  });
+  let aSaisir = 0;
+  let bonusLines = 0;
+  for (const s of orphanSessions) {
+    if (coveredIds.has(s.id)) continue;
+    const row = [
+      '',
+      '',
+      esc(s.code),
+      fmtD(s.startDate),
+      fmtD(s.endDate),
+      esc(s.product?.title ?? s.name ?? ''),
+      '',
+      '',
+      '',
+    ];
+    if (s.trainers.length > 0) {
+      // Promotion isPrimary "bonus" (déterministe, hors Tréso) que l'apply fera.
+      row[0] = 'PROMOUVOIR_PRIMARY_BONUS';
+      row[1] = 'HAUTE';
+      row[8] = '(promotion isPrimary hors Tréso)';
+      bonusLines++;
+    } else {
+      row[0] = 'A_SAISIR_MAIN';
+      aSaisir++;
+    }
+    lines.push(row.join(','));
+  }
+
+  fs.writeFileSync(CSV_PATH, lines.join('\n'));
+  console.log(
+    `📄 CSV de revue : ${CSV_PATH}  (${lines.length - 1} lignes — ${aSaisir} à saisir à la main, ${bonusLines} promotions bonus)`,
+  );
+
   if (!APPLY) {
     console.log(`👁️  Mode dry-run — relance avec --apply pour écrire en base.\n`);
   } else {
