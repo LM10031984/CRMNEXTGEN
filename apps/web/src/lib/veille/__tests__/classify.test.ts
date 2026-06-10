@@ -1,27 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Phase 13 Plan 13-05 Task 0 — Tests Wave 0 RED pour `classifyItem`.
+ * Phase 13 Plan 13-05 Task 0 — Tests pour `classifyItem`.
+ *
+ * Refactor 2026-06-10 : callOllama → callLlm (profil 'classify').
  *
  * Stratégie de mock :
- *  - `@/lib/ai-ollama` (callOllama) mocké pour simuler 4 scénarios.
+ *  - `@/lib/ai-llm` (callLlm) mocké pour simuler 4 scénarios.
+ *  - `@/lib/ai-config` (getLlmModel/getLlmProvider) mocké pour le model/provider tracé.
  *  - `@qualiof/db` (prisma.aIGenerationJob.create) mocké — vérifie tracing.
  *
  * Coverage (4 tests minimum) :
- *  1. Ollama JSON valide INDIC_23 conf=85 → ClassifyOutput correct + AIGenerationJob status='ok'.
- *  2. Ollama JSON malformé / Zod fail → null + AIGenerationJob status='error'.
+ *  1. LLM JSON valide INDIC_23 conf=85 → ClassifyOutput correct + AIGenerationJob status='ok'.
+ *  2. LLM JSON malformé / Zod fail → null + AIGenerationJob status='error'.
  *  3. theme='OTHER' → ClassifyOutput renvoyé + AIGenerationJob status='skipped_other'.
- *  4. Ollama throw (timeout, HTTP error) → null + AIGenerationJob status='error'.
- *
- * Acceptance : modèle figé `mistral-small:24b` (D-06) — testable via mock.calls.
+ *  4. LLM throw (timeout, HTTP error) → null + AIGenerationJob status='error'.
  */
 
-const { callOllamaMock, aiGenJobCreate } = vi.hoisted(() => ({
-  callOllamaMock: vi.fn(),
-  aiGenJobCreate: vi.fn().mockResolvedValue({ id: 'gen-1' }),
+const { callLlmMock, aiGenJobCreate, getLlmModelMock, getLlmProviderMock } =
+  vi.hoisted(() => ({
+    callLlmMock: vi.fn(),
+    aiGenJobCreate: vi.fn().mockResolvedValue({ id: 'gen-1' }),
+    getLlmModelMock: vi.fn().mockReturnValue('mistralai/mistral-small-2402'),
+    getLlmProviderMock: vi.fn().mockReturnValue('openrouter'),
+  }));
+vi.mock('@/lib/ai-llm', () => ({
+  callLlm: callLlmMock,
 }));
-vi.mock('@/lib/ai-ollama', () => ({
-  callOllama: callOllamaMock,
+vi.mock('@/lib/ai-config', () => ({
+  getLlmModel: getLlmModelMock,
+  getLlmProvider: getLlmProviderMock,
 }));
 vi.mock('@qualiof/db', () => ({
   prisma: {
@@ -32,13 +40,13 @@ vi.mock('@qualiof/db', () => ({
 import { classifyItem } from '../classify';
 
 beforeEach(() => {
-  callOllamaMock.mockReset();
+  callLlmMock.mockReset();
   aiGenJobCreate.mockClear();
 });
 
 describe('classifyItem', () => {
-  it('returns ClassifyOutput when Ollama returns valid JSON INDIC_23 confidence=85', async () => {
-    callOllamaMock.mockResolvedValueOnce({
+  it('returns ClassifyOutput when LLM returns valid JSON INDIC_23 confidence=85', async () => {
+    callLlmMock.mockResolvedValueOnce({
       raw: '{"theme":"INDIC_23","confidence":85,"exploitation_draft":"Action concrète : mettre à jour la procédure Qualiopi pour intégrer cette évolution."}',
       parsedJson: {
         theme: 'INDIC_23',
@@ -46,7 +54,8 @@ describe('classifyItem', () => {
         exploitation_draft:
           'Action concrète : mettre à jour la procédure Qualiopi pour intégrer cette évolution.',
       },
-      model: 'mistral-small:24b',
+      provider: 'openrouter',
+      model: 'mistralai/mistral-small-2402',
       durationMs: 1234,
     });
 
@@ -58,28 +67,29 @@ describe('classifyItem', () => {
     expect(out?.theme).toBe('INDIC_23');
     expect(out?.confidence).toBe(85);
     expect(out?.exploitation_draft).toContain('Action concrète');
-    // model figé D-06
-    expect(callOllamaMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'mistral-small:24b' }),
+    // Le profil 'classify' est explicitement passé à callLlm
+    expect(callLlmMock).toHaveBeenCalledWith(
+      expect.objectContaining({ profile: 'classify', jsonOutput: true }),
     );
-    // AIGenerationJob ok
+    // AIGenerationJob ok avec provider/model issus de callLlm
     expect(aiGenJobCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           tenantId: 'tenant-1',
-          provider: 'ollama',
-          model: 'mistral-small:24b',
+          provider: 'openrouter',
+          model: 'mistralai/mistral-small-2402',
           status: 'ok',
         }),
       }),
     );
   });
 
-  it('returns null and logs AIGenerationJob status=error when Ollama JSON malformed', async () => {
-    callOllamaMock.mockResolvedValueOnce({
+  it('returns null and logs AIGenerationJob status=error when LLM JSON malformed', async () => {
+    callLlmMock.mockResolvedValueOnce({
       raw: 'not a json {{{',
       parsedJson: null,
-      model: 'mistral-small:24b',
+      provider: 'openrouter',
+      model: 'mistralai/mistral-small-2402',
       durationMs: 800,
     });
     const out = await classifyItem(
@@ -95,14 +105,15 @@ describe('classifyItem', () => {
   });
 
   it('returns OTHER classification with AIGenerationJob status=skipped_other', async () => {
-    callOllamaMock.mockResolvedValueOnce({
+    callLlmMock.mockResolvedValueOnce({
       raw: '{"theme":"OTHER","confidence":20,"exploitation_draft":"Hors scope Qualiopi."}',
       parsedJson: {
         theme: 'OTHER',
         confidence: 20,
         exploitation_draft: 'Hors scope Qualiopi.',
       },
-      model: 'mistral-small:24b',
+      provider: 'openrouter',
+      model: 'mistralai/mistral-small-2402',
       durationMs: 800,
     });
     const out = await classifyItem(
@@ -117,8 +128,8 @@ describe('classifyItem', () => {
     );
   });
 
-  it('returns null and logs AIGenerationJob status=error when Ollama throws (timeout)', async () => {
-    callOllamaMock.mockRejectedValueOnce(new Error('Ollama timeout after 60000ms'));
+  it('returns null and logs AIGenerationJob status=error when LLM throws (timeout)', async () => {
+    callLlmMock.mockRejectedValueOnce(new Error('OpenRouter timeout after 60000ms'));
     const out = await classifyItem(
       { title: 'x', snippet: 'y', source: 's' },
       'tenant-1',
@@ -128,7 +139,7 @@ describe('classifyItem', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: 'error',
-          errorMsg: expect.stringContaining('Ollama timeout'),
+          errorMsg: expect.stringContaining('OpenRouter timeout'),
         }),
       }),
     );

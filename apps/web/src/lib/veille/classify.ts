@@ -1,8 +1,9 @@
 /**
- * Phase 13 Plan 13-05 — Classifier Ollama RSS → thème Qualiopi.
+ * Phase 13 Plan 13-05 — Classifier RSS → thème Qualiopi.
  *
- * D-06 : modèle figé `mistral-small:24b` (pas de switch dynamique qwen3:30b-a3b
- * en V1). Si on change : bump PROMPT_VERSION_VEILLE + tracer dans AIGenerationJob.
+ * Phase 13 refactor (2026-06-10) : `callOllama` → `callLlm({ profile: 'classify' })`.
+ * Le modèle effectif vient de `ai-config.ts` (env OPENROUTER_MODEL_CLASSIFY
+ * ou défaut `mistralai/mistral-small-2402`). Plus de littéral de modèle ici.
  *
  * Guard-rails (RESEARCH §6.4) :
  *  - Zod validation stricte (theme enum + confidence 0-100 + exploitation 10-500).
@@ -17,15 +18,14 @@
 
 import { createHash } from 'node:crypto';
 import { prisma } from '@qualiof/db';
-import { callOllama } from '@/lib/ai-ollama';
+import { callLlm } from '@/lib/ai-llm';
+import { getLlmModel, getLlmProvider } from '@/lib/ai-config';
 import {
   PROMPT_VERSION_VEILLE,
   SYSTEM_PROMPT_VEILLE_CLASSIFY,
   buildVeilleClassifyUserPrompt,
   VeilleClassifyOutputSchema,
 } from './prompts';
-
-const OLLAMA_MODEL_VEILLE = 'mistral-small:24b' as const;
 
 export interface ClassifyInput {
   title: string;
@@ -40,7 +40,7 @@ export interface ClassifyOutput {
 }
 
 /**
- * Classifie un item RSS via Ollama mistral-small:24b.
+ * Classifie un item RSS via le LLM configuré (profil `classify`).
  * Trace le résultat dans `AIGenerationJob` pour audit (provider/model/promptVersion/status/latency).
  *
  * @returns `ClassifyOutput` si JSON valide ET Zod-compliant (incluant theme=OTHER),
@@ -57,9 +57,14 @@ export async function classifyItem(
     .digest('hex')
     .slice(0, 32);
 
+  // Provider/model résolus à l'avance pour pouvoir tracer même en cas d'exception
+  // avant que callLlm n'ait eu le temps de retourner ces valeurs.
+  const provider = getLlmProvider();
+  const model = getLlmModel('classify');
+
   try {
-    const r = await callOllama({
-      model: OLLAMA_MODEL_VEILLE,
+    const r = await callLlm({
+      profile: 'classify',
       systemPrompt: SYSTEM_PROMPT_VEILLE_CLASSIFY,
       prompt: buildVeilleClassifyUserPrompt(input),
       jsonOutput: true,
@@ -71,8 +76,8 @@ export async function classifyItem(
       await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'ollama',
-          model: OLLAMA_MODEL_VEILLE,
+          provider: r.provider,
+          model: r.model,
           promptVersion: PROMPT_VERSION_VEILLE,
           inputHash,
           status: 'error',
@@ -89,8 +94,8 @@ export async function classifyItem(
     await prisma.aIGenerationJob.create({
       data: {
         tenantId,
-        provider: 'ollama',
-        model: OLLAMA_MODEL_VEILLE,
+        provider: r.provider,
+        model: r.model,
         promptVersion: PROMPT_VERSION_VEILLE,
         inputHash,
         status: parsed.data.theme === 'OTHER' ? 'skipped_other' : 'ok',
@@ -104,8 +109,8 @@ export async function classifyItem(
     await prisma.aIGenerationJob.create({
       data: {
         tenantId,
-        provider: 'ollama',
-        model: OLLAMA_MODEL_VEILLE,
+        provider,
+        model,
         promptVersion: PROMPT_VERSION_VEILLE,
         inputHash,
         status: 'error',

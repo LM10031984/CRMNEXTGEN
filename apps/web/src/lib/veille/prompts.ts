@@ -1,10 +1,10 @@
 /**
- * Phase 13 Plan 13-05 — Prompt Ollama de classification RSS → thème Qualiopi.
+ * Phase 13 Plan 13-05 — Prompt de classification RSS → thème Qualiopi.
  *
  * Source de vérité : RESEARCH §6.1 (prompt verbatim) + §6.3 (Zod schema).
  *
- * D-06 : modèle figé `mistral-small:24b` (cf classify.ts). PROMPT_VERSION
- * tracé dans `AIGenerationJob.promptVersion` pour rejouer un audit.
+ * Modèle effectif : résolu par `ai-config.ts` (profil `classify`).
+ * PROMPT_VERSION tracé dans `AIGenerationJob.promptVersion` pour rejouer un audit.
  *
  * Worker safety : 0 import React / server-action / rbac.
  */
