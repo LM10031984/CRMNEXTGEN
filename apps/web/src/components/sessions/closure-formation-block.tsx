@@ -27,6 +27,14 @@ interface Props {
   isActive?: boolean;
   /** Programme produit = doc Support pédagogique (10e doc du process). */
   programmeProductDocId?: string | null;
+  /**
+   * HOTFIX 1 (2026-06-10) — docIds des 3 docs PARTAGÉS session-level pour
+   * rendre les rows cliquables (parité avec étape 1/2). Les rows par
+   * stagiaire restent non-cliquables (un href agrégé serait trompeur, le
+   * DocDockDrawer reste le hub per-stagiaire).
+   */
+  grilleObsSessionDocId?: string | null;
+  bilanSatisfactionDocId?: string | null;
   /** Expansion initiale (dérivée de stagesState[4] === 'active'). */
   expanded?: boolean;
 }
@@ -44,14 +52,21 @@ export function ClosureFormationBlock({
   status,
   isActive = false,
   programmeProductDocId,
+  grilleObsSessionDocId,
+  bilanSatisfactionDocId,
   expanded,
 }: Props) {
   const N = status.participantsCount;
 
-  const sharedItems: { done: boolean; label: string; indic: string }[] = [
-    { done: status.grilleObsSession, label: "Grille d'observation session", indic: indicShort('GRILLE_OBS_SESSION') },
-    { done: status.bilanSatisfaction, label: 'Bilan satisfaction session', indic: indicShort('SATISFACTION_SESSION') },
-    { done: Boolean(programmeProductDocId), label: 'Support pédagogique (programme final)', indic: indicShort('SUPPORT_PEDAGOGIQUE') },
+  // HOTFIX 1 — chaque doc partagé porte son href quand il existe ; sinon pas
+  // de lien (cohérent avec un doc manquant). StepDocRow rend l'anchor.
+  const docHref = (id?: string | null): string | undefined =>
+    id ? `/api/documents/${id}` : undefined;
+
+  const sharedItems: { done: boolean; label: string; indic: string; pdfHref?: string }[] = [
+    { done: status.grilleObsSession, label: "Grille d'observation session", indic: indicShort('GRILLE_OBS_SESSION'), pdfHref: docHref(grilleObsSessionDocId) },
+    { done: status.bilanSatisfaction, label: 'Bilan satisfaction session', indic: indicShort('SATISFACTION_SESSION'), pdfHref: docHref(bilanSatisfactionDocId) },
+    { done: Boolean(programmeProductDocId), label: 'Support pédagogique (programme final)', indic: indicShort('SUPPORT_PEDAGOGIQUE'), pdfHref: docHref(programmeProductDocId) },
   ];
 
   const perParticipantItems: {
@@ -178,6 +193,7 @@ export function ClosureFormationBlock({
                   done={it.done}
                   label={it.label}
                   indic={it.indic}
+                  pdfHref={it.pdfHref}
                 />
               ))}
             </ul>

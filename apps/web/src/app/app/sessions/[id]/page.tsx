@@ -931,6 +931,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           isActive={stage.stagesState[4] === 'active'}
           expanded={stage.stagesState[4] === 'active'}
           programmeProductDocId={programmeProductDocId ?? null}
+          grilleObsSessionDocId={grilleSessionDocId ?? null}
+          bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
         />
 
         <div id="step-5" className="scroll-mt-20" />
