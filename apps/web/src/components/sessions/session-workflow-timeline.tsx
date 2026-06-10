@@ -23,8 +23,9 @@ function pillarIndic(docType: string): string {
  * 3 zones coordonnées :
  *   1. Hero "Prochaine étape" — détecte l'étape attendue selon statut session
  *      + état préparation + état pack closure. Affiche un CTA contextuel énorme.
- *   2. Conformité Qualiopi — 9 indicateurs métier (1, 6, 8, 9, 10, 11, 17,
- *      Légal Art. L6353-1, 30), score X/9. **Collapsée par défaut (commit ui-e3)**
+ *   2. Conformité Qualiopi — 9 indicateurs métier (1, 6, 8, 9, 10, 11, 11, 17,
+ *      30), score X/9. Le pilier « Attestation » porte l'ind. 11 (certificat de
+ *      réalisation, CORRECTION V9 Kaïna). **Collapsée par défaut (commit ui-e3)**
  *      — chip score visible en summary, détail par indic révélé au clic. Évite la
  *      surcharge visuelle hors-audit. (09.3-03-fix : « 27 » sous-traitance retiré.)
  *   3. Timeline 5 étapes (children) — passés en props pour que la page session
@@ -473,15 +474,14 @@ function computeQualiopiPillars(
       hint: 'Check-list formation',
     },
     {
-      // CORRECTION 1 — « Ind 27 » (sous-traitance) était faux ici. Le pilier
-      // « Attestation » couvre attestation de fin (Ind 11) + certificat de
-      // réalisation (obligation Légal Art. L6353-1). On affiche l'indicateur du
-      // certificat (« Légal », via catalogue) pour ne pas dupliquer l'« Ind 11 »
-      // déjà porté par le pilier « Évaluation » ci-dessus.
+      // CORRECTION V9 (Kaïna audit blanc) — le certificat de réalisation se range
+      // dans l'ind. 11. Le pilier « Attestation » agrège certificat + attestation
+      // de fin → il porte donc l'ind. 11 (plus « Légal » ni « Ind 27 »). L'indicateur
+      // est dérivé du catalogue (CERTIFICAT_REALISATION → « Indicateur 11 »).
       ind: pillarIndic('CERTIFICAT_REALISATION'),
       label: 'Attestation',
       done: N > 0 && closure.attestations >= N && closure.certificats >= N,
-      hint: 'Attestation de fin (Ind 11) + certificat de réalisation (Légal Art. L6353-1)',
+      hint: 'Certificat de réalisation (Ind 11 · Légal Art. L6353-1) + attestation de fin (Légal Art. L6353-1)',
     },
     {
       ind: 'Ind 30',
