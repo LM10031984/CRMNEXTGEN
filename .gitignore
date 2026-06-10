@@ -54,5 +54,8 @@ venv/
 # Uploaded user data (palier 1: stays out of git)
 data/uploads/
 
-# GSD planning (local-only)
-.planning/
+# GSD planning — registre de décision du projet, VERSIONNÉ depuis 2026-06-10
+# (leçon session cloud 9.3 : contrats/décisions/plans doivent survivre au poste local).
+# Seuls les artefacts jetables restent ignorés :
+.planning/**/*.tmp
+.planning/**/*.local.md

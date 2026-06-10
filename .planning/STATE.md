@@ -244,10 +244,17 @@ Stopped at: Phase 09.3 exécutée (4 plans, 3 commits code) depuis la spec du pl
 Last completed plan: 09.3-04 (bookkeeping — balayage .bak/.orig : aucun trouvé sur cette branche)
 Next plan: Bloc A item 2 (préparation du 16/06, humain hors code) puis Bloc B lot P0 : T1 → T2 → T4 → T6 → T5 → T7 → T3
 
-Restes ouverts Phase 9.3 (à rejouer par Laurent) :
-- Checkpoint visuel :3010 sur les 3 surfaces (09.3-03) — pas de runtime dans l'environnement d'exécution.
-- Recoupement « 0 drift » du catalogue contre grille BCI réelle + guide V9 + QUALIOPI-PLAN-COMPLET §1 (sources sur le poste local, non poussées) — le test de mapping verrouille les décisions explicites du plan directeur uniquement.
-- Re-seed à lancer (`pnpm --filter @qualiof/db db:seed`) pour appliquer le triage du catalogue en base (upsert + purge SATISFACTION / PRE_ACCORD_OPCO / VALIDATION_OPCO).
+Restes ouverts Phase 9.3 — GATES BLOQUANTS avant merge cloud-migration et avant T1 (consigne Laurent 2026-06-10) :
+1. **Diff contrat reconstruit vs contrat local** — décision par décision via `.planning/phases/09.3-retrouvabilite-preuves/CONTRAT-RECONSTRUIT.md` (checklist R-01..R-08 vs D-09.3-01..08). Divergences suspectées : naming `source` vs `sourceTable`+`sourceId`, découpage 6 vs « cinq sources », tags indicateurs. La 9.3 cloud est une RÉINTERPRÉTATION (artefacts locaux non poussés).
+2. **Push des artefacts .planning/ locaux** — `.planning/` sorti du gitignore (2026-06-10) : contrats, décisions D-*, plans, MATRICE-NAVIGATION-DOCS.md, QUALIOPI-PLAN-COMPLET.md sont le registre de décision du projet, pas des brouillons locaux.
+3. **Checkpoint visuel :3010** sur les 3 surfaces (09.3-03).
+4. **Re-seed SÉQUENCÉ avec la 9.2** — `pnpm --filter @qualiof/db db:seed` est une mutation de la base prod-locale pendant que la réconciliation 9.2 est en vol (entre dry-run et --apply Plan 03). Interdit entre deux passes de rejeu. Le lancer SOIT avant le --apply du Plan 03 avec un `pg_dump` dédié, SOIT après le gate E3 — jamais entre.
+5. **Recoupement « 0 drift »** du catalogue contre grille BCI réelle + guide V9 + QUALIOPI-PLAN-COMPLET §1 — le test de mapping ne verrouille que les décisions explicites du plan directeur.
+6. **Test export factures à rejouer en local** — passé en cloud sur xlsx 0.18.5 (substitut npm, CVE connues, réseau cloud bloquant cdn.sheetjs.com), pas sur le 0.20.3 épinglé. Ne pas le compter vert avant rejeu avec la vraie dépendance.
+
+Décision T5 (provisoire, recommandation Laurent 2026-06-10) : **envoi traçable documenté comme preuve ind. 9 pour l'audit ; Yousign APRÈS le 3 juillet** — même logique que le gel : pas de brique e-signature neuve à 3 semaines de l'audit, l'indicateur exige la preuve de transmission, pas la signature électronique. À confirmer avec Kaïna le 16/06.
+
+Dette de merge tracée : claude/lucid-davinci-kfqfsf empile 5 commits sur cloud-migration qui porte déjà le gate `updateSessionDetails` ouvert ; le `dedupe.ts` refactorisé en 9.2 sur main reste un point de réconciliation cloud-migration ↔ main à venir.
 
 Last activity: 2026-06-10 — Plan directeur adopté + U0 créé + Phase 9.3 livrée (hors checkpoints humains ci-dessus). Note de passation : les artefacts GSD 9.3 (4 plans, contrat UnifiedDoc, D-09.3-01..08, MATRICE-NAVIGATION-DOCS.md) ne sont pas dans le repo distant — exécution faite depuis la spec Partie 1 du plan directeur ; contrat UnifiedDoc reconstruit dans lib/resolve-docs.ts.
 
