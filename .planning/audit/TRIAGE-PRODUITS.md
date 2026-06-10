@@ -1,0 +1,83 @@
+# Triage des produits de formation pré-audit Qualiopi (BCI 03/07/2026)
+
+> Généré le 10/06/2026 · **read-only**, relançable · 1 ligne / produit.
+> Les heuristiques **signalent**, elles ne décident pas. Colonnes RÉEL / PRÉINSCRIPTION / DOUBLON à remplir par Laurent.
+
+## ⚠ Pourquoi ce triage AVANT toute génération
+
+Le **programme (`programMd`) est partagé par produit**. Une session **terminée** rattachée à
+une **coquille de préinscription** ou à un **doublon** produirait un document Qualiopi **FAUX**
+à la racine — peu importe la conformité des prompts.
+
+**Étape suivante (PAS dans ce script)** : pour chaque produit classé PRÉINSCRIPTION ou DOUBLON,
+**re-mapper ses sessions vers le produit RÉEL** correspondant, **AVANT T2/T3 et la génération de masse**.
+
+## En-tête — chiffres réels
+
+| Indicateur | Valeur |
+| --- | ---: |
+| **Total produits** | **32** |
+| Réels probables (≥1 session terminée) | 20 |
+| **Suspects (≥1 signal ⚠)** | **16** |
+| · dont 0 session | 10 |
+| · dont programme vide | 6 |
+| · dont programme court (< 200 car.) | 0 |
+| · dont prix 0/null | 6 |
+| · dont quasi-doublon de titre | 8 |
+| Origine SmartOF (ExternalIdentity) | 20 |
+| Origine ? hors SmartOF (manuel/préinscription) | 12 |
+
+> **Choix consignés** : pas de champ `source`/`origine` direct sur `TrainingProduct` (schema vérifié).
+> L'origine est dérivée de `ExternalIdentity(source='smartof')` : « SmartOF » si présent, sinon
+> « ? (hors SmartOF) » — on ne peut PAS distinguer « manuel » de « préinscription » côté schema,
+> c'est l'objet du classement manuel. Seuils heuristiques : programme court < 200 car.,
+> similarité de titre ≥ 0.85 (Levenshtein normalisé sur titre sans accents/casse/ponctuation).
+
+## Produits (suspects en tête)
+
+| Code · id | Titre | Prix HT | Sessions (dont term.) | Programme | Origine | Signal | RÉEL | PRÉINSCRIPTION | DOUBLON |
+| --- | --- | ---: | ---: | --- | --- | --- | :---: | :---: | :---: |
+| `PROD-0664` · 43e580ff | Cadastre Niveau 1 - Présentiel Collectif | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null · ⚠ quasi-doublon de PROD-0041 |  |  |  |
+| `PROD-0666` · aa6e27cb | Cadastre Niveau 2 - Présentiel collectif | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null · ⚠ quasi-doublon de PROD-0060 |  |  |  |
+| `PROD-0667` · 71ba9536 | Anglais professionnel boosté par l’IA | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null |  |  |  |
+| `PROD-0668` · cada712b | Optimisation des systèmes d’information avec l’IA | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null |  |  |  |
+| `PROD-0669` · 00ce2cc6 | Immobilier : gagnez 2h par jour grâce à l’IA | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null |  |  |  |
+| `PROD-0670` · cf80eb86 | IA générative | 0,00 € | 0 (0 term.) | vide | ? (hors SmartOF) | ⚠ 0 session · ⚠ programme vide · ⚠ prix 0/null |  |  |  |
+| `FRM-0001` · cf961a3d | Exploiter La puissance de l'IA dans son activité immobilière | 336,00 € | 0 (0 term.) | 928 car. | ? (hors SmartOF) | ⚠ 0 session |  |  |  |
+| `PROD-0001` · 7f4dc9b6 | Maitriser Claude l'intelligence surpuissante d'anthropic pour conseillers Immobilier | 1 008,00 € | 0 (0 term.) | 1249 car. | ? (hors SmartOF) | ⚠ 0 session |  |  |  |
+| `PROD-0663` · ec7e597c | Formation Claude anthropic pour les conseillers immo | 336,00 € | 0 (0 term.) | 519 car. | ? (hors SmartOF) | ⚠ 0 session |  |  |  |
+| `PROD-0672` · d067e312 | IA appliquée pour agents immobiliers - 16h | 672,00 € | 0 (0 term.) | 1136 car. | ? (hors SmartOF) | ⚠ 0 session |  |  |  |
+| `PROD-0041` · 965f33b4 | Cadastre Niveau 1 - Présentiel Collectif | 336,00 € | 4 (4 term.) | 1467 car. | SmartOF | ⚠ quasi-doublon de PROD-0664 |  |  |  |
+| `PROD-0042` · 304512f0 | L'intelligence artificielle au service des conseillers immobiliers (72h) | 3 024,00 € | 11 (9 term.) | 2362 car. | SmartOF | ⚠ quasi-doublon de PROD-0066 |  |  |  |
+| `PROD-0057` · 681e2d87 | Intégrer l’intelligence artificielle pour gagner en productivité - 105h00 | 2 625,00 € | 4 (4 term.) | 4889 car. | SmartOF | ⚠ quasi-doublon de PROD-0061 |  |  |  |
+| `PROD-0060` · 45f98380 | Cadastre Niveau 2 - Présentiel collectif | 336,00 € | 1 (1 term.) | 1248 car. | SmartOF | ⚠ quasi-doublon de PROD-0666 |  |  |  |
+| `PROD-0061` · c0ac775f | Intégrer l’intelligence artificielle pour gagner en productivité - 77h00 | 3 080,00 € | 1 (1 term.) | 1887 car. | SmartOF | ⚠ quasi-doublon de PROD-0057 |  |  |  |
+| `PROD-0066` · c15f333f | L'intelligence artificielle au service des conseillers immobiliers - 16h | 672,00 € | 10 (7 term.) | 2586 car. | SmartOF | ⚠ quasi-doublon de PROD-0042 |  |  |  |
+| `FRM-0002` · a909f661 | Claude d'anthropic pour les conseillers immobiliers | 336,00 € | 1 (0 term.) | 1309 car. | ? (hors SmartOF) |  |  |  |  |
+| `PROD-0003` · a3500765 | L’immobilier et sa prospection efficace : Devenir incontournable sur son secteur | 3 000,00 € | 1 (1 term.) | 2356 car. | SmartOF |  |  |  |  |
+| `PROD-0043` · 746d646e | Formation l'IA & l'humain : L'harmonie dans l'immobilier | 199,00 € | 2 (0 term.) | 780 car. | SmartOF |  |  |  |  |
+| `PROD-0044` · dca6c868 | Vendez mieux avec l’IA | 336,00 € | 1 (1 term.) | 1633 car. | SmartOF |  |  |  |  |
+| `PROD-0058` · be193bed | L'IA au service des conseillers immobiliers (8h) | 336,00 € | 3 (3 term.) | 1601 car. | SmartOF |  |  |  |  |
+| `PROD-0059` · 96444a7c | Booster vendeur (8h) | 336,00 € | 4 (2 term.) | 2278 car. | SmartOF |  |  |  |  |
+| `PROD-0062` · 64528547 | Non discrimination, Tracfin et déontologie | 336,00 € | 7 (6 term.) | 1963 car. | SmartOF |  |  |  |  |
+| `PROD-0063` · d61555db | Intégrer l'Intelligence Artificielle dans son entreprise pour  gagner en productivité - 40h | 1 680,00 € | 6 (6 term.) | 3158 car. | SmartOF |  |  |  |  |
+| `PROD-0064` · 4f0b6507 | Maitriser l'intelligence artificielle pour booster la performance commerciale - 72h | 3 024,00 € | 4 (3 term.) | 2202 car. | SmartOF |  |  |  |  |
+| `PROD-0065` · 25b195c3 | Exploiter l’intelligence artificielle dans l’immobilier pour gagner en productivité - 24h | 1 008,00 € | 6 (6 term.) | 2074 car. | SmartOF |  |  |  |  |
+| `PROD-00661` · 60a55c57 | Communication digitale & Stratégie  marketing pour activité événementielle (72h) | 3 024,00 € | 1 (1 term.) | 2379 car. | SmartOF |  |  |  |  |
+| `PROD-047` · 8ea4a7db | Formation complète en marketing digital et IA stratégie globale, référencement, création de contenus et gestion de la relation client | 2 978,00 € | 1 (1 term.) | 3348 car. | SmartOF |  |  |  |  |
+| `PROD-053` · a8c4ce10 | Cycle complet de prospection, relation client et négociation immobilière | 3 000,00 € | 2 (2 term.) | 21150 car. | SmartOF |  |  |  |  |
+| `PROD-055` · c65c9171 | Maîtrise des techniques de vente immobilière | 3 000,00 € | 1 (1 term.) | 5221 car. | SmartOF |  |  |  |  |
+| `PROD-0662` · 8fd3fd9c | Maîtriser l’Intelligence Artificielle pour développer son activité | 336,00 € | 5 (5 term.) | 2713 car. | SmartOF |  |  |  |  |
+| `PROD-0671` · e9666762 | Tracfin | 168,00 € | 1 (1 term.) | 4481 car. | ? (hors SmartOF) |  |  |  |  |
+
+## Mode d'emploi du classement
+
+1. Pour chaque ligne, cocher **une seule** des 3 colonnes (RÉEL / PRÉINSCRIPTION / DOUBLON).
+2. Un produit avec **sessions terminées** + **programme renseigné** + **prix > 0** est
+   très probablement RÉEL.
+3. Un produit **0 session** ou **programme vide** est très probablement une coquille
+   (PRÉINSCRIPTION) ou un DOUBLON.
+4. Pour un **quasi-doublon**, identifier lequel des deux est le RÉEL (celui avec sessions
+   terminées + programme) ; l'autre sera DOUBLON et ses sessions seront re-mappées.
+5. Étape suivante (hors ce script) : re-mapper les sessions des PRÉINSCRIPTION/DOUBLON
+   vers le produit RÉEL, **avant** la génération.
