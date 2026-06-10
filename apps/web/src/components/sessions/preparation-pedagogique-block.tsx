@@ -207,11 +207,20 @@ export function PreparationPedagogiqueBlock({
       state={stepState}
       expanded={expanded}
       caption="Programme · Déroulé · Check-list · Convention · Convocation · Analyse besoin · AGEFICE"
-      // 09.3-03-fix CORRECTION 1 — « Ind 27 » (sous-traitance) retiré + « Ind 10/11 »
-      // corrigés. Indicateurs réels des docs de l'étape, dérivés du catalogue :
-      // PROGRAMME→1, ANALYSE_BESOIN→4, DEROULE→6, POSITIONNEMENT→8,
+      // CORRECTION 3 (V9 Laurent) — caption d'étape CURATÉE EN DUR (prop string,
+      // non dérivée par indicateur primaire). Attendu Préparation = 1·4·5·6·9·17.
+      //  - « 8 » (positionnement) RETIRÉ : le positionnement = début de formation,
+      //    déjà compté dans la caption Pack (étape 4). Le « 8 » fantôme venait d'une
+      //    recopie manuelle erronée des indicateurs primaires des docs de l'étape.
+      //  - « 5 » AJOUTÉ : programme + déroulé prouvent AUSSI l'ind. 5 (« objectifs
+      //    opérationnels et évaluables » — NC majeure Kaïna). NOTE : aucun doc n'a
+      //    l'ind. 5 comme indicateur PRIMAIRE dans le catalogue (programme=1,
+      //    déroulé=6), donc une dérivation par indicateur primaire ne produirait
+      //    JAMAIS 5 → on cure la caption à la main, adossée au sens métier. Limite
+      //    connue : multi-indicateur par doc (5 en secondaire) = chantier futur.
+      // Mapping de référence : PROGRAMME→1(+5), ANALYSE_BESOIN→4, DEROULE→6(+5),
       // CONVENTION/CONVOCATION→9, CHECKLIST→17.
-      qualiopi="Ind 1 · 4 · 6 · 8 · 9 · 17"
+      qualiopi="Ind 1 · 4 · 5 · 6 · 9 · 17"
       badge={badge}
       action={action}
     >
