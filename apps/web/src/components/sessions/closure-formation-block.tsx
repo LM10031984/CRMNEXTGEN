@@ -59,6 +59,7 @@ export function ClosureFormationBlock({
     total: number;
     label: string;
     indic: string;
+    funder?: string;
     hide?: boolean;
   }[] = [
     { count: status.attestations, total: N, label: 'Attestation de fin de formation', indic: indicShort('ATTESTATION_FIN') },
@@ -71,7 +72,10 @@ export function ClosureFormationBlock({
       count: status.assiduites,
       total: status.ageficeEligibleCount,
       label: 'Attestation d\'assiduité AGEFICE',
-      indic: indicShort('ASSIDUITE'),
+      // CORRECTION 1 (V9) — pièce financeur, AUCUN indicateur Qualiopi
+      // (la preuve ind. 12 est l'émargement). Badge financeur « AGEFICE ».
+      indic: '',
+      funder: 'AGEFICE',
       hide: status.ageficeEligibleCount === 0,
     },
   ];
@@ -147,9 +151,11 @@ export function ClosureFormationBlock({
       state={state}
       expanded={expanded}
       caption="10 documents Qualiopi générés en 1 clic"
-      // 09.3-03-fix CORRECTION 1 — « Ind 27 » (sous-traitance) retiré : faux pour
-      // le pack de fin. Indicateurs réels des docs de l'étape 4, dérivés du catalogue :
-      // POSITIONNEMENT→8, ATTESTATION_FIN/QCM/GRILLE_OBS→11, ASSIDUITE→12, SATISFACTION→30.
+      // CORRECTION V9 — caption Pack = 8·11·12·30 (validée Laurent, inchangée).
+      // Indicateurs réels des docs de l'étape 4 : POSITIONNEMENT→8,
+      // CERTIFICAT/QCM/GRILLE_OBS→11, ÉMARGEMENT→12 (preuve d'assiduité ; la pièce
+      // « assiduité AGEFICE » elle-même est un dérivé financeur SANS indicateur),
+      // SATISFACTION→30.
       qualiopi="Ind 8 · 11 · 12 · 30"
       badge={badge}
       action={action}
@@ -188,6 +194,7 @@ export function ClosureFormationBlock({
                   total={p.total}
                   label={p.label}
                   indic={p.indic}
+                  funder={p.funder}
                 />
               ))}
             </ul>

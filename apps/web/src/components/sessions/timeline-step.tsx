@@ -200,6 +200,7 @@ export function StepDocRow({
   count,
   total,
   indic,
+  funder,
   pdfHref,
 }: {
   done?: boolean;
@@ -208,6 +209,13 @@ export function StepDocRow({
   count?: number;
   total?: number;
   indic?: string;
+  /**
+   * CORRECTION 1 (V9) — badge FINANCEUR (ex: « AGEFICE ») pour les pièces
+   * administratives qui n'ont PAS d'indicateur Qualiopi (assiduité). Affiché
+   * à la place de l'indicateur, dans un style distinct (chip financeur) pour
+   * ne pas le confondre avec une preuve Qualiopi.
+   */
+  funder?: string;
   /**
    * A8 2026-06-09 — Lien PDF du doc. Si fourni ET le row est `done`,
    * la ligne devient un anchor cliquable « Ouvrir le PDF » (target=_blank).
@@ -250,6 +258,14 @@ export function StepDocRow({
           title={indic}
         >
           {indic}
+        </span>
+      )}
+      {funder && (
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide shrink-0 px-1.5 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700"
+          title={`Pièce financeur ${funder} — sans indicateur Qualiopi`}
+        >
+          {funder}
         </span>
       )}
     </>
