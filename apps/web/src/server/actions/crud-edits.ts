@@ -835,10 +835,15 @@ export async function validateAiDraftProduct(productId: string): Promise<{
   ok: boolean;
   error?: string;
 }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié.' };
-  if (!['ADMIN', 'MANAGER'].includes(user.role)) {
-    return { ok: false, error: 'Seuls ADMIN et MANAGER peuvent valider un brouillon IA.' };
+  let user: LuciaUser;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError) return { ok: false, error: 'Non authentifié.' };
+    if (e instanceof ForbiddenError) {
+      return { ok: false, error: 'Seuls ADMIN et MANAGER peuvent valider un brouillon IA.' };
+    }
+    throw e;
   }
 
   const product = await prisma.trainingProduct.findFirst({

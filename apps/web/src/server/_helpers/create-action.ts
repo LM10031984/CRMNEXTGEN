@@ -76,15 +76,22 @@ export interface CreateActionOptions<TSchema extends ZodTypeAny, TData> {
  * Factory de Server Action. Retourne une fonction qui prend l'input,
  * valide auth + RBAC + Zod, exécute le handler, et renvoie un résultat
  * uniforme.
+ *
+ * Overloads : sans `schema` → action sans input (`action()`). Avec `schema`
+ * → action typée Zod (`action(input)`).
  */
+export function createAction<TData = void>(
+  opts: Omit<CreateActionOptions<ZodTypeAny, TData>, 'schema'> & { schema?: undefined },
+): () => Promise<ActionResult<TData>>;
+export function createAction<TSchema extends ZodTypeAny, TData = void>(
+  opts: CreateActionOptions<TSchema, TData> & { schema: TSchema },
+): (input: z.infer<TSchema>) => Promise<ActionResult<TData>>;
 export function createAction<TSchema extends ZodTypeAny, TData = void>(
   opts: CreateActionOptions<TSchema, TData>,
-): (
-  rawInput: TSchema extends ZodTypeAny ? z.infer<TSchema> : void,
-) => Promise<ActionResult<TData>> {
+): (input?: z.infer<TSchema>) => Promise<ActionResult<TData>> {
   const log = childLogger(`action:${opts.name}`);
 
-  return async (rawInput) => {
+  return (async (rawInput?: unknown) => {
     const start = Date.now();
 
     // 1. Auth
@@ -185,7 +192,7 @@ export function createAction<TSchema extends ZodTypeAny, TData = void>(
         code: 'INTERNAL',
       };
     }
-  };
+  }) as (input?: z.infer<TSchema>) => Promise<ActionResult<TData>>;
 }
 
 /**

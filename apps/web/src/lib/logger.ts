@@ -17,6 +17,7 @@
 
 import pino, { type LoggerOptions } from 'pino';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createRequire } from 'node:module';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const LEVEL = process.env.LOG_LEVEL ?? (IS_PROD ? 'info' : 'debug');
@@ -117,8 +118,9 @@ const prettyStream = IS_PROD
   ? undefined
   : (() => {
       // Require dynamique pour ne pas embarquer pino-pretty en prod bundle.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pretty = require('pino-pretty') as typeof import('pino-pretty').default;
+      // `createRequire` permet de garder `require()` en mode ESM (tsx workers).
+      const req = createRequire(import.meta.url);
+      const pretty = req('pino-pretty') as typeof import('pino-pretty');
       return pretty({
         colorize: true,
         translateTime: 'HH:MM:ss.l',

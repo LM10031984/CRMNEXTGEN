@@ -78,6 +78,9 @@ vi.mock('next/headers', () => ({
     set: vi.fn(),
     get: vi.fn().mockReturnValue(undefined),
   }),
+  headers: vi.fn().mockResolvedValue({
+    get: vi.fn().mockReturnValue(null),
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -86,6 +89,14 @@ vi.mock('next/navigation', () => ({
     err.name = 'NEXT_REDIRECT';
     throw err;
   }),
+}));
+
+// Rate-limit fail-open (Redis non disponible en test).
+vi.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ ok: true, remaining: 99, resetIn: 0 }),
+  RateLimitProfile: {
+    LOGIN: { limit: 5, windowSec: 900 },
+  },
 }));
 
 // ─── Imports du SUT ──────────────────────────────────────────────────────

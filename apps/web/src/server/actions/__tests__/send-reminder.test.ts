@@ -97,6 +97,10 @@ vi.mock('@/lib/mailer', () => ({
   sendMail: vi.fn(),
 }));
 
+vi.mock('@/lib/mailer-queue/enqueue', () => ({
+  enqueueMail: vi.fn(),
+}));
+
 vi.mock('@/lib/mailer-templates/invoice-reminder', () => ({
   renderInvoiceReminderEmail: vi.fn().mockReturnValue({
     subject: 'Mock subject',
@@ -145,6 +149,7 @@ import { prisma } from '@qualiof/db';
 import { requireRole, ForbiddenError } from '@/lib/rbac';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
 import { sendMail } from '@/lib/mailer';
+import { enqueueMail } from '@/lib/mailer-queue/enqueue';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { revalidatePath } from 'next/cache';
 import { sendInvoiceReminder } from '../invoices';
@@ -156,6 +161,7 @@ const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeo
 const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
 const logInvoiceEventMock = logInvoiceEvent as unknown as ReturnType<typeof vi.fn>;
 const sendMailMock = sendMail as unknown as ReturnType<typeof vi.fn>;
+const enqueueMailMock = enqueueMail as unknown as ReturnType<typeof vi.fn>;
 const renderInvoiceReminderEmailMock = renderInvoiceReminderEmail as unknown as ReturnType<typeof vi.fn>;
 const revalidatePathMock = revalidatePath as unknown as ReturnType<typeof vi.fn>;
 
@@ -202,6 +208,8 @@ beforeEach(() => {
   logInvoiceEventMock.mockReset();
   logInvoiceEventMock.mockResolvedValue(undefined);
   sendMailMock.mockReset();
+  enqueueMailMock.mockReset();
+  enqueueMailMock.mockResolvedValue({ ok: true, mode: 'sent', jobId: 'mock-job' });
   renderInvoiceReminderEmailMock.mockReset();
   renderInvoiceReminderEmailMock.mockReturnValue({
     subject: 'Mock subject',
@@ -299,7 +307,7 @@ describe('sendInvoiceReminder', () => {
     });
 
     expect(res.ok).toBe(true);
-    expect(sendMailMock).toHaveBeenCalled();
+    expect(enqueueMailMock).toHaveBeenCalled();
   });
 
   it('Test 7 — reminderCount=2 + invoiceReminderDays=[30,45] → skip (level max atteint)', async () => {
@@ -343,7 +351,7 @@ describe('sendInvoiceReminder', () => {
       invoiceNumber: 'FAC-000042',
       payerName: 'OPCO EP',
     });
-    expect(sendMailMock).toHaveBeenCalledWith(
+    expect(enqueueMailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'paiement@opco-ep.fr',
         subject: 'Mock subject',
@@ -352,7 +360,7 @@ describe('sendInvoiceReminder', () => {
   });
 
   it('Test 10 — SMTP_HOST vide → result.dryRun=true + AuditLog diff.dryRun=true', async () => {
-    sendMailMock.mockResolvedValueOnce({ ok: true, dryRun: true });
+    enqueueMailMock.mockResolvedValueOnce({ ok: true, mode: 'dry-run' });
     invoiceFindFirst.mockResolvedValueOnce(makeInvoice());
 
     const res = await sendInvoiceReminder({

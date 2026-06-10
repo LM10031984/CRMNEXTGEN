@@ -436,7 +436,7 @@ export async function resendInvitation(
 
     const token = generateToken();
     const expiresAt = invitationExpiry();
-    await prisma.userInvitation.create({
+    const invitation = await prisma.userInvitation.create({
       data: {
         tenantId: admin.tenantId,
         email: target.email,

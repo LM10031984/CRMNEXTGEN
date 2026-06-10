@@ -119,5 +119,7 @@ export async function getFileSignedUrl(
       ? `attachment; filename="${opts.downloadFilename.replace(/"/g, '')}"`
       : undefined,
   });
-  return getSignedUrl(client(), cmd, { expiresIn });
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return getSignedUrl(client() as any, cmd as any, { expiresIn });
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }

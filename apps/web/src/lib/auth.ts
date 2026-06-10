@@ -9,9 +9,16 @@
 import { Lucia } from 'lucia';
 import { PrismaAdapter } from '@lucia-auth/adapter-prisma';
 import { cookies } from 'next/headers';
-import { cache } from 'react';
+import * as React from 'react';
 import { prisma } from '@qualiof/db';
 import type { Session, User } from 'lucia';
+
+// `React.cache` est exporté uniquement en condition `react-server` (RSC).
+// Dans un worker BullMQ (tsx pure Node), il n'est pas dispo — on retombe sur
+// l'identité (les workers n'ont pas besoin de mémoïsation per-request).
+type Memo = <T extends (...args: unknown[]) => unknown>(fn: T) => T;
+const cache: Memo =
+  (React as { cache?: Memo }).cache ?? ((fn) => fn);
 
 const adapter = new PrismaAdapter(prisma.authSession, prisma.user);
 

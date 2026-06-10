@@ -422,7 +422,7 @@ Ouvrir le pack : ${link}
       subject,
       html,
       text,
-      idempotencyKey: `closure-notif:${batch.id}:${user.id}:${finalStatus}`,
+      idempotencyKey: `closure-notif:${batch.id}:${batch.createdByUserId}:${finalStatus}`,
     });
     if (r.ok && r.mode !== 'dry-run') {
       log.info(

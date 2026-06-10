@@ -180,7 +180,8 @@ describe('uploadTenantLogo', () => {
     expect(mkdirMock).toHaveBeenCalled();
     expect(writeFileMock).toHaveBeenCalled();
     const writeCall = writeFileMock.mock.calls[0]!;
-    expect(writeCall[0]).toContain('public/of-assets/tenant-1/logo.png');
+    // Windows utilise \, Linux/Mac /
+    expect(String(writeCall[0]).replace(/\\/g, '/')).toContain('public/of-assets/tenant-1/logo.png');
     // Supprime les variantes png/jpg/svg (idempotent même si absentes)
     expect(unlinkMock).toHaveBeenCalledTimes(3);
 
