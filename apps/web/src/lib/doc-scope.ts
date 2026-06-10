@@ -17,7 +17,9 @@ export const MATRIX_DOC_TYPES = [
   'PROGRAMME',
   'CONVENTION',
   'CONVOCATION',
-  'PRE_ACCORD_OPCO',
+  // D-09.3-07 : PRE_ACCORD_OPCO + VALIDATION_OPCO = jalons workflow OpcoSubmission,
+  // hors matrice docs par-participant (plus de cellule MISSING permanente injustifiée).
+  // SATISFACTION nu = remplacé par SATISFACTION_CHAUD/FROID. CUSTOM = upload libre, hors matrice.
   'SUPPORT_PEDAGOGIQUE',
   'EMARGEMENT',
   'CERTIFICAT_REALISATION',
