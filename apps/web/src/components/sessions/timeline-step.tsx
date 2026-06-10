@@ -229,7 +229,12 @@ export function StepDocRow({
   pdfHref?: string;
 }) {
   const showCounter = typeof count === 'number' && typeof total === 'number';
-  const allDone = showCounter ? total > 0 && count >= total : Boolean(done);
+  // HOTFIX 2 (2026-06-10) — borne d'affichage : un compteur « X/Y » ne peut
+  // jamais montrer X>Y (vu « 2/1 » sur AGEFICE quand un dossier orphelin restait
+  // compté). Le résolveur AGEFICE intersecte déjà avec les éligibles, mais on
+  // garde ce clamp comme invariant UI pour tout row count/total.
+  const shownCount = showCounter ? Math.min(count as number, total as number) : count;
+  const allDone = showCounter ? (total as number) > 0 && (count as number) >= (total as number) : Boolean(done);
   const stateNode = pending ? (
     <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
   ) : allDone ? (
@@ -248,7 +253,7 @@ export function StepDocRow({
         {label}
         {showCounter && (
           <span className="tabular-nums text-xs ml-1.5">
-            ({count}/{total})
+            ({shownCount}/{total})
           </span>
         )}
       </span>

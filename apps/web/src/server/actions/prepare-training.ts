@@ -10,6 +10,7 @@ import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue';
+import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
 
 export interface PrepareTrainingResult {
   ok: boolean;
@@ -582,7 +583,7 @@ export async function getSessionPreparationStatus(
     'AGEFICE',
   ];
 
-  const [docs, abAssets, latestBatch, ageficeEligibleCount] = await Promise.all([
+  const [docs, abAssets, latestBatch, ageficeEligibleParticipants] = await Promise.all([
     prisma.document.findMany({
       where: {
         tenantId: user.tenantId,
@@ -630,10 +631,12 @@ export async function getSessionPreparationStatus(
         },
       },
     }),
-    // Compte des participants éligibles AGEFICE (TNS) — pour piloter
-    // l'affichage conditionnel de la ligne "Demande AGEFICE" dans l'UI.
+    // IDs des participants éligibles AGEFICE (TNS) — pilote l'affichage
+    // conditionnel de la ligne "Demande AGEFICE" ET sert de set d'intersection
+    // pour borner le numérateur (HOTFIX 2 : un dossier généré pour un
+    // participant non-éligible ne doit plus gonfler le compteur → plus de 2/1).
     participantIds.length > 0
-      ? prisma.sessionParticipant.count({
+      ? prisma.sessionParticipant.findMany({
           where: {
             sessionId: session.id,
             OR: [
@@ -650,9 +653,13 @@ export async function getSessionPreparationStatus(
               },
             ],
           },
+          select: { id: true },
         })
-      : Promise.resolve(0),
+      : Promise.resolve([] as Array<{ id: string }>),
   ]);
+
+  const eligibleAgeficeIds = ageficeEligibleParticipants.map((p) => p.id);
+  const ageficeEligibleCount = eligibleAgeficeIds.length;
 
   const programme = docs.some((d) => d.type === 'PROGRAMME');
   const deroule = docs.some((d) => d.type === 'DEROULE_PEDAGOGIQUE');
@@ -665,11 +672,12 @@ export async function getSessionPreparationStatus(
   );
   // Demande AGEFICE indexée par participantId (et non entityId — cf
   // agefice-generator où Document.participantId est l'identifiant métier).
-  const ageficeSet = new Set(
-    docs
-      .filter((d) => d.type === 'AGEFICE' && d.participantId != null)
-      .map((d) => d.participantId as string),
-  );
+  // HOTFIX 2 : on n'expose que les dossiers des participants ÉLIGIBLES via
+  // countAgeficeReady (intersection), sinon un dossier orphelin → 2/1.
+  const ageficeDocParticipantIds = docs
+    .filter((d) => d.type === 'AGEFICE' && d.participantId != null)
+    .map((d) => d.participantId as string);
+  const ageficeReady = countAgeficeReady(ageficeDocParticipantIds, eligibleAgeficeIds);
 
   const analyseBesoinDone = abAssets.length;
   let analyseBesoinInProgress = 0;
@@ -691,7 +699,7 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone,
     analyseBesoinInProgress,
     analyseBesoinPending,
-    ageficeCount: ageficeSet.size,
+    ageficeCount: ageficeReady,
     ageficeEligibleCount,
     participantsCount: participantIds.length,
     batchId: latestBatch?.id,
