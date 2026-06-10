@@ -17,6 +17,8 @@
  * templates déterministes → jamais stub → `usedStub=false`.
  */
 
+import { DOC_INDICATORS } from '@/lib/doc-scope';
+
 // === Contrat figé (CONTEXT.md) ===
 
 export type DocSourceTable =
@@ -43,6 +45,13 @@ export interface UnifiedDoc {
   href: string | null; // null = preuve à produire (markdown tenant) ou clé MinIO sinon
   status: 'present' | 'stub' | 'missing';
   usedStub: boolean; // D-#1 : stub = pire qu'absent (blocker T4 ind. 11)
+  // ── 09.3-03-fix CORRECTION 2 — dédup version courante (champs ADDITIFS).
+  //    Le résolveur remonte toutes les régénérations d'un même (docType × ancrage)
+  //    comme versions successives. `version` = rang dans le groupe (N = la plus
+  //    récente, 1 = la plus ancienne) ; `isCurrent` = vrai pour la plus récente
+  //    SEULEMENT. L'UI n'affiche par défaut que `isCurrent:true`.
+  version: number;
+  isCurrent: boolean;
 }
 
 // === Row-types minces (champs LUS seulement — pas le type Prisma complet,
@@ -94,27 +103,17 @@ export interface ResolveDocsInput {
 }
 
 /**
- * Map docType → indicateur Qualiopi V1.
+ * Map docType → indicateur Qualiopi.
  *
- * Volontairement PARTIEL : le câblage fin du catalog (seed `QualiopiDocCatalog`)
- * + corrections RNQ V9 (D-09.3-08) sont dans le Plan 09.3-02. Ici on accepte
- * `null` pour tout type non mappé (NE PAS bloquer — cf <action> §7 du plan).
- * Les valeurs présentes reprennent les indicateurs déjà non-contestés du CONTEXT
- * (EMARGEMENT 12, EVALUATION_ACQUIS 11, ATTESTATION_FIN 11). Les types ambigus
- * (CONVENTION, PROGRAMME, CONVOCATION…) sont laissés `null` pour ne pas figer
- * une valeur que le Plan 02 va trancher sur 3 sources.
+ * 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE (NAV-05 étendu) : ZÉRO mapping local.
+ * L'indicateur vient EXCLUSIVEMENT du catalogue `QUALIOPI_DOC_CATALOG_INDICATORS`
+ * (doc-scope.ts), recoupé sur le RNQ V9. Format propagé TEL QUEL (« Indicateur 11 »,
+ * « Légal Art. L6353-1 », null) — JAMAIS de numéro nu concaténé. Tout docType/kind
+ * non couvert par le catalogue → `null` (ne bloque pas), mais le catalogue est
+ * censé être EXHAUSTIF (cf test `resolve-docs.test.ts`).
  */
-const DOC_TYPE_TO_INDICATOR: Record<string, string | null> = {
-  EMARGEMENT: '12',
-  ASSIDUITE: '12',
-  EVALUATION_ACQUIS: '11',
-  QCM: '11',
-  ATTESTATION_FIN: '11',
-  CERTIFICAT_REALISATION: '11',
-};
-
 function indicatorFor(docType: string): string | null {
-  return DOC_TYPE_TO_INDICATOR[docType] ?? null;
+  return DOC_INDICATORS[docType] ?? null;
 }
 
 /** Déduit l'ancrage d'un Document depuis entityType (seules sessionId/participantId sont de vraies FK). */
@@ -151,11 +150,79 @@ function pedSource(rawJson: unknown): string | undefined {
 }
 
 /**
+ * Doc « brut » avant calcul de version/isCurrent (CORRECTION 2).
+ * Le résolveur construit d'abord ces RawDoc, puis `assignVersions` les groupe
+ * par (docType × ancrage) et leur attribue version/isCurrent.
+ */
+type RawDoc = Omit<UnifiedDoc, 'version' | 'isCurrent'>;
+
+/**
+ * Clé d'ancrage logique pour la dédup (CORRECTION 2). « Cible logique » :
+ *  - participant → sessionId + participantId (le doc d'UN stagiaire dans UNE session)
+ *  - session     → sessionId
+ *  - product     → productId
+ *  - tenant      → tenantId
+ * Combinée au docType, elle identifie une lignée de régénérations successives.
+ */
+function anchorKey(anchor: DocAnchor): string {
+  switch (anchor.level) {
+    case 'participant':
+      return `participant:${anchor.sessionId}:${anchor.participantId}`;
+    case 'session':
+      return `session:${anchor.sessionId}`;
+    case 'product':
+      return `product:${anchor.productId}`;
+    case 'tenant':
+      return `tenant:${anchor.tenantId}`;
+    default:
+      return 'unknown';
+  }
+}
+
+/**
+ * CORRECTION 2 — regroupe les RawDoc par (docType × ancrage), trie chaque groupe
+ * par `generatedAt` DESC (le plus récent d'abord), et attribue :
+ *  - le plus récent → `isCurrent:true`, `version = N` (N = taille du groupe) ;
+ *  - les autres     → `isCurrent:false`, `version = N-1, N-2, …` (rang décroissant).
+ * Les docs sans `generatedAt` (identité/légal) sont traités comme une lignée
+ * d'un seul élément la plupart du temps (sourceId distinct) → version 1, courant.
+ */
+function assignVersions(raws: RawDoc[]): UnifiedDoc[] {
+  const groups = new Map<string, RawDoc[]>();
+  for (const r of raws) {
+    const key = `${r.docType}@@${anchorKey(r.anchor)}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(r);
+    else groups.set(key, [r]);
+  }
+
+  const result: UnifiedDoc[] = [];
+  for (const arr of groups.values()) {
+    // Tri DESC par generatedAt (null = le plus ancien possible → epoch 0).
+    const sorted = [...arr].sort(
+      (a, b) => (b.generatedAt?.getTime() ?? 0) - (a.generatedAt?.getTime() ?? 0),
+    );
+    const total = sorted.length;
+    sorted.forEach((r, idx) => {
+      result.push({
+        ...r,
+        version: total - idx, // idx 0 (le plus récent) → version = N (courant)
+        isCurrent: idx === 0,
+      });
+    });
+  }
+  return result;
+}
+
+/**
  * Résolveur pur : UNION des 6 sources → UnifiedDoc[].
  * Aucun effet de bord, aucune lecture DB, déterministe.
+ *
+ * CORRECTION 2 — chaque doc porte `version`/`isCurrent` calculés par dédup
+ * (docType × ancrage). L'UI n'affiche par défaut que les courants.
  */
 export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
-  const out: UnifiedDoc[] = [];
+  const out: RawDoc[] = [];
 
   // 1) Document → UnifiedDoc (templates déterministes : usedStub=false, status=present).
   for (const doc of input.documents) {
@@ -205,7 +272,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         sourceTable: 'SensitiveData',
         sourceId: id.cniUrl,
         docType: 'CNI',
-        qualiopiIndicator: null,
+        qualiopiIndicator: indicatorFor('CNI'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
         href: id.cniUrl,
@@ -218,7 +285,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         sourceTable: 'Person',
         sourceId: id.ribKey,
         docType: 'RIB',
-        qualiopiIndicator: null,
+        qualiopiIndicator: indicatorFor('RIB'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
         href: id.ribKey,
@@ -232,7 +299,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         sourceTable: 'AgeficeProfile',
         sourceId: id.cfpKey,
         docType: 'CFP',
-        qualiopiIndicator: null,
+        qualiopiIndicator: indicatorFor('CFP'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
         href: id.cfpKey,
@@ -248,7 +315,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
       sourceTable: 'Tenant',
       sourceId: input.legal.tenantId,
       docType: 'CGV',
-      qualiopiIndicator: null,
+      qualiopiIndicator: indicatorFor('CGV'), // catalogue → null (source unique)
       anchor: { level: 'tenant', tenantId: input.legal.tenantId },
       generatedAt: null,
       href: null,
@@ -261,7 +328,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
       sourceTable: 'Tenant',
       sourceId: input.legal.tenantId,
       docType: 'REGLEMENT_INTERIEUR',
-      qualiopiIndicator: null,
+      qualiopiIndicator: indicatorFor('REGLEMENT_INTERIEUR'), // catalogue → null
       anchor: { level: 'tenant', tenantId: input.legal.tenantId },
       generatedAt: null,
       href: null,
@@ -270,5 +337,6 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
     });
   }
 
-  return out;
+  // CORRECTION 2 — dédup version courante par (docType × ancrage).
+  return assignVersions(out);
 }

@@ -874,11 +874,13 @@ export default async function ApprenantDetailPage({
             )}
           </section>
 
-          {/* Phase 9.3 NAV-02(a) — liste unifiée toutes sources (≤2 clics D-09.3-06). */}
+          {/* Phase 9.3 NAV-02(a) — liste unifiée toutes sources (≤2 clics D-09.3-06).
+              09.3-03-fix CORRECTION 2 — compteur = versions COURANTES uniquement
+              (UnifiedDocsList n'affiche que isCurrent). */}
           <section className="rounded-2xl border border-border bg-white overflow-hidden">
             <div className="p-5 border-b border-border">
               <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                Tous les documents (toutes sources)
+                Tous les documents (toutes sources) ({unifiedDocs.filter((d) => d.isCurrent).length})
               </h2>
               <p className="text-xs text-muted-foreground mt-1">
                 Preuves Qualiopi consolidées — session, produit, participant et organisme

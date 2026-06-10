@@ -240,3 +240,151 @@ describe('resolveDocs — union des 6 sources (NAV-01, D-09.3-04)', () => {
     for (const d of tenantDocs) expect(d.href).toBeNull();
   });
 });
+
+/**
+ * 09.3-03-fix CORRECTION 1 — SOURCE UNIQUE indicateurs.
+ * Les indicateurs émis par `resolveDocs` viennent EXCLUSIVEMENT du catalogue
+ * `QUALIOPI_DOC_CATALOG_INDICATORS` (doc-scope.ts). Aucun mapping local résiduel.
+ */
+describe('resolveDocs — indicateurs depuis le catalogue (CORRECTION 1, source unique)', () => {
+  function docOfType(type: string) {
+    const input = buildInput();
+    input.documents = [
+      {
+        id: `d-${type}`,
+        type,
+        entityType: 'participant',
+        entityId: 'pp1',
+        pdfUrl: 'http://minio/x.pdf',
+        sessionId: 's1',
+        participantId: 'pp1',
+        createdAt: CREATED_AT,
+      },
+    ];
+    input.pedagogicalAssets = [];
+    input.identity = [];
+    input.legal = { tenantId: 't1' };
+    return resolveDocs(input).find((d) => d.docType === type)!;
+  }
+
+  it('CONVENTION → "Indicateur 9"', () => {
+    expect(docOfType('CONVENTION').qualiopiIndicator).toBe('Indicateur 9');
+  });
+  it('ATTESTATION_FIN → "Indicateur 11"', () => {
+    expect(docOfType('ATTESTATION_FIN').qualiopiIndicator).toBe('Indicateur 11');
+  });
+  it('CERTIFICAT_REALISATION → "Légal Art. L6353-1" (jamais un numéro nu)', () => {
+    expect(docOfType('CERTIFICAT_REALISATION').qualiopiIndicator).toBe('Légal Art. L6353-1');
+  });
+  it('AGEFICE → null (administratif, PAS « Ind 27 »)', () => {
+    expect(docOfType('AGEFICE').qualiopiIndicator).toBeNull();
+  });
+  it('PROGRAMME → "Indicateur 1"', () => {
+    expect(docOfType('PROGRAMME').qualiopiIndicator).toBe('Indicateur 1');
+  });
+  it('aucun indicateur émis n\'est un numéro nu (« 11 », « 27 »…)', () => {
+    const input = buildInput();
+    input.legal = { tenantId: 't1', cgvMarkdown: '# CGV', reglementInterieurMarkdown: '# RI' };
+    for (const d of resolveDocs(input)) {
+      if (d.qualiopiIndicator !== null) {
+        expect(d.qualiopiIndicator, `${d.docType} indicateur nu`).not.toMatch(/^\d+$/);
+      }
+    }
+  });
+  it('PedagogicalAsset kind GRILLE_OBS → "Indicateur 11" (kind brut couvert par le catalogue)', () => {
+    const input = buildInput();
+    input.documents = [];
+    input.identity = [];
+    input.legal = { tenantId: 't1' };
+    input.pedagogicalAssets = [
+      {
+        id: 'pa-go',
+        kind: 'GRILLE_OBS',
+        sessionId: 's1',
+        participantId: 'pp1',
+        rawJson: { source: 'ollama' },
+        pdfUrl: 'http://minio/go.pdf',
+        generatedAt: GENERATED_AT,
+      },
+    ];
+    expect(resolveDocs(input).find((d) => d.docType === 'GRILLE_OBS')?.qualiopiIndicator).toBe(
+      'Indicateur 11',
+    );
+  });
+});
+
+/**
+ * 09.3-03-fix CORRECTION 2 — TEST DE PUISSANCE dédup version courante.
+ * 3 régénérations d'un même (docType × ancrage) à des `generatedAt` différents :
+ *  - une seule doit être `isCurrent` (la plus récente) ;
+ *  - sa `version` doit valoir 3 (taille du groupe).
+ * Commenter le tri DESC dans `assignVersions` doit virer ce test au rouge.
+ */
+describe('resolveDocs — dédup version courante (CORRECTION 2, test de puissance)', () => {
+  function threeVersionsInput(): ResolveDocsInput {
+    const mk = (id: string, day: string) => ({
+      id,
+      type: 'CONVENTION',
+      entityType: 'participant',
+      entityId: 'pp1',
+      pdfUrl: `http://minio/${id}.pdf`,
+      sessionId: 's1',
+      participantId: 'pp1',
+      createdAt: new Date(`2026-06-${day}T10:00:00.000Z`),
+    });
+    return {
+      // Ordre d'insertion volontairement NON trié (v2, v3, v1) pour exercer le tri.
+      documents: [mk('conv-v2', '02'), mk('conv-v3', '03'), mk('conv-v1', '01')],
+      pedagogicalAssets: [],
+      identity: [],
+      legal: { tenantId: 't1' },
+    };
+  }
+
+  it('3 versions du même (CONVENTION × participant) → 1 seule isCurrent, version=3', () => {
+    const docs = resolveDocs(threeVersionsInput());
+    expect(docs).toHaveLength(3);
+    const current = docs.filter((d) => d.isCurrent);
+    expect(current).toHaveLength(1);
+    expect(current[0]!.sourceId).toBe('conv-v3'); // la plus récente (03)
+    expect(current[0]!.version).toBe(3);
+  });
+
+  it('les versions non-courantes portent un rang décroissant (2 puis 1)', () => {
+    const docs = resolveDocs(threeVersionsInput());
+    const olds = docs.filter((d) => !d.isCurrent).map((d) => d.version).sort((a, b) => b - a);
+    expect(olds).toEqual([2, 1]);
+  });
+
+  it('deux (docType × ancrage) DIFFÉRENTS ne fusionnent pas (chacun courant, version 1)', () => {
+    const docs = resolveDocs({
+      documents: [
+        {
+          id: 'a',
+          type: 'CONVENTION',
+          entityType: 'participant',
+          entityId: 'pp1',
+          pdfUrl: 'http://minio/a.pdf',
+          sessionId: 's1',
+          participantId: 'pp1',
+          createdAt: CREATED_AT,
+        },
+        {
+          id: 'b',
+          type: 'CONVENTION',
+          entityType: 'participant',
+          entityId: 'pp2',
+          pdfUrl: 'http://minio/b.pdf',
+          sessionId: 's1',
+          participantId: 'pp2',
+          createdAt: CREATED_AT,
+        },
+      ],
+      pedagogicalAssets: [],
+      identity: [],
+      legal: { tenantId: 't1' },
+    });
+    expect(docs).toHaveLength(2);
+    expect(docs.every((d) => d.isCurrent && d.version === 1)).toBe(true);
+  });
+});
