@@ -38,6 +38,9 @@ import {
 import { MATRIX_DOC_TYPES } from '@/lib/doc-scope';
 // Phase 11 Plan 11-09 — Cross-nav D-07 : bloc Factures sur fiche apprenant.
 import { LearnerInvoicesBlock } from '@/components/learners/learner-invoices-block';
+// Phase 9.3 Plan 09.3-03 — NAV-02(a) : liste unifiée des docs (session+produit+participant+tenant).
+import { UnifiedDocsList } from '@/components/docs/unified-docs-list';
+import { getDocsForPerson } from '@/lib/docs/get-docs-for';
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -101,6 +104,12 @@ export default async function ApprenantDetailPage({
     },
   });
   if (!person) notFound();
+
+  // Phase 9.3 NAV-02(a) — liste unifiée des docs (session+produit+participant+tenant).
+  // Réutilise les 6 sources de preuves Qualiopi via resolveDocs (scope tenantId garanti
+  // par le wrapper). Affichée SOUS le bloc « Documents générés » existant (anti-régression
+  // CENTRAL-03). tenantId = user.tenantId (variable réelle de la page, cf. ligne 63).
+  const unifiedDocs = await getDocsForPerson(person.id, user.tenantId);
 
   // Documents liés à cet apprenant via ses participations
   const participantIds = person.participations.map((p) => p.id);
@@ -783,6 +792,7 @@ export default async function ApprenantDetailPage({
         // UX-03 : CTA pour générer un document si l'apprenant a au moins une participation
         const hasParticipations = person.participations.length > 0;
         return (
+          <div className="space-y-6">
           <section className="rounded-2xl border border-border bg-white overflow-hidden">
             <div className="p-5 border-b border-border flex items-start justify-between gap-3 flex-wrap">
               <div>
@@ -863,6 +873,21 @@ export default async function ApprenantDetailPage({
               </div>
             )}
           </section>
+
+          {/* Phase 9.3 NAV-02(a) — liste unifiée toutes sources (≤2 clics D-09.3-06). */}
+          <section className="rounded-2xl border border-border bg-white overflow-hidden">
+            <div className="p-5 border-b border-border">
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+                Tous les documents (toutes sources)
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Preuves Qualiopi consolidées — session, produit, participant et organisme
+                (CGV/RI). Un document en mode stub est signalé « non conforme ».
+              </p>
+            </div>
+            <UnifiedDocsList docs={unifiedDocs} />
+          </section>
+          </div>
         );
       })()}
     </div>
