@@ -117,6 +117,87 @@ export const DOC_INDICATORS: Record<string, string | null> = {
   CUSTOM: null,
 };
 
+/**
+ * Audit pré-BCI 03/07 — FAMILLE de gouvernance d'un docType/kind.
+ *
+ * ENJEU (but métier inventaire de génération de masse) : ne PAS mettre tous les
+ * docs dans la même benne de génération rétroactive. La famille découpe la
+ * worklist en LOTS :
+ *  - Lot A (génération de masse OK)   = `descriptif` + `analyse`
+ *  - Lot B (NE PAS générer sans aval) = `resultat`  + `presence`
+ *
+ * Pourquoi Lot B est interdit en génération automatique : générer rétroactivement
+ * un RÉSULTAT (scoring QCM, évaluation des acquis, satisfaction) ou une PREUVE
+ * SIGNÉE (émargement, assiduité, certificat, attestation) pour un stagiaire 2024
+ * = produire une fausse affirmation devant le financeur AGEFICE / l'auditeur.
+ *
+ * BIAIS DE SÉCURITÉ (non négociable) : tout docType/kind ABSENT de ce map est
+ * traité par défaut comme `resultat` (cf. `docFamilyOf`), JAMAIS `descriptif`.
+ * On préfère sur-classer en Lot B (gel) que de générer par erreur une preuve.
+ *
+ * Source UNIQUE (catalogue doc-scope) : le script d'inventaire dérive la famille
+ * d'ici, sans map local. Bordures à valider par Laurent (cf. test de couverture).
+ */
+export type DocFamily = 'descriptif' | 'analyse' | 'resultat' | 'presence';
+
+export const DOC_FAMILY: Record<string, DocFamily> = {
+  // ── descriptif : documents cadres/administratifs, pas de résultat ni de signature
+  //    stagiaire engageante. Génération de masse sans risque de fausse affirmation.
+  PROGRAMME: 'descriptif',
+  DEROULE_PEDAGOGIQUE: 'descriptif',
+  DEROULE: 'descriptif',
+  CONVOCATION: 'descriptif',
+  CHECKLIST_FORMATION: 'descriptif',
+  CONVENTION: 'descriptif',
+  CGV: 'descriptif',
+  REGLEMENT_INTERIEUR: 'descriptif',
+  SUPPORT_PEDAGOGIQUE: 'descriptif',
+  FACTURE: 'descriptif',
+  AGEFICE: 'descriptif',
+  PRE_ACCORD_OPCO: 'descriptif',
+  VALIDATION_OPCO: 'descriptif',
+  CNI: 'descriptif',
+  RIB: 'descriptif',
+  CFP: 'descriptif',
+
+  // ── analyse : analyse du besoin. Lot A (relire avant envoi), mais isolée car
+  //    elle reflète un échange amont — à régénérer avec prudence.
+  ANALYSE_BESOIN: 'analyse',
+
+  // ── resultat : tout ce qui PORTE UN RÉSULTAT/score/avis du stagiaire. Lot B.
+  EVALUATION_ACQUIS: 'resultat',
+  QCM: 'resultat',
+  POSITIONNEMENT: 'resultat',
+  GRILLE_OBS: 'resultat',
+  GRILLE_OBS_SESSION: 'resultat',
+  COMPETENCES: 'resultat',
+  SATISFACTION_CHAUD: 'resultat',
+  SATISFACTION_FROID: 'resultat',
+  SATISFACTION: 'resultat',
+  SATISFACTION_SESSION: 'resultat',
+
+  // ── presence : preuves de présence/réalisation SIGNÉES. Lot B (non régénérables
+  //    rétroactivement — une signature ne s'invente pas).
+  EMARGEMENT: 'presence',
+  ASSIDUITE: 'presence',
+  CERTIFICAT_REALISATION: 'presence',
+  ATTESTATION_FIN: 'presence',
+};
+
+/**
+ * Famille d'un docType/kind avec BIAIS DE SÉCURITÉ : défaut `resultat` (Lot B,
+ * gelé) pour tout type inconnu — jamais `descriptif`. Source unique = DOC_FAMILY.
+ */
+export function docFamilyOf(docType: string): DocFamily {
+  return DOC_FAMILY[docType] ?? 'resultat';
+}
+
+/** Lot de gouvernance dérivé de la famille. Lot A = masse OK ; Lot B = gelé. */
+export function docLotOf(docType: string): 'A' | 'B' {
+  const fam = docFamilyOf(docType);
+  return fam === 'descriptif' || fam === 'analyse' ? 'A' : 'B';
+}
+
 /** Labels FR — short = 2-3 chars header (UI-SPEC glyph legend), long = aria-label/tooltip. */
 export const DOC_TYPE_LABELS: Record<string, { short: string; long: string }> = {
   PROGRAMME: { short: 'Pg', long: 'Programme de formation' },
