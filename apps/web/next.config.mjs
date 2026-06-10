@@ -2,9 +2,14 @@ import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Charge .env depuis la racine du mono-repo
+// Charge .env depuis la racine du mono-repo, puis .env.local en override.
+// Convention Next.js standard : .env.local pour les secrets/overrides locaux
+// non-commit (clés OpenRouter, DB locale, ports custom...). Sans override:true,
+// dotenv ne réécrit pas une variable déjà set par .env — d'où l'AI_PROVIDER
+// qui restait "ollama" même si .env.local disait "openrouter".
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, '../../.env') });
+loadEnv({ path: path.resolve(__dirname, '../../.env.local'), override: true });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
