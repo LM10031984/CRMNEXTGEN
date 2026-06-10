@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 12 complete (MOD-01 rename /app/preinscriptions → /app/inscriptions + MOD-02 catalogue templates read-only)
-last_updated: "2026-06-01T12:00:00Z"
-last_activity: 2026-06-01 — Phase 12 close : MOD-01 rename route admin /app/preinscriptions → /app/inscriptions (move git mv + redirect 308 + sidebar 1 entrée + 17 refs migrées + route publique /preinscription/[token] préservée D-03 + constante MinIO bucket préservée) + MOD-02 catalogue lib/templates-catalog.ts (27 entries 3 catégories qualiopi/agefice/email + Server Component listing /app/templates + RBAC ADMIN+MANAGER+LECTEUR D-09). V1 sans preview Gotenberg (D-11 décision planner). Convention « renommage de route » établie (1ère application projet : move + redirect 308 + grep update systématique). Convention « catalogue centralisé code-driven lib/<feature>-catalog.ts » établie (1ère application projet). 15 tests Wave 0 verts (5 redirect-308/nav-config + 6 catalogue + 4 page smoke), 707/707 tests verts global. Build Next.js clean. Plus aucun placeholder dans la sidebar. Composant <Placeholder> orphelin (0 import restant) — décision : supprimer.
+stopped_at: Completed 09.3-02-PLAN.md
+last_updated: "2026-06-10T09:17:41.753Z"
+last_activity: 2026-06-10
 progress:
-  total_phases: 14
+  total_phases: 16
   completed_phases: 9
-  total_plans: 61
+  total_plans: 84
   completed_plans: 51
 ---
 
@@ -21,19 +21,22 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 10 — Audit Qualiopi blanc (seule phase v5 restante)
+**Current focus:** Phase 09.3 — navigation-documentaire-unifi-e
 
 ---
 
 ## Current Position
 
-Phase: 12 (Modules stub Inscriptions et Modèles) — COMPLETE (closed 2026-06-01, 3/3 plans, 2/2 MOD-* requirements, 15 tests Wave 0 verts, 0 placeholder restant dans sidebar)
-Next: /gsd:plan-phase 10 (Audit Qualiopi blanc — seule phase v5 restante : QBLANC-01/02/03)
+Phase: 09.3 (navigation-documentaire-unifi-e) — EXECUTING
+Plan: 3 of 4
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-06-10 — Plan 09.3-02 livré (NAV-04 + NAV-05). 3 tâches, 3 commits atomiques `fbfeccb`/`b5fe95b`/`9be197a`. **NAV-05 — 7 corrections `qualiopiIndicator` du seed `QualiopiDocCatalog` sur RNQ V9 (D-09.3-08)** : CONVENTION ind.7→9 (preuve transversale, contrôle nominatif + transmission Adobe Sign), PROGRAMME ind.9→1 (info publique exhaustive), CONVOCATION null→9 (conditions de déroulement diffusées), SUPPORT_PEDAGOGIQUE ind.9→19 (ressources mises à disposition), PRE_ACCORD_OPCO + AGEFICE ind.7→null (financement/administratif), CERTIFICAT_REALISATION garde « Légal Art. L6353-1 » + note « preuve d'audit rattachée Indicateur 11 ». Inchangés : EMARGEMENT/ASSIDUITE 12, EVALUATION_ACQUIS/ATTESTATION_FIN 11, FACTURE légal, VALIDATION_OPCO null. 0 occurrence « Indicateur 7 » résiduelle dans le bloc `seedQualiopiDocCatalog` (Indicateur 7 légitime V9 ailleurs non touché). **NAV-04 — triage 5 fantômes (D-09.3-07)** : SATISFACTION nu retiré du seed (remplacé fonctionnellement par SATISFACTION_CHAUD/FROID en PedagogicalAsset, déjà dans MATRIX_DOC_TYPES) ; PRE_ACCORD_OPCO retiré de MATRIX_DOC_TYPES (14→13, jalon workflow OpcoSubmission, reste entrée catalog avec indicateur null) ; VALIDATION_OPCO tracé jalon (déjà hors matrice) ; SUPPORT_PEDAGOGIQUE gardé (upload manuel, ind.19) ; CUSTOM upload libre (hors matrice) → plus de cellule MISSING permanente injustifiée dans la matrice par-participant. **GATE PRINCIPAL NAV-05** = nouveau `apps/web/src/lib/docs/__tests__/seed-catalog.test.ts` (14 tests) qui LIT le seed réel via fs + regex et asserte le mapping cible figé `QUALIOPI_DOC_CATALOG_INDICATORS` (nouvelle constante exportée doc-scope.ts = source de vérité de recette, réutilisable T10) + Test 4 = recette 0-drift (aucune entrée Indicateur 7 + seed == mapping cible) + Test 3 = NAV-04 (SATISFACTION/PRE_ACCORD_OPCO/VALIDATION_OPCO/CUSTOM absents de MATRIX_DOC_TYPES). Suite complète 858/858 verte (+14), tsc @qualiof/db clean. 1 déviation Rule 1 : expectations `learner-stats.test.ts` (missingDocsCount 14/13/12→13/12/11) + `doc-scope.test.ts` (length 14→13) recalées suite au retrait du fantôme PRE_ACCORD_OPCO (conséquence directe et nécessaire). Hors scope (consigné `deferred-items.md`) : 6 erreurs tsc pré-existantes `redirect-308.test.ts` (next.config.mjs WIP non committé) — 0 erreur tsc hors ce fichier. Plan 09.3-03 débloqué.
+- 2026-06-10 — Phase 9.3 inserted after Phase 9: Navigation documentaire unifiée (URGENT, pré-audit RNQ V9 03/07). Prérequis de Phase 10 (Audit blanc) : sans navigation unifiée, l'audit blanc affichera des dossiers verts creux. Audit Phase 1 livré (`.planning/audit/MATRICE-NAVIGATION-DOCS.md`) : le modèle `Document` n'a que sessionId/participantId en FK réelle ; les preuves Qualiopi sont éclatées sur 5 sources (Document, PedagogicalAsset, SensitiveData/Person/AgeficeProfile pour CNI/RIB/CFP, markdown Tenant pour CGV/RI). Solution actée = résolveur LECTURE pur `resolveDocs` (UNION des 5 sources, ZÉRO migration/backfill — réversible) plutôt que dénormaliser Document seul (insuffisant car la moitié des preuves ne sont pas des Document, et risqué à 3 sem de l'audit). Contrat `UnifiedDoc` figé : référence polymorphe `sourceTable+sourceId` (réutilisable par T7 check-list), `qualiopiIndicator` + `usedStub` pour la conformité (usedStub = `PedagogicalAsset.rawJson.source==='stub'`, false pour les docs Document = templates déterministes). 3 surfaces à brancher : onglet Docs apprenant enrichi (la fiche charge DÉJÀ rawSessionDocs/rawProductDocs `apprenants/[id]/page.tsx:147` mais ne les affiche pas → surtout du rendu), bloc Docs produit, liens docs tenant. Critère de recette NON-NÉGOCIABLE (anti-pattern récurrent Laurent) : test comportemental vitest fixtures = 1 preuve dans chacune des 5 sources pour un même apprenant → assert resolveDocs renvoie 5 (PAS un grep d'imports). Triage 5 types fantômes : SATISFACTION nu → retirer du seed (remplacé par CHAUD/FROID) ; PRE_ACCORD_OPCO/VALIDATION_OPCO → sortir matrice docs, jalons workflow OpcoSubmission ; SUPPORT_PEDAGOGIQUE → garder en upload manuel (preuve réelle) ; CUSTOM → upload libre. HORS PÉRIMÈTRE : migration Document +productId/+personId + backfill → ROADMAP post-03/07 (le résolveur la prépare, ne la bloque pas).
+- 2026-06-10 — Phase 9.2 inserted after Phase 9: Réconciliation base 3 sources (Airtable + SmartOF + Tréso AGEFICE) (URGENT, pré-audit RNQ V9 03/07). Prérequis de Phase 10 (Audit blanc). Principe : zéro reconstruction de schéma d'import — auditer/rejouer/arbitrer l'outillage existant (dry-run + ExternalIdentity). 5 étapes E0 photo read-only + pg_dump ‖ E1 RECONCILE-RULES.md (golden-record SmartOF descriptif / Airtable casquettes pré-nov2025 / Tréso encaissement) → E2 rejeu ordonné (prérequis dur : dedupe.merge.test.ts AVANT passe dedupe) → E3 reliquat CSV + gate écart CA <2% + 0 ligne inexpliquée → E4 dry run témoin gate de fond (Bloom + markdown, 0 stub). Garde-fous : pg_dump avant chaque --apply, interdiction modifier scripts import sans justif écrite, gel couple modèle/prompts (Ollama mistral-small:24b) pour tout l'audit jusqu'au 03/07. E5 (généralisation échantillon) hors périmètre, conditionné liste backfillables validée Kaïna 16/06 (émargements exclus, non négociable).
 - 2026-05-12 — Brownfield project initialized. Paliers 2.2/2.3/3/4 imported as Validated requirements. New milestone v5 created with 40 active requirements split across 12 phases (fine granularity).
 - 2026-05-13 — Phase 6 closed : UX-11 hiérarchisation dashboard (NO-OP audit + a11y CollapsibleSection) + UX-12 helper funder-codes (14 sites UI) + UX-13 audit a11y (verdict PASS_AVEC_NOTES). 3 plans livrés (06-01 commits `096bc28`+`4d98926`, 06-02 commit `b71b620`, 06-03 NO-OP doc-only) + 1 plan bookkeeping (06-04). ~8 fichiers UI touchés, 1 audit a11y doc, 0 stub introduit.
 - 2026-05-14 — Plan 07-01 livré : Tenant Prisma étendu (+10 colonnes nullables D-01 hybrid), of-config.ts refactoré async (`loadOfConfig(tenantId)` + helper pur `resolveOfConfig` + legacy `getOfConfig()`), 12+ call sites migrés vers pre-resolve Option B, 4 drifts `process.env.OF_*` éliminés (invoices.ts, programme-generator.ts, qualiopi-bilan/export, generate-checklist-formation, mailer.ts). 15 tests Vitest verts. Build + tsc clean. SET-01/SET-02/SET-03 fondations posées.
@@ -159,6 +162,7 @@ Quand on renomme une route Next.js (ex : `/app/foo` → `/app/bar`) :
    { source: '/app/foo/:path*', destination: '/app/bar/:path*', permanent: true },
    ```
    (Convention CLAUDE.md > Routes — toujours `:path*` pour les sous-routes.)
+
 4. **Grep update systématique** : `grep -rn "/app/foo" apps/web/src/` puis migrer tous les `href`, `redirect()`, `router.push()`, `revalidatePath()`. Les noms de dossiers internes (`components/foo/`, `server/actions/foo*.ts`) et les constantes MinIO peuvent garder leur nom (D-05 Phase 12).
 5. **Sidebar nav-config** : si l'item existait, renommer `label` + `href`. Si doublon stub, supprimer.
 6. **Tests Wave 0** : test redirect-308 (vérifie le tableau retourné par `nextConfig.redirects()`) + test snapshot sidebar (vérifie 1 seule entrée du nouveau label, 0 entrée de l'ancien).
@@ -240,12 +244,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Top 2 risques audit Qualiopi résolus (Ind 1 + Ind 2 via page /catalogue). Restent : Ind 11 procédure évaluation, Ind 21 CV formateurs, Ind 26 réseau handicap, Ind 27 contrats sous-traitance.
+Stopped at: Completed 09.3-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-05-30 — Audit Qualiopi : Top 1 + Top 2 risques résolus via page publique /catalogue (Ind 1 + Ind 2)
+Last activity: 2026-06-10
 
 ### Roadmap Evolution
 

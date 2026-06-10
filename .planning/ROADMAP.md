@@ -155,6 +155,44 @@ Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l
 - [x] 09-04-PLAN.md — Page paramètres /app/parametres/distribution-leads ADMIN + extension cloche TopBar (kind lead.assigned + markNotificationRead) + sidebar (Vue de charge + Distribution leads)
 - [x] 09-05-PLAN.md — Bookkeeping (REQUIREMENTS/ROADMAP/STATE + smoke build/tests + 09-SMOKE.md + 09-SUMMARY.md)
 
+### Phase 09.3: Navigation documentaire unifiée (INSERTED)
+
+**Goal:** Rendre toute preuve Qualiopi retrouvable en ≤2 clics depuis chacune des 3 fiches (apprenant / session / produit) via un résolveur lecture pur `resolveDocs` qui UNIONise les 5 sources éclatées (Document, PedagogicalAsset, SensitiveData/Person/AgeficeProfile, Tenant), porte la conformité (qualiopiIndicator + usedStub) et expose une référence polymorphe sourceTable+sourceId réutilisable par T7 — sans migration de schéma. Inclut le triage des 5 DocType fantômes et la correction 3-sources de la colonne qualiopiIndicator du seed. Prérequis de l'audit blanc Phase 10.
+**Requirements**: NAV-01 (résolveur pur + test 5-sources), NAV-02 (3 surfaces UI ≤2 clics), NAV-03 (conformité usedStub visible), NAV-04 (triage 5 fantômes), NAV-05 (correction seed qualiopiIndicator 3-sources)
+**Depends on:** Phase 9
+**Plans:** 2/4 plans executed
+
+Plans:
+- [x] 09.3-01-PLAN.md — Résolveur pur resolveDocs + wrappers Prisma scoped tenantId + test comportemental 5-sources (NAV-01)
+- [x] 09.3-02-PLAN.md — Triage 5 fantômes (NAV-04) + 7 corrections seed qualiopiIndicator RNQ V9 (NAV-05)
+- [ ] 09.3-03-PLAN.md — 3 surfaces UI ≤2 clics + badge usedStub (NAV-02 + NAV-03)
+- [ ] 09.3-04-PLAN.md — Bookkeeping + smoke + SUMMARY
+
+### Phase 09.2: Réconciliation base 3 sources (Airtable + SmartOF + Tréso AGEFICE) (INSERTED)
+
+**Goal:** Obtenir une base réconciliée et fiable en rejouant l'outillage d'import existant dans le bon ordre (zéro reconstruction), arbitrer le reliquat, et prouver sur 1 session témoin que des données propres génèrent l'intégralité des docs Qualiopi conformes. Prérequis de Phase 10 (Audit blanc), pré-audit RNQ V9 du 03/07.
+**Requirements**: TBD (phase insérée — décisions figées dans 09.2-RECONCILE-RULES.md + 09.2-CONTEXT.md)
+**Depends on:** Phase 9
+**Success Criteria** (what must be TRUE):
+  1. `dedupe.merge.test.ts` existe et passe : une fusion réelle reporte les `ExternalIdentity` du perdant sur le survivant (prérequis dur fermé avant la passe dedupe).
+  2. Dédoublonnage exécuté avec garde-fous : email jamais clé de fusion seule (cas Nestenn), SIRET partagé noms ≠ → reliquat manuel, 48 persons sans email → clé alternative.
+  3. Chaîne rejouée dans l'ordre (dedupe → SmartOF → sync-prices hors-AGEFICE → Tréso) ; chaque `--apply` précédé d'un `pg_dump` et d'une revue de diff ; aucun script d'import modifié sans justification écrite.
+  4. Bug prix corrigé via passe Tréso (336€×52 résolu) ; clé Tréso à dégradation explicite (jamais de no-match silencieux).
+  5. Gate cohérence vert : écart CA AGEFICE < 2 % + 0 ligne inexpliquée (symétrique), reliquat tranché dans un CSV de travail.
+  6. Dry run témoin sur 1 session 2026 AGEFICE complète : pack closure génère tous les docs, gate de fond OK (Bloom + structure + 0 stub), couple modèle/prompts gelé (mistral-small).
+
+**Plans:** 8 plans
+
+Plans:
+- [ ] 09.2-01-PLAN.md — Wave 0 : db:generate + refacto testabilité dedupe + dedupe.merge.test.ts (prérequis dur)
+- [ ] 09.2-02-PLAN.md — Wave 0 : correction clé Tréso §4 + test scoring + gate-treso-ca.ts + sonde-lieux-smartof.ts (read-only)
+- [ ] 09.2-03-PLAN.md — Passe dédoublonnage dedupe.ts (dry → pg_dump → apply, checkpoint humain)
+- [ ] 09.2-04-PLAN.md — Passe SmartOF identité/sessions/inscriptions + décision lieux (dry → pg_dump → apply, checkpoint)
+- [ ] 09.2-05-PLAN.md — Passe sync prix hors-AGEFICE (dry → pg_dump → apply, checkpoint ; 336€ intacts)
+- [ ] 09.2-06-PLAN.md — Passe Tréso AGEFICE (prix 336€ corrigé + 4 booléens canoniques) + backfill formateur (2 applies, 2 checkpoints)
+- [ ] 09.2-07-PLAN.md — Gate E3 : écart CA <2% + reliquat symétrique tranché (CSV de travail, checkpoint décision)
+- [ ] 09.2-08-PLAN.md — Dry run témoin E4 : closure 1 session 2026 AGEFICE, gate de fond (0 stub + Bloom), modèle gelé
+
 ### Phase 09.1: Centralisation Qualiopi 360° (INSERTED)
 **Goal**: Centraliser visuellement les documents Qualiopi par session/apprenant/produit ; permettre re-génération ciblée 1 stagiaire ; refondre fiches apprenant (timeline année) et produit (4 onglets) ; cross-navigation Airtable-style.
 **Depends on**: Phase 9
