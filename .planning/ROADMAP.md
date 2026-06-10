@@ -4,6 +4,8 @@
 
 Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l'audit UX/QA 2026-05-12 + 4 nouvelles features métier en 12 phases (granularity fine), avec couverture 100% des 40 v1 requirements définis dans `REQUIREMENTS.md`. Démarrage par les bugs critiques bloquants démo, puis fondations responsive, puis UX gaps, puis paramètres + RBAC, puis nouvelles features (leads auto, Qualiopi blanc, factures, modules stub).
 
+> **Plan directeur actif (2026-06-10)** : `.planning/PLAN-DIRECTEUR-COMPLET.md` — Partie 1 (pré-audit Qualiopi du 3 juillet 2026 : Phase 9.3 résolveur docs → lot P0 T1–T7 → T3 → dry run + gel J-3) puis Partie 2 (refonte UX U0–U5, après le 3/07). Il remplace `PLAN-DIRECTEUR-AUDIT-03-07.md` (v1) et prime sur l'ordre des phases ci-dessous jusqu'au 3 juillet.
+
 ## Phases
 
 **Phase Numbering:**
@@ -19,6 +21,7 @@ Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l
 - [x] **Phase 7: Paramètres organisme éditables** - Sortir SIRET/logo/préfixe facture du read-only
 - [x] **Phase 8: Multi-utilisateurs et RBAC** - Invitation users + permissions effectives par rôle
 - [x] **Phase 9: Distribution leads automatique** - Auto-assignation Lead→Commercial + vue de charge
+- [ ] **Phase 09.3: Retrouvabilité des preuves (INSERTED)** - Résolveur lecture seule `resolveDocs` (UNION 6 sources), triage des 5 DocType fantômes + corrections seed, 3 surfaces UI (tout doc en ≤ 2 clics) — cf. `PLAN-DIRECTEUR-COMPLET.md` Partie 1, Bloc A
 - [ ] **Phase 10: Audit Qualiopi blanc** - Simulation pré-audit 32 indicateurs + alertes dossiers incomplets
 - [x] **Phase 11: Factures cycle complet** - Numérotation, paiements, relances, export comptable (completed 2026-05-21)
 - [x] **Phase 12: Modules stub Inscriptions et Modèles** - Trancher périmètre, livrer ou retirer

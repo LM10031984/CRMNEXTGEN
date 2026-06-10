@@ -240,12 +240,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Top 2 risques audit Qualiopi résolus (Ind 1 + Ind 2 via page /catalogue). Restent : Ind 11 procédure évaluation, Ind 21 CV formateurs, Ind 26 réseau handicap, Ind 27 contrats sous-traitance.
+Stopped at: Adoption du plan directeur complet (`.planning/PLAN-DIRECTEUR-COMPLET.md`, 2026-06-10) — Partie 1 pré-audit 3 juillet (Phase 9.3 → T1–T7 → T3 → dry run + gel J-3), Partie 2 post-audit UX (U0–U5). U0 démarré : `.planning/ux/JOURNAL-FRICTION.md` créé.
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
-Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
+Next plan: Phase 09.3 (résolveur resolveDocs 6 sources + triage fantômes + 3 surfaces UI) — cf. PLAN-DIRECTEUR-COMPLET.md Partie 1 Bloc A
 
-Last activity: 2026-05-30 — Audit Qualiopi : Top 1 + Top 2 risques résolus via page publique /catalogue (Ind 1 + Ind 2)
+Last activity: 2026-06-10 — Plan directeur complet placé dans `.planning/`, référencé ROADMAP+STATE, journal de friction U0 créé. Note de passation : les artefacts GSD de la 9.3 (4 plans, contrat UnifiedDoc, décisions D-09.3-01..08, `MATRICE-NAVIGATION-DOCS.md`) ne sont **pas** dans le repo distant (restés en local) — l'exécution 9.3 se fait depuis la spec de la Partie 1 du plan directeur.
 
 ### Roadmap Evolution
 
