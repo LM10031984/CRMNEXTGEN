@@ -382,10 +382,13 @@ async function detectEiSelfOrgsPerPerson(tenantId: string): Promise<
   return result;
 }
 
-export async function detectPersonsByName(tenantId: string): Promise<
-  Array<{ key: string; ids: string[]; names: string[] }>
-> {
-  const persons = await prisma.person.findMany({
+export async function detectPersonsByName(
+  tenantId: string,
+  // Client injectable (testabilité 09.2) : par défaut le singleton (CLI inchangé).
+  // Le test passe un client lié à qualiof_test pour ne JAMAIS lire/écrire la prod-locale.
+  client: Pick<typeof prisma, 'person'> = prisma,
+): Promise<Array<{ key: string; ids: string[]; names: string[] }>> {
+  const persons = await client.person.findMany({
     where: { tenantId },
     select: { id: true, firstName: true, lastName: true, email: true },
   });

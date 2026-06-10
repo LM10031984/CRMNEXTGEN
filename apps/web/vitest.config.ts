@@ -13,7 +13,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // scripts/** : tests d'intégration BDD réelle des scripts de réconciliation
+    // (Phase 09.2 — dedupe.merge, match-treso-scoring). Inclus dans la suite.
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.{test,spec}.{ts,tsx}'],
   },
   resolve: {
     alias: {

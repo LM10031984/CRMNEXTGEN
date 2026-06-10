@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run",
+    "test": "dotenv -e ../../.env -- vitest run",
     "worker:closure": "dotenv -e ../../.env -- tsx watch --clear-screen=false scripts/closure-worker.ts",
     "worker:closure:pg": "dotenv -e ../../.env.local -e ../../.env -- tsx watch --clear-screen=false scripts/closure-worker-postgres.ts",
     "worker:reminders": "dotenv -e ../../.env -- tsx watch --clear-screen=false scripts/invoice-reminder-worker.ts",
