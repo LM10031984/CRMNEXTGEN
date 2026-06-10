@@ -41,6 +41,35 @@ export const SESSION_ONLY_DOC_TYPES = [
 ] as const;
 export type SessionOnlyDocType = (typeof SESSION_ONLY_DOC_TYPES)[number];
 
+/**
+ * D-09.3-08 — Mapping cible figé `DocType → qualiopiIndicator` du seed
+ * `QualiopiDocCatalog` (`packages/db/prisma/seed.ts`), recoupé sur le RNQ V9
+ * (plan §1) + la grille des 2 rapports d'audit BCI précédents.
+ *
+ * Source de vérité de la recette « 0 drift » (NAV-05) : le test
+ * `seed-catalog.test.ts` lit le seed réel et asserte qu'il correspond
+ * exactement à ce mapping. La valeur racine erronée `Indicateur 7` (constante
+ * maison QUALIOPI_INDICATORS, non-V9) ne doit JAMAIS apparaître ici.
+ *
+ * `null` = doc administratif/financement sans indicateur Qualiopi.
+ * `'Légal …'` = obligation légale (hors numérotation RNQ).
+ */
+export const QUALIOPI_DOC_CATALOG_INDICATORS: Record<string, string | null> = {
+  CONVENTION: 'Indicateur 9',
+  PRE_ACCORD_OPCO: null,
+  PROGRAMME: 'Indicateur 1',
+  CONVOCATION: 'Indicateur 9',
+  EMARGEMENT: 'Indicateur 12',
+  SUPPORT_PEDAGOGIQUE: 'Indicateur 19',
+  CERTIFICAT_REALISATION: 'Légal Art. L6353-1',
+  ASSIDUITE: 'Indicateur 12',
+  EVALUATION_ACQUIS: 'Indicateur 11',
+  ATTESTATION_FIN: 'Indicateur 11',
+  VALIDATION_OPCO: null,
+  FACTURE: 'Légal',
+  AGEFICE: null,
+};
+
 /** Labels FR — short = 2-3 chars header (UI-SPEC glyph legend), long = aria-label/tooltip. */
 export const DOC_TYPE_LABELS: Record<string, { short: string; long: string }> = {
   PROGRAMME: { short: 'Pg', long: 'Programme de formation' },

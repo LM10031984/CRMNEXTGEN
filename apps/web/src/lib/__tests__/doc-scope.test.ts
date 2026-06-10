@@ -11,15 +11,15 @@ import {
  * Tests Phase 9.1 Plan 09.1-01 Task 2 — `doc-scope.ts` (table figée D-04).
  *
  * Coverage (cf. <behavior> tests 8/9/10) :
- *  - Test 8 : MATRIX_DOC_TYPES.length === 14 (cf. UI-SPEC Open Question 1)
+ *  - Test 8 : MATRIX_DOC_TYPES.length === 13 (D-09.3-07 : PRE_ACCORD_OPCO retiré, jalon OpcoSubmission)
  *  - Test 9 : SESSION_ONLY_DOC_TYPES.length === 3
  *  - Test 10 : DOC_TYPE_TO_CLOSURE_KIND.CERTIFICAT_REALISATION === 'CERTIFICAT'
  *  - Sanity : chaque MATRIX_DOC_TYPE doit avoir un label DOC_TYPE_LABELS.
  */
 
 describe('MATRIX_DOC_TYPES (D-04 table figée)', () => {
-  it('Test 8 — MATRIX_DOC_TYPES.length === 14', () => {
-    expect(MATRIX_DOC_TYPES.length).toBe(14);
+  it('Test 8 — MATRIX_DOC_TYPES.length === 13 (D-09.3-07 : PRE_ACCORD_OPCO retiré)', () => {
+    expect(MATRIX_DOC_TYPES.length).toBe(13);
   });
 
   it('contient PROGRAMME en tête (priorité affichage colonnes matrice)', () => {
