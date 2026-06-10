@@ -240,12 +240,16 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Adoption du plan directeur complet (`.planning/PLAN-DIRECTEUR-COMPLET.md`, 2026-06-10) — Partie 1 pré-audit 3 juillet (Phase 9.3 → T1–T7 → T3 → dry run + gel J-3), Partie 2 post-audit UX (U0–U5). U0 démarré : `.planning/ux/JOURNAL-FRICTION.md` créé.
-Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
-Last completed plan: 260530-f0l (bloc Résultats Ind 2)
-Next plan: Phase 09.3 (résolveur resolveDocs 6 sources + triage fantômes + 3 surfaces UI) — cf. PLAN-DIRECTEUR-COMPLET.md Partie 1 Bloc A
+Stopped at: Phase 09.3 exécutée (4 plans, 3 commits code) depuis la spec du plan directeur — résolveur `resolveDocs` UNION 6 sources (lib/resolve-docs.ts pur + resolve-docs-db.ts wrappers tenant-scopés, 17 tests, gate mutation exécuté), triage 5 DocType fantômes + corrections seed (packages/db/src/qualiopi-doc-catalog.ts, 9 tests mapping), 3 surfaces UI (onglet Docs apprenant unifié + badge '⚠ no_proof' + pièces CNI/RIB/CFP ; <ProductDocsBlock> fiche produit ; liens PDFs légaux dans /app/parametres). 825/825 tests apps/web verts, 102/102 shared, 19/19 db, tsc clean, next build OK.
+Last completed plan: 09.3-04 (bookkeeping — balayage .bak/.orig : aucun trouvé sur cette branche)
+Next plan: Bloc A item 2 (préparation du 16/06, humain hors code) puis Bloc B lot P0 : T1 → T2 → T4 → T6 → T5 → T7 → T3
 
-Last activity: 2026-06-10 — Plan directeur complet placé dans `.planning/`, référencé ROADMAP+STATE, journal de friction U0 créé. Note de passation : les artefacts GSD de la 9.3 (4 plans, contrat UnifiedDoc, décisions D-09.3-01..08, `MATRICE-NAVIGATION-DOCS.md`) ne sont **pas** dans le repo distant (restés en local) — l'exécution 9.3 se fait depuis la spec de la Partie 1 du plan directeur.
+Restes ouverts Phase 9.3 (à rejouer par Laurent) :
+- Checkpoint visuel :3010 sur les 3 surfaces (09.3-03) — pas de runtime dans l'environnement d'exécution.
+- Recoupement « 0 drift » du catalogue contre grille BCI réelle + guide V9 + QUALIOPI-PLAN-COMPLET §1 (sources sur le poste local, non poussées) — le test de mapping verrouille les décisions explicites du plan directeur uniquement.
+- Re-seed à lancer (`pnpm --filter @qualiof/db db:seed`) pour appliquer le triage du catalogue en base (upsert + purge SATISFACTION / PRE_ACCORD_OPCO / VALIDATION_OPCO).
+
+Last activity: 2026-06-10 — Plan directeur adopté + U0 créé + Phase 9.3 livrée (hors checkpoints humains ci-dessus). Note de passation : les artefacts GSD 9.3 (4 plans, contrat UnifiedDoc, D-09.3-01..08, MATRICE-NAVIGATION-DOCS.md) ne sont pas dans le repo distant — exécution faite depuis la spec Partie 1 du plan directeur ; contrat UnifiedDoc reconstruit dans lib/resolve-docs.ts.
 
 ### Roadmap Evolution
 
