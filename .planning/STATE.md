@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-stopped_at: "09.3-03 — 3 tâches AUTO faites, CHECKPOINT visuel Task 4 EN ATTENTE (vérif :3010 ≤2 clics + stub non conforme)"
-last_updated: "2026-06-10T09:25:26.823Z"
+status: in-progress
+stopped_at: "Phase 9.3 COMPLÈTE (4/4 plans) — NAV-01..05 livrés, checkpoint 09.3-03 APPROUVÉ par Laurent"
+last_updated: "2026-06-10T13:30:00.000Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 16
   completed_phases: 9
   total_plans: 84
-  completed_plans: 52
+  completed_plans: 54
 ---
 
 # STATE — QualiOF
@@ -27,13 +27,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 ## Current Position
 
-Phase: 09.2 (r-conciliation-base-3-sources-airtable-smartof-tr-so-agefice) — EXECUTING
-Plan: 1 of 8
+Phase: 09.3 (navigation-documentaire-unifi-e) — COMPLETE (4/4 plans, 2026-06-10)
+Plan: 4 of 4 (clôture)
+
+Next: hotfix séparé (docs non cliquables étapes 2-4 page session + compteur AGEFICE 2/1→1/1 + typo « intellligence » header + dénormalisation nom produit F-02), PUIS retour rail audit RNQ V9 — CSV formateurs (Ind 21), inventaire preuves PSH (Ind 26, présenter 16/06 Kaïna), RDV Kaïna 16/06. Phases ouvertes : 09.2 (réconciliation, 3/8) et 10 (audit blanc, consomme resolveDocs + catalogue V9 corrigé).
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-06-10 — **Phase 9.3 done** (NAV-01..05, 4/4 plans). Navigation documentaire unifiée LIVRÉE : `resolveDocs` pur UNIONise **6 sources** de preuves (Document, PedagogicalAsset, SensitiveData/CNI, Person/RIB, AgeficeProfile/CFP, Tenant/CGV-RI) → `UnifiedDoc[]` (référence polymorphe `sourceTable+sourceId` T7-ready, 0 migration, réversible) + wrappers scopés tenantId (PII via racine Person, 0 fuite RGPD) ; **test comportemental 6-sources vert** prouvé ROUGE→VERT par mutation (jamais dégradé en grep) ; 3 surfaces ≤2 clics (`UnifiedDocsList` + onglet Docs apprenant + onglet Docs produit groupé produit→sessions→apprenant) ; badge `usedStub` visible (stub jamais conforme) ; triage 5 fantômes + 7 corrections seed `qualiopiIndicator` RNQ V9 + gate Vitest 0-drift. **Checkpoint visuel 09.3-03 APPROUVÉ par Laurent** + 3 corrections d'indicateurs V9 tranchées (ASSIDUITE→null badge financeur hors rollup ind.12, CERTIFICAT→Ind 11+mention légale, ATTESTATION_FIN→Légal pur, captions Préparation=1·4·5·6·9·17 / Pack=8·11·12·30) + source unique indicateurs/libellés (retrait littéraux « Ind 27 », résolveur lit le catalogue) + dédup version courante. **Suite 897/897 verte**, tsc web (hors 6 préexistantes redirect-308) + db clean, build OK, 0 orphelin .bak/.orig. **DETTE D-09.3-08(b) DIFFÉRÉE** : la convention ne doit PAS figurer sous l'item ind.1 du futur T7 (check-list QUALIOPI-PLAN-COMPLET) — preuves ind.1 = site+programme+CGV, place convention = ind.9 ; T7 absent de la branche (vérifié : `indicShort('CONVENTION')`=Ind 9, checklist-formation-template ne l'indexe pas), donc rien à corriger ici-et-maintenant → à encoder lors de la création de T7. **Limite mono-indicateur** : ind.5 (objectifs, NC majeure Kaïna) porté par aucun doc en primaire → curaté à la main dans caption Préparation ; tagger ind.5 SECONDAIRE sur programme/déroulé + dériver captions = chantier futur (lié T9). **Dépendance T10** (alignement RNCQ) : même source V9 que le fix seed → séquencer ensemble. **Re-seed `pnpm db:seed` requis** (page /paramètres lit la table ; UI fiches lit DOC_INDICATORS déjà correct). **Migration Document** +productId/+personId + backfill reportée post-03/07. **Hotfix séparé en attente** (hors 9.3) : docs non cliquables étapes 2-4 page session + compteur AGEFICE (2/1→1/1) + typo « intellligence » header + dénormalisation nom produit (F-02) ; backfill formateur Tréso hors scope (Phase 9.2/E2). Suite : hotfix puis retour rail audit (CSV formateurs Ind 21, inventaire preuves PSH Ind 26, RDV Kaïna 16/06).
 - 2026-06-10 — Plan 09.3-02 livré (NAV-04 + NAV-05). 3 tâches, 3 commits atomiques `fbfeccb`/`b5fe95b`/`9be197a`. **NAV-05 — 7 corrections `qualiopiIndicator` du seed `QualiopiDocCatalog` sur RNQ V9 (D-09.3-08)** : CONVENTION ind.7→9 (preuve transversale, contrôle nominatif + transmission Adobe Sign), PROGRAMME ind.9→1 (info publique exhaustive), CONVOCATION null→9 (conditions de déroulement diffusées), SUPPORT_PEDAGOGIQUE ind.9→19 (ressources mises à disposition), PRE_ACCORD_OPCO + AGEFICE ind.7→null (financement/administratif), CERTIFICAT_REALISATION garde « Légal Art. L6353-1 » + note « preuve d'audit rattachée Indicateur 11 ». Inchangés : EMARGEMENT/ASSIDUITE 12, EVALUATION_ACQUIS/ATTESTATION_FIN 11, FACTURE légal, VALIDATION_OPCO null. 0 occurrence « Indicateur 7 » résiduelle dans le bloc `seedQualiopiDocCatalog` (Indicateur 7 légitime V9 ailleurs non touché). **NAV-04 — triage 5 fantômes (D-09.3-07)** : SATISFACTION nu retiré du seed (remplacé fonctionnellement par SATISFACTION_CHAUD/FROID en PedagogicalAsset, déjà dans MATRIX_DOC_TYPES) ; PRE_ACCORD_OPCO retiré de MATRIX_DOC_TYPES (14→13, jalon workflow OpcoSubmission, reste entrée catalog avec indicateur null) ; VALIDATION_OPCO tracé jalon (déjà hors matrice) ; SUPPORT_PEDAGOGIQUE gardé (upload manuel, ind.19) ; CUSTOM upload libre (hors matrice) → plus de cellule MISSING permanente injustifiée dans la matrice par-participant. **GATE PRINCIPAL NAV-05** = nouveau `apps/web/src/lib/docs/__tests__/seed-catalog.test.ts` (14 tests) qui LIT le seed réel via fs + regex et asserte le mapping cible figé `QUALIOPI_DOC_CATALOG_INDICATORS` (nouvelle constante exportée doc-scope.ts = source de vérité de recette, réutilisable T10) + Test 4 = recette 0-drift (aucune entrée Indicateur 7 + seed == mapping cible) + Test 3 = NAV-04 (SATISFACTION/PRE_ACCORD_OPCO/VALIDATION_OPCO/CUSTOM absents de MATRIX_DOC_TYPES). Suite complète 858/858 verte (+14), tsc @qualiof/db clean. 1 déviation Rule 1 : expectations `learner-stats.test.ts` (missingDocsCount 14/13/12→13/12/11) + `doc-scope.test.ts` (length 14→13) recalées suite au retrait du fantôme PRE_ACCORD_OPCO (conséquence directe et nécessaire). Hors scope (consigné `deferred-items.md`) : 6 erreurs tsc pré-existantes `redirect-308.test.ts` (next.config.mjs WIP non committé) — 0 erreur tsc hors ce fichier. Plan 09.3-03 débloqué.
 - 2026-06-10 — Phase 9.3 inserted after Phase 9: Navigation documentaire unifiée (URGENT, pré-audit RNQ V9 03/07). Prérequis de Phase 10 (Audit blanc) : sans navigation unifiée, l'audit blanc affichera des dossiers verts creux. Audit Phase 1 livré (`.planning/audit/MATRICE-NAVIGATION-DOCS.md`) : le modèle `Document` n'a que sessionId/participantId en FK réelle ; les preuves Qualiopi sont éclatées sur 5 sources (Document, PedagogicalAsset, SensitiveData/Person/AgeficeProfile pour CNI/RIB/CFP, markdown Tenant pour CGV/RI). Solution actée = résolveur LECTURE pur `resolveDocs` (UNION des 5 sources, ZÉRO migration/backfill — réversible) plutôt que dénormaliser Document seul (insuffisant car la moitié des preuves ne sont pas des Document, et risqué à 3 sem de l'audit). Contrat `UnifiedDoc` figé : référence polymorphe `sourceTable+sourceId` (réutilisable par T7 check-list), `qualiopiIndicator` + `usedStub` pour la conformité (usedStub = `PedagogicalAsset.rawJson.source==='stub'`, false pour les docs Document = templates déterministes). 3 surfaces à brancher : onglet Docs apprenant enrichi (la fiche charge DÉJÀ rawSessionDocs/rawProductDocs `apprenants/[id]/page.tsx:147` mais ne les affiche pas → surtout du rendu), bloc Docs produit, liens docs tenant. Critère de recette NON-NÉGOCIABLE (anti-pattern récurrent Laurent) : test comportemental vitest fixtures = 1 preuve dans chacune des 5 sources pour un même apprenant → assert resolveDocs renvoie 5 (PAS un grep d'imports). Triage 5 types fantômes : SATISFACTION nu → retirer du seed (remplacé par CHAUD/FROID) ; PRE_ACCORD_OPCO/VALIDATION_OPCO → sortir matrice docs, jalons workflow OpcoSubmission ; SUPPORT_PEDAGOGIQUE → garder en upload manuel (preuve réelle) ; CUSTOM → upload libre. HORS PÉRIMÈTRE : migration Document +productId/+personId + backfill → ROADMAP post-03/07 (le résolveur la prépare, ne la bloque pas).
 - 2026-06-10 — Phase 9.2 inserted after Phase 9: Réconciliation base 3 sources (Airtable + SmartOF + Tréso AGEFICE) (URGENT, pré-audit RNQ V9 03/07). Prérequis de Phase 10 (Audit blanc). Principe : zéro reconstruction de schéma d'import — auditer/rejouer/arbitrer l'outillage existant (dry-run + ExternalIdentity). 5 étapes E0 photo read-only + pg_dump ‖ E1 RECONCILE-RULES.md (golden-record SmartOF descriptif / Airtable casquettes pré-nov2025 / Tréso encaissement) → E2 rejeu ordonné (prérequis dur : dedupe.merge.test.ts AVANT passe dedupe) → E3 reliquat CSV + gate écart CA <2% + 0 ligne inexpliquée → E4 dry run témoin gate de fond (Bloom + markdown, 0 stub). Garde-fous : pg_dump avant chaque --apply, interdiction modifier scripts import sans justif écrite, gel couple modèle/prompts (Ollama mistral-small:24b) pour tout l'audit jusqu'au 03/07. E5 (généralisation échantillon) hors périmètre, conditionné liste backfillables validée Kaïna 16/06 (émargements exclus, non négociable).
@@ -244,10 +247,10 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: 09.3-03 — 3 tâches AUTO faites, CHECKPOINT visuel Task 4 EN ATTENTE (vérif :3010 ≤2 clics + stub non conforme)
-Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
-Last completed plan: 260530-f0l (bloc Résultats Ind 2)
-Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
+Stopped at: Phase 9.3 COMPLÈTE (4/4 plans) — clôture bookkeeping 09.3-04, checkpoint 09.3-03 APPROUVÉ par Laurent
+Last commit: def2b46 — test(09.3-03): verrou corrections V9 — mapping + captions
+Last completed plan: 09.3-04 (clôture Phase 9.3 — SMOKE + SUMMARY + REQUIREMENTS/ROADMAP/STATE)
+Next plan: hotfix séparé (docs cliquables étapes 2-4 + compteur AGEFICE 1/1 + typo header + dénormalisation F-02) PUIS retour rail audit (Ind 21 CV formateurs / Ind 26 réseau handicap PACA / RDV Kaïna 16/06) ; Phases 09.2 (3/8) et 10 (audit blanc) ouvertes
 
 Last activity: 2026-06-10
 

@@ -160,13 +160,13 @@ Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l
 **Goal:** Rendre toute preuve Qualiopi retrouvable en ≤2 clics depuis chacune des 3 fiches (apprenant / session / produit) via un résolveur lecture pur `resolveDocs` qui UNIONise les 5 sources éclatées (Document, PedagogicalAsset, SensitiveData/Person/AgeficeProfile, Tenant), porte la conformité (qualiopiIndicator + usedStub) et expose une référence polymorphe sourceTable+sourceId réutilisable par T7 — sans migration de schéma. Inclut le triage des 5 DocType fantômes et la correction 3-sources de la colonne qualiopiIndicator du seed. Prérequis de l'audit blanc Phase 10.
 **Requirements**: NAV-01 (résolveur pur + test 5-sources), NAV-02 (3 surfaces UI ≤2 clics), NAV-03 (conformité usedStub visible), NAV-04 (triage 5 fantômes), NAV-05 (correction seed qualiopiIndicator 3-sources)
 **Depends on:** Phase 9
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
-- [x] 09.3-01-PLAN.md — Résolveur pur resolveDocs + wrappers Prisma scoped tenantId + test comportemental 5-sources (NAV-01)
-- [x] 09.3-02-PLAN.md — Triage 5 fantômes (NAV-04) + 7 corrections seed qualiopiIndicator RNQ V9 (NAV-05)
-- [ ] 09.3-03-PLAN.md — 3 surfaces UI ≤2 clics + badge usedStub (NAV-02 + NAV-03)
-- [ ] 09.3-04-PLAN.md — Bookkeeping + smoke + SUMMARY
+- [x] 09.3-01-PLAN.md — Résolveur pur resolveDocs (6 sources) + wrappers Prisma scoped tenantId + test comportemental 6-sources (NAV-01)
+- [x] 09.3-02-PLAN.md — Triage 5 fantômes (NAV-04) + 7 corrections seed qualiopiIndicator RNQ V9 + gate 0-drift (NAV-05)
+- [x] 09.3-03-PLAN.md — 3 surfaces UI ≤2 clics + badge usedStub (NAV-02 + NAV-03) — checkpoint APPROUVÉ Laurent + 3 corrections V9 (ASSIDUITE/CERTIFICAT/ATTESTATION) + source unique indicateurs
+- [x] 09.3-04-PLAN.md — Bookkeeping + smoke (897/897, 0 orphelin) + SUMMARY + dette D-09.3-08(b) différée
 
 ### Phase 09.2: Réconciliation base 3 sources (Airtable + SmartOF + Tréso AGEFICE) (INSERTED)
 
@@ -181,12 +181,12 @@ Plans:
   5. Gate cohérence vert : écart CA AGEFICE < 2 % + 0 ligne inexpliquée (symétrique), reliquat tranché dans un CSV de travail.
   6. Dry run témoin sur 1 session 2026 AGEFICE complète : pack closure génère tous les docs, gate de fond OK (Bloom + structure + 0 stub), couple modèle/prompts gelé (mistral-small).
 
-**Plans:** 8 plans
+**Plans:** 3/8 plans executed
 
 Plans:
-- [ ] 09.2-01-PLAN.md — Wave 0 : db:generate + refacto testabilité dedupe + dedupe.merge.test.ts (prérequis dur)
-- [ ] 09.2-02-PLAN.md — Wave 0 : correction clé Tréso §4 + test scoring + gate-treso-ca.ts + sonde-lieux-smartof.ts (read-only)
-- [ ] 09.2-03-PLAN.md — Passe dédoublonnage dedupe.ts (dry → pg_dump → apply, checkpoint humain)
+- [x] 09.2-01-PLAN.md — Wave 0 : db:generate + refacto testabilité dedupe + dedupe.merge.test.ts (prérequis dur)
+- [x] 09.2-02-PLAN.md — Wave 0 : correction clé Tréso §4 + test scoring + gate-treso-ca.ts + sonde-lieux-smartof.ts (read-only)
+- [x] 09.2-03-PLAN.md — Passe dédoublonnage dedupe.ts (dry → pg_dump → apply, checkpoint humain)
 - [ ] 09.2-04-PLAN.md — Passe SmartOF identité/sessions/inscriptions + décision lieux (dry → pg_dump → apply, checkpoint)
 - [ ] 09.2-05-PLAN.md — Passe sync prix hors-AGEFICE (dry → pg_dump → apply, checkpoint ; 336€ intacts)
 - [ ] 09.2-06-PLAN.md — Passe Tréso AGEFICE (prix 336€ corrigé + 4 booléens canoniques) + backfill formateur (2 applies, 2 checkpoints)
@@ -279,6 +279,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
 | 8. Multi-utilisateurs et RBAC | 6/6 | Complete    | 2026-05-16 |
 | 9. Distribution leads automatique | 5/5 | Complete    | 2026-05-16 |
 | 9.1. Centralisation Qualiopi 360° (INSERTED) | 6/6 | Complete    | 2026-05-18 |
+| 9.3. Navigation documentaire unifiée (INSERTED) | 4/4 | Complete    | 2026-06-10 |
 | 10. Audit Qualiopi blanc | 0/TBD | Not started | - |
 | 11. Factures cycle complet | 10/10 | Complete    | 2026-05-21 |
 | 12. Modules stub Inscriptions et Modèles | 3/3 | Complete    | 2026-06-01 |
