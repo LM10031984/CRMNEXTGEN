@@ -54,5 +54,11 @@ venv/
 # Uploaded user data (palier 1: stays out of git)
 data/uploads/
 
-# GSD planning (local-only)
-.planning/
+# GSD planning — VERSIONNÉ (leçon Phase 9.3 : ne pas perdre les artefacts de planification)
+# .planning/ est désormais tracké et poussé. Garde-fou : aucun secret en clair dans .planning
+# (INTEGRATIONS.md scrubbé 2026-06-10) — masquer toute credential avant commit.
+
+# Sauvegardes .env locales (peuvent contenir des secrets) — jamais commitées
+.env.local.cloud-backup
+.env.local
+.env.*.backup

@@ -181,14 +181,14 @@ Plans:
   5. Gate cohérence vert : écart CA AGEFICE < 2 % + 0 ligne inexpliquée (symétrique), reliquat tranché dans un CSV de travail.
   6. Dry run témoin sur 1 session 2026 AGEFICE complète : pack closure génère tous les docs, gate de fond OK (Bloom + structure + 0 stub), couple modèle/prompts gelé (mistral-small).
 
-**Plans:** 3/8 plans executed
+**Plans:** 5/8 plans executed
 
 Plans:
 - [x] 09.2-01-PLAN.md — Wave 0 : db:generate + refacto testabilité dedupe + dedupe.merge.test.ts (prérequis dur)
 - [x] 09.2-02-PLAN.md — Wave 0 : correction clé Tréso §4 + test scoring + gate-treso-ca.ts + sonde-lieux-smartof.ts (read-only)
 - [x] 09.2-03-PLAN.md — Passe dédoublonnage dedupe.ts (dry → pg_dump → apply, checkpoint humain)
-- [ ] 09.2-04-PLAN.md — Passe SmartOF identité/sessions/inscriptions + décision lieux (dry → pg_dump → apply, checkpoint)
-- [ ] 09.2-05-PLAN.md — Passe sync prix hors-AGEFICE (dry → pg_dump → apply, checkpoint ; 336€ intacts)
+- [x] 09.2-04-PLAN.md — Passe SmartOF identité/sessions/inscriptions + décision lieux (dry → pg_dump → apply, checkpoint)
+- [x] 09.2-05-PLAN.md — Passe sync prix hors-AGEFICE (dry → pg_dump → apply, checkpoint ; 336€ intacts)
 - [ ] 09.2-06-PLAN.md — Passe Tréso AGEFICE (prix 336€ corrigé + 4 booléens canoniques) + backfill formateur (2 applies, 2 checkpoints)
 - [ ] 09.2-07-PLAN.md — Gate E3 : écart CA <2% + reliquat symétrique tranché (CSV de travail, checkpoint décision)
 - [ ] 09.2-08-PLAN.md — Dry run témoin E4 : closure 1 session 2026 AGEFICE, gate de fond (0 stub + Bloom), modèle gelé
