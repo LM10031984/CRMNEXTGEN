@@ -182,11 +182,22 @@ export interface TresoLike {
   opcoLabel: string | null;
 }
 
+/**
+ * Niveau de clé utilisé pour le rapprochement (REPORTING SEUL — n'influe PAS sur
+ * le matching, Plan 06 Task 1 step 3bis). Permet une revue ligne à ligne
+ * PROPORTIONNÉE au checkpoint humain :
+ *  - CLE_PLEINE        : noms + dates + nb stagiaires tous concordants (survol).
+ *  - DEGRADE_DATES_ORG : dates+org seuls, nb stagiaires vide/divergent (à vérifier).
+ *  - DEPARTAGE_MONTANT : plusieurs candidats ex æquo départagés par le montant (à vérifier 1 à 1).
+ */
+export type KeyLevel = 'CLE_PLEINE' | 'DEGRADE_DATES_ORG' | 'DEPARTAGE_MONTANT';
+
 export interface MatchResult<T extends TresoLike = TresoLike> {
   treso: T;
   bestScore: number;
   bestSession: { code: string; id: string } | null;
   runnerUp: { code: string; score: number } | null;
+  keyLevel: KeyLevel;
 }
 
 /**
@@ -221,6 +232,33 @@ export function scoreTresoRow(t: TresoLike, sig: SigLike): number {
 }
 
 /**
+ * Classe le niveau de clé d'un rapprochement (REPORTING SEUL — ne touche pas au
+ * matching). `departageByMontant` = vrai si le bestSig a été choisi parmi des ex
+ * æquo via le montant (cf. matchTresoRows). Réutilise les mêmes composantes que
+ * scoreTresoRow (noms, date début ±2j, nb stagiaires égal) sans altérer le score.
+ */
+export function classifyKeyLevel(
+  t: TresoLike,
+  sig: SigLike | null,
+  departageByMontant: boolean,
+): KeyLevel {
+  if (departageByMontant) return 'DEPARTAGE_MONTANT';
+  if (!sig) return 'DEGRADE_DATES_ORG';
+  const tStags = splitStagiaires(t.stagiairesRaw).map(normalize);
+  const namesMatched = tStags.some((n) =>
+    [...sig.stagNames].some((s) => s.includes(n) || n.includes(s)),
+  );
+  const dateStartMatched =
+    !!t.dateRange && dayDiff(t.dateRange.start, sig.session.startDate) <= 2;
+  const nbStagMatched =
+    t.nbStagiaires != null && t.nbStagiaires === sig.session.participants.length;
+  // Clé pleine = noms + dates + nb stagiaires tous concordants (haute confiance).
+  if (namesMatched && dateStartMatched && nbStagMatched) return 'CLE_PLEINE';
+  // Sinon on s'est appuyé sur dates/org sans le verrou nb stagiaires → dégradé.
+  return 'DEGRADE_DATES_ORG';
+}
+
+/**
  * Pour chaque ligne Tréso : meilleur score d'ENTRÉE, puis DÉPARTAGE par montant
  * (section 4 étape 3) — entre candidats à score d'entrée ÉGAL, la session dont
  * |total - montant| est minimal gagne. Le montant ne départage QUE des candidats
@@ -239,7 +277,8 @@ export function matchTresoRows<T extends TresoLike>(
     const top = scored.filter((x) => x.score === maxScore && maxScore > 0);
     // Départage par montant (le plus proche de t.montant) parmi les ex æquo.
     let bestSig: SigLike | null = top[0]?.sig ?? null;
-    if (top.length > 1 && t.montant != null) {
+    const departageByMontant = top.length > 1 && t.montant != null;
+    if (departageByMontant) {
       bestSig = top.reduce((a, b) =>
         Math.abs(b.sig.total - t.montant!) < Math.abs(a.sig.total - t.montant!) ? b : a,
       ).sig;
@@ -267,6 +306,7 @@ export function matchTresoRows<T extends TresoLike>(
       bestScore,
       bestSession,
       runnerUp: runnerScore > 0 ? { code: runnerCode, score: runnerScore } : null,
+      keyLevel: classifyKeyLevel(t, bestSig, departageByMontant),
     });
   }
   return results;
@@ -353,6 +393,7 @@ async function main(): Promise<void> {
     [
       'verdict',
       'score',
+      'niveau_cle',
       'sheet',
       'session_code',
       'runner_up',
@@ -375,6 +416,7 @@ async function main(): Promise<void> {
       [
         verdict,
         r.bestScore,
+        r.keyLevel,
         t.yearSheet,
         r.bestSession?.code ?? '',
         r.runnerUp ? `${r.runnerUp.code}(${r.runnerUp.score})` : '',
