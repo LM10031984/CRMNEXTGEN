@@ -6,10 +6,10 @@
 ## À faire par Laurent AVANT d'envoyer (≈ 20 min)
 
 1. **Sondage Drive** (toi seul) — l'émargement signé existe-t-il, **complet et daté** ?
-   - **SES-0002 en priorité** (11 apprenants, terminée 2024, 0 document dans l'app = dossier le plus exposé)
-   - puis 2-3 autres parmi : SES-0001, SES-0003, SES-0005, SES-0009, SES-0055, SES-0056, SES-0090
+   - ✅ **SES-0002 FAIT (2026-06-12)** : émargements au Drive confirmés + lieu renseigné (Saint-Laurent-du-Var, Concept Patrimoine) = **Cas A avéré**. Dossier le plus exposé → clos.
+   - reste à sonder : SES-0001, SES-0003, SES-0005, SES-0009, SES-0055, SES-0056, SES-0090
    - La réponse oriente la question : **oui** → le « trou » se réduit à un champ lieu vide ; **non** → vrai écart Indicateur 12 à assumer.
-2. **Renseigner les lieux à la main** (toi seul sais où elles se sont tenues) — 8 sessions présentielles dans l'app. → fait disparaître la moitié du sujet avant même de le poser.
+2. **Renseigner les lieux** (toi sais où elles se sont tenues) — 7 sessions restantes (SES-0002 déjà fait). Tu peux me les donner comme SES-0002 et je les saisis.
 
 ## Question à Kaïna — selon le résultat du sondage
 
