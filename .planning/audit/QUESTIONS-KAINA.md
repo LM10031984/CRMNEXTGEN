@@ -9,7 +9,9 @@
    - ✅ **SES-0002 FAIT (2026-06-12)** : émargements au Drive confirmés + lieu renseigné (Saint-Laurent-du-Var, Concept Patrimoine) = **Cas A avéré**. Dossier le plus exposé → clos.
    - reste à sonder : SES-0001, SES-0003, SES-0005, SES-0009, SES-0055, SES-0056, SES-0090
    - La réponse oriente la question : **oui** → le « trou » se réduit à un champ lieu vide ; **non** → vrai écart Indicateur 12 à assumer.
-2. **Renseigner les lieux** (toi sais où elles se sont tenues) — 7 sessions restantes (SES-0002 déjà fait). Tu peux me les donner comme SES-0002 et je les saisis.
+2. ✅ **Lieux : FAIT (2026-06-12, les 8)** — SES-0002 (Concept Patrimoine), SES-0001/0003/0005 (siège Start Academy Vence), SES-0009 (Nestenn Fréjus), SES-0055/0056/0090 (Bianco Invest Nice). Trou « lieu vide » fermé. Reste juste à confirmer le **Cas A/B émargement Drive** pour les 7 autres (SES-0002 = Cas A confirmé).
+
+> **État avant envoi** : le sujet « lieu » est clos. Ne reste que la question de **format de preuve d'assiduité** (Cas A) — à envoyer dès que tu confirmes que les émargements des 7 autres sessions sont bien au Drive. Si l'une n'y est pas → ajouter le Cas B (ind. 32) pour celle-là seulement.
 
 ## Question à Kaïna — selon le résultat du sondage
 
