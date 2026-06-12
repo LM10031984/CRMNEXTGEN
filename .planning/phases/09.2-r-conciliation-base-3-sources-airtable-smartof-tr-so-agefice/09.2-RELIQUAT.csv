@@ -1,39 +1,31 @@
 categorie,ref,description,donnees_cle,verdict,motif
-_TOTAUX_,SIRET_DOUBLONS,4 SIRET partagés par noms différents (arbitrage manuel),4 cas,,
-_TOTAUX_,MATCH_DIFF,13 lignes Tréso matchées mais montant base != Tréso,13 cas,,
-_TOTAUX_,MULTI_MATCH,3 apprenants homonymes / multi-sessions,3 cas,,
-_TOTAUX_,NOT_FOUND,127 lignes Tréso sans SP base (~159 442 € — groupes + absents),127 cas,,
-_TOTAUX_,ORPHELINS_BDD,95 SP AGEFICE sans ligne Tréso (sessions fantômes / hors Tréso),95 cas,,
-_TOTAUX_,AMBIGU_NOMATCH,62 AMBIGU + 40 NO_MATCH (matching session Plan 06),102 cas,,
-_TOTAUX_,CONFLIT_BOOLEEN,<=64 AUTO avec >=1 booléen Tréso=NON (croiser base true),<=64 cas,,
-_TOTAUX_,SIRET_INVALIDE,37 orgs requiresCleanup=true,37 cas,,
-_TOTAUX_,SANS_EMAIL,86 Person sans email (non discriminées au dedupe),86 cas,,
-_TOTAUX_,SANS_LIEU,11 sessions sans locationId,11 cas,,
-_TOTAUX_,ORPHELINS_FK,OpcoSubmission/BillingProfile/Task pointant un id disparu,0 cas (dedupe propre),ACCEPTE,Vérifié Plan 07 : 0 FK pendante après repointage dedupe
-SIRET_DOUBLONS,4226921E01,Même SIRET 2 noms,CHAUGNE Delphine || CHAUGNE Sylvain,,
-SIRET_DOUBLONS,43404180200019,Même SIRET 2 noms,GF Immobilier || PALA Fabrice,,
-SIRET_DOUBLONS,75242996900013,Même SIRET 2 noms,MILLET Rachel || NEYRAT Immobilier Chalon sur Saone,,
-SIRET_DOUBLONS,79738709900048,Même SIRET 2 noms,DELIVAUTO || OUABID Saïd,,
-MATCH_DIFF,SES-0044 / Vanessa Ladeira,Prix base != Tréso,base=1855 Tréso=3024 (2026),,
-MATCH_DIFF,SES-0044 / Laurie Boyer,Prix base != Tréso,base=1855 Tréso=3024 (2026),,
-MATCH_DIFF,SES-0044 / Alexis Larmier,Prix base != Tréso,base=1855 Tréso=3024 (2026),,
-MATCH_DIFF,SES-0044 / Alexia Astier,Prix base != Tréso,base=1855 Tréso=3024 (2026),,
-MATCH_DIFF,SES-0044 / Vanessa Ladeira (2025),Prix base != Tréso (ligne 2025),base=1855 Tréso=280,,
-MATCH_DIFF,SES-0044 / Laurie Boyer (2025),Prix base != Tréso (ligne 2025),base=1855 Tréso=280,,
-MATCH_DIFF,SES-0044 / Alexis Larmier (2025),Prix base != Tréso (ligne 2025),base=1855 Tréso=280,,
-MATCH_DIFF,SES-0044 / Alexia Astier (2025),Prix base != Tréso (ligne 2025),base=1855 Tréso=280,,
-MATCH_DIFF,SES-0006 / Grégory Dusaussoy,Prix base != Tréso,base=336 Tréso=164,,
-MATCH_DIFF,SES-0006 / Manon Romagnoli,Prix base != Tréso,base=336 Tréso=164,,
-MATCH_DIFF,SES-0022 / Franck Sevieri,Prix base != Tréso — TRESO=0 (faux positif suspecté Plan 06 nom-seul),base=2364 Tréso=0,,
-MATCH_DIFF,SES-0052 / Quentin Guirao,Prix base != Tréso,base=3024 Tréso=3200,,
-MATCH_DIFF,SES-0010 / Thomas Geay,Prix base != Tréso,base=3024 Tréso=3045,,
-MULTI_MATCH,Agathe Dumoulin,2 sessions candidates,SES-0010 / SES-0001 (2026),,
-MULTI_MATCH,Jean Leyrat,2 sessions candidates (480€),SES-0077 / SES-0076 (2026),,
-MULTI_MATCH,Clotilde Manuel,3 sessions candidates (3045€),SES-0097 / SES-0098 / SES-0031 (2024),,
-NOT_FOUND,GROUPE (127 lignes),Lignes Tréso sans SP base — groupes Tréso + apprenants absents,~159 442 € — détail /tmp/treso-rapprochement.csv (Status=NOT_FOUND),,
-ORPHELINS_BDD,GROUPE (95 SP),SP AGEFICE sans ligne Tréso — sessions fantômes ou hors périmètre Tréso,détail /tmp/treso-rapprochement.csv (section ORPHELINS BDD),,
-AMBIGU_NOMATCH,GROUPE (102 lignes),Matching session Plan 06 sous le seuil auto,détail /tmp/treso-matching.csv (verdict AMBIGU/NO_MATCH + niveau_cle),,
-CONFLIT_BOOLEEN,GROUPE (<=64 AUTO),Booléen base=true alors que Tréso=NON (conflit descendant non arbitré au Plan 06),à croiser SP booléens vs /tmp/treso-matching.csv,,
-SIRET_INVALIDE,GROUPE (37 orgs),requiresCleanup=true (SIRET invalide / à nettoyer),"ex: AIT BEN ALLA Hassan, Agnès SERVANT, BATTESTI Marie-Josephe, BESSET Olivier...",,
-SANS_EMAIL,GROUPE (86 Person),Person sans email — non discriminées au dedupe (clé email absente),SELECT Person WHERE email IS NULL,,
-SANS_LIEU,"SES-0001,0002,0003,0005,0009,0013,0014,0055,0056,0090,0097",11 sessions sans locationId (reliquat lieu Plan 04),locationId NULL,,
+_TOTAUX_,SIRET_DOUBLONS,4 SIRET partagés par noms différents,4 cas,ACCEPTE,EI/enseigne ou homonyme — désambiguïsation manuelle différée (n'affecte pas le CA)
+_TOTAUX_,MATCH_DIFF,13 lignes matchées mais prix base != Tréso,13 cas,ACCEPTE,Tréso = source de vérité ; écart prix à rejouer en passe ciblée future (hors gate E3). 0 mutation Plan 07 (Sevieri = faux écart, doublon ligne Tréso)
+_TOTAUX_,MULTI_MATCH,3 apprenants homonymes/multi-sessions,3 cas,ACCEPTE,Homonyme à désambiguïser manuellement — n'affecte pas le total CA
+_TOTAUX_,NOT_FOUND,127 lignes Tréso sans SP base,127 cas (~159k brut),ACCEPTE,"Artefact: 13 lignes Groupe (agrégats) + 29 individus DÉJÀ en base (faux NOT_FOUND variantes orthographe/filtre année, confirmé FLEURY/GUIGO/JOZWICKI/MARTINEZ/TCHAKMAKJIAN) ; missing réel ~29k (match-treso)"
+_TOTAUX_,ORPHELINS_BDD,95 SP base sans ligne Tréso,95 cas,ACCEPTE,SP AGEFICE hors périmètre Tréso (sessions non déposées / hors 3 onglets) — connus, pas une perte
+_TOTAUX_,AMBIGU_NOMATCH,62 AMBIGU + 40 NO_MATCH (matching Plan 06),102 cas,ACCEPTE,Sous le seuil auto ; ~29k réel après retrait agrégats ; chaque ligne explicable (groupe/variante/hors-base)
+_TOTAUX_,CONFLIT_BOOLEEN,<=64 AUTO avec >=1 booléen Tréso=NON,<=64 cas,ACCEPTE,OR-merge Plan 06 no-op (booléens déjà true en base) ; conflit descendant base-true/Tréso-false non arbitré auto — audit booléen différé
+_TOTAUX_,SIRET_INVALIDE,37 orgs requiresCleanup=true,37 cas,ACCEPTE,Nettoyage SIRET différé (qualité donnée, n'affecte pas le CA)
+_TOTAUX_,SANS_EMAIL,86 Person sans email,86 cas,ACCEPTE,Non discriminées au dedupe (clé email absente) ; reliquat qualité donnée, n'affecte pas le CA
+_TOTAUX_,SANS_LIEU,11 sessions sans locationId,11 cas,ACCEPTE,Reliquat lieu Plan 04 ; backfill lieu manuel différé (n'affecte pas le CA)
+_TOTAUX_,ORPHELINS_FK,OpcoSubmission/BillingProfile/Task FK disparue,0 cas,ACCEPTE,Vérifié Plan 07 : 0 FK pendante après repointage dedupe
+SIRET_DOUBLONS,4226921E01,Même SIRET 2 noms,CHAUGNE Delphine || CHAUGNE Sylvain,ACCEPTE,Couple/EI même SIRET — désambiguïsation manuelle différée
+SIRET_DOUBLONS,43404180200019,Même SIRET 2 noms,GF Immobilier || PALA Fabrice,ACCEPTE,EI + enseigne (cas métier dominant) — désambiguïsation différée
+SIRET_DOUBLONS,75242996900013,Même SIRET 2 noms,MILLET Rachel || NEYRAT Immobilier Chalon sur Saone,ACCEPTE,EI + enseigne — désambiguïsation différée
+SIRET_DOUBLONS,79738709900048,Même SIRET 2 noms,DELIVAUTO || OUABID Saïd,ACCEPTE,EI + enseigne — désambiguïsation différée
+MATCH_DIFF,SES-0022 / Franck Sevieri,Faux écart — 2 lignes Tréso (2364 MATCH_OK + doublon 0),base=2364 (Tréso confirme 2364),ACCEPTE,base 2364 CORRECT (ligne Tréso MATCH_OK 2364) ; la ligne Tréso=0 est un doublon (planif/dépôt) → pas de correction
+MATCH_DIFF,SES-0044 / groupe (4 app. x2 lignes),Prix base 1855 != Tréso 3024/280,base=1855 Tréso=3024(2026)/280(2025),ACCEPTE,Tréso source de vérité ; SES-0044 non auto-matchée Plan 06 (garde 1855) → correction ciblée future hors gate
+MATCH_DIFF,SES-0006 / Dusaussoy + Romagnoli,Prix base 336 != Tréso 164,base=336 Tréso=164,ACCEPTE,Écart prix à rejouer passe ciblée future (Tréso source de vérité) — hors gate E3
+MATCH_DIFF,SES-0052 / Quentin Guirao,Prix base 3024 != Tréso 3200,base=3024 Tréso=3200,ACCEPTE,Écart mineur (176€) — correction ciblée différée
+MATCH_DIFF,SES-0010 / Thomas Geay,Prix base 3024 != Tréso 3045,base=3024 Tréso=3045,ACCEPTE,Écart mineur (21€) — correction ciblée différée
+MULTI_MATCH,Agathe Dumoulin,2 sessions candidates,SES-0010 / SES-0001 (2026),ACCEPTE,Homonyme/multi-session à désambiguïser manuellement
+MULTI_MATCH,Jean Leyrat,2 sessions candidates (480€),SES-0077 / SES-0076 (2026),ACCEPTE,Homonyme/multi-session à désambiguïser manuellement
+MULTI_MATCH,Clotilde Manuel,3 sessions candidates (3045€),SES-0097 / SES-0098 / SES-0031 (2024),ACCEPTE,Homonyme/multi-session à désambiguïser manuellement
+NOT_FOUND,GROUPE (127 lignes),Lignes Tréso sans SP base,~159 442 € — détail /tmp/treso-rapprochement.csv,ACCEPTE,Artefact mesure (groupes + variantes orthographe + filtre année) ; missing réel ~29k (match-treso fiable)
+ORPHELINS_BDD,GROUPE (95 SP),SP AGEFICE sans ligne Tréso,détail /tmp/treso-rapprochement.csv,ACCEPTE,SP hors périmètre 3 onglets Tréso (sessions non déposées AGEFICE) — pas une perte de CA
+AMBIGU_NOMATCH,GROUPE (102 lignes),Matching session sous le seuil,détail /tmp/treso-matching.csv,ACCEPTE,Reliquat matching ; chaque ligne explicable ; ~29k réel
+CONFLIT_BOOLEEN,GROUPE (<=64 AUTO),Booléen base=true vs Tréso=NON,à croiser SP booléens,ACCEPTE,Audit booléen descendant différé (OR-merge Plan 06 ne dégrade jamais un true)
+SIRET_INVALIDE,GROUPE (37 orgs),requiresCleanup=true,SELECT requiresCleanup,ACCEPTE,Nettoyage SIRET différé — qualité donnée
+SANS_EMAIL,GROUPE (86 Person),Person sans email,email IS NULL,ACCEPTE,Reliquat dedupe (clé email absente) — qualité donnée
+SANS_LIEU,"SES-0001,0002,0003,0005,0009,0013,0014,0055,0056,0090,0097",11 sessions sans locationId,locationId NULL,ACCEPTE,Reliquat lieu Plan 04 — backfill manuel différé
