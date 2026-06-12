@@ -81,3 +81,20 @@ une **coquille de préinscription** ou à un **doublon** produirait un document 
    terminées + programme) ; l'autre sera DOUBLON et ses sessions seront re-mappées.
 5. Étape suivante (hors ce script) : re-mapper les sessions des PRÉINSCRIPTION/DOUBLON
    vers le produit RÉEL, **avant** la génération.
+
+## Classement appliqué — 2026-06-12 (validé Laurent)
+
+**6 coquilles 0 € / 0 session / programme vide — toutes `isActive=false` en base.** Déjà inactives : Cadastre N1 43e580ff, Cadastre N2 aa6e27cb, Optimisation SI cada712b. Flaguées ce jour (UPDATE 3) : Anglais 71ba9536, IA générative cf80eb86, Immobilier 2h 00ce2cc6. pg_dump `qualiof-pre-flag-coquilles-20260612-185037`. **Garantie** : un produit `isActive=false` n'apparaît plus dans le sélecteur de création de session (`sessions-create.ts:47 WHERE isActive:true`) → aucune session ne pourra jamais s'y rattacher.
+
+| Produit coquille | Classement | Vrai produit (RÉEL) |
+| --- | --- | --- |
+| `PROD-0664` 43e580ff Cadastre N1 (0 €) | **DOUBLON** | `PROD-0041` 965f33b4 (336 €, 4 term.) |
+| `PROD-0666` aa6e27cb Cadastre N2 (0 €) | **DOUBLON** | `PROD-0060` 45f98380 (336 €, 1 term.) |
+| `PROD-0667` 71ba9536 Anglais | **PRÉINSCRIPTION** | — |
+| `PROD-0668` cada712b Optimisation SI | **PRÉINSCRIPTION** | — |
+| `PROD-0669` 00ce2cc6 Immobilier 2h | **PRÉINSCRIPTION** | — |
+| `PROD-0670` cf80eb86 IA générative | **PRÉINSCRIPTION** | — |
+
+**Re-mapping sessions : 0 déplacement** (les 6 coquilles ont 0 session ; les sessions terminées sont déjà sur les vrais produits). Le risque « doc faux à la racine » est donc **nul ET verrouillé** (coquilles inactives).
+
+**Quasi-doublons FAUX (ne pas merger — durées différentes = produits distincts RÉELS)** : `PROD-0042` (72h) ≠ `PROD-0066` (16h) ; `PROD-0057` (105h) ≠ `PROD-0061` (77h). Les 20 produits à sessions terminées = RÉELS. Restants 0-session avec programme (FRM-0001/0002, PROD-0001/0663/0672, PROD-0043) : à confirmer par Laurent (probables PRÉINSCRIPTION, mais non bloquants — aucune session terminée dessus).
