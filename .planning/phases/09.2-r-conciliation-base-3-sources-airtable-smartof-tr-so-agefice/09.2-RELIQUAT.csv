@@ -8,7 +8,7 @@ _TOTAUX_,AMBIGU_NOMATCH,62 AMBIGU + 40 NO_MATCH (matching Plan 06),102 cas,ACCEP
 _TOTAUX_,CONFLIT_BOOLEEN,<=64 AUTO avec >=1 booléen Tréso=NON,<=64 cas,ACCEPTE,OR-merge Plan 06 no-op (booléens déjà true en base) ; conflit descendant base-true/Tréso-false non arbitré auto — audit booléen différé
 _TOTAUX_,SIRET_INVALIDE,37 orgs requiresCleanup=true,37 cas,ACCEPTE,Nettoyage SIRET différé (qualité donnée, n'affecte pas le CA)
 _TOTAUX_,SANS_EMAIL,86 Person sans email,86 cas,ACCEPTE,Non discriminées au dedupe (clé email absente) ; reliquat qualité donnée, n'affecte pas le CA
-_TOTAUX_,SANS_LIEU,11 sessions sans locationId,11 cas,ACCEPTE,Reliquat lieu Plan 04 ; backfill lieu manuel différé (n'affecte pas le CA)
+_TOTAUX_,SANS_LIEU,11 sessions sans locationId,11 cas,CORRIGE-PARTIEL,CORRECTION 2026-06-12 : NON distanciel (créneaux présentiels confirmés) = PRÉSENTIEL sans lieu enregistré = vrai trou Qualiopi (convention/émargement). De plus assiduité in-app=0 (0 SessionSlot/Attendance ; SES-0002 11 appr/0 doc). Lieu à renseigner + preuve émargement papier Drive à vérifier → CANDIDAT liste assumée + question Kaïna (si échantillonné le 03/07)
 _TOTAUX_,ORPHELINS_FK,OpcoSubmission/BillingProfile/Task FK disparue,0 cas,ACCEPTE,Vérifié Plan 07 : 0 FK pendante après repointage dedupe
 SIRET_DOUBLONS,4226921E01,Même SIRET 2 noms,CHAUGNE Delphine || CHAUGNE Sylvain,ACCEPTE,Couple/EI même SIRET — désambiguïsation manuelle différée
 SIRET_DOUBLONS,43404180200019,Même SIRET 2 noms,GF Immobilier || PALA Fabrice,ACCEPTE,EI + enseigne (cas métier dominant) — désambiguïsation différée
@@ -28,4 +28,4 @@ AMBIGU_NOMATCH,GROUPE (102 lignes),Matching session sous le seuil,détail /tmp/t
 CONFLIT_BOOLEEN,GROUPE (<=64 AUTO),Booléen base=true vs Tréso=NON,à croiser SP booléens,ACCEPTE,Audit booléen descendant différé (OR-merge Plan 06 ne dégrade jamais un true)
 SIRET_INVALIDE,GROUPE (37 orgs),requiresCleanup=true,SELECT requiresCleanup,ACCEPTE,Nettoyage SIRET différé — qualité donnée
 SANS_EMAIL,GROUPE (86 Person),Person sans email,email IS NULL,ACCEPTE,Reliquat dedupe (clé email absente) — qualité donnée
-SANS_LIEU,"SES-0001,0002,0003,0005,0009,0013,0014,0055,0056,0090,0097",11 sessions sans locationId,locationId NULL,ACCEPTE,Reliquat lieu Plan 04 — backfill manuel différé
+SANS_LIEU,"SES-0001,0002,0003,0005,0009,0055,0056,0090 (non-annulées) + 0013,0014 annulées + 0097",11 sessions PRÉSENTIEL sans lieu enregistré,locationId NULL ; créneaux présentiels ; assiduité in-app=0,CORRIGE-PARTIEL,Présentiel sans lieu = trou Qualiopi (pas distanciel). Lieu à renseigner (Laurent connaît) + vérifier émargement papier Drive ; annulées (0013/0014) = N/A. Candidat liste assumée/Kaïna
