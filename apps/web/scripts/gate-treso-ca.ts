@@ -70,7 +70,19 @@ async function main(): Promise<void> {
           : null;
       if (montant == null) continue; // ligne sans montant (planifiée/vide) → exclue
       const label = String(r['Nom des stagiaires'] ?? '');
-      if (isTotalRow(label)) continue; // ligne de total Excel → exclue
+      // Les lignes de total/sous-total portent leur libellé (« CA HT 2025 »,
+      // « MONTANT A ENCAISSER », « MONTANT TOTAL A PERCEVOIR ») dans la colonne
+      // « Date de dépôt » (variantes d'en-tête selon l'onglet), PAS dans la colonne
+      // stagiaires. Un vrai dossier y porte une DATE (number) → depotLabel reste ''
+      // pour eux : l'exclusion ne peut pas faire tomber un dossier réel.
+      const depotRaw =
+        r['Date de dépôt \nde la demande'] ??
+        r['Date de dépôt de la demande'] ??
+        r['Date de dépot'] ??
+        r['Date de dépôt'] ??
+        r['Date de dépot de la demande'];
+      const depotLabel = typeof depotRaw === 'string' ? depotRaw : '';
+      if (isTotalRow(label) || isTotalRow(depotLabel)) continue; // ligne de total Excel → exclue
       // « Groupe X » multi-stagiaires = 1 montant total (compté une fois ici).
       tresoTotal += montant;
       tresoLines++;
