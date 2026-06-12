@@ -1,6 +1,6 @@
 categorie,ref,description,donnees_cle,verdict,motif
 _TOTAUX_,SIRET_DOUBLONS,4 SIRET partagés par noms différents,4 cas,ACCEPTE,EI/enseigne ou homonyme — désambiguïsation manuelle différée (n'affecte pas le CA)
-_TOTAUX_,MATCH_DIFF,13 lignes matchées mais prix base != Tréso,13 cas,ACCEPTE,Tréso = source de vérité ; écart prix à rejouer en passe ciblée future (hors gate E3). 0 mutation Plan 07 (Sevieri = faux écart, doublon ligne Tréso)
+_TOTAUX_,MATCH_DIFF,13 lignes matchées mais prix base != Tréso,13 cas (1 CORRIGE + 12 ACCEPTE),CORRIGE+ACCEPTE,Triangulation export 12-06 : SES-0044 ×4 corrigé 1855→3024 (Tréso==SmartOF) ; 12 autres ACCEPTE (SmartOF confirme base ; Sevieri 0 jamais écrasé ; écarts Tréso = partiels/arrondis)
 _TOTAUX_,MULTI_MATCH,3 apprenants homonymes/multi-sessions,3 cas,ACCEPTE,Homonyme à désambiguïser manuellement — n'affecte pas le total CA
 _TOTAUX_,NOT_FOUND,127 lignes Tréso sans SP base,127 cas (~159k brut),ACCEPTE,"Artefact: 13 lignes Groupe (agrégats) + 29 individus DÉJÀ en base (faux NOT_FOUND variantes orthographe/filtre année, confirmé FLEURY/GUIGO/JOZWICKI/MARTINEZ/TCHAKMAKJIAN) ; missing réel ~29k (match-treso)"
 _TOTAUX_,ORPHELINS_BDD,95 SP base sans ligne Tréso,95 cas,ACCEPTE,SP AGEFICE hors périmètre Tréso (sessions non déposées / hors 3 onglets) — connus, pas une perte
@@ -15,7 +15,7 @@ SIRET_DOUBLONS,43404180200019,Même SIRET 2 noms,GF Immobilier || PALA Fabrice,A
 SIRET_DOUBLONS,75242996900013,Même SIRET 2 noms,MILLET Rachel || NEYRAT Immobilier Chalon sur Saone,ACCEPTE,EI + enseigne — désambiguïsation différée
 SIRET_DOUBLONS,79738709900048,Même SIRET 2 noms,DELIVAUTO || OUABID Saïd,ACCEPTE,EI + enseigne — désambiguïsation différée
 MATCH_DIFF,SES-0022 / Franck Sevieri,Faux écart — 2 lignes Tréso (2364 MATCH_OK + doublon 0),base=2364 (Tréso confirme 2364),ACCEPTE,base 2364 CORRECT (ligne Tréso MATCH_OK 2364) ; la ligne Tréso=0 est un doublon (planif/dépôt) → pas de correction
-MATCH_DIFF,SES-0044 / groupe (4 app. x2 lignes),Prix base 1855 != Tréso 3024/280,base=1855 Tréso=3024(2026)/280(2025),ACCEPTE,Tréso source de vérité ; SES-0044 non auto-matchée Plan 06 (garde 1855) → correction ciblée future hors gate
+MATCH_DIFF,SES-0044 / 4 app. (Astier/Boyer/Ladeira/Larmier),Prix base 1855 != vrai prix 3024 (72h),base 1855 -> 3024,CORRIGE,Triangulation export 12-06 : Tréso 2026 == SmartOF Budget HT == 3024 contre base 1855 → UPDATE appliqué 2026-06-12 (pg_dump qualiof-pre-e3-correction-182421). +4676€ CA base
 MATCH_DIFF,SES-0006 / Dusaussoy + Romagnoli,Prix base 336 != Tréso 164,base=336 Tréso=164,ACCEPTE,Écart prix à rejouer passe ciblée future (Tréso source de vérité) — hors gate E3
 MATCH_DIFF,SES-0052 / Quentin Guirao,Prix base 3024 != Tréso 3200,base=3024 Tréso=3200,ACCEPTE,Écart mineur (176€) — correction ciblée différée
 MATCH_DIFF,SES-0010 / Thomas Geay,Prix base 3024 != Tréso 3045,base=3024 Tréso=3045,ACCEPTE,Écart mineur (21€) — correction ciblée différée
