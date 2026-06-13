@@ -98,3 +98,22 @@ une **coquille de préinscription** ou à un **doublon** produirait un document 
 **Re-mapping sessions : 0 déplacement** (les 6 coquilles ont 0 session ; les sessions terminées sont déjà sur les vrais produits). Le risque « doc faux à la racine » est donc **nul ET verrouillé** (coquilles inactives).
 
 **Quasi-doublons FAUX (ne pas merger — durées différentes = produits distincts RÉELS)** : `PROD-0042` (72h) ≠ `PROD-0066` (16h) ; `PROD-0057` (105h) ≠ `PROD-0061` (77h). Les 20 produits à sessions terminées = RÉELS. Restants 0-session avec programme (FRM-0001/0002, PROD-0001/0663/0672, PROD-0043) : à confirmer par Laurent (probables PRÉINSCRIPTION, mais non bloquants — aucune session terminée dessus).
+
+## CORRECTION 2026-06-13 — PROD-0662 sur-mergé dé-mergé (re-mapping)
+
+**Mon classement coquilles du 12-06 était FAUX sur 3 produits.** Le croisement base↔export 12-06 a révélé que `PROD-0662` (« Maîtriser l'IA », 35h) regroupait **5 formations DIFFÉRENTES** (Plan 05 reliquat « à éclater »). 3 des « coquilles » que j'avais flaguées `isActive=false` étaient en fait les **vrais produits cibles**, vides uniquement parce que leurs sessions étaient absorbées par PROD-0662 (Case 1 vérifié : 0 session hier ET aujourd'hui, toutes sur PROD-0662).
+
+**Re-map + réactivation appliqués (pg_dump `qualiof-pre-remap-prod0662-...`)** :
+| Session | Re-mappée vers | Durée | Produit réactivé |
+| --- | --- | --- | --- |
+| SES-0055 | `71ba9536` Anglais professionnel | 21h | isActive=true |
+| SES-0072 | `cf80eb86` IA générative | 105h | isActive=true |
+| SES-0056 | `cada712b` Optimisation SI | 14h (durée corrigée 0→14, source Laurent+export 2j) | isActive=true |
+| SES-0090 | reste `PROD-0662` Maîtriser l'IA | 35h | — |
+| **SES-0084** | **EN ATTENTE décision Laurent** (reste PROD-0662 temporairement) | 40h | — |
+
+**Reclassement** : 71ba9536 / cf80eb86 / cada712b = **RÉELS** (plus PRÉINSCRIPTION). Coquilles restantes inactives : 43e580ff + aa6e27cb (DOUBLON Cadastre) + 00ce2cc6 (Immobilier 2h, 0 session base).
+
+**⚠️ EXCLUSION LOT A — noir sur blanc** : **SES-0055 / SES-0056 / SES-0072 / SES-0084 sont HORS périmètre Lot A** tant que leurs produits cibles ont un **programme vide** (Anglais/IA générative/Optimisation SI : programMd=0 ; SES-0084 non tranchée). Programmes à remplir via T2/T3 AVANT toute génération, sinon pack à trous. Ne PAS les inclure dans la génération de masse avec les autres.
+
+**SES-0084 (40h) — décision catalogue EN ATTENTE** : réutiliser `d61555db` (« Intégrer l'IA en entreprise pour gagner en productivité - 40h ») SEULEMENT si SES-0084 a dispensé ce **contenu générique-entreprise** (programme vérifié : automatisation/Zapier/marketing, **zéro immobilier**). Si SES-0084 a un contenu **immobilier propre** → créer un produit distinct (un 5ᵉ produit IA n'est pas un doublon si le programme diffère). Faux ami écarté : `cf961a3d` (titre « activité immobilière » mais 8h ≠ 40h).
