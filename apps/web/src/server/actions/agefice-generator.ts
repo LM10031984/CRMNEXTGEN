@@ -233,9 +233,8 @@ export async function generateAgeficeForParticipant(
           .filter(Boolean)
           .join(' — '),
         (session.location.address as any)?.street,
-        [(session.location.address as any)?.postalCode, (session.location.address as any)?.city]
-          .filter(Boolean)
-          .join(' '),
+        // CP + Ville retirés d'ici : ils ont leurs propres champs (Code Postal /
+        // Ville Lieu de Formation) → évite la ville notée 2 fois (Laurent 2026-06-16).
       ]
         .filter(Boolean)
         .join('\n')
@@ -278,17 +277,23 @@ export async function generateAgeficeForParticipant(
     },
     entreprise: {
       raisonSociale: eiOrg.legalName,
-      nomCommercial: eiOrg.network ?? null,
+      // Nom commercial = nom de l'apprenant suffixé « EI » (Laurent 2026-06-16).
+      nomCommercial: `${participant.person.firstName} ${participant.person.lastName} EI`.trim(),
       naf: eiOrg.naf,
       siret: eiOrg.siret,
-      activite: eiOrg.activityDescription,
+      // Activité principale exercée : TOUJOURS « Immobilier » (Laurent 2026-06-16).
+      activite: 'Immobilier',
       formeJuridique: eiOrg.legalForm,
       // AGEFICE refuse les dossiers si la raison sociale n'apparaît pas dans
-      // le champ "Adresse Entreprise" du Cerfa. Laurent 2026-06-04 (retour
-      // terrain). On force le format "Raison Sociale — Rue".
-      address: [eiOrg.legalName, orgAddress?.street].filter(Boolean).join(' — ') || null,
-      postalCode: orgAddress?.postalCode ?? null,
-      city: orgAddress?.city ?? null,
+      // le champ "Adresse Entreprise" du Cerfa (Laurent 2026-06-04). On force le
+      // format "Raison Sociale — Rue", la rue venant du DOMICILE de l'apprenant
+      // si l'EI n'a pas d'adresse propre (auto-entrepreneur : adresse entreprise
+      // = domicile ; Laurent 2026-06-16).
+      address:
+        [eiOrg.legalName, orgAddress?.street ?? personalAddress?.street].filter(Boolean).join(' — ') ||
+        null,
+      postalCode: orgAddress?.postalCode ?? personalAddress?.postalCode ?? null,
+      city: orgAddress?.city ?? personalAddress?.city ?? null,
     },
     stagiaire: {
       civilite: inferCivilite(participant.person.civility),
@@ -318,9 +323,17 @@ export async function generateAgeficeForParticipant(
       dureeFoadSynchrone: duree.foadSync,
       dureeFoadAsynchrone: duree.foadAsync,
       formateur: formateur || 'À confirmer',
-      lieuPostalCode:
-        (session.location?.address as any)?.postalCode ?? of.addressCp,
-      lieuVille: (session.location?.address as any)?.city ?? of.addressVille,
+      // Lieu de formation : si une Location est rattachée, on prend SON CP/ville
+      // (jamais ceux de l'OF — c'était le bug du CP 06800 OF affiché pour un lieu
+      // à Nice, Laurent 2026-06-16). Fallback OF UNIQUEMENT si aucune Location
+      // (formation intra-OF). Si la Location existe mais sans CP/ville structurés,
+      // on laisse vide (à corriger sur la fiche lieu) plutôt que d'afficher l'OF.
+      lieuPostalCode: session.location
+        ? ((session.location.address as any)?.postalCode ?? null)
+        : of.addressCp,
+      lieuVille: session.location
+        ? ((session.location.address as any)?.city ?? null)
+        : of.addressVille,
       lieuAdresseComplete,
       prixHT: effectivePrice,
       enEntreprise: ageficeEnEntreprise,
