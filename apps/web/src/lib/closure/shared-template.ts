@@ -177,6 +177,24 @@ export function loadSignatureDataUrl(
   return loadAssetDataUrl(fallbacks, tenantId);
 }
 
+/**
+ * Signature à embarquer selon le FORMATEUR (Laurent 2026-06-16) :
+ *  - Laurent Marx → signature pédago (signature-laurent.png).
+ *  - Jean-Guy → `signature-jean-guy.png` (à déposer dans
+ *    public/of-assets/{tenantId}/ OU bundlé dans src/assets/).
+ * Retourne '' si formateur non reconnu (pas de signature auto → emplacement vide).
+ */
+export function loadTrainerSignatureDataUrl(tenantId?: string, trainerName?: string | null): string {
+  const n = (trainerName ?? '').toLowerCase();
+  if (n.includes('jean') && n.includes('guy')) {
+    return loadAssetDataUrl(['signature-jean-guy.png'], tenantId);
+  }
+  if (n.includes('laurent') && n.includes('marx')) {
+    return loadSignatureDataUrl(tenantId, 'pedago');
+  }
+  return '';
+}
+
 export function escapeHtml(s: string | null | undefined): string {
   if (!s) return '';
   return String(s)
@@ -545,9 +563,12 @@ export function renderBrandHeader(of?: OfConfig, tenantId?: string): string {
  * Conforme au modèle DOCX C3_i11 fourni par Laurent (cert. de réalisation).
  * Apparaît sur la PAGE 1 uniquement (en flow normal après le bandeau brand).
  */
-export function renderOfficialBadges(): string {
+export function renderOfficialBadges(opts: { qualiopi?: boolean } = {}): string {
+  // qualiopi=false : retire le logo « Qualiopi processus certifié » (Kaïna 2026-06-16,
+  // pour le certificat de réalisation). Le logo Ministère est conservé.
+  const showQualiopi = opts.qualiopi !== false;
   const ministere = loadLogoMinistereDataUrl();
-  const qualiopi = loadLogoQualiopiDataUrl();
+  const qualiopi = showQualiopi ? loadLogoQualiopiDataUrl() : null;
   return `
 <div class="official-badges">
   ${ministere ? `<img class="badge-left" src="${ministere}" alt="Ministère du Travail" />` : '<span></span>'}

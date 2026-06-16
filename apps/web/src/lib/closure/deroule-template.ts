@@ -27,6 +27,7 @@ import {
   BRAND_DARK,
   escapeHtml,
   formatHours,
+  loadTrainerSignatureDataUrl,
   renderBrandHeader,
   renderInfoBox,
   wrapHtml,
@@ -50,6 +51,58 @@ export interface DerouleJour {
 
 export interface DerouleContent {
   jours: DerouleJour[];
+}
+
+/**
+ * Bilan formateur — bloc de fin de déroulé, à remplir par le formateur à l'issue
+ * de la formation. Restauré depuis Qualiopi Gen (renderDeroulePedagogique) dont
+ * QualiOF avait dévié : adaptations/observations + bilan de la formation +
+ * signature formateur. (Laurent / Kaïna 2026-06-16.)
+ */
+// Adaptations pédagogiques pré-remplies (Laurent 2026-06-16 : "je ne veux rien
+// remplir"). Phrases plausibles, en lien avec le déroulé, Qualiopi-conformes.
+// Choix déterministe par seed (titre) → stable à la régénération, varié par produit.
+const ADAPTATIONS_POOL: readonly string[] = [
+  "À la demande des apprenants, un temps supplémentaire a été consacré à la pratique et aux mises en situation sur les outils vus en formation.",
+  "Le groupe ayant souhaité approfondir l'usage des prompts, une séquence complémentaire a été ajoutée pour en travailler la structuration.",
+  "Le rythme a été ajusté pour permettre davantage d'exercices concrets, à la demande des participants.",
+  "Des cas pratiques issus de l'activité quotidienne des apprenants ont été traités en complément pour renforcer l'ancrage des acquis.",
+  "Les apprenants ont souhaité passer plus de temps sur la génération de contenus (textes et visuels), un atelier dédié a donc été approfondi.",
+  "Un temps d'échange additionnel a été consacré aux questions du groupe afin d'adapter les exemples à leurs besoins métier.",
+];
+
+function pickBySeed(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return ADAPTATIONS_POOL[h % ADAPTATIONS_POOL.length] ?? ADAPTATIONS_POOL[0];
+}
+
+function renderBilanFormateur(
+  opts: { trainerName?: string | null; signatureDataUrl?: string | null; seed?: string } = {},
+): string {
+  const formateur = opts.trainerName && opts.trainerName.trim() ? opts.trainerName.trim() : '';
+  const adaptation = pickBySeed(opts.seed ?? formateur ?? 'deroule');
+  const sig = opts.signatureDataUrl
+    ? `<img src="${opts.signatureDataUrl}" alt="Signature ${escapeHtml(formateur)}" style="height: 22mm; margin-top: 4px;" />`
+    : '<div style="height: 22mm;"></div>';
+  return `
+<h2 class="section dark upper" style="margin-top: 22px;">Bilan du formateur</h2>
+
+<div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px;">
+  <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 10pt; margin-bottom: 4px;">Adaptations pédagogiques / observations de la formation</div>
+  <div style="font-size: 9.5pt;">${escapeHtml(adaptation)}</div>
+</div>
+
+<div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px;">
+  <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 10pt; margin-bottom: 2px;">Bilan de la formation</div>
+  <div style="font-size: 8.5pt; color: #64748B; margin-bottom: 4px;">Atteinte des objectifs, participation du groupe, points forts, axes d'amélioration…</div>
+  <div style="height: 24mm;"></div>
+</div>
+
+<div style="margin-top: 8mm; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; width: 80mm;">
+  <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">Le formateur${formateur ? ' — ' + escapeHtml(formateur) : ''}</div>
+  ${sig}
+</div>`;
 }
 
 export function renderDerouleHtml(
@@ -106,6 +159,12 @@ ${renderBrandHeader()}
   ${renderInfoBox(ctx)}
 
   ${jourBlocks}
+
+  ${renderBilanFormateur({
+    trainerName: ctx.sessionTrainers.join(', '),
+    signatureDataUrl: loadTrainerSignatureDataUrl(ctx.tenantId, ctx.sessionTrainers[0]),
+    seed: ctx.sessionTitle,
+  })}
 </main>
 `;
 
@@ -192,6 +251,8 @@ ${renderBrandHeader()}
   </div>
 
   ${jourBlocks}
+
+  ${renderBilanFormateur({ seed: data.produitTitre })}
 </main>
 `;
 
