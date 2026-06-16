@@ -7,6 +7,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { formatFunderCode } from '@/lib/funder-codes';
+import { PED_KIND_TO_DOC_TYPE } from '@/lib/doc-scope';
 import { SessionParticipantsList } from '@/components/sessions/session-participants-list';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
@@ -265,7 +266,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       inner = new Map();
       pedAssetsByPid.set(a.participantId, inner);
     }
-    inner.set(a.kind as string, { id: a.id });
+    // Indexer par le DocType de colonne de la matrice, pas le kind brut :
+    // le QCM a kind='QCM' mais sa colonne est 'EVALUATION_ACQUIS' (les autres
+    // kinds sont identité). Sans ce mapping, la cellule QCM restait rouge alors
+    // que l'asset existait. Le contrat de deriveCellState attend une map DocType→asset.
+    const assetDocType = PED_KIND_TO_DOC_TYPE[a.kind as string] ?? (a.kind as string);
+    inner.set(assetDocType, { id: a.id });
   }
 
   // Construit le tableau matrixParticipants pour ParticipantDocMatrix.

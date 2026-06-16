@@ -304,3 +304,16 @@ export const DOC_TYPE_TO_PED_KIND: Record<string, string | null> = {
   GRILLE_OBS_SESSION: 'GRILLE_OBS',
   DEROULE_PEDAGOGIQUE: 'DEROULE',
 };
+
+/**
+ * Inverse de DOC_TYPE_TO_PED_KIND : PedagogicalKind → MatrixDocType (clé de colonne).
+ * Sert à indexer les PedagogicalAsset par le DocType de leur colonne de matrice.
+ * Indispensable car le kind brut diffère du DocType pour le QCM
+ * (kind 'QCM' ↔ colonne 'EVALUATION_ACQUIS') : sans ce mapping, la cellule QCM
+ * reste rouge alors que l'asset existe.
+ */
+export const PED_KIND_TO_DOC_TYPE: Record<string, string> = Object.fromEntries(
+  Object.entries(DOC_TYPE_TO_PED_KIND)
+    .filter((entry): entry is [string, string] => entry[1] != null)
+    .map(([docType, kind]) => [kind, docType]),
+);
