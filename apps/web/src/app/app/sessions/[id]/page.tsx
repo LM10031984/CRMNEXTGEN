@@ -7,7 +7,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { formatFunderCode } from '@/lib/funder-codes';
-import { ParticipantActionsMenu } from '@/components/sessions/participant-actions-menu';
+import { SessionParticipantsList } from '@/components/sessions/session-participants-list';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
@@ -899,6 +899,23 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             </>
           }
         />
+
+        {/* Liste nominative des inscrits + désinscription. Avant : seulement un
+            compteur "N apprenants" + la matrice 14 colonnes où le menu d'actions
+            était hors écran. Frustration Laurent 15/06. */}
+        <div className="mt-3">
+          <SessionParticipantsList
+            canManage={canWrite}
+            participants={matrixParticipants.map((p) => ({
+              id: p.id,
+              personId: p.personId,
+              fullName: p.fullName,
+              sponsorOrgLabel: p.sponsorOrgLabel,
+              docCount: docCompletionByParticipant.get(p.id) ?? 0,
+              docTotal: PERSONAL_DOC_TOTAL,
+            }))}
+          />
+        </div>
 
         <div id="step-2" className="scroll-mt-20" />
         <PreparationPedagogiqueBlock
