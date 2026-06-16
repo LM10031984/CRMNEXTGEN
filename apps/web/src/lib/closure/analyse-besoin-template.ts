@@ -86,6 +86,12 @@ ${renderBrandHeader()}
       : ''
   }
 
+  <h2 class="section">Situation de handicap</h2>
+  <p class="paragraph">Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante ?&nbsp;&nbsp; <strong>&#9744; OUI</strong>&nbsp;&nbsp;&nbsp; <strong>&#9744; NON</strong></p>
+  <p class="paragraph" style="margin-bottom: 4px;">Si oui, laquelle ?</p>
+  <div style="border: 1px solid #CBD5E1; border-radius: 4px; min-height: 20mm; background: #FFFFFF;"></div>
+  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap — indicateur 18).</p>
+
   ${(() => {
     const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;
     // L'analyse du besoin est réalisée par le formateur de la session (c'est lui
