@@ -89,8 +89,8 @@ ${renderBrandHeader()}
     <thead>
       <tr>
         <th style="text-align: center; vertical-align: middle;">Date</th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Matin · ${HORAIRE_MATIN}</span></th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Après-midi · ${HORAIRE_APREM}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Matin · ${HORAIRE_MATIN}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Après-midi · ${HORAIRE_APREM}</span></th>
       </tr>
     </thead>
     <tbody>
