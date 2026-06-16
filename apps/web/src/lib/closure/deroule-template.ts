@@ -86,7 +86,7 @@ function renderBilanFormateur(
     ? `<img src="${opts.signatureDataUrl}" alt="Signature ${escapeHtml(formateur)}" style="height: 22mm; margin-top: 4px;" />`
     : '<div style="height: 22mm;"></div>';
   return `
-<h2 class="section dark upper" style="margin-top: 22px;">Bilan du formateur</h2>
+<h2 class="section dark upper" style="margin-top: 22px;">Rapport formateur</h2>
 
 <div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px;">
   <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 10pt; margin-bottom: 4px;">Adaptations pédagogiques / observations de la formation</div>
