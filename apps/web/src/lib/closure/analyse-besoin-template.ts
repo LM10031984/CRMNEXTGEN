@@ -88,7 +88,12 @@ ${renderBrandHeader()}
 
   ${(() => {
     const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;
-    const responsable = pickResponsablePedagogique(seed);
+    // L'analyse du besoin est réalisée par le formateur de la session (c'est lui
+    // qui mène le positionnement amont). Fallback responsable pédagogique si
+    // aucun formateur n'est renseigné sur la session.
+    const hasTrainer = ctx.sessionTrainers.length > 0;
+    const realisePar = hasTrainer ? ctx.sessionTrainers.join(', ') : pickResponsablePedagogique(seed);
+    const roleLabel = hasTrainer ? 'Formateur — Start Academy' : 'Responsable pédagogique Start Academy';
     const date = computeAnalyseDate(ctx.sessionStartDate, 15, seed);
     return `
   <div style="margin-top: 18mm; padding: 12px 14px; border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC;">
@@ -96,10 +101,10 @@ ${renderBrandHeader()}
       Réalisé par
     </div>
     <div style="font-size: 12pt; font-weight: 700; color: ${BRAND_DARK};">
-      ${escapeHtml(responsable)}
+      ${escapeHtml(realisePar)}
     </div>
     <div style="font-size: 9.5pt; color: #475569; margin-top: 2px;">
-      Le ${escapeHtml(formatDateFr(date))} — Responsable pédagogique Start Academy
+      Le ${escapeHtml(formatDateFr(date))} — ${escapeHtml(roleLabel)}
     </div>
   </div>`;
   })()}

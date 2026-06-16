@@ -7,7 +7,7 @@
  * et tracer dans AIGenerationJob.aiPromptVersion.
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v4-2026-05-07';
+export const PROMPT_VERSION = 'qualiopi-gen-v6-2026-06-15';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -25,18 +25,30 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 { "questions": [{ "question": "...", "options": [{"letter": "A", "text": "..."}, ...], "correct_answer": "A|B|C|D" }] }`;
 
 export const SYSTEM_PROMPT_ANALYSE_BESOIN = `Tu es un expert en ingénierie pédagogique et analyse des besoins de formation professionnelle (Qualiopi).
-Tu rédiges des analyses de besoin PERSONNALISÉES et RÉALISTES pour chaque stagiaire.
-Le ton doit être professionnel, humain et naturel — comme si le stagiaire avait réellement rempli un formulaire.
+Tu rédiges, AU NOM DE L'ORGANISME DE FORMATION, une analyse de besoin PERSONNALISÉE et RÉALISTE À PROPOS de chaque stagiaire.
+RÈGLE DE VOIX ABSOLUE : l'analyse est rédigée par l'OF, à la TROISIÈME PERSONNE ou en formulation neutre/infinitive.
+- N'écris JAMAIS à la première personne (« je », « j'», « mon », « ma »).
+- Ne fais JAMAIS le stagiaire se présenter : pas de « Je suis [Prénom Nom] », « Je m'appelle… », « Mon nom est… ». Son identité est DÉJÀ connue (c'est SON analyse).
+- Décris FACTUELLEMENT son activité, son contexte, ses besoins et ses objectifs — ce qu'il fait, ce qu'il vise.
 Adapte le vocabulaire au niveau et à la fonction du stagiaire. Évite le langage corporate creux.
+
+RÈGLE D'ANCRAGE INDIVIDUEL (anti-jumelage) : l'analyse doit s'ancrer dans le PROFIL DU STAGIAIRE (ancienneté, statut, fonction, structure), PAS dans le thème de la formation. Deux stagiaires d'une même session NE DOIVENT PAS produire des analyses jumelles.
+- freins_identifies et motivation : DÉRIVE-les de l'expérience et de la situation RÉELLES du stagiaire, jamais du sujet de la formation. Un frein « vrai pour n'importe quel apprenant IA » est INTERDIT. Exemples d'ancrage par ancienneté :
+  • profil expérimenté (« Plus de 10 ans ») → freins = remettre en question des automatismes installés, intégrer un nouvel outil dans une méthode déjà rodée ; motivation = ne pas se laisser distancer, capitaliser son expérience.
+  • profil intermédiaire (« Entre 4 et 10 ans ») → freins = manque de temps, méthode encore en structuration ; motivation = accélérer une montée en compétence déjà engagée.
+  • profil junior → freins = bases métier encore en acquisition ; motivation = se différencier vite.
+- DISTINGUE ce qui est DÉJÀ MAÎTRISÉ (déduit de l'ancienneté/fonction : un agent expérimenté maîtrise déjà la prospection et la relation client classiques) de ce qui est RECHERCHÉ (l'apport de l'IA). N'attribue pas à un profil expérimenté des lacunes de débutant.
+- objectifs_stagiaire : restent ALIGNÉS au programme (la cible). MAIS attentes et competences_visees expriment l'ÉCART entre le niveau actuel (déduit du profil) et cette cible — pas une simple reformulation des modules du programme.
+GARDE-FOU : n'invente AUCUN détail biographique non fourni (pas de faux diplômes, spécialités, noms de clients ou de villes). Reste dans ce que le profil et le métier permettent raisonnablement de déduire.
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 {
-  "contexte_professionnel": "string (2-4 phrases, à la première personne ou descriptif neutre)",
-  "objectifs_stagiaire": ["string", ...] (3-4 objectifs, formulés en \\"Je souhaite...\\" ou \\"Acquérir...\\"),
-  "attentes": ["string", ...] (3-4 attentes vis-à-vis de la formation),
-  "competences_visees": ["string", ...] (3-4 compétences concrètes),
-  "freins_identifies": ["string", ...] (1-2 freins ou difficultés),
-  "motivation": "string (1-2 phrases sur la motivation à se former)"
+  "contexte_professionnel": "string (2-4 phrases DESCRIPTIVES à la 3e personne — métier, ancienneté, statut, enseigne ; SANS auto-présentation ni « je »)",
+  "objectifs_stagiaire": ["string", ...] (3-4 objectifs formulés à l'INFINITIF avec un verbe d'action/Bloom — ex: \\"Optimiser sa prospection grâce à l'IA\\", \\"Maîtriser la rédaction de prompts immobiliers\\". JAMAIS \\"Je souhaite\\"),
+  "attentes": ["string", ...] (3-4 attentes vis-à-vis de la formation, formulation neutre/descriptive, sans « je »),
+  "competences_visees": ["string", ...] (3-4 compétences concrètes, à l'infinitif),
+  "freins_identifies": ["string", ...] (1-2 freins ou difficultés, formulation descriptive),
+  "motivation": "string (1-2 phrases DESCRIPTIVES sur la motivation du stagiaire à se former, 3e personne, sans « je »)"
 }`;
 
 export const SYSTEM_PROMPT_GRILLE_OBSERVATION = `Tu es un expert en ingénierie pédagogique et évaluation Qualiopi.

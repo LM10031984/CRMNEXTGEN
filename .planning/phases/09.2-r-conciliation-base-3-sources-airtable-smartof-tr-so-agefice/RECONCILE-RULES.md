@@ -164,6 +164,30 @@ Le seuil de 2 % ne mesure quelque chose que si les deux totaux couvrent le même
 
 **Gate E4 = gate DE FOND, pas que d'existence** : verbes de Bloom présents, structure markdown attendue, autant de grilles que de mises en situation, **0 stub**. Invariant documentaire vérifié : analyse besoin → programme → déroulé type → déroulé réalisé.
 
+### 6.1 Amendement (2026-06-14) — distinction « gel » vs « correction de conformité »
+
+Le gel protège **la recette qui passe E4** afin qu'elle soit identique à celle qui génère le Lot A. Une **correction qui amène un prompt EN conformité** sert cet objectif — elle ne le viole pas. Une telle correction est autorisée, **datée et tracée ici**, puis l'état corrigé devient la **nouvelle baseline gelée**.
+
+Corrections appliquées le 2026-06-14 (révélées par le dry-run témoin SES-0044, Plan 08) :
+
+1. **Analyse du besoin — voix.** Le prompt produisait une auto-présentation à la 1ʳᵉ personne (« Je suis Alexia Astier… »). L'analyse du besoin est rédigée **par l'OF À PROPOS du stagiaire** → réécrite en **3ᵉ personne / infinitif factuel**, sans « je » ni redite d'identité. (`SYSTEM_PROMPT_ANALYSE_BESOIN`.) Les prompts **satisfaction / positionnement restent en 1ʳᵉ personne** (légitimement remplis par le stagiaire) — NON touchés.
+2. **Analyse du besoin — attribution.** Le bloc « Réalisé par » tirait un responsable pédagogique au hasard → désormais **le formateur de la session** (`ctx.sessionTrainers`), fallback responsable pédagogique. (`analyse-besoin-template.ts`.)
+3. **Versioning.** `PROMPT_VERSION` `qualiopi-gen-v4-2026-05-07` → **`qualiopi-gen-v5-2026-06-14`** (frontière d'audit nette dans `AIGenerationJob.promptVersion`).
+
+**Modèle : INCHANGÉ.** `mistral-small:24b` reste le **modèle gelé unique** (décision 2026-06-14, option 1). L'override `.env CLOSURE_OLLAMA_MODEL_DEROULE=gpt-oss:20b` est **à retirer en pré-Lot-A** (un seul modèle dans la fenêtre d'audit) ; il ne mord que sur les produits **sans horaires parsables** (le déroulé de SES-0044 passe par `parseProgrammeToDeroule`, déterministe, sans appel LLM).
+
+**Re-validation requise** après correction : régénérer le témoin SES-0044 sur v5 + relecture humaine avant clôture de la phase.
+
+### 6.2 Règle générale — correction de prompt pré-Lot-A (2026-06-15)
+
+**Les prompts sont gelés dans leur état VALIDÉ par le témoin E4.** Une correction de prompt **antérieure au Lot A** est permise **à condition** de : (1) l'écrire ici AVANT de toucher le prompt ; (2) régénérer le témoin SES-0044 ; (3) le re-valider par lecture humaine ; (4) **modèle inchangé `mistral-small:24b`**. Tant que la re-validation n'est pas faite, **E4 reste OUVERT** — on ne clôture pas en gravant un défaut connu.
+
+Correction #2 — 2026-06-15 (révélée par la relecture du témoin v5) — **item n°1 de T2/T3, pas de 9.2** :
+
+4. **Analyse du besoin — sur-dérivation du programme.** v5 produisait des objectifs/attentes/compétences = le programme reformulé au nom du stagiaire, et des freins/motivation génériques (vrais pour n'importe quel apprenant IA). Risque : deux stagiaires d'une même session → analyses jumelles sauf prénom/métier. Correction : **ancrer dans le profil individuel** (ancienneté, statut, fonction) — freins/motivation dérivés de l'expérience réelle ; distinguer ce qui est **déjà maîtrisé** de ce qui est **recherché** ; attentes/compétences = **écart niveau actuel → cible**, pas reformulation du programme. `PROMPT_VERSION` `v5` → **`qualiopi-gen-v6-2026-06-15`**.
+
+**Plafond de donnée (constaté SES-0044) :** les 5 stagiaires n'ont que **2 profils** (« +10 ans » / « 4-10 ans »), même métier, 0 diplôme. La divergence atteignable est **bornée par le recueil**, pas par le prompt. La vraie personnalisation par personne = **recueil du besoin enrichi (Kaïna, Lot B rétroactif)** — hors portée prompt.
+
 ---
 
 ## 7. Garde-fous globaux d'exécution
