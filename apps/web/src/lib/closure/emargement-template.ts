@@ -15,6 +15,7 @@ import {
   BRAND_DARK,
   escapeHtml,
   formatDateFr,
+  loadSignatureDataUrl,
   renderBrandHeader,
   renderInfoBox,
   renderStagiaireBlock,
@@ -58,6 +59,14 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
   const stagiaireFull = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
   const days = computeFormationDays(ctx.sessionStartDate, ctx.sessionEndDate);
   const trainer = ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À renseigner';
+
+  // Bloc certification Qualiopi (Laurent 2026-06-16) : « Certifié exact par
+  // [formateur] », « Fait à [lieu EXACT de formation], le [date fin] » + tampon/
+  // signature (signature-pedago = Laurent Marx). Le lieu exact est OBLIGATOIRE :
+  // sans lieu, l'émargement n'est pas valide → on signale explicitement.
+  const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
+  const lieuFormation = ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
+  const dateCertif = formatDateFr(ctx.sessionEndDate);
 
   const rows = days
     .map((d) => {
@@ -120,6 +129,19 @@ ${renderBrandHeader()}
       </div>
       <div style="height: 26mm;"></div>
     </div>
+  </div>
+
+  <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
+       par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
+       (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
+  <div style="margin-top: 12mm; padding-top: 8px; border-top: 1px solid #CBD5E1;">
+    <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 4px 0;">
+      Certifié exact par ${escapeHtml(trainer)}, formateur.
+    </p>
+    <p style="font-size: 10pt; margin: 0;">
+      Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
+    </p>
+    ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature et cachet ${escapeHtml(trainer)}" style="height: 25mm; margin-top: 6px;" />` : ''}
   </div>
 </main>
 `;
