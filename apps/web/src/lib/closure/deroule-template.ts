@@ -74,7 +74,7 @@ const ADAPTATIONS_POOL: readonly string[] = [
 function pickBySeed(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return ADAPTATIONS_POOL[h % ADAPTATIONS_POOL.length] ?? ADAPTATIONS_POOL[0];
+  return ADAPTATIONS_POOL[h % ADAPTATIONS_POOL.length] ?? ADAPTATIONS_POOL[0]!;
 }
 
 function renderBilanFormateur(
