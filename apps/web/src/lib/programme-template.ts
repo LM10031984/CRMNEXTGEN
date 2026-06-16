@@ -349,6 +349,22 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
     support = DEFAULT_PEDAGOGICAL_SUPPORT;
   }
 
+  // Méthode pédagogique ind. 12 (Kaïna 16/06) : garantir l'alternance théorie/
+  // pratique + les tours de table, même si le produit a des méthodes custom.
+  const PEDAGOGY_ALTERNANCE =
+    'La pédagogie repose sur une alternance entre apports théoriques et mises en situation pratiques.';
+  const PEDAGOGY_TOURS_TABLE =
+    "Des tours de table réguliers et temps d'échange ponctuent la formation pour ajuster le rythme et favoriser la participation.";
+  if (!methods.toLowerCase().includes('alternance')) {
+    methods = `${methods}\n${PEDAGOGY_ALTERNANCE}`;
+  }
+  if (
+    !methods.toLowerCase().includes('tour de table') &&
+    !methods.toLowerCase().includes('tours de table')
+  ) {
+    methods = `${methods}\n${PEDAGOGY_TOURS_TABLE}`;
+  }
+
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
