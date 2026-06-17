@@ -74,7 +74,7 @@ function loadAssetDataUrl(filenames: string[], tenantId?: string): string {
       const p = path.join(process.cwd(), 'src', 'assets', name);
       const buf = fs.readFileSync(p);
       const ext = path.extname(name).slice(1) || 'png';
-      const mime = ext === 'svg' ? 'svg+xml' : ext;
+      const mime = ext === 'svg' ? 'svg+xml' : ext === 'jpg' ? 'jpeg' : ext;
       const url = `data:image/${mime};base64,${buf.toString('base64')}`;
       fileCache.set(cacheKey, url);
       return url;
