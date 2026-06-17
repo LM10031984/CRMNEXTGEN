@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { callOllama } from '@/lib/ai-ollama';
+import { callLlm, type LlmTier } from '@/lib/llm-client';
 import { getDayStartEnd, PAUSE_DEJEUNER } from '@/lib/formation-horaires';
 import {
   PROMPT_VERSION,
@@ -452,20 +453,35 @@ async function tryOnce<T>(
   userPrompt: string,
   schema: z.ZodSchema<T>,
   modelOverride?: string,
+  tier: LlmTier = 'fast',
 ): Promise<{ ok: true; data: T; latencyMs: number } | { ok: false; reason: string; latencyMs: number }> {
   const startedAt = Date.now();
-  const modelUsed = modelOverride ?? MODEL;
+  const cloud = (process.env.AI_PROVIDER ?? 'ollama') === 'openrouter';
+  const modelUsed = cloud ? `cloud:${tier}` : modelOverride ?? MODEL;
   try {
-    const result = await callOllama({
-      model: modelUsed,
-      systemPrompt,
-      prompt: userPrompt,
-      jsonOutput: true,
-      temperature: 0.3,
-      maxTokens: 8192,
-      // 10 min : avec saturation GPU sur Apple Silicon, le QCM peut prendre 5+ min
-      timeoutMs: 600_000,
-    });
+    // Wiring cloud (Kaïna 16/06) : si AI_PROVIDER=openrouter, le déroulé et les
+    // docs rédactionnels passent par callLlm (tier quality = Sonnet). Sinon
+    // Ollama local inchangé. `tier` est ignoré côté Ollama (modelOverride prime).
+    const result = cloud
+      ? await callLlm({
+          tier,
+          systemPrompt,
+          prompt: userPrompt,
+          jsonOutput: true,
+          temperature: 0.3,
+          maxTokens: 8192,
+          timeoutMs: 240_000,
+        })
+      : await callOllama({
+          model: modelUsed,
+          systemPrompt,
+          prompt: userPrompt,
+          jsonOutput: true,
+          temperature: 0.3,
+          maxTokens: 8192,
+          // 10 min : avec saturation GPU sur Apple Silicon, le QCM peut prendre 5+ min
+          timeoutMs: 600_000,
+        });
     const latencyMs = Date.now() - startedAt;
 
     if (result.parsedJson === null) {
@@ -621,6 +637,7 @@ Ajoute obligatoirement :
     refId,
     tenantId,
     MODEL_DEROULE,
+    'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
   );
 }
 
@@ -635,14 +652,16 @@ async function runOllamaJson<T>(
   refId: string | null,
   tenantId: string | null,
   modelOverride?: string,
+  tier: LlmTier = 'fast',
 ): Promise<T | null> {
-  const modelUsed = modelOverride ?? MODEL;
+  const cloud = (process.env.AI_PROVIDER ?? 'ollama') === 'openrouter';
+  const modelUsed = cloud ? `cloud:${tier}` : modelOverride ?? MODEL;
   const inputHash = simpleHash(`${taskName}:${userPrompt}`);
   const jobLog = tenantId
     ? await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'ollama',
+          provider: cloud ? 'openrouter' : 'ollama',
           model: modelUsed,
           promptVersion: PROMPT_VERSION,
           inputHash,
@@ -656,7 +675,7 @@ async function runOllamaJson<T>(
   let lastReason = '';
   let totalLatency = 0;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const r = await tryOnce(taskName, systemPrompt, userPrompt, schema, modelOverride);
+    const r = await tryOnce(taskName, systemPrompt, userPrompt, schema, modelOverride, tier);
     totalLatency += r.latencyMs;
     if (r.ok) {
       if (jobLog) {
