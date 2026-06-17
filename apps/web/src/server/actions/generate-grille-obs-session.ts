@@ -87,6 +87,7 @@ export async function generateGrilleObsSessionForSession(
     nom: p.person.lastName,
     fonction: p.person.legalLinks[0]?.function ?? null,
     professionalStatus: p.person.professionalStatus,
+    civilite: p.person.civility ?? null,
   }));
 
   const formation: FormationCtx = {

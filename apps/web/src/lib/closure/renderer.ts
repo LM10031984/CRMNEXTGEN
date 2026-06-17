@@ -108,6 +108,7 @@ function buildStagiaireCtx(ctx: ClosureContext): StagiaireCtx {
     anciennete: ctx.stagiaireMeta?.anciennete ?? null,
     diplomes: ctx.stagiaireMeta?.diplomes ?? null,
     professionalStatus: ctx.stagiaireMeta?.professionalStatus ?? null,
+    civilite: ctx.apprenantCivility ?? null,
   };
 }
 

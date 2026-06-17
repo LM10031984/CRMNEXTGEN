@@ -34,6 +34,7 @@ import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
 import type { SatisfactionFroidContent } from './satisfaction-froid-template';
 import type { DerouleContent } from './deroule-template';
 import type { GrilleSessionContent } from './grille-obs-session-template';
+import { normalizeGender } from './shared-template';
 
 // mistral-small:24b est le meilleur compromis qualité/vitesse/JSON-compliance
 // pour ces 3 docs. qwen3:30b-a3b a un comportement instable avec
@@ -59,6 +60,21 @@ export interface StagiaireCtx {
   anciennete: string | null;
   diplomes: string | null;
   professionalStatus: string | null;
+  civilite: string | null;
+}
+
+/**
+ * Directive d'accord en genre injectée dans les prompts rédactionnels : sans
+ * elle, le modèle défaute au masculin générique (« dirigeant », « ce
+ * professionnel ») même pour une femme. Source de vérité = normalizeGender.
+ */
+function genderDirective(civilite: string | null): string {
+  const g = normalizeGender(civilite);
+  if (g === 'F')
+    return `\n\nGENRE DU STAGIAIRE : FÉMININ. Accorde au FÉMININ tous les mots qui la désignent (ex : dirigeante, conseillère, indépendante, engagée, elle). N'emploie JAMAIS le masculin générique ni « ce professionnel » : écris « cette professionnelle » / « elle ».`;
+  if (g === 'M')
+    return `\n\nGENRE DU STAGIAIRE : MASCULIN. Accorde au masculin les mots qui le désignent (il, dirigeant, conseiller…).`;
+  return '';
 }
 
 // =====================================================
@@ -380,7 +396,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 Stagiaire :
 ${stagiaireBlock || '(profil non détaillé)'}
 
-L'analyse doit donner l'impression que le stagiaire a réellement répondu à un questionnaire en amont de la formation.`;
+L'analyse doit donner l'impression que le stagiaire a réellement répondu à un questionnaire en amont de la formation.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-analyse-besoin',
@@ -432,7 +448,7 @@ Consignes (impératives) :
    - "commentaire" : bilan global personnalisé du parcours de ${stagiaire.prenom} en formation (2-3 phrases, mentionne son prénom)
    - "axe_amelioration" : 1-2 phrases sur ce que ${stagiaire.prenom} peut continuer à développer après la formation
 
-La grille doit être positive (valorise le parcours) tout en étant crédible (pas tout du A, pas de phrases creuses).`;
+La grille doit être positive (valorise le parcours) tout en étant crédible (pas tout du A, pas de phrases creuses).${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-grille',
@@ -544,7 +560,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 Stagiaire :
 ${stagiaireBlock || '(profil non détaillé)'}
 
-Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.`;
+Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-positionnement',
@@ -571,7 +587,7 @@ export async function generateSatisfactionChaudContent(
 Programme :
 ${formation.programmeMd || '(programme à compléter)'}
 
-Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.`;
+Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-chaud',
@@ -598,7 +614,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 
 Profil : ${stagiaire.fonction ?? 'professionnel'}${stagiaire.entreprise ? ` chez ${stagiaire.entreprise}` : ''}.
 
-Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.`;
+Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-froid',
@@ -729,6 +745,7 @@ export interface GrilleSessionStagiaireInput {
   nom: string;
   fonction: string | null;
   professionalStatus: string | null;
+  civilite: string | null;
 }
 
 export async function generateGrilleSessionContent(
@@ -741,8 +758,11 @@ export async function generateGrilleSessionContent(
   if (stagiaires.length === 0) return null;
   const stagiairesList = stagiaires
     .map(
-      (s) =>
-        `- participantId="${s.participantId}" — ${s.prenom} ${s.nom}${s.fonction ? ` (${s.fonction})` : ''}${s.professionalStatus ? ` [${s.professionalStatus}]` : ''}`,
+      (s) => {
+        const g = normalizeGender(s.civilite);
+        const genre = g === 'F' ? ' {genre: féminin}' : g === 'M' ? ' {genre: masculin}' : '';
+        return `- participantId="${s.participantId}" — ${s.prenom} ${s.nom}${s.fonction ? ` (${s.fonction})` : ''}${s.professionalStatus ? ` [${s.professionalStatus}]` : ''}${genre}`;
+      },
     )
     .join('\n');
 
@@ -758,7 +778,7 @@ Stagiaires présents (${stagiaires.length}) :
 ${stagiairesList}
 
 Pour chaque compétence, l'objet "niveaux" doit OBLIGATOIREMENT contenir une clé pour CHAQUE participantId listé ci-dessus avec un niveau A, B ou C.
-Pour "observations", produis exactement ${stagiaires.length} entrées (1 par participantId) avec une observation positive et personnalisée (2-3 phrases).`;
+Pour "observations", produis exactement ${stagiaires.length} entrées (1 par participantId) avec une observation positive et personnalisée (2-3 phrases). Accorde chaque observation au genre indiqué entre accolades {genre: …} pour le stagiaire concerné (féminin → conseillère, engagée, elle ; masculin → conseiller, il).`;
 
   const result = await runOllamaJson(
     'generate-grille-obs-session',
