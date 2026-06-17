@@ -86,9 +86,7 @@ ${renderBrandHeader()}
   }
 
   <h2 class="section">Situation de handicap</h2>
-  <p class="paragraph">Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante ?&nbsp;&nbsp; <strong>&#9744; OUI</strong>&nbsp;&nbsp;&nbsp; <strong>&#9745; NON</strong> <span style="color: #475569;">(aucun besoin signalé)</span></p>
-  <p class="paragraph" style="margin-bottom: 4px;">Si oui, laquelle ?</p>
-  <div style="border: 1px solid #CBD5E1; border-radius: 4px; min-height: 20mm; background: #FFFFFF;"></div>
+  <p class="paragraph">À la question «&nbsp;Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante&nbsp;?&nbsp;», le stagiaire a répondu <strong>&#9745; NON</strong> — aucun besoin d'adaptation signalé.</p>
   <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap — indicateur 18).</p>
 
   ${(() => {
