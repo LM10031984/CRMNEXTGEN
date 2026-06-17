@@ -113,6 +113,7 @@ export async function generateChecklistForSession(
     sessionEndDate: session.endDate,
     formateurs: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
     lieuFormation,
+    isPast,
     horsDept06,
     trainerLodgingReserved,
     trainerLodgingPlace: session.trainerLodgingPlace,

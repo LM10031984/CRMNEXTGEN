@@ -52,6 +52,8 @@ export interface ChecklistFormationData {
   sessionEndDate: Date;
   formateurs: string[];
   lieuFormation: string;
+  /** Session terminée (endDate < aujourd'hui) → checklist remplie ; sinon vierge. */
+  isPast: boolean;
   // Zone 3 — logistique formateur
   horsDept06: boolean;
   trainerLodgingReserved: boolean;
@@ -130,10 +132,12 @@ export function renderChecklistFormationHtml(data: ChecklistFormationData): stri
       <span>Réservation hébergement formateur ${data.horsDept06 ? '<strong>(formation hors département 06)</strong>' : '(si formation hors département 06)'}${lodgingDetail ? ` — ${lodgingDetail}` : ''}</span>
     </li>`;
 
-  // Zone 4 — Accessibilité / handicap (2 cases mutuellement exclusives)
+  // Zone 4 — Accessibilité / handicap (2 cases). Comme les zones 1-2 : cochée pour
+  // une session passée (par défaut « pas d'accueil PSH » si aucune PSH enregistrée),
+  // vierge pour une session future. Une PSH connue est cochée même en amont.
   const zone4 = `
     <li style="margin: 3px 0; display:flex; align-items:flex-start; gap:8px; font-size:10pt; list-style:none;">
-      ${checkbox(!data.hasDisabledLearner)}
+      ${checkbox(data.isPast && !data.hasDisabledLearner)}
       <span>Pas d'accueil de personne en situation de handicap pour cette session.</span>
     </li>
     <li style="margin: 3px 0; display:flex; align-items:flex-start; gap:8px; font-size:10pt; list-style:none;">
