@@ -80,14 +80,17 @@ export function ProductProgrammeTab({
               </div>
             </div>
           </div>
-          <Link
-            href={`/api/documents/${pdfId}` as any}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-white text-primary px-3 py-2 text-sm font-medium hover:bg-primary/5 transition-colors"
-          >
-            Voir le PDF
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/api/documents/${pdfId}` as any}
+              target="_blank"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-white text-primary px-3 py-2 text-sm font-medium hover:bg-primary/5 transition-colors"
+            >
+              Voir le PDF
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+            <GenerateProductProgrammeButton productId={productId} regenerateOnly />
+          </div>
         </div>
       )}
 
