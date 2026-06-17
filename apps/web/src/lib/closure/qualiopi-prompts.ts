@@ -19,7 +19,7 @@ Les questions doivent :
 - Couvrir différents aspects de la formation
 - Être de difficulté modérée (un stagiaire ayant suivi la formation doit pouvoir répondre à >90%)
 
-Génère AU MOINS 10 questions (idéalement 12-13).
+Génère EXACTEMENT 12 questions (QCM administré sur Kahoot, seuil de réussite 9/12).
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 { "questions": [{ "question": "...", "options": [{"letter": "A", "text": "..."}, ...], "correct_answer": "A|B|C|D" }] }`;

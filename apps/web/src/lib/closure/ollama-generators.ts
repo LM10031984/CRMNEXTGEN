@@ -43,7 +43,7 @@ const MODEL = process.env.CLOSURE_OLLAMA_MODEL ?? 'mistral-small:24b';
 // Override de modèle par kind. Permet d'utiliser un modèle plus léger (gpt-oss:20b)
 // pour les docs longs comme le déroulé pédagogique sans toucher au reste.
 const MODEL_DEROULE = process.env.CLOSURE_OLLAMA_MODEL_DEROULE ?? MODEL;
-const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 13);
+const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 12);
 
 export interface FormationCtx {
   titre: string;
