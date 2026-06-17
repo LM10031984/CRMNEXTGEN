@@ -193,6 +193,11 @@ Structure type d'une journée (9h00–18h00, soit 8h de formation + 1h de pause 
 - Pause café 15h15–15h30 si la journée dépasse 6h (isPause: true, objectifs: "Pause")
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM final sur Kahoot (12 questions, seuil 9/12), bilan, remise attestations
 
+COHÉRENCE HORAIRE OBLIGATOIRE (un auditeur additionne tes créneaux) :
+- La durée entre parenthèses DOIT égaler l'écart horaire (fin − début). Ex : "17h30–18h00" = (30 min) ; ne JAMAIS écrire "(15 min)" pour un créneau de 30 min.
+- La somme des créneaux de TRAVAIL (hors pauses) = 8h00 PILE : matin 9h00–13h00 (4h) + après-midi 14h00–18h00 (4h).
+- Le bloc final d'évaluation (QCM Kahoot 12 questions) dure 20 à 30 min — ex : 17h30–18h00 (30 min), pas 15 min.
+
 FORMAT DE RENDU — TABLEAU 6 COLONNES, SOIS CONCIS :
 Le déroulé est rendu en TABLEAU à 6 colonnes étroites (Durée / Objectifs / Contenu / Outils / Exercice / Évaluation). Chaque champ = QUELQUES LIGNES MAXIMUM, style synthétique et télégraphique. INTERDIT : paragraphes numérotés à rallonge ("1)…2)…3)…"), listes de 5 micro-étapes, pavés. La qualité vient de la PRÉCISION, pas de la longueur. Cible : un déroulé lisible en colonnes, pas un mur de texte.
 

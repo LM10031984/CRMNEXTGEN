@@ -176,6 +176,29 @@ ${block('Bilan de la formation', bilan)}
  * session et produit. Une colonne par champ → lisible et aéré (rendu en paysage).
  * Format resserré : une cellule = quelques lignes (cf. prompt concision).
  */
+/**
+ * Recalcule la parenthèse de durée à partir de l'écart horaire RÉEL (fin − début)
+ * pour garantir la cohérence (ex : "17h45–18h00 (30 min)" → "17h45–18h00 (15 min)").
+ * Évite les scories d'arithmétique que relèverait un auditeur. Si le format n'est
+ * pas reconnaissable, on renvoie la valeur d'origine inchangée.
+ */
+function normalizeDuree(duree: string): string {
+  const m = duree.match(/(\d{1,2})\s*h\s*(\d{2})?\s*[–—-]\s*(\d{1,2})\s*h\s*(\d{2})?/);
+  if (!m) return duree;
+  const start = Number(m[1]) * 60 + Number(m[2] ?? 0);
+  const end = Number(m[3]) * 60 + Number(m[4] ?? 0);
+  const dur = end - start;
+  if (dur <= 0) return duree;
+  const label =
+    dur >= 60
+      ? dur % 60 === 0
+        ? `${dur / 60}h`
+        : `${Math.floor(dur / 60)}h${String(dur % 60).padStart(2, '0')}`
+      : `${dur} min`;
+  const range = m[0].replace(/\s+/g, '').replace(/[—-]/, '–');
+  return `${range} (${label})`;
+}
+
 function renderDerouleDays(content: DerouleContent): string {
   return content.jours
     .map((jour, idx) => {
@@ -184,13 +207,13 @@ function renderDerouleDays(content: DerouleContent): string {
           if (seq.isPause) {
             return `
 <tr style="background: #F8FAFC;">
-  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(seq.duree)}</td>
+  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(normalizeDuree(seq.duree))}</td>
   <td colspan="5" style="font-style: italic; color: #64748B;">${escapeHtml(seq.objectifs)}</td>
 </tr>`;
           }
           return `
 <tr>
-  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(seq.duree)}</td>
+  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(normalizeDuree(seq.duree))}</td>
   <td>${escapeHtml(seq.objectifs)}</td>
   <td>${escapeHtml(seq.contenu)}</td>
   <td>${escapeHtml(seq.outils)}</td>
