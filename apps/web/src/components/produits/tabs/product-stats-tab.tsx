@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { BookOpen, Users, Clock, Euro } from 'lucide-react';
+import { BookOpen, Users, Clock, Euro, GraduationCap, ThumbsUp } from 'lucide-react';
 import type { ProductStats } from '@/lib/product-stats';
+import type { EvaluationStats } from '@/lib/evaluation-stats';
 
 /**
  * Phase 9.1 Plan 09.1-05 Task 2 — Tab "Stats" de la fiche produit (Server Component).
@@ -20,7 +21,15 @@ import type { ProductStats } from '@/lib/product-stats';
 
 interface Props {
   stats: ProductStats;
+  evalStats?: EvaluationStats | null;
   productId: string;
+}
+
+/** « X sessions, Y stagiaires » — base de calcul des taux (transparence). */
+function evalBase(nbSessions: number, nbStagiaires: number): string {
+  const s = `${nbSessions} session${nbSessions > 1 ? 's' : ''}`;
+  const p = `${nbStagiaires} stagiaire${nbStagiaires > 1 ? 's' : ''}`;
+  return `${s}, ${p}`;
 }
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', {
@@ -29,8 +38,10 @@ const fmtEUR = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 0,
 });
 
-export function ProductStatsTab({ stats, productId }: Props) {
+export function ProductStatsTab({ stats, evalStats, productId }: Props) {
   const noSessions = stats.sessionsRealisees === 0;
+  const qcm = evalStats?.qcm ?? null;
+  const reco = evalStats?.reco ?? null;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -61,6 +72,26 @@ export function ProductStatsTab({ stats, productId }: Props) {
         label="CA CUMULÉ"
         value={fmtEUR.format(stats.caCumule)}
         subtitle={noSessions ? 'aucune session terminée' : 'HT facturé'}
+      />
+      <PrioCardLocal
+        icon={GraduationCap}
+        label="RÉUSSITE QCM"
+        value={qcm ? `${qcm.tauxReussite} %` : '—'}
+        subtitle={
+          qcm
+            ? `moyenne ${qcm.scoreMoyen} % · ${evalBase(evalStats?.nbSessions ?? 0, qcm.nbStagiaires)}`
+            : 'aucune évaluation'
+        }
+      />
+      <PrioCardLocal
+        icon={ThumbsUp}
+        label="RECOMMANDATION"
+        value={reco ? `${reco.tauxRecommandation} %` : '—'}
+        subtitle={
+          reco
+            ? `${evalBase(evalStats?.nbSessions ?? 0, reco.nbReponses)}`
+            : 'aucune évaluation'
+        }
       />
     </div>
   );

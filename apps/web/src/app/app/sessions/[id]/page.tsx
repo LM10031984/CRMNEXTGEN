@@ -24,6 +24,8 @@ import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
 import { NextActionHero } from '@/components/sessions/next-action-hero';
 import { sessionStage } from '@/lib/sessions/session-stage';
 import { getSessionClosureStatus } from '@/server/actions/closure-status';
+import { getSessionEvaluationStats } from '@/lib/evaluation-stats';
+import { SessionEvaluationBlock } from '@/components/sessions/session-evaluation-block';
 import { getSessionPreparationStatus } from '@/server/actions/prepare-training';
 import { MarkCompletedButton } from '@/components/sessions/mark-completed-button';
 import { SessionActionsMenu } from '@/components/sessions/session-actions-menu';
@@ -411,6 +413,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   // tenant-scopée via validateRequest (déjà résolue ci-dessus).
   const preparationStatus = await getSessionPreparationStatus(session.id);
   const closureStatus = await getSessionClosureStatus(session.id);
+  const sessionEvalStats = await getSessionEvaluationStats(session.id, user.tenantId);
 
   // ─── Données complémentaires pour la timeline 5 étapes ─────────────────
   // SessionSlot : pour step 3 "Pendant la formation" (créneaux + émargements signés)
@@ -957,6 +960,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           grilleObsSessionDocId={grilleSessionDocId ?? null}
           bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
         />
+
+        <SessionEvaluationBlock evalStats={sessionEvalStats} />
 
         <div id="step-5" className="scroll-mt-20" />
         <StepFacturation

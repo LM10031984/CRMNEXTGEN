@@ -27,6 +27,7 @@ import {
   type ProductSessionRow,
   type ProductLearnerRow,
 } from '@/lib/product-stats';
+import { getProductEvaluationStats, type EvaluationStats } from '@/lib/evaluation-stats';
 
 /**
  * Phase 9.1 Plan 09.1-05 Task 3 — Fiche produit refondue en 4 onglets URL-state.
@@ -93,12 +94,16 @@ export default async function ProductDetailPage({
   // Lazy load par tab — seulement les data nécessaires à l'onglet courant.
   // Le programmePdfId est chargé pour le tab "programme" (lien PDF si présent).
   let stats: ProductStats | null = null;
+  let evalStats: EvaluationStats | null = null;
   let sessions: ProductSessionRow[] | null = null;
   let learners: ProductLearnerRow[] | null = null;
   let programmePdfId: string | null = null;
 
   if (activeTab === 'stats') {
-    stats = await getProductStats(id, user.tenantId);
+    [stats, evalStats] = await Promise.all([
+      getProductStats(id, user.tenantId),
+      getProductEvaluationStats(id, user.tenantId),
+    ]);
   } else if (activeTab === 'sessions') {
     sessions = await listProductSessions(id, user.tenantId);
   } else if (activeTab === 'apprenants') {
@@ -194,7 +199,7 @@ export default async function ProductDetailPage({
       >
         {activeTab === 'stats' && stats && (
           <div className="space-y-5">
-            <ProductStatsTab stats={stats} productId={product.id} />
+            <ProductStatsTab stats={stats} evalStats={evalStats} productId={product.id} />
             {/* Satisfaction agrégée toutes sessions confondues — Qualiopi 2026 :
                 indicateur 30 ouvert au niveau produit en plus du niveau session */}
             <ProductSatisfactionPanel productId={product.id} tenantId={user.tenantId} />
