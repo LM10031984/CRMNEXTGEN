@@ -191,7 +191,7 @@ Structure type d'une journée (9h00–18h00, soit 8h de formation + 1h de pause 
 - Pause déjeuner 13h00–14h00 (1h) (isPause: true, objectifs: "Pause déjeuner")
 - Blocs de l'après-midi tirés du programme
 - Pause café 15h15–15h30 si la journée dépasse 6h (isPause: true, objectifs: "Pause")
-- Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM, bilan, remise attestations
+- Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM final sur Kahoot (12 questions, seuil 9/12), bilan, remise attestations
 
 FORMAT DE RENDU — TABLEAU 6 COLONNES, SOIS CONCIS :
 Le déroulé est rendu en TABLEAU à 6 colonnes étroites (Durée / Objectifs / Contenu / Outils / Exercice / Évaluation). Chaque champ = QUELQUES LIGNES MAXIMUM, style synthétique et télégraphique. INTERDIT : paragraphes numérotés à rallonge ("1)…2)…3)…"), listes de 5 micro-étapes, pavés. La qualité vient de la PRÉCISION, pas de la longueur. Cible : un déroulé lisible en colonnes, pas un mur de texte.
@@ -203,12 +203,12 @@ EXIGENCES PAR SÉQUENCE (champs non-pause) :
 3. "contenu" — notions-clés de la séquence en une phrase synthétique (PAS d'étapes numérotées). ~150 caractères max.
 4. "outils" — 2-3 supports max (diaporama, fiche technique, vidéo, étude de cas, jeu de rôle…). Liste courte.
 5. "exercice" — l'atelier / mise en situation : intitulé + durée + modalité (binôme/sous-groupes). 1 ligne. Ex : "Jeu de rôle 'premier RDV client' en binômes (15 min + débrief)".
-6. "evaluation" — type + critère en une phrase courte. Ex : "Observation directe, grille 4 critères, feedback oral".
+6. "evaluation" — UNIQUEMENT les modalités RÉELLES de Start Academy, jamais d'évaluation inventée. Deux cas seulement : (a) séquence de mise en situation/pratique → évaluation formative par OBSERVATION du formateur, consignée dans la grille d'amélioration du stagiaire et le rapport formateur. Ex : "Observation formateur pendant la mise en situation". (b) acquis théoriques → évalués par le QCM final sur Kahoot. Ex : "Acquis évalués au QCM Kahoot final". N'invente PAS de "grille d'observation à N critères" ni aucun autre dispositif non utilisé.
 
 ALTERNANCE OBLIGATOIRE (conformité Qualiopi ind. 12) — NON NÉGOCIABLE malgré la concision :
 - Dans CHAQUE DEMI-JOURNÉE : au moins UNE séquence avec une vraie mise en situation / atelier pratique (champ "exercice" rempli concrètement) ET au moins UN temps d'échange / tour de table explicite.
 - Alterne les formats sur la formation (apport théorique, étude de cas, mise en situation/jeu de rôle, sous-groupes, tour de table) — jamais deux fois le même format consécutivement quand c'est évitable.
-- Progression : 1re moitié = bases (théorie/cadres), 2de moitié = pratique (cas, simulations). Dernière demi-journée = évaluation sommative (QCM + bilan).
+- Progression : 1re moitié = bases (théorie/cadres), 2de moitié = pratique (cas, simulations). Dernière demi-journée = évaluation sommative (QCM Kahoot + bilan).
 
 PAUSES — pour les séquences isPause:true :
 - "duree" : horaire (ex: "13h00–14h00 (1h)")
