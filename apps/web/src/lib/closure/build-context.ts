@@ -40,8 +40,18 @@ export async function buildClosureContextForParticipant(
 
   const session = participant.session;
   const product = session.product;
+  // Lieu = adresse POSTALE complète quand elle est en base (rue + CP + ville) —
+  // exigence Qualiopi sur l'émargement/attestation (lieu exact de la formation).
+  // Avant : seulement « nom — ville » (la rue stockée n'était pas affichée).
+  // Fallback « nom — ville » si aucune rue renseignée.
+  const _addr = (session.location?.address ?? null) as
+    | { street?: string; postalCode?: string; city?: string }
+    | null;
+  const _cityLine = [_addr?.postalCode, _addr?.city].filter(Boolean).join(' ');
   const sessionLocation = session.location
-    ? `${session.location.name}${(session.location.address as { city?: string } | null)?.city ? ` — ${(session.location.address as { city?: string }).city}` : ''}`
+    ? _addr?.street
+      ? [_addr.street, _cityLine].filter(Boolean).join(', ')
+      : `${session.location.name}${_addr?.city ? ` — ${_addr.city}` : ''}`
     : null;
 
   const primaryLink = participant.person.legalLinks[0] ?? null;
