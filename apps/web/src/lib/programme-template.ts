@@ -283,8 +283,7 @@ function escapeHtml(s: string): string {
 const DEFAULT_TARGET_AUDIENCE =
   "Professionnels de l'immobilier (agents commerciaux, conseillers, négociateurs, gérants d'agences) souhaitant développer leurs compétences.";
 const DEFAULT_PREREQUISITES = "Aucun prérequis spécifique.";
-const DEFAULT_PEDAGOGICAL_METHODS =
-  "La formation se déroule en présentiel.\nLes formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.";
+const DEFAULT_PEDAGOGICAL_METHODS = "La formation se déroule en présentiel.";
 const DEFAULT_PEDAGOGICAL_SUPPORT =
   "Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.";
 const DEFAULT_TRAINER_PROFILE =
@@ -344,6 +343,14 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
   // Méthodes pédagogiques : on s'assure que la phrase générique livret/Canva
   // apparaît toujours en dernière ligne (pattern Start Academy)
   let methods = (data.produitPedagogicalMethods ?? DEFAULT_PEDAGOGICAL_METHODS).trim();
+  // Retrait de l'ancienne phrase « prospection » (remplacée par alternance +
+  // tours de table, Kaïna 16/06) — catch-all : default, données produit, imports.
+  methods = methods
+    .replace(
+      /Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection[^.]*\.\s*/gi,
+      '',
+    )
+    .trim();
   let support = (data.produitPedagogicalSupport ?? DEFAULT_PEDAGOGICAL_SUPPORT).trim();
   if (!methods.toLowerCase().includes('livret') && !support.toLowerCase().includes('livret')) {
     support = DEFAULT_PEDAGOGICAL_SUPPORT;
