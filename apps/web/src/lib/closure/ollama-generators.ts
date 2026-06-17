@@ -242,12 +242,15 @@ const DerouleSequenceSchema = z
   })
   .superRefine((seq, ctx) => {
     if (seq.isPause) return; // pauses : champs vides tolérés
+    // Minimums BAS (Kaïna 16/06) : on garantit juste des cellules non vides et
+    // signifiantes. La CONCISION (quelques lignes/cellule, format 6 colonnes)
+    // est pilotée par le prompt, pas par un plancher de caractères.
     const checks: Array<[keyof typeof seq, number, string]> = [
-      ['objectifs', 120, 'Objectifs trop courts (min 120 caractères) — détailler les objectifs pédagogiques actionnables.'],
-      ['contenu', 200, 'Contenu trop court (min 200 caractères) — détailler le déroulement étape par étape.'],
-      ['outils', 60, 'Outils trop succincts (min 60 caractères) — lister 3-5 supports concrets.'],
-      ['exercice', 100, 'Exercice trop succinct (min 100 caractères) — préciser consigne, durée, modalité, livrable.'],
-      ['evaluation', 60, 'Évaluation trop succincte (min 60 caractères) — préciser type, critères, feedback.'],
+      ['objectifs', 15, 'Objectifs vides ou trop courts — au moins un objectif actionnable.'],
+      ['contenu', 20, 'Contenu vide ou trop court — au moins la notion-clé de la séquence.'],
+      ['outils', 6, 'Outils manquants — au moins un support.'],
+      ['exercice', 15, 'Exercice manquant — au moins l\'intitulé de la mise en situation.'],
+      ['evaluation', 8, 'Évaluation manquante — au moins le type.'],
     ];
     for (const [field, min, msg] of checks) {
       const v = seq[field];
