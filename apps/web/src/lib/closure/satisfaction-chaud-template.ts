@@ -108,7 +108,7 @@ const RATING_SCORE: Record<RatingValue, number> = {
   'Mauvais': 0,
 };
 
-function computeGlobalScore(content: SatisfactionChaudContent): number {
+export function computeGlobalScore(content: SatisfactionChaudContent): number {
   const allRatings: RatingValue[] = [
     content.organisation.communication,
     content.organisation.delai,

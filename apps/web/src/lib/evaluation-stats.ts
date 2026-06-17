@@ -14,6 +14,8 @@
  */
 
 import { prisma } from '@qualiof/db';
+import { computeGlobalScore } from './closure/satisfaction-chaud-template';
+import type { SatisfactionChaudContent } from './closure/satisfaction-chaud-template';
 
 /** Seuil de réussite QCM en %. « 9/12 » ≈ 70 % (choix Laurent 17/06 ; 9/12 = 75 % strict). */
 export const QCM_SUCCESS_THRESHOLD = 70;
@@ -26,15 +28,17 @@ export interface QcmStats {
   nbStagiaires: number;
 }
 
-export interface RecoStats {
+export interface SatisfactionStats {
   /** % de « Oui » à « Recommanderiez-vous cette formation ? » (satisfaction à chaud). */
   tauxRecommandation: number;
+  /** Note globale moyenne (%) — « Taux de satisfaction global » (Très bien=100 / Bien=85 / Moyen=50 / Mauvais=0). */
+  noteGlobale: number;
   nbReponses: number;
 }
 
 export interface EvaluationStats {
   qcm: QcmStats | null;
-  reco: RecoStats | null;
+  satisfaction: SatisfactionStats | null;
   /** Nombre de sessions réelles couvertes par le calcul (pour « X sessions, Y stagiaires »). */
   nbSessions: number;
 }
@@ -52,12 +56,24 @@ export function computeQcmStats(scores: number[]): QcmStats | null {
   };
 }
 
-export function computeRecoStats(recommandeOui: boolean[]): RecoStats | null {
-  if (recommandeOui.length === 0) return null;
+/**
+ * Stats de satisfaction à chaud : taux de recommandation (% Oui) + note globale
+ * moyenne. `recommandeOui` et `notes` proviennent des mêmes docs ; on tolère des
+ * longueurs différentes (un doc peut avoir l'un sans l'autre). nbReponses = nb de
+ * docs de satisfaction exploités.
+ */
+export function computeSatisfactionStats(
+  recommandeOui: boolean[],
+  notes: number[],
+): SatisfactionStats | null {
+  const nbReponses = Math.max(recommandeOui.length, notes.length);
+  if (nbReponses === 0) return null;
   const oui = recommandeOui.filter(Boolean).length;
+  const noteGlobale = notes.length > 0 ? Math.round(notes.reduce((a, b) => a + b, 0) / notes.length) : 0;
   return {
-    tauxRecommandation: Math.round((oui / recommandeOui.length) * 100),
-    nbReponses: recommandeOui.length,
+    tauxRecommandation: recommandeOui.length > 0 ? Math.round((oui / recommandeOui.length) * 100) : 0,
+    noteGlobale,
+    nbReponses,
   };
 }
 
@@ -74,6 +90,21 @@ export function extractRecommandeOui(rawJson: unknown): boolean | null {
   return String(r).trim().toLowerCase() === 'oui';
 }
 
+/**
+ * Extrait la note globale (%) d'un rawJson satisfaction à chaud via la MÊME
+ * formule que le doc (computeGlobalScore). Renvoie null si les ratings manquent
+ * (rawJson malformé/incomplet) — garde-fou try/catch.
+ */
+export function extractNoteGlobale(rawJson: unknown): number | null {
+  try {
+    const content = rawJson as SatisfactionChaudContent;
+    if (!content?.organisation || !content?.pedagogie || !content?.benefice) return null;
+    return computeGlobalScore(content);
+  } catch {
+    return null;
+  }
+}
+
 // ---- Fetch (scopé tenantId) ----
 
 /** Stats d'évaluation pour UNE session (sur ses QCM + satisfactions à chaud réels). */
@@ -87,10 +118,11 @@ export async function getSessionEvaluationStats(
   ]);
   const scores = qcmAssets.map((a) => extractQcmScore(a.rawJson)).filter((s): s is number => s != null);
   const recos = satAssets.map((a) => extractRecommandeOui(a.rawJson)).filter((r): r is boolean => r != null);
+  const notes = satAssets.map((a) => extractNoteGlobale(a.rawJson)).filter((n): n is number => n != null);
   return {
     qcm: computeQcmStats(scores),
-    reco: computeRecoStats(recos),
-    nbSessions: scores.length > 0 || recos.length > 0 ? 1 : 0,
+    satisfaction: computeSatisfactionStats(recos, notes),
+    nbSessions: scores.length > 0 || satAssets.length > 0 ? 1 : 0,
   };
 }
 
@@ -115,15 +147,15 @@ export async function getProductEvaluationStats(
   ]);
   const qcmScored = qcmAssets.filter((a) => extractQcmScore(a.rawJson) != null);
   const scores = qcmScored.map((a) => extractQcmScore(a.rawJson)!);
-  const satWithReco = satAssets.filter((a) => extractRecommandeOui(a.rawJson) != null);
-  const recos = satWithReco.map((a) => extractRecommandeOui(a.rawJson)!);
+  const recos = satAssets.map((a) => extractRecommandeOui(a.rawJson)).filter((r): r is boolean => r != null);
+  const notes = satAssets.map((a) => extractNoteGlobale(a.rawJson)).filter((n): n is number => n != null);
   const sessions = new Set<string>([
     ...qcmScored.map((a) => a.sessionId),
-    ...satWithReco.map((a) => a.sessionId),
+    ...satAssets.map((a) => a.sessionId),
   ]);
   return {
     qcm: computeQcmStats(scores),
-    reco: computeRecoStats(recos),
+    satisfaction: computeSatisfactionStats(recos, notes),
     nbSessions: sessions.size,
   };
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BookOpen, Users, Clock, Euro, GraduationCap, ThumbsUp } from 'lucide-react';
+import { BookOpen, Users, Clock, Euro, GraduationCap, ThumbsUp, SmilePlus } from 'lucide-react';
 import type { ProductStats } from '@/lib/product-stats';
 import type { EvaluationStats } from '@/lib/evaluation-stats';
 
@@ -41,7 +41,7 @@ const fmtEUR = new Intl.NumberFormat('fr-FR', {
 export function ProductStatsTab({ stats, evalStats, productId }: Props) {
   const noSessions = stats.sessionsRealisees === 0;
   const qcm = evalStats?.qcm ?? null;
-  const reco = evalStats?.reco ?? null;
+  const sat = evalStats?.satisfaction ?? null;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -86,12 +86,16 @@ export function ProductStatsTab({ stats, evalStats, productId }: Props) {
       <PrioCardLocal
         icon={ThumbsUp}
         label="RECOMMANDATION"
-        value={reco ? `${reco.tauxRecommandation} %` : '—'}
+        value={sat ? `${sat.tauxRecommandation} %` : '—'}
         subtitle={
-          reco
-            ? `${evalBase(evalStats?.nbSessions ?? 0, reco.nbReponses)}`
-            : 'aucune évaluation'
+          sat ? `${evalBase(evalStats?.nbSessions ?? 0, sat.nbReponses)}` : 'aucune évaluation'
         }
+      />
+      <PrioCardLocal
+        icon={SmilePlus}
+        label="NOTE GLOBALE"
+        value={sat ? `${sat.noteGlobale} %` : '—'}
+        subtitle={sat ? 'satisfaction à chaud' : 'aucune évaluation'}
       />
     </div>
   );

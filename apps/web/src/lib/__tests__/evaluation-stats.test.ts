@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeQcmStats,
-  computeRecoStats,
+  computeSatisfactionStats,
   extractQcmScore,
   extractRecommandeOui,
+  extractNoteGlobale,
   QCM_SUCCESS_THRESHOLD,
 } from '../evaluation-stats';
 
@@ -34,15 +35,23 @@ describe('computeQcmStats', () => {
   });
 });
 
-describe('computeRecoStats', () => {
+describe('computeSatisfactionStats', () => {
   it('retourne null sans données', () => {
-    expect(computeRecoStats([])).toBeNull();
+    expect(computeSatisfactionStats([], [])).toBeNull();
   });
 
-  it('taux de recommandation = % de Oui', () => {
-    const r = computeRecoStats([true, true, true, false])!;
+  it('taux de recommandation = % de Oui + note globale moyenne', () => {
+    const r = computeSatisfactionStats([true, true, true, false], [90, 80, 100, 70])!;
     expect(r.tauxRecommandation).toBe(75);
+    expect(r.noteGlobale).toBe(85); // moyenne 90,80,100,70 = 85
     expect(r.nbReponses).toBe(4);
+  });
+
+  it('note globale tolère l\'absence (recommandation seule)', () => {
+    const r = computeSatisfactionStats([true, true], [])!;
+    expect(r.tauxRecommandation).toBe(100);
+    expect(r.noteGlobale).toBe(0);
+    expect(r.nbReponses).toBe(2);
   });
 });
 
@@ -60,5 +69,11 @@ describe('extracteurs rawJson', () => {
     expect(extractRecommandeOui({ recommandation: 'Non' })).toBe(false);
     expect(extractRecommandeOui({})).toBeNull();
     expect(extractRecommandeOui(null)).toBeNull();
+  });
+
+  it('extractNoteGlobale renvoie null si ratings absents', () => {
+    expect(extractNoteGlobale({})).toBeNull();
+    expect(extractNoteGlobale(null)).toBeNull();
+    expect(extractNoteGlobale({ recommandation: 'Oui' })).toBeNull(); // pas de blocs ratings
   });
 });
