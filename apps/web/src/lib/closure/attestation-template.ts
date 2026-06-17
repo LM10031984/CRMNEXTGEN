@@ -41,7 +41,7 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
 
   const body = `
 ${renderBrandHeader(ctx.of, ctx.tenantId)}
-${renderOfficialBadges()}
+${renderOfficialBadges({ qualiopi: false })}
 <main class="body">
   <h1 class="doc-title center">ATTESTATION DE FIN DE FORMATION</h1>
   <p class="doc-subtitle center">Conformément à l'article L.6353-1 du Code du travail — indicateur Qualiopi 11</p>
