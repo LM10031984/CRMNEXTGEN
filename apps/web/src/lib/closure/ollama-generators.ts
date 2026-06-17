@@ -297,6 +297,8 @@ ${formation.programmeMd || '(programme à compléter)'}`;
     refTable,
     refId,
     tenantId,
+    undefined,
+    'quality', // rédactionnel → Sonnet (audit routage 17/06)
   );
   if (!raw) return null;
   return attachQcmScoring(raw.questions);
@@ -388,6 +390,8 @@ L'analyse doit donner l'impression que le stagiaire a réellement répondu à un
     refTable,
     refId,
     tenantId,
+    undefined,
+    'quality', // rédactionnel → Sonnet (audit routage 17/06)
   );
 }
 
@@ -438,6 +442,8 @@ La grille doit être positive (valorise le parcours) tout en étant crédible (p
     refTable,
     refId,
     tenantId,
+    undefined,
+    'quality', // rédactionnel → Sonnet (audit routage 17/06)
   );
 }
 
@@ -548,6 +554,8 @@ Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majorita
     refTable,
     refId,
     tenantId,
+    undefined,
+    'quality', // rédactionnel (objectifs/prérequis) → Sonnet (audit routage 17/06)
   );
 }
 
@@ -760,6 +768,8 @@ Pour "observations", produis exactement ${stagiaires.length} entrées (1 par par
     refTable,
     refId,
     tenantId,
+    undefined,
+    'quality', // rédactionnel (observations perso) → Sonnet (audit routage 17/06)
   );
   if (!result) return null;
 
