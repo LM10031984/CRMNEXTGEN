@@ -59,9 +59,10 @@ export interface DerouleContent {
  * QualiOF avait dévié : adaptations/observations + bilan de la formation +
  * signature formateur. (Laurent / Kaïna 2026-06-16.)
  */
-// Adaptations pédagogiques pré-remplies (Laurent 2026-06-16 : "je ne veux rien
-// remplir"). Phrases plausibles, en lien avec le déroulé, Qualiopi-conformes.
-// Choix déterministe par seed (titre) → stable à la régénération, varié par produit.
+// Contenu du rapport formateur — pré-rempli de façon plausible et déterministe
+// (seed = titre) → stable à la régénération, varié par produit. (Kaïna 2026-06-16 :
+// structure complète façon Qualiopi Gen — questionnaire 7 critères + remarques +
+// adaptations + bilan.)
 const ADAPTATIONS_POOL: readonly string[] = [
   "À la demande des apprenants, un temps supplémentaire a été consacré à la pratique et aux mises en situation sur les outils vus en formation.",
   "Le groupe ayant souhaité approfondir l'usage des prompts, une séquence complémentaire a été ajoutée pour en travailler la structuration.",
@@ -71,35 +72,100 @@ const ADAPTATIONS_POOL: readonly string[] = [
   "Un temps d'échange additionnel a été consacré aux questions du groupe afin d'adapter les exemples à leurs besoins métier.",
 ];
 
-function pickBySeed(seed: string): string {
+const REMARQUES_GROUPE_POOL: readonly string[] = [
+  "Groupe impliqué et curieux, bonne dynamique d'échange tout au long de la formation.",
+  "Participants de niveaux de départ hétérogènes mais très motivés ; entraide spontanée entre stagiaires.",
+  "Groupe attentif et participatif, nombreuses questions concrètes liées à leur activité quotidienne.",
+  "Bonne cohésion de groupe, les stagiaires ont partagé volontiers leurs cas pratiques.",
+];
+
+const BILAN_POOL: readonly string[] = [
+  "Objectifs pédagogiques atteints. Les stagiaires repartent avec des méthodes directement applicables à leur activité ; bonne progression observée entre le début et la fin de la formation.",
+  "Formation menée à son terme, objectifs couverts. Montée en compétences nette sur les outils travaillés ; les mises en situation ont confirmé l'assimilation des acquis.",
+  "Ensemble des objectifs traités. Participation soutenue et résultats positifs aux évaluations ; quelques axes d'approfondissement identifiés pour un éventuel module avancé.",
+];
+
+// 7 critères du questionnaire de satisfaction formateur (demande Kaïna).
+const CRITERES_FORMATEUR: readonly string[] = [
+  "Homogénéité du groupe",
+  "Niveau de base des stagiaires",
+  "Nombre de stagiaires",
+  "Participation du groupe",
+  "Assimilation des contenus",
+  "Salle et conditions matérielles",
+  "Information et organisation en amont",
+];
+
+function hashSeed(seed: string): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return ADAPTATIONS_POOL[h % ADAPTATIONS_POOL.length] ?? ADAPTATIONS_POOL[0]!;
+  return h;
+}
+
+function pick(pool: readonly string[], seed: string): string {
+  return pool[hashSeed(seed) % pool.length] ?? pool[0]!;
+}
+
+// Note 1-5 cohérente (majorité 4-5, parfois 3) déterministe par seed + index.
+function noteBySeed(seed: string, i: number): number {
+  const r = hashSeed(`${seed}#${i}`) % 10;
+  return r < 5 ? 5 : r < 9 ? 4 : 3;
 }
 
 function renderBilanFormateur(
   opts: { trainerName?: string | null; signatureDataUrl?: string | null; seed?: string } = {},
 ): string {
   const formateur = opts.trainerName && opts.trainerName.trim() ? opts.trainerName.trim() : '';
-  const adaptation = pickBySeed(opts.seed ?? formateur ?? 'deroule');
+  const seed = opts.seed ?? formateur ?? 'deroule';
+  const adaptation = pick(ADAPTATIONS_POOL, seed);
+  const remarques = pick(REMARQUES_GROUPE_POOL, `${seed}~rg`);
+  const bilan = pick(BILAN_POOL, `${seed}~bilan`);
   const sig = opts.signatureDataUrl
-    ? `<img src="${opts.signatureDataUrl}" alt="Signature ${escapeHtml(formateur)}" style="height: 22mm; margin-top: 4px;" />`
-    : '<div style="height: 22mm;"></div>';
+    ? `<img src="${opts.signatureDataUrl}" alt="Signature ${escapeHtml(formateur)}" style="height: 20mm; margin-top: 4px;" />`
+    : '<div style="height: 20mm;"></div>';
+
+  const critereRows = CRITERES_FORMATEUR.map((critere, i) => {
+    const note = noteBySeed(seed, i);
+    const cells = [1, 2, 3, 4, 5]
+      .map(
+        (n) =>
+          `<td style="text-align: center; width: 9mm; ${
+            n === note
+              ? `background: ${BRAND_DARK}; color: white; font-weight: 700;`
+              : 'color: #CBD5E1;'
+          }">${n}</td>`,
+      )
+      .join('');
+    return `<tr><td>${escapeHtml(critere)}</td>${cells}</tr>`;
+  }).join('');
+
+  const block = (titre: string, contenu: string) => `
+<div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 7px 10px; margin-bottom: 8px;">
+  <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 9.5pt; margin-bottom: 3px;">${titre}</div>
+  <div style="font-size: 9pt;">${escapeHtml(contenu)}</div>
+</div>`;
+
   return `
 <h2 class="section dark upper" style="margin-top: 22px;">Rapport formateur</h2>
 
-<div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px;">
-  <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 10pt; margin-bottom: 4px;">Adaptations pédagogiques / observations de la formation</div>
-  <div style="font-size: 9.5pt;">${escapeHtml(adaptation)}</div>
-</div>
+<div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 9.5pt; margin-bottom: 4px;">Questionnaire de satisfaction du formateur</div>
+<table class="data" style="margin-top: 0; font-size: 9pt; width: 130mm;">
+  <thead>
+    <tr>
+      <th>Critère d'appréciation</th>
+      <th colspan="5" style="text-align: center;">Évaluation (1 = faible · 5 = excellent)</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${critereRows}
+  </tbody>
+</table>
 
-<div style="border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px;">
-  <div style="font-weight: 700; color: ${BRAND_DARK}; font-size: 10pt; margin-bottom: 2px;">Bilan de la formation</div>
-  <div style="font-size: 8.5pt; color: #64748B; margin-bottom: 4px;">Atteinte des objectifs, participation du groupe, points forts, axes d'amélioration…</div>
-  <div style="height: 24mm;"></div>
-</div>
+${block('Remarques particulières sur le groupe', remarques)}
+${block('Adaptations pédagogiques / observations de la formation', adaptation)}
+${block('Bilan de la formation', bilan)}
 
-<div style="margin-top: 8mm; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; width: 80mm;">
+<div style="margin-top: 6mm; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px; width: 80mm;">
   <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">Le formateur${formateur ? ' — ' + escapeHtml(formateur) : ''}</div>
   ${sig}
 </div>`;
