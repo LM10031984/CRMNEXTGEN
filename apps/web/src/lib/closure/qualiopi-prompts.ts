@@ -190,30 +190,22 @@ Structure type d'une journée (9h00–18h00, soit 8h de formation + 1h de pause 
 - Pause café 15h15–15h30 si la journée dépasse 6h (isPause: true, objectifs: "Pause")
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" — QCM, bilan, remise attestations
 
-EXIGENCES DÉTAILLÉES PAR SÉQUENCE (champs non-pause) :
+FORMAT DE RENDU — TABLEAU 6 COLONNES, SOIS CONCIS :
+Le déroulé est rendu en TABLEAU à 6 colonnes étroites (Durée / Objectifs / Contenu / Outils / Exercice / Évaluation). Chaque champ = QUELQUES LIGNES MAXIMUM, style synthétique et télégraphique. INTERDIT : paragraphes numérotés à rallonge ("1)…2)…3)…"), listes de 5 micro-étapes, pavés. La qualité vient de la PRÉCISION, pas de la longueur. Cible : un déroulé lisible en colonnes, pas un mur de texte.
 
-1. "duree" — horaire complet et durée. Format : "9h00–10h30 (1h30)". JAMAIS juste "1h30".
+EXIGENCES PAR SÉQUENCE (champs non-pause) :
 
-2. "objectifs" — 2 à 4 objectifs pédagogiques ACTIONNABLES (verbes opérationnels : identifier, analyser, construire, argumenter, mettre en œuvre, évaluer). Préciser le NIVEAU TAXONOMIQUE de Bloom (connaissance / compréhension / application / analyse). Format : phrases ou liste à puces séparées par "•". MINIMUM 200 caractères.
+1. "duree" — horaire + durée. Format : "9h00–10h30 (1h30)".
+2. "objectifs" — 1 à 2 objectifs actionnables (verbe opérationnel : identifier, analyser, construire, argumenter, mettre en œuvre). ~1 ligne, 120 caractères max.
+3. "contenu" — notions-clés de la séquence en une phrase synthétique (PAS d'étapes numérotées). ~150 caractères max.
+4. "outils" — 2-3 supports max (diaporama, fiche technique, vidéo, étude de cas, jeu de rôle…). Liste courte.
+5. "exercice" — l'atelier / mise en situation : intitulé + durée + modalité (binôme/sous-groupes). 1 ligne. Ex : "Jeu de rôle 'premier RDV client' en binômes (15 min + débrief)".
+6. "evaluation" — type + critère en une phrase courte. Ex : "Observation directe, grille 4 critères, feedback oral".
 
-3. "contenu" — déroulement concret, étape par étape, en 4-6 micro-étapes minimum. Mentionne au moins une notion-clé, un cadre théorique, un exemple sectoriel. MINIMUM 350 caractères. Exemple correct : "1) Cadrage théorique : les 4 leviers d'AIDA en prospection téléphonique. 2) Démonstration filmée d'un appel-type avec analyse pas-à-pas. 3) Décortication des objections fréquentes (prix, délai, concurrence). 4) Distribution de la fiche technique 'script d'accroche personnalisable'. 5) Échange en sous-groupes sur les cas vécus."
-
-4. "outils" — supports MATÉRIELS et PÉDAGOGIQUES précis. Lister 3-5 éléments parmi : diaporama (avec mention du nombre de slides), fiches techniques, vidéos, paperboard, post-its, plateforme LMS, quiz Wooclap/Mentimeter, étude de cas écrite, jeu de rôle, fichier Excel modèle, contrats-types, scripts d'appel. MINIMUM 100 caractères.
-
-5. "exercice" — exercice CONCRET avec consigne, durée, livrable, modalité (individuel/binôme/sous-groupes). Au moins une mise en situation réelle ou simulation. MINIMUM 150 caractères. Exemple correct : "Mise en situation 'premier rendez-vous client' en binômes (15 min de jeu de rôle + 10 min de débrief). Le formateur observe 2-3 binômes et restitue à chaud. Livrable : grille d'auto-évaluation remplie."
-
-6. "evaluation" — modalité d'évaluation des acquis SUR CETTE SÉQUENCE (formative en cours de séquence ou sommative en fin). Préciser : type (QCM, observation, restitution orale, livrable écrit), critères (3-5 critères concrets), feedback (oral immédiat / écrit). MINIMUM 100 caractères. Exemple correct : "Évaluation formative par observation directe pendant l'exercice. Grille à 4 critères : clarté de l'argumentation, gestion des objections, écoute active, posture. Feedback oral collectif en fin de séquence."
-
-VARIÉTÉ PÉDAGOGIQUE OBLIGATOIRE — alterne sur la formation :
-- Cours magistral interactif (pour transmettre théorie/cadre)
-- Étude de cas réelle (analyse et discussion)
-- Mise en situation / jeu de rôle (avec débrief)
-- Travail en sous-groupes (production collective)
-- Démonstration et reproduction (geste métier)
-- Évaluation formative (QCM intermédiaire, vote dynamique)
-JAMAIS deux fois le même format consécutivement quand c'est évitable.
-
-PROGRESSION PÉDAGOGIQUE : la première moitié de la formation construit les bases (théorie, cadres), la seconde moitié approfondit la mise en pratique (cas, simulations, exercices longs). La dernière demi-journée intègre une évaluation sommative (QCM + production).
+ALTERNANCE OBLIGATOIRE (conformité Qualiopi ind. 12) — NON NÉGOCIABLE malgré la concision :
+- Dans CHAQUE DEMI-JOURNÉE : au moins UNE séquence avec une vraie mise en situation / atelier pratique (champ "exercice" rempli concrètement) ET au moins UN temps d'échange / tour de table explicite.
+- Alterne les formats sur la formation (apport théorique, étude de cas, mise en situation/jeu de rôle, sous-groupes, tour de table) — jamais deux fois le même format consécutivement quand c'est évitable.
+- Progression : 1re moitié = bases (théorie/cadres), 2de moitié = pratique (cas, simulations). Dernière demi-journée = évaluation sommative (QCM + bilan).
 
 PAUSES — pour les séquences isPause:true :
 - "duree" : horaire (ex: "13h00–14h00 (1h)")
