@@ -18,7 +18,6 @@ import {
   escapeHtml,
   formatDateFr,
   renderBrandHeader,
-  renderInfoBox,
   renderStagiaireBlock,
   wrapHtml,
 } from './shared-template';
@@ -69,7 +68,7 @@ ${renderBrandHeader()}
   <p class="doc-subtitle">Indicateur Qualiopi 4 — Recueil des besoins en amont de la formation</p>
   <hr class="doc-rule" />
 
-  ${renderInfoBox(ctx)}
+  <p style="margin: 4px 0 10px 0; font-size: 10.5pt; color: #475569;">Formation envisagée : <strong style="color: ${BRAND_DARK};">${escapeHtml(ctx.sessionTitle)}</strong></p>
   ${renderStagiaireBlock(ctx)}
 
   ${renderParagraphSection('Contexte professionnel', content.contexte_professionnel)}
