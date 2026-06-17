@@ -199,8 +199,12 @@ function renderDerouleDays(content: DerouleContent): string {
 </tr>`;
         })
         .join('');
+      // Strip un préfixe « Jour N — » déjà présent dans le thème (le modèle le
+      // remet parfois) pour éviter le doublon « Jour 1 — Jour 1 — … ».
+      const theme = jour.theme.replace(/^\s*jour\s*\d+\s*[—–:.\-]+\s*/i, '').trim();
+      const titre = theme ? `Jour ${idx + 1} — ${escapeHtml(theme)}` : `Jour ${idx + 1}`;
       return `
-<h2 class="section dark upper" style="margin-top: 16px;">Jour ${idx + 1} — ${escapeHtml(jour.theme)}</h2>
+<h2 class="section dark upper" style="margin-top: 16px;">${titre}</h2>
 <table class="data" style="margin-top: 4px; font-size: 8.5pt;">
   <thead>
     <tr>
