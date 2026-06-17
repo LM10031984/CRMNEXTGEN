@@ -58,7 +58,7 @@ function loadAssetDataUrl(filenames: string[], tenantId?: string): string {
         const buf = fs.readFileSync(p);
         const ext = path.extname(name).slice(1) || 'png';
         // SVG content-type quirk : doit être `image/svg+xml` (pas `image/svg`)
-        const mime = ext === 'svg' ? 'svg+xml' : ext;
+        const mime = ext === 'svg' ? 'svg+xml' : ext === 'jpg' ? 'jpeg' : ext;
         const url = `data:image/${mime};base64,${buf.toString('base64')}`;
         fileCache.set(cacheKey, url);
         return url;
@@ -187,7 +187,7 @@ export function loadSignatureDataUrl(
 export function loadTrainerSignatureDataUrl(tenantId?: string, trainerName?: string | null): string {
   const n = (trainerName ?? '').toLowerCase();
   if (n.includes('jean') && n.includes('guy')) {
-    return loadAssetDataUrl(['signature-jean-guy.png'], tenantId);
+    return loadAssetDataUrl(['signature-jean-guy.jpg', 'signature-jean-guy.png'], tenantId);
   }
   if (n.includes('laurent') && n.includes('marx')) {
     return loadSignatureDataUrl(tenantId, 'pedago');
