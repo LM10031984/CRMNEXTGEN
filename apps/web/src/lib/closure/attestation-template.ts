@@ -30,7 +30,11 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   // Phase 7 (Plan 07-03) — résolution signature pédago uploadée via Paramètres
   // (signature-pedago.png), fallback bundled signature-laurent.png.
   const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
-  const today = formatDateFr(new Date());
+  // Date d'émission = fin de la session (l'attestation se délivre à l'issue de la
+  // formation), JAMAIS la date de génération. Sinon une régénération a posteriori
+  // daterait l'attestation du jour — marqueur visible en audit. Cohérent avec le
+  // certificat (qui utilise déjà sessionEndDate).
+  const dateAttestation = formatDateFr(ctx.sessionEndDate);
   const dateStr =
     ctx.sessionStartDate.toDateString() === ctx.sessionEndDate.toDateString()
       ? `le ${formatDateFr(ctx.sessionStartDate)}`
@@ -61,7 +65,7 @@ ${renderOfficialBadges({ qualiopi: false })}
     <p>Cette attestation est délivrée pour servir et valoir ce que de droit.</p>
   </section>
 
-  <p style="margin-top: 24px;">Fait à ${escapeHtml(lieuFait)}, le ${escapeHtml(today)}.</p>
+  <p style="margin-top: 24px;">Fait à ${escapeHtml(lieuFait)}, le ${escapeHtml(dateAttestation)}.</p>
 
   <div class="signature-block">
     <div class="col">

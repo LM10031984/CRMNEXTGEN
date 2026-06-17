@@ -114,7 +114,7 @@ ${renderBrandHeader()}
   <!-- 2 cases signature formateur en bas de page (matin + après-midi).
        Horaires retirés des libellés à la demande de Laurent 2026-06-04 :
        "une signature le matin et l'aprem sans les horaires". -->
-  <div style="margin-top: 14mm; display: flex; gap: 12mm;">
+  <div style="margin-top: 8mm; display: flex; gap: 12mm;">
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
         Signature formateur — Matin
@@ -122,7 +122,7 @@ ${renderBrandHeader()}
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}
       </div>
-      <div style="height: 26mm;"></div>
+      <div style="height: 18mm;"></div>
     </div>
     <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
       <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
@@ -131,14 +131,14 @@ ${renderBrandHeader()}
       <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
         ${escapeHtml(trainer)}
       </div>
-      <div style="height: 26mm;"></div>
+      <div style="height: 18mm;"></div>
     </div>
   </div>
 
   <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
        par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
        (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
-  <div style="margin-top: 12mm; padding-top: 8px; border-top: 1px solid #CBD5E1;">
+  <div style="margin-top: 8mm; padding-top: 8px; border-top: 1px solid #CBD5E1; break-inside: avoid; page-break-inside: avoid;">
     <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 4px 0;">
       Certifié exact par ${escapeHtml(trainer)}, formateur.
     </p>
@@ -146,8 +146,8 @@ ${renderBrandHeader()}
       Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
     </p>
     <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 6px;">
-      ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 25mm;" />` : ''}
-      ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 25mm;" />` : ''}
+      ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 24mm;" />` : ''}
+      ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 32mm;" />` : ''}
     </div>
   </div>
 </main>
