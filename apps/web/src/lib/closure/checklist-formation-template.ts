@@ -1,13 +1,14 @@
 /**
- * Check-list formation (C4.i17 Qualiopi).
+ * Check-list formation (C4.i17 Qualiopi) — 4 zones (refonte Laurent 17/06).
  *
- * 1 doc par session — pré-rempli IA selon : lieu, hébergement formateur,
- * accessibilité PSH. Coches :
- *   - ADMINISTRATIF (déroulé péda, convention formateur, émargement,
- *     règlement intérieur, certificat, lien QCM, livret stagiaires…)
- *   - REPAS / PAUSE (machine à café, eau, multiprise…)
- *   - MATÉRIEL (PC, paperboard, projecteur, internet…)
- *   - Accessibilité PSH
+ * Doc AUTONOME (aucun lien technique avec l'analyse de besoin). Structure :
+ *   Zone 1 — Apporté par Start Academy (ce que l'OF amène)
+ *   Zone 2 — Conditions du lieu d'accueil (ce que le lieu fournit)  ← séparation Kaïna
+ *   Zone 3 — Logistique formateur (nom + hébergement si hors dépt 06)
+ *   Zone 4 — Accessibilité / handicap (2 cases + référent Jean-Guy Ourmières)
+ *
+ * Génération : VIERGE (cases décochées) pour les sessions FUTURES, REMPLIE
+ * (cases cochées) pour les sessions PASSÉES — décidé par le générateur.
  */
 
 import {
@@ -18,36 +19,30 @@ import {
   wrapHtml,
 } from './shared-template';
 
-export interface ChecklistAdministratif {
-  derouleP: boolean;
-  conventionFormateur: boolean;
+/** Référent handicap unique de l'OF (ind. 26) — identique sur tous les docs. */
+const HANDICAP_REFERENT_LINE =
+  'Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60';
+
+/** Zone 1 — apporté par Start Academy. */
+export interface ChecklistZoneApportee {
+  deroulePedagogique: boolean;
   emargement: boolean;
-  reglementInterieur: boolean;
-  positionnementAutoEval: boolean;
-  certificatRealisation: boolean;
-  lienQcm: boolean;
-  livretStagiaires: boolean;
-  evaluationChaud: boolean;
-  grilleAmelioration: boolean;
-  cleUsbSupport: boolean;
-}
-
-export interface ChecklistRepas {
-  machineCafe: boolean;
-  cafe: boolean;
-  bouilloire: boolean;
-  the: boolean;
-  rallongeElectrique: boolean;
-  eau: boolean;
-  multiprise: boolean;
-}
-
-export interface ChecklistMateriel {
+  positionnement: boolean;
+  satisfaction: boolean;
+  livretSupport: boolean;
+  cleUsb: boolean;
   pc: boolean;
+  videoprojecteur: boolean;
   paperboard: boolean;
-  projecteur: boolean;
-  ecranAdapte: boolean;
+}
+
+/** Zone 2 — conditions du lieu d'accueil. */
+export interface ChecklistConditionsLieu {
+  salleAdaptee: boolean;
+  espacePause: boolean;
+  espaceRepas: boolean;
   connexionInternet: boolean;
+  prisesElectriques: boolean;
 }
 
 export interface ChecklistFormationData {
@@ -57,19 +52,17 @@ export interface ChecklistFormationData {
   sessionEndDate: Date;
   formateurs: string[];
   lieuFormation: string;
-  lieuContact: string | null;
-  // Hébergement formateur
-  needsTrainerLodging: boolean;
+  // Zone 3 — logistique formateur
+  horsDept06: boolean;
+  trainerLodgingReserved: boolean;
   trainerLodgingPlace: string | null;
   trainerLodgingDates: string | null;
-  // Accessibilité PSH
+  // Zone 4 — accessibilité / handicap
   hasDisabledLearner: boolean;
   disabilityAdaptations: string | null;
-  handicapReferent: string;
-  // Coches IA
-  administratif: ChecklistAdministratif;
-  repas: ChecklistRepas;
-  materiel: ChecklistMateriel;
+  // Zones de coches
+  apportee: ChecklistZoneApportee;
+  conditionsLieu: ChecklistConditionsLieu;
 }
 
 function checkbox(checked: boolean): string {
@@ -85,6 +78,10 @@ function row(label: string, checked: boolean): string {
   </li>`;
 }
 
+function ul(items: string): string {
+  return `<ul style="list-style: none; padding: 0; margin: 4px 0 12px 0;">${items}</ul>`;
+}
+
 export function renderChecklistFormationHtml(data: ChecklistFormationData): string {
   const sameDay =
     data.sessionStartDate.toDateString() === data.sessionEndDate.toDateString();
@@ -92,62 +89,61 @@ export function renderChecklistFormationHtml(data: ChecklistFormationData): stri
     ? formatDateFr(data.sessionStartDate)
     : `Du ${formatDateFr(data.sessionStartDate)} au ${formatDateFr(data.sessionEndDate)}`;
   const formateurStr = data.formateurs.length > 0 ? data.formateurs.join(', ') : 'À renseigner';
+  const a = data.apportee;
+  const c = data.conditionsLieu;
 
-  const administratifList = `
-    ${row('Déroulé pédagogique – rapport formateur', data.administratif.derouleP)}
-    ${row('Convention Formateur', data.administratif.conventionFormateur)}
-    ${row("Feuilles d'émargement", data.administratif.emargement)}
-    ${row('Règlement intérieur', data.administratif.reglementInterieur)}
-    ${row('Questionnaire de positionnement / auto-évaluation', data.administratif.positionnementAutoEval)}
-    ${row('Certificat de réalisation', data.administratif.certificatRealisation)}
-    ${row('Lien QCM', data.administratif.lienQcm)}
-    ${row('Livret stagiaires', data.administratif.livretStagiaires)}
-    ${row('Évaluation à chaud stagiaire', data.administratif.evaluationChaud)}
-    ${row('Grille amélioration stagiaire', data.administratif.grilleAmelioration)}
-    ${row('Clé USB – support de cours / présentation', data.administratif.cleUsbSupport)}
-  `;
+  // Zone 1 — Apporté par Start Academy
+  const zone1 = ul(`
+    ${row('Déroulé pédagogique', a.deroulePedagogique)}
+    ${row("Feuilles d'émargement", a.emargement)}
+    ${row('Questionnaire de positionnement', a.positionnement)}
+    ${row('Questionnaires de satisfaction', a.satisfaction)}
+    ${row('Livret / support de formation', a.livretSupport)}
+    ${row('Clé USB (support de cours / présentation)', a.cleUsb)}
+    ${row('PC', a.pc)}
+    ${row('Vidéoprojecteur', a.videoprojecteur)}
+    ${row('Paperboard', a.paperboard)}
+  `);
 
-  const repasList = `
-    ${row('Machine à café', data.repas.machineCafe)}
-    ${row('Café', data.repas.cafe)}
-    ${row('Bouilloire', data.repas.bouilloire)}
-    ${row('Thé', data.repas.the)}
-    ${row('Rallonge électrique', data.repas.rallongeElectrique)}
-    ${row('Eau', data.repas.eau)}
-    ${row('Multiprise', data.repas.multiprise)}
-  `;
+  // Zone 2 — Conditions du lieu d'accueil
+  const zone2 = ul(`
+    ${row("Salle adaptée au nombre d'inscrits", c.salleAdaptee)}
+    ${row('Espace pause', c.espacePause)}
+    ${row('Espace repas', c.espaceRepas)}
+    ${row('Connexion internet', c.connexionInternet)}
+    ${row('Prises électriques', c.prisesElectriques)}
+  `);
 
-  const materielList = `
-    ${row('PC', data.materiel.pc)}
-    ${row('Paperboard', data.materiel.paperboard)}
-    ${row('Projecteur', data.materiel.projecteur)}
-    ${row('Écran ou mur adapté', data.materiel.ecranAdapte)}
-    ${row('Connexion internet', data.materiel.connexionInternet)}
-  `;
-
-  const lodgingBlock = data.needsTrainerLodging
-    ? `
+  // Zone 3 — Logistique formateur
+  const lodgingDetail = [
+    data.trainerLodgingDates ? `Dates : ${escapeHtml(data.trainerLodgingDates)}` : null,
+    data.trainerLodgingPlace ? `Lieu : ${escapeHtml(data.trainerLodgingPlace)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const zone3 = `
     <p style="font-size:10pt; margin: 4px 0;">
-      <strong>Hébergement formateur :</strong>
-      ${checkbox(true)} OUI
-      ${data.trainerLodgingDates ? `· Dates : ${escapeHtml(data.trainerLodgingDates)}` : ''}
-      ${data.trainerLodgingPlace ? `· Lieu : ${escapeHtml(data.trainerLodgingPlace)}` : ''}
-    </p>`
-    : `<p style="font-size:10pt; margin: 4px 0;">
-      <strong>Hébergement formateur :</strong> ${checkbox(false)} NON
-    </p>`;
-
-  const handicapBlock = data.hasDisabledLearner
-    ? `
-    <p style="font-size:10pt; margin: 4px 0;">
-      ${checkbox(true)} <strong>Accueil d'une personne en situation de handicap.</strong>
+      <strong>Formateur de la session :</strong> ${escapeHtml(formateurStr)}
     </p>
-    <p style="font-size:10pt; margin: 2px 0 4px 22px; color:#475569;">
-      Adaptations à prévoir : ${escapeHtml(data.disabilityAdaptations ?? '— à compléter par le référent —')}
-    </p>`
-    : `
-    <p style="font-size:10pt; margin: 4px 0;">
-      ${checkbox(true)} <strong>Pas d'accueil de personne en situation de handicap pour cette session.</strong>
+    <li style="margin: 3px 0; display:flex; align-items:flex-start; gap:8px; font-size:10pt; list-style:none;">
+      ${checkbox(data.trainerLodgingReserved)}
+      <span>Réservation hébergement formateur ${data.horsDept06 ? '<strong>(formation hors département 06)</strong>' : '(si formation hors département 06)'}${lodgingDetail ? ` — ${lodgingDetail}` : ''}</span>
+    </li>`;
+
+  // Zone 4 — Accessibilité / handicap (2 cases mutuellement exclusives)
+  const zone4 = `
+    <li style="margin: 3px 0; display:flex; align-items:flex-start; gap:8px; font-size:10pt; list-style:none;">
+      ${checkbox(!data.hasDisabledLearner)}
+      <span>Pas d'accueil de personne en situation de handicap pour cette session.</span>
+    </li>
+    <li style="margin: 3px 0; display:flex; align-items:flex-start; gap:8px; font-size:10pt; list-style:none;">
+      ${checkbox(data.hasDisabledLearner)}
+      <span>Accueil d'une personne en situation de handicap — adaptations à prévoir : ${escapeHtml(
+        data.hasDisabledLearner ? data.disabilityAdaptations ?? '— à compléter par le référent —' : '…',
+      )}</span>
+    </li>
+    <p style="font-size:10pt; margin: 6px 0 0 0; color:#475569;">
+      <strong>Référent handicap :</strong> ${escapeHtml(HANDICAP_REFERENT_LINE)}
     </p>`;
 
   const body = `
@@ -172,39 +168,23 @@ ${renderBrandHeader()}
         </tr>
         <tr>
           <td class="label">Lieu :</td>
-          <td class="value" colspan="3">${escapeHtml(data.lieuFormation)}${data.lieuContact ? ` — Contact : ${escapeHtml(data.lieuContact)}` : ''}</td>
+          <td class="value" colspan="3">${escapeHtml(data.lieuFormation)}</td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  ${lodgingBlock}
+  <h2 class="section dark upper">1 · Apporté par Start Academy</h2>
+  ${zone1}
 
-  <h2 class="section dark upper">Administratif</h2>
-  <ul style="list-style: none; padding: 0; margin: 4px 0 12px 0;">
-    ${administratifList}
-  </ul>
+  <h2 class="section dark upper">2 · Conditions du lieu d'accueil</h2>
+  ${zone2}
 
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
-    <div>
-      <h2 class="section dark upper">Repas / Pause</h2>
-      <ul style="list-style: none; padding: 0; margin: 4px 0 12px 0;">
-        ${repasList}
-      </ul>
-    </div>
-    <div>
-      <h2 class="section dark upper">Matériel</h2>
-      <ul style="list-style: none; padding: 0; margin: 4px 0 12px 0;">
-        ${materielList}
-      </ul>
-    </div>
-  </div>
+  <h2 class="section dark upper">3 · Logistique formateur</h2>
+  ${zone3}
 
-  <h2 class="section dark upper">Accueil d'un public en situation de handicap</h2>
-  ${handicapBlock}
-  <p style="font-size:10pt; margin: 4px 0 0 0; color:#475569;">
-    <strong>Référent handicap interne :</strong> ${escapeHtml(data.handicapReferent)}
-  </p>
+  <h2 class="section dark upper" style="margin-top: 14px;">4 · Accessibilité / situation de handicap</h2>
+  ${zone4}
 </main>
 `;
 

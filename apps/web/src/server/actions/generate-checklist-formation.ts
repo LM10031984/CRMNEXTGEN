@@ -18,93 +18,40 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import {
   renderChecklistFormationHtml,
   type ChecklistFormationData,
-  type ChecklistAdministratif,
-  type ChecklistRepas,
-  type ChecklistMateriel,
+  type ChecklistZoneApportee,
+  type ChecklistConditionsLieu,
 } from '@/lib/closure/checklist-formation-template';
-import { loadOfConfig } from '@/lib/of-config';
 
 /**
- * PRNG déterministe seedé sur `sessionId` (BUG-9) — garantit que :
- *  - 2 sessions différentes → check-lists différentes (anti-pattern audit)
- *  - 1 session régénérée 2× → check-list identique (cohérence)
- *  - Pas besoin de stocker le random — la session est sa propre source de vérité
- *
- * Algorithme : mulberry32 sur hash FNV-1a 32-bit du sessionId.
+ * Coches des zones 1 & 2 selon que la session est PASSÉE ou FUTURE (Laurent 17/06) :
+ *  - session passée (endDate < aujourd'hui) → REMPLIE (tout coché : l'OF a apporté
+ *    le matériel, le lieu a fourni les conditions)
+ *  - session future → VIERGE (rien coché, à remplir le jour J)
  */
-function makeSeededRandom(seed: string): () => number {
-  // FNV-1a 32-bit pour transformer sessionId (uuid) en entier 32-bit reproductible.
-  let h = 0x811c9dc5;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  let state = h >>> 0;
-  // mulberry32
-  return function next(): number {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function buildDefaults(
-  modality: string,
-  sessionId: string,
-): {
-  administratif: ChecklistAdministratif;
-  repas: ChecklistRepas;
-  materiel: ChecklistMateriel;
+function buildZones(isPast: boolean): {
+  apportee: ChecklistZoneApportee;
+  conditionsLieu: ChecklistConditionsLieu;
 } {
-  const isPresentiel = modality === 'PRESENTIEL' || modality === 'MIXTE';
-  const rng = makeSeededRandom(sessionId);
-
-  // Helper : coche avec probabilité `p` SI `eligible`, sinon false.
-  // Probabilités calibrées 80-95% pour rester crédible audit (formateur sérieux).
-  const maybe = (eligible: boolean, p = 0.9): boolean => eligible && rng() < p;
-
-  // ADMINISTRATIF — la majorité reste TOUJOURS cochée (obligation Qualiopi
-  // par indicateur), mais on relâche 3 cases "optionnelles selon contexte"
-  // (clé USB support, livret papier, grille amélioration prête en avance)
-  // pour introduire une légère variation entre sessions.
-  const administratif: ChecklistAdministratif = {
-    derouleP: true, // Qualiopi indic 10
-    conventionFormateur: true, // Qualiopi indic 27
-    emargement: true, // Qualiopi indic 12
-    reglementInterieur: true, // Qualiopi indic 9
-    positionnementAutoEval: true, // Qualiopi indic 11
-    certificatRealisation: true, // Qualiopi indic 12
-    lienQcm: true, // Qualiopi indic 11
-    livretStagiaires: maybe(true, 0.92), // indic 19 — papier pas systématique
-    evaluationChaud: true, // Qualiopi indic 30
-    grilleAmelioration: maybe(true, 0.88), // remplie pendant, pas prête à 100% en amont
-    cleUsbSupport: maybe(true, 0.85), // optionnel selon formateur
+  return {
+    apportee: {
+      deroulePedagogique: isPast,
+      emargement: isPast,
+      positionnement: isPast,
+      satisfaction: isPast,
+      livretSupport: isPast,
+      cleUsb: isPast,
+      pc: isPast,
+      videoprojecteur: isPast,
+      paperboard: isPast,
+    },
+    conditionsLieu: {
+      salleAdaptee: isPast,
+      espacePause: isPast,
+      espaceRepas: isPast,
+      connexionInternet: isPast,
+      prisesElectriques: isPast,
+    },
   };
-
-  // REPAS / PAUSE — seulement présentiel, et même là tout n'est pas systématique
-  // selon le lieu (locataire vs salle louée vs entreprise client).
-  const repas: ChecklistRepas = {
-    machineCafe: maybe(isPresentiel, 0.85),
-    cafe: maybe(isPresentiel, 0.9),
-    bouilloire: maybe(isPresentiel, 0.7),
-    the: maybe(isPresentiel, 0.75),
-    rallongeElectrique: maybe(isPresentiel, 0.85),
-    eau: maybe(isPresentiel, 0.95), // quasi toujours
-    multiprise: maybe(isPresentiel, 0.85),
-  };
-
-  // MATERIEL — PC + connexion toujours (sans ça pas de formation), reste varie
-  const materiel: ChecklistMateriel = {
-    pc: true,
-    paperboard: maybe(isPresentiel, 0.85),
-    projecteur: maybe(isPresentiel, 0.9),
-    ecranAdapte: maybe(isPresentiel, 0.8),
-    connexionInternet: true,
-  };
-
-  return { administratif, repas, materiel };
 }
 
 export async function generateChecklistForSession(
@@ -139,21 +86,25 @@ export async function generateChecklistForSession(
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
 
-  // Lieu de formation (nom + ville depuis Location)
+  // Lieu de formation = adresse postale complète (rue, CP ville) si dispo.
   const locationAddr = session.location?.address as
     | { street?: string; city?: string; postalCode?: string }
     | null
     | undefined;
+  const cityLine = [locationAddr?.postalCode, locationAddr?.city].filter(Boolean).join(' ');
   const lieuFormation = session.location
-    ? `${session.location.name}${locationAddr?.city ? ` — ${locationAddr.city}` : ''}`
+    ? locationAddr?.street
+      ? [locationAddr.street, cityLine].filter(Boolean).join(', ')
+      : `${session.location.name}${locationAddr?.city ? ` — ${locationAddr.city}` : ''}`
     : 'À renseigner';
-  // Contact lieu : on n'a pas de champ dédié → utilise la 1ère personne formateur ou null
-  const lieuContact = null;
 
-  const { administratif, repas, materiel } = buildDefaults(session.modality, sessionId);
+  // Hors département 06 → réservation hébergement formateur obligatoire (Laurent 17/06).
+  const horsDept06 = !(locationAddr?.postalCode ?? '').startsWith('06');
+  const trainerLodgingReserved = horsDept06 || session.needsTrainerLodging;
 
-  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
-  const of = await loadOfConfig(user.tenantId);
+  // Passé vs futur : remplie (cochée) si terminée, vierge sinon.
+  const isPast = session.endDate.getTime() < Date.now();
+  const { apportee, conditionsLieu } = buildZones(isPast);
 
   const data: ChecklistFormationData = {
     formationTitre: session.product.title,
@@ -162,16 +113,14 @@ export async function generateChecklistForSession(
     sessionEndDate: session.endDate,
     formateurs: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
     lieuFormation,
-    lieuContact,
-    needsTrainerLodging: session.needsTrainerLodging,
+    horsDept06,
+    trainerLodgingReserved,
     trainerLodgingPlace: session.trainerLodgingPlace,
     trainerLodgingDates: session.trainerLodgingDates,
     hasDisabledLearner: session.hasDisabledLearner,
     disabilityAdaptations: session.disabilityAdaptations,
-    handicapReferent: of.handicapReferent,
-    administratif,
-    repas,
-    materiel,
+    apportee,
+    conditionsLieu,
   };
 
   let pdfBuffer: Buffer;
