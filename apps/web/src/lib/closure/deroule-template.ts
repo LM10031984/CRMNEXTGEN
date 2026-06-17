@@ -105,41 +105,45 @@ function renderBilanFormateur(
 </div>`;
 }
 
-export function renderDerouleHtml(
-  ctx: ClosureContext,
-  content: DerouleContent,
-): string {
-  const jourBlocks = content.jours
+/**
+ * Tableau 6 colonnes (façon Cadastre / Qualiopi Gen) — partagé par les variantes
+ * session et produit. Une colonne par champ → lisible et aéré (rendu en paysage).
+ * Format resserré : une cellule = quelques lignes (cf. prompt concision).
+ */
+function renderDerouleDays(content: DerouleContent): string {
+  return content.jours
     .map((jour, idx) => {
       const seqRows = jour.sequences
         .map((seq) => {
           if (seq.isPause) {
             return `
 <tr style="background: #F8FAFC;">
-  <td style="font-weight: 600; color: ${BRAND_DARK}; width: 32mm; vertical-align: middle;">${escapeHtml(seq.duree)}</td>
-  <td style="vertical-align: middle; font-style: italic; color: #64748B;">${escapeHtml(seq.objectifs)}</td>
+  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(seq.duree)}</td>
+  <td colspan="5" style="font-style: italic; color: #64748B;">${escapeHtml(seq.objectifs)}</td>
 </tr>`;
           }
           return `
 <tr>
-  <td style="font-weight: 600; color: ${BRAND_DARK}; width: 32mm; vertical-align: top;">${escapeHtml(seq.duree)}</td>
-  <td style="vertical-align: top;">
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Objectifs :</strong> ${escapeHtml(seq.objectifs)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Contenu :</strong> ${escapeHtml(seq.contenu)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Outils :</strong> ${escapeHtml(seq.outils)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Exercice :</strong> ${escapeHtml(seq.exercice)}</div>
-    <div style="font-size: 9.5pt;"><strong>Évaluation :</strong> ${escapeHtml(seq.evaluation)}</div>
-  </td>
+  <td style="font-weight: 600; color: ${BRAND_DARK}; white-space: nowrap;">${escapeHtml(seq.duree)}</td>
+  <td>${escapeHtml(seq.objectifs)}</td>
+  <td>${escapeHtml(seq.contenu)}</td>
+  <td>${escapeHtml(seq.outils)}</td>
+  <td>${escapeHtml(seq.exercice)}</td>
+  <td>${escapeHtml(seq.evaluation)}</td>
 </tr>`;
         })
         .join('');
       return `
-<h2 class="section dark upper" style="margin-top: 18px;">Jour ${idx + 1} — ${escapeHtml(jour.theme)}</h2>
-<table class="data" style="margin-top: 4px;">
+<h2 class="section dark upper" style="margin-top: 16px;">Jour ${idx + 1} — ${escapeHtml(jour.theme)}</h2>
+<table class="data" style="margin-top: 4px; font-size: 8.5pt;">
   <thead>
     <tr>
-      <th style="width: 22mm;">Durée</th>
-      <th>Détail de la séquence</th>
+      <th style="width: 24mm;">Durée</th>
+      <th style="width: 17%;">Objectifs</th>
+      <th style="width: 23%;">Contenu de la séance</th>
+      <th style="width: 15%;">Outils / pédagogie</th>
+      <th style="width: 22%;">Exercice pratique</th>
+      <th style="width: 14%;">Évaluation</th>
     </tr>
   </thead>
   <tbody>
@@ -148,6 +152,13 @@ export function renderDerouleHtml(
 </table>`;
     })
     .join('');
+}
+
+export function renderDerouleHtml(
+  ctx: ClosureContext,
+  content: DerouleContent,
+): string {
+  const jourBlocks = renderDerouleDays(content);
 
   const body = `
 ${renderBrandHeader()}
@@ -168,7 +179,7 @@ ${renderBrandHeader()}
 </main>
 `;
 
-  return wrapHtml({ title: `Déroulé pédagogique — ${ctx.sessionTitle}`, bodyHtml: body });
+  return wrapHtml({ title: `Déroulé pédagogique — ${ctx.sessionTitle}`, bodyHtml: body, landscape: true });
 }
 
 /**
@@ -186,45 +197,7 @@ export function renderProductDerouleHtml(
   data: ProductDerouleData,
   content: DerouleContent,
 ): string {
-  const jourBlocks = content.jours
-    .map((jour, idx) => {
-      const seqRows = jour.sequences
-        .map((seq) => {
-          if (seq.isPause) {
-            return `
-<tr style="background: #F8FAFC;">
-  <td style="font-weight: 600; color: ${BRAND_DARK}; width: 32mm; vertical-align: middle;">${escapeHtml(seq.duree)}</td>
-  <td style="vertical-align: middle; font-style: italic; color: #64748B;">${escapeHtml(seq.objectifs)}</td>
-</tr>`;
-          }
-          return `
-<tr>
-  <td style="font-weight: 600; color: ${BRAND_DARK}; width: 32mm; vertical-align: top;">${escapeHtml(seq.duree)}</td>
-  <td style="vertical-align: top;">
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Objectifs :</strong> ${escapeHtml(seq.objectifs)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Contenu :</strong> ${escapeHtml(seq.contenu)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Outils :</strong> ${escapeHtml(seq.outils)}</div>
-    <div style="font-size: 9.5pt; margin-bottom: 2px;"><strong>Exercice :</strong> ${escapeHtml(seq.exercice)}</div>
-    <div style="font-size: 9.5pt;"><strong>Évaluation :</strong> ${escapeHtml(seq.evaluation)}</div>
-  </td>
-</tr>`;
-        })
-        .join('');
-      return `
-<h2 class="section dark upper" style="margin-top: 18px;">Jour ${idx + 1} — ${escapeHtml(jour.theme)}</h2>
-<table class="data" style="margin-top: 4px;">
-  <thead>
-    <tr>
-      <th style="width: 22mm;">Durée</th>
-      <th>Détail de la séquence</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${seqRows}
-  </tbody>
-</table>`;
-    })
-    .join('');
+  const jourBlocks = renderDerouleDays(content);
 
   const body = `
 ${renderBrandHeader()}
@@ -259,5 +232,6 @@ ${renderBrandHeader()}
   return wrapHtml({
     title: `Déroulé pédagogique — ${data.produitTitre}`,
     bodyHtml: body,
+    landscape: true,
   });
 }

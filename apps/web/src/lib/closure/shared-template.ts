@@ -657,13 +657,20 @@ export function renderCorpFooter(of?: OfConfig): string {
  * `@bottom-center` de la page 1 (WeasyPrint le découvre seulement quand
  * la pagination atteint son emplacement dans le flux).
  */
-export function wrapHtml(opts: { title: string; bodyHtml: string; of?: OfConfig }): string {
+export function wrapHtml(opts: {
+  title: string;
+  bodyHtml: string;
+  of?: OfConfig;
+  /** Force l'orientation paysage (déroulé 6 colonnes). Override le @page A4 portrait. */
+  landscape?: boolean;
+}): string {
+  const orientation = opts.landscape ? '\n  <style>@page { size: A4 landscape; }</style>' : '';
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <title>${escapeHtml(opts.title)}</title>
-  ${SHARED_STYLES}
+  ${SHARED_STYLES}${orientation}
 </head>
 <body>
 ${renderCorpFooter(opts.of)}
