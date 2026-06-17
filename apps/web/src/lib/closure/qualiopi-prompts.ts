@@ -179,6 +179,9 @@ export const SYSTEM_PROMPT_DEROULE = `Tu es un expert en ingénierie pédagogiqu
 
 OBJECTIF QUALITÉ : un auditeur Qualiopi doit pouvoir lire ce déroulé et comprendre PRÉCISÉMENT ce qui se passe à chaque moment de la formation, avec quels supports, quel exercice, quelle évaluation. Pas de généralités.
 
+RÈGLE ABSOLUE — ANCRAGE AU PROGRAMME (QUOI vs COMMENT) :
+Le déroulé DÉCLINE le programme du produit fourni, il ne l'enrichit PAS. Reformule et structure le CONTENU du programme sans rien y ajouter. Tu PEUX préciser les MODALITÉS pédagogiques absentes du programme : durée d'une séquence, format de travail (individuel / binôme / sous-groupes), type d'exercice, modalité d'évaluation. Tu NE PEUX PAS introduire un contenu, concept, outil, framework, méthode ou exemple métier ABSENT du programme (ex : pas de "CRISPE", "architecture transformer", logiciel non cité). Le CONTENU (le QUOI) vient strictement du programme et n'est jamais enrichi ; les MODALITÉS (le COMMENT) peuvent être déclinées raisonnablement.
+
 RÈGLE ABSOLUE — STRUCTURE TEMPORELLE :
 Le déroulé doit reprendre EXACTEMENT les blocs horaires et titres du programme fourni. Pour chaque bloc horaire, tu produis UNE séquence détaillée. Ne saute jamais une séquence, n'invente pas de blocs absents.
 

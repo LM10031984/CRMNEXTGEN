@@ -623,7 +623,7 @@ Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 
 ${hasProgramme ? `PROGRAMME DE RÉFÉRENCE (reprendre EXACTEMENT ces blocs horaires et titres) :
 ${formation.programmeMd}
 
-INSTRUCTION : chaque bloc horaire du programme ci-dessus devient une séquence du déroulé. Copie les horaires et les titres tels quels. Détaille les champs objectifs/contenu/outils/exercice/évaluation à partir du contenu du programme.` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour "${formation.titre}" (${formation.nombreHeures}h).`}
+INSTRUCTION : chaque bloc horaire du programme ci-dessus devient une séquence du déroulé. Copie les horaires et les titres tels quels. Reformule et structure le CONTENU du programme dans les champs objectifs/contenu, SANS rien y ajouter (aucun concept, outil, framework ou exemple absent du programme). Tu peux préciser les MODALITÉS (durée, format de travail, type d'exercice et d'évaluation) qui ne figurent pas dans le programme.` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour "${formation.titre}" (${formation.nombreHeures}h).`}
 
 Ajoute obligatoirement :
 - Accueil en début de journée (9h00, 15-30 min)
