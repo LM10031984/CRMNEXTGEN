@@ -15,7 +15,8 @@ import {
   BRAND_DARK,
   escapeHtml,
   formatDateFr,
-  loadSignatureDataUrl,
+  loadStampDataUrl,
+  loadTrainerSignatureDataUrl,
   renderBrandHeader,
   renderInfoBox,
   renderStagiaireBlock,
@@ -64,7 +65,10 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
   // [formateur] », « Fait à [lieu EXACT de formation], le [date fin] » + tampon/
   // signature (signature-pedago = Laurent Marx). Le lieu exact est OBLIGATOIRE :
   // sans lieu, l'émargement n'est pas valide → on signale explicitement.
-  const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
+  // Signature du formateur réel de la session (Jean-Guy pour ses sessions),
+  // PAS la signature pédago Laurent. + tampon Start Academy.
+  const signatureDataUrl = loadTrainerSignatureDataUrl(ctx.tenantId, trainer);
+  const stampDataUrl = loadStampDataUrl(ctx.tenantId);
   const lieuFormation = ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
   const dateCertif = formatDateFr(ctx.sessionEndDate);
 
@@ -141,7 +145,10 @@ ${renderBrandHeader()}
     <p style="font-size: 10pt; margin: 0;">
       Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
     </p>
-    ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature et cachet ${escapeHtml(trainer)}" style="height: 25mm; margin-top: 6px;" />` : ''}
+    <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 6px;">
+      ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 25mm;" />` : ''}
+      ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 25mm;" />` : ''}
+    </div>
   </div>
 </main>
 `;
