@@ -296,6 +296,42 @@ const DEFAULT_ACCESSIBILITY =
   "La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l'accès à l'emploi des personnes en situation de handicap.\nNotre organisme tente de donner à tous les mêmes chances d'accéder ou de maintenir l'emploi.\nNous pouvons adapter certaines de nos modalités de formation, pour cela, nous étudierons ensemble vos besoins.";
 
 /**
+ * Référent handicap unique de l'OF (ind. 26) — DOIT être identique sur tous les
+ * docs (analyse besoin, programme…). Laurent 17/06 : Jean-Guy Ourmières.
+ */
+const HANDICAP_REFERENT_LINE =
+  'Référent handicap : Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60.';
+
+/**
+ * Nettoie la liste d'objectifs (champ SmartOF souvent brouillé) :
+ *  - retire l'amorce dupliquée (« … sera capable de : »), déjà affichée comme titre
+ *  - retire les puces « ● » de tête (le <ul> en ajoute)
+ *  - remplace le verbe NON évaluable « Comprendre » par « Identifier » (process ind. 5)
+ */
+export function cleanObjectifs(objectifs: string[]): string[] {
+  return objectifs
+    .map((o) => o.replace(/^\s*[●•·‣*-]\s*/, '').trim())
+    .filter((o) => o.length > 0 && !/sera capable de\s*:?\s*$|à l['’]issue de la formation/i.test(o))
+    .map((o) => o.replace(/^Comprendre\b/i, 'Identifier'));
+}
+
+/** Retire un contact nominatif parti (Julien LAFITTE) → contact générique OF. */
+export function replaceDepartedContact(text: string): string {
+  return text
+    .replace(/Julien\s+LAFITTE\s*/gi, '')
+    .replace(/07\s*80\s*91\s*95\s*31/g, '06 31 05 63 90');
+}
+
+/**
+ * Nettoie les modalités d'inscription (champ SmartOF) :
+ *  - retire le bloc « ACCESSIBILITÉ … HANDICAP » embarqué (doublon de la section dédiée)
+ *  - retire le contact d'une personne nommée (Julien LAFITTE, parti) → contact générique
+ */
+export function cleanAccessConditions(text: string): string {
+  return replaceDepartedContact(text.split(/ACCESSIBILIT[ÉE]\s+AUX\s+PERSONNES/i)[0]!).trim();
+}
+
+/**
  * Convertit "70" en "70 heures (1 journée de 7 heures)" / "21" en
  * "21 heures (3 journées de 7 heures)". Heuristique simple basée sur 7h/jour.
  */
@@ -319,8 +355,9 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
   // pour respecter l'upload UI Paramètres, fallback bundled `src/assets/`.
   const logoDataUrl = loadLogoColorDataUrl(data.tenantId);
 
-  const objectifs = data.produitObjectifs.length > 0
-    ? data.produitObjectifs
+  const objectifsRaw = cleanObjectifs(data.produitObjectifs);
+  const objectifs = objectifsRaw.length > 0
+    ? objectifsRaw
     : ['Objectifs à définir dans la fiche produit.'];
 
   // Normalise le markdown : l'IA peut generer "##Titre" sans espace ou
@@ -458,7 +495,7 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="section">Modalités d'inscription et délai d'accès à notre formation</h2>
-  ${escapeHtml(data.produitAccessConditions ?? DEFAULT_ACCESS_CONDITIONS)
+  ${escapeHtml(cleanAccessConditions(data.produitAccessConditions ?? DEFAULT_ACCESS_CONDITIONS))
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -468,12 +505,13 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="section">Accessibilité aux personnes en situation de handicap</h2>
-  ${escapeHtml(data.produitAccessibility ?? DEFAULT_ACCESSIBILITY)
+  ${escapeHtml(replaceDepartedContact(data.produitAccessibility ?? DEFAULT_ACCESSIBILITY))
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => `<p>${line}</p>`)
     .join('')}
+  <p><strong>${escapeHtml(HANDICAP_REFERENT_LINE)}</strong></p>
 </section>
 
 <section class="contact-block">
