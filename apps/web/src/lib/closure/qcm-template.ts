@@ -94,7 +94,7 @@ export function renderQcmHtml(ctx: ClosureContext, content: QcmContent): string 
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">QCM d'évaluation des acquis</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Évaluation des connaissances en fin de formation</p>
+  <p class="doc-subtitle">Évaluation des connaissances en fin de formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}

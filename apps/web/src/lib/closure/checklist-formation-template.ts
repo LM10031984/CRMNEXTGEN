@@ -154,7 +154,7 @@ export function renderChecklistFormationHtml(data: ChecklistFormationData): stri
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">CHECK-LIST FORMATION</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi C4.i17 — Préparation logistique de la session</p>
+  <p class="doc-subtitle">Préparation logistique de la session</p>
   <hr class="doc-rule" />
 
   <div class="info-box">

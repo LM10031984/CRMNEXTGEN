@@ -88,7 +88,7 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title" style="margin: 4px 0 8px 0;">FICHE D'ÉMARGEMENT</h1>
-  <p class="doc-subtitle" style="margin: 0 0 6px 0;">Indicateur Qualiopi 11 — Présence du stagiaire en formation</p>
+  <p class="doc-subtitle" style="margin: 0 0 6px 0;">Présence du stagiaire en formation</p>
   <hr class="doc-rule" style="margin: 6px 0;" />
 
   ${renderInfoBox(ctx)}

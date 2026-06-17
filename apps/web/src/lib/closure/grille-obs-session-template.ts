@@ -159,7 +159,7 @@ export function renderGrilleObsSessionHtml(data: GrilleSessionTemplateData): str
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">GRILLE D'AMÉLIORATION STAGIAIRE</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi C3.i11 — Évaluation consolidée par session</p>
+  <p class="doc-subtitle">Évaluation consolidée par session</p>
   <hr class="doc-rule" />
 
   <div class="info-box">

@@ -65,7 +65,7 @@ export function renderAnalyseBesoinHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Analyse des besoins du stagiaire</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 4 — Recueil des besoins en amont de la formation</p>
+  <p class="doc-subtitle">Recueil des besoins en amont de la formation</p>
   <hr class="doc-rule" />
 
   <p style="margin: 4px 0 10px 0; font-size: 10.5pt; color: #475569;">Formation envisagée : <strong style="color: ${BRAND_DARK};">${escapeHtml(ctx.sessionTitle)}</strong></p>
@@ -87,7 +87,7 @@ ${renderBrandHeader()}
 
   <h2 class="section">Situation de handicap</h2>
   <p class="paragraph">À la question «&nbsp;Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante&nbsp;?&nbsp;», le stagiaire a répondu <strong>&#9745; NON</strong> — aucun besoin d'adaptation signalé.</p>
-  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap — indicateur 18).</p>
+  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap).</p>
 
   ${(() => {
     const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;

@@ -84,7 +84,7 @@ ${obsGlob.axe_amelioration ? `
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">GRILLE D'AMÉLIORATION STAGIAIRE</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Suivi pédagogique individualisé</p>
+  <p class="doc-subtitle">Suivi pédagogique individualisé</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}

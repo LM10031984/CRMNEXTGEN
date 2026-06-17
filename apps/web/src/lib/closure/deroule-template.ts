@@ -257,7 +257,7 @@ export function renderDerouleHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Déroulé pédagogique</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Programme jour par jour de la formation</p>
+  <p class="doc-subtitle">Programme jour par jour de la formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}
@@ -296,7 +296,7 @@ export function renderProductDerouleHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Déroulé pédagogique</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Programme jour par jour de la formation</p>
+  <p class="doc-subtitle">Programme jour par jour de la formation</p>
   <hr class="doc-rule" />
 
   <div class="info-box">

@@ -111,7 +111,7 @@ export function renderSatisfactionFroidHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Questionnaire de satisfaction à froid</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 30 — Évaluation différée 3 à 6 mois après la formation</p>
+  <p class="doc-subtitle">Évaluation différée 3 à 6 mois après la formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}

@@ -253,7 +253,7 @@ export function renderSatisfactionSessionHtml(data: SatisfactionSessionTemplateD
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">BILAN DE SATISFACTION — SESSION</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 30 — Évaluation à chaud agrégée</p>
+  <p class="doc-subtitle">Évaluation à chaud agrégée</p>
   <hr class="doc-rule" />
 
   <div style="background: #F8FAFC; border-left: 4px solid ${BRAND_DARK}; padding: 10px 14px; margin: 10px 0;">

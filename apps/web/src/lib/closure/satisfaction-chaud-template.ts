@@ -148,7 +148,7 @@ export function renderSatisfactionChaudHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Questionnaire de satisfaction à chaud</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 30 — Évaluation immédiate de la formation</p>
+  <p class="doc-subtitle">Évaluation immédiate de la formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}
