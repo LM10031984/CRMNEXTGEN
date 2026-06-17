@@ -154,10 +154,10 @@ Pour "recommandation" : "Oui" toujours.
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 {
   "organisation": { "communication": "Très bien|Bien|Moyen", "delai": "Très bien|Bien|Moyen", "duree": "Très bien|Bien|Moyen", "engagements": "Très bien|Bien|Moyen", "commentaire": "string (1 phrase)" },
-  "moyens": { "cadre": "...", "locaux": "...", "supports": "...", "materiel": "...", "commentaire": "string" },
-  "pedagogie": { "difficulte": "...", "articulation": "...", "theorique": "...", "pratique": "...", "rythme": "...", "approche": "...", "ecoute": "...", "animation": "...", "commentaire": "string" },
-  "groupe": { "ambiance": "...", "nombre": "...", "heterogeneite": "...", "attention": "...", "commentaire": "string" },
-  "benefice": { "adequation": "...", "utilite": "Très utile|Utile|Peu utile", "commentaire": "string" },
+  "moyens": { "cadre": "Très bien|Bien|Moyen", "locaux": "Très bien|Bien|Moyen", "supports": "Très bien|Bien|Moyen", "materiel": "Très bien|Bien|Moyen", "commentaire": "string" },
+  "pedagogie": { "difficulte": "Très bien|Bien|Moyen", "articulation": "Très bien|Bien|Moyen", "theorique": "Très bien|Bien|Moyen", "pratique": "Très bien|Bien|Moyen", "rythme": "Très bien|Bien|Moyen", "approche": "Très bien|Bien|Moyen", "ecoute": "Très bien|Bien|Moyen", "animation": "Très bien|Bien|Moyen", "commentaire": "string" },
+  "groupe": { "ambiance": "Très bien|Bien|Moyen", "nombre": "Très bien|Bien|Moyen", "heterogeneite": "Très bien|Bien|Moyen", "attention": "Très bien|Bien|Moyen", "commentaire": "string" },
+  "benefice": { "adequation": "Très bien|Bien|Moyen", "utilite": "Très utile|Utile|Peu utile", "commentaire": "string" },
   "recommandation": "Oui",
   "remarques": "string (1-2 phrases — retour d'expérience global)"
 }`;
@@ -172,8 +172,8 @@ Règles strictes :
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 {
-  "mise_en_pratique": { "applique": "Très bien|Bien|Moyen", "frequence": "...", "resultats": "...", "commentaire": "string (1 phrase concrète sur l'application au quotidien)" },
-  "impact": { "performance": "...", "autonomie": "...", "confiance": "...", "satisfaction_client": "...", "commentaire": "string (1 phrase)" },
+  "mise_en_pratique": { "applique": "Très bien|Bien|Moyen", "frequence": "Très bien|Bien|Moyen", "resultats": "Très bien|Bien|Moyen", "commentaire": "string (1 phrase concrète sur l'application au quotidien)" },
+  "impact": { "performance": "Très bien|Bien|Moyen", "autonomie": "Très bien|Bien|Moyen", "confiance": "Très bien|Bien|Moyen", "satisfaction_client": "Très bien|Bien|Moyen", "commentaire": "string (1 phrase)" },
   "bilan": { "atteinte_objectifs": "Très bien|Bien", "recommandation": "Oui", "utilite_long_terme": "Très bien|Bien" },
   "remarques": "string (1 phrase — retour bilan global)"
 }`;
