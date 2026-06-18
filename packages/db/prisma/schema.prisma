@@ -338,6 +338,11 @@ model TrainingProduct {
   targetAudience     String?
   objectives         Json // string[]
   programMd          String
+  // quick 260618-rkj — Corps figé du déroulé pédagogique (jours[]) — identique sur
+  // toutes les sessions du produit. Seul le bilan/rapport formateur reste par session.
+  // NB prod : poussé via `prisma db push` en local/sandbox ; un `prisma migrate deploy`
+  // formel sera requis avant déploiement cloud (cf. mémoire feedback_prisma_migrate_deploy).
+  derouleJson        Json?
   pedagogicalMethods String?
   evaluationMethods  String?
   accessibility      String?
