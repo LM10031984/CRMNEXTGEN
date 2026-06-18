@@ -28,8 +28,8 @@ import { prisma } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { buildClosureContextForParticipant } from './build-context';
-import { generateDerouleContent } from './ollama-generators';
-import { renderDerouleHtml } from './deroule-template';
+import { generateDerouleContent, generateRapportFormateur } from './ollama-generators';
+import { renderDerouleHtml, type DerouleContent } from './deroule-template';
 
 export interface PersistDerouleSessionResult {
   ok: boolean;
@@ -41,7 +41,7 @@ export interface PersistDerouleSessionResult {
 export async function persistDerouleSession(
   tenantId: string,
   sessionId: string,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; frozenBody?: DerouleContent },
 ): Promise<PersistDerouleSessionResult> {
   // 1. Court-circuit idempotent : si un déroulé-session existe déjà et qu'on
   //    n'est pas en mode force, on le réutilise SANS régénérer le LLM.
@@ -76,15 +76,29 @@ export async function persistDerouleSession(
   const ctx = await buildClosureContextForParticipant(firstParticipant.id, tenantId);
   if (!ctx) return { ok: false, error: 'Contexte closure null' };
 
-  // 3. Génère le contenu via LLM (Sonnet quand AI_PROVIDER=openrouter).
+  // 3. Détermine le contenu du déroulé.
   const formation = {
     titre: ctx.sessionTitle,
     programmeMd: ctx.formationMeta?.programmeMd ?? session.product.programMd ?? '',
     nombreHeures: ctx.durationHours,
   };
-  const deroule = await generateDerouleContent(formation, 'PedagogicalAsset', null, tenantId);
-  // Pas de stub silencieux pour un doc Qualiopi : si le LLM échoue, on remonte.
-  if (!deroule) return { ok: false, error: 'déroulé contenu null (LLM)' };
+
+  let deroule: DerouleContent;
+  if (opts?.frozenBody) {
+    // FIGER-DEROULE : corps figé au PRODUIT (identique toutes sessions). On NE
+    //   régénère PAS le corps. Seul le bilan/rapport formateur est généré PAR
+    //   SESSION (Haiker tier 'fast') puis fusionné au corps figé avant rendu →
+    //   corps identique entre 2 sessions, bilan potentiellement différent.
+    const rapport = await generateRapportFormateur(formation, 'PedagogicalAsset', null, tenantId);
+    deroule = rapport ? { ...opts.frozenBody, rapportFormateur: rapport } : opts.frozenBody;
+  } else {
+    // Rétro-compat (pas de figé fourni) : génération complète via LLM (qui
+    //   inclut déjà son rapportFormateur). Pas de stub silencieux pour un doc
+    //   Qualiopi : si le LLM échoue, on remonte.
+    const generated = await generateDerouleContent(formation, 'PedagogicalAsset', null, tenantId);
+    if (!generated) return { ok: false, error: 'déroulé contenu null (LLM)' };
+    deroule = generated;
+  }
 
   // 4. Rendu PDF + upload MinIO.
   let pdfBuffer: Buffer;

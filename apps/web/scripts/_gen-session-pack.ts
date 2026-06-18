@@ -52,7 +52,10 @@ const { generateConventionCore } = await import('../src/lib/closure/convention-c
 const { generateProgrammeForProductCore } = await import('../src/lib/closure/programme-core');
 const { generateChecklistCore } = await import('../src/lib/closure/checklist-core');
 const { persistDerouleSession } = await import('../src/lib/closure/generate-deroule-session');
-const { generateNormalizedProgramme } = await import('../src/lib/closure/ollama-generators');
+// quick 260618-rkj : figeage produit (programme normalisé + corps déroulé) 1×/produit
+// → generateNormalizedProgramme n'est plus appelé PAR SESSION (déplacé dans le helper).
+const { freezeProductAssets } = await import('../src/lib/closure/freeze-product-assets');
+type FrozenProductAssets = Awaited<ReturnType<typeof freezeProductAssets>>;
 const {
   sanitize,
   formatDateFR,
@@ -83,6 +86,11 @@ async function copyToDrive(pdfUrl: string | null | undefined, destFile: string):
   fs.writeFileSync(destFile, buf); // écrase par défaut → jamais de '(1).pdf'
   return true;
 }
+
+// quick 260618-rkj : mémoïsation du figeage produit HORS boucle → un même produit
+// référencé par plusieurs sessions n'est figé qu'UNE seule fois (programme + corps
+// déroulé), puis réutilisé sans re-coût LLM sur les sessions suivantes.
+const frozenByProduct = new Map<string, FrozenProductAssets>();
 
 for (const SES of CODES) {
   console.log(`\n=================== ${SES} ===================`);
@@ -145,6 +153,7 @@ for (const SES of CODES) {
     console.log(`\n  [dry-run] Plan de génération (rien écrit) :`);
     console.log(`  [dry-run]   Pack closure : ${kinds.length} kinds × ${parts.length} pers = ${kinds.length * parts.length} jobs`);
     console.log(`  [dry-run]     kinds : ${kinds.join(', ')}`);
+    console.log(`  [dry-run]   freeze produit (programme + corps déroulé) : skip dry-run`);
     console.log(`  [dry-run]   Docs session (cœurs) : Programme + Déroulé + Checklist`);
     console.log(`  [dry-run]   Conventions : ${parts.length} (1 par apprenant)`);
     console.log(`  [dry-run]   Drive racine : ${planPaths.rootDir}`);
@@ -156,6 +165,25 @@ for (const SES of CODES) {
     console.log(`\n  ✓ ${SES} (dry-run, rien écrit)`);
     continue;
   }
+
+  // b-bis) FIGEAGE PRODUIT (quick 260618-rkj) — UNE fois par productId (mémoïsé).
+  //   Fige le programme normalisé (programMd) + le corps du déroulé (derouleJson)
+  //   au niveau PRODUIT. Conformité Qualiopi : même formation = même programme +
+  //   même corps de déroulé sur toutes ses sessions. Zéro re-coût LLM sur les
+  //   sessions suivantes du même produit. (Non atteint en DRY_RUN : la garde
+  //   plus haut a déjà `continue`.)
+  const frozen = await freezeProductAssets(
+    tenantId,
+    {
+      id: p.id,
+      programMd: p.programMd,
+      objectives: p.objectives,
+      durationHours: p.durationHours,
+      title: p.title,
+      derouleJson: p.derouleJson,
+    },
+    frozenByProduct,
+  );
 
   // c) PACK CLOSURE par participant via processClosureJobPayload EN DIRECT.
   let batchId: string | null = null;
@@ -192,19 +220,22 @@ for (const SES of CODES) {
   // d) DOCS NIVEAU SESSION via les CŒURS.
   console.log('\n  Docs session (cœurs) :');
 
-  // Programme SESSION — source unique programme+convention (normalisé une fois).
-  const objectives = Array.isArray(p.objectives) ? (p.objectives as string[]) : [];
-  const normalizedProgrammeMd =
-    (await generateNormalizedProgramme(p.programMd ?? '', objectives, p.durationHours, p.title, tenantId)) ??
-    (p.programMd ?? '');
+  // Programme figé produit (FIGER-PROG) — force:false réutilise le Document
+  //   PROGRAMME produit existant, ZÉRO re-LLM. Le programme figé (frozen.programmeMd)
+  //   alimente Programme.pdf ET Convention.pdf (source unique).
   const progRes = await generateProgrammeForProductCore(tenantId, p.id, {
-    force: true,
-    programmeMdOverride: normalizedProgrammeMd,
+    force: false,
+    programmeMdOverride: frozen.programmeMd,
   });
   log(progRes.ok ? '✓' : '✗', `Programme — ${progRes.ok ? progRes.pdfUrl : progRes.error}`);
 
-  // Déroulé SESSION (persistDerouleSession, idempotent).
-  const derouleRes = await persistDerouleSession(tenantId, session.id, { force: true });
+  // Corps déroulé figé produit (FIGER-DEROULE) ; bilan/rapport formateur regénéré
+  //   par session. force:true régénère le PDF pour fusionner le bilan session, MAIS
+  //   le CORPS provient du figé → corps identique entre sessions du même produit.
+  const derouleRes = await persistDerouleSession(tenantId, session.id, {
+    force: true,
+    frozenBody: frozen.derouleBody,
+  });
   log(derouleRes.ok ? '✓' : '✗', `Déroulé — ${derouleRes.ok ? derouleRes.pdfUrl : derouleRes.error}`);
 
   // Checklist SESSION.
@@ -212,6 +243,9 @@ for (const SES of CODES) {
   log(checklistRes.ok ? '✓' : '✗', `Checklist — ${checklistRes.ok ? checklistRes.pdfUrl : checklistRes.error}`);
 
   // Convention par participant (cœur, conventionDate J-15 ouvrés interne).
+  // FIGER-CONVENTION-VERIF : la convention est un template DÉTERMINISTE SANS LLM
+  //   qui lit product.programMd figé (vérifié convention-core.ts:156) → elle hérite
+  //   automatiquement du programme figé, aucune régression LLM introduite.
   const conventionByPart = new Map<string, string | undefined>();
   console.log('\n  Conventions (cœur, par apprenant) :');
   for (const part of parts) {
