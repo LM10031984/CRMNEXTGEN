@@ -15,7 +15,6 @@ import {
   formatDateFr,
   formatHours,
   loadSignatureDataUrl,
-  loadTrainerSignatureDataUrl,
   renderBrandHeader,
   renderOfficialBadges,
   stagiaireLabel,
@@ -32,22 +31,6 @@ export function renderCertificatHtml(ctx: ClosureContext): string {
   // `public/of-assets/{ctx.tenantId}/signature-dirigeant.png` (certificat signé
   // par le dirigeant/représentant légal), fallback bundled.
   const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'dirigeant');
-  // Formateur RÉEL de la session (cohérence émargement). On AJOUTE une 2e colonne
-  // signature formateur, SANS jamais dupliquer l'image du représentant légal :
-  // loadTrainerSignatureDataUrl(... 'Laurent Marx') renvoie la même image que la
-  // signature dirigeant déjà affichée → dans ce cas on n'affiche que le NOM + mention.
-  const trainer = ctx.sessionTrainers[0] ?? null;
-  const trainerSig = trainer ? loadTrainerSignatureDataUrl(ctx.tenantId, trainer) : '';
-  const trainerSigIsDuplicate = trainerSig !== '' && trainerSig === signatureDataUrl;
-  const showTrainerImg = trainerSig !== '' && !trainerSigIsDuplicate;
-  const trainerColHtml = trainer
-    ? `
-    <div class="col">
-      <div class="label">Le formateur — ${escapeHtml(trainer)}</div>
-      <div class="role">Formateur de la session</div>
-      ${showTrainerImg ? `<img class="tampon" src="${trainerSig}" alt="Signature du formateur" />` : ''}
-    </div>`
-    : '';
   // Date du certificat = date de fin de formation (et non date d'édition).
   // Indicateur Qualiopi : le certificat atteste de la fin effective de l'action.
   const dateCertificat = formatDateFr(ctx.sessionEndDate);
@@ -103,7 +86,7 @@ ${renderOfficialBadges({ qualiopi: false })}
       <div class="label">${escapeHtml(respFullName)}</div>
       <div class="role">${escapeHtml(respTitre)} — ${escapeHtml(of.name)}</div>
       ${signatureDataUrl ? `<img class="tampon" src="${signatureDataUrl}" alt="Signature et cachet" />` : ''}
-    </div>${trainerColHtml}
+    </div>
   </div>
 </main>
 `;
