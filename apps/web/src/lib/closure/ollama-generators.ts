@@ -318,6 +318,35 @@ const DerouleSchema = z.object({
     .min(1),
 });
 
+/**
+ * Variante LOCALE de DerouleSchema avec un plancher de séquences ADAPTATIF à la
+ * durée du jour (quick 260618-vg2). Utilisée par la boucle multi-jours pour valider
+ * CHAQUE jour : le DERNIER jour d'une formation non multiple de 8h est PARTIEL
+ * (ex. PROD-0670 = 105h → 14 jours, jour 14 = 1h) et ne peut pas produire ≥5
+ * séquences. Le `DerouleSchema` global (l.310, cas nbJours===1) reste INCHANGÉ.
+ *
+ * minSeq = max(2, min(5, round(heuresJour)) :
+ *   - jour plein 8h → min(5, 8) = 5 (plancher historique inchangé)
+ *   - jour 1h/2h → max(2, 1|2) = 2 (Accueil/contenu + bloc clôture)
+ *   - jour 5h → min(5, 5) = 5 (plafonné — palier simple, corrections §1)
+ *
+ * PUR : aucun plancher de cellule touché (DerouleSequenceSchema réutilisé tel quel).
+ * Forme IDENTIQUE à DerouleSchema ({ jours: [...] }) → compatible runOllamaJson<T>.
+ */
+export function buildDerouleJourSchema(heuresJour: number) {
+  const minSeq = Math.max(2, Math.min(5, Math.round(heuresJour)));
+  return z.object({
+    jours: z
+      .array(
+        z.object({
+          theme: z.string().min(10),
+          sequences: z.array(DerouleSequenceSchema).min(minSeq),
+        }),
+      )
+      .min(1),
+  });
+}
+
 const RapportFormateurSchema = z.object({
   adaptations: z.string().min(10),
   remarquesGroupe: z.string().min(10),
@@ -774,13 +803,18 @@ function buildDerouleJourPrompt(
   nbJours: number,
   jourGrille: string,
   hasProgramme: boolean,
+  heuresJour: number,
 ): string {
+  const jourCourt =
+    heuresJour < 8
+      ? `\nATTENTION : ce jour ne fait que ${heuresJour}h — produis un nombre de séquences PROPORTIONNÉ à cette durée (pas de remplissage artificiel pour atteindre une journée pleine).`
+      : '';
   return `Génère le déroulé pédagogique du JOUR ${k} sur ${nbJours} de la formation suivante.
 
 Titre : ${formation.titre}
 Durée totale : ${formation.nombreHeures} heures réparties sur ${nbJours} jours.
 
-Tu génères UNIQUEMENT le Jour ${k} (un seul élément dans "jours"). N'invente pas les autres jours.
+Tu génères UNIQUEMENT le Jour ${k} (un seul élément dans "jours"). N'invente pas les autres jours.${jourCourt}
 
 GRILLE HORAIRE IMPOSÉE DU JOUR ${k} (à recopier telle quelle) :
 ${jourGrille}
@@ -858,12 +892,23 @@ Ajoute obligatoirement :
       jours: [scaffold.jours[k - 1]!],
       multiDayDeferred: false,
     });
-    const jourPrompt = buildDerouleJourPrompt(formation, k, nbJours, jourGrille, hasProgramme);
+    // Plancher de séquences PROPORTIONNÉ à la durée du jour (quick 260618-vg2) :
+    // débloque le DERNIER jour PARTIEL (durationHours non multiple de 8). Le jour
+    // plein garde min 5 ; un jour court accepte 2. DerouleSchema global inchangé.
+    const heuresJour = scaffold.jours[k - 1]!.travailTotalMin / 60;
+    const jourPrompt = buildDerouleJourPrompt(
+      formation,
+      k,
+      nbJours,
+      jourGrille,
+      hasProgramme,
+      heuresJour,
+    );
     const partiel = await runOllamaJson(
       'generate-deroule',
       SYSTEM_PROMPT_DEROULE,
       jourPrompt,
-      DerouleSchema,
+      buildDerouleJourSchema(heuresJour),
       refTable,
       refId,
       tenantId,

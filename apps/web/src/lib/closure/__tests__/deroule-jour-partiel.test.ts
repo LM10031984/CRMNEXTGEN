@@ -16,9 +16,11 @@ import { describe, it, expect, vi } from 'vitest';
  *
  * ── PROTOCOLE DE MUTATION (feedback_test_de_puissance_mutation) ──
  *  Si on remet `sequences.min(5)` RIGIDE pour TOUS les jours dans
- *  buildDerouleJourSchema (au lieu du min adaptatif), les Test 1 / 2 / 6 doivent
+ *  buildDerouleJourSchema (au lieu du min adaptatif), les Test 1 / 2 doivent
  *  virer ROUGE → preuve que le test garde réellement le comportement adaptatif
- *  (et non un mock complaisant).
+ *  (et non un mock complaisant). Vérifié 2026-06-18 : mutation `minSeq = 5` →
+ *  Test 1 + Test 2 ROUGES, le reste vert. (Test 6 cible assembleDeroule pur,
+ *  indépendant du schéma — il prouve l'assemblage 14 jours, pas le plancher.)
  *  Inversement, si on met `sequences.min(0)` (plancher supprimé), les Test 3 / 5
  *  doivent virer ROUGE → preuve que la rigueur sur les jours pleins n'est PAS
  *  relâchée. Mutation documentée ici, JAMAIS appliquée au code livré.
@@ -56,30 +58,32 @@ function makeJour(n: number) {
   };
 }
 
-// Un DerouleContent partiel (1 jour) pour l'assemblage (Test 6).
+// buildDerouleJourSchema valide la forme `{ jours: [...] }` (IDENTIQUE à DerouleSchema,
+// contrat de runOllamaJson : le LLM renvoie 1 jour dans "jours"). On parse donc le
+// jour ENVELOPPÉ. makeDerouleContent sert aussi de partiel pour l'assemblage (Test 6).
 function makeDerouleContent(n: number) {
   return { jours: [makeJour(n)] };
 }
 
 describe('buildDerouleJourSchema — min de séquences adaptatif à la durée du jour', () => {
   it('Test 1 — jour partiel 1h passe avec 2 séquences (LE BUG À DÉBLOQUER)', () => {
-    expect(buildDerouleJourSchema(1).safeParse(makeJour(2)).success).toBe(true);
+    expect(buildDerouleJourSchema(1).safeParse(makeDerouleContent(2)).success).toBe(true);
   });
 
   it('Test 2 — jour partiel 2h passe avec 2 séquences', () => {
-    expect(buildDerouleJourSchema(2).safeParse(makeJour(2)).success).toBe(true);
+    expect(buildDerouleJourSchema(2).safeParse(makeDerouleContent(2)).success).toBe(true);
   });
 
   it('Test 3 — jour PLEIN 8h REJETTE 4 séquences (le min adaptatif ne relâche PAS tout)', () => {
-    expect(buildDerouleJourSchema(8).safeParse(makeJour(4)).success).toBe(false);
+    expect(buildDerouleJourSchema(8).safeParse(makeDerouleContent(4)).success).toBe(false);
   });
 
   it('Test 4 — jour PLEIN 8h accepte 5 séquences (non-régression)', () => {
-    expect(buildDerouleJourSchema(8).safeParse(makeJour(5)).success).toBe(true);
+    expect(buildDerouleJourSchema(8).safeParse(makeDerouleContent(5)).success).toBe(true);
   });
 
   it('Test 5 — plancher >= 2 même pour un jour très court (1 séquence rejetée)', () => {
-    expect(buildDerouleJourSchema(1).safeParse(makeJour(1)).success).toBe(false);
+    expect(buildDerouleJourSchema(1).safeParse(makeDerouleContent(1)).success).toBe(false);
   });
 
   it('Test 6 — assemblage 105h : 13 jours pleins + 1 jour partiel (2 séq) → 14 jours', () => {
