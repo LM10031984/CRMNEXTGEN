@@ -220,20 +220,71 @@ function renderJourLines(j: HoraireJour, k: number): string[] {
   return lines;
 }
 
+/** Vrai si la journée est un jour PLEIN figé (8h, matin+après-midi standard). */
+function isJourPlein(j: HoraireJour): boolean {
+  return (
+    j.travailTotalMin === 480 &&
+    j.matin.label === HORAIRE_MATIN_PROG &&
+    j.apresMidi.label === HORAIRE_APREM_PROG
+  );
+}
+
+/** Résumé textuel du créneau d'un jour PARTIEL (pour la ligne dédiée du dernier jour). */
+function describeJourPartiel(j: HoraireJour): string {
+  const heures = j.travailTotalMin / 60;
+  if (j.apresMidi.travailMin > 0) {
+    // matin complet + après-midi partiel.
+    return `matin ${j.matin.label} / déjeuner ${j.dejeuner.start}–${j.dejeuner.end} / après-midi ${j.apresMidi.label} — ${heures}h`;
+  }
+  // matin seul.
+  return `matin ${j.matin.label} (matin seul) — ${heures}h`;
+}
+
 /**
  * Rend l'échafaudage horaire en bloc markdown lisible, injectable DANS le prompt
  * user comme grille IMPOSÉE (le LLM NE calcule PAS la grille, il la recopie).
- * Liste chaque journée `### Jour K` avec ses créneaux.
+ *
+ * - `nbJours === 1` : comportement HISTORIQUE inchangé (PROD-0062 + slice mono-jour
+ *   du déroulé). Liste un unique `### Jour 1` avec ses créneaux.
+ * - `nbJours > 1` : l'horaire est affiché UNE SEULE FOIS sous « Organisation des
+ *   journées » (les jours pleins sont identiques, on ne répète pas le bloc par jour).
+ *   Si le dernier jour est PARTIEL, on ajoute UNE ligne dédiée à ce jour-là.
  */
 export function renderHoraireScaffoldMd(scaffold: HoraireScaffold): string {
+  // Cas mono-jour : strictement inchangé (déroulé slice + non-régression PROD-0062).
+  if (scaffold.nbJours === 1) {
+    const out: string[] = [
+      `## Grille horaire imposée — 1 jour (${scaffold.durationHours}h au total)`,
+      ``,
+    ];
+    out.push(...renderJourLines(scaffold.jours[0]!, 1));
+    out.push(`NE PAS modifier ces horaires ; les recopier tels quels pour chaque jour.`);
+    return out.join('\n');
+  }
+
+  // Cas multi-jours : horaire mentionné UNE SEULE FOIS.
+  const lastIdx = scaffold.jours.length - 1;
+  const lastJour = scaffold.jours[lastIdx]!;
+  const lastIsPlein = isJourPlein(lastJour);
+
   const out: string[] = [
-    `## Grille horaire imposée — ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''} (${scaffold.durationHours}h au total)`,
+    `## Grille horaire imposée — ${scaffold.nbJours} jours (${scaffold.durationHours}h au total)`,
     ``,
+    `### Organisation des journées`,
+    ``,
+    `Chaque journée (8h) — Matin : ${HORAIRE_MATIN_PROG} · Pause déjeuner : ${PAUSE_DEJEUNER.start}–${PAUSE_DEJEUNER.end} · Après-midi : ${HORAIRE_APREM_PROG} (pauses café ~${PAUSE_CAFE_MATIN_PROG.at} et ~${PAUSE_CAFE_APREM_PROG.at} incluses).`,
   ];
-  scaffold.jours.forEach((j, idx) => {
-    out.push(...renderJourLines(j, idx + 1));
-  });
-  out.push(`NE PAS modifier ces horaires ; les recopier tels quels pour chaque jour.`);
+
+  if (!lastIsPlein) {
+    out.push(
+      `Dernier jour (jour ${scaffold.nbJours}) : ${describeJourPartiel(lastJour)}.`,
+    );
+  }
+
+  out.push(``);
+  out.push(
+    `Les horaires sont identiques chaque jour ; ne les répète pas par jour. Recopie cette grille UNE SEULE FOIS.`,
+  );
   return out.join('\n');
 }
 

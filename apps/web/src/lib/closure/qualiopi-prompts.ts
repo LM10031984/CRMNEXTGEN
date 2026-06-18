@@ -7,7 +7,7 @@
  * et tracer dans AIGenerationJob.aiPromptVersion.
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v8-2026-06-18';
+export const PROMPT_VERSION = 'qualiopi-gen-v9-2026-06-18';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -193,7 +193,7 @@ export const SYSTEM_PROMPT_NORMALIZE_PROGRAMME = `Tu es un expert en ingénierie
 OBJECTIF : produire un programme propre (markdown) qui (1) respecte une grille horaire IMPOSÉE, (2) reformule chaque intitulé de contenu en VERBE D'ACTION ÉVALUABLE, (3) reste STRICTEMENT FIDÈLE au programme source.
 
 RÈGLE ABSOLUE — HORAIRES IMPOSÉS (ne PAS recalculer) :
-La grille horaire t'est FOURNIE dans le prompt : elle décrit N journées (certaines partielles le dernier jour). Tu RÉPARTIS le contenu source sur CES N journées en RECOPIANT les horaires de chaque jour TELS QUELS (matin / pause déjeuner / après-midi quand le jour les comporte). Tu NE produis JAMAIS d'autres horaires (pas de 9h-11h, 14h15…), même s'ils figurent dans le programme source : ces horaires source sont OBSOLÈTES et doivent être remplacés par la grille imposée. Tu n'inventes ni ne supprimes aucun jour : tu utilises exactement les N journées de la grille.
+La grille horaire t'est FOURNIE dans le prompt : elle décrit l'organisation des journées (et, pour une formation longue, un éventuel dernier jour partiel). Les horaires sont IDENTIQUES chaque jour : tu les mentionnes UNE SEULE FOIS, dans une section « Organisation des journées » en tête, et tu NE les répètes PAS jour par jour. Tu NE produis JAMAIS d'autres horaires (pas de 9h-11h, 14h15…), même s'ils figurent dans le programme source : ces horaires source sont OBSOLÈTES et doivent être remplacés par la grille imposée. Tu n'inventes ni ne supprimes aucun jour : tu utilises exactement le nombre de journées de la grille.
 
 RÈGLE ABSOLUE — FIDÉLITÉ (DÉCLINER, PAS ENRICHIR) :
 Tu DÉCLINES le contenu du programme source sur la grille imposée. Tu ne RETIRES aucun thème/module présent dans la source et tu n'AJOUTES aucun thème, concept, outil, framework ou exemple ABSENT de la source. Test simple : si un thème ne provient pas du programme source, il n'a PAS sa place. INTERDIT d'introduire un sujet d'un autre domaine.
@@ -203,8 +203,8 @@ Chaque intitulé de contenu commence par un VERBE D'ACTION évaluable (Identifie
 
 FORMAT DE RENDU — MARKDOWN PLAT réutilisable directement :
 Réponds en JSON { "programmeMd": "..." }. Le champ programmeMd est un markdown propre :
-- Un rappel de la grille horaire imposée (les N journées) en tête.
-- Structure le markdown par JOUR (### Jour K) quand la grille comporte plusieurs jours ; répartis les thèmes source sur les jours sans en inventer ni en retirer. Pour une formation d'une seule journée, une structure plate matin/après-midi suffit.
+- Une section « ### Organisation des journées » en tête qui rappelle l'horaire UNE SEULE FOIS (les horaires sont identiques chaque jour, plus l'éventuel dernier jour partiel). NE répète PAS l'horaire dans chaque jour.
+- Structure ensuite le CONTENU par JOUR (### Jour K) quand la formation comporte plusieurs jours ; répartis les thèmes source sur les jours sans en inventer ni en retirer, et SANS y recopier les horaires (ils sont déjà donnés une fois plus haut). Pour une formation d'une seule journée, une structure plate matin/après-midi suffit.
 - Les contenus déclinés sur les blocs matin et après-midi de chaque jour, chaque intitulé en verbe d'action évaluable (titres ## / ### ou items de liste en gras).
 - AUCUN thème absent du programme source.
 Réponds UNIQUEMENT en JSON, sans texte autour.`;

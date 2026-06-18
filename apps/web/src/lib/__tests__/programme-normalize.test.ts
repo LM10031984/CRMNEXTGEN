@@ -188,19 +188,35 @@ describe('buildHoraireScaffold — grille horaire déterministe multi-jours', ()
     );
   });
 
-  it('renderHoraireScaffoldMd liste chaque Jour K et garde horaires figés + consigne de recopie', () => {
+  it('renderHoraireScaffoldMd 72h (9 jours pleins identiques) : horaire UNE SEULE FOIS sous « Organisation des journées », PAS un bloc par jour', () => {
     const md = renderHoraireScaffoldMd(buildHoraireScaffold(72));
-    expect(md).toContain('### Jour 1');
-    expect(md).toContain('### Jour 9');
-    expect(md).toContain('9h00–13h00');
-    expect(md).toContain('14h00–18h00');
-    expect(md).toContain('recopier');
+    // dédup multi-jours : section unique, plus de « ### Jour K » par jour.
+    expect(md).toContain('### Organisation des journées');
+    expect(md).not.toContain('### Jour 1');
+    expect(md).not.toContain('### Jour 9');
+    // // test de puissance déterministe : le bloc horaire n'apparaît qu'UNE fois.
+    expect((md.match(/Matin : 9h00/g) || []).length).toBe(1);
+    expect((md.match(/9h00–13h00/g) || []).length).toBe(1);
+    expect((md.match(/14h00–18h00/g) || []).length).toBe(1);
   });
 
-  it('renderHoraireScaffoldMd cas 1 jour : un seul ### Jour 1 et les horaires figés', () => {
+  it('renderHoraireScaffoldMd 105h (13 pleins + dernier 1h partiel) : grille pleine 1× + UNE ligne dernier jour partiel', () => {
+    const md = renderHoraireScaffoldMd(buildHoraireScaffold(105));
+    expect(md).toContain('### Organisation des journées');
+    // bloc plein générique : 1 seule occurrence (pas répété 13×).
+    expect((md.match(/Chaque journée/g) || []).length).toBe(1);
+    expect((md.match(/9h00–13h00/g) || []).length).toBe(1);
+    // ligne dédiée au dernier jour partiel (reliquat 1h : matin 9h00–10h00).
+    expect(md).toContain('9h00–10h00');
+    expect((md.match(/9h00–10h00/g) || []).length).toBe(1);
+    expect(md).not.toContain('### Jour 14');
+  });
+
+  it('renderHoraireScaffoldMd cas 1 jour : STRICTEMENT inchangé — un seul ### Jour 1 et les horaires figés (PROD-0062)', () => {
     const md = renderHoraireScaffoldMd(buildHoraireScaffold(8));
     expect(md).toContain('### Jour 1');
     expect(md).not.toContain('### Jour 2');
+    expect(md).not.toContain('### Organisation des journées');
     expect(md).toContain('9h00–13h00');
     expect(md).toContain('14h00–18h00');
     expect(md).toContain('recopier');
