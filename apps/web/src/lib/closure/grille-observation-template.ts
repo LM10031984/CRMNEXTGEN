@@ -83,7 +83,7 @@ ${obsGlob.axe_amelioration ? `
   const body = `
 ${renderBrandHeader()}
 <main class="body">
-  <h1 class="doc-title">GRILLE D'AMÉLIORATION STAGIAIRE</h1>
+  <h1 class="doc-title">GRILLE D'OBSERVATION</h1>
   <p class="doc-subtitle">Suivi pédagogique individualisé</p>
   <hr class="doc-rule" />
 

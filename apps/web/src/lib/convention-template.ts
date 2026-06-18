@@ -41,6 +41,12 @@ export interface ConventionData {
   // Session
   sessionStartDate: Date;
   sessionEndDate: Date;
+  // Date de signature = J-15 jours ouvrés avant le début de session,
+  // calculée côté fournisseur (server action / script témoin) via
+  // subtractBusinessDaysISO — NE PAS hardcoder. Garantit l'antériorité
+  // (ind.9), le délai de rétractation 14j (Art.6) et le « solde la veille »
+  // (Art.7). Cf. audit témoin SES-0087 (2026-06-18, COR-1).
+  conventionDate: Date;
   sessionLieu: string;
 
   // Produit
@@ -59,6 +65,21 @@ export interface ConventionData {
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 const fmtDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/**
+ * Nettoie le markdown du programme avant rendu (COR-4, audit témoin SES-0087) :
+ * calqué sur `normalizeMd` de programme-template.ts. Supprime les puces
+ * orphelines (« • », « ● », « · », « ‣ », « * », « - » seules sur une ligne)
+ * pour éviter les « • » vides dans le HTML rendu, et recolle les titres
+ * markdown collés à leur dièse (« ##Titre » → « ## Titre »).
+ */
+function cleanProgrammeBullets(md: string): string {
+  return md
+    .replace(/(^|\n)(#{1,6})([^\s#])/g, '$1$2 $3') // titre collé au dièse
+    .replace(/^\s*[●•·‣]+\s*$/gm, '') // ligne ne contenant qu'une puce unicode
+    .replace(/^\s*\*+\s*$/gm, '') // ligne ne contenant que des astérisques
+    .replace(/(^|\n)[*-]\s*$/g, '$1'); // tiret/astérisque de fin de ligne vide
+}
 
 // Phase 7 (Plan 07-03) — Le cache local logo a été supprimé au profit du
 // cache central dans `closure/shared-template.ts` (loadLogoColorDataUrl).
@@ -181,7 +202,7 @@ export function renderConventionHtml(data: ConventionData, of: OfConfig): string
   const logoDataUrl = loadLogoColorDataUrl(data.tenantId);
   const respFullName = `${of.resp.prenom} ${of.resp.nom}`.trim();
   const programmeHtml = data.produitProgrammeMd
-    ? (marked.parse(data.produitProgrammeMd, { async: false }) as string)
+    ? (marked.parse(cleanProgrammeBullets(data.produitProgrammeMd), { async: false }) as string)
     : '<p><em>Programme à compléter dans la fiche produit (champ Programme détaillé).</em></p>';
   const objectifs = data.produitObjectifs.length > 0
     ? data.produitObjectifs
@@ -302,7 +323,7 @@ ${renderOfPagedFooter()}
   <p>Si une contestation ou un différend n'ont pu être réglés à l'amiable, le <strong>tribunal judiciaire de Nice</strong> sera seul compétent pour régler le litige.</p>
 </section>
 
-<p class="closing">Fait en double exemplaire, à <strong>${escapeHtml(of.addressVille)}</strong> le <strong>${fmtDate(new Date())}</strong>.</p>
+<p class="closing">Fait en double exemplaire, à <strong>${escapeHtml(of.addressVille)}</strong> le <strong>${fmtDate(data.conventionDate)}</strong>.</p>
 
 <div class="signatures">
   <div class="box">
