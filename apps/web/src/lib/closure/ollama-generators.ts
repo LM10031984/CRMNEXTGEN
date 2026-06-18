@@ -24,6 +24,7 @@ import {
   SYSTEM_PROMPT_NORMALIZE_PROGRAMME,
   SYSTEM_PROMPT_POSITIONNEMENT,
   SYSTEM_PROMPT_QCM,
+  SYSTEM_PROMPT_RAPPORT_FORMATEUR,
   SYSTEM_PROMPT_SATISFACTION_CHAUD,
   SYSTEM_PROMPT_SATISFACTION_FROID,
 } from './qualiopi-prompts';
@@ -293,9 +294,52 @@ const DerouleSchema = z.object({
     .min(1),
 });
 
+const RapportFormateurSchema = z.object({
+  adaptations: z.string().min(10),
+  remarquesGroupe: z.string().min(10),
+  bilan: z.string().min(10),
+});
+
 // =====================================================
 // Generators
 // =====================================================
+
+/**
+ * Génère les narratifs du « Rapport formateur » du déroulé (adaptations / remarques
+ * groupe / bilan) par LLM, ANCRÉS au programme réel — au lieu des pools génériques
+ * codés en dur (qui faisaient fuiter des thèmes hors programme, ex. « prompts/IA »
+ * sur une formation Tracfin). tier 'fast' = Haiku en cloud (texte court).
+ * Retourne null sur échec → l'appelant retombe sur les pools (fallback).
+ */
+export async function generateRapportFormateur(
+  formation: FormationCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<z.infer<typeof RapportFormateurSchema> | null> {
+  const hasProgramme = !!formation.programmeMd && formation.programmeMd.trim().length > 10;
+  const prompt = `Tu remplis ton rapport de formateur APRÈS avoir animé cette formation.
+
+Titre : ${formation.titre}
+Durée : ${formation.nombreHeures} heures
+
+${hasProgramme ? `PROGRAMME DE LA FORMATION (ancre-toi STRICTEMENT dessus, n'introduis aucun thème absent) :
+${formation.programmeMd}` : `Aucun programme détaillé disponible — reste strictement sur le thème « ${formation.titre} » sans introduire d'autre sujet.`}
+
+Rédige tes trois narratifs (adaptations pédagogiques / observations, remarques sur le groupe, bilan de la formation), à la première personne, 1 à 2 phrases chacun.`;
+
+  return runOllamaJson(
+    'generate-rapport-formateur',
+    SYSTEM_PROMPT_RAPPORT_FORMATEUR,
+    prompt,
+    RapportFormateurSchema,
+    refTable,
+    refId,
+    tenantId,
+    undefined,
+    'fast',
+  );
+}
 
 export async function generateQcmContent(
   formation: FormationCtx,
