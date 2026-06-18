@@ -130,7 +130,7 @@ export function buildHoraireScaffold(durationHours: number): HoraireScaffold {
 export function renderHoraireScaffoldMd(scaffold: HoraireScaffold): string {
   const j = scaffold.jours[0]!;
   return [
-    `### Grille horaire imposée (1 journée — 8h pile)`,
+    `### Organisation de la journée`,
     ``,
     `- Matin : **${j.matin.label}** (4h) — pause café ~${j.matin.pauseCafe.at} (${j.matin.pauseCafe.durationMin} min, incluse).`,
     `- Pause déjeuner : ${j.dejeuner.start}–${j.dejeuner.end} (${j.dejeuner.durationMin} min).`,

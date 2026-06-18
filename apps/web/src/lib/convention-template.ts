@@ -247,7 +247,7 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="article">Article 4 — Organisation de l'action de formation</h2>
-  <p>L'action de formation aura lieu du <strong>${fmtDate(data.sessionStartDate)} à 9h</strong> au <strong>${fmtDate(data.sessionEndDate)} à 17h</strong>, au ${escapeHtml(data.sessionLieu)}.</p>
+  <p>L'action de formation aura lieu du <strong>${fmtDate(data.sessionStartDate)} à 9h</strong> au <strong>${fmtDate(data.sessionEndDate)} à 18h</strong>, au ${escapeHtml(data.sessionLieu)}.</p>
   <p>Elle est organisée pour un effectif de <strong>${nbStagiaires} stagiaire${nbStagiaires > 1 ? 's' : ''}</strong>.</p>
   <p>L'organisme ${escapeHtml(of.name)} accueillera ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
   <p style="padding-left: 14px;">${stagiaireListe}</p>
