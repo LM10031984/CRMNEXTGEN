@@ -304,8 +304,9 @@ export const SHARED_STYLES = `
 <style>
   /* CSS Paged Media (WeasyPrint) — footer répété nativement sur chaque page
    * via running element. Marges @page : 25mm haut (pages 2+), 0 page 1
-   * (bandeau brand pleine largeur), 22mm bas réservés pour le footer running. */
-  @page { size: A4; margin: 25mm 0 22mm 0; @bottom-center { content: element(corpfooter); } }
+   * (bandeau brand pleine largeur), 28mm bas réservés pour le footer running
+   * (3 lignes : adresse longue Vence sur 2 lignes + contact + version doc). */
+  @page { size: A4; margin: 25mm 0 28mm 0; @bottom-center { content: element(corpfooter); } }
   @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
   body {

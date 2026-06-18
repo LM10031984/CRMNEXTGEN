@@ -54,7 +54,7 @@ export const OF_PAGED_FOOTER_STYLES = `
  * pour réserver la place au footer (border-top + 2 lignes 11pt).
  */
 export const OF_PAGED_PAGE_RULE = `
-  @page { size: A4; margin: 22mm 18mm 22mm 18mm; @bottom-center { content: element(corpfooter); } }
+  @page { size: A4; margin: 22mm 18mm 28mm 18mm; @bottom-center { content: element(corpfooter); } }
 `;
 
 /**
