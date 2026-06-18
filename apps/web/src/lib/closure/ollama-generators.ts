@@ -755,7 +755,7 @@ Ajoute obligatoirement :
 - Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" avec QCM et remise des attestations`;
 
-    return runOllamaJson(
+    const deroule = await runOllamaJson(
       'generate-deroule',
       SYSTEM_PROMPT_DEROULE,
       prompt,
@@ -766,6 +766,11 @@ Ajoute obligatoirement :
       MODEL_DEROULE,
       'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
     );
+    if (!deroule) return null;
+    // Rapport formateur ancré au programme — UN seul appel, échec → champ absent
+    // (renderBilanFormateur fallback pool), le déroulé n'est PAS avorté.
+    const rapport = await generateRapportFormateur(formation, refTable, refId, tenantId);
+    return rapport ? { ...deroule, rapportFormateur: rapport } : deroule;
   }
 
   // ── Multi-jours (quick 260618-jy1) : 1 appel LLM PAR JOUR, puis réassemblage pur. ──
@@ -803,7 +808,11 @@ Ajoute obligatoirement :
   }
 
   // 1 seul DerouleContent → 1 seul PDF (renderDerouleHtml pagine les N jours + rapport unique).
-  return assembleDeroule(partiels);
+  const deroule = assembleDeroule(partiels);
+  // Rapport formateur ancré au programme — UN seul appel APRÈS assemblage (pas par jour),
+  // échec → champ absent (fallback pool), le déroulé multi-jours n'est PAS avorté.
+  const rapport = await generateRapportFormateur(formation, refTable, refId, tenantId);
+  return rapport ? { ...deroule, rapportFormateur: rapport } : deroule;
 }
 
 /** Schéma de sortie du générateur de programme normalisé : markdown plat,

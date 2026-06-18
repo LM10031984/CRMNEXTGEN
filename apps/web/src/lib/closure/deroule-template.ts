@@ -51,6 +51,9 @@ export interface DerouleJour {
 
 export interface DerouleContent {
   jours: DerouleJour[];
+  /** Narratifs du rapport formateur générés par LLM (ancrés au programme).
+   *  Absent si la génération a échoué → renderBilanFormateur fallback sur les pools. */
+  rapportFormateur?: { adaptations: string; remarquesGroupe: string; bilan: string };
 }
 
 /**
