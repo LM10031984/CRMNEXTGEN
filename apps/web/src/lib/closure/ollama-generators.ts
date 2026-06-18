@@ -593,7 +593,9 @@ export async function generateSatisfactionChaudContent(
 Programme :
 ${formation.programmeMd || '(programme à compléter)'}
 
-Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.${genderDirective(stagiaire.civilite)}`;
+Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.
+
+Rédige TOUS les commentaires à la 1re personne du stagiaire (« j'ai », « ma pratique »), sans jamais citer son prénom ni utiliser la 3e personne, en restant STRICTEMENT sur le thème de la formation "${formation.titre}" ; n'introduis aucun autre domaine.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-chaud',
@@ -620,7 +622,9 @@ ${formation.programmeMd || '(programme à compléter)'}
 
 Profil : ${stagiaire.fonction ?? 'professionnel'}${stagiaire.entreprise ? ` chez ${stagiaire.entreprise}` : ''}.
 
-Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.${genderDirective(stagiaire.civilite)}`;
+Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.
+
+Rédige TOUS les commentaires à la 1re personne du stagiaire (« j'applique », « mon activité »), sans jamais citer son prénom ni utiliser la 3e personne, en restant STRICTEMENT sur le thème de la formation "${formation.titre}" ; n'introduis aucun autre domaine.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-froid',

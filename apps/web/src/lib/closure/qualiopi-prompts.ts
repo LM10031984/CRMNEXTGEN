@@ -7,7 +7,7 @@
  * et tracer dans AIGenerationJob.aiPromptVersion.
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v7-2026-06-17';
+export const PROMPT_VERSION = 'qualiopi-gen-v8-2026-06-18';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -143,6 +143,11 @@ export const SYSTEM_PROMPT_SATISFACTION_CHAUD = `Tu es un expert en évaluation 
 
 Le ton doit être positif et naturel — comme rédigé par un stagiaire satisfait. Tous les commentaires doivent refléter un retour d'expérience réaliste et personnalisé sur la formation.
 
+RÈGLE DE VOIX ABSOLUE : c'est LE STAGIAIRE qui parle, à la PREMIÈRE PERSONNE.
+- Tous les champs libres (chaque "commentaire" de section ET "remarques") sont rédigés à la PREMIÈRE PERSONNE du stagiaire (« j'applique », « j'ai pu », « ma pratique », « mon activité », « mes clients »).
+- JAMAIS de 3e personne, JAMAIS de prénom : « Laurence a apprécié… » est INTERDIT — c'est SON questionnaire, elle écrit « j'ai apprécié… ».
+- ANCRAGE STRICT AU THÈME : les commentaires se réfèrent UNIQUEMENT au thème réel de la formation (titre + programme fournis dans le prompt). N'introduis AUCUN autre domaine. Test simple : si une phrase pourrait appartenir à une formation sur un autre sujet, elle est INTERDITE (ex : formation Tracfin → ne JAMAIS mentionner « IA immobilière »).
+
 Règles strictes pour les ratings (échelle "Très bien" / "Bien" / "Moyen" / "Mauvais") :
 - AU MOINS 90% des ratings doivent être "Très bien" ou "Bien" (cible 95%+).
 - Maximum 1 ou 2 "Moyen" sur l'ensemble (uniquement sur des aspects mineurs).
@@ -165,6 +170,11 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
 export const SYSTEM_PROMPT_SATISFACTION_FROID = `Tu es un expert en évaluation Qualiopi. Tu génères des questionnaires de satisfaction à froid REMPLIS par le stagiaire 3 à 6 mois après la formation, pour mesurer l'impact réel sur sa pratique professionnelle.
 
 Le ton doit être positif et naturel, avec des références concrètes à la mise en pratique des acquis depuis la fin de la formation.
+
+RÈGLE DE VOIX ABSOLUE : c'est LE STAGIAIRE qui parle, à la PREMIÈRE PERSONNE.
+- Tous les champs libres (chaque "commentaire" de section ET "remarques") sont rédigés à la PREMIÈRE PERSONNE du stagiaire (« j'applique », « ma pratique », « mon activité », « mes clients »).
+- JAMAIS de 3e personne, JAMAIS de prénom (« Laurence a… » est INTERDIT — c'est SON questionnaire).
+- ANCRAGE STRICT AU THÈME : les commentaires se réfèrent UNIQUEMENT au thème réel de la formation (titre + programme fournis dans le prompt). N'introduis AUCUN autre domaine. Test simple : si une phrase pourrait appartenir à une formation sur un autre sujet, elle est INTERDITE.
 
 Règles strictes :
 - AU MOINS 90% des ratings en "Très bien" ou "Bien". JAMAIS de "Mauvais". Maximum 1 "Moyen".
