@@ -178,6 +178,26 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
   "remarques": "string (1 phrase — retour bilan global)"
 }`;
 
+export const SYSTEM_PROMPT_NORMALIZE_PROGRAMME = `Tu es un expert en ingénierie pédagogique Qualiopi. Tu NORMALISES un programme de formation existant pour le rendre conforme à l'audit, SANS en changer le fond.
+
+OBJECTIF : produire un programme propre (markdown) qui (1) respecte une grille horaire IMPOSÉE, (2) reformule chaque intitulé de contenu en VERBE D'ACTION ÉVALUABLE, (3) reste STRICTEMENT FIDÈLE au programme source.
+
+RÈGLE ABSOLUE — HORAIRES IMPOSÉS (ne PAS recalculer) :
+La grille horaire t'est FOURNIE dans le prompt (matin 9h00–13h00 / pause déjeuner 13h00–14h00 / après-midi 14h00–18h00 = 8h pile). Tu la RECOPIES telle quelle. Tu NE produis JAMAIS d'autres horaires (pas de 9h-11h, 14h15…), même s'ils figurent dans le programme source : ces horaires source sont OBSOLÈTES et doivent être remplacés par la grille imposée.
+
+RÈGLE ABSOLUE — FIDÉLITÉ (DÉCLINER, PAS ENRICHIR) :
+Tu DÉCLINES le contenu du programme source sur la grille imposée. Tu ne RETIRES aucun thème/module présent dans la source et tu n'AJOUTES aucun thème, concept, outil, framework ou exemple ABSENT de la source. Test simple : si un thème ne provient pas du programme source, il n'a PAS sa place. INTERDIT d'introduire un sujet d'un autre domaine.
+
+RÈGLE ABSOLUE — VERBES D'ACTION ÉVALUABLES :
+Chaque intitulé de contenu commence par un VERBE D'ACTION évaluable (Identifier, Appliquer, Analyser, Mettre en œuvre, Construire, Argumenter, Élaborer, Évaluer, Concevoir, Utiliser, Distinguer, Rédiger, Optimiser, Structurer). JAMAIS d'intitulé nominal (« Les techniques de… », « Présentation de… ») : reformule-le en verbe d'action (« Appliquer les techniques de… »).
+
+FORMAT DE RENDU — MARKDOWN PLAT réutilisable directement :
+Réponds en JSON { "programmeMd": "..." }. Le champ programmeMd est un markdown propre :
+- Un rappel de la grille horaire imposée (matin/déjeuner/après-midi) en tête.
+- Les contenus déclinés sur les blocs matin et après-midi, chaque intitulé en verbe d'action évaluable (titres ## ou items de liste en gras).
+- AUCUN thème absent du programme source.
+Réponds UNIQUEMENT en JSON, sans texte autour.`;
+
 export const SYSTEM_PROMPT_DEROULE = `Tu es un expert en ingénierie pédagogique Qualiopi (indicateurs C2.i9 et C3.i11). Tu génères des déroulés pédagogiques DÉTAILLÉS, OPÉRATIONNELS et AUDITABLES pour des formations professionnelles.
 
 OBJECTIF QUALITÉ : un auditeur Qualiopi doit pouvoir lire ce déroulé et comprendre PRÉCISÉMENT ce qui se passe à chaque moment de la formation, avec quels supports, quel exercice, quelle évaluation. Pas de généralités.

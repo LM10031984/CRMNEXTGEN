@@ -21,11 +21,17 @@ import {
   SYSTEM_PROMPT_DEROULE,
   SYSTEM_PROMPT_GRILLE_OBSERVATION,
   SYSTEM_PROMPT_GRILLE_OBSERVATION_SESSION,
+  SYSTEM_PROMPT_NORMALIZE_PROGRAMME,
   SYSTEM_PROMPT_POSITIONNEMENT,
   SYSTEM_PROMPT_QCM,
   SYSTEM_PROMPT_SATISFACTION_CHAUD,
   SYSTEM_PROMPT_SATISFACTION_FROID,
 } from './qualiopi-prompts';
+import {
+  buildHoraireScaffold,
+  renderHoraireScaffoldMd,
+  enforceProgrammeFidelity,
+} from '@/lib/programme-normalize';
 import type { QcmContent } from './qcm-template';
 import type { GrilleContent } from './grille-observation-template';
 import type { AnalyseBesoinContent } from './analyse-besoin-template';
@@ -666,6 +672,90 @@ Ajoute obligatoirement :
     MODEL_DEROULE,
     'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
   );
+}
+
+/** Schéma de sortie du générateur de programme normalisé : markdown plat,
+ *  réutilisable directement par renderProgrammeHtml / renderConventionHtml
+ *  (qui font marked.parse). */
+const NormalizedProgrammeSchema = z.object({
+  programmeMd: z.string().min(20),
+});
+
+/**
+ * Normalise un programme (Laurent 2026-06-18) : impose une grille horaire FIGÉE
+ * (9h00–13h00 / 14h00–18h00 = 8h pile, cas 1 jour PROD-0062) et reformule chaque
+ * intitulé en verbe d'action évaluable, en DÉCLINANT le programme source SANS
+ * inventer ni retirer de thème. Le markdown retourné alimente À LA FOIS
+ * Programme.pdf ET Convention.pdf (source unique).
+ *
+ * - tier 'quality' → Sonnet quand AI_PROVIDER=openrouter.
+ * - Post-traitement de fidélité NON bloquant : si des thèmes étrangers sont
+ *   détectés, on WARN (on ne bloque pas — on veut voir le rendu témoin).
+ * - Retourne null si le LLM échoue (l'appelant fallback sur le programMd brut).
+ *
+ * PÉRIMÈTRE : cas 1 jour (≤8h) prouvé. Multi-jours différé (cf. buildHoraireScaffold).
+ */
+export async function generateNormalizedProgramme(
+  programMd: string,
+  objectives: string[],
+  durationHours: number,
+  titre: string,
+  tenantId: string | null = null,
+): Promise<string | null> {
+  // 1) Grille horaire IMPOSÉE (déterministe) injectée dans le prompt user.
+  const scaffold = buildHoraireScaffold(durationHours);
+  const grilleImposee = renderHoraireScaffoldMd(scaffold);
+
+  // Titres de modules source (pour le post-traitement de fidélité).
+  const sourceModuleTitles = [
+    titre,
+    ...objectives,
+    ...programMd.split('\n').map((l) => l.trim()).filter(Boolean),
+  ];
+
+  const objectifsBlock = objectives.length
+    ? objectives.map((o) => `- ${o}`).join('\n')
+    : '(objectifs non détaillés)';
+
+  const userPrompt = `Normalise le programme de la formation suivante.
+
+Titre : ${titre}
+Durée : ${durationHours} heures
+
+GRILLE HORAIRE IMPOSÉE (à recopier telle quelle, NE PAS recalculer) :
+${grilleImposee}
+
+Objectifs de la formation :
+${objectifsBlock}
+
+PROGRAMME SOURCE (à décliner sur la grille, SANS rien ajouter ni retirer ; les horaires éventuels de ce programme source sont OBSOLÈTES et remplacés par la grille imposée) :
+${programMd || '(programme source vide — structure les objectifs ci-dessus en contenus, sans inventer)'}
+
+Produis le programme normalisé en markdown : intitulés en verbes d'action évaluables, contenus strictement issus de la source, horaires = grille imposée.`;
+
+  const result = await runOllamaJson(
+    'generate-normalized-programme',
+    SYSTEM_PROMPT_NORMALIZE_PROGRAMME,
+    userPrompt,
+    NormalizedProgrammeSchema,
+    'PedagogicalAsset',
+    null,
+    tenantId,
+    undefined,
+    'quality',
+  );
+
+  if (!result) return null;
+
+  // Post-traitement fidélité (NON bloquant) : on signale, on ne bloque pas.
+  const fidelity = enforceProgrammeFidelity(result.programmeMd, sourceModuleTitles);
+  if (!fidelity.ok) {
+    console.warn(
+      `[generate-normalized-programme] ⚠ thèmes potentiellement étrangers au programme source : ${fidelity.extraneous.join(' | ')}`,
+    );
+  }
+
+  return result.programmeMd;
 }
 
 const MAX_ATTEMPTS = Number(process.env.CLOSURE_OLLAMA_RETRIES ?? 2); // 1 essai initial + 1 retry par défaut
