@@ -172,6 +172,13 @@ for (const SES of CODES) {
   //   même corps de déroulé sur toutes ses sessions. Zéro re-coût LLM sur les
   //   sessions suivantes du même produit. (Non atteint en DRY_RUN : la garde
   //   plus haut a déjà `continue`.)
+  //
+  // quick 260618-vg2 : un échec de figeage produit (ex. throw "Corps déroulé null"
+  //   pour un produit dont un jour partiel ne se générait pas) ou de toute étape
+  //   de génération ne doit PLUS avorter TOUT le run multi-produits. On logge ✗ et
+  //   on passe à la session suivante. (Les `continue` plus haut — introuvable / sans
+  //   produit / dry-run — restent HORS de ce try, inchangés.)
+  try {
   const frozen = await freezeProductAssets(
     tenantId,
     {
@@ -307,6 +314,12 @@ for (const SES of CODES) {
 
   // f) Récap.
   console.log(`\n  ✓ ${SES} terminé — Drive : ${paths.rootDir}${DRY_RUN ? ' (dry-run, rien écrit)' : ''}`);
+  } catch (e: any) {
+    // Isolation par produit/session : un throw (figeage, cœur, Drive…) n'avorte
+    // pas le run — on logge ✗ et on enchaîne la session suivante.
+    log('✗', `${SES} — échec produit/session : ${e?.message ?? e}`);
+    continue;
+  }
 }
 
 await prisma.$disconnect();
