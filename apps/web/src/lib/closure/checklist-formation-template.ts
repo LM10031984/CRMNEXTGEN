@@ -33,12 +33,12 @@ export interface ChecklistZoneApportee {
   cleUsb: boolean;
   pc: boolean;
   videoprojecteur: boolean;
-  paperboard: boolean;
 }
 
 /** Zone 2 — conditions du lieu d'accueil. */
 export interface ChecklistConditionsLieu {
   salleAdaptee: boolean;
+  paperboard: boolean;
   espacePause: boolean;
   espaceRepas: boolean;
   connexionInternet: boolean;
@@ -104,12 +104,12 @@ export function renderChecklistFormationHtml(data: ChecklistFormationData): stri
     ${row('Clé USB (support de cours / présentation)', a.cleUsb)}
     ${row('PC', a.pc)}
     ${row('Vidéoprojecteur', a.videoprojecteur)}
-    ${row('Paperboard', a.paperboard)}
   `);
 
   // Zone 2 — Conditions du lieu d'accueil
   const zone2 = ul(`
     ${row("Salle adaptée au nombre d'inscrits", c.salleAdaptee)}
+    ${row('Paperboard', c.paperboard)}
     ${row('Espace pause', c.espacePause)}
     ${row('Espace repas', c.espaceRepas)}
     ${row('Connexion internet', c.connexionInternet)}

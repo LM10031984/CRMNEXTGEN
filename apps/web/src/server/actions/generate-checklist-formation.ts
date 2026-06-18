@@ -42,10 +42,10 @@ function buildZones(isPast: boolean): {
       cleUsb: isPast,
       pc: isPast,
       videoprojecteur: isPast,
-      paperboard: isPast,
     },
     conditionsLieu: {
       salleAdaptee: isPast,
+      paperboard: isPast,
       espacePause: isPast,
       espaceRepas: isPast,
       connexionInternet: isPast,
