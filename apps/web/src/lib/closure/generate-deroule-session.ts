@@ -28,14 +28,56 @@ import { prisma } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { buildClosureContextForParticipant } from './build-context';
-import { generateDerouleContent, generateRapportFormateur } from './ollama-generators';
+import {
+  generateDerouleContent,
+  generateRapportFormateur,
+  type SessionRapportCtx,
+} from './ollama-generators';
 import { renderDerouleHtml, type DerouleContent } from './deroule-template';
+import type { ClosureContext } from './shared-template';
 
 export interface PersistDerouleSessionResult {
   ok: boolean;
   assetId?: string;
   pdfUrl?: string;
   error?: string;
+}
+
+/** Participant minimal chargé pour le contexte session (effectif + enseignes). */
+interface RapportParticipant {
+  person: {
+    legalLinks: { organization: { brandName: string | null; legalName: string } }[];
+  };
+}
+
+/**
+ * Construit (pure, zéro IO) le contexte session transmis à
+ * `generateRapportFormateur` : effectif réel + enseignes dédupliquées des
+ * apprenants + dates/lieu réutilisés du ClosureContext déjà résolu. Quick
+ * 260618-skk : ancre les narratifs du rapport formateur sur des faits propres
+ * à la session pour qu'ils diffèrent d'une session à l'autre du même produit.
+ */
+export function buildSessionRapportCtx(
+  participants: RapportParticipant[],
+  ctx: ClosureContext,
+): SessionRapportCtx {
+  const seen = new Set<string>();
+  const enseignes: string[] = [];
+  for (const p of participants) {
+    const org = p.person.legalLinks[0]?.organization;
+    const label = (org?.brandName ?? org?.legalName ?? '').trim();
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      enseignes.push(label);
+    }
+  }
+  return {
+    nbApprenants: participants.length,
+    enseignes,
+    dateDebut: ctx.sessionStartDate ?? null,
+    dateFin: ctx.sessionEndDate ?? null,
+    lieu: ctx.sessionLocation ?? null,
+  };
 }
 
 export async function persistDerouleSession(
@@ -53,22 +95,36 @@ export async function persistDerouleSession(
     return { ok: true, assetId: existing.id, pdfUrl: existing.pdfUrl ?? undefined };
   }
 
-  // 2. Charge la session + produit + 1er participant (le rendu du déroulé a
-  //    besoin d'un ClosureContext, construit à partir d'un participantId).
+  // 2. Charge la session + produit + TOUS les participants éligibles. Le 1er sert
+  //    de base au ClosureContext (rendu déroulé) ; l'ensemble sert au contexte
+  //    session du rapport formateur (effectif + enseignes — quick 260618-skk).
+  //    Les enseignes sont résolues via les mêmes rôles que build-context.ts.
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId },
     include: {
       product: true,
       participants: {
         where: { enrollmentStatus: { in: ['PRE_ENROLLED', 'CONFIRMED', 'ATTENDED'] } },
-        select: { id: true },
-        take: 1,
+        orderBy: { id: 'asc' },
+        select: {
+          id: true,
+          person: {
+            select: {
+              legalLinks: {
+                where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL', 'DIRIGEANT', 'SALARIE'] } },
+                orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }],
+                select: { organization: { select: { legalName: true, brandName: true } } },
+              },
+            },
+          },
+        },
       },
     },
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
   if (!session.product) return { ok: false, error: 'Produit lié à la session manquant' };
-  const firstParticipant = session.participants[0];
+  const participants = session.participants;
+  const firstParticipant = participants[0];
   if (!firstParticipant) {
     return { ok: false, error: 'Aucun participant inscrit (contexte de rendu déroulé indisponible)' };
   }
@@ -89,7 +145,14 @@ export async function persistDerouleSession(
     //   régénère PAS le corps. Seul le bilan/rapport formateur est généré PAR
     //   SESSION (Haiker tier 'fast') puis fusionné au corps figé avant rendu →
     //   corps identique entre 2 sessions, bilan potentiellement différent.
-    const rapport = await generateRapportFormateur(formation, 'PedagogicalAsset', null, tenantId);
+    const sessionCtx = buildSessionRapportCtx(participants, ctx);
+    const rapport = await generateRapportFormateur(
+      formation,
+      'PedagogicalAsset',
+      null,
+      tenantId,
+      sessionCtx,
+    );
     deroule = rapport ? { ...opts.frozenBody, rapportFormateur: rapport } : opts.frozenBody;
   } else {
     // Rétro-compat (pas de figé fourni) : génération complète via LLM (qui
