@@ -697,7 +697,13 @@ const NormalizedProgrammeSchema = z.object({
  *   détectés, on WARN (on ne bloque pas — on veut voir le rendu témoin).
  * - Retourne null si le LLM échoue (l'appelant fallback sur le programMd brut).
  *
- * PÉRIMÈTRE : cas 1 jour (≤8h) prouvé. Multi-jours différé (cf. buildHoraireScaffold).
+ * MULTI-JOURS (quick 260618-jy1) : la grille imposée est désormais MULTI-JOURS
+ * (buildHoraireScaffold rend N journées). Le mapping reste UN SEUL appel LLM par
+ * défaut : le programme normalisé est un markdown PLAT (pas de N séquences riches
+ * comme le déroulé), donc le risque de troncature est faible même à 14 jours, et
+ * un appel unique préserve la cohérence transversale (répartition des thèmes sur
+ * les jours). Le chunking par jour est réservé au DÉROULÉ (generateDerouleContent),
+ * lui beaucoup plus lourd en tokens. Signature publique inchangée.
  */
 export async function generateNormalizedProgramme(
   programMd: string,
@@ -724,18 +730,18 @@ export async function generateNormalizedProgramme(
   const userPrompt = `Normalise le programme de la formation suivante.
 
 Titre : ${titre}
-Durée : ${durationHours} heures
+Durée : ${durationHours} heures réparties sur ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''}
 
-GRILLE HORAIRE IMPOSÉE (à recopier telle quelle, NE PAS recalculer) :
+GRILLE HORAIRE IMPOSÉE — ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''} (à recopier telle quelle, NE PAS recalculer) :
 ${grilleImposee}
 
 Objectifs de la formation :
 ${objectifsBlock}
 
-PROGRAMME SOURCE (à décliner sur la grille, SANS rien ajouter ni retirer ; les horaires éventuels de ce programme source sont OBSOLÈTES et remplacés par la grille imposée) :
+PROGRAMME SOURCE (à RÉPARTIR sur les ${scaffold.nbJours} journées de la grille, SANS rien ajouter ni retirer ; les horaires éventuels de ce programme source sont OBSOLÈTES et remplacés par la grille imposée) :
 ${programMd || '(programme source vide — structure les objectifs ci-dessus en contenus, sans inventer)'}
 
-Produis le programme normalisé en markdown : intitulés en verbes d'action évaluables, contenus strictement issus de la source, horaires = grille imposée.`;
+Produis le programme normalisé en markdown : ${scaffold.nbJours > 1 ? 'une section ### Jour K par journée, ' : ''}intitulés en verbes d'action évaluables, contenus strictement issus de la source répartis sur les journées, horaires = grille imposée.`;
 
   const result = await runOllamaJson(
     'generate-normalized-programme',
