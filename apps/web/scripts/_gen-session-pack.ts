@@ -38,16 +38,19 @@ const DRY_RUN = process.env.DRY_RUN === '1';
 // Surchargeable via DRIVE_BASE. Sous-dossier dédié pour ne pas polluer la racine.
 const DRIVE_BASE =
   process.env.DRIVE_BASE ??
-  '/Users/laurentmarx/Library/CloudStorage/GoogleDrive-laurent@start-academy.fr/Mon Drive/QualiOF - Packs de formation';
+  '/Users/laurentmarx/Library/CloudStorage/GoogleDrive-laurent@start-academy.fr/.shortcut-targets-by-id/1ov5w1JGdItymqXxMmNm7EyJpG1LZChnk/Start Academy/Process, Tableaux suivis & Documents/Formations dispensées/2025/Sessions de formation 2026';
 
 // 3) Imports (après le bloc provider).
 const { prisma } = await import('@qualiof/db');
 const { processClosureJobPayload } = await import('../src/lib/closure/worker');
 const { CLOSURE_DOC_KINDS } = await import('../src/lib/closure/types');
 const { downloadFile, DOCS_BUCKET } = await import('../src/lib/storage');
-const { generateConventionCore } = await import('../src/server/actions/convention-generator');
-const { generateProgrammeForProductCore } = await import('../src/server/actions/programme-generator');
-const { generateChecklistCore } = await import('../src/server/actions/generate-checklist-formation');
+// quick 260618-gux : import des CŒURS sans auth depuis leurs fichiers dédiés
+// (PAS depuis les server actions, qui importent @/lib/auth → erreur « react
+// does not provide an export named 'cache' » au boot du script tsx).
+const { generateConventionCore } = await import('../src/lib/closure/convention-core');
+const { generateProgrammeForProductCore } = await import('../src/lib/closure/programme-core');
+const { generateChecklistCore } = await import('../src/lib/closure/checklist-core');
 const { persistDerouleSession } = await import('../src/lib/closure/generate-deroule-session');
 const { generateNormalizedProgramme } = await import('../src/lib/closure/ollama-generators');
 const {
@@ -127,6 +130,32 @@ for (const SES of CODES) {
 
   console.log(`Produit ${p.code} (${p.durationHours}h) — ${parts.length} apprenants — froidEligible=${froidEligible}`);
   console.log(`Provider : ${process.env.AI_PROVIDER} | DRY_RUN=${DRY_RUN ? '1' : '0'}`);
+
+  // DRY_RUN = plan SEUL, AUCUNE écriture (ni DB, ni MinIO, ni Drive). On affiche
+  // ce qui SERAIT généré puis on passe à la session suivante. Garde explicite
+  // avant toute persistance (quick 260618-gux : l'ancien DRY_RUN ne protégeait
+  // que la copie Drive, pas processClosureJobPayload / les cœurs).
+  if (DRY_RUN) {
+    const planPaths = buildSessionPaths(
+      DRIVE_BASE,
+      p.title,
+      session.startDate,
+      parts.map((part) => ({ prenom: part.person.firstName, nom: part.person.lastName })),
+    );
+    console.log(`\n  [dry-run] Plan de génération (rien écrit) :`);
+    console.log(`  [dry-run]   Pack closure : ${kinds.length} kinds × ${parts.length} pers = ${kinds.length * parts.length} jobs`);
+    console.log(`  [dry-run]     kinds : ${kinds.join(', ')}`);
+    console.log(`  [dry-run]   Docs session (cœurs) : Programme + Déroulé + Checklist`);
+    console.log(`  [dry-run]   Conventions : ${parts.length} (1 par apprenant)`);
+    console.log(`  [dry-run]   Drive racine : ${planPaths.rootDir}`);
+    console.log(`  [dry-run]     ${ROOT_FILE_PROGRAMME} / ${ROOT_FILE_DEROULE} / ${ROOT_FILE_CHECKLIST}`);
+    for (const part of parts) {
+      const who = sanitize(`${part.person.firstName} ${part.person.lastName}`);
+      console.log(`  [dry-run]     ${who}/ → ${LEARNER_FILE_CONVENTION} + docs pack closure`);
+    }
+    console.log(`\n  ✓ ${SES} (dry-run, rien écrit)`);
+    continue;
+  }
 
   // c) PACK CLOSURE par participant via processClosureJobPayload EN DIRECT.
   let batchId: string | null = null;

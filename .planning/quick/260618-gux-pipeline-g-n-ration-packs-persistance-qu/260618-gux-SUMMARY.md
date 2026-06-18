@@ -32,12 +32,17 @@ key-files:
     - apps/web/scripts/_gen-session-pack.ts
     - apps/web/scripts/gen-session-pack-helpers.ts
     - apps/web/src/lib/closure/__tests__/gen-session-pack-pure.test.ts
+    - apps/web/src/lib/closure/convention-core.ts
+    - apps/web/src/lib/closure/programme-core.ts
+    - apps/web/src/lib/closure/checklist-core.ts
   modified:
     - apps/web/src/server/actions/convention-generator.ts
     - apps/web/src/server/actions/programme-generator.ts
     - apps/web/src/server/actions/generate-checklist-formation.ts
 decisions:
-  - DRIVE_BASE par défaut = "Mon Drive/QualiOF - Packs de formation" (synchronisé Google Drive), surchargeable par env
+  - DRIVE_BASE par défaut corrigé = ".shortcut-targets-by-id/.../Sessions de formation 2026" (vrai chemin synchronisé), surchargeable par env
+  - cœurs déplacés dans des fichiers dédiés src/lib/closure/*-core.ts (PLUS dans les server actions) → AUCUN import auth transitif côté script tsx
+  - DRY_RUN = garde pré-persistance réelle (plan seul, ni DB ni MinIO ni Drive)
 metrics:
   duration: ~30 min
   completed: 2026-06-18
@@ -104,3 +109,34 @@ Aucun. `persistDerouleSession` retourne `{ ok:false }` si le LLM échoue (pas de
 - Fichiers créés : 4/4 FOUND.
 - Commits : `c796bfb`, `263c2f5`, `fa5ee28` tous FOUND.
 - Exports cœurs présents dans les 3 server actions.
+
+---
+
+## Correctif post-livraison — bug démarrage `react cache` (2026-06-18)
+
+### Symptôme
+`DRY_RUN=1 SES=SES-0057 tsx scripts/_gen-session-pack.ts` plantait au boot :
+`The requested module 'react' does not provide an export named 'cache'` (via `apps/web/src/lib/auth.ts:12`).
+
+### Cause racine
+Les 3 cœurs « sans auth » avaient été laissés DANS les fichiers server-action (`convention-generator.ts`, `programme-generator.ts`, `generate-checklist-formation.ts`), qui font `import { validateRequest } from '@/lib/auth'` en tête. Le script importait le cœur → tirait tout le module → tirait `auth.ts` → erreur `react cache`. Violation de la règle projet « un script tsx ne doit JAMAIS importer, même transitivement, une server action utilisant validateRequest » : l'extraction d'origine était nominale (la fonction était `export`ée) mais pas structurelle (toujours dans un module contaminé par auth).
+
+### Fix (pattern « core dans fichier séparé sans auth + server action = wrapper »)
+1. Cœurs déplacés dans des fichiers dédiés N'IMPORTANT PAS auth :
+   - `apps/web/src/lib/closure/convention-core.ts` ← `generateConventionCore`
+   - `apps/web/src/lib/closure/programme-core.ts` ← `generateProgrammeForProductCore`
+   - `apps/web/src/lib/closure/checklist-core.ts` ← `generateChecklistCore` (+ helpers `makeSeededRandom`/`buildZones`)
+2. Les 3 server actions importent le cœur depuis le nouveau fichier et restent des wrappers (`validateRequest` → core → `revalidatePath`). Signatures publiques INCHANGÉES (les ~16 consommateurs n'utilisent que les wrappers ; les cœurs n'étaient importés directement que par le script).
+3. Script `_gen-session-pack.ts` : imports des cœurs repointés vers `../src/lib/closure/*-core` (au lieu de `../src/server/actions/*`).
+4. Trace transitive vérifiée : `grep -rn "@/lib/auth" src/lib/` = 0 (worker.ts, ollama-generators, generate-deroule-session, storage, types, of-config — aucun n'importe auth). Le faux positif `of-config.ts:188` est un commentaire, pas un import.
+5. **DRIVE_BASE corrigé** : `Mon Drive/QualiOF - Packs de formation` (inexistant/non synchronisé) → vrai chemin `…/.shortcut-targets-by-id/1ov5w1JGdItymqXxMmNm7EyJpG1LZChnk/Start Academy/Process, Tableaux suivis & Documents/Formations dispensées/2025/Sessions de formation 2026`.
+6. **DRY_RUN renforcé** (déviation Rule 2 — correctness) : l'ancien `DRY_RUN` ne protégeait QUE la copie Drive ; `processClosureJobPayload` + les cœurs écrivaient quand même DB+MinIO. Ajout d'une garde explicite avant toute persistance → DRY_RUN = plan SEUL, rien écrit (DB, MinIO, Drive).
+
+### Vérification du correctif
+- `DRY_RUN=1 SES=SES-0057 npx dotenv -e ../../.env -- tsx scripts/_gen-session-pack.ts` : DÉMARRE sans erreur react/cache, affiche le plan complet (9 kinds × 2 pers + Programme/Déroulé/Checklist + 2 conventions + chemin Drive corrigé), « Pipeline terminé », rien écrit.
+- `tsc --noEmit` web : 0 erreur dans les fichiers touchés ; seul `sessions.ts:804` (legalName, WIP Laurent) subsiste, toléré.
+- `vitest run generators-idempotent` : 4/4 verts. Suite complète : 964/965 (1 échec PRÉ-EXISTANT `shared-template.test.ts` logo jpeg/jpg, hors scope — cf deferred-items).
+- WIP non committé de Laurent (crud-edits.ts, page.tsx, edit-product-button.tsx, session-location-picker.tsx) NON touché. Worker Ollama non touché. Aucune génération réelle (DRY_RUN=0 jamais lancé).
+
+### Note d'effet de bord (1er run)
+Le tout 1er run DRY_RUN (avant le renfort de la garde) a persisté ATTESTATION+CERTIFICAT pour les 2 participants de SES-0057 (DB+MinIO) car l'ancien DRY_RUN ne bloquait pas la persistance. Sans gravité : les cœurs sont idempotents (find-or-create / deleteMany+recreate) → un run réel ultérieur écrasera proprement. Le run DRY_RUN suivant (garde en place) n'a rien écrit.
