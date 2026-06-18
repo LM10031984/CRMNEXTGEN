@@ -59,6 +59,30 @@ export interface FormationCtx {
   nombreHeures: number;
 }
 
+/**
+ * Contexte de SESSION optionnel passé à `generateRapportFormateur` (quick
+ * 260618-skk, CAUSE 2). Ancre les narratifs du rapport formateur sur des FAITS
+ * concrets propres à la session (effectif, profils/enseignes, période, lieu,
+ * résultats agrégés) pour qu'ils diffèrent d'une session à l'autre du MÊME
+ * produit — sans jamais sortir du périmètre du programme (garde anti hors-sujet
+ * conservée). Tous les champs résultats sont optionnels : le prompt les omet
+ * proprement quand ils sont absents.
+ */
+export interface SessionRapportCtx {
+  nbApprenants: number;
+  /** brandName/legalName distincts des enseignes des apprenants (peut être vide). */
+  enseignes: string[];
+  dateDebut: Date | null;
+  dateFin: Date | null;
+  lieu: string | null;
+  /** Score QCM moyen 0-100 (optionnel — agrégation lecture hors scope de ce quick). */
+  qcmScoreMoyen?: number | null;
+  /** Libellé satisfaction agrégé, ex. « Très bien » (optionnel). */
+  satisfactionMoyenne?: string | null;
+  /** Progression positionnement avant/après observée (optionnel). */
+  positionnementProgressed?: boolean | null;
+}
+
 export interface StagiaireCtx {
   prenom: string;
   nom: string;
@@ -305,10 +329,47 @@ const RapportFormateurSchema = z.object({
 // =====================================================
 
 /**
+ * Construit les lignes factuelles compactes décrivant la session, filtrées sur
+ * les valeurs non nulles (pure, sans IO). Renvoie '' si rien d'exploitable.
+ */
+function buildFaitsSession(s: SessionRapportCtx): string {
+  const fmtDate = (d: Date | null): string | null =>
+    d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : null;
+  const lines: string[] = [];
+
+  const effectif =
+    s.nbApprenants > 0
+      ? `- Effectif : ${s.nbApprenants} apprenant${s.nbApprenants > 1 ? 's' : ''}${
+          s.enseignes.length ? `, issus de ${s.enseignes.join(', ')}` : ''
+        }`
+      : null;
+  if (effectif) lines.push(effectif);
+
+  const debut = fmtDate(s.dateDebut);
+  const fin = fmtDate(s.dateFin);
+  if (debut && fin) lines.push(`- Période : du ${debut} au ${fin}`);
+  else if (debut) lines.push(`- Date : ${debut}`);
+
+  if (s.lieu) lines.push(`- Lieu : ${s.lieu}`);
+
+  if (typeof s.qcmScoreMoyen === 'number') {
+    lines.push(`- Score QCM moyen du groupe : ${Math.round(s.qcmScoreMoyen)}%`);
+  }
+  if (s.satisfactionMoyenne) lines.push(`- Satisfaction moyenne : ${s.satisfactionMoyenne}`);
+  if (s.positionnementProgressed === true) {
+    lines.push(`- Progression mesurée au positionnement avant/après`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Génère les narratifs du « Rapport formateur » du déroulé (adaptations / remarques
  * groupe / bilan) par LLM, ANCRÉS au programme réel — au lieu des pools génériques
  * codés en dur (qui faisaient fuiter des thèmes hors programme, ex. « prompts/IA »
  * sur une formation Tracfin). tier 'fast' = Haiku en cloud (texte court).
+ * Avec un `sessionCtx` (quick 260618-skk), les narratifs sont en plus ancrés sur
+ * les faits concrets de la session → distincts d'une session à l'autre.
  * Retourne null sur échec → l'appelant retombe sur les pools (fallback).
  */
 export async function generateRapportFormateur(
@@ -316,8 +377,15 @@ export async function generateRapportFormateur(
   refTable = 'PedagogicalAsset',
   refId: string | null = null,
   tenantId: string | null = null,
+  sessionCtx: SessionRapportCtx | null = null,
 ): Promise<z.infer<typeof RapportFormateurSchema> | null> {
   const hasProgramme = !!formation.programmeMd && formation.programmeMd.trim().length > 10;
+
+  // CAUSE 2 (quick 260618-skk) : bloc de FAITS CONCRETS de la session. Construit
+  // uniquement si un sessionCtx est fourni ; chaque ligne est filtrée sur les
+  // valeurs non nulles → narratifs distincts d'une session à l'autre.
+  const faitsSession = sessionCtx ? buildFaitsSession(sessionCtx) : '';
+
   const prompt = `Tu remplis ton rapport de formateur APRÈS avoir animé cette formation.
 
 Titre : ${formation.titre}
@@ -325,6 +393,10 @@ Durée : ${formation.nombreHeures} heures
 
 ${hasProgramme ? `PROGRAMME DE LA FORMATION (ancre-toi STRICTEMENT dessus, n'introduis aucun thème absent) :
 ${formation.programmeMd}` : `Aucun programme détaillé disponible — reste strictement sur le thème « ${formation.titre} » sans introduire d'autre sujet.`}
+${faitsSession ? `
+FAITS CONCRETS DE CETTE SESSION PRÉCISE :
+${faitsSession}
+Ancre tes trois narratifs sur CES FAITS CONCRETS de la session (effectif, profils/enseignes, période, lieu, résultats) pour qu'ils soient DISTINCTS d'une session à l'autre, tout en restant STRICTEMENT dans le périmètre du programme ci-dessus (aucun thème hors programme).` : ''}
 
 Rédige tes trois narratifs (adaptations pédagogiques / observations, remarques sur le groupe, bilan de la formation), à la première personne, 1 à 2 phrases chacun.`;
 

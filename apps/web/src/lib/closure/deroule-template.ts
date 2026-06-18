@@ -277,7 +277,11 @@ ${renderBrandHeader()}
   ${renderBilanFormateur({
     trainerName: ctx.sessionTrainers.join(', '),
     signatureDataUrl: loadTrainerSignatureDataUrl(ctx.tenantId, ctx.sessionTrainers[0]),
-    seed: ctx.sessionTitle,
+    // CAUSE 1 (quick 260618-skk) : le seed des 7 notes du tableau satisfaction
+    // formateur doit être l'identifiant de SESSION (sessionCode), pas le titre
+    // PRODUIT (identique toutes sessions). Sinon noteBySeed produit les MÊMES
+    // notes pour toutes les sessions du même produit (copier-coller Qualiopi).
+    seed: ctx.sessionCode,
     rapport: content.rapportFormateur ?? null,
   })}
 </main>
