@@ -217,18 +217,31 @@ export async function processClosureJobPayload(
 
     const docType = DOC_TYPE_BY_KIND[payload.kind];
     if (docType) {
-      const doc = await prisma.document.create({
-        data: {
-          tenantId: payload.tenantId,
-          type: docType,
-          entityType: 'participant',
-          entityId: payload.participantId,
-          pdfUrl: key,
-          hashSha256: hash,
-          sessionId: payload.sessionId,
-          participantId: payload.participantId,
-        },
-      });
+      // Idempotence : 1 seul Document par (session, participant, type).
+      // deleteMany + create dans la MÊME transaction → pas de fenêtre où
+      // 0 doc existe si le process casse entre les deux (atomicité).
+      const [, doc] = await prisma.$transaction([
+        prisma.document.deleteMany({
+          where: {
+            tenantId: payload.tenantId,
+            sessionId: payload.sessionId,
+            participantId: payload.participantId,
+            type: docType,
+          },
+        }),
+        prisma.document.create({
+          data: {
+            tenantId: payload.tenantId,
+            type: docType,
+            entityType: 'participant',
+            entityId: payload.participantId,
+            pdfUrl: key,
+            hashSha256: hash,
+            sessionId: payload.sessionId,
+            participantId: payload.participantId,
+          },
+        }),
+      ]);
       documentId = doc.id;
     }
 
