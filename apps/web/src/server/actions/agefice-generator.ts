@@ -74,19 +74,19 @@ export async function generateAgeficeForParticipant(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
-  // Force regen : delete les Document AGEFICE existants pour ce participant
-  // AVANT de générer, sinon le hash SHA256 idempotent renvoie l'ancien doc
-  // (avec adresse buggée ou prix faux). Laurent 2026-06-04 : "je ne peux pas
-  // régénérer un doc".
-  if (options?.force) {
-    await prisma.document.deleteMany({
-      where: {
-        tenantId: user.tenantId,
-        type: 'AGEFICE',
-        participantId,
-      },
-    });
-  }
+  // Idempotence inconditionnelle : delete les Document AGEFICE existants pour
+  // ce participant AVANT de générer, sinon le hash SHA256 idempotent renvoie
+  // l'ancien doc (avec adresse buggée ou prix faux) et on empile des doublons.
+  // Laurent 2026-06-04 : "je ne peux pas régénérer un doc". Le paramètre
+  // `force` reste accepté dans la signature pour compat appelants mais ne
+  // conditionne plus la suppression.
+  await prisma.document.deleteMany({
+    where: {
+      tenantId: user.tenantId,
+      type: 'AGEFICE',
+      participantId,
+    },
+  });
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },

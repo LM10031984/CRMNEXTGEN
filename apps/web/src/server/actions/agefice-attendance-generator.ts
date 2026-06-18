@@ -55,11 +55,12 @@ export async function generateAgeficeAttendanceForParticipant(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
-  if (options?.force) {
-    await prisma.document.deleteMany({
-      where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
-    });
-  }
+  // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
+  // même type avant de recréer (anti-doublons). Le paramètre `force` reste
+  // accepté dans la signature pour compat appelants mais ne conditionne plus rien.
+  await prisma.document.deleteMany({
+    where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
+  });
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
