@@ -15,6 +15,7 @@ import {
   formatDateFr,
   formatHours,
   loadSignatureDataUrl,
+  loadTrainerSignatureDataUrl,
   renderBrandHeader,
   renderOfficialBadges,
   soussigneLabel,
@@ -30,6 +31,14 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   // Phase 7 (Plan 07-03) — résolution signature pédago uploadée via Paramètres
   // (signature-pedago.png), fallback bundled signature-laurent.png.
   const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
+  // Formateur RÉEL de la session (cohérence émargement). On AJOUTE une 2e colonne
+  // signature formateur, SANS jamais dupliquer l'image du représentant légal :
+  // loadTrainerSignatureDataUrl(... 'Laurent Marx') renvoie EXACTEMENT la même
+  // image que la signature pédago déjà affichée ci-dessus → dans ce cas on
+  // n'affiche que le NOM + mention (pas une 2e signature Laurent identique).
+  const trainer = ctx.sessionTrainers[0] ?? null;
+  const trainerSig = trainer ? loadTrainerSignatureDataUrl(ctx.tenantId, trainer) : '';
+  const trainerSigIsDuplicate = trainerSig !== '' && trainerSig === signatureDataUrl;
   // Date d'émission = fin de la session (l'attestation se délivre à l'issue de la
   // formation), JAMAIS la date de génération. Sinon une régénération a posteriori
   // daterait l'attestation du jour — marqueur visible en audit. Cohérent avec le
@@ -42,6 +51,19 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   const stagiaireFull = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
   const apprenantPrefix = civilityLabel(ctx.apprenantCivility); // null si inconnu → on n'affiche rien
   const lieuFait = of.addressVille || 'Vence';
+
+  // Colonne formateur : affichée seulement si un formateur est connu.
+  // - image affichée UNIQUEMENT si distincte de la signature du représentant légal.
+  // - sinon (non reconnu '' ou doublon Laurent) → NOM + mention sans image.
+  const showTrainerImg = trainerSig !== '' && !trainerSigIsDuplicate;
+  const trainerColHtml = trainer
+    ? `
+    <div class="col">
+      <div class="label">Le formateur — ${escapeHtml(trainer)}</div>
+      <div class="role">Formateur de la session</div>
+      ${showTrainerImg ? `<img class="tampon" src="${trainerSig}" alt="Signature du formateur" />` : ''}
+    </div>`
+    : '';
 
   const body = `
 ${renderBrandHeader(ctx.of, ctx.tenantId)}
@@ -72,7 +94,7 @@ ${renderOfficialBadges({ qualiopi: false })}
       <div class="label">${escapeHtml(respFullName)}</div>
       <div class="role">${escapeHtml(respTitre)} — ${escapeHtml(of.name)}</div>
       ${signatureDataUrl ? `<img class="tampon" src="${signatureDataUrl}" alt="Signature et cachet" />` : ''}
-    </div>
+    </div>${trainerColHtml}
   </div>
 </main>
 `;
