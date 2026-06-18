@@ -13,6 +13,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { getOfConfig, type OfConfig } from '@/lib/of-config';
+import { DOC_VERSION } from '@/lib/doc-version';
 
 export const BRAND_BLUE = '#00B4E6';
 export const BRAND_DARK = '#00527A';
@@ -645,7 +646,7 @@ export function renderCorpFooter(of?: OfConfig): string {
   return `
 <footer class="corp">
   <strong>${escapeHtml(cfg.name)}</strong> – Siège social : ${escapeHtml(cfg.addressFull)} - SIRET : ${escapeHtml(cfg.siret)} – NDA ${escapeHtml(cfg.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
 </footer>
 `.trim();
 }
