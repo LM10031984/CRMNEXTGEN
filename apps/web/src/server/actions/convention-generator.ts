@@ -35,15 +35,34 @@ export async function generateConventionForParticipant(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
+  const r = await generateConventionCore(user.tenantId, participantId, options);
+  if (r.sessionId) revalidatePath(`/app/sessions/${r.sessionId}`);
+  if (r.personId) revalidatePath(`/app/apprenants/${r.personId}`);
+  return { ok: r.ok, documentId: r.documentId, error: r.error };
+}
+
+/**
+ * Cœur SANS auth de la génération de convention (réutilisable par scripts
+ * pipeline / worker). Prend `tenantId` en paramètre au lieu de lire
+ * `validateRequest()`. NE FAIT PAS de revalidatePath (laissé au wrapper).
+ * Conserve le `deleteMany` inconditionnel (le test generators-idempotent en
+ * dépend) et la logique métier J-15 ouvrés intacte.
+ */
+export async function generateConventionCore(
+  tenantId: string,
+  participantId: string,
+  options?: { force?: boolean },
+): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; personId?: string }> {
+  void options;
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
   // même type avant de recréer (anti-doublons). Le paramètre `force` reste
   // accepté dans la signature pour compat appelants mais ne conditionne plus rien.
   await prisma.document.deleteMany({
-    where: { tenantId: user.tenantId, type: 'CONVENTION', participantId },
+    where: { tenantId, type: 'CONVENTION', participantId },
   });
 
   const participant = await prisma.sessionParticipant.findFirst({
-    where: { id: participantId, session: { tenantId: user.tenantId } },
+    where: { id: participantId, session: { tenantId } },
     include: {
       person: {
         include: {
@@ -98,7 +117,7 @@ export async function generateConventionForParticipant(
   // Lieu : "Raison sociale — Nom du lieu, adresse" si dispo, sinon siège OF.
   // legalName ajouté 2026-06-03 (cf demande Laurent : ex "SARL XYZ — Agence
   // Nice Centre, 12 rue X, 06000 Nice").
-  const of = await loadOfConfig(user.tenantId);
+  const of = await loadOfConfig(tenantId);
   const locName = participant.session.location
     ? [
         (participant.session.location as { legalName?: string | null }).legalName,
@@ -149,7 +168,7 @@ export async function generateConventionForParticipant(
     produitTrainerProfile: participant.session.product.trainerProfile,
     produitPriceHTPerStagiaire: effectivePrice,
     // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
-    tenantId: user.tenantId,
+    tenantId,
   };
 
   let pdfBuffer: Buffer;
@@ -177,7 +196,7 @@ export async function generateConventionForParticipant(
 
   const document = await prisma.document.create({
     data: {
-      tenantId: user.tenantId,
+      tenantId,
       type: 'CONVENTION',
       entityType: 'participant',
       entityId: participant.id,
@@ -188,7 +207,10 @@ export async function generateConventionForParticipant(
     },
   });
 
-  revalidatePath(`/app/sessions/${participant.session.id}`);
-  revalidatePath(`/app/apprenants/${participant.person.id}`);
-  return { ok: true, documentId: document.id };
+  return {
+    ok: true,
+    documentId: document.id,
+    sessionId: participant.session.id,
+    personId: participant.person.id,
+  };
 }

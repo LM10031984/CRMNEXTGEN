@@ -176,8 +176,24 @@ export async function generateProgrammeForProduct(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
+  const r = await generateProgrammeForProductCore(user.tenantId, productId, opts);
+  revalidatePath(`/app/produits/${productId}`);
+  return r;
+}
+
+/**
+ * Cœur SANS auth du programme PRODUIT (réutilisable par scripts pipeline).
+ * Prend `tenantId` en paramètre. NE FAIT PAS de revalidatePath (laissé au
+ * wrapper). `opts.programmeMdOverride` permet d'injecter un programme normalisé
+ * (source unique programme+convention) au lieu de `product.programMd`.
+ */
+export async function generateProgrammeForProductCore(
+  tenantId: string,
+  productId: string,
+  opts: { force?: boolean; programmeMdOverride?: string } = {},
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
   const product = await prisma.trainingProduct.findFirst({
-    where: { id: productId, tenantId: user.tenantId },
+    where: { id: productId, tenantId },
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
 
@@ -196,7 +212,7 @@ export async function generateProgrammeForProduct(
   if (!opts.force) {
     const existing = await prisma.document.findFirst({
       where: {
-        tenantId: user.tenantId,
+        tenantId,
         type: 'PROGRAMME',
         entityType: 'product',
         entityId: productId,
@@ -214,7 +230,17 @@ export async function generateProgrammeForProduct(
   const objectives = (product.objectives as string[] | null) ?? [];
 
   // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
-  const of = await loadOfConfig(user.tenantId);
+  const of = await loadOfConfig(tenantId);
+
+  // Source unique programme+convention : si un programme normalisé est fourni
+  // (généré par generateNormalizedProgramme côté script), on l'utilise au lieu
+  // du programMd brut du produit.
+  const programmeMd =
+    typeof opts.programmeMdOverride === 'string' && opts.programmeMdOverride.trim().length > 0
+      ? opts.programmeMdOverride
+      : typeof product.programMd === 'string'
+        ? product.programMd
+        : '';
 
   const data: ProgrammeData = {
     // Pas d'apprenant ni de session — programme generique
@@ -223,7 +249,7 @@ export async function generateProgrammeForProduct(
     produitDureeHeures: product.durationHours,
     produitPriceHT: Number(product.priceHT),
     produitObjectifs: objectives,
-    produitProgrammeMd: typeof product.programMd === 'string' ? product.programMd : '',
+    produitProgrammeMd: programmeMd,
     produitPrerequisites: product.prerequisites,
     produitTargetAudience: product.targetAudience,
     produitPedagogicalMethods: product.pedagogicalMethods,
@@ -239,7 +265,7 @@ export async function generateProgrammeForProduct(
     ofPhone: of.phone,
     ofEmail: of.email,
     // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
-    tenantId: user.tenantId,
+    tenantId,
   };
 
   let pdfBuffer: Buffer;
@@ -255,7 +281,7 @@ export async function generateProgrammeForProduct(
   // Reutilise un Document existant pour ce produit avec le meme hash
   const existing = await prisma.document.findFirst({
     where: {
-      tenantId: user.tenantId,
+      tenantId,
       type: 'PROGRAMME',
       entityType: 'product',
       entityId: productId,
@@ -276,7 +302,7 @@ export async function generateProgrammeForProduct(
 
   const doc = await prisma.document.create({
     data: {
-      tenantId: user.tenantId,
+      tenantId,
       type: 'PROGRAMME',
       entityType: 'product',
       entityId: productId,
@@ -285,7 +311,6 @@ export async function generateProgrammeForProduct(
     },
   });
 
-  revalidatePath(`/app/produits/${productId}`);
   return { ok: true, documentId: doc.id, pdfUrl: objectKey };
 }
 

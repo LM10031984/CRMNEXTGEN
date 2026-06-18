@@ -93,10 +93,25 @@ export async function generateChecklistForSession(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
+  const r = await generateChecklistCore(user.tenantId, sessionId, opts);
+  revalidatePath(`/app/sessions/${sessionId}`);
+  return r;
+}
+
+/**
+ * Cœur SANS auth de la check-list formation (réutilisable par scripts
+ * pipeline). Prend `tenantId` en paramètre. NE FAIT PAS de revalidatePath
+ * (laissé au wrapper). Conserve le find-or-create + PRNG seedé intacts.
+ */
+export async function generateChecklistCore(
+  tenantId: string,
+  sessionId: string,
+  opts: { force?: boolean } = {},
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
   if (!opts.force) {
     const existing = await prisma.document.findFirst({
       where: {
-        tenantId: user.tenantId,
+        tenantId,
         type: 'CHECKLIST_FORMATION',
         entityType: 'session',
         entityId: sessionId,
@@ -109,7 +124,7 @@ export async function generateChecklistForSession(
   }
 
   const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, tenantId: user.tenantId },
+    where: { id: sessionId, tenantId },
     include: {
       product: { select: { title: true } },
       location: true,
@@ -174,7 +189,7 @@ export async function generateChecklistForSession(
 
   const doc = await prisma.document.create({
     data: {
-      tenantId: user.tenantId,
+      tenantId,
       type: 'CHECKLIST_FORMATION',
       entityType: 'session',
       entityId: sessionId,
@@ -184,6 +199,5 @@ export async function generateChecklistForSession(
     },
   });
 
-  revalidatePath(`/app/sessions/${sessionId}`);
   return { ok: true, documentId: doc.id, pdfUrl: objectKey };
 }
