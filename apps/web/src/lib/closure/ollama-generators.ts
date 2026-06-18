@@ -637,6 +637,50 @@ Rédige TOUS les commentaires à la 1re personne du stagiaire (« j'applique »,
   );
 }
 
+/**
+ * Réassemble N déroulés partiels (1 par jour) en UN seul DerouleContent.
+ * PURE : `flatMap` préserve l'ordre d'entrée, gère 0/1/N partiels ET les partiels
+ * multi-jours (cas dégénéré LLM → tous les jours aplatis dans l'ordre). Source
+ * unique du réassemblage chunké de generateDerouleContent (testée en déterministe).
+ */
+export function assembleDeroule(partiels: DerouleContent[]): DerouleContent {
+  return { jours: partiels.flatMap((p) => p.jours) };
+}
+
+/**
+ * Construit le prompt user d'UN jour (k sur N) pour le déroulé chunké. Réutilise
+ * SYSTEM_PROMPT_DEROULE (qui décrit déjà une journée 9h-18h) et cadre le périmètre
+ * « jour k » dans le user prompt. La grille figée du jour vient de buildHoraireScaffold.
+ */
+function buildDerouleJourPrompt(
+  formation: FormationCtx,
+  k: number,
+  nbJours: number,
+  jourGrille: string,
+  hasProgramme: boolean,
+): string {
+  return `Génère le déroulé pédagogique du JOUR ${k} sur ${nbJours} de la formation suivante.
+
+Titre : ${formation.titre}
+Durée totale : ${formation.nombreHeures} heures réparties sur ${nbJours} jours.
+
+Tu génères UNIQUEMENT le Jour ${k} (un seul élément dans "jours"). N'invente pas les autres jours.
+
+GRILLE HORAIRE IMPOSÉE DU JOUR ${k} (à recopier telle quelle) :
+${jourGrille}
+
+${hasProgramme ? `PROGRAMME DE RÉFÉRENCE COMPLET (reprendre EXACTEMENT ses blocs horaires et titres pour la part qui revient au Jour ${k}) :
+${formation.programmeMd}
+
+INSTRUCTION : chaque bloc de contenu du programme attribué à ce jour devient une séquence. Reformule et structure le CONTENU dans objectifs/contenu, SANS rien ajouter (aucun concept, outil, framework ou exemple absent du programme). Tu peux préciser les MODALITÉS (durée, format de travail, type d'exercice et d'évaluation).` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour le Jour ${k} de "${formation.titre}".`}
+
+Ajoute obligatoirement pour ce jour :
+${k === 1 ? '- Accueil en début de journée (9h00, 15-30 min) — UNIQUEMENT au Jour 1.' : "- PAS d'accueil ni de tour de table d'ouverture (réservé au Jour 1)."}
+- Pause déjeuner ${PAUSE_DEJEUNER.start}–${PAUSE_DEJEUNER.end} (1h) (isPause: true, objectifs: "Pause déjeuner", autres champs vides) SI le jour comporte un après-midi.
+- Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
+${k === nbJours ? '- Dernier bloc : "Évaluation des acquis et clôture" — QCM Kahoot final (12 questions) et remise des attestations — UNIQUEMENT ce dernier jour.' : '- PAS de bloc d\'évaluation finale / QCM Kahoot (réservé au dernier jour).'}`;
+}
+
 export async function generateDerouleContent(
   formation: FormationCtx,
   refTable = 'PedagogicalAsset',
@@ -644,12 +688,14 @@ export async function generateDerouleContent(
   tenantId: string | null = null,
 ): Promise<DerouleContent | null> {
   const nbJours = Math.max(1, Math.ceil(formation.nombreHeures / 8));
-  const heuresParJour = Math.round(formation.nombreHeures / nbJours);
-  const { start, end } = getDayStartEnd(heuresParJour);
+  const hasProgramme = !!formation.programmeMd && formation.programmeMd.trim().length > 10;
 
-  const hasProgramme = formation.programmeMd && formation.programmeMd.trim().length > 10;
+  // ── Cas 1 jour : comportement HISTORIQUE strictement inchangé (non-régression). ──
+  if (nbJours === 1) {
+    const heuresParJour = Math.round(formation.nombreHeures / nbJours);
+    const { start, end } = getDayStartEnd(heuresParJour);
 
-  const prompt = `Génère un déroulé pédagogique pour la formation suivante.
+    const prompt = `Génère un déroulé pédagogique pour la formation suivante.
 
 Titre : ${formation.titre}
 Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 1 ? 's' : ''} (${heuresParJour}h/jour, ${start}–${end})
@@ -665,17 +711,55 @@ Ajoute obligatoirement :
 - Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" avec QCM et remise des attestations`;
 
-  return runOllamaJson(
-    'generate-deroule',
-    SYSTEM_PROMPT_DEROULE,
-    prompt,
-    DerouleSchema,
-    refTable,
-    refId,
-    tenantId,
-    MODEL_DEROULE,
-    'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
-  );
+    return runOllamaJson(
+      'generate-deroule',
+      SYSTEM_PROMPT_DEROULE,
+      prompt,
+      DerouleSchema,
+      refTable,
+      refId,
+      tenantId,
+      MODEL_DEROULE,
+      'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
+    );
+  }
+
+  // ── Multi-jours (quick 260618-jy1) : 1 appel LLM PAR JOUR, puis réassemblage pur. ──
+  // Évite le timeout/troncature d'un déroulé monolithique sur formation longue
+  // (PROD-0042 9j, jusqu'à 14j). Échec d'UN jour → null GLOBAL (console.error) :
+  // pas de PDF partiel trompeur, l'appelant fallback sur le stub.
+  const scaffold = buildHoraireScaffold(formation.nombreHeures);
+  const partiels: DerouleContent[] = [];
+  for (let k = 1; k <= nbJours; k++) {
+    const jourGrille = renderHoraireScaffoldMd({
+      durationHours: formation.nombreHeures,
+      nbJours: 1,
+      jours: [scaffold.jours[k - 1]!],
+      multiDayDeferred: false,
+    });
+    const jourPrompt = buildDerouleJourPrompt(formation, k, nbJours, jourGrille, hasProgramme);
+    const partiel = await runOllamaJson(
+      'generate-deroule',
+      SYSTEM_PROMPT_DEROULE,
+      jourPrompt,
+      DerouleSchema,
+      refTable,
+      refId,
+      tenantId,
+      MODEL_DEROULE,
+      'quality',
+    );
+    if (!partiel) {
+      console.error(
+        `[generate-deroule] jour ${k}/${nbJours} échoué — déroulé GLOBAL abandonné (null), pas de troncature silencieuse.`,
+      );
+      return null;
+    }
+    partiels.push(partiel);
+  }
+
+  // 1 seul DerouleContent → 1 seul PDF (renderDerouleHtml pagine les N jours + rapport unique).
+  return assembleDeroule(partiels);
 }
 
 /** Schéma de sortie du générateur de programme normalisé : markdown plat,

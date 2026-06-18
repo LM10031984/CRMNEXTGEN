@@ -8,6 +8,52 @@ import {
   extractSectionTitles,
   enforceProgrammeFidelity,
 } from '../programme-normalize';
+import { assembleDeroule } from '../closure/ollama-generators';
+import type { DerouleContent, DerouleJour } from '../closure/deroule-template';
+
+// Fabrique un jour minimal taggé par son thème (pour vérifier l'ordre).
+function jour(theme: string): DerouleJour {
+  return { theme, sequences: [] };
+}
+
+describe('assembleDeroule — réassemblage pur des déroulés partiels', () => {
+  it('3 partiels [J1][J2][J3] → 1 DerouleContent {jours:[J1,J2,J3]}, ordre préservé', () => {
+    const partiels: DerouleContent[] = [
+      { jours: [jour('Jour 1')] },
+      { jours: [jour('Jour 2')] },
+      { jours: [jour('Jour 3')] },
+    ];
+    const out = assembleDeroule(partiels);
+    expect(out.jours).toHaveLength(3);
+    expect(out.jours.map((j) => j.theme)).toEqual(['Jour 1', 'Jour 2', 'Jour 3']);
+  });
+
+  it('1 partiel → identité (jours inchangés)', () => {
+    const partiels: DerouleContent[] = [{ jours: [jour('Unique')] }];
+    expect(assembleDeroule(partiels).jours.map((j) => j.theme)).toEqual(['Unique']);
+  });
+
+  it('0 partiel → { jours: [] }', () => {
+    expect(assembleDeroule([])).toEqual({ jours: [] });
+  });
+
+  it('partiel à plusieurs jours (cas dégénéré LLM) → tous aplatis dans l’ordre', () => {
+    const partiels: DerouleContent[] = [
+      { jours: [jour('A'), jour('B')] },
+      { jours: [jour('C')] },
+    ];
+    expect(assembleDeroule(partiels).jours.map((j) => j.theme)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('// test de puissance ordre réassemblage — 3 partiels ABC → ABC (un reverse/unshift virerait rouge)', () => {
+    const partiels: DerouleContent[] = [
+      { jours: [jour('A')] },
+      { jours: [jour('B')] },
+      { jours: [jour('C')] },
+    ];
+    expect(assembleDeroule(partiels).jours.map((j) => j.theme)).toEqual(['A', 'B', 'C']);
+  });
+});
 
 describe('buildHoraireScaffold — grille horaire déterministe multi-jours', () => {
   it('8h → 1 jour plein (NON-RÉGRESSION) : matin 9h00–13h00 (4h) + déjeuner + après-midi 14h00–18h00 (4h)', () => {
