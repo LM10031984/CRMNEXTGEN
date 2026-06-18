@@ -23,15 +23,47 @@ import {
 } from '@/lib/closure/checklist-formation-template';
 
 /**
- * Coches des zones 1 & 2 selon que la session est PASSÉE ou FUTURE (Laurent 17/06) :
- *  - session passée (endDate < aujourd'hui) → REMPLIE (tout coché : l'OF a apporté
- *    le matériel, le lieu a fourni les conditions)
- *  - session future → VIERGE (rien coché, à remplir le jour J)
+ * PRNG déterministe seedé sur `sessionId` (mulberry32 / FNV-1a) : même session →
+ * même résultat à chaque régénération ; 2 sessions différentes → résultats
+ * différents. Pas de stockage nécessaire (la session est sa source de vérité).
  */
-function buildZones(isPast: boolean): {
+function makeSeededRandom(seed: string): () => number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  let state = h >>> 0;
+  return function next(): number {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Coches des zones 1 & 2 selon que la session est PASSÉE ou FUTURE (Laurent 17/06) :
+ *  - session passée (endDate < aujourd'hui) → REMPLIE (l'OF a apporté le matériel,
+ *    le lieu a fourni les conditions)
+ *  - session future → VIERGE (rien coché, à remplir le jour J)
+ *
+ * Variation réaliste (Laurent 18/06) : sur une session passée, 3 items « lieu »
+ * (paperboard, espace pause, espace repas) peuvent être décochés aléatoirement
+ * (0, 1, 2 ou les 3) — déterministe par session — pour éviter des check-lists
+ * toutes identiques (anti-pattern audit). Le reste reste coché.
+ */
+function buildZones(
+  isPast: boolean,
+  sessionId: string,
+): {
   apportee: ChecklistZoneApportee;
   conditionsLieu: ChecklistConditionsLieu;
 } {
+  const rng = makeSeededRandom(sessionId);
+  const P_MANQUE = 0.3; // ~30% de chance que l'item lieu soit absent ce jour-là
+  const lieuPresent = (): boolean => isPast && rng() >= P_MANQUE;
   return {
     apportee: {
       deroulePedagogique: isPast,
@@ -45,9 +77,9 @@ function buildZones(isPast: boolean): {
     },
     conditionsLieu: {
       salleAdaptee: isPast,
-      paperboard: isPast,
-      espacePause: isPast,
-      espaceRepas: isPast,
+      paperboard: lieuPresent(),
+      espacePause: lieuPresent(),
+      espaceRepas: lieuPresent(),
       connexionInternet: isPast,
       prisesElectriques: isPast,
     },
@@ -104,7 +136,7 @@ export async function generateChecklistForSession(
 
   // Passé vs futur : remplie (cochée) si terminée, vierge sinon.
   const isPast = session.endDate.getTime() < Date.now();
-  const { apportee, conditionsLieu } = buildZones(isPast);
+  const { apportee, conditionsLieu } = buildZones(isPast, sessionId);
 
   const data: ChecklistFormationData = {
     formationTitre: session.product.title,
