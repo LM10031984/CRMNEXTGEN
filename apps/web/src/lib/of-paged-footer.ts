@@ -18,6 +18,7 @@
  */
 
 import { getOfConfig } from './of-config';
+import { DOC_VERSION } from './doc-version';
 
 const BRAND_DARK = '#00527A';
 
@@ -66,6 +67,6 @@ export function renderOfPagedFooter(): string {
   const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
   return `<footer class="corp">
   <strong>${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
 </footer>`;
 }
