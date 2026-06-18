@@ -116,13 +116,20 @@ function noteBySeed(seed: string, i: number): number {
 }
 
 function renderBilanFormateur(
-  opts: { trainerName?: string | null; signatureDataUrl?: string | null; seed?: string } = {},
+  opts: {
+    trainerName?: string | null;
+    signatureDataUrl?: string | null;
+    seed?: string;
+    /** Narratifs LLM ancrés au programme. Si présents, ils REMPLACENT les pools
+     *  génériques (anti hors-programme) ; sinon fallback pool (non-régression). */
+    rapport?: { adaptations: string; remarquesGroupe: string; bilan: string } | null;
+  } = {},
 ): string {
   const formateur = opts.trainerName && opts.trainerName.trim() ? opts.trainerName.trim() : '';
   const seed = opts.seed ?? formateur ?? 'deroule';
-  const adaptation = pick(ADAPTATIONS_POOL, seed);
-  const remarques = pick(REMARQUES_GROUPE_POOL, `${seed}~rg`);
-  const bilan = pick(BILAN_POOL, `${seed}~bilan`);
+  const adaptation = opts.rapport?.adaptations ?? pick(ADAPTATIONS_POOL, seed);
+  const remarques = opts.rapport?.remarquesGroupe ?? pick(REMARQUES_GROUPE_POOL, `${seed}~rg`);
+  const bilan = opts.rapport?.bilan ?? pick(BILAN_POOL, `${seed}~bilan`);
   const sig = opts.signatureDataUrl
     ? `<img src="${opts.signatureDataUrl}" alt="Signature ${escapeHtml(formateur)}" style="height: 20mm; margin-top: 4px;" />`
     : '<div style="height: 20mm;"></div>';
@@ -271,6 +278,7 @@ ${renderBrandHeader()}
     trainerName: ctx.sessionTrainers.join(', '),
     signatureDataUrl: loadTrainerSignatureDataUrl(ctx.tenantId, ctx.sessionTrainers[0]),
     seed: ctx.sessionTitle,
+    rapport: content.rapportFormateur ?? null,
   })}
 </main>
 `;
