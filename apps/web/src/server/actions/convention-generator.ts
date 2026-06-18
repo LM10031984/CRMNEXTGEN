@@ -26,6 +26,7 @@ import {
   type ConventionStagiaire,
 } from '@/lib/convention-template';
 import { loadOfConfig } from '@/lib/of-config';
+import { subtractBusinessDaysISO } from '@/lib/business-days';
 
 export async function generateConventionForParticipant(
   participantId: string,
@@ -123,6 +124,14 @@ export async function generateConventionForParticipant(
   // Produit : objectifs depuis la fiche produit
   const objectives = (participant.session.product.objectives as string[] | null) ?? [];
 
+  // COR-1 — date de signature = J-15 jours OUVRÉS avant le début de session
+  // (règle Laurent « signée ≥15j avant »). Cohérence : signée J-15 ouvrés →
+  // rétractation 14j (Art.6) finit ~J-1 → solde « la veille » (Art.7) cohérent.
+  // NE PAS hardcoder de date (audit témoin SES-0087, 2026-06-18).
+  const startIso = participant.session.startDate.toISOString().slice(0, 10);
+  const conventionIso = subtractBusinessDaysISO(startIso, 15);
+  const conventionDate = new Date(conventionIso + 'T00:00:00Z');
+
   const data: ConventionData = {
     beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
     beneficiaireSiret: participant.sponsorOrg.siret,
@@ -131,6 +140,7 @@ export async function generateConventionForParticipant(
     stagiaires,
     sessionStartDate: participant.session.startDate,
     sessionEndDate: participant.session.endDate,
+    conventionDate,
     sessionLieu: lieu,
     produitTitre: participant.session.name ?? participant.session.product.title,
     produitDureeHeures: participant.session.product.durationHours,

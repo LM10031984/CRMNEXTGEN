@@ -27,6 +27,9 @@ const { generateDerouleContent } = await import('../src/lib/closure/ollama-gener
 const { renderDerouleHtml } = await import('../src/lib/closure/deroule-template');
 const { loadOfConfig } = await import('../src/lib/of-config');
 const { renderHtmlToPdfWeasy } = await import('../src/lib/pdf-render');
+const { formatLocation } = await import('../src/lib/format-location');
+const { subtractBusinessDaysISO } = await import('../src/lib/business-days');
+const { isFroidEligible } = await import('../src/lib/closure/satisfaction-froid-eligibility');
 
 // noms de fichiers FR par kind closure
 const KIND_FR: Record<string, string> = {
@@ -72,17 +75,28 @@ const ROOT = `/tmp/qualiof-gen/${sanitize(`${session.code} - ${p.title} - ${date
 fs.rmSync(ROOT, { recursive: true, force: true });
 fs.mkdirSync(ROOT, { recursive: true });
 
-const lieu = session.location
-  ? `${session.location.name}${(session.location.address as any)?.city ? ` — ${(session.location.address as any).city}` : ''}`
-  : null;
+// COR-3 — lieu propre, anti-duplication ville + titlecase léger (helper partagé)
+const lieu = formatLocation(session.location as any);
 const formateurs = session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim());
+
+let ok = 0, ko = 0, stub = 0;
+const log = (icon: string, msg: string) => console.log(`  ${icon} ${msg}`);
+
+// COR-1 — date convention = J-15 jours ouvrés avant le début (déterministe par session)
+const conventionIso = subtractBusinessDaysISO(session.startDate.toISOString().slice(0, 10), 15);
+const conventionDate = new Date(conventionIso + 'T00:00:00Z');
+log('✓', `Convention datée ${conventionIso} (J-15 ouvrés avant ${session.startDate.toISOString().slice(0, 10)})`);
+
+// COR-2 — gate satisfaction à froid (ind.31, 3-6 mois) : ≥90 jours calendaires
+const froidEligible = isFroidEligible(session.endDate, new Date());
+if (!froidEligible) {
+  log('⚠', `froid sauté : session terminée depuis < 90j (fin ${session.endDate.toISOString().slice(0, 10)})`);
+}
+const kinds = froidEligible ? PART_KINDS : PART_KINDS.filter((k) => k !== 'SATISFACTION_FROID');
 
 console.log(`\n=== TÉMOIN ${session.code} — ${p.title} (${p.durationHours}h) ===`);
 console.log(`Formateur(s) : ${formateurs.join(', ') || '(aucun)'} | Apprenants : ${parts.length} | Provider : ${process.env.AI_PROVIDER}`);
 console.log(`Sortie : ${ROOT}\n`);
-
-let ok = 0, ko = 0, stub = 0;
-const log = (icon: string, msg: string) => console.log(`  ${icon} ${msg}`);
 async function write(file: string, buf: Buffer | Uint8Array) {
   fs.writeFileSync(file, buf);
 }
@@ -182,7 +196,7 @@ for (const part of parts) {
       beneficiaireRcsVille: orgAddr?.city ?? null,
       beneficiaireRepresentantNom: repr,
       stagiaires: [{ prenom: part.person.firstName, nom: part.person.lastName, email: part.person.email }],
-      sessionStartDate: session.startDate, sessionEndDate: session.endDate, sessionLieu: lieu ?? of.addressFull,
+      sessionStartDate: session.startDate, sessionEndDate: session.endDate, conventionDate, sessionLieu: lieu ?? of.addressFull,
       produitTitre: session.name ?? p.title, produitDureeHeures: p.durationHours,
       produitObjectifs: Array.isArray(p.objectives) ? (p.objectives as string[]) : [],
       produitProgrammeMd: normalizedProgrammeMd, produitTrainerProfile: p.trainerProfile,
@@ -192,10 +206,10 @@ for (const part of parts) {
     ok++; log('✓', 'Convention de formation.pdf');
   } catch (e: any) { ko++; log('✗', `Convention — ${e?.message ?? e}`); }
 
-  // Pack closure (9 docs)
+  // Pack closure (kinds éligibles — SATISFACTION_FROID filtré si session < 90j)
   const ctx = await buildClosureContextForParticipant(part.id, session.tenantId);
-  if (!ctx) { ko += PART_KINDS.length; log('✗', 'contexte closure null → 9 docs sautés'); continue; }
-  for (const kind of PART_KINDS) {
+  if (!ctx) { ko += kinds.length; log('✗', `contexte closure null → ${kinds.length} docs sautés`); continue; }
+  for (const kind of kinds) {
     try {
       const res: any = await renderClosureDoc(kind as any, ctx as any);
       await write(`${dir}/${KIND_FR[kind]}.pdf`, res.pdfBuffer);
