@@ -14,8 +14,16 @@
  * on aligne les constantes matin/après-midi sur celles de l'émargement (figées
  * Start Academy). On NE réinvente PAS la règle ailleurs.
  *
- * PÉRIMÈTRE : seul le cas 1 JOUR (≤ 8h, PROD-0062) est supporté/prouvé ici.
- * Le multi-jours (chunking par jour) est explicitement DIFFÉRÉ.
+ * PÉRIMÈTRE : multi-jours IMPLÉMENTÉ (quick 260618-jy1). N = ceil(h/8) journées
+ * déterministes. Les (N-1) premiers jours sont pleins (8h), le DERNIER jour porte
+ * le reliquat figé :
+ *   reliquat = durationHours − 8·(N−1)
+ *   - reliquat === 8 (multiple de 8) → dernier jour PLEIN.
+ *   - reliquat ≤ 4h → matin SEUL 9h00→(9h+reliquat), pas d'après-midi, pas de déjeuner.
+ *   - 4h < reliquat < 8h → matin complet 9h00–13h00 + déjeuner + après-midi partiel
+ *     14h00→(14h+reliquat−4).
+ * Aucun « smart calc » sur les minutes : le reliquat est un entier d'heures
+ * (durationHours entier) et les labels sont concaténés sur cet entier.
  */
 
 import { PAUSE_DEJEUNER } from '@/lib/formation-horaires';
@@ -53,17 +61,20 @@ export const VERBES_EVALUABLES = [
 
 /** Bloc horaire d'une demi-journée dans l'échafaudage. */
 export interface HoraireBloc {
-  label: string; // ex "9h00–13h00"
-  /** durée de TRAVAIL en minutes (hors pause café interne) */
+  /** ex "9h00–13h00". Chaîne VIDE si bloc absent (ex après-midi d'un jour partiel ≤4h). */
+  label: string;
+  /** durée de TRAVAIL en minutes (hors pause café interne). 0 si bloc absent. */
   travailMin: number;
-  /** pause café interne incluse dans le bloc (n'allonge pas la journée) */
+  /** pause café interne incluse dans le bloc (n'allonge pas la journée). durationMin=0 si absent. */
   pauseCafe: { at: string; durationMin: number };
 }
 
 /** Une journée figée de l'échafaudage. */
 export interface HoraireJour {
   matin: HoraireBloc;
+  /** déjeuner conservé si la journée ≥ 5h (jour plein ou partiel >4h). durationMin=0 sinon. */
   dejeuner: { start: string; end: string; durationMin: number };
+  /** après-midi. travailMin=0 + label='' pour un jour partiel ≤4h (matin seul). */
   apresMidi: HoraireBloc;
   /** somme du TRAVAIL de la journée en minutes (matin + après-midi, hors pauses) */
   travailTotalMin: number;
@@ -72,31 +83,20 @@ export interface HoraireJour {
 /** Résultat de l'échafaudage horaire déterministe. */
 export interface HoraireScaffold {
   durationHours: number;
-  /** nbJours = ceil(durationHours / 8) — calculable pour extension future. */
+  /** nbJours = ceil(durationHours / 8). */
   nbJours: number;
-  /** Journées rendues. PÉRIMÈTRE : une seule journée même si nbJours>1 (voir multiDayDeferred). */
+  /** Les N journées rendues : (N-1) pleines + 1 dernier jour (plein ou partiel selon reliquat). */
   jours: HoraireJour[];
-  /** true dès que nbJours>1 : le multi-jours n'est PAS implémenté (différé Laurent 2026-06-18). */
+  /** @deprecated multi-jours désormais IMPLÉMENTÉ — toujours false (gardé pour compat type). */
   multiDayDeferred: boolean;
 }
 
-/**
- * Construit l'échafaudage horaire FIGÉ/DÉTERMINISTE.
- *
- * Pour N ≤ 8 → 1 jour : matin 9h00–13h00 (4h) + déjeuner 13h00–14h00 +
- * après-midi 14h00–18h00 (4h) → 8h de travail pile. Pauses café internes
- * (~10h45 et ~15h45, 15 min) DANS les blocs (ne repoussent pas 18h00).
- *
- * Déterminisme garanti : valeurs HARDCODÉES, aucun random, aucun calcul « malin »
- * sur la valeur métier. Deux appels identiques → résultat strictement identique.
- *
- * nbJours = Math.ceil(N / 8) reste calculé (pour extension), mais une SEULE
- * journée est rendue ; multiDayDeferred=true signale que le chunking par jour
- * n'est pas implémenté.
- */
-export function buildHoraireScaffold(durationHours: number): HoraireScaffold {
-  const nbJours = Math.max(1, Math.ceil(durationHours / 8));
-  const jour: HoraireJour = {
+const NO_PAUSE_CAFE = { at: '', durationMin: 0 } as const;
+const NO_DEJEUNER = { start: '', end: '', durationMin: 0 } as const;
+
+/** Jour PLEIN figé : matin 9h00–13h00 (4h) + déjeuner + après-midi 14h00–18h00 (4h) = 8h pile. */
+function buildJourPlein(): HoraireJour {
+  return {
     matin: {
       label: HORAIRE_MATIN_PROG,
       travailMin: 240, // 4h pile (figé)
@@ -114,30 +114,127 @@ export function buildHoraireScaffold(durationHours: number): HoraireScaffold {
     },
     travailTotalMin: 480, // 8h pile (figé)
   };
-  // TODO multi-jours : chunking par jour (différé Laurent 2026-06-18)
+}
+
+/**
+ * Jour PARTIEL déterministe pour le reliquat du dernier jour. `reliquatHeures`
+ * est un ENTIER d'heures (1..8). Horaires HARDCODÉS par concaténation sur l'entier
+ * (PAS de smart calc sur minutes).
+ *  - reliquatHeures >= 8 → jour plein.
+ *  - reliquatHeures <= 4 → matin SEUL 9h00→(9h+reliquat), pas d'après-midi, pas de déjeuner
+ *    (cohérent getDayStartEnd : pas de pause déjeuner si journée < 5h).
+ *  - 4 < reliquatHeures < 8 → matin complet 9h00–13h00 + déjeuner + après-midi partiel
+ *    14h00→(14h+reliquat−4).
+ */
+function buildJourPartiel(reliquatHeures: number): HoraireJour {
+  if (reliquatHeures >= 8) return buildJourPlein();
+
+  if (reliquatHeures <= 4) {
+    // Matin seul, journée < 5h → pas de déjeuner, pas d'après-midi.
+    return {
+      matin: {
+        label: `9h00–${9 + reliquatHeures}h00`,
+        travailMin: reliquatHeures * 60,
+        pauseCafe: { at: PAUSE_CAFE_MATIN_PROG.at, durationMin: PAUSE_CAFE_MATIN_PROG.durationMin },
+      },
+      dejeuner: { ...NO_DEJEUNER },
+      apresMidi: { label: '', travailMin: 0, pauseCafe: { ...NO_PAUSE_CAFE } },
+      travailTotalMin: reliquatHeures * 60,
+    };
+  }
+
+  // 4 < reliquat < 8 : matin complet + après-midi partiel.
+  const apremHeures = reliquatHeures - 4; // 1..3
+  return {
+    matin: {
+      label: HORAIRE_MATIN_PROG,
+      travailMin: 240,
+      pauseCafe: { at: PAUSE_CAFE_MATIN_PROG.at, durationMin: PAUSE_CAFE_MATIN_PROG.durationMin },
+    },
+    dejeuner: {
+      start: PAUSE_DEJEUNER.start,
+      end: PAUSE_DEJEUNER.end,
+      durationMin: PAUSE_DEJEUNER.durationMin,
+    },
+    apresMidi: {
+      label: `14h00–${14 + apremHeures}h00`,
+      travailMin: apremHeures * 60,
+      pauseCafe: { at: PAUSE_CAFE_APREM_PROG.at, durationMin: PAUSE_CAFE_APREM_PROG.durationMin },
+    },
+    travailTotalMin: reliquatHeures * 60,
+  };
+}
+
+/**
+ * Construit l'échafaudage horaire FIGÉ/DÉTERMINISTE sur N = ceil(h/8) journées.
+ *
+ * Les (N-1) premiers jours sont PLEINS (8h). Le dernier jour porte le reliquat
+ * = durationHours − 8·(N−1) (voir buildJourPartiel). Si durationHours est multiple
+ * de 8, reliquat===8 → dernier jour plein.
+ *
+ * Déterminisme garanti : valeurs HARDCODÉES, aucun random, aucun calcul « malin »
+ * sur la valeur métier (le reliquat est un entier d'heures). Deux appels identiques
+ * → résultat strictement identique.
+ *
+ * Défense : durationHours non entier → Math.round (cas non métier, garde-fou).
+ */
+export function buildHoraireScaffold(durationHours: number): HoraireScaffold {
+  const h = Number.isInteger(durationHours) ? durationHours : Math.round(durationHours);
+  const nbJours = Math.max(1, Math.ceil(h / 8));
+  const reliquat = h - 8 * (nbJours - 1); // heures du DERNIER jour (1..8)
+
+  const jours: HoraireJour[] = [];
+  for (let i = 0; i < nbJours - 1; i++) jours.push(buildJourPlein());
+  jours.push(buildJourPartiel(reliquat)); // pour nbJours===1 et h=8 → jour plein (non-régression)
+
   return {
     durationHours,
     nbJours,
-    jours: [jour], // PÉRIMÈTRE : un seul jour rendu, même si nbJours>1
-    multiDayDeferred: nbJours > 1,
+    jours,
+    multiDayDeferred: false, // multi-jours implémenté
   };
+}
+
+/** Rend une journée (interne) en lignes markdown. Omet les blocs absents. */
+function renderJourLines(j: HoraireJour, k: number): string[] {
+  const lines: string[] = [`### Jour ${k} — Organisation de la journée`, ``];
+  lines.push(
+    `- Matin : **${j.matin.label}** (${j.matin.travailMin / 60}h)` +
+      (j.matin.pauseCafe.durationMin
+        ? ` — pause café ~${j.matin.pauseCafe.at} (${j.matin.pauseCafe.durationMin} min, incluse).`
+        : `.`),
+  );
+  if (j.dejeuner.durationMin) {
+    lines.push(`- Pause déjeuner : ${j.dejeuner.start}–${j.dejeuner.end} (${j.dejeuner.durationMin} min).`);
+  }
+  if (j.apresMidi.travailMin > 0) {
+    lines.push(
+      `- Après-midi : **${j.apresMidi.label}** (${j.apresMidi.travailMin / 60}h)` +
+        (j.apresMidi.pauseCafe.durationMin
+          ? ` — pause café ~${j.apresMidi.pauseCafe.at} (${j.apresMidi.pauseCafe.durationMin} min, incluse).`
+          : `.`),
+    );
+  }
+  lines.push(`- Total travail du jour : ${j.travailTotalMin / 60}h00.`);
+  lines.push(``);
+  return lines;
 }
 
 /**
  * Rend l'échafaudage horaire en bloc markdown lisible, injectable DANS le prompt
  * user comme grille IMPOSÉE (le LLM NE calcule PAS la grille, il la recopie).
+ * Liste chaque journée `### Jour K` avec ses créneaux.
  */
 export function renderHoraireScaffoldMd(scaffold: HoraireScaffold): string {
-  const j = scaffold.jours[0]!;
-  return [
-    `### Organisation de la journée`,
+  const out: string[] = [
+    `## Grille horaire imposée — ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''} (${scaffold.durationHours}h au total)`,
     ``,
-    `- Matin : **${j.matin.label}** (4h) — pause café ~${j.matin.pauseCafe.at} (${j.matin.pauseCafe.durationMin} min, incluse).`,
-    `- Pause déjeuner : ${j.dejeuner.start}–${j.dejeuner.end} (${j.dejeuner.durationMin} min).`,
-    `- Après-midi : **${j.apresMidi.label}** (4h) — pause café ~${j.apresMidi.pauseCafe.at} (${j.apresMidi.pauseCafe.durationMin} min, incluse).`,
-    ``,
-    `Total travail : 8h00 pile. NE PAS modifier ces horaires ; les recopier tels quels.`,
-  ].join('\n');
+  ];
+  scaffold.jours.forEach((j, idx) => {
+    out.push(...renderJourLines(j, idx + 1));
+  });
+  out.push(`NE PAS modifier ces horaires ; les recopier tels quels pour chaque jour.`);
+  return out.join('\n');
 }
 
 // ---------------------------------------------------------------------------

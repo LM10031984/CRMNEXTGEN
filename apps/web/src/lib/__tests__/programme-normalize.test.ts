@@ -9,8 +9,8 @@ import {
   enforceProgrammeFidelity,
 } from '../programme-normalize';
 
-describe('buildHoraireScaffold — grille horaire déterministe (cas 1 jour)', () => {
-  it('8h → 1 jour, matin 9h00–13h00 (4h) + déjeuner + après-midi 14h00–18h00 (4h)', () => {
+describe('buildHoraireScaffold — grille horaire déterministe multi-jours', () => {
+  it('8h → 1 jour plein (NON-RÉGRESSION) : matin 9h00–13h00 (4h) + déjeuner + après-midi 14h00–18h00 (4h)', () => {
     const s = buildHoraireScaffold(8);
     expect(s.nbJours).toBe(1);
     expect(s.jours).toHaveLength(1);
@@ -24,9 +24,10 @@ describe('buildHoraireScaffold — grille horaire déterministe (cas 1 jour)', (
     expect(j.apresMidi.label).toBe('14h00–18h00');
     expect(j.apresMidi.label).toBe(HORAIRE_APREM_PROG);
     expect(j.apresMidi.travailMin).toBe(240);
+    expect(j.travailTotalMin).toBe(480);
   });
 
-  it('somme TRAVAIL = 8h pile (480 min, hors pauses)', () => {
+  it('somme TRAVAIL d’un jour plein = 8h pile (480 min, hors pauses)', () => {
     const j = buildHoraireScaffold(8).jours[0]!;
     expect(j.matin.travailMin + j.apresMidi.travailMin).toBe(480);
     expect(j.travailTotalMin).toBe(480);
@@ -40,31 +41,122 @@ describe('buildHoraireScaffold — grille horaire déterministe (cas 1 jour)', (
     expect(j.apresMidi.label.endsWith('18h00')).toBe(true);
   });
 
-  it('nbJours = ceil(N/8) calculable ; pour N≤8 reste 1 jour sans multiDayDeferred', () => {
+  it('nbJours = ceil(N/8) ; pour N≤8 reste 1 jour sans multiDayDeferred', () => {
     expect(buildHoraireScaffold(4).nbJours).toBe(1);
     expect(buildHoraireScaffold(8).nbJours).toBe(1);
     expect(buildHoraireScaffold(8).multiDayDeferred).toBe(false);
   });
 
-  it('multi-jours DIFFÉRÉ : N>8 calcule nbJours>1 mais ne rend qu’UNE journée + multiDayDeferred=true', () => {
-    const s = buildHoraireScaffold(16);
-    expect(s.nbJours).toBe(2);
-    expect(s.jours).toHaveLength(1); // périmètre : non implémenté
-    expect(s.multiDayDeferred).toBe(true);
+  it('40h → 5 jours TOUS pleins (travailTotalMin 480 chacun, aucun partiel)', () => {
+    const s = buildHoraireScaffold(40);
+    expect(s.nbJours).toBe(5);
+    expect(s.jours).toHaveLength(5);
+    expect(s.multiDayDeferred).toBe(false);
+    for (const j of s.jours) {
+      expect(j.travailTotalMin).toBe(480);
+      expect(j.matin.travailMin).toBe(240);
+      expect(j.apresMidi.travailMin).toBe(240);
+    }
   });
 
-  it('déterminisme strict : 2 appels mêmes args → résultat identique', () => {
+  it('72h → 9 jours tous pleins (PROD-0042)', () => {
+    const s = buildHoraireScaffold(72);
+    expect(s.nbJours).toBe(9);
+    expect(s.jours).toHaveLength(9);
+    for (const j of s.jours) {
+      expect(j.travailTotalMin).toBe(480);
+    }
+  });
+
+  it('16h → 2 jours PLEINS (multiple de 8, reliquat=8 → dernier jour plein, PAS partiel)', () => {
+    const s = buildHoraireScaffold(16);
+    expect(s.nbJours).toBe(2);
+    expect(s.jours).toHaveLength(2);
+    expect(s.multiDayDeferred).toBe(false);
+    const last = s.jours[1]!;
+    expect(last.travailTotalMin).toBe(480);
+    expect(last.apresMidi.travailMin).toBe(240);
+  });
+
+  it('105h → 14 jours : 13 pleins + dernier reliquat 1h (matin 9h00→10h00, pas d’après-midi)', () => {
+    const s = buildHoraireScaffold(105);
+    expect(s.nbJours).toBe(14);
+    expect(s.jours).toHaveLength(14);
+    // 13 premiers pleins
+    for (let i = 0; i < 13; i++) {
+      expect(s.jours[i]!.travailTotalMin).toBe(480);
+    }
+    // dernier jour : reliquat = 105 - 8*13 = 1h
+    const last = s.jours[13]!;
+    expect(last.matin.label).toBe('9h00–10h00');
+    expect(last.matin.travailMin).toBe(60);
+    expect(last.apresMidi.travailMin).toBe(0); // pas d'après-midi
+    expect(last.travailTotalMin).toBe(60);
+  });
+
+  it('reliquat >4h : 21h → 3 jours, dernier reliquat=5h → matin complet + après-midi partiel 14h00→15h00', () => {
+    const s = buildHoraireScaffold(21);
+    expect(s.nbJours).toBe(3);
+    expect(s.jours).toHaveLength(3);
+    expect(s.jours[0]!.travailTotalMin).toBe(480);
+    expect(s.jours[1]!.travailTotalMin).toBe(480);
+    const last = s.jours[2]!;
+    expect(last.matin.label).toBe('9h00–13h00');
+    expect(last.matin.travailMin).toBe(240);
+    expect(last.apresMidi.label).toBe('14h00–15h00');
+    expect(last.apresMidi.travailMin).toBe(60);
+    expect(last.travailTotalMin).toBe(300); // 5h
+  });
+
+  it('reliquat ≤4h : 12h → 2 jours, dernier reliquat=4h → matin seul 9h00→13h00, pas d’après-midi', () => {
+    const s = buildHoraireScaffold(12);
+    expect(s.nbJours).toBe(2);
+    expect(s.jours).toHaveLength(2);
+    expect(s.jours[0]!.travailTotalMin).toBe(480);
+    const last = s.jours[1]!;
+    expect(last.matin.label).toBe('9h00–13h00');
+    expect(last.matin.travailMin).toBe(240);
+    expect(last.apresMidi.travailMin).toBe(0);
+    expect(last.travailTotalMin).toBe(240); // 4h
+  });
+
+  it('// test de puissance reliquat — travailMin matin du dernier jour de 105h === 60 (formule reliquat=h−8·(nbJours−1))', () => {
+    // Si la formule reliquat est cassée (ex 8*(nbJours-1) → 8*nbJours, soit reliquat 105-112=-7
+    // → tout plein, dernier jour 480), ce test DOIT virer rouge.
+    const s = buildHoraireScaffold(105);
+    expect(s.jours[13]!.matin.travailMin).toBe(60);
+    expect(s.jours[13]!.travailTotalMin).toBe(60);
+  });
+
+  it('multiDayDeferred toujours false (multi-jours désormais implémenté)', () => {
+    expect(buildHoraireScaffold(72).multiDayDeferred).toBe(false);
+    expect(buildHoraireScaffold(105).multiDayDeferred).toBe(false);
+  });
+
+  it('déterminisme strict : 2 appels mêmes args → résultat identique (8h, 72h, 105h)', () => {
     expect(buildHoraireScaffold(8)).toEqual(buildHoraireScaffold(8));
-    expect(renderHoraireScaffoldMd(buildHoraireScaffold(8))).toBe(
-      renderHoraireScaffoldMd(buildHoraireScaffold(8)),
+    expect(buildHoraireScaffold(72)).toEqual(buildHoraireScaffold(72));
+    expect(buildHoraireScaffold(105)).toEqual(buildHoraireScaffold(105));
+    expect(renderHoraireScaffoldMd(buildHoraireScaffold(72))).toBe(
+      renderHoraireScaffoldMd(buildHoraireScaffold(72)),
     );
   });
 
-  it('renderHoraireScaffoldMd contient les horaires figés et la consigne de recopie', () => {
-    const md = renderHoraireScaffoldMd(buildHoraireScaffold(8));
+  it('renderHoraireScaffoldMd liste chaque Jour K et garde horaires figés + consigne de recopie', () => {
+    const md = renderHoraireScaffoldMd(buildHoraireScaffold(72));
+    expect(md).toContain('### Jour 1');
+    expect(md).toContain('### Jour 9');
     expect(md).toContain('9h00–13h00');
     expect(md).toContain('14h00–18h00');
-    expect(md).toContain('8h00 pile');
+    expect(md).toContain('recopier');
+  });
+
+  it('renderHoraireScaffoldMd cas 1 jour : un seul ### Jour 1 et les horaires figés', () => {
+    const md = renderHoraireScaffoldMd(buildHoraireScaffold(8));
+    expect(md).toContain('### Jour 1');
+    expect(md).not.toContain('### Jour 2');
+    expect(md).toContain('9h00–13h00');
+    expect(md).toContain('14h00–18h00');
     expect(md).toContain('recopier');
   });
 });
