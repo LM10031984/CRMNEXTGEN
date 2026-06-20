@@ -62,6 +62,18 @@ const nextConfig = {
         destination: '/app/templates/:path*',
         permanent: true,
       },
+      // quick 260620-d42 : variante naturelle tapée à la main pour le Pilotage
+      // Direction (PROJECT.md BUG-03). Pas d'accent dans les URLs.
+      {
+        source: '/app/pilotage-direction',
+        destination: '/app/pilotage',
+        permanent: true,
+      },
+      {
+        source: '/app/pilotage-direction/:path*',
+        destination: '/app/pilotage/:path*',
+        permanent: true,
+      },
     ];
   },
 };
