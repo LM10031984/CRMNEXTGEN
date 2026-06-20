@@ -158,3 +158,182 @@ export function aggregateMonthly(
   }
   return buckets;
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// 2. Fetch scopés tenantId (I/O Prisma)
+// ───────────────────────────────────────────────────────────────────────────
+//
+// Toutes les requêtes scopent le tenant via `session: { tenantId }`
+// (SessionParticipant n'a PAS de colonne tenantId directe — cf. product-stats.ts).
+// Bornes d'année en UTC (Date.UTC) pour cohérence avec le stockage DateTime UTC.
+// `now()` = new Date() au moment du fetch (pas de cache).
+//
+// Définition (cf. <interfaces> du plan) :
+//  - session terminée / réalisée   : endDate < now
+//  - session à venir / prévisionnel : endDate >= now
+
+/** Bornes [début année, début année+1[ en UTC. */
+function yearBoundsUTC(year: number): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, 0, 1)),
+    end: new Date(Date.UTC(year + 1, 0, 1)),
+  };
+}
+
+/**
+ * CA réalisé mensuel (EUR HT) : SUM(priceHT) des participants des sessions
+ * TERMINÉES (endDate < now) dont la startDate est dans l'année `year`.
+ */
+export async function getRealisedMonthly(
+  tenantId: string,
+  year: number,
+): Promise<number[]> {
+  const { start, end } = yearBoundsUTC(year);
+  const now = new Date();
+
+  const rows = await prisma.sessionParticipant.findMany({
+    where: {
+      session: {
+        tenantId,
+        startDate: { gte: start, lt: end },
+        endDate: { lt: now },
+      },
+    },
+    select: {
+      priceHT: true,
+      session: { select: { startDate: true } },
+    },
+  });
+
+  return aggregateMonthly(
+    rows.map((p) => ({
+      startDate: p.session.startDate,
+      priceHT: Number(p.priceHT),
+    })),
+  );
+}
+
+/**
+ * CA prévisionnel mensuel (EUR HT) : SUM(priceHT) des participants des sessions
+ * À VENIR / non terminées (endDate >= now) dont la startDate est dans `year`.
+ */
+export async function getForecastMonthly(
+  tenantId: string,
+  year: number,
+): Promise<number[]> {
+  const { start, end } = yearBoundsUTC(year);
+  const now = new Date();
+
+  const rows = await prisma.sessionParticipant.findMany({
+    where: {
+      session: {
+        tenantId,
+        startDate: { gte: start, lt: end },
+        endDate: { gte: now },
+      },
+    },
+    select: {
+      priceHT: true,
+      session: { select: { startDate: true } },
+    },
+  });
+
+  return aggregateMonthly(
+    rows.map((p) => ({
+      startDate: p.session.startDate,
+      priceHT: Number(p.priceHT),
+    })),
+  );
+}
+
+/**
+ * Objectif annuel (EUR HT) du tenant pour l'année. 0 si aucun objectif saisi.
+ */
+export async function getAnnualObjective(
+  tenantId: string,
+  year: number,
+): Promise<number> {
+  const target = await prisma.revenueTarget.findUnique({
+    where: { tenantId_year: { tenantId, year } },
+    select: { amountHT: true },
+  });
+  return target?.amountHT ?? 0;
+}
+
+/**
+ * CA total réalisé d'une année (EUR HT) = somme du réalisé mensuel.
+ * Utilisé pour le N-1 (le caller passe `year - 1`).
+ */
+export async function getTotalRealisedForYear(
+  tenantId: string,
+  year: number,
+): Promise<number> {
+  const monthly = await getRealisedMonthly(tenantId, year);
+  return monthly.reduce((acc, m) => acc + m, 0);
+}
+
+/**
+ * Poids de saisonnalité calculés sur les 3 années précédant `beforeYear`
+ * ([beforeYear-3, beforeYear-1]). Les années sans données contribuent en zéro
+ * (neutralisées par la normalisation de `computeSeasonalityWeights`).
+ */
+export async function getSeasonalityWeights(
+  tenantId: string,
+  beforeYear: number,
+): Promise<number[]> {
+  const years = [beforeYear - 3, beforeYear - 2, beforeYear - 1];
+  const monthlyByYear = await Promise.all(
+    years.map((y) => getRealisedMonthly(tenantId, y)),
+  );
+  return computeSeasonalityWeights(monthlyByYear);
+}
+
+export interface PilotageData {
+  realiseMonthly: number[];
+  previsionnelMonthly: number[];
+  objectifAnnuel: number;
+  /** Objectif annuel réparti sur 12 mois selon la saisonnalité. */
+  objectifMensuel: number[];
+  totalRealiseN1: number;
+  kpis: PilotageKpis;
+}
+
+/**
+ * Orchestrateur : assemble toutes les données du pilotage pour un tenant/année.
+ * Consommé par la page (Plan 02). Toutes les requêtes en parallèle.
+ */
+export async function getPilotageData(
+  tenantId: string,
+  year: number,
+): Promise<PilotageData> {
+  const [
+    realiseMonthly,
+    previsionnelMonthly,
+    objectifAnnuel,
+    totalRealiseN1,
+    weights,
+  ] = await Promise.all([
+    getRealisedMonthly(tenantId, year),
+    getForecastMonthly(tenantId, year),
+    getAnnualObjective(tenantId, year),
+    getTotalRealisedForYear(tenantId, year - 1),
+    getSeasonalityWeights(tenantId, year),
+  ]);
+
+  const objectifMensuel = distributeAnnualObjective(objectifAnnuel, weights);
+  const kpis = computeKpis({
+    realiseMonthly,
+    previsionnelMonthly,
+    objectifAnnuel,
+    totalRealiseN1,
+  });
+
+  return {
+    realiseMonthly,
+    previsionnelMonthly,
+    objectifAnnuel,
+    objectifMensuel,
+    totalRealiseN1,
+    kpis,
+  };
+}
