@@ -1563,3 +1563,18 @@ enum RegulatoryWatchSource {
   IMPORT
   AUTO
 }
+
+// Pilotage Direction (quick 260620-d42) — objectif CA annuel par tenant/année.
+// Pas de relation inverse sur Tenant : tenantId reste une colonne FK logique non contrainte
+// (évite de toucher le model Tenant). Objectif stocké en euros HT entiers (pas de centimes).
+model RevenueTarget {
+  id        String   @id @default(uuid())
+  tenantId  String
+  year      Int
+  amountHT  Int // objectif annuel en euros HT (entier — pas de centimes pour un objectif)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([tenantId, year])
+  @@index([tenantId])
+}
