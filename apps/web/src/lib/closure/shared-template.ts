@@ -477,6 +477,9 @@ export const SHARED_STYLES = `
     flex-wrap: wrap;
     gap: 40px;
     align-items: flex-start;
+    /* Empêche le bloc signature/cachet de basculer seul en page 2. */
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .signature-block .col {
     min-width: 220px;

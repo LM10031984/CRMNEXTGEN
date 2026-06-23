@@ -15,6 +15,7 @@ import {
   formatDateFr,
   formatHours,
   loadSignatureDataUrl,
+  loadStampDataUrl,
   renderBrandHeader,
   renderOfficialBadges,
   stagiaireLabel,
@@ -31,6 +32,10 @@ export function renderCertificatHtml(ctx: ClosureContext): string {
   // `public/of-assets/{ctx.tenantId}/signature-dirigeant.png` (certificat signé
   // par le dirigeant/représentant légal), fallback bundled.
   const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'dirigeant');
+  // Cachet/tampon de l'OF apposé EN SUPERPOSITION sous la signature (rendu
+  // réaliste d'un document tamponné main : signature au premier plan, tampon
+  // décalé en fond). Laurent 2026-06-23 : "il manque le tampon sur le certificat".
+  const stampDataUrl = loadStampDataUrl(ctx.tenantId);
   // Date du certificat = date de fin de formation (et non date d'édition).
   // Indicateur Qualiopi : le certificat atteste de la fin effective de l'action.
   const dateCertificat = formatDateFr(ctx.sessionEndDate);
@@ -66,6 +71,13 @@ ${renderOfficialBadges({ qualiopi: false })}
     .cert-field { margin: 12px 0; }
     .cert-label { font-size: 11pt; font-weight: 700; color: ${BRAND_DARK}; }
     .cert-value { font-size: 11pt; margin-top: 3px; padding-left: 8px; }
+    /* Signature + cachet superposés : tampon en fond décalé, signature devant. */
+    .sig-stamp { position: relative; display: inline-block; margin-top: 8px; }
+    .sig-stamp .sig { display: block; height: 22mm; position: relative; z-index: 2; }
+    .sig-stamp .stamp {
+      position: absolute; height: 30mm; right: -14mm; bottom: -8mm;
+      z-index: 1; opacity: 0.88;
+    }
   </style>
 
   ${fieldHtml(`${stagiaireLabel(ctx.apprenantCivility)} :`, stagiaireFull)}
@@ -85,7 +97,14 @@ ${renderOfficialBadges({ qualiopi: false })}
     <div class="col">
       <div class="label">${escapeHtml(respFullName)}</div>
       <div class="role">${escapeHtml(respTitre)} — ${escapeHtml(of.name)}</div>
-      ${signatureDataUrl ? `<img class="tampon" src="${signatureDataUrl}" alt="Signature et cachet" />` : ''}
+      ${
+        signatureDataUrl || stampDataUrl
+          ? `<div class="sig-stamp">
+        ${stampDataUrl ? `<img class="stamp" src="${stampDataUrl}" alt="Cachet de l'organisme" />` : ''}
+        ${signatureDataUrl ? `<img class="sig" src="${signatureDataUrl}" alt="Signature" />` : ''}
+      </div>`
+          : ''
+      }
     </div>
   </div>
 </main>
