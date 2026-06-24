@@ -62,3 +62,4 @@ data/uploads/
 .env.local.cloud-backup
 .env.local
 .env.*.backup
+backups/

@@ -134,7 +134,18 @@ for (const SES of CODES) {
   if (!froidEligible) {
     log('⚠', `froid sauté : session terminée depuis < 90j (fin ${session.endDate.toISOString().slice(0, 10)})`);
   }
-  const kinds = kindsForFroid(froidEligible).filter((k) => (PART_CLOSURE_KINDS as string[]).includes(k));
+  // EXCLUDE_KINDS (opt-in, défaut vide) : liste de kinds à NE PAS générer
+  // (ex : EXCLUDE_KINDS=EMARGEMENT pour une session demi-journée dont
+  //  l'émargement standard 9-13/14-18 serait incohérent). Sans effet sur les
+  //  runs de masse qui ne définissent pas la variable.
+  const EXCLUDE_KINDS = (process.env.EXCLUDE_KINDS ?? '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  const kinds = kindsForFroid(froidEligible)
+    .filter((k) => (PART_CLOSURE_KINDS as string[]).includes(k))
+    .filter((k) => !EXCLUDE_KINDS.includes(k));
+  if (EXCLUDE_KINDS.length) console.log(`  ⚠ kinds exclus : ${EXCLUDE_KINDS.join(', ')}`);
 
   console.log(`Produit ${p.code} (${p.durationHours}h) — ${parts.length} apprenants — froidEligible=${froidEligible}`);
   console.log(`Provider : ${process.env.AI_PROVIDER} | DRY_RUN=${DRY_RUN ? '1' : '0'}`);
