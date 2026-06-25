@@ -107,13 +107,16 @@ export function SessionHeaderBar({
           </div>
 
           {/* H1 nom formation (édition inline si un composant client est passé) */}
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight truncate">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight break-words">
             {title}
           </h1>
           {/*
-            <h1> accepte string OU composant client (ex: <SessionTitleInline>).
-            Le `truncate` reste appliqué — l'input inline override la largeur
-            via inputClassName si besoin.
+            LOT 3a — `truncate` retiré : il coupait les noms de formation longs
+            (ex. « Formation complète en marketing digital… ») à une seule ligne.
+            Laurent veut LIRE le titre entier → `break-words` autorise le retour
+            à la ligne (le parent a `min-w-0 flex-1`, donc pas de débordement).
+            <h1> accepte string OU composant client (ex: <SessionTitleInline>) ;
+            l'input inline override la largeur via inputClassName si besoin.
           */}
 
           {/* Sous-titre : date · lieu · inscrits */}
