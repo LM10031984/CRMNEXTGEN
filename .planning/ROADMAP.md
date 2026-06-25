@@ -4,11 +4,6 @@
 
 Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l'audit UX/QA 2026-05-12 + 4 nouvelles features métier en 12 phases (granularity fine), avec couverture 100% des 40 v1 requirements définis dans `REQUIREMENTS.md`. Démarrage par les bugs critiques bloquants démo, puis fondations responsive, puis UX gaps, puis paramètres + RBAC, puis nouvelles features (leads auto, Qualiopi blanc, factures, modules stub).
 
-## Plans Qualiopi (préparation audit BCI 03/07/2026)
-
-- [`QUALIOPI-PLAN-COMPLET.md`](./QUALIOPI-PLAN-COMPLET.md) — plan de mise en conformité Qualiopi (matrice 32 indicateurs + tâches T1→T13). Source de vérité conformité.
-- [`PLAN-FICHE-SESSION-ONGLETS-RECAP.md`](./PLAN-FICHE-SESSION-ONGLETS-RECAP.md) — présentation UI (onglets + récap) + ordonnancement (Lot A→E) + correctifs bugs. Adossé au plan complet.
-
 ## Phases
 
 **Phase Numbering:**
@@ -155,44 +150,6 @@ Milestone v5 "Audit UX/QA + Features métier" : structurer les 22 frictions de l
 - [x] 09-04-PLAN.md — Page paramètres /app/parametres/distribution-leads ADMIN + extension cloche TopBar (kind lead.assigned + markNotificationRead) + sidebar (Vue de charge + Distribution leads)
 - [x] 09-05-PLAN.md — Bookkeeping (REQUIREMENTS/ROADMAP/STATE + smoke build/tests + 09-SMOKE.md + 09-SUMMARY.md)
 
-### Phase 09.3: Navigation documentaire unifiée (INSERTED)
-
-**Goal:** Rendre toute preuve Qualiopi retrouvable en ≤2 clics depuis chacune des 3 fiches (apprenant / session / produit) via un résolveur lecture pur `resolveDocs` qui UNIONise les 5 sources éclatées (Document, PedagogicalAsset, SensitiveData/Person/AgeficeProfile, Tenant), porte la conformité (qualiopiIndicator + usedStub) et expose une référence polymorphe sourceTable+sourceId réutilisable par T7 — sans migration de schéma. Inclut le triage des 5 DocType fantômes et la correction 3-sources de la colonne qualiopiIndicator du seed. Prérequis de l'audit blanc Phase 10.
-**Requirements**: NAV-01 (résolveur pur + test 5-sources), NAV-02 (3 surfaces UI ≤2 clics), NAV-03 (conformité usedStub visible), NAV-04 (triage 5 fantômes), NAV-05 (correction seed qualiopiIndicator 3-sources)
-**Depends on:** Phase 9
-**Plans:** 4/4 plans complete
-
-Plans:
-- [x] 09.3-01-PLAN.md — Résolveur pur resolveDocs (6 sources) + wrappers Prisma scoped tenantId + test comportemental 6-sources (NAV-01)
-- [x] 09.3-02-PLAN.md — Triage 5 fantômes (NAV-04) + 7 corrections seed qualiopiIndicator RNQ V9 + gate 0-drift (NAV-05)
-- [x] 09.3-03-PLAN.md — 3 surfaces UI ≤2 clics + badge usedStub (NAV-02 + NAV-03) — checkpoint APPROUVÉ Laurent + 3 corrections V9 (ASSIDUITE/CERTIFICAT/ATTESTATION) + source unique indicateurs
-- [x] 09.3-04-PLAN.md — Bookkeeping + smoke (897/897, 0 orphelin) + SUMMARY + dette D-09.3-08(b) différée
-
-### Phase 09.2: Réconciliation base 3 sources (Airtable + SmartOF + Tréso AGEFICE) (INSERTED)
-
-**Goal:** Obtenir une base réconciliée et fiable en rejouant l'outillage d'import existant dans le bon ordre (zéro reconstruction), arbitrer le reliquat, et prouver sur 1 session témoin que des données propres génèrent l'intégralité des docs Qualiopi conformes. Prérequis de Phase 10 (Audit blanc), pré-audit RNQ V9 du 03/07.
-**Requirements**: TBD (phase insérée — décisions figées dans 09.2-RECONCILE-RULES.md + 09.2-CONTEXT.md)
-**Depends on:** Phase 9
-**Success Criteria** (what must be TRUE):
-  1. `dedupe.merge.test.ts` existe et passe : une fusion réelle reporte les `ExternalIdentity` du perdant sur le survivant (prérequis dur fermé avant la passe dedupe).
-  2. Dédoublonnage exécuté avec garde-fous : email jamais clé de fusion seule (cas Nestenn), SIRET partagé noms ≠ → reliquat manuel, 48 persons sans email → clé alternative.
-  3. Chaîne rejouée dans l'ordre (dedupe → SmartOF → sync-prices hors-AGEFICE → Tréso) ; chaque `--apply` précédé d'un `pg_dump` et d'une revue de diff ; aucun script d'import modifié sans justification écrite.
-  4. Bug prix corrigé via passe Tréso (336€×52 résolu) ; clé Tréso à dégradation explicite (jamais de no-match silencieux).
-  5. Gate cohérence vert : écart CA AGEFICE < 2 % + 0 ligne inexpliquée (symétrique), reliquat tranché dans un CSV de travail.
-  6. Dry run témoin sur 1 session 2026 AGEFICE complète : pack closure génère tous les docs, gate de fond OK (Bloom + structure + 0 stub), couple modèle/prompts gelé (mistral-small).
-
-**Plans:** 5/8 plans executed
-
-Plans:
-- [x] 09.2-01-PLAN.md — Wave 0 : db:generate + refacto testabilité dedupe + dedupe.merge.test.ts (prérequis dur)
-- [x] 09.2-02-PLAN.md — Wave 0 : correction clé Tréso §4 + test scoring + gate-treso-ca.ts + sonde-lieux-smartof.ts (read-only)
-- [x] 09.2-03-PLAN.md — Passe dédoublonnage dedupe.ts (dry → pg_dump → apply, checkpoint humain)
-- [x] 09.2-04-PLAN.md — Passe SmartOF identité/sessions/inscriptions + décision lieux (dry → pg_dump → apply, checkpoint)
-- [x] 09.2-05-PLAN.md — Passe sync prix hors-AGEFICE (dry → pg_dump → apply, checkpoint ; 336€ intacts)
-- [ ] 09.2-06-PLAN.md — Passe Tréso AGEFICE (prix 336€ corrigé + 4 booléens canoniques) + backfill formateur (2 applies, 2 checkpoints)
-- [ ] 09.2-07-PLAN.md — Gate E3 : écart CA <2% + reliquat symétrique tranché (CSV de travail, checkpoint décision)
-- [ ] 09.2-08-PLAN.md — Dry run témoin E4 : closure 1 session 2026 AGEFICE, gate de fond (0 stub + Bloom), modèle gelé
-
 ### Phase 09.1: Centralisation Qualiopi 360° (INSERTED)
 **Goal**: Centraliser visuellement les documents Qualiopi par session/apprenant/produit ; permettre re-génération ciblée 1 stagiaire ; refondre fiches apprenant (timeline année) et produit (4 onglets) ; cross-navigation Airtable-style.
 **Depends on**: Phase 9
@@ -220,11 +177,24 @@ Plans:
 **Depends on**: Nothing
 **Requirements**: [QBLANC-01, QBLANC-02, QBLANC-03]
 **Success Criteria** (what must be TRUE):
-  1. Page Qualiopi blanc : score global + détail 32 indicateurs.
-  2. Pour chaque session : checklist auto 10 docs Qualiopi + scoring + drill-down.
-  3. Notification cloche + email 7j avant fin de session si dossier incomplet.
-  4. Bouton "Télécharger rapport audit blanc" → PDF (Gotenberg) avec verdict par indicateur.
-**Plans**: TBD
+  1. Page Qualiopi blanc : score global + détail 23 indicateurs applicables Start Academy (D-01 — CONTEXT.md mentionne 21 ind, liste exacte 23 numéros).
+  2. Pour chaque session : checklist auto 10 docs Qualiopi + scoring + drill-down (réutilise ParticipantDocMatrix Phase 9.1, D-11).
+  3. Notification cloche + email 7j avant fin de session si dossier incomplet (worker BullMQ daily 9h Europe/Paris).
+  4. Bouton "Télécharger rapport audit blanc" → PDF WeasyPrint avec verdict par indicateur (1 page synthèse + 23 pages détaillées).
+**Plans:** 11 plans
+**Plans**:
+- [ ] 10-01-PLAN.md — Foundation Prisma migration QualiopiBlancEntry + enum QualiopiBlancStatus
+- [ ] 10-02-PLAN.md — Catalogue 23 indicateurs + helper AuditLog qualiopiBlanc.* (8e one-helper-per-entity)
+- [ ] 10-03-PLAN.md — Core worker-safe (calcAutoStatus, computeGlobalScore, upsertEntry) + server actions wrapper
+- [ ] 10-04-PLAN.md — Seed QualiopiDocCatalog enrichi pour Ind 9/11/12/30 mapping
+- [ ] 10-05-PLAN.md — Page UI principale + sidebar + 4 PrioCard + tableau 23 ind
+- [ ] 10-06-PLAN.md — Drill-down session (réutilise ParticipantDocMatrix Phase 9.1) + helper computeSessionCompleteness
+- [ ] 10-07-PLAN.md — Worker BullMQ daily 9h Europe/Paris + Notifications + email récap
+- [ ] 10-08-PLAN.md — Extension NotificationsBell + Zod payload schema
+- [ ] 10-09-PLAN.md — Template WeasyPrint PDF (1 synthèse + 23 pages) + DocType += AUDIT_BLANC
+- [ ] 10-10-PLAN.md — Server action export + bouton UI + Document MinIO + AuditLog exported
+- [ ] 10-11-PLAN.md — Bookkeeping fin de phase (SMOKE/SUMMARY/STATE/ROADMAP/REQUIREMENTS)
+
 
 ### Phase 11: Factures cycle complet
 **Goal**: Module Factures fonctionnel bout en bout — création, numérotation, paiements, relances, export comptable.
@@ -279,8 +249,7 @@ Phases execute in numeric order. Phase 2 depends on 1, Phase 3 on 2, Phase 8 on 
 | 8. Multi-utilisateurs et RBAC | 6/6 | Complete    | 2026-05-16 |
 | 9. Distribution leads automatique | 5/5 | Complete    | 2026-05-16 |
 | 9.1. Centralisation Qualiopi 360° (INSERTED) | 6/6 | Complete    | 2026-05-18 |
-| 9.3. Navigation documentaire unifiée (INSERTED) | 4/4 | Complete    | 2026-06-10 |
-| 10. Audit Qualiopi blanc | 0/TBD | Not started | - |
+| 10. Audit Qualiopi blanc | 0/11 | Not started | - |
 | 11. Factures cycle complet | 10/10 | Complete    | 2026-05-21 |
 | 12. Modules stub Inscriptions et Modèles | 3/3 | Complete    | 2026-06-01 |
 | 13. Veille Qualiopi intégrée | 6/6 | Complete    | 2026-05-25 |
@@ -306,6 +275,16 @@ Plans:
 - [x] 13-04-PLAN.md — Export PDF audit : DocType += VEILLE_AUDIT + template HTML WeasyPrint + Document MinIO + AuditLog `regulatoryWatch.exported` — 13 tests verts
 - [x] 13-05-PLAN.md — Worker BullMQ : 8 modules `lib/veille/*` (worker safety pattern, grep 0 imports interdits) + cron hebdo + Ollama `mistral-small:24b` + 3 scripts dev + AuditLog `regulatoryWatch.auto_inserted` (convention COMPLÈTE 8/8) — 16 tests verts
 - [x] 13-06-PLAN.md — Bookkeeping : SMOKE.md (4 flows + résultats réels) + SUMMARY.md (récap phase) + STATE/REQUIREMENTS/ROADMAP — pending Laurent validation UI
+
+### Phase 14: Intégration Google Calendar — rappels/convocations/satisfaction automatisés (formateur invité, textes exacts countdown, template siège, backfill audit + auto par session)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 14 to break down)
 
 ---
 
