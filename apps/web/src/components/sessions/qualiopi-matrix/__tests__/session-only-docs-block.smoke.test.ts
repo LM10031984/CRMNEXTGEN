@@ -50,3 +50,34 @@ describe('SessionOnlyDocsBlock — A5/A6 : 4 cartes session', () => {
     expect(src).toMatch(/generateSatisfactionSessionForSession\(sessionId\)/);
   });
 });
+
+/**
+ * LOT 3b — garde-fou RBAC. Le bloc « Documents session » est désormais rendu
+ * pour TOUS (la consultation est ouverte aux LECTEURs), donc la GÉNÉRATION doit
+ * rester strictement gardée par `canWrite` à l'intérieur du composant : un
+ * lecteur ne doit JAMAIS voir « Générer » ni « Re-générer ».
+ *
+ * Vérification source : tout bouton portant un libellé de génération
+ * (« Générer … » / « Re-générer ») est précédé d'un garde `canWrite && (`.
+ */
+describe('SessionOnlyDocsBlock — génération gardée par canWrite (garde-fou RBAC LOT 3b)', () => {
+  // src brut (commentaires retirés) pour matcher la structure réelle.
+  it('le bouton « Re-générer » est dans une branche `{canWrite && (` ', () => {
+    // La branche hasPdf : canWrite && (<button>…Re-générer)
+    expect(src).toMatch(/canWrite\s*&&\s*\([\s\S]*?Re-générer/);
+  });
+
+  it('le bouton « Générer … » (doc absent) est dans une branche `{canWrite && (` ', () => {
+    // La branche !hasPdf : canWrite && (<button>…Générer ${article} ${shortLabel})
+    expect(src).toMatch(/canWrite\s*&&\s*\([\s\S]*?Générer\s*\$\{card\.article\}/);
+  });
+
+  it('le lien « Voir le PDF » n\'est PAS gardé par canWrite (consultation ouverte à tous)', () => {
+    // Voir le PDF est rendu dans la branche `pdf ? ( … )`, sans canWrite.
+    // On vérifie qu'aucun `canWrite` n'introduit le lien de consultation :
+    // le fragment entre `pdf ? (` et `Voir le PDF` ne contient pas `canWrite`.
+    const m = src.match(/pdf\s*\?\s*\(([\s\S]*?)Voir le PDF/);
+    expect(m).not.toBeNull();
+    expect(m![1]).not.toMatch(/canWrite/);
+  });
+});

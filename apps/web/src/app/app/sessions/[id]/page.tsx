@@ -993,19 +993,25 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           Bilan satisfaction session (ind. 30 — 4ᵉ carte A5). Sans ce bloc,
           ces 2 docs majeurs ne sont régénérables qu'en relançant le pack
           complet — trou conformité identifié par le plan. Lot B le
-          déplacera en onglet Clôture, ici interim. */}
-      {canWrite && (
-        <SessionOnlyDocsBlock
-          sessionId={session.id}
-          productId={session.product?.id ?? null}
-          deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
-          grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
-          checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
-          satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
-          grilleObsAssetCount={grilleObsAssetCount}
-          canWrite={canWrite}
-        />
-      )}
+          déplacera en onglet Clôture, ici interim.
+
+          LOT 3b — garde `canWrite &&` retiré : la CONSULTATION de ces docs
+          (déroulé, grille, checklist, satisfaction) doit être ouverte à TOUS,
+          y compris les LECTEURs. Seule la GÉNÉRATION reste réservée à canWrite,
+          déjà gardée À L'INTÉRIEUR de SessionOnlyDocsBlock (boutons « Générer »
+          et « Re-générer » conditionnés par la prop canWrite). Un lecteur voit
+          donc « Voir le PDF » sur doc présent et l'état « Manquant » sans bouton
+          sur doc absent. */}
+      <SessionOnlyDocsBlock
+        sessionId={session.id}
+        productId={session.product?.id ?? null}
+        deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
+        grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
+        checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
+        satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
+        grilleObsAssetCount={grilleObsAssetCount}
+        canWrite={canWrite}
+      />
 
       {/* <ParticipantDocsCards> supprimé (commit ui-e3 #5) — le DocDockDrawer
           porte la même affordance "clic génère ce doc" (smoke gate
