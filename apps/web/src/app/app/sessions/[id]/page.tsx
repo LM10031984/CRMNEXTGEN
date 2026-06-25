@@ -33,6 +33,7 @@ import { EditSessionDetailsDialog } from '@/components/sessions/edit-session-det
 import { CreatePersonButton } from '@/components/forms/create-person-button';
 import { SessionStatusSelect } from '@/components/sessions/session-status-select';
 import { SessionLogisticsEditor } from '@/components/sessions/session-logistics-editor';
+import { SessionCalendarSyncToggle } from '@/components/sessions/session-calendar-sync-toggle';
 import { SessionLocationPicker } from '@/components/sessions/session-location-picker';
 import { SessionTrainerPicker } from '@/components/sessions/session-trainer-picker';
 import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-toggle';
@@ -704,6 +705,19 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   }}
                 />
               </SettingsDrawerSection>
+
+              {canEdit && (
+                <SettingsDrawerSection
+                  title="Agenda / Rappels"
+                  anchorId="section-agenda-rappels"
+                  icon={<Calendar className="h-3 w-3" aria-hidden="true" />}
+                >
+                  <SessionCalendarSyncToggle
+                    sessionId={session.id}
+                    isPastSession={new Date(session.endDate) < new Date()}
+                  />
+                </SettingsDrawerSection>
+              )}
 
               <SettingsDrawerSection
                 title="Notes internes"
