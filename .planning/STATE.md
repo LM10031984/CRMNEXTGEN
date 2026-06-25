@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed quick 260618-rkj (figer programme + corps déroulé produit)
-last_updated: "2026-06-18T18:06:58.495Z"
-last_activity: "2026-05-30 — Audit Qualiopi : Top 1 + Top 2 risques résolus via page publique /catalogue (Ind 1 + Ind 2)"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-06-25T10:22:58.723Z"
+last_activity: 2026-06-25
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 9
-  total_plans: 72
-  completed_plans: 49
+  total_plans: 78
+  completed_plans: 50
 ---
 
 # STATE — QualiOF
@@ -21,19 +21,20 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 10 — Audit Qualiopi blanc (seule phase v5 restante)
+**Current focus:** Phase 14 — int-gration-google-calendar
 
 ---
 
 ## Current Position
 
-Phase: 12 (Modules stub Inscriptions et Modèles) — COMPLETE (closed 2026-06-01, 3/3 plans, 2/2 MOD-* requirements, 15 tests Wave 0 verts, 0 placeholder restant dans sidebar)
-Next: /gsd:plan-phase 10 (Audit Qualiopi blanc — seule phase v5 restante : QBLANC-01/02/03)
+Phase: 14 (int-gration-google-calendar) — EXECUTING
+Plan: 2 of 6
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-06-25 — Plan 14-01 livré (Wave 1, fondation worker-safe Google Calendar). 3 modules `apps/web/src/lib/calendar/*` purs (0 import auth/react — règle worker BullMQ, vérifié grep sur tout le dossier) : (1) `google-client.ts` `getCalendarClient()` clone du pattern `scripts/_google-test.ts` (OAuth `OAuth2` + `setCredentials({ refresh_token })` lus depuis `../../secrets` oauth-client.json + google-token.json) singleton mémoïsé + `CALENDAR_ID` figé agenda « Rappel Formations » ; (2) `colors.ts` `CALENDAR_COLORS={formation:'7',rappel:'6',froid:'3'}` (colorId Google = strings) ; (3) `idempotency.ts` `buildEventKey(sessionCode,type,dayIndex?)` → `qualiof_<code-lc>_<type>[_<day>]` déterministe sans timestamp charset `[a-z0-9_-]` + `QUALIOF_KEY_PROP='qualiof_key'` (extendedProperties.private pour insert/update/skip) + type `CalendarEventType`. TDD sur idempotency : 6 tests Vitest verts (RED `78a7d3a` → GREEN `3d71c91`). tsc clean sur lib/calendar. 1 déviation Rule 3 : commentaire worker-safe reformulé sans citer littéralement les tokens interdits (sinon le grep d'acceptance se déclenchait sur le commentaire). 3 commits `1a396a7`/`78a7d3a`/`3d71c91`. Socle prêt pour Plan 14-04 (orchestrateur). Plan 14-02 débloqué.
 - 2026-06-25 — Phase 14 ajoutée : Intégration Google Calendar (rappels/convocations/satisfaction auto). Connexion API Google Calendar (compte service Start Academy, agenda « Rappel Formations »), worker par session : formateur invité réel (apprenants non invités), textes EXACTS Start Academy (rappel J-15→J-1 « dans X jours » calculé, satisfaction froid 1m/1m15j/2m), template siège Vence auto (cf reference_rappel_siege_vence_qualiopi), joint programme session + Charte/RI/CGV, codes couleur. 2 modes : backfill audit (sessions ≥ mars 2025) + auto nouvelles sessions. Prérequis bloquant = accès Google Calendar API. Import .ics abandonné (Google retire invités à l'import + pas de countdown). Pilote manuel SES-0097 fait via MCP (modèle de rendu).
 - 2026-05-12 — Brownfield project initialized. Paliers 2.2/2.3/3/4 imported as Validated requirements. New milestone v5 created with 40 active requirements split across 12 phases (fine granularity).
 - 2026-05-13 — Phase 6 closed : UX-11 hiérarchisation dashboard (NO-OP audit + a11y CollapsibleSection) + UX-12 helper funder-codes (14 sites UI) + UX-13 audit a11y (verdict PASS_AVEC_NOTES). 3 plans livrés (06-01 commits `096bc28`+`4d98926`, 06-02 commit `b71b620`, 06-03 NO-OP doc-only) + 1 plan bookkeeping (06-04). ~8 fichiers UI touchés, 1 audit a11y doc, 0 stub introduit.
@@ -243,12 +244,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed quick 260618-rkj (figer programme + corps déroulé produit)
+Stopped at: Completed 14-01-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-06-23 — Completed quick task 260623-ei7 : fix certificat (tampon + signature page 2)
+Last activity: 2026-06-25
 
 ### Roadmap Evolution
 

@@ -278,13 +278,23 @@ Plans:
 
 ### Phase 14: Intégration Google Calendar — rappels/convocations/satisfaction automatisés (formateur invité, textes exacts countdown, template siège, backfill audit + auto par session)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Automatiser, par session, la creation d'evenements Google Calendar dans l'agenda « Rappel Formations » (1 evenement formation + 15 rappels quotidiens countdown J-15->veille + 3 relances satisfaction a froid), avec formateur invite reel, apprenants en invites (notification conditionnelle), textes EXACTS Start Academy, template siege Vence auto, pieces jointes Drive, codes couleur, en 2 modes (backfill audit sessions >= mars 2025 + auto nouvelles sessions), idempotent.
+**Requirements**: (aucun REQ-ID — phase derivee du CONTEXT.md, must_haves goal-backward par plan)
 **Depends on:** Phase 13
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Pour une session : 1 evenement formation (bleu/colorId 7) + 15 rappels quotidiens (orange/6, countdown « dans X jours » exact) + 3 relances froid (violet/3) crees dans « Rappel Formations ».
+  2. Formateur principal toujours invite (email reel) ; apprenants toujours dans les invites — sendUpdates 'none' pour les sessions passees (trace audit), toggle 'all'/'none' pour les sessions a venir.
+  3. Textes reproduits MOT POUR MOT (rappel + froid) + bloc siege Vence etendu auto quand lieu = 618 Bd Jean Maurel inferieur, 06140 Vence + pieces jointes Drive (programme + CGV + RI + Charte PSH + questionnaire froid).
+  4. 2 modes : backfill one-shot sequentiel (sessions >= 2025-03-01, apres purge des ~350 .ics casses) + auto via UI fiche session. Re-run idempotent (0 doublon, cle deterministe + table SessionCalendarSync).
+**Plans:** 1/6 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 14 to break down)
+- [x] 14-01-PLAN.md — Fondation worker-safe : getCalendarClient (secrets OAuth) + cle d'idempotence deterministe + constantes couleurs
+- [ ] 14-02-PLAN.md — Textes EXACTS (rappel + froid) + bloc siege Vence conditionnel + countdown « dans X jours » + horaires figes + ids Drive
+- [ ] 14-03-PLAN.md — Migration Prisma SessionCalendarSync (trace + 2e filet idempotence) + wrappers tenant-scopes
+- [ ] 14-04-PLAN.md — Event builders (formation + 15 rappels + 3 froid) + orchestrateur syncSessionCalendar idempotent (invites/sendUpdates)
+- [ ] 14-05-PLAN.md — Purge ~350 .ics casses + backfill one-shot sequentiel (>= mars 2025) + loadSessionEventCtx
+- [ ] 14-06-PLAN.md — Server action wrapper auth + UI toggle/bouton fiche session + verification idempotence bout-en-bout
 
 ---
 
