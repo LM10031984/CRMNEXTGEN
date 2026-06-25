@@ -21,15 +21,27 @@ interface Props {
   sessionId: string;
   /** session passée → notification désactivée (trace uniquement). */
   isPastSession: boolean;
+  /**
+   * 'drawer' (défaut) = bloc complet avec toggle "notifier les apprenants" (Paramètres).
+   * 'header' = bouton compact pour la barre d'actions de la fiche (sync rapide,
+   * sans notification aux apprenants — la notification reste dans le tiroir Paramètres).
+   */
+  variant?: 'drawer' | 'header';
 }
 
-export function SessionCalendarSyncToggle({ sessionId, isPastSession }: Props) {
+export function SessionCalendarSyncToggle({
+  sessionId,
+  isPastSession,
+  variant = 'drawer',
+}: Props) {
   const [notifyLearners, setNotifyLearners] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function sync() {
+  // notify : le bouton en-tête ne notifie jamais les apprenants (sync rapide sûre) ;
+  // seul le tiroir Paramètres expose le toggle.
+  function runSync(notify: boolean) {
     startTransition(async () => {
-      const r = await syncSessionCalendarAction({ sessionId, notifyLearners });
+      const r = await syncSessionCalendarAction({ sessionId, notifyLearners: notify });
       if (r.ok) {
         const { inserted, updated, skipped } = r.recap;
         toast.success(
@@ -40,6 +52,31 @@ export function SessionCalendarSyncToggle({ sessionId, isPastSession }: Props) {
         toast.error(r.error ?? 'Erreur lors de la synchronisation');
       }
     });
+  }
+
+  function sync() {
+    runSync(notifyLearners);
+  }
+
+  // Variante en-tête : bouton compact (style aligné sur DocsButton). `disabled={pending}`
+  // empêche un 2e clic pendant la synchro ; le cœur est idempotent (re-clic = update, 0 doublon).
+  if (variant === 'header') {
+    return (
+      <button
+        type="button"
+        onClick={() => runSync(false)}
+        disabled={pending}
+        title="Créer / mettre à jour les événements agenda de cette session (idempotent)"
+        className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors disabled:opacity-60"
+      >
+        {pending ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <CalendarClock className="h-4 w-4" aria-hidden="true" />
+        )}
+        {pending ? 'Synchro…' : "Synchroniser l'agenda"}
+      </button>
+    );
   }
 
   return (

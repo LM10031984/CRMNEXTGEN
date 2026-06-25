@@ -587,6 +587,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               items={docDockItems}
               canGenerate={canWrite}
             />
+            {/* Synchro agenda Google — bouton compact (Phase 14). Idempotent : un
+                2e clic met à jour sans dupliquer. Notification apprenants = via le
+                tiroir Paramètres > Agenda / Rappels. */}
+            {canEdit && (
+              <SessionCalendarSyncToggle
+                variant="header"
+                sessionId={session.id}
+                isPastSession={new Date(session.endDate) < new Date()}
+              />
+            )}
             {/* Hub Paramètres — ouvre <SettingsDrawer> (commit ui-e3).
                 Remplace le <details> "Paramètres avancés" en bas de page. */}
             <SettingsButton>
