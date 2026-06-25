@@ -107,7 +107,9 @@ describe('resolveDocs — union des 6 sources (NAV-01, D-09.3-04)', () => {
     const cfp = resolveDocs(buildInput()).find((d) => d.sourceTable === 'AgeficeProfile');
     expect(cfp).toBeDefined();
     expect(cfp?.docType).toBe('CFP');
-    expect(cfp?.href).toBe('cfp-key');
+    // LOT 1.5 — CFP est une PII sans route API de téléchargement → href null
+    // (la clé brute « cfp-key » donnait un 404 relatif).
+    expect(cfp?.href).toBeNull();
   });
 
   it('Test 5 : anchor.level correct par source', () => {
@@ -216,17 +218,58 @@ describe('resolveDocs — union des 6 sources (NAV-01, D-09.3-04)', () => {
     expect(ped.usedStub).toBe(false);
   });
 
-  it('CNI/RIB/CFP → href = clé MinIO, status "present"', () => {
+  it('CNI/RIB/CFP → href null (PII sans route API), status "present" (LOT 1.5)', () => {
+    // BUG corrigé : avant LOT 1.5 le href portait la clé MinIO brute, qui se
+    // résolvait relativement à l'URL courante → 404. Aucune route API ne sert ces
+    // PII (consultées via IdentityDocsCard) → href null retire le lien cassé.
+    // La PRÉSENCE reste portée par status='present' (inchangé).
     const docs = resolveDocs(buildInput());
     const cni = docs.find((d) => d.sourceTable === 'SensitiveData')!;
     const rib = docs.find((d) => d.sourceTable === 'Person')!;
     const cfp = docs.find((d) => d.sourceTable === 'AgeficeProfile')!;
     expect(cni.docType).toBe('CNI');
-    expect(cni.href).toBe('cni-key');
+    expect(cni.href).toBeNull();
     expect(cni.status).toBe('present');
     expect(rib.docType).toBe('RIB');
-    expect(rib.href).toBe('rib-key');
+    expect(rib.href).toBeNull();
+    expect(rib.status).toBe('present');
     expect(cfp.docType).toBe('CFP');
+    expect(cfp.href).toBeNull();
+    expect(cfp.status).toBe('present');
+  });
+
+  it('LOT 1.5 — Document/PedagogicalAsset href = URL API de téléchargement (pas une clé MinIO)', () => {
+    const docs = resolveDocs(buildInput());
+    const doc = docs.find((d) => d.sourceTable === 'Document')!;
+    const ped = docs.find((d) => d.sourceTable === 'PedagogicalAsset')!;
+    // sourceId = row id (d1 / pa1 dans les fixtures).
+    expect(doc.href).toBe('/api/documents/d1');
+    expect(ped.href).toBe('/api/pedagogical-assets/pa1');
+    // Forme garantie : URL absolue racine (slash initial) → jamais résolue
+    // relativement à la page courante (cause du 404 d'origine).
+    expect(doc.href!.startsWith('/api/')).toBe(true);
+    expect(ped.href!.startsWith('/api/')).toBe(true);
+    // Et surtout : ce n'est PAS la clé MinIO brute du fixture.
+    expect(doc.href).not.toBe('http://minio/d1.pdf');
+    expect(ped.href).not.toBe('http://minio/pa1.pdf');
+  });
+
+  it('LOT 1.5 — PedagogicalAsset "missing" (pdfUrl null) → href null (pas de lien mort)', () => {
+    const input = buildInput();
+    input.pedagogicalAssets = [
+      {
+        id: 'pa-missing',
+        kind: 'QCM',
+        sessionId: 's1',
+        participantId: 'pp1',
+        rawJson: { source: 'shared' },
+        pdfUrl: null,
+        generatedAt: GENERATED_AT,
+      },
+    ];
+    const ped = resolveDocs(input).find((d) => d.sourceTable === 'PedagogicalAsset')!;
+    expect(ped.status).toBe('missing');
+    expect(ped.href).toBeNull();
   });
 
   it('CGV + RI tous deux présents → 2 docs Tenant', () => {
@@ -388,5 +431,40 @@ describe('resolveDocs — dédup version courante (CORRECTION 2, test de puissan
     });
     expect(docs).toHaveLength(2);
     expect(docs.every((d) => d.isCurrent && d.version === 1)).toBe(true);
+  });
+});
+
+/**
+ * LOT 1.5 — TEST DE PUISSANCE href (convention Laurent : un test doit GARDER
+ * quelque chose, pas un mock complaisant).
+ *
+ * Ce test garde la FORME de l'URL de téléchargement produite par `downloadHrefFor`.
+ * Preuve de puissance (à rejouer manuellement au gate) :
+ *   - dans resolve-docs.ts, faire renvoyer la clé brute pour Document, p.ex.
+ *       case 'Document': return sourceId;        // (au lieu de `/api/documents/${sourceId}`)
+ *     OU revenir à `href: doc.pdfUrl` à l'assignation → CE TEST DOIT VIRER ROUGE
+ *     (la clé « http://minio/d1.pdf » n'a pas de slash initial / ne commence pas
+ *     par /api/). Restaurer le mapping → vert. Cela prouve que le test garde bien
+ *     l'invariant « href = URL API absolue », pas juste « href défini ».
+ */
+describe('resolveDocs — href = URL API absolue (LOT 1.5, test de puissance)', () => {
+  it('le href d\'un Document/PedagogicalAsset commence par un slash et n\'est jamais une clé MinIO brute', () => {
+    const docs = resolveDocs(buildInput());
+    for (const d of docs) {
+      if (d.href === null) continue;
+      // Invariant gardé : URL racine (slash initial) — c'est précisément ce qui
+      // évite la résolution relative responsable du 404 d'origine.
+      expect(d.href.startsWith('/'), `${d.sourceTable} href doit être absolu: ${d.href}`).toBe(true);
+      // Et jamais une clé/URL de stockage brute (minio/, deroules/, …, ou http(s)://).
+      expect(/^https?:\/\//.test(d.href), `${d.sourceTable} href est une URL de stockage brute`).toBe(false);
+      expect(d.href.includes('minio'), `${d.sourceTable} href contient la clé MinIO`).toBe(false);
+    }
+  });
+
+  it('un Document mappe vers /api/documents/{rowId} (l\'id de ligne, pas la clé pdfUrl)', () => {
+    const doc = resolveDocs(buildInput()).find((d) => d.sourceTable === 'Document')!;
+    expect(doc.href).toBe('/api/documents/d1');
+    // Garde l'INDIRECTION : c'est bien sourceId (= row id), pas pdfUrl, qui pilote l'URL.
+    expect(doc.sourceId).toBe('d1');
   });
 });

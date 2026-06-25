@@ -42,7 +42,7 @@ export interface UnifiedDoc {
   qualiopiIndicator: string | null; // D-#1 : conformité, pas juste existence
   anchor: DocAnchor;
   generatedAt: Date | null;
-  href: string | null; // null = preuve à produire (markdown tenant) ou clé MinIO sinon
+  href: string | null; // URL API de téléchargement (/api/documents|pedagogical-assets/{id}) ; null = preuve markdown (tenant) ou PII sans route (CNI/RIB/CFP). JAMAIS une clé MinIO brute (LOT 1.5).
   status: 'present' | 'stub' | 'missing';
   usedStub: boolean; // D-#1 : stub = pire qu'absent (blocker T4 ind. 11)
   // ── 09.3-03-fix CORRECTION 2 — dédup version courante (champs ADDITIFS).
@@ -114,6 +114,43 @@ export interface ResolveDocsInput {
  */
 function indicatorFor(docType: string): string | null {
   return DOC_INDICATORS[docType] ?? null;
+}
+
+/**
+ * LOT 1.5 — URL de téléchargement utilisable par le navigateur.
+ *
+ * BUG corrigé : `href` était la clé MinIO BRUTE (ex « deroules/produits/x.pdf »).
+ * Sans slash initial, le navigateur la résout RELATIVEMENT au chemin courant
+ * (/app/produits/{id}/… → /app/produits/deroules/produits/x.pdf → 404). Le lien
+ * « Télécharger » de la liste unifiée était donc cassé pour TOUS les docs.
+ *
+ * Le href doit pointer vers une route API qui streame le PDF via lib/storage
+ * (downloadFile). Mapping par `sourceTable` × `sourceId` (= row id pour Document
+ * et PedagogicalAsset) :
+ *  - Document         → /api/documents/{id}           (route existante)
+ *  - PedagogicalAsset → /api/pedagogical-assets/{id}  (route existante)
+ *  - SensitiveData/Person/AgeficeProfile (CNI/RIB/CFP) → null : AUCUNE route API
+ *    n'existe pour ces PII (consultées via IdentityDocsCard dédiée), donc un lien
+ *    de clé brute n'est qu'un 404 trompeur. null = on retire honnêtement le lien
+ *    cassé (la présence reste portée par `status`, inchangé).
+ *  - Tenant (CGV/RI)  → null (markdown, pas de PDF stocké — déjà null en amont).
+ */
+function downloadHrefFor(sourceTable: DocSourceTable, sourceId: string): string | null {
+  switch (sourceTable) {
+    case 'Document':
+      return `/api/documents/${sourceId}`;
+    case 'PedagogicalAsset':
+      return `/api/pedagogical-assets/${sourceId}`;
+    // CNI / RIB / CFP : PII sans route API de téléchargement → pas de lien.
+    case 'SensitiveData':
+    case 'Person':
+    case 'AgeficeProfile':
+    // CGV / RI : preuve markdown, pas un PDF stocké.
+    case 'Tenant':
+      return null;
+    default:
+      return null;
+  }
 }
 
 /** Déduit l'ancrage d'un Document depuis entityType (seules sessionId/participantId sont de vraies FK). */
@@ -233,7 +270,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
       qualiopiIndicator: indicatorFor(doc.type),
       anchor: anchorForDocument(doc),
       generatedAt: doc.createdAt,
-      href: doc.pdfUrl,
+      href: downloadHrefFor('Document', doc.id),
       status: 'present',
       usedStub: false,
     });
@@ -252,7 +289,9 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         ? { level: 'participant', participantId: pa.participantId, personId: '', sessionId: pa.sessionId }
         : { level: 'session', sessionId: pa.sessionId },
       generatedAt: pa.generatedAt,
-      href: pa.pdfUrl,
+      // Lien seulement si le PDF existe réellement (status present/stub). Un asset
+      // « missing » (pdfUrl null) ne reçoit pas de href → pas de lien mort.
+      href: pa.pdfUrl ? downloadHrefFor('PedagogicalAsset', pa.id) : null,
       status,
       usedStub,
     });
@@ -275,7 +314,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         qualiopiIndicator: indicatorFor('CNI'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
-        href: id.cniUrl,
+        href: downloadHrefFor('SensitiveData', id.cniUrl),
         status: 'present',
         usedStub: false,
       });
@@ -288,7 +327,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         qualiopiIndicator: indicatorFor('RIB'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
-        href: id.ribKey,
+        href: downloadHrefFor('Person', id.ribKey),
         status: 'present',
         usedStub: false,
       });
@@ -302,7 +341,7 @@ export function resolveDocs(input: ResolveDocsInput): UnifiedDoc[] {
         qualiopiIndicator: indicatorFor('CFP'), // catalogue → null (source unique)
         anchor: participantAnchor,
         generatedAt: null,
-        href: id.cfpKey,
+        href: downloadHrefFor('AgeficeProfile', id.cfpKey),
         status: 'present',
         usedStub: false,
       });
