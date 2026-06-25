@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-06-25T10:22:58.723Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-06-25T10:28:51.664Z"
 last_activity: 2026-06-25
 progress:
   total_phases: 15
   completed_phases: 9
   total_plans: 78
-  completed_plans: 50
+  completed_plans: 51
 ---
 
 # STATE — QualiOF
@@ -28,12 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 14 (int-gration-google-calendar) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-06-25 — Plan 14-02 livré (Wave 1, textes EXACTS + countdown). 2 modules purs worker-safe `apps/web/src/lib/calendar/*` (0 import auth/react, grep clean) + 2 tests : (1) `countdown.ts` `countdownLabel(daysUntil)` (0→« aujourd'hui », 1→« demain », n>1→« dans N jours », clamp neg) + `daysBetween(from,to)` (jours calendaires entiers UTC floor) — aucune lib de dates (calcul natif Date) ; (2) `texts.ts` fige MOT POUR MOT les textes du pilote SES-0097 (source `14-PILOTE-TEXTS.md`, checkpoint Task 0 résolu hors-bande) : `renderRappelText(ctx)` = corps standard (📍lieu/⏳durée/👨‍🏫formateur/✔️checklist/docs/contact/« Emma de Start Academy ») + ligne countdown `📅 Votre formation commence {countdown} !` injectée si countdown non vide + `SIEGE_BLOCK` concaténé si `ctx.isSiege` ; `renderFroidText(ctx,relance)` = 3 relances (RELANCE 1 avec blague PS, RELANCE 2 préfixe « 1 mois et 15 jours », RELANCE 3 « 2 mois ») + salutation `Bonjour {prénoms}` + lien questionnaire C7.i30 `1uNEa7…` ; `isSiegeVence(addr)` détecte siège (618+Jean Maurel+06140/Vence, robuste Bd/Boulevard/casse/espaces) ; const `HORAIRES` (9h-13h/14h-18h FIGÉES, pas de smart-calc), `DRIVE_DOCS` (cgv/ri/chartePsh/froid), `SIEGE_BLOCK`/`SIEGE_ADDRESS`, helper `driveViewUrl`. 24 tests Vitest verts (8 countdown TDD RED `f481ce2`→GREEN `c6553c2` + 16 texts). 1 déviation Rule 3 : commentaires reformulés sans citer littéralement « dayjs/date-fns » ni « durationHours » (sinon grep d'acceptance se déclenche). 3 commits `f481ce2`/`c6553c2`/`ad10cc7`. Note décision : renderRappelText unique sert formation all-day (countdown vide) ET rappels quotidiens (countdown calculé) ; bloc siège AJOUTÉ au corps (concat), pas en remplacement. Plan 14-04 (orchestrateur builders) consomme ce module : appeler `countdownLabel(daysBetween(dateRappel,dateDebut))` + `isSiegeVence(session.location.address)`.
 - 2026-06-25 — Plan 14-01 livré (Wave 1, fondation worker-safe Google Calendar). 3 modules `apps/web/src/lib/calendar/*` purs (0 import auth/react — règle worker BullMQ, vérifié grep sur tout le dossier) : (1) `google-client.ts` `getCalendarClient()` clone du pattern `scripts/_google-test.ts` (OAuth `OAuth2` + `setCredentials({ refresh_token })` lus depuis `../../secrets` oauth-client.json + google-token.json) singleton mémoïsé + `CALENDAR_ID` figé agenda « Rappel Formations » ; (2) `colors.ts` `CALENDAR_COLORS={formation:'7',rappel:'6',froid:'3'}` (colorId Google = strings) ; (3) `idempotency.ts` `buildEventKey(sessionCode,type,dayIndex?)` → `qualiof_<code-lc>_<type>[_<day>]` déterministe sans timestamp charset `[a-z0-9_-]` + `QUALIOF_KEY_PROP='qualiof_key'` (extendedProperties.private pour insert/update/skip) + type `CalendarEventType`. TDD sur idempotency : 6 tests Vitest verts (RED `78a7d3a` → GREEN `3d71c91`). tsc clean sur lib/calendar. 1 déviation Rule 3 : commentaire worker-safe reformulé sans citer littéralement les tokens interdits (sinon le grep d'acceptance se déclenchait sur le commentaire). 3 commits `1a396a7`/`78a7d3a`/`3d71c91`. Socle prêt pour Plan 14-04 (orchestrateur). Plan 14-02 débloqué.
 - 2026-06-25 — Phase 14 ajoutée : Intégration Google Calendar (rappels/convocations/satisfaction auto). Connexion API Google Calendar (compte service Start Academy, agenda « Rappel Formations »), worker par session : formateur invité réel (apprenants non invités), textes EXACTS Start Academy (rappel J-15→J-1 « dans X jours » calculé, satisfaction froid 1m/1m15j/2m), template siège Vence auto (cf reference_rappel_siege_vence_qualiopi), joint programme session + Charte/RI/CGV, codes couleur. 2 modes : backfill audit (sessions ≥ mars 2025) + auto nouvelles sessions. Prérequis bloquant = accès Google Calendar API. Import .ics abandonné (Google retire invités à l'import + pas de countdown). Pilote manuel SES-0097 fait via MCP (modèle de rendu).
 - 2026-05-12 — Brownfield project initialized. Paliers 2.2/2.3/3/4 imported as Validated requirements. New milestone v5 created with 40 active requirements split across 12 phases (fine granularity).
@@ -244,7 +245,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 14-01-PLAN.md
+Stopped at: Completed 14-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA

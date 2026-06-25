@@ -286,11 +286,11 @@ Plans:
   2. Formateur principal toujours invite (email reel) ; apprenants toujours dans les invites — sendUpdates 'none' pour les sessions passees (trace audit), toggle 'all'/'none' pour les sessions a venir.
   3. Textes reproduits MOT POUR MOT (rappel + froid) + bloc siege Vence etendu auto quand lieu = 618 Bd Jean Maurel inferieur, 06140 Vence + pieces jointes Drive (programme + CGV + RI + Charte PSH + questionnaire froid).
   4. 2 modes : backfill one-shot sequentiel (sessions >= 2025-03-01, apres purge des ~350 .ics casses) + auto via UI fiche session. Re-run idempotent (0 doublon, cle deterministe + table SessionCalendarSync).
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 - [x] 14-01-PLAN.md — Fondation worker-safe : getCalendarClient (secrets OAuth) + cle d'idempotence deterministe + constantes couleurs
-- [ ] 14-02-PLAN.md — Textes EXACTS (rappel + froid) + bloc siege Vence conditionnel + countdown « dans X jours » + horaires figes + ids Drive
+- [x] 14-02-PLAN.md — Textes EXACTS (rappel + froid) + bloc siege Vence conditionnel + countdown « dans X jours » + horaires figes + ids Drive
 - [ ] 14-03-PLAN.md — Migration Prisma SessionCalendarSync (trace + 2e filet idempotence) + wrappers tenant-scopes
 - [ ] 14-04-PLAN.md — Event builders (formation + 15 rappels + 3 froid) + orchestrateur syncSessionCalendar idempotent (invites/sendUpdates)
 - [ ] 14-05-PLAN.md — Purge ~350 .ics casses + backfill one-shot sequentiel (>= mars 2025) + loadSessionEventCtx
