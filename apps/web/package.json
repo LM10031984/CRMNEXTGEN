@@ -21,7 +21,9 @@
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
     "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",
-    "e2e:closure": "dotenv -e ../../.env -- tsx scripts/closure-e2e-test.ts"
+    "e2e:closure": "dotenv -e ../../.env -- tsx scripts/closure-e2e-test.ts",
+    "calendar:purge": "dotenv -e ../../.env -- tsx scripts/calendar-purge-broken.ts",
+    "calendar:backfill": "dotenv -e ../../.env -- tsx scripts/calendar-backfill.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
