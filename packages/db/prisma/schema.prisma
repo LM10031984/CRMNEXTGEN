@@ -463,6 +463,7 @@ model TrainingSession {
   preEnrollments        PreEnrollment[]
   tasks                 Task[]
   comments              InternalComment[]
+  calendarSyncs         SessionCalendarSync[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
@@ -1577,4 +1578,33 @@ model RevenueTarget {
 
   @@unique([tenantId, year])
   @@index([tenantId])
+}
+
+// =====================================================
+// === Synchro Google Calendar (Phase 14)
+// =====================================================
+
+/// Phase 14 — trace de synchro Google Calendar par session.
+/// Second filet d'idempotence (en complément de la clé déterministe écrite dans
+/// extendedProperties.private côté Google) ET preuve d'audit Qualiopi du backfill :
+/// quelle session a quels événements créés, quand, en quel mode, avec quel
+/// sendUpdates appliqué. L'orchestrateur (Plan 14-04) upsert une ligne par
+/// événement (clé composite sessionId + eventKey), ce qui permet à un re-run de
+/// décider skip/update au lieu de dupliquer.
+model SessionCalendarSync {
+  id            String          @id @default(uuid())
+  tenantId      String
+  sessionId     String
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventKey      String // buildEventKey(...) déterministe — Plan 14-01
+  googleEventId String // id retourné par events.insert
+  eventType     String // 'formation' | 'rappel' | 'froid'
+  dayIndex      Int? // index du rappel quotidien / relance froid
+  syncMode      String // 'backfill' | 'auto'
+  sentUpdates   String // 'all' | 'none' — sendUpdates appliqué à l'insert
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([sessionId, eventKey])
+  @@index([tenantId, sessionId])
 }
