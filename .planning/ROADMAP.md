@@ -286,15 +286,26 @@ Plans:
   2. Formateur principal toujours invite (email reel) ; apprenants toujours dans les invites — sendUpdates 'none' pour les sessions passees (trace audit), toggle 'all'/'none' pour les sessions a venir.
   3. Textes reproduits MOT POUR MOT (rappel + froid) + bloc siege Vence etendu auto quand lieu = 618 Bd Jean Maurel inferieur, 06140 Vence + pieces jointes Drive (programme + CGV + RI + Charte PSH + questionnaire froid).
   4. 2 modes : backfill one-shot sequentiel (sessions >= 2025-03-01, apres purge des ~350 .ics casses) + auto via UI fiche session. Re-run idempotent (0 doublon, cle deterministe + table SessionCalendarSync).
-**Plans:** 2/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 14-01-PLAN.md — Fondation worker-safe : getCalendarClient (secrets OAuth) + cle d'idempotence deterministe + constantes couleurs
 - [x] 14-02-PLAN.md — Textes EXACTS (rappel + froid) + bloc siege Vence conditionnel + countdown « dans X jours » + horaires figes + ids Drive
-- [ ] 14-03-PLAN.md — Migration Prisma SessionCalendarSync (trace + 2e filet idempotence) + wrappers tenant-scopes
-- [ ] 14-04-PLAN.md — Event builders (formation + 15 rappels + 3 froid) + orchestrateur syncSessionCalendar idempotent (invites/sendUpdates)
-- [ ] 14-05-PLAN.md — Purge ~350 .ics casses + backfill one-shot sequentiel (>= mars 2025) + loadSessionEventCtx
-- [ ] 14-06-PLAN.md — Server action wrapper auth + UI toggle/bouton fiche session + verification idempotence bout-en-bout
+- [x] 14-03-PLAN.md — Migration Prisma SessionCalendarSync (trace + 2e filet idempotence) + wrappers tenant-scopes
+- [x] 14-04-PLAN.md — Event builders (formation + 15 rappels + 3 froid) + orchestrateur syncSessionCalendar idempotent (invites/sendUpdates)
+- [x] 14-05-PLAN.md — Purge ~350 .ics casses + backfill one-shot sequentiel (>= mars 2025) + loadSessionEventCtx
+- [x] 14-06-PLAN.md — Server action wrapper auth + UI toggle/bouton fiche session + verification idempotence bout-en-bout
+
+### Phase 15: Refonte fiche session en 5 onglets
+
+**Goal:** Remplacer le scroll de 1069 lignes de la fiche session par 5 onglets (Session · Avant · Après · Tous les documents · Agenda), ranger chaque document à un seul endroit (supprimer les ~16 surfaces redondantes), déplacer la validation programme IA au niveau produit, nettoyer les batches zombies. Réorganisation de surface — le câblage métier existant est réutilisé tel quel.
+**Source de vérité:** `.planning/PLAN-FICHE-SESSION-ONGLETS-RECAP.md` (réécrit 2026-06-26, vision simplifiée 5 onglets). Conformité audit T1-T13 + dette Lot E conservées en annexe §8, hors scope.
+**Requirements**: TBD (dérivés du plan source au moment du /gsd:plan-phase)
+**Depends on:** Phase 14
+**Plans:** 0 plans (4 lots prévus : coquille onglets → réembarquer+dédoublonner → onglet Agenda → programme produit+nettoyage)
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 15 to break down)
 
 ---
 
