@@ -300,12 +300,15 @@ Plans:
 
 **Goal:** Remplacer le scroll de 1069 lignes de la fiche session par 5 onglets (Session · Avant · Après · Tous les documents · Agenda), ranger chaque document à un seul endroit (supprimer les ~16 surfaces redondantes), déplacer la validation programme IA au niveau produit, nettoyer les batches zombies. Réorganisation de surface — le câblage métier existant est réutilisé tel quel.
 **Source de vérité:** `.planning/PLAN-FICHE-SESSION-ONGLETS-RECAP.md` (réécrit 2026-06-26, vision simplifiée 5 onglets). Conformité audit T1-T13 + dette Lot E conservées en annexe §8, hors scope.
-**Requirements**: TBD (dérivés du plan source au moment du /gsd:plan-phase)
+**Requirements**: dérivés goal-backward par lot (pas de REQ-ID formel) : FS-ONGLETS-COQUILLE · FS-ONGLETS-REEMBARQUE · FS-ONGLETS-DEDUP · FS-ONGLETS-AGENDA · FS-PROGRAMME-PRODUIT · FS-ZOMBIES · FS-CORRECTIFS
 **Depends on:** Phase 14
-**Plans:** 0 plans (4 lots prévus : coquille onglets → réembarquer+dédoublonner → onglet Agenda → programme produit+nettoyage)
+**Plans:** 4 plans (4 vagues séquentielles — chaque lot dépend du précédent)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 15 to break down)
+- [ ] 15-01-PLAN.md — Lot 1 (Wave 1) : coquille à onglets (SessionTabs `?tab=` + pushState) + en-tête, 5 onglets câblés deep-link
+- [ ] 15-02-PLAN.md — Lot 2 (Wave 2) : réembarquer Avant/Après/Tous-docs (Tout générer + 4 docs session) + SUPPRIMER drawer/bouton/4 cartes
+- [ ] 15-03-PLAN.md — Lot 3 (Wave 3) : onglet Agenda (synchro Google Calendar Phase 14 + créneaux lecture)
+- [ ] 15-04-PLAN.md — Lot 4 (Wave 4) : validation IA retirée de la session (lien produit) + nettoyage batches zombies DRY/WRITE + correctifs visuels
 
 ---
 
