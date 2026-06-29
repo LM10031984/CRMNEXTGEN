@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { SESSION_TABS, coerceTab, type SessionTabId } from './session-tabs-config';
 
 /**
  * Phase 15 Lot 1 (15-01) — Coquille à 5 onglets de la fiche session.
@@ -24,21 +25,6 @@ import { cn } from '@/lib/utils';
  * Lot 1 = structure seulement : les panneaux ENVELOPPENT les blocs EXISTANTS de
  * `page.tsx` sans en modifier le contenu (le réembarquement propre = Lot 2).
  */
-
-export const SESSION_TABS = [
-  { id: 'session', label: 'Session' },
-  { id: 'avant', label: 'Avant la formation' },
-  { id: 'apres', label: 'Après la formation' },
-  { id: 'docs', label: 'Tous les documents' },
-  { id: 'agenda', label: 'Agenda' },
-] as const;
-
-export type SessionTabId = (typeof SESSION_TABS)[number]['id'];
-
-/** Valide `raw` contre les 5 ids connus ; fallback `'session'` (onglet par défaut). */
-export function coerceTab(raw: string | undefined): SessionTabId {
-  return SESSION_TABS.some((t) => t.id === raw) ? (raw as SessionTabId) : 'session';
-}
 
 interface Props {
   defaultTab: SessionTabId;

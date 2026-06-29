@@ -29,7 +29,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => currentParams,
 }));
 
-import { SessionTabs, coerceTab } from '../session-tabs';
+import { SessionTabs } from '../session-tabs';
+import { coerceTab } from '../session-tabs-config';
 
 const panels = {
   session: <div>PANEL_SESSION</div>,

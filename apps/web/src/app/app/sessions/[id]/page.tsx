@@ -57,7 +57,8 @@ import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
-import { SessionTabs, coerceTab } from '@/components/sessions/tabs/session-tabs';
+import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
+import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
