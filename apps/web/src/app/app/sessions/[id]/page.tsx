@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, ChevronRight, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -57,13 +57,24 @@ import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
+import { SessionTabs, coerceTab } from '@/components/sessions/tabs/session-tabs';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
-export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SessionDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { user } = await validateRequest();
   if (!user) return null;
   const { id } = await params;
+  // Phase 15 Lot 1 — onglet actif lu côté serveur pour le deep-link initial
+  // (?tab=apres). Le conteneur client <SessionTabs> relit ensuite ?tab= via
+  // useSearchParams (survie au router.refresh()).
+  const sp = await searchParams;
 
   const session = await prisma.trainingSession.findFirst({
     where: { id, tenantId: user.tenantId },
@@ -832,238 +843,238 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      {/* Status select + dates editor — gardés sous le hero pour édition
-          rapide sans ouvrir la modale Modifier. Discrets.
-          Anchor #section-status : cible du CTA sessionStage "Marquer comme
-          terminée" quand endDate < now et status pré-COMPLETED. */}
-      <div id="section-status" className="flex items-center gap-2 flex-wrap text-xs scroll-mt-20">
-        <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
-        <SessionDatesEditor
-          sessionId={session.id}
-          initialStart={session.startDate}
-          initialEnd={session.endDate}
-        />
-      </div>
-
-      {/* Auto-refresh + progress bar visible quand un pack closure tourne */}
-      {latestBatch && (
-        <BatchProgressAutoRefresh
-          status={latestBatch.status}
-          totalDocs={latestBatch.totalDocs}
-          doneDocs={latestBatch.doneDocs}
-          errorDocs={latestBatch.errorDocs}
-        />
-      )}
-
-      {/* SessionTasksPanel migré dans le <SettingsDrawer> (commit ui-e3).
-          Le badge tasks reste accessible via le bouton "Paramètres" du
-          SessionHeaderBar. */}
-
-      {/* Bloc "Dossier Qualiopi %" supprimé — redondant avec la barre conformité
-          Qualiopi du Hero (9 indicateurs) qui couvre déjà cette info, et son
-          calcul X/N était bugué après refonte (Laurent 2026-06-04 : "il dit 0/3
-          alors que les docs ont été générés"). */}
-
       {/* ════════════════════════════════════════════════════════════════
-          Refonte UX 2026-06-04 — Timeline 5 étapes process Qualiopi
-          Remplace : SessionOnlyDocsBlock + PreparationPedagogiqueBlock +
-          ClosureFormationBlock + TresoStatusBlock + SessionInvoicesBlock
-          (qui étaient juxtaposés sans cohérence). Tout est désormais sous
-          un axe linéaire unique : Création → Préparation → Pendant →
-          Pack fin → Facturation. Avec Hero "Prochaine étape" intelligent
-          et barre conformité Qualiopi en haut.
+          Phase 15 Lot 1 — Coquille à 5 onglets (?tab=).
+          ENVELOPPEMENT SEULEMENT : les blocs métier EXISTANTS sont regroupés
+          tels quels en 5 panneaux passés en props à <SessionTabs> ; AUCUN
+          contenu n'est modifié, AUCUN composant supprimé. Le réembarquement
+          propre + la suppression des doublons = Lot 2.
+
+          En-tête persistant (RecordRecentVisit + SessionHeaderBar +
+          NextActionHero) reste AU-DESSUS des onglets (allègement fin = Lot 4).
+          SessionEvaluationBlock + StepFacturation restent HORS onglets
+          (déféré, cf. 15-CONTEXT §deferred) — conservés en bas de page.
           ════════════════════════════════════════════════════════════════ */}
-      <div id="section-formateurs" className="scroll-mt-20" />
-      <SessionWorkflowTimeline
-        sessionStatus={session.status}
-        prep={preparationStatus}
-        closure={closureStatus}
-        canLaunchPack={sessionCompleteness.ready}
-        participantsCount={session.participants.length}
-        primaryTrainerName={primaryTrainerName}
-        productAiDraftPending={Boolean(session.product?.aiDraftedAt)}
-        canWrite={canWrite}
-      >
-        <div id="step-1" className="scroll-mt-20" />
-        <StepCreation
-          state={stage.stagesState[1] === 'active' ? 'active' : stage.stagesState[1] === 'done' ? 'done' : 'todo'}
-          expanded={stage.stagesState[1] === 'active'}
-          blockerMessage={stage.status === 'blocked' && stage.current === 1 ? stage.blocker : undefined}
-          productId={session.product?.id ?? null}
-          productLabel={productLabel}
-          productCode={productCode}
-          productAiDraftedAt={session.product?.aiDraftedAt ?? null}
-          productProgrammePdfId={programmeProductDocId ?? null}
-          canValidateAi={canEdit}
-          durationHours={productDuration}
-          startDate={session.startDate}
-          endDate={session.endDate}
-          locationLabel={locationLabel}
-          primaryTrainerName={primaryTrainerName}
-          coTrainerCount={coTrainerCount}
-          participantsCount={session.participants.length}
-          pricePerLearner={pricePerLearnerNum}
-          actions={
-            <>
-              {canEdit && (
-                <EditSessionDetailsDialog
-                  sessionId={session.id}
-                  initial={{
-                    name: session.name,
-                    startDate: session.startDate,
-                    endDate: session.endDate,
-                    capacityMin: session.capacityMin,
-                    capacityMax: session.capacityMax,
-                    modality: session.modality,
-                    pricePerLearner:
-                      session.pricePerLearner === null ? null : Number(session.pricePerLearner),
-                    language: session.language,
-                    internalNotes: session.internalNotes,
-                  }}
+      <SessionTabs
+        defaultTab={coerceTab(sp.tab)}
+        session={
+          <div className="space-y-6 pt-4">
+            {/* Status select + dates editor — gardés sous le hero pour édition
+                rapide sans ouvrir la modale Modifier. Discrets.
+                Anchor #section-status : cible du CTA sessionStage "Marquer comme
+                terminée" quand endDate < now et status pré-COMPLETED. */}
+            <div id="section-status" className="flex items-center gap-2 flex-wrap text-xs scroll-mt-20">
+              <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
+              <SessionDatesEditor
+                sessionId={session.id}
+                initialStart={session.startDate}
+                initialEnd={session.endDate}
+              />
+            </div>
+
+            {/* SessionWorkflowTimeline conservé ICI (Lot 1 = enveloppement) : il
+                porte la barre conformité Qualiopi (9 indicateurs) + l'étape
+                Création + la liste nominative des inscrits. La décomposition fine
+                de la timeline (étapes réparties par onglet) = Lot 2. */}
+            <div id="section-formateurs" className="scroll-mt-20" />
+            <SessionWorkflowTimeline
+              sessionStatus={session.status}
+              prep={preparationStatus}
+              closure={closureStatus}
+              canLaunchPack={sessionCompleteness.ready}
+              participantsCount={session.participants.length}
+              primaryTrainerName={primaryTrainerName}
+              productAiDraftPending={Boolean(session.product?.aiDraftedAt)}
+              canWrite={canWrite}
+            >
+              <div id="step-1" className="scroll-mt-20" />
+              <StepCreation
+                state={stage.stagesState[1] === 'active' ? 'active' : stage.stagesState[1] === 'done' ? 'done' : 'todo'}
+                expanded={stage.stagesState[1] === 'active'}
+                blockerMessage={stage.status === 'blocked' && stage.current === 1 ? stage.blocker : undefined}
+                productId={session.product?.id ?? null}
+                productLabel={productLabel}
+                productCode={productCode}
+                productAiDraftedAt={session.product?.aiDraftedAt ?? null}
+                productProgrammePdfId={programmeProductDocId ?? null}
+                canValidateAi={canEdit}
+                durationHours={productDuration}
+                startDate={session.startDate}
+                endDate={session.endDate}
+                locationLabel={locationLabel}
+                primaryTrainerName={primaryTrainerName}
+                coTrainerCount={coTrainerCount}
+                participantsCount={session.participants.length}
+                pricePerLearner={pricePerLearnerNum}
+                actions={
+                  <>
+                    {canEdit && (
+                      <EditSessionDetailsDialog
+                        sessionId={session.id}
+                        initial={{
+                          name: session.name,
+                          startDate: session.startDate,
+                          endDate: session.endDate,
+                          capacityMin: session.capacityMin,
+                          capacityMax: session.capacityMax,
+                          modality: session.modality,
+                          pricePerLearner:
+                            session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+                          language: session.language,
+                          internalNotes: session.internalNotes,
+                        }}
+                      />
+                    )}
+                    {canWrite && (
+                      <AddParticipantDialog
+                        sessionId={session.id}
+                        defaultPrice={Number(session.pricePerLearner ?? 0)}
+                        excludePersonIds={session.participants.map((p) => p.personId)}
+                      />
+                    )}
+                  </>
+                }
+              />
+
+              {/* Liste nominative des inscrits + désinscription. Avant : seulement un
+                  compteur "N apprenants" + la matrice 14 colonnes où le menu d'actions
+                  était hors écran. Frustration Laurent 15/06. */}
+              <div className="mt-3">
+                <SessionParticipantsList
+                  canManage={canWrite}
+                  participants={matrixParticipants.map((p) => ({
+                    id: p.id,
+                    personId: p.personId,
+                    fullName: p.fullName,
+                    sponsorOrgLabel: p.sponsorOrgLabel,
+                    docCount: docCompletionByParticipant.get(p.id) ?? 0,
+                    docTotal: PERSONAL_DOC_TOTAL,
+                  }))}
                 />
-              )}
-              {canWrite && (
-                <AddParticipantDialog
-                  sessionId={session.id}
-                  defaultPrice={Number(session.pricePerLearner ?? 0)}
-                  excludePersonIds={session.participants.map((p) => p.personId)}
-                />
-              )}
-            </>
-          }
-        />
+              </div>
+            </SessionWorkflowTimeline>
 
-        {/* Liste nominative des inscrits + désinscription. Avant : seulement un
-            compteur "N apprenants" + la matrice 14 colonnes où le menu d'actions
-            était hors écran. Frustration Laurent 15/06. */}
-        <div className="mt-3">
-          <SessionParticipantsList
-            canManage={canWrite}
-            participants={matrixParticipants.map((p) => ({
-              id: p.id,
-              personId: p.personId,
-              fullName: p.fullName,
-              sponsorOrgLabel: p.sponsorOrgLabel,
-              docCount: docCompletionByParticipant.get(p.id) ?? 0,
-              docTotal: PERSONAL_DOC_TOTAL,
-            }))}
-          />
-        </div>
+            {/* <ParticipantDocsCards> supprimé (commit ui-e3 #5) — le DocDockDrawer
+                porte la même affordance "clic génère ce doc".
+                L'anchor #section-participants est conservé en ghost pour les
+                CTAs sessionStage qui pointent ici ("Ajouter un apprenant"). */}
+            <div id="section-participants" className="scroll-mt-20" />
+          </div>
+        }
+        avant={
+          <div className="space-y-6 pt-4">
+            <div id="step-2" className="scroll-mt-20" />
+            <PreparationPedagogiqueBlock
+              sessionId={session.id}
+              initialStatus={preparationStatus}
+              canWrite={canWrite}
+              isActive={stage.stagesState[2] === 'active'}
+              expanded={stage.stagesState[2] === 'active'}
+              programmePdfHref={programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined}
+              deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
+              checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
+            />
+          </div>
+        }
+        apres={
+          <div className="space-y-6 pt-4">
+            {/* Auto-refresh + progress bar visible quand un pack closure tourne —
+                Lot 1 : déplacé du niveau page DANS l'onglet « Après » (plus de
+                bandeau flottant page-wide, cf. 15-CONTEXT). */}
+            {latestBatch && (
+              <BatchProgressAutoRefresh
+                status={latestBatch.status}
+                totalDocs={latestBatch.totalDocs}
+                doneDocs={latestBatch.doneDocs}
+                errorDocs={latestBatch.errorDocs}
+              />
+            )}
 
-        <div id="step-2" className="scroll-mt-20" />
-        <PreparationPedagogiqueBlock
-          sessionId={session.id}
-          initialStatus={preparationStatus}
-          canWrite={canWrite}
-          isActive={stage.stagesState[2] === 'active'}
-          expanded={stage.stagesState[2] === 'active'}
-          programmePdfHref={programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined}
-          deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
-          checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
-        />
+            <div id="step-3" className="scroll-mt-20" />
+            <StepPendantFormation
+              state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
+              expanded={stage.stagesState[3] === 'active'}
+              participantsCount={session.participants.length}
+              emargementsGenerated={closureStatus.emargements}
+              totalSlots={totalSlots}
+              signedSlots={signedSlots}
+              startDateISO={session.startDate.toISOString()}
+              endDateISO={session.endDate.toISOString()}
+            />
 
-        <div id="step-3" className="scroll-mt-20" />
-        <StepPendantFormation
-          state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
-          expanded={stage.stagesState[3] === 'active'}
-          participantsCount={session.participants.length}
-          emargementsGenerated={closureStatus.emargements}
-          totalSlots={totalSlots}
-          signedSlots={signedSlots}
-          startDateISO={session.startDate.toISOString()}
-          endDateISO={session.endDate.toISOString()}
-        />
+            <div id="step-4" className="scroll-mt-20" />
+            <ClosureFormationBlock
+              sessionId={session.id}
+              status={closureStatus}
+              isActive={stage.stagesState[4] === 'active'}
+              expanded={stage.stagesState[4] === 'active'}
+              programmeProductDocId={programmeProductDocId ?? null}
+              grilleObsSessionDocId={grilleSessionDocId ?? null}
+              bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
+            />
 
-        <div id="step-4" className="scroll-mt-20" />
-        <ClosureFormationBlock
-          sessionId={session.id}
-          status={closureStatus}
-          isActive={stage.stagesState[4] === 'active'}
-          expanded={stage.stagesState[4] === 'active'}
-          programmeProductDocId={programmeProductDocId ?? null}
-          grilleObsSessionDocId={grilleSessionDocId ?? null}
-          bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
-        />
-
-        <SessionEvaluationBlock evalStats={sessionEvalStats} />
-
-        <div id="step-5" className="scroll-mt-20" />
-        <StepFacturation
-          state={stage.stagesState[5] === 'active' ? 'active' : stage.stagesState[5] === 'done' ? 'done' : 'todo'}
-          expanded={stage.stagesState[5] === 'active'}
-          invoices={timelineInvoiceRows}
-          caTotalHT={caTotalHT}
-          opcoSubmissionId={latestOpcoSubmission?.id ?? null}
-        />
-      </SessionWorkflowTimeline>
-
-      {/* A5 — SessionOnlyDocsBlock remonté en sidebar de la page. Couvre les
-          4 docs niveau session avec génération à l'unité : Déroulé (produit),
-          Grille obs session (ind. 11 🔴), Checklist formation (ind. 17), et
-          Bilan satisfaction session (ind. 30 — 4ᵉ carte A5). Sans ce bloc,
-          ces 2 docs majeurs ne sont régénérables qu'en relançant le pack
-          complet — trou conformité identifié par le plan. Lot B le
-          déplacera en onglet Clôture, ici interim.
-
-          LOT 3b — garde `canWrite &&` retiré : la CONSULTATION de ces docs
-          (déroulé, grille, checklist, satisfaction) doit être ouverte à TOUS,
-          y compris les LECTEURs. Seule la GÉNÉRATION reste réservée à canWrite,
-          déjà gardée À L'INTÉRIEUR de SessionOnlyDocsBlock (boutons « Générer »
-          et « Re-générer » conditionnés par la prop canWrite). Un lecteur voit
-          donc « Voir le PDF » sur doc présent et l'état « Manquant » sans bouton
-          sur doc absent. */}
-      <SessionOnlyDocsBlock
-        sessionId={session.id}
-        productId={session.product?.id ?? null}
-        deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
-        grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
-        checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
-        satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
-        grilleObsAssetCount={grilleObsAssetCount}
-        canWrite={canWrite}
+            {/* A5 — SessionOnlyDocsBlock : 4 docs niveau session avec génération à
+                l'unité (Déroulé, Grille obs session ind. 11, Checklist ind. 17,
+                Bilan satisfaction session ind. 30). Conservé tel quel (Lot 1 =
+                enveloppement) ; le réembarquement propre = Lot 2. */}
+            <SessionOnlyDocsBlock
+              sessionId={session.id}
+              productId={session.product?.id ?? null}
+              deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
+              grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
+              checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
+              satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
+              grilleObsAssetCount={grilleObsAssetCount}
+              canWrite={canWrite}
+            />
+          </div>
+        }
+        docs={
+          <div className="pt-4">
+            {/* Vue tableau Qualiopi — matrice ParticipantDocMatrix promue en
+                onglet plein écran (sortie de son <details>). Lecture seule.
+                Lot 1 = enveloppement : contenu inchangé. */}
+            <div id="section-doc-matrix" className="scroll-mt-20">
+              <div className="mb-4">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Vue tableau Qualiopi · matrice apprenant × document
+                </span>
+              </div>
+              <ParticipantDocMatrix
+                sessionId={session.id}
+                userRole={user.role}
+                hasAgeficeParticipant={hasAgeficeParticipant}
+                participants={matrixParticipants}
+                productDocs={productDocsMap}
+                sessionDocs={sessionDocsMap}
+              />
+            </div>
+          </div>
+        }
+        agenda={
+          <div className="pt-4">
+            <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-6 text-sm text-muted-foreground">
+              Agenda — synchro Google Calendar (Lot 3)
+            </div>
+          </div>
+        }
       />
 
-      {/* <ParticipantDocsCards> supprimé (commit ui-e3 #5) — le DocDockDrawer
-          porte la même affordance "clic génère ce doc" (smoke gate
-          doc-dock-drawer.smoke.test.ts : 6 tests verts l'attestent).
-          L'anchor #section-participants est conservé en ghost pour les
-          CTAs sessionStage qui pointent ici ("Ajouter un apprenant"). */}
-      <div id="section-participants" className="scroll-mt-20" />
+      {/* ════════════════════════════════════════════════════════════════
+          HORS flux onglets (déféré, cf. 15-CONTEXT §deferred) — conservés en
+          bas de page, ni supprimés ni modifiés (Lot 1). Évaluation/stats +
+          Facturation seront rebranchés dans un 2ᵉ temps.
+          ════════════════════════════════════════════════════════════════ */}
+      <SessionEvaluationBlock evalStats={sessionEvalStats} />
 
-      {/* <details> "Paramètres avancés" supprimé (commit ui-e3) — tout le
-          contenu (Formateurs/Lieu/Logistique/Notes/Satisfaction/Tasks) vit
-          désormais dans <SettingsDrawer>, ouvert via le bouton "Paramètres"
-          du SessionHeaderBar (à côté de "Documents"). Les CTAs sessionStage
-          pointant vers #section-formateurs/lieu/logistique ouvrent le drawer
-          automatiquement via hash-detection (SettingsButton useEffect). */}
-
-      {/* Vue tableau Qualiopi — matrice ParticipantDocMatrix réintroduite ici
-          (commit ui-d). Cible du lien "Vue tableau" du DocDockDrawer footer.
-          Repliée par défaut pour ne pas polluer la vue principale — ouverte
-          via le drawer ou un anchor direct. */}
-      <details id="section-doc-matrix" className="group rounded-2xl border border-border bg-white overflow-hidden scroll-mt-20">
-        <summary className="cursor-pointer list-none p-4 flex items-center gap-2 hover:bg-muted/20 transition-colors [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Vue tableau Qualiopi · matrice apprenant × document
-          </span>
-        </summary>
-        <div className="border-t border-border p-4 sm:p-5 bg-muted/10">
-          <ParticipantDocMatrix
-            sessionId={session.id}
-            userRole={user.role}
-            hasAgeficeParticipant={hasAgeficeParticipant}
-            participants={matrixParticipants}
-            productDocs={productDocsMap}
-            sessionDocs={sessionDocsMap}
-          />
-        </div>
-      </details>
-
-      {/* DocDock floating SUPPRIMÉ (commit ui-d). Remplacé par <DocsButton>
-          dans la barre actions du SessionHeaderBar qui ouvre <DocDockDrawer>
-          (drawer side panel z-60 avec backdrop / ESC / scroll-lock / focus-trap).
-          Fichier doc-dock.tsx encore présent — sera supprimé en commit ui-e. */}
+      <div id="step-5" className="scroll-mt-20" />
+      <StepFacturation
+        state={stage.stagesState[5] === 'active' ? 'active' : stage.stagesState[5] === 'done' ? 'done' : 'todo'}
+        expanded={stage.stagesState[5] === 'active'}
+        invoices={timelineInvoiceRows}
+        caTotalHT={caTotalHT}
+        opcoSubmissionId={latestOpcoSubmission?.id ?? null}
+      />
     </div>
   );
 }
