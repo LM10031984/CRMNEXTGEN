@@ -130,12 +130,15 @@ describe('TabAvant — « Tout générer » (dispatchGenerateMissing)', () => {
 });
 
 describe('TabAvant — une ligne par doc/stagiaire (dispatchGenerateDoc)', () => {
+  // Labels désambiguïsés : « AGEFICE » seul matcherait aussi « Assiduité
+  // AGEFICE ». On cible le label complet de chaque doc (rendu dans aria-label
+  // « Générer {label} »), ce qui reste un test comportemental sur la ligne.
   const cases: Array<{ docType: string; label: RegExp }> = [
-    { docType: 'CONVENTION', label: /convention/i },
-    { docType: 'CONVOCATION', label: /convocation/i },
-    { docType: 'AGEFICE', label: /agefice/i },
-    { docType: 'ANALYSE_BESOIN', label: /analyse/i },
-    { docType: 'ASSIDUITE_AGEFICE', label: /assiduité/i },
+    { docType: 'CONVENTION', label: /générer convention/i },
+    { docType: 'CONVOCATION', label: /générer convocation/i },
+    { docType: 'AGEFICE', label: /générer demande agefice/i },
+    { docType: 'ANALYSE_BESOIN', label: /générer analyse besoin/i },
+    { docType: 'ASSIDUITE_AGEFICE', label: /générer assiduité agefice/i },
   ];
 
   for (const c of cases) {
