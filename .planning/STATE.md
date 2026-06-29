@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 14-06-PLAN.md (Phase 14 codée 6/6 ; runs LIVE + E2E gated)
-last_updated: "2026-06-25T16:04:19.147Z"
-last_activity: 2026-06-25
+stopped_at: "Completed 15-01-PLAN.md (coquille à onglets — checkpoint visuel Laurent :3010 à valider)"
+last_updated: "2026-06-29T05:03:08.117Z"
+last_activity: 2026-06-29
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 10
-  total_plans: 78
-  completed_plans: 55
+  total_plans: 82
+  completed_plans: 56
 ---
 
 # STATE — QualiOF
@@ -21,19 +21,20 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service.
 
-**Current focus:** Phase 14 — int-gration-google-calendar
+**Current focus:** Phase 15 — refonte-fiche-session-onglets
 
 ---
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
+Phase: 15 (refonte-fiche-session-onglets) — EXECUTING
+Plan: 2 of 4
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-06-29 — **Plan 15-01 livré** (Lot 1 — coquille à onglets, ADDITIF PUR). `<SessionTabs>` client (`apps/web/src/components/sessions/tabs/session-tabs.tsx`, approche C 15-RESEARCH) : 5 onglets `?tab=` (`session|avant|apres|docs|agenda`) lus via `useSearchParams`, navigation `window.history.pushState` (0 round-trip/refetch — la fiche fait ~10 requêtes Prisma), panneaux pré-rendus en props MONTÉS mais `hidden` (switch instantané ; PAS de `<Link>`), a11y `role=tablist/tab/aria-selected` clonée de `ProductTabs`. `coerceTab` pur exporté (fallback `session`). `page.tsx` (`app/sessions/[id]`) : signature +`searchParams`, deep-link serveur `coerceTab(sp.tab)`, blocs métier EXISTANTS ENVELOPPÉS sans modif (11 composants rendus 1× chacun, vérifié), en-tête persistant (RecordRecentVisit/SessionHeaderBar/NextActionHero) AU-DESSUS, SessionEvaluationBlock+StepFacturation HORS onglets (déféré CONTEXT), ParticipantDocMatrix promue onglet « Tous les documents » (sortie du `<details>`), onglet Agenda = placeholder (contenu réel Lot 3). `SessionWorkflowTimeline` (barre conformité 9 indic. + StepCreation + ParticipantsList) gardé ENTIER dans l'onglet Session (décompo = Lot 2). TDD RED→GREEN ; test de PUISSANCE prouvé (`defaultTab` volontairement divergent de l'URL → routage + aria virent ROUGE si on ignore `?tab=`, restaurés verts). 3 commits `06f024a`(test)/`601da67`(feat)/`403250b`(feat). tsc clean, suite **1101/1102** (seul échec = `shared-template.test.ts` MIME jpeg/jpg **PRÉ-EXISTANT hors scope**, logué `deferred-items.md`). 2 déviations Rule 3 : `cleanup()` entre tests (Vitest env=node, pas d'auto-cleanup) + retrait import `ChevronRight` orphelin. ⚠ RESTE GATÉ : checkpoint visuel Laurent sur `:3010` (5 onglets, deep-link `?tab=apres`, `router.refresh()` préserve l'onglet) avant `/gsd:verify-work`. Prochain : Plan 15-02 (réembarquement + suppression doublons drawer/cartes).
 - 2026-06-26 — **Phase 15 ajoutée** : Refonte fiche session en 5 onglets (Session · Avant · Après · Tous les documents · Agenda). Déclenchée par retour Laurent (« usine à gaz », fiche session = cœur produit, 1 doc affiché à ~16 endroits, scroll de 1069 lignes, packs zombies, cartes minuscules illisibles). Vision simplifiée validée : 1 doc = 1 endroit, programme IA déplacé au niveau produit, Facturation + conformité lourde hors flux. Source de vérité = `.planning/PLAN-FICHE-SESSION-ONGLETS-RECAP.md` (réécrit, mapping conformité T1-T13 + dette Lot E conservés en annexe §8). Dir : `.planning/phases/15-refonte-fiche-session-onglets/`. Prochain : `/gsd:plan-phase 15`.
 - 2026-06-25 — Plan 14-06 livré (CODE — Wave 4, mode auto + UI). Server action `syncSessionCalendarAction` (`apps/web/src/server/actions/calendar-sync.ts`) : wrapper mince auth-gaté `requireRole(['ADMIN','MANAGER'])`, charge `loadSessionEventCtx` → `syncSessionCalendar` (core worker-safe, frontière respectée : le core n'importe PAS l'action), `AuditLog` `sessions.calendarSynced` (diff = recap+notifyLearners+isPastSession), `revalidatePath`, retour `{ok,...}`. ctx null/sans formateur → `{ok:false}` sans appel API. UI `session-calendar-sync-toggle.tsx` (client : toggle « envoyer réellement aux apprenants » = notifyLearners + bouton « Synchroniser l'agenda », useTransition + sonner) inséré section « Agenda / Rappels » de la fiche session (`app/sessions/[id]/page.tsx`), gardé `canEdit`. 8 tests mockés verts. 2 commits `5af9443`/`8c37cef`. ⚠ NOTE EXÉCUTION : Bash sous-agent encore refusé → orchestrateur a fait tests/commits/bookkeeping + fixé 1 bug tsc (`diff` AuditLog : cast `as unknown as Prisma.InputJsonValue` car le recap typé ne matche pas InputJsonValue). ⚠⚠ RESTE GATÉ PAR LAURENT (destructif/externe) : (1) purge `pnpm calendar:purge` DRY→OK→`WRITE=1`→re-DRY ; (2) backfill `pnpm calendar:backfill` DRY→OK→`WRITE=1` ; (3) checkpoint E2E idempotence = double-clic synchro UI sur session à venir (1er run ~19 créés / 2e run 0 doublon), procédure dans 14-SMOKE.md. Phase 14 = CODE 6/6, verification + runs live à suivre.
 - 2026-06-25 — Plan 14-05 livré (CODE — Wave 3, runs LIVE restent gated). `load-session-ctx.ts` `loadSessionEventCtx(tenantId,sessionId)` → `{ctx:SessionEventCtx, missingTrainerEmail}` (formateur isPrimary+fallback, learnerEmails dédup, durée ceil(h/8), locationAddressText à plat pour isSiegeVence), tenant-scopé worker-safe, 7 tests verts (mock @qualiof/db vi.hoisted). `scripts/calendar-purge-broken.ts` : purge events .ics cassés, pagination pageToken, prédicat CONSERVATEUR (cassé = NI qualiof_key NI attendees → un event QualiOF n'est JAMAIS supprimé), garde-fou anti-suppression, DRY par défaut / WRITE=1 delete séquentiel sendUpdates:none + délai. `scripts/calendar-backfill.ts` : sessions startDate>=2025-03-01, for...of await (JAMAIS Promise.all), try/catch par session, délai 200ms anti-429, syncSessionCalendar syncMode=backfill notifyLearners=false, rattrapage ciblé SESSION_CODE, DRY par défaut. Scripts pnpm `calendar:purge` / `calendar:backfill` (dotenv+tsx). 3 commits `bd4b387`/`e6ae801`/`48a83c0`. worker-safe + tsc clean. ⚠ NOTE EXÉCUTION : Bash sous-agent encore refusé → orchestrateur a fait tests/commits/bookkeeping (faux positif guard Promise.all = occurrences en commentaire seulement). ⚠⚠ RUNS LIVE NON EXÉCUTÉS (destructif/externe) : séquence gatée par Laurent = (1) `pnpm calendar:purge` DRY → feu vert → `WRITE=1 pnpm calendar:purge` → re-DRY 0 cassé ; puis (2) `pnpm calendar:backfill` DRY → feu vert → `WRITE=1 pnpm calendar:backfill`. Reste plan 14-06 (server action + UI toggle, checkpoint idempotence E2E).
@@ -250,12 +251,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 14-06-PLAN.md (Phase 14 codée 6/6 ; runs LIVE + E2E gated)
+Stopped at: Completed 15-01-PLAN.md (coquille à onglets — checkpoint visuel Laurent :3010 à valider)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-06-25
+Last activity: 2026-06-29
 
 ### Roadmap Evolution
 
