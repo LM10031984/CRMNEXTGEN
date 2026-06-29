@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 /**
  * Phase 15 Lot 1 (15-01) Task 1 — TDD RED.
@@ -49,6 +49,9 @@ function isPanelVisible(text: string): boolean {
 }
 
 beforeEach(() => {
+  // environment=node par défaut : pas de cleanup auto entre tests → on démonte
+  // explicitement le DOM précédent pour éviter les "multiple elements".
+  cleanup();
   setSearchParams('');
   vi.restoreAllMocks();
 });
@@ -75,8 +78,11 @@ describe('SessionTabs — routage onglet via ?tab=', () => {
   });
 
   it('?tab=apres → PANEL_APRES visible, PANEL_SESSION masqué', () => {
+    // defaultTab="session" VOLONTAIREMENT divergent de l'URL : seul un composant
+    // qui LIT réellement `?tab=` (et pas la prop defaultTab) peut afficher Après.
+    // C'est le test de puissance — il vire ROUGE si on renvoie defaultTab.
     setSearchParams('tab=apres');
-    render(<SessionTabs defaultTab="apres" {...panels} />);
+    render(<SessionTabs defaultTab="session" {...panels} />);
     expect(isPanelVisible('PANEL_APRES')).toBe(true);
     expect(isPanelVisible('PANEL_SESSION')).toBe(false);
   });
@@ -98,8 +104,9 @@ describe('SessionTabs — a11y (tablist / tab / aria-selected)', () => {
   });
 
   it('l’onglet actif a aria-selected="true", les autres "false"', () => {
+    // defaultTab divergent : aria-selected doit suivre l'URL, pas la prop.
     setSearchParams('tab=apres');
-    render(<SessionTabs defaultTab="apres" {...panels} />);
+    render(<SessionTabs defaultTab="session" {...panels} />);
     const tabs = screen.getAllByRole('tab');
     const selected = tabs.filter((t) => t.getAttribute('aria-selected') === 'true');
     const unselected = tabs.filter((t) => t.getAttribute('aria-selected') === 'false');
