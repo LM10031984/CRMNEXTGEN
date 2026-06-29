@@ -106,16 +106,11 @@ export function SessionHeaderBar({
             </Badge>
           </div>
 
-          {/* H1 nom formation (édition inline si un composant client est passé) */}
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight truncate">
+          {/* H1 nom formation. Titre normal : il s'affiche en entier et passe à la
+              ligne aux espaces (pas de `truncate` qui le coupait). */}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight">
             {title}
           </h1>
-          {/*
-            REVERT — retour à `truncate` (état d'origine stable). Les essais
-            `break-words` / `line-clamp-2` faisaient grandir l'en-tête
-            `sticky top-14` et masquaient le contenu. Le titre coupé sera
-            traité proprement plus tard (test visuel requis).
-          */}
 
           {/* Sous-titre : date · lieu · inscrits */}
           <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap">
