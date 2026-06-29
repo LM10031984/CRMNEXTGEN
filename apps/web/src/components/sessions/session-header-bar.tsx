@@ -92,8 +92,11 @@ export function SessionHeaderBar({
     >
       {backLink && <div className="mb-2">{backLink}</div>}
 
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 flex-1">
+      {/* Empilé : bloc titre + infos en pleine largeur, puis les actions en
+          dessous. Évite l'écrasement du titre par les boutons `shrink-0`
+          (bug pré-existant : titre + méta réduits à une colonne d'un mot). */}
+      <div className="flex flex-col gap-3">
+        <div className="min-w-0">
           {/* Bandeau statut + code */}
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span
@@ -153,8 +156,8 @@ export function SessionHeaderBar({
           )}
         </div>
 
-        {/* Barre actions */}
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+        {/* Barre actions — en dessous du titre, pleine largeur, wrap si besoin. */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           {actionsSecondary}
           {actionPrimary}
           {kebab}
