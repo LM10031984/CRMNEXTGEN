@@ -22,8 +22,10 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  */
 
 // --- mocks ------------------------------------------------------------------
-const dispatchGenerateMissing = vi.fn(async () => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] }));
-const dispatchGenerateDoc = vi.fn(async () => ({ ok: true }));
+const dispatchGenerateMissing = vi.fn(
+  async (..._args: unknown[]) => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] }),
+);
+const dispatchGenerateDoc = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
 vi.mock('@/server/actions/dispatch-generate-doc', () => ({
   dispatchGenerateMissing: (...args: unknown[]) => dispatchGenerateMissing(...args),
   dispatchGenerateDoc: (...args: unknown[]) => dispatchGenerateDoc(...args),

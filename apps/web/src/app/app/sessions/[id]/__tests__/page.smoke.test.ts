@@ -50,10 +50,14 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).toMatch(/<NextActionHero/);
   });
 
-  it('hub documents : <DocsButton> dans la barre actions (refonte (d))', () => {
-    // DocsButton ouvre <DocDockDrawer>. Sans ce composant en haut, plus
-    // aucun accès au drawer depuis la fiche.
-    expect(pageSrc).toMatch(/<DocsButton/);
+  it('onglets remplis : <TabAvant> + <TabApres> + <TabTousDocuments> (Phase 15 Lot 2)', () => {
+    // Lot 2 : le <DocsButton>/<DocDockDrawer> est SUPPRIMÉ ; ses actions
+    // uniques (dispatchGenerate*) sont réembarquées dans <TabAvant>.
+    expect(pageSrc).toMatch(/<TabAvant/);
+    expect(pageSrc).toMatch(/<TabApres/);
+    expect(pageSrc).toMatch(/<TabTousDocuments/);
+    // Anti-régression : le drawer ne doit plus être monté.
+    expect(pageSrc).not.toMatch(/<DocsButton/);
   });
 
   it('hub paramètres : <SettingsButton> dans la barre actions (ui-e3)', () => {
@@ -83,11 +87,12 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).toMatch(/<StepFacturation/);
   });
 
-  it('matrice repliable : <ParticipantDocMatrix> sous anchor #section-doc-matrix', () => {
-    // Anchor obligatoire : c'est la cible du lien "Vue tableau" du
-    // <DocDockDrawer> footer. Si l'anchor disparaît, le lien casse.
-    expect(pageSrc).toMatch(/id=["']section-doc-matrix["']/);
-    expect(pageSrc).toMatch(/<ParticipantDocMatrix/);
+  it('matrice promue en onglet « Tous les documents » : <TabTousDocuments>', () => {
+    // Phase 15 Lot 2 : <ParticipantDocMatrix> + l'anchor #section-doc-matrix
+    // vivent désormais DANS <TabTousDocuments> (lecture seule), plus
+    // directement dans page.tsx. La matrice n'est plus montée inline ici.
+    expect(pageSrc).toMatch(/<TabTousDocuments/);
+    expect(pageSrc).not.toMatch(/<ParticipantDocMatrix/);
   });
 
   it('anchor #section-participants conservé (cible CTA "Ajouter un apprenant")', () => {
@@ -112,14 +117,13 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).not.toMatch(/<DocDock>/);
   });
 
-  it('monte <SessionOnlyDocsBlock> avec 4 cartes (A5 — réintroduit pour Bilan satisfaction)', () => {
-    // A5 2026-06-09 : la suppression de (d) coupait la génération à
-    // l'unité des 2 docs niveau session (Grille obs ind. 11, Bilan
-    // satisfaction ind. 30). Le bloc est réintroduit avec la 4ᵉ carte
-    // SATISFACTION_SESSION. Lot B le déplacera en onglet Clôture mais
-    // ne doit PAS le re-supprimer.
-    expect(pageSrc).toMatch(/<SessionOnlyDocsBlock/);
-    expect(pageSrc).toMatch(/satisfactionPdfRef/);
+  it('4 docs niveau session réembarqués dans <TabApres> (SessionOnlyDocsBlock supprimé)', () => {
+    // Phase 15 Lot 2 : <SessionOnlyDocsBlock> (les 4 cartes minuscules)
+    // est SUPPRIMÉ. Ses 4 actions unitaires (Déroulé/Grille obs/Checklist/
+    // Bilan satisfaction session) vivent maintenant DANS <TabApres>, câblées
+    // sur les mêmes server actions (testé par apres-session-docs.test.tsx).
+    expect(pageSrc).not.toMatch(/<SessionOnlyDocsBlock/);
+    expect(pageSrc).toMatch(/sessionDocs=\{apresSessionDocs\}/);
   });
 
   it('plus de <details> "Paramètres avancés" (migré en SettingsDrawer ui-e3)', () => {

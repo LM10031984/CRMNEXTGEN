@@ -121,6 +121,22 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
         state: ageficeId ? 'generated' : 'missing',
         pdfUrl: ageficeId ? `/api/documents/${ageficeId}` : undefined,
       });
+
+      // Phase 15 Lot 2 — ASSIDUITE_AGEFICE réembarquée dans l'onglet Avant.
+      // Cette action vivait UNIQUEMENT dans le DocDockDrawer (supprimé) et
+      // n'était couverte NI par les 4 cartes session NI par SessionOnlyDocsBlock
+      // (RESEARCH Q2). Présence = Document type='ASSIDUITE' pour ce stagiaire.
+      const assiduiteId = docs?.get('ASSIDUITE');
+      items.push({
+        key: `assiduite-agefice-${p.id}`,
+        docType: 'ASSIDUITE_AGEFICE',
+        label: `Assiduité AGEFICE — ${p.fullName}`,
+        participantName: p.fullName,
+        participantId: p.id,
+        section: 'participant',
+        state: assiduiteId ? 'generated' : 'missing',
+        pdfUrl: assiduiteId ? `/api/documents/${assiduiteId}` : undefined,
+      });
     }
 
     // Analyse besoin = IA Ollama, gérée comme un kind PedagogicalAsset

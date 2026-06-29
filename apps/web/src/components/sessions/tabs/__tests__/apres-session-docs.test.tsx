@@ -18,10 +18,10 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  */
 
 // --- mocks des 4 actions niveau session ------------------------------------
-const generateDerouleForProduct = vi.fn(async () => ({ ok: true }));
-const generateGrilleObsSessionForSession = vi.fn(async () => ({ ok: true }));
-const generateChecklistForSession = vi.fn(async () => ({ ok: true }));
-const generateSatisfactionSessionForSession = vi.fn(async () => ({ ok: true }));
+const generateDerouleForProduct = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+const generateGrilleObsSessionForSession = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+const generateChecklistForSession = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+const generateSatisfactionSessionForSession = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 
 vi.mock('@/server/actions/deroule-product-generator', () => ({
   generateDerouleForProduct: (...a: unknown[]) => generateDerouleForProduct(...a),

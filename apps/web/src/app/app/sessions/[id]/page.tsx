@@ -18,8 +18,8 @@ import { SessionWorkflowTimeline } from '@/components/sessions/session-workflow-
 import { StepCreation } from '@/components/sessions/step-creation';
 import { StepPendantFormation } from '@/components/sessions/step-pendant-formation';
 import { StepFacturation } from '@/components/sessions/step-facturation';
-import { DocsButton } from '@/components/sessions/docs-button';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
+import { buildClosureCompletionItems } from '@/lib/sessions/build-closure-completion-items';
 import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
 import { NextActionHero } from '@/components/sessions/next-action-hero';
 import { sessionStage } from '@/lib/sessions/session-stage';
@@ -47,8 +47,6 @@ import { DeleteSessionButton } from '@/components/sessions/delete-session-button
 import { DuplicateSessionButton } from '@/components/sessions/duplicate-session-button';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
-import { ParticipantDocMatrix } from '@/components/sessions/qualiopi-matrix/participant-doc-matrix';
-import { SessionOnlyDocsBlock } from '@/components/sessions/qualiopi-matrix/session-only-docs-block';
 import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
@@ -59,6 +57,10 @@ import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
+// Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
+import { TabAvant } from '@/components/sessions/tabs/tab-avant';
+import { TabApres } from '@/components/sessions/tabs/tab-apres';
+import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -494,10 +496,8 @@ export default async function SessionDetailPage({
   const productCode = session.product?.code ?? null;
   const productDuration = session.product?.durationHours ?? null;
 
-  // 🪄 Items du DocDock — bouton magique bas-droite pour générer/télécharger
-  // n'importe quel doc pré-formation Qualiopi en 1 clic. Résout Laurent
-  // 2026-06-04 : "il manque le doc AGEFICE SES-0094, je ne vois pas comment
-  // la générer · trouver les docs c'est compliqué".
+  // Items pré-formation Qualiopi (source unique) — alimentent l'onglet « Avant »
+  // (TabAvant) qui réembarque les actions dispatchGenerate* de l'ancien drawer.
   const docDockItems = buildDocDockItems({
     programmeProductDocId,
     derouleProductDocId,
@@ -512,6 +512,54 @@ export default async function SessionDetailPage({
     analyseBesoinInProgress: preparationStatus.analyseBesoinInProgress,
     analyseBesoinPending: preparationStatus.analyseBesoinPending,
   });
+
+  // Phase 15 Lot 2 — l'onglet « Avant » n'agit que sur les docs PAR STAGIAIRE
+  // (Convention/Convocation/AGEFICE/Analyse besoin/Assiduité AGEFICE). Les docs
+  // partagés produit/session (Programme/Déroulé/Checklist) vivent côté
+  // produit / onglet « Après » (1 doc = 1 maison) — on les retire d'ici pour ne
+  // pas dupliquer la surface d'action.
+  const avantItems = docDockItems.filter((it) => it.section !== 'shared');
+
+  // Phase 15 Lot 2 — onglet « Après » : compteur « manquants » dérivé de la
+  // MÊME source que la matrice (`docCompletion`), via buildClosureCompletionItems.
+  const closureItems = buildClosureCompletionItems({
+    participantsCount: closureStatus.participantsCount,
+    ageficeEligibleCount: closureStatus.ageficeEligibleCount,
+    programmeProductDocId,
+    grilleObsSession: closureStatus.grilleObsSession,
+    bilanSatisfaction: closureStatus.bilanSatisfaction,
+    attestations: closureStatus.attestations,
+    certificats: closureStatus.certificats,
+    qcm: closureStatus.qcm,
+    positionnements: closureStatus.positionnements,
+    satisfactionChaud: closureStatus.satisfactionChaud,
+    satisfactionFroid: closureStatus.satisfactionFroid,
+    assiduites: closureStatus.assiduites,
+  });
+
+  // État des 4 docs niveau session pour les boutons unitaires de l'onglet Après.
+  // grilleObs : proxy aligné sur la matrice (Document GRILLE_OBS_SESSION OU
+  // ≥1 PedagogicalAsset GRILLE_OBS par participant — cf. grilleObsAssetCount).
+  const apresSessionDocs = {
+    deroule: {
+      state: (derouleProductDocId ? 'generated' : 'missing') as 'generated' | 'missing',
+      pdfUrl: derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined,
+    },
+    grilleObs: {
+      state: (grilleSessionDocId || grilleObsAssetCount > 0 ? 'generated' : 'missing') as
+        | 'generated'
+        | 'missing',
+      pdfUrl: grilleSessionDocId ? `/api/documents/${grilleSessionDocId}` : undefined,
+    },
+    checklist: {
+      state: (checklistDocId ? 'generated' : 'missing') as 'generated' | 'missing',
+      pdfUrl: checklistDocId ? `/api/documents/${checklistDocId}` : undefined,
+    },
+    satisfactionSession: {
+      state: (satisfactionSessionDocId ? 'generated' : 'missing') as 'generated' | 'missing',
+      pdfUrl: satisfactionSessionDocId ? `/api/documents/${satisfactionSessionDocId}` : undefined,
+    },
+  };
 
   // Source UNIQUE pour l'étape courante — header + hero + timeline + drawer
   // lisent tous depuis ici (commit ui-a 2026-06-05).
@@ -593,12 +641,10 @@ export default async function SessionDetailPage({
                 }}
               />
             )}
-            {/* Hub Documents — ouvre <DocDockDrawer> avec compteur manquants */}
-            <DocsButton
-              sessionId={session.id}
-              items={docDockItems}
-              canGenerate={canWrite}
-            />
+            {/* Phase 15 Lot 2 — <DocsButton>/<DocDockDrawer> SUPPRIMÉ : ses
+                actions uniques (dispatchGenerateMissing/dispatchGenerateDoc) sont
+                réembarquées dans l'onglet « Avant » (TabAvant). Le moteur (server
+                actions) est conservé, seule l'UI du drawer disparaît. */}
             {/* Synchro agenda Google — bouton compact (Phase 14). Idempotent : un
                 2e clic met à jour sans dupliquer. Notification apprenants = via le
                 tiroir Paramètres > Agenda / Rappels. */}
@@ -964,6 +1010,9 @@ export default async function SessionDetailPage({
         }
         avant={
           <div className="space-y-6 pt-4">
+            {/* Vue d'ensemble préparation (badge X/Y + CTA bulk « Lancer la
+                préparation »). Lignes docs = STATUT seulement (pas d'action par
+                doc) → pas de doublon de surface avec TabAvant. */}
             <div id="step-2" className="scroll-mt-20" />
             <PreparationPedagogiqueBlock
               sessionId={session.id}
@@ -975,82 +1024,78 @@ export default async function SessionDetailPage({
               deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
               checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
             />
+
+            {/* Phase 15 Lot 2 — actions par doc/stagiaire réembarquées depuis le
+                drawer supprimé : « Tout générer » + 1 ligne par doc (Convention/
+                Convocation/AGEFICE/Analyse besoin/Assiduité AGEFICE). */}
+            <TabAvant sessionId={session.id} items={avantItems} canGenerate={canWrite} />
           </div>
         }
         apres={
-          <div className="space-y-6 pt-4">
-            {/* Auto-refresh + progress bar visible quand un pack closure tourne —
-                Lot 1 : déplacé du niveau page DANS l'onglet « Après » (plus de
-                bandeau flottant page-wide, cf. 15-CONTEXT). */}
-            {latestBatch && (
-              <BatchProgressAutoRefresh
-                status={latestBatch.status}
-                totalDocs={latestBatch.totalDocs}
-                doneDocs={latestBatch.doneDocs}
-                errorDocs={latestBatch.errorDocs}
+          <TabApres
+            sessionId={session.id}
+            productId={session.product?.id ?? null}
+            canWrite={canWrite}
+            sessionDocs={apresSessionDocs}
+            closureItems={closureItems}
+            batch={
+              latestBatch
+                ? {
+                    status: latestBatch.status,
+                    totalDocs: latestBatch.totalDocs,
+                    doneDocs: latestBatch.doneDocs,
+                    errorDocs: latestBatch.errorDocs,
+                  }
+                : null
+            }
+            packCta={
+              <GenerateClosurePackButton
+                sessionId={session.id}
+                participantCount={session.participants.length}
+                blockers={sessionCompleteness.blockers}
               />
-            )}
-
-            <div id="step-3" className="scroll-mt-20" />
-            <StepPendantFormation
-              state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
-              expanded={stage.stagesState[3] === 'active'}
-              participantsCount={session.participants.length}
-              emargementsGenerated={closureStatus.emargements}
-              totalSlots={totalSlots}
-              signedSlots={signedSlots}
-              startDateISO={session.startDate.toISOString()}
-              endDateISO={session.endDate.toISOString()}
-            />
-
-            <div id="step-4" className="scroll-mt-20" />
-            <ClosureFormationBlock
-              sessionId={session.id}
-              status={closureStatus}
-              isActive={stage.stagesState[4] === 'active'}
-              expanded={stage.stagesState[4] === 'active'}
-              programmeProductDocId={programmeProductDocId ?? null}
-              grilleObsSessionDocId={grilleSessionDocId ?? null}
-              bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
-            />
-
-            {/* A5 — SessionOnlyDocsBlock : 4 docs niveau session avec génération à
-                l'unité (Déroulé, Grille obs session ind. 11, Checklist ind. 17,
-                Bilan satisfaction session ind. 30). Conservé tel quel (Lot 1 =
-                enveloppement) ; le réembarquement propre = Lot 2. */}
-            <SessionOnlyDocsBlock
-              sessionId={session.id}
-              productId={session.product?.id ?? null}
-              deroulePdfRef={derouleProductDocId ? { id: derouleProductDocId } : undefined}
-              grilleObsPdfRef={grilleSessionDocId ? { id: grilleSessionDocId } : undefined}
-              checklistPdfRef={checklistDocId ? { id: checklistDocId } : undefined}
-              satisfactionPdfRef={satisfactionSessionDocId ? { id: satisfactionSessionDocId } : undefined}
-              grilleObsAssetCount={grilleObsAssetCount}
-              canWrite={canWrite}
-            />
-          </div>
+            }
+            pendantBlock={
+              <>
+                <div id="step-3" className="scroll-mt-20" />
+                <StepPendantFormation
+                  state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
+                  expanded={stage.stagesState[3] === 'active'}
+                  participantsCount={session.participants.length}
+                  emargementsGenerated={closureStatus.emargements}
+                  totalSlots={totalSlots}
+                  signedSlots={signedSlots}
+                  startDateISO={session.startDate.toISOString()}
+                  endDateISO={session.endDate.toISOString()}
+                />
+              </>
+            }
+            closureBlock={
+              <>
+                <div id="step-4" className="scroll-mt-20" />
+                <ClosureFormationBlock
+                  sessionId={session.id}
+                  status={closureStatus}
+                  isActive={stage.stagesState[4] === 'active'}
+                  expanded={stage.stagesState[4] === 'active'}
+                  programmeProductDocId={programmeProductDocId ?? null}
+                  grilleObsSessionDocId={grilleSessionDocId ?? null}
+                  bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
+                />
+              </>
+            }
+          />
         }
         docs={
-          <div className="pt-4">
-            {/* Vue tableau Qualiopi — matrice ParticipantDocMatrix promue en
-                onglet plein écran (sortie de son <details>). Lecture seule.
-                Lot 1 = enveloppement : contenu inchangé. */}
-            <div id="section-doc-matrix" className="scroll-mt-20">
-              <div className="mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Vue tableau Qualiopi · matrice apprenant × document
-                </span>
-              </div>
-              <ParticipantDocMatrix
-                sessionId={session.id}
-                userRole={user.role}
-                hasAgeficeParticipant={hasAgeficeParticipant}
-                participants={matrixParticipants}
-                productDocs={productDocsMap}
-                sessionDocs={sessionDocsMap}
-              />
-            </div>
-          </div>
+          <TabTousDocuments
+            sessionId={session.id}
+            userRole={user.role}
+            hasAgeficeParticipant={hasAgeficeParticipant}
+            participants={matrixParticipants}
+            productDocs={productDocsMap}
+            sessionDocs={sessionDocsMap}
+            zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
+          />
         }
         agenda={
           <div className="pt-4">
