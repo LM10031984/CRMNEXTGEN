@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Completed 15-02-PLAN.md (réembarquement + suppression doublons — checkpoint visuel Laurent :3010 à valider)"
-last_updated: "2026-06-29T06:16:32.024Z"
-last_activity: 2026-06-29
+stopped_at: "Completed 15-03-PLAN.md (onglet Agenda — toggle Phase 14 réembarqué + doublon retiré — checkpoint visuel Laurent :3010 à valider)"
+last_updated: "2026-07-01T16:03:18.373Z"
+last_activity: 2026-07-01
 progress:
   total_phases: 16
   completed_phases: 10
   total_plans: 82
-  completed_plans: 57
+  completed_plans: 58
 ---
 
 # STATE — QualiOF
@@ -28,12 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 15 (refonte-fiche-session-onglets) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- 2026-07-01 — **Plan 15-03 livré** (Lot 3 — onglet Agenda). `<TabAgenda>` (client, `apps/web/src/components/sessions/tabs/tab-agenda.tsx`) réembarque `<SessionCalendarSyncToggle>` (moteur idempotent Phase 14 `syncSessionCalendarAction` **NON retouché** — re-sync = 0 doublon prouvé) en variante « drawer » (celle avec le checkbox « Envoyer réellement les invitations » requis par le comportement `notifyLearners`) + affiche les créneaux `SessionSlot` **jour par jour en LECTURE** (jour formaté `fr-FR` + demi-journée + horaires figés `09:00 – 18:00`, aucune édition — créneaux interactifs HORS phase). Garde `canEdit` AU NIVEAU du conteneur `TabAgenda` (le composant Phase 14 n'a pas de prop `canEdit`) : toggle rendu uniquement pour ADMIN/MANAGER, message sinon — miroir du `{canEdit && <toggle/>}` de page.tsx. **DOUBLON RETIRÉ** de `page.tsx` : la variante en-tête (`variant="header"`, L652) ET la section Paramètres « Agenda / Rappels » du `SettingsDrawer` (L783) rendaient le toggle en double → **maison unique = l'onglet Agenda** (« 1 surface = 1 endroit »). `grep -c SessionCalendarSyncToggle page.tsx = 0` ; consommateur unique dans tout `apps/web/src` (hors def+tests) = `tab-agenda.tsx` (import + 1 usage JSX). **AUCUNE re-implémentation de synchro** : `grep syncSessionCalendar\b|new google\.|events.insert` dans `tab-agenda.tsx` = 0. Câblage : placeholder Lot 1 remplacé par `<TabAgenda sessionId isPastSession slots canEdit />` ; `sessionSlotsAgg` (déjà fetché pour le compteur d'émargement de la timeline) étendu de `date/startTime/endTime/halfDay` → `agendaSlots` sérialisés (Date→ISO string avant la frontière RSC), **0 requête Prisma additionnelle** ; imports orphelins retirés (`SessionCalendarSyncToggle`, icône `Calendar` lucide). TDD strict RED→GREEN ; **test de puissance prouvé** (`sessionId={'MUTANT'}` sur le toggle → `tab-agenda` vire ROUGE sur l'assertion `arg.sessionId` → restauré → 4/4). 3 commits `fd0769d`(test)/`306585a`(feat)/`cdf2f7f`(feat). tsc **clean**, suite **1105/1106** (seul échec = `shared-template.test.ts` MIME jpeg/jpg **PRÉ-EXISTANT hors scope**, `deferred-items.md` ; baseline 1101/1102 → +4 tests tab-agenda tous verts), **suite calendar Phase 14 67/67 non régressée** (idempotence intacte). 2 déviations Rule 3 (reformulation de commentaires anti-grep pour l'acceptance `grep=0` + retrait de l'import `Calendar` orphelin). ⚠ RESTE GATÉ : checkpoint visuel Laurent `:3010` (onglet `?tab=agenda` = toggle + créneaux lecture ; doublon disparu de l'en-tête ET des Paramètres ; idempotence double-clic = 0 doublon, procédure `14-SMOKE.md`) avant `/gsd:verify-work`. Prochain : Plan 15-04 (validation IA au produit + nettoyage batches zombies + correctifs visuels).
 - 2026-06-29 — **Plan 15-02 livré** (Lot 2 — réembarquement + suppression des doublons). 3 onglets remplis : `<TabAvant>` (client, `tabs/tab-avant.tsx`) = CTA « Tout générer » → `dispatchGenerateMissing` + 1 ligne LISIBLE par doc/stagiaire → `dispatchGenerateDoc` (CONVENTION/CONVOCATION/AGEFICE/ANALYSE_BESOIN/**ASSIDUITE_AGEFICE**, action qui ne vivait QUE dans le drawer — RESEARCH Q2), statut lu depuis `DocDockItem[]` (source unique) ; `<TabApres>` (client) = CTA pack + `StepPendantFormation` + `ClosureFormationBlock` passés en **slots serveur** (`React.ReactNode`, pattern RSC) + suivi batch `BatchProgressAutoRefresh` DANS l'onglet + 4 boutons unitaires docs niveau session (`generateDerouleForProduct`/`generateGrilleObsSessionForSession`/`generateChecklistForSession`/`generateSatisfactionSessionForSession`), compteur « manquants » via `apresMissingCount`→`docCompletion(closureItems)` (MÊME source que la matrice) ; `<TabTousDocuments>` (serveur) = `ParticipantDocMatrix` plein écran + ZIP, **LECTURE SEULE** (grep : 0 action de génération). **SUPPRIMÉS** : `doc-dock-drawer.tsx`, `docs-button.tsx`, `qualiopi-matrix/session-only-docs-block.tsx` (+2 smoke tests obsolètes) ; **MOTEUR CONSERVÉ** : `dispatch-generate-doc.ts` + 4 actions niveau session intacts, toujours appelés depuis les onglets (acceptance grep : 0 JSX usage / 0 import des composants supprimés ; occurrences restantes = commentaires). `buildDocDockItems` étendu (émet ASSIDUITE_AGEFICE par stagiaire AGEFICE-éligible). `doc-dock-items.ts` CONSERVÉ (toujours consommé par page.tsx, pas orphelin). Pré-condition LOCKED respectée : réembarquement PROUVÉ par tests AVANT suppression. Module NEUTRE `tabs/tab-apres-helpers.ts` (`apresMissingCount`, pas de `'use client'`) = frontière RSC respectée (miroir de `session-tabs-config.ts`). Blocs Préparation/Closure CONSERVÉS comme vues d'ensemble (StepDocRow = statut seul, pas d'action par doc → pas de doublon de surface). TDD RED→GREEN ; **2 tests de puissance prouvés** (`tab-avant` CONVOCATION→CONVENTION = rouge ; `tab-apres-helpers` recompte local `items.length` = rouge ; restaurés verts). 4 commits `ec133de`(test)/`a5a5a2f`(feat)/`95d88a3`(feat)/`757aa1a`(feat). tsc **clean**, suite **1101/1102** (seul échec = `shared-template.test.ts` MIME jpeg/jpg **PRÉ-EXISTANT hors scope**, `deferred-items.md`), 13 nouveaux tests Lot 2 tous verts (6 avant + 4 après + 3 source). 3 déviations : Rule 1 (labels test AGEFICE vs Assiduité AGEFICE désambiguïsés) + Rule 3 ×2 (typage strict mocks tsc + maj/suppression des smoke tests des surfaces supprimées). ⚠ RESTE GATÉ : checkpoint visuel Laurent `:3010` (1 doc = 1 onglet d'action, plus de cartes minuscules, suivi pack dans Après, bouton « Documents » drawer disparu) avant `/gsd:verify-work`. Prochain : Plan 15-03 (onglet Agenda — synchro Google Calendar Phase 14 + créneaux lecture).
 - 2026-06-29 — **Plan 15-01 livré** (Lot 1 — coquille à onglets, ADDITIF PUR). `<SessionTabs>` client (`apps/web/src/components/sessions/tabs/session-tabs.tsx`, approche C 15-RESEARCH) : 5 onglets `?tab=` (`session|avant|apres|docs|agenda`) lus via `useSearchParams`, navigation `window.history.pushState` (0 round-trip/refetch — la fiche fait ~10 requêtes Prisma), panneaux pré-rendus en props MONTÉS mais `hidden` (switch instantané ; PAS de `<Link>`), a11y `role=tablist/tab/aria-selected` clonée de `ProductTabs`. `coerceTab` pur exporté (fallback `session`). `page.tsx` (`app/sessions/[id]`) : signature +`searchParams`, deep-link serveur `coerceTab(sp.tab)`, blocs métier EXISTANTS ENVELOPPÉS sans modif (11 composants rendus 1× chacun, vérifié), en-tête persistant (RecordRecentVisit/SessionHeaderBar/NextActionHero) AU-DESSUS, SessionEvaluationBlock+StepFacturation HORS onglets (déféré CONTEXT), ParticipantDocMatrix promue onglet « Tous les documents » (sortie du `<details>`), onglet Agenda = placeholder (contenu réel Lot 3). `SessionWorkflowTimeline` (barre conformité 9 indic. + StepCreation + ParticipantsList) gardé ENTIER dans l'onglet Session (décompo = Lot 2). TDD RED→GREEN ; test de PUISSANCE prouvé (`defaultTab` volontairement divergent de l'URL → routage + aria virent ROUGE si on ignore `?tab=`, restaurés verts). 3 commits `06f024a`(test)/`601da67`(feat)/`403250b`(feat). tsc clean, suite **1101/1102** (seul échec = `shared-template.test.ts` MIME jpeg/jpg **PRÉ-EXISTANT hors scope**, logué `deferred-items.md`). 2 déviations Rule 3 : `cleanup()` entre tests (Vitest env=node, pas d'auto-cleanup) + retrait import `ChevronRight` orphelin. ⚠ RESTE GATÉ : checkpoint visuel Laurent sur `:3010` (5 onglets, deep-link `?tab=apres`, `router.refresh()` préserve l'onglet) avant `/gsd:verify-work`. Prochain : Plan 15-02 (réembarquement + suppression doublons drawer/cartes).
 - 2026-06-26 — **Phase 15 ajoutée** : Refonte fiche session en 5 onglets (Session · Avant · Après · Tous les documents · Agenda). Déclenchée par retour Laurent (« usine à gaz », fiche session = cœur produit, 1 doc affiché à ~16 endroits, scroll de 1069 lignes, packs zombies, cartes minuscules illisibles). Vision simplifiée validée : 1 doc = 1 endroit, programme IA déplacé au niveau produit, Facturation + conformité lourde hors flux. Source de vérité = `.planning/PLAN-FICHE-SESSION-ONGLETS-RECAP.md` (réécrit, mapping conformité T1-T13 + dette Lot E conservés en annexe §8). Dir : `.planning/phases/15-refonte-fiche-session-onglets/`. Prochain : `/gsd:plan-phase 15`.
@@ -252,12 +253,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 15-02-PLAN.md (réembarquement + suppression doublons — checkpoint visuel Laurent :3010 à valider)
+Stopped at: Completed 15-03-PLAN.md (onglet Agenda — toggle Phase 14 réembarqué + doublon retiré — checkpoint visuel Laurent :3010 à valider)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-06-29
+Last activity: 2026-07-01
 
 ### Roadmap Evolution
 
