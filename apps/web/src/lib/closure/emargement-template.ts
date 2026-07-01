@@ -111,43 +111,50 @@ ${renderBrandHeader()}
     </tbody>
   </table>
 
-  <!-- 2 cases signature formateur en bas de page (matin + après-midi).
-       Horaires retirés des libellés à la demande de Laurent 2026-06-04 :
-       "une signature le matin et l'aprem sans les horaires". -->
-  <div style="margin-top: 8mm; display: flex; gap: 12mm;">
-    <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
-      <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Matin
+  <!-- Bloc bas de page (Laurent 2026-07-01) : signatures formateur + certification.
+       IMPORTANT — PAS de break-inside:avoid ici. Ce dernier FORÇAIT tout le bloc à
+       basculer en page 2 dès que le moteur estimait qu'il ne tenait pas dans
+       l'espace restant, laissant du vide en page 1 ("certifié exact en page 2
+       alors qu'il y a la place"). Sans lui + hauteurs compactées, le contenu coule
+       naturellement et tient sur la page 1 pour une session courte. -->
+  <div style="margin-top: 6mm;">
+    <!-- 2 cases signature formateur (matin + après-midi). Horaires retirés
+         (Laurent 2026-06-04) : "une signature le matin et l'aprem sans les horaires". -->
+    <div style="display: flex; gap: 12mm;">
+      <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 6px 10px;">
+        <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;">
+          Signature formateur — Matin
+        </div>
+        <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
+          ${escapeHtml(trainer)}
+        </div>
+        <div style="height: 12mm;"></div>
       </div>
-      <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
-        ${escapeHtml(trainer)}
+      <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 6px 10px;">
+        <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;">
+          Signature formateur — Après-midi
+        </div>
+        <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
+          ${escapeHtml(trainer)}
+        </div>
+        <div style="height: 12mm;"></div>
       </div>
-      <div style="height: 18mm;"></div>
     </div>
-    <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
-      <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Après-midi
-      </div>
-      <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
-        ${escapeHtml(trainer)}
-      </div>
-      <div style="height: 18mm;"></div>
-    </div>
-  </div>
 
-  <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
-       par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
-       (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
-  <div style="margin-top: 8mm; padding-top: 8px; border-top: 1px solid #CBD5E1; break-inside: avoid; page-break-inside: avoid;">
-    <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 4px 0;">
-      Certifié exact par ${escapeHtml(trainer)}, formateur.
-    </p>
-    <p style="font-size: 10pt; margin: 0;">
-      Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
-    </p>
-    <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 6px;">
-      ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 24mm;" />` : ''}
-      ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 32mm;" />` : ''}
+    <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
+         par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
+         (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
+    <div style="margin-top: 5mm; padding-top: 6px; border-top: 1px solid #CBD5E1;">
+      <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 3px 0;">
+        Certifié exact par ${escapeHtml(trainer)}, formateur.
+      </p>
+      <p style="font-size: 10pt; margin: 0;">
+        Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
+      </p>
+      <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 4px;">
+        ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 20mm;" />` : ''}
+        ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 26mm;" />` : ''}
+      </div>
     </div>
   </div>
 </main>

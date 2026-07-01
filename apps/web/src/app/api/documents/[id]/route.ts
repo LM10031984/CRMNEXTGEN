@@ -23,7 +23,10 @@ export async function GET(
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${doc.type.toLowerCase()}-${doc.id.slice(0, 8)}.pdf"`,
-        'Cache-Control': 'private, max-age=3600',
+        // no-store : un doc régénéré garde le MÊME id/URL. Avec un cache navigateur
+        // (avant : max-age=3600), l'ancienne version était resservie jusqu'à 1h après
+        // régénération (« je revois l'ancienne version », Laurent 2026-07-01).
+        'Cache-Control': 'no-store, must-revalidate',
       },
     });
   } catch (e: unknown) {
