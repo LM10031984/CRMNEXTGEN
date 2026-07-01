@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
+import { ArrowLeft, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -33,7 +33,6 @@ import { EditSessionDetailsDialog } from '@/components/sessions/edit-session-det
 import { CreatePersonButton } from '@/components/forms/create-person-button';
 import { SessionStatusSelect } from '@/components/sessions/session-status-select';
 import { SessionLogisticsEditor } from '@/components/sessions/session-logistics-editor';
-import { SessionCalendarSyncToggle } from '@/components/sessions/session-calendar-sync-toggle';
 import { SessionLocationPicker } from '@/components/sessions/session-location-picker';
 import { SessionTrainerPicker } from '@/components/sessions/session-trainer-picker';
 import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-toggle';
@@ -61,6 +60,7 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
+import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
@@ -438,6 +438,11 @@ export default async function SessionDetailPage({
       where: { sessionId: session.id, session: { tenantId: user.tenantId } },
       select: {
         id: true,
+        // Phase 15 Lot 3 — champs pour l'affichage lecture de l'onglet Agenda.
+        date: true,
+        startTime: true,
+        endTime: true,
+        halfDay: true,
         attendances: { select: { signedAt: true }, take: 1 },
       },
     }),
@@ -468,6 +473,16 @@ export default async function SessionDetailPage({
 
   const totalSlots = sessionSlotsAgg.length;
   const signedSlots = sessionSlotsAgg.filter((s) => s.attendances.length > 0).length;
+
+  // Phase 15 Lot 3 — créneaux sérialisés (date ISO) pour l'onglet Agenda (lecture).
+  const agendaSlots = sessionSlotsAgg.map((s) => ({
+    id: s.id,
+    date: s.date.toISOString(),
+    startTime: s.startTime,
+    endTime: s.endTime,
+    halfDay: s.halfDay,
+  }));
+  const isPastSession = new Date(session.endDate) < new Date();
 
   const primaryTrainer = session.trainers.find((t) => t.isPrimary) ?? null;
   const primaryTrainerName = primaryTrainer
@@ -645,16 +660,10 @@ export default async function SessionDetailPage({
                 actions uniques (dispatchGenerateMissing/dispatchGenerateDoc) sont
                 réembarquées dans l'onglet « Avant » (TabAvant). Le moteur (server
                 actions) est conservé, seule l'UI du drawer disparaît. */}
-            {/* Synchro agenda Google — bouton compact (Phase 14). Idempotent : un
-                2e clic met à jour sans dupliquer. Notification apprenants = via le
-                tiroir Paramètres > Agenda / Rappels. */}
-            {canEdit && (
-              <SessionCalendarSyncToggle
-                variant="header"
-                sessionId={session.id}
-                isPastSession={new Date(session.endDate) < new Date()}
-              />
-            )}
+            {/* Phase 15 Lot 3 — le toggle de synchro agenda (variante en-tête) est
+                RETIRÉ : sa maison unique est désormais l'onglet Agenda (TabAgenda).
+                « 1 surface = 1 endroit ». Le moteur (syncSessionCalendarAction,
+                Phase 14) est conservé et appelé depuis l'onglet Agenda. */}
             {/* Hub Paramètres — ouvre <SettingsDrawer> (commit ui-e3).
                 Remplace le <details> "Paramètres avancés" en bas de page. */}
             <SettingsButton>
@@ -774,18 +783,9 @@ export default async function SessionDetailPage({
                 />
               </SettingsDrawerSection>
 
-              {canEdit && (
-                <SettingsDrawerSection
-                  title="Agenda / Rappels"
-                  anchorId="section-agenda-rappels"
-                  icon={<Calendar className="h-3 w-3" aria-hidden="true" />}
-                >
-                  <SessionCalendarSyncToggle
-                    sessionId={session.id}
-                    isPastSession={new Date(session.endDate) < new Date()}
-                  />
-                </SettingsDrawerSection>
-              )}
+              {/* Phase 15 Lot 3 — section « Agenda / Rappels » RETIRÉE des Paramètres :
+                  le toggle de synchro agenda vivait ici en doublon. Sa maison unique
+                  est désormais l'onglet Agenda (TabAgenda). Moteur Phase 14 inchangé. */}
 
               <SettingsDrawerSection
                 title="Notes internes"
@@ -1098,11 +1098,12 @@ export default async function SessionDetailPage({
           />
         }
         agenda={
-          <div className="pt-4">
-            <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-6 text-sm text-muted-foreground">
-              Agenda — synchro Google Calendar (Lot 3)
-            </div>
-          </div>
+          <TabAgenda
+            sessionId={session.id}
+            isPastSession={isPastSession}
+            slots={agendaSlots}
+            canEdit={canEdit}
+          />
         }
       />
 
