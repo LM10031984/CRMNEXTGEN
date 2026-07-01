@@ -23,7 +23,8 @@
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",
     "e2e:closure": "dotenv -e ../../.env -- tsx scripts/closure-e2e-test.ts",
     "calendar:purge": "dotenv -e ../../.env -- tsx scripts/calendar-purge-broken.ts",
-    "calendar:backfill": "dotenv -e ../../.env -- tsx scripts/calendar-backfill.ts"
+    "calendar:backfill": "dotenv -e ../../.env -- tsx scripts/calendar-backfill.ts",
+    "closure:close-zombies": "dotenv -e ../../.env -- tsx scripts/close-zombie-batches.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
