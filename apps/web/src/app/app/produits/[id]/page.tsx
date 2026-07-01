@@ -122,6 +122,7 @@ export default async function ProductDetailPage({
     programmePdfId = programmeDoc?.id ?? null;
   }
 
+  const pAny = product as Record<string, unknown>;
   const editCurrent = {
     title: product.title,
     theme: product.theme,
@@ -135,6 +136,15 @@ export default async function ProductDetailPage({
     trainerProfile: product.trainerProfile,
     accessibility: product.accessibility,
     accessConditions: product.accessConditions,
+    ageficeFormationType: (pAny.ageficeFormationType as string | null | undefined) ?? null,
+    ageficeNiveau: (pAny.ageficeNiveau as string | null | undefined) ?? null,
+    ageficeCertif: (pAny.ageficeCertif as string | null | undefined) ?? null,
+    ageficeAttestation: (pAny.ageficeAttestation as string | null | undefined) ?? null,
+    ageficeEvaluations: (pAny.ageficeEvaluations as string[] | null | undefined) ?? null,
+    ageficeObligatoire: (pAny.ageficeObligatoire as boolean | null | undefined) ?? null,
+    ageficeReconversion: (pAny.ageficeReconversion as boolean | null | undefined) ?? null,
+    ageficeEnEntreprise: (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? null,
+    ageficeMandat: (pAny.ageficeMandat as boolean | null | undefined) ?? null,
   };
 
   return (

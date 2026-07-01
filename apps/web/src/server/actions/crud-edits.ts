@@ -126,6 +126,16 @@ export async function updateTrainingProduct(input: {
   trainerProfile?: string | null;
   accessibility?: string | null;
   accessConditions?: string | null;
+  // ── Conformité Cerfa AGEFICE ──────────────────────────────────────────
+  ageficeFormationType?: string | null; // ACTION | BILAN | VAE
+  ageficeNiveau?: string | null;        // INITIATION | MISE_A_JOUR | PERFECTIONNEMENT
+  ageficeCertif?: string | null;        // TITRE_HOMOLOGUE | QUALIF_BRANCHE | CQP | SANS_QUALIFICATION
+  ageficeAttestation?: string | null;   // RNCP | AUTRE_DIPLOME | DIPLOME_ETAT | ATTESTATION_STAGE
+  ageficeEvaluations?: string | null;   // CSV : "QUIZ,FEUILLES_PRESENCE"
+  ageficeObligatoire?: string | null;   // OUI | NON | '' (null)
+  ageficeReconversion?: string | null;
+  ageficeEnEntreprise?: string | null;
+  ageficeMandat?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -153,6 +163,38 @@ export async function updateTrainingProduct(input: {
   if (input.trainerProfile !== undefined) data.trainerProfile = input.trainerProfile?.trim() || null;
   if (input.accessibility !== undefined) data.accessibility = input.accessibility?.trim() || null;
   if (input.accessConditions !== undefined) data.accessConditions = input.accessConditions?.trim() || null;
+
+  // ── Conformité Cerfa AGEFICE — conversion strings → enum/bool/array ────
+  const triState = (v: string | null | undefined): boolean | null => {
+    if (v == null) return null;
+    const u = v.trim().toUpperCase();
+    if (u === 'OUI') return true;
+    if (u === 'NON') return false;
+    return null;
+  };
+  if (input.ageficeFormationType !== undefined)
+    (data as Record<string, unknown>).ageficeFormationType = input.ageficeFormationType?.trim() || null;
+  if (input.ageficeNiveau !== undefined)
+    (data as Record<string, unknown>).ageficeNiveau = input.ageficeNiveau?.trim() || null;
+  if (input.ageficeCertif !== undefined)
+    (data as Record<string, unknown>).ageficeCertif = input.ageficeCertif?.trim() || null;
+  if (input.ageficeAttestation !== undefined)
+    (data as Record<string, unknown>).ageficeAttestation = input.ageficeAttestation?.trim() || null;
+  if (input.ageficeEvaluations !== undefined) {
+    const arr = (input.ageficeEvaluations ?? '')
+      .split(/[,;]\s*/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    (data as Record<string, unknown>).ageficeEvaluations = arr;
+  }
+  if (input.ageficeObligatoire !== undefined)
+    (data as Record<string, unknown>).ageficeObligatoire = triState(input.ageficeObligatoire);
+  if (input.ageficeReconversion !== undefined)
+    (data as Record<string, unknown>).ageficeReconversion = triState(input.ageficeReconversion);
+  if (input.ageficeEnEntreprise !== undefined)
+    (data as Record<string, unknown>).ageficeEnEntreprise = triState(input.ageficeEnEntreprise);
+  if (input.ageficeMandat !== undefined)
+    (data as Record<string, unknown>).ageficeMandat = triState(input.ageficeMandat);
 
   if (Object.keys(data).length === 0) return { ok: true };
 
