@@ -20,6 +20,8 @@ import { StepCreation } from '../step-creation';
 
 const baseProps = {
   state: 'done' as const,
+  // Body déplié pour que le bloc programme (et son lien produit) soit rendu.
+  expanded: true,
   productId: 'prod-123',
   productLabel: 'Formation IA immobilier',
   productCode: 'PROD-0062',

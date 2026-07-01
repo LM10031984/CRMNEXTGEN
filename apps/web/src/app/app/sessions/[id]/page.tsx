@@ -944,7 +944,6 @@ export default async function SessionDetailPage({
                 productCode={productCode}
                 productAiDraftedAt={session.product?.aiDraftedAt ?? null}
                 productProgrammePdfId={programmeProductDocId ?? null}
-                canValidateAi={canEdit}
                 durationHours={productDuration}
                 startDate={session.startDate}
                 endDate={session.endDate}

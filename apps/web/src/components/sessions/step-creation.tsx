@@ -2,16 +2,15 @@ import type { ReactNode } from 'react';
 import { Calendar, Euro, ExternalLink, FileText, MapPin, Package, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TimelineStep, type StepState } from './timeline-step';
-import { InlineAiDraftValidator } from './inline-ai-draft-validator';
 
 interface Props {
   state: StepState;
   productId: string | null;
   productLabel: string | null;
   productCode: string | null;
+  /** Brouillon IA du programme (au niveau PRODUIT) — sert un badge lecture seule + lien produit. */
   productAiDraftedAt: Date | null;
   productProgrammePdfId: string | null;
-  canValidateAi: boolean;
   durationHours: number | null;
   startDate: Date | null;
   endDate: Date | null;
@@ -50,7 +49,6 @@ export function StepCreation(props: Props) {
     productCode,
     productAiDraftedAt,
     productProgrammePdfId,
-    canValidateAi,
     durationHours,
     startDate,
     endDate,
@@ -153,9 +151,17 @@ export function StepCreation(props: Props) {
               <FileText className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold">Programme de la formation</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">Programme de la formation</span>
+                {productAiDraftedAt && (
+                  <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                    Brouillon IA — à valider sur la fiche produit
+                  </span>
+                )}
+              </div>
               <div className="text-[11px] text-muted-foreground">
                 Source Qualiopi · Ind 1 · 6 — partagé pour toutes les sessions du produit
+                {productAiDraftedAt && ' · validation IA au niveau produit'}
               </div>
             </div>
           </div>
@@ -189,19 +195,10 @@ export function StepCreation(props: Props) {
         </div>
       )}
 
-      {/* Bannière inline programme IA — valide en 1 clic SANS quitter la session.
-          Bug remonté Laurent 2026-06-04 : "je dois valider le programme sans
-          être éjecté de la fiche session". */}
-      {productAiDraftedAt && productId && (
-        <div className="mt-4">
-          <InlineAiDraftValidator
-            productId={productId}
-            aiDraftedAt={productAiDraftedAt}
-            productPdfId={productProgrammePdfId}
-            canValidate={canValidateAi}
-          />
-        </div>
-      )}
+      {/* La validation du programme IA vit désormais au niveau PRODUIT
+          (/app/produits/{id}?tab=programme). Sur la session : programme en
+          lecture seule + lien produit (bloc ci-dessus), plus d'action de
+          validation ici (Phase 15 Lot 4 — 1 doc = 1 maison). */}
 
       {/* Actions inline — Modifier la session / Ajouter un apprenant.
           On ne sait jamais — Laurent 2026-06-04. */}
