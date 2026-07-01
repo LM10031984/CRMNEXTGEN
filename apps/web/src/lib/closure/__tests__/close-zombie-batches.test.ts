@@ -17,8 +17,9 @@ import {
  *   - ne JAMAIS toucher un batch réellement actif (job PROCESSING récent, cas 2),
  *   - ignorer un batch déjà finalisé (cas 3).
  *
- * `finalStatusFor` reproduit la logique du worker (bumpAndFinalize) :
- *   errorDocs === 0 → COMPLETED ; doneDocs === 0 → FAILED ; sinon → PARTIAL.
+ * `finalStatusFor` se base sur la COUVERTURE réelle (doneDocs vs totalDocs) car
+ * un zombie n'a pas fini : doneDocs === 0 → FAILED ; doneDocs ≥ totalDocs →
+ * COMPLETED ; sinon → PARTIAL (décision Laurent 2026-07-01 : pack à moitié = PARTIAL).
  *
  * Critère de zombie sûr (15-RESEARCH Q6), seuil aligné sur STUCK_PROCESSING_MINUTES=15.
  */
@@ -54,10 +55,13 @@ describe('isZombieBatch — prédicat pur de clôture', () => {
     const jobs = [job({ status: 'DONE' }), job({ status: 'ERROR' })];
     expect(isZombieBatch(b, jobs, NOW)).toBe(true);
 
-    // finalStatusFor : 3 sous-assertions selon doneDocs/errorDocs
-    expect(finalStatusFor(batch({ doneDocs: 10, errorDocs: 0 }))).toBe('COMPLETED');
-    expect(finalStatusFor(batch({ doneDocs: 0, errorDocs: 10 }))).toBe('FAILED');
-    expect(finalStatusFor(batch({ doneDocs: 7, errorDocs: 3 }))).toBe('PARTIAL');
+    // finalStatusFor : couverture réelle (doneDocs vs totalDocs)
+    expect(finalStatusFor(batch({ totalDocs: 10, doneDocs: 10 }))).toBe('COMPLETED');
+    expect(finalStatusFor(batch({ totalDocs: 10, doneDocs: 0 }))).toBe('FAILED');
+    expect(finalStatusFor(batch({ totalDocs: 10, doneDocs: 7 }))).toBe('PARTIAL');
+    // Cas discriminant = les vrais zombies (12/45, errorDocs=0) : l'ancienne
+    // logique errorDocs-based les mettait COMPLETED, la nouvelle → PARTIAL.
+    expect(finalStatusFor(batch({ totalDocs: 45, doneDocs: 12, errorDocs: 0 }))).toBe('PARTIAL');
   });
 
   it('cas 2 : RUNNING stale MAIS un job PROCESSING récent (2min) → NON touché', () => {

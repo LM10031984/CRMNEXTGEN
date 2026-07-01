@@ -84,13 +84,21 @@ export function isZombieBatch(
 }
 
 /**
- * Statut terminal à appliquer à un batch zombie, calqué sur la finalisation
- * du worker : aucune erreur → COMPLETED ; aucun succès → FAILED ; sinon PARTIAL.
+ * Statut terminal à appliquer à un batch zombie.
+ *
+ * ⚠️ Un zombie n'a PAS fini (worker tué en cours) : on se base donc sur la
+ * COUVERTURE réelle (doneDocs vs totalDocs), pas sur errorDocs (qui reste 0
+ * quand les jobs restants n'ont jamais tourné — ce n'est pas un succès).
+ *   - rien de généré (doneDocs = 0) → FAILED
+ *   - tout généré (doneDocs ≥ totalDocs) → COMPLETED (finalisation manquée)
+ *   - partiellement généré → PARTIAL (honnête : ni fini, ni en cours)
+ * Décision Laurent 2026-07-01 : un pack arrêté à moitié = PARTIAL, jamais
+ * COMPLETED (ne pas afficher « terminé » un pack à 3/27).
  */
 export function finalStatusFor(
-  batch: Pick<ZombieBatchInput, 'doneDocs' | 'errorDocs'>,
+  batch: Pick<ZombieBatchInput, 'doneDocs' | 'totalDocs'>,
 ): Extract<ClosureBatchStatus, 'COMPLETED' | 'PARTIAL' | 'FAILED'> {
-  if (batch.errorDocs === 0) return 'COMPLETED';
   if (batch.doneDocs === 0) return 'FAILED';
+  if (batch.doneDocs >= batch.totalDocs) return 'COMPLETED';
   return 'PARTIAL';
 }
