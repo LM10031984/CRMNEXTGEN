@@ -132,7 +132,12 @@ export function SessionHeaderBar({
             </span>
           </p>
 
-          {/* Méta discrète : durée + tarif (édition inline si priceSlot fourni). */}
+          {/* Méta discrète : durée + tarif (édition inline si priceSlot fourni).
+              Tarif dédupliqué (NO-OP 15-04, vérifié 2026-07-01) : le rendu est un
+              either/or strict — priceSlot (SessionPriceInline, dont le `display`
+              porte déjà « X € / stagiaire » sans `suffix`, fix A3) REMPLACE le bloc
+              par défaut, jamais en plus. Le bug « 3 024 € / stagiaire € / stagiaire »
+              n'est plus reproductible. Aucune modif de code requise. */}
           {(durationHours || pricePerLearner !== null || priceSlot) && (
             <p className="text-[11px] text-muted-foreground mt-1 inline-flex items-center gap-x-2 gap-y-0.5 flex-wrap">
               {durationHours && (
