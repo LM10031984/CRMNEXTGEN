@@ -224,20 +224,41 @@ export async function generateAgeficeForParticipant(
   });
   // Format "Raison sociale — Nom du lieu\nadresse\nCP Ville" (cf demande Laurent
   // 2026-06-03 : Cerfa AGEFICE exige SARL X — Agence Y + adresse).
+  // Normalise une adresse pour comparaison tolérante (accents, ponctuation,
+  // abréviations FR courantes) — sert à détecter une rue déjà présente dans le
+  // libellé du lieu.
+  const normalizeAddr = (s: string): string =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\bav\b/g, 'avenue')
+      .replace(/\bbd\b|\bbld\b|\bboul\b/g, 'boulevard')
+      .replace(/\bimp\b/g, 'impasse')
+      .replace(/\bch\b|\bchem\b/g, 'chemin')
+      .replace(/\bpl\b/g, 'place')
+      .replace(/\brte\b/g, 'route')
+      .replace(/\bst\b/g, 'saint')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
   const lieuAdresseComplete = session.location
-    ? [
-        [
+    ? (() => {
+        const nameLine = [
           (session.location as { legalName?: string | null }).legalName,
           session.location.name,
         ]
           .filter(Boolean)
-          .join(' — '),
-        (session.location.address as any)?.street,
-        // CP + Ville retirés d'ici : ils ont leurs propres champs (Code Postal /
-        // Ville Lieu de Formation) → évite la ville notée 2 fois (Laurent 2026-06-16).
-      ]
-        .filter(Boolean)
-        .join('\n')
+          .join(' — ');
+        const street = (session.location.address as any)?.street as string | null | undefined;
+        // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
+        // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
+        // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
+        // 2026-07). CP + Ville ont leurs propres champs Cerfa.
+        const appendStreet =
+          !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
+        return [nameLine, appendStreet ? street : null].filter(Boolean).join('\n');
+      })()
     : of.addressFull;
 
   // ── Conformité Cerfa (Section C/D) ───────────────────────────
