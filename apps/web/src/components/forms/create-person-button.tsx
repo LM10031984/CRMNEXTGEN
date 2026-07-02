@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Upload, Loader2, Check, AlertTriangle, Sparkles, Building2 } from 'lucide-react';
 import { createPerson } from '@/server/actions/crud-edits';
+import { lookupSiret } from '@/server/actions/sirene-lookup';
 import { extractApprenantDocs } from '@/server/actions/extract-apprenant-docs';
 import { uploadApprenantDocs } from '@/server/actions/upload-apprenant-docs';
 import { addParticipant } from '@/server/actions/sessions';
@@ -53,7 +54,39 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
   const [professionalExperience, setProfessionalExperience] = useState('');
   const [siret, setSiret] = useState('');
   const [activityCode, setActivityCode] = useState('');
+  const [siretBusy, setSiretBusy] = useState(false);
+  const [siretMsg, setSiretMsg] = useState<string | null>(null);
   const [socialSecurityNb, setSocialSecurityNb] = useState('');
+
+  // Auto-remplissage depuis le SIRET via l'API SIRENE gratuite : code APE
+  // toujours rempli ; adresse seulement si les champs sont encore vides (ne pas
+  // écraser la saisie manuelle / l'extraction IA).
+  async function onLookupSiret() {
+    const s = siret.replace(/\s/g, '');
+    if (!/^\d{14}$/.test(s)) {
+      setSiretMsg('SIRET : 14 chiffres attendus.');
+      return;
+    }
+    setSiretBusy(true);
+    setSiretMsg(null);
+    try {
+      const r = await lookupSiret(s);
+      if (!r.ok || !r.company) {
+        setSiretMsg(r.error ?? 'Entreprise introuvable.');
+        return;
+      }
+      const c = r.company;
+      if (c.codeApe) setActivityCode(c.codeApe);
+      if (c.street && !addressStreet) setAddressStreet(c.street);
+      if (c.postalCode && !addressPostalCode) setAddressPostalCode(c.postalCode);
+      if (c.city && !addressCity) setAddressCity(c.city);
+      setSiretMsg(
+        `✓ ${c.denomination ?? 'Entreprise trouvée'} — APE ${c.codeApe ?? '?'}${c.cessee ? ' (⚠ cessée)' : ''}`,
+      );
+    } finally {
+      setSiretBusy(false);
+    }
+  }
   // Uploads
   const [cniFile, setCniFile] = useState<File | null>(null);
   const [ribFile, setRibFile] = useState<File | null>(null);
@@ -397,8 +430,24 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">SIRET (auto-entreprise)</label>
-                  <input type="text" value={siret} onChange={(e) => setSiret(e.target.value)} placeholder="14 chiffres" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
-                  <p className="text-[10px] text-muted-foreground mt-1">Si rempli : crée auto-entreprise + lien EI_SELF</p>
+                  <div className="flex gap-1.5">
+                    <input type="text" value={siret} onChange={(e) => { setSiret(e.target.value); setSiretMsg(null); }} placeholder="14 chiffres" className="flex-1 px-3 py-2 border border-border rounded-lg text-sm font-mono" />
+                    <button
+                      type="button"
+                      onClick={onLookupSiret}
+                      disabled={siretBusy || !siret.trim()}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 disabled:opacity-50"
+                      title="Récupérer code APE + adresse depuis le registre SIRENE (gratuit)"
+                    >
+                      {siretBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      Compléter
+                    </button>
+                  </div>
+                  {siretMsg ? (
+                    <p className={`text-[10px] mt-1 ${siretMsg.startsWith('✓') ? 'text-emerald-600' : 'text-amber-600'}`}>{siretMsg}</p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-1">Si rempli : crée auto-entreprise + lien EI_SELF. « Compléter » → code APE + adresse auto.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Code NAF</label>
