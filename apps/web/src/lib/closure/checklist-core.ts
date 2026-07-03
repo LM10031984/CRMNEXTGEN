@@ -143,12 +143,18 @@ export async function generateChecklistCore(
   const isPast = session.endDate.getTime() < Date.now();
   const { apportee, conditionsLieu } = buildZones(isPast, sessionId);
 
+  // Convention métier : UN formateur par session = le principal (isPrimary), comme
+  // le calendrier Google et l'émargement. Fallback liste complète si aucun primary
+  // (imports historiques) pour ne jamais afficher « À renseigner » à tort.
+  const primaryTrainers = session.trainers.filter((t) => t.isPrimary);
+  const displayedTrainers = primaryTrainers.length > 0 ? primaryTrainers : session.trainers;
+
   const data: ChecklistFormationData = {
     formationTitre: session.product.title,
     sessionCode: session.code,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
-    formateurs: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
+    formateurs: displayedTrainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
     lieuFormation,
     isPast,
     horsDept06,
