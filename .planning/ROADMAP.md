@@ -318,11 +318,11 @@ Plans:
 **Requirements**: REQ-16-01 (env openrouter) · REQ-16-02 (vision→callLlm) · REQ-16-03 (veille→callLlm) · REQ-16-04 (retry+stub) · REQ-16-05 (re-tuning prompts) · REQ-16-06 (tiers Haiku/Sonnet) · REQ-16-07 (migration tests + pack témoin)
 **Voie technique retenue (D-04):** RÉUTILISER la passerelle OpenRouter existante (`callLlm`), PAS de SDK `@anthropic-ai/sdk` natif. Le closure route DÉJÀ via callLlm quand AI_PROVIDER=openrouter — le vrai re-câblage callOllama→callLlm ne concerne que vision + veille.
 **Depends on:** Phase 15
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 - [x] 16-01-PLAN.md — env.ts : enum openrouter + 7 clés OPENROUTER_* + turbo/.env.example (Wave 1)
-- [ ] 16-02-PLAN.md — veille classify.ts → callLlm tier fast + test migré (Wave 2)
+- [x] 16-02-PLAN.md — veille classify.ts → callLlm tier fast + test migré (Wave 2)
 - [ ] 16-03-PLAN.md — OCR vision (pdf-extract + preinscription-extractor) → callLlm + test (Wave 2)
 - [ ] 16-04-PLAN.md — closure : tiers D-01a par générateur + test routage/retry→stub (Wave 2)
 - [ ] 16-05-PLAN.md — re-tuning 5 prompts Claude + bump PROMPT_VERSION (Wave 3)

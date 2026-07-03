@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-07-03T13:45:21.260Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-07-03T13:55:18.317Z"
 last_activity: 2026-07-03
 progress:
   total_phases: 17
   completed_phases: 11
   total_plans: 88
-  completed_plans: 60
+  completed_plans: 61
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 16 (migration-ia-ollama-vers-claude-api) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-03 — **Plan 16-02 livré** (Wave 2, patron de migration call-site le plus simple — REQ-16-03). Le call site veille `apps/web/src/lib/veille/classify.ts` (`classifyItem`, RSS→thème Qualiopi) bascule de `callOllama` DIRECT (`@/lib/ai-ollama`) vers **`callLlm({ tier: 'fast' })`** (`@/lib/llm-client`) → Claude Haiku via OpenRouter quand `AI_PROVIDER=openrouter`, Ollama local sinon (le call site ne connaît plus de modèle codé — suppression de `const OLLAMA_MODEL_VEILLE`). **Tracing `AIGenerationJob` rendu DYNAMIQUE** : les 2 branches succès (ok / Zod-fail) écrivent `provider: r.provider` + `model: r.model` (lus du `LlmResult`) au lieu de `'ollama'`/`'mistral-small:24b'` figés ; la branche `catch` (le throw précède la réponse → `r` indéfini) trace un **repli** `provider = AI_PROVIDER==='openrouter' ? 'openrouter' : 'ollama'` + `model: 'unknown'`. **Prompt NON re-tuné** (`PROMPT_VERSION_VEILLE` inchangé — seul le backend change dans ce plan). **Test migré** `@/lib/ai-ollama`→`@/lib/llm-client` (`callLlmMock`), mocks enrichis `provider:'openrouter'`+`model:'anthropic/claude-haiku-4.5'`, assertion de routage `expect.objectContaining({ tier: 'fast' })` (mutation-safe : inverser en `'quality'` → Test 1 ROUGE) + protocole de mutation documenté en commentaire (feedback_test_de_puissance_mutation). **Worker-safe préservé** (grep `requireRole|validateRequest|from 'react'|next/cache` = 0 dans classify.ts ; `callLlm` = fetch pur). TDD RED (test migré d'abord — le mock `@/lib/llm-client` n'était pas consommé tant que classify.ts importait `@/lib/ai-ollama`, la vraie voie Ollama traçait encore `provider:'ollama'`) → GREEN (source migrée). **4/4 tests `classify.test.ts` verts** en isolation (`pnpm exec vitest run src/lib/veille/__tests__/classify.test.ts`). Acceptance grep OK : callLlm=4 / callOllama=0 / r.provider=3 / test @/lib/llm-client=3 / tier:'fast'=5. 1 commit `22800c6`(feat). 0 déviation (plan à la lettre). ⚠ 2 hors-scope logués `deferred-items.md` : (a) échec unique de suite `shared-template.test.ts:175` MIME `image/jpeg` vs `image/jpg` = PRÉ-EXISTANT (documenté 15-01→16-01, veille non touchée) — les 4 classify passent isolés ; (b) drift symlink pnpm `packages/shared/node_modules/vitest` rend `tsc` non fiable sur les tests (idem 16-01). REQ-16-03 satisfait. Patron prouvé (isolé + worker-safe + mutation-safe) = modèle pour Waves suivantes (16-03→16-06 : vision OCR / closure generators / pack témoin). Prochain : Plan 16-03.
 
 - 2026-07-03 — **Plan 16-01 livré** (Wave 1, fondation env boot-safe OpenRouter — REQ-16-01). `packages/shared/src/env.ts` : enum `AI_PROVIDER` étendu `['ollama','openrouter','anthropic','qualiopi-gen']` (le boot ne throw plus `Invalid enum value` sur `AI_PROVIDER=openrouter`) ; **7 clés `OPENROUTER_*`** déclarées server+runtimeEnv avec les défauts EXACTS de `llm-client.ts` (`OPENROUTER_BASE_URL`/`API_KEY` optional/`MODEL_FAST=anthropic/claude-haiku-4.5`/`MODEL_QUALITY=anthropic/claude-sonnet-4.6`/`MODEL_VISION`/`APP_NAME=QualiOF`/`SITE_URL=http://localhost:3010`) — clés qui étaient lues via `process.env` brut hors validation t3-env ; **`OLLAMA_MODEL_VISION`** régularisée (lue L23/L71 de `llm-client.ts` mais JAMAIS déclarée — clé fantôme, single source of truth CLAUDE.md). 2 schémas Zod isolés exportés (`AI_PROVIDER_SCHEMA`/`OPENROUTER_MODEL_FAST_SCHEMA`) réutilisés dans `server` ET testés directement (évite de fournir DATABASE_URL/AUTH_SECRET en test). `turbo.json` globalEnv : +8 clés (7 OPENROUTER_* + OLLAMA_MODEL_VISION, invalidation cache). `.env.example` : bloc OpenRouter documenté + bascule `AI_PROVIDER=openrouter` commentée. `OPENROUTER_API_KEY` gardée `optional()` (llm-client throw déjà en runtime si vide ; requis casserait le dev local Ollama). TDD RED→GREEN prouvé (`env.test.ts` 4/4 : openrouter accepté, provider invalide rejeté=fail loud, défaut appliqué). tsc source `env.ts` clean. 2 commits `537c8ad`(feat env+test)/`a4d53ce`(chore turbo+env.example). 1 déviation Rule 3 (verification-only) : binaire `vitest`/`tsc` exécuté via chemin root-résolu car symlink `packages/shared/node_modules/vitest` périmé (pointe `..._@types+node@22.19.17` sans suffixe `_jsdom`, réel = `..._jsdom@25.0.1`). ⚠ **DETTE out-of-scope loguée `deferred-items.md`** : ce même symlink périmé fait échouer `tsc` avec `TS2307 Cannot find module 'vitest'` sur les 8 fichiers de test PRÉ-EXISTANTS (identique) — non causé par ce plan ; correctif suggéré = `pnpm install` au root. REQ-16-01 satisfait, débloque Waves 2/3 (vision/veille/closure/pack témoin). Prochain : Plan 16-02.
 - 2026-07-03 — **Phase 16 ajoutée** : Migration IA Ollama→Claude API (demande Laurent « on sort Ollama, migration cloud avec Claude »). Scope repéré : chokepoint UNIQUE `callOllama` (`lib/ai-ollama`) via `tryOnce`/`runOllamaJson` dans `ollama-generators.ts` (10 générateurs) ; `AI_PROVIDER` env supporte DÉJÀ `'anthropic'` (branchement amorcé). Approche : SDK `@anthropic-ai/sdk` + sorties structurées `messages.parse()` sur les schémas Zod existants + re-tuning des 5 prompts (écrits mistral-small) + env `ANTHROPIC_API_KEY`. Décision cadrage = modèle (Opus 4.8 défaut qualité / Sonnet+Haiku coût cf. milestone v6), garder le stub en fallback. Prochain : `/gsd:plan-phase 16`. NB session 2026-07-03 : Phase 15 (refonte 5 onglets) TERMINÉE + fixes hors-GSD (AGEFICE adresse ×2 fix `agefice-generator.ts`, backfill 22 codes APE via API SIRENE gratuite `_backfill-ape-agefice.ts`, lookup SIRET→APE in-app `lib/sirene.ts`+`sirene-lookup.ts`+bouton create-person, worker auto-reprise jobs orphelins `lib/closure/requeue.ts` — 153 orphelins vidés, positionnement stub varié+progression `stub-content.ts`).
@@ -257,7 +259,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 16-01-PLAN.md
+Stopped at: Completed 16-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
