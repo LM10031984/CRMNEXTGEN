@@ -1,12 +1,12 @@
 /**
  * Extraction texte de PDF / images.
  * - PDFs natifs (avec couche texte) : unpdf (rapide, gratuit)
- * - Images JPG/PNG/WebP : Ollama vision (qwen2.5vl) — OCR local
- * - PDF scan sans couche texte : fallback automatique pdf-to-png-converter
- *   + Ollama vision sur chaque page rastérisée
+ * - Images JPG/PNG/WebP : OCR vision via callLlm (Claude vision cloud / vision local)
+ * - PDF scan sans couche texte : fallback automatique pdftoppm (rasterisation)
+ *   + OCR vision sur chaque page rastérisée
  */
 
-import { callOllamaVision } from './ai-ollama';
+import { callLlm } from '@/lib/llm-client';
 
 /**
  * Rastérise un PDF en PNG via `pdftoppm` (poppler-utils, CLI brew).
@@ -18,7 +18,7 @@ import { callOllamaVision } from './ai-ollama';
  * binaire système (`brew install poppler`), aucune dep Node, marche partout.
  *
  * 144 DPI : compromis lisibilité MRZ / taille — assez pour qu'un vision model
- * lise une CNI, sans alourdir inutilement la requête Ollama.
+ * lise une CNI, sans alourdir inutilement la requête vision.
  */
 async function rasterizePdfPagesToPng(pdfBuffer: Buffer): Promise<Buffer[]> {
   const { execFile } = await import('node:child_process');
@@ -80,13 +80,18 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<ExtractedDoc> 
 }
 
 /**
- * OCR d'une image via Ollama vision. Retourne la transcription brute du
- * texte visible. Lent (2-15 s selon le modèle / la taille image), à
- * appeler en fire-and-forget côté pipeline.
+ * OCR d'une image via `callLlm({ imageBuffer })` (tier vision — Claude Haiku
+ * vision en cloud OpenRouter, llama3.2-vision en local selon AI_PROVIDER).
+ * Retourne la transcription brute du texte visible. Lent (2-15 s selon le
+ * modèle / la taille image), à appeler en fire-and-forget côté pipeline.
+ *
+ * En cas d'échec : retour text:'' / pages:0 (null-équivalent → saisie
+ * manuelle admin). PAS de stub généré (D-03c).
  */
 export async function extractTextFromImage(buffer: Buffer): Promise<ExtractedDoc> {
   try {
-    const r = await callOllamaVision({
+    // imageBuffer force le tier vision côté callLlm (détection mime interne).
+    const r = await callLlm({
       imageBuffer: buffer,
       prompt: VISION_OCR_PROMPT,
       temperature: 0,
@@ -103,8 +108,9 @@ export async function extractTextFromImage(buffer: Buffer): Promise<ExtractedDoc
       text: '',
       pages: 0,
       warnings: [
-        `Échec OCR Ollama vision : ${e?.message ?? e}. ` +
-          `Vérifier que le modèle est installé (\`ollama pull qwen2.5vl:7b\`) et que Ollama tourne sur ${process.env.OLLAMA_HOST ?? 'http://localhost:11434'}.`,
+        `Échec OCR vision : ${e?.message ?? e}. ` +
+          "Vérifiez la clé OPENROUTER_API_KEY ou l'accès réseau (ou l'accès Ollama local selon AI_PROVIDER), " +
+          'ou saisissez les champs manuellement.',
       ],
     };
   }
