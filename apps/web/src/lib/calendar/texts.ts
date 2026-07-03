@@ -83,6 +83,10 @@ export const SIEGE_BLOCK = `🛣️ Accès par les transports :
  * - `countdown` : phrase déjà calculée par countdownLabel (rappels quotidiens)
  * - `salutationPrenoms` : prénoms des apprenants (textes froid)
  * - `isSiege` : true si la session a lieu au siège Vence
+ * - `programmeUrl` : URL Drive du programme de la session (optionnel). Quand
+ *   fournie, une ligne « Programme de la formation » cliquable s'ajoute au bloc
+ *   documents du rappel. Absent (programme en MinIO, pas d'id Drive) → aucune
+ *   ligne programme.
  */
 export type CalendarTextCtx = {
   formation: string;
@@ -95,6 +99,7 @@ export type CalendarTextCtx = {
   countdown: string;
   salutationPrenoms: string;
   isSiege: boolean;
+  programmeUrl?: string;
 };
 
 /**
@@ -103,6 +108,16 @@ export type CalendarTextCtx = {
  * Texte EXACT du pilote SES-0097 (HTML, <br> implicite via sauts de ligne).
  */
 function rappelBody(ctx: CalendarTextCtx): string {
+  // Les 3 documents obligatoires deviennent des liens Drive cliquables (Qualiopi).
+  const charteLink = `<a href="${driveViewUrl(DRIVE_DOCS.chartePsh)}">Charte accueil handicap</a>`;
+  const riLink = `<a href="${driveViewUrl(DRIVE_DOCS.ri)}">Règlement intérieur</a>`;
+  const cgvLink = `<a href="${driveViewUrl(DRIVE_DOCS.cgv)}">Conditions générales de vente</a>`;
+  // Ligne programme optionnelle, insérée AU-DESSUS de la ligne Charte quand l'URL
+  // du programme de session est disponible (sinon rien : programme en MinIO).
+  const programmeLine = ctx.programmeUrl
+    ? `<a href="${ctx.programmeUrl}">Programme de la formation</a>\n`
+    : '';
+
   return `Rappel – Votre formation ${ctx.formation} commence bientôt !
 
 Bonjour,
@@ -119,9 +134,9 @@ Pour un bon déroulement de la formation, nous vous invitons à :
 ✔️ Anticiper votre trajet ou vérifier votre connexion si la formation est en ligne
 
 Merci de bien vouloir consulter et lire les documents suivants :
-Charte accueil handicap
-Règlement intérieur
-Conditions générales de vente
+${programmeLine}${charteLink}
+${riLink}
+${cgvLink}
 
 Si vous avez la moindre question, n'hésitez pas à nous contacter à formation@start-academy.fr ou au 07 80 91 95 31.
 
