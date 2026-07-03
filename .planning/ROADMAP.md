@@ -310,6 +310,18 @@ Plans:
 - [x] 15-03-PLAN.md — Lot 3 (Wave 3) : onglet Agenda (synchro Google Calendar Phase 14 + créneaux lecture)
 - [x] 15-04-PLAN.md — Lot 4 (Wave 4) : validation IA retirée de la session (lien produit) + nettoyage batches zombies DRY/WRITE + correctifs visuels
 
+### Phase 16: Migration IA Ollama vers Claude API
+
+**Goal:** Sortir Ollama (mistral-small:24b local) au profit de l'API Claude pour la génération des docs Qualiopi (QCM, analyse besoin, grille, positionnement, satisfaction, déroulé, rapport formateur…). Objectif : fiabilité (fini les stubs/échecs sous charge), qualité (contenu varié, ex. écarts positionnement), et cap cloud (milestone v6).
+**Scope repéré:** point d'entrée UNIQUE `callOllama` (`lib/ai-ollama`) via `tryOnce`/`runOllamaJson` dans `ollama-generators.ts` (10 générateurs) ; `AI_PROVIDER` env supporte déjà `'anthropic'` (branchement amorcé). Approche : SDK `@anthropic-ai/sdk` + sorties structurées `messages.parse()` sur les schémas Zod existants + re-tuning des 5 prompts (écrits pour mistral-small) + env `ANTHROPIC_API_KEY`.
+**Décision à trancher au cadrage:** modèle (Opus 4.8 par défaut qualité ; Sonnet+Haiku pour coût, cf. milestone v6). Garder le stub comme fallback.
+**Requirements**: TBD (dérivés au /gsd:plan-phase 16)
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 16 to break down)
+
 ---
 
 *Roadmap created: 2026-05-12 · Granularity: fine · 13 phases · 44 requirements*
