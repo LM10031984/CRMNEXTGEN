@@ -8,6 +8,16 @@
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
+/**
+ * Schémas isolés exportés pour test unitaire (Phase 16 Plan 16-01).
+ * Testés directement pour éviter d'avoir à fournir DATABASE_URL/AUTH_SECRET
+ * dans un `createEnv` complet. Ce sont les MÊMES schémas que ceux du bloc `server`.
+ */
+export const AI_PROVIDER_SCHEMA = z
+  .enum(['ollama', 'openrouter', 'anthropic', 'qualiopi-gen'])
+  .default('ollama');
+export const OPENROUTER_MODEL_FAST_SCHEMA = z.string().default('anthropic/claude-haiku-4.5');
+
 export const sharedEnv = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -29,13 +39,23 @@ export const sharedEnv = createEnv({
     DOC_ENGINE_TOKEN: z.string().optional(),
 
     // IA
-    AI_PROVIDER: z.enum(['ollama', 'anthropic', 'qualiopi-gen']).default('ollama'),
+    AI_PROVIDER: AI_PROVIDER_SCHEMA,
     OLLAMA_URL: z.string().url().default('http://localhost:11434'),
     OLLAMA_MODEL_FAST: z.string().default('mistral-small:24b'),
     OLLAMA_MODEL_REASONING: z.string().default('qwen3:30b-a3b'),
     OLLAMA_MODEL_EMBED: z.string().default('nomic-embed-text:latest'),
+    OLLAMA_MODEL_VISION: z.string().default('llama3.2-vision:11b'),
     ANTHROPIC_API_KEY: z.string().optional(),
     ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-7'),
+
+    // OpenRouter (gateway cloud Claude — migration v6, lu par llm-client.ts)
+    OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
+    OPENROUTER_API_KEY: z.string().optional(),
+    OPENROUTER_MODEL_FAST: OPENROUTER_MODEL_FAST_SCHEMA,
+    OPENROUTER_MODEL_QUALITY: z.string().default('anthropic/claude-sonnet-4.6'),
+    OPENROUTER_MODEL_VISION: z.string().default('anthropic/claude-haiku-4.5'),
+    OPENROUTER_APP_NAME: z.string().default('QualiOF'),
+    OPENROUTER_SITE_URL: z.string().url().default('http://localhost:3010'),
 
     // Qualiopi Gen (Supabase Edge Functions)
     QUALIOPI_GEN_URL: z.string().url().optional(),
@@ -83,8 +103,16 @@ export const sharedEnv = createEnv({
     OLLAMA_MODEL_FAST: process.env.OLLAMA_MODEL_FAST,
     OLLAMA_MODEL_REASONING: process.env.OLLAMA_MODEL_REASONING,
     OLLAMA_MODEL_EMBED: process.env.OLLAMA_MODEL_EMBED,
+    OLLAMA_MODEL_VISION: process.env.OLLAMA_MODEL_VISION,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL_FAST: process.env.OPENROUTER_MODEL_FAST,
+    OPENROUTER_MODEL_QUALITY: process.env.OPENROUTER_MODEL_QUALITY,
+    OPENROUTER_MODEL_VISION: process.env.OPENROUTER_MODEL_VISION,
+    OPENROUTER_APP_NAME: process.env.OPENROUTER_APP_NAME,
+    OPENROUTER_SITE_URL: process.env.OPENROUTER_SITE_URL,
     QUALIOPI_GEN_URL: process.env.QUALIOPI_GEN_URL,
     QUALIOPI_GEN_TOKEN: process.env.QUALIOPI_GEN_TOKEN,
     AUTH_SECRET: process.env.AUTH_SECRET,
