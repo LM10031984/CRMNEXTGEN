@@ -110,6 +110,9 @@ function toTextCtx(ctx: SessionEventCtx, countdown: string): CalendarTextCtx {
     countdown,
     salutationPrenoms: ctx.salutationPrenoms,
     isSiege: isSiegeVence(ctx.locationAddressText),
+    // Programme cliquable dans le corps (formation + rappels) quand un id Drive
+    // de programme de session existe ; sinon undefined (aucune ligne programme).
+    programmeUrl: ctx.programmeDriveId ? driveViewUrl(ctx.programmeDriveId) : undefined,
   };
 }
 
@@ -191,6 +194,9 @@ export function buildRappelEvents(ctx: SessionEventCtx): GEvent[] {
       start: { date: toDateStr(day) },
       end: { date: toDateStr(addDays(day, 1)) },
       extendedProperties: withKey(key),
+      // Mêmes pièces jointes que l'événement [Formation] : programme (si dispo)
+      // + Charte accueil handicap / Règlement intérieur / CGV.
+      attachments: buildFormationAttachments(ctx.programmeDriveId),
       reminders: {
         useDefault: false,
         overrides: [{ method: 'popup', minutes: 9 * 60 }],
