@@ -18,6 +18,28 @@ import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
 import type { SatisfactionFroidContent } from './satisfaction-froid-template';
 import type { DerouleContent } from './deroule-template';
 
+/**
+ * PRNG déterministe seedé par une chaîne (participantId) : le stub varie d'un
+ * stagiaire à l'autre mais reste STABLE à la régénération d'un même stagiaire.
+ */
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export function stubQcmContent(_ctx: ClosureContext): QcmContent {
   // 11 questions génériques (>= 10 minimum Qualiopi). 9 bonnes / 11 = 82%
   // pour rester dans la fourchette cible 75-95% (>= 65% obligatoire).
@@ -105,24 +127,47 @@ export function stubAnalyseBesoinContent(ctx: ClosureContext): AnalyseBesoinCont
 // structurel (signatures à compléter).
 // ===========================================================================
 
-export function stubPositionnementContent(_ctx: ClosureContext): PositionnementContent {
+export function stubPositionnementContent(ctx: ClosureContext): PositionnementContent {
+  // Scores variés PAR STAGIAIRE (graine = participantId → stable en régénération)
+  // avec PROGRESSION TOUJOURS GARANTIE (apres > avant sur chaque compétence).
+  const seed = `${ctx.apprenantPrenom}-${ctx.apprenantNom}-${ctx.sessionCode}`.trim() || 'positionnement';
+  const rand = mulberry32(hashStr(seed));
+  const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rand() * arr.length)]!;
+
+  const labels = [
+    'Maîtriser les fondamentaux du domaine',
+    'Identifier les bonnes pratiques applicables au quotidien',
+    'Utiliser les outils présentés en formation',
+    'Adapter sa pratique à des contextes variés',
+    'Structurer une démarche professionnelle',
+    'Évaluer ses résultats et progresser en continu',
+  ];
+  const competences = labels.map((label) => {
+    // AVANT : majoritairement 1-2, parfois 3 (il vient se former).
+    const avant = pick([1, 1, 1, 2, 2, 3] as const);
+    // ÉCART variable (1 à 3), borné pour ne pas dépasser 4 et rester >= 1
+    // → apres toujours strictement supérieur à avant (progression garantie).
+    const gap = Math.min(pick([1, 2, 2, 3] as const), 4 - avant);
+    const apres = (avant + Math.max(1, gap)) as 1 | 2 | 3 | 4;
+    return { label, avant: avant as 1 | 2 | 3 | 4, apres };
+  });
+
+  const commentairesPool = [
+    'Formation alignée avec mes attentes, je repars avec des outils concrets à mettre en place.',
+    'Contenu très opérationnel, j\'ai pu identifier des axes d\'amélioration immédiats pour ma pratique.',
+    'Bonne progression sur les points où j\'étais le moins à l\'aise, cas concrets très utiles.',
+    'Formation qui répond à mon besoin de structurer ma démarche au quotidien.',
+  ];
+
   return {
     objectifs_formation:
-      "Acquérir des compétences directement applicables au quotidien professionnel et structurer mes pratiques.",
+      'Acquérir des compétences directement applicables au quotidien professionnel et structurer mes pratiques.',
     demande_specifique:
       "J'aimerais des cas concrets et des outils opérationnels que je peux mettre en place dès la fin de la formation.",
     prerequis:
       "Connaissances générales du métier, expérience terrain, à l'aise avec les outils numériques de base.",
-    competences: [
-      { label: "Maîtriser les fondamentaux du domaine", avant: 2, apres: 4 },
-      { label: "Identifier les bonnes pratiques applicables au quotidien", avant: 1, apres: 3 },
-      { label: "Utiliser les outils présentés en formation", avant: 1, apres: 4 },
-      { label: "Adapter sa pratique à des contextes variés", avant: 2, apres: 3 },
-      { label: "Structurer une démarche professionnelle", avant: 2, apres: 4 },
-      { label: "Évaluer ses résultats et progresser en continu", avant: 1, apres: 3 },
-    ],
-    commentaires:
-      "Formation alignée avec mes attentes, je repars avec des outils concrets à mettre en place.",
+    competences,
+    commentaires: pick(commentairesPool),
   };
 }
 
