@@ -37,6 +37,15 @@ const TENANT = process.env.TENANT_ID ?? 'db191440-a144-48d1-93c1-767e6f647f2c';
 const SINCE = new Date('2025-03-01');
 const WRITE = process.env.WRITE === '1';
 const ONLY_CODE = process.env.SESSION_CODE; // rattrapage ciblé d'une seule session
+// Override ciblé : id Drive du Programme.pdf de LA session (rattrapage manuel tant
+// qu'aucune source d'id Drive par session n'existe en base). Exige SESSION_CODE :
+// un programme est propre à une session, jamais appliqué en masse.
+const PROGRAMME_DRIVE_ID = process.env.PROGRAMME_DRIVE_ID;
+if (PROGRAMME_DRIVE_ID && !ONLY_CODE) {
+  throw new Error(
+    'PROGRAMME_DRIVE_ID exige SESSION_CODE=SES-XXXX (le programme est propre à une session, jamais appliqué en masse).',
+  );
+}
 const SESSION_DELAY_MS = 200; // lissage anti-429 entre sessions (mode WRITE)
 
 interface Recap {
@@ -88,6 +97,12 @@ async function main() {
         recap.skippedNoTrainer.push(session.code);
         console.log(`  ⚠ ${session.code} : pas d'e-mail formateur → SKIP`);
         continue;
+      }
+
+      if (PROGRAMME_DRIVE_ID) {
+        // event-builders dérive programmeUrl + pièce jointe depuis programmeDriveId.
+        loaded.ctx.programmeDriveId = PROGRAMME_DRIVE_ID;
+        console.log(`  ↳ override PROGRAMME_DRIVE_ID=${PROGRAMME_DRIVE_ID} (pièce jointe + lien programme)`);
       }
 
       const isPastSession = (session.endDate ?? session.startDate) < NOW;
