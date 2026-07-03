@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from '../env';
+// Import depuis le module pur `env-schemas` (pas `../env`) : `../env` exécute
+// createEnv() au chargement et exigerait un .env complet → test non hermétique.
+import { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from '../env-schemas';
 
 /**
  * Tests Phase 16 Plan 16-01 Task 1 — env.ts boot-safety pour le provider OpenRouter.

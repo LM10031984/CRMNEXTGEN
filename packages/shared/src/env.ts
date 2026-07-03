@@ -10,13 +10,12 @@ import { z } from 'zod';
 
 /**
  * Schémas isolés exportés pour test unitaire (Phase 16 Plan 16-01).
- * Testés directement pour éviter d'avoir à fournir DATABASE_URL/AUTH_SECRET
- * dans un `createEnv` complet. Ce sont les MÊMES schémas que ceux du bloc `server`.
+ * Définis dans `./env-schemas` (module pur sans effet de bord) puis re-exportés
+ * ici pour compat : `createEnv` ci-dessous valide TOUT l'env au chargement, donc
+ * les tests importent depuis `env-schemas` pour rester hermétiques (pas de .env requis).
  */
-export const AI_PROVIDER_SCHEMA = z
-  .enum(['ollama', 'openrouter', 'anthropic', 'qualiopi-gen'])
-  .default('ollama');
-export const OPENROUTER_MODEL_FAST_SCHEMA = z.string().default('anthropic/claude-haiku-4.5');
+export { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from './env-schemas';
+import { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from './env-schemas';
 
 export const sharedEnv = createEnv({
   server: {
