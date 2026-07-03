@@ -3,6 +3,7 @@ import {
   isSiegeVence,
   renderRappelText,
   renderFroidText,
+  driveViewUrl,
   HORAIRES,
   DRIVE_DOCS,
   SIEGE_BLOCK,
@@ -71,6 +72,47 @@ describe('renderRappelText', () => {
   it("n'ajoute PAS le bloc siège quand isSiege=false", () => {
     const out = renderRappelText(baseCtx);
     expect(out).not.toContain(SIEGE_BLOCK);
+  });
+
+  it('rend les 3 documents en liens cliquables vers les bons ids Drive', () => {
+    const out = renderRappelText(baseCtx);
+    expect(out).toContain(
+      `<a href="${driveViewUrl(DRIVE_DOCS.chartePsh)}">Charte accueil handicap</a>`,
+    );
+    expect(out).toContain(
+      `<a href="${driveViewUrl(DRIVE_DOCS.ri)}">Règlement intérieur</a>`,
+    );
+    expect(out).toContain(
+      `<a href="${driveViewUrl(DRIVE_DOCS.cgv)}">Conditions générales de vente</a>`,
+    );
+  });
+
+  it('insère la ligne « Programme de la formation » cliquable quand programmeUrl est fourni', () => {
+    const out = renderRappelText({
+      ...baseCtx,
+      programmeUrl: 'https://drive.google.com/file/d/PROGID/view',
+    });
+    expect(out).toContain('Programme de la formation');
+    expect(out).toContain('PROGID');
+    expect(out).toContain(
+      '<a href="https://drive.google.com/file/d/PROGID/view">Programme de la formation</a>',
+    );
+    // la ligne programme s'insère AU-DESSUS de la ligne Charte
+    const idxProgramme = out.indexOf('Programme de la formation');
+    const idxCharte = out.indexOf('Charte accueil handicap');
+    expect(idxProgramme).toBeGreaterThan(-1);
+    expect(idxProgramme).toBeLessThan(idxCharte);
+  });
+
+  it("n'insère PAS la ligne programme quand programmeUrl est absent", () => {
+    const out = renderRappelText(baseCtx);
+    expect(out).not.toContain('Programme de la formation');
+  });
+
+  it('conserve MOT POUR MOT les phrases Qualiopi figées (non-régression)', () => {
+    const out = renderRappelText(baseCtx);
+    expect(out).toContain('Merci de bien vouloir consulter et lire les documents suivants :');
+    expect(out).toContain('Emma de Start Academy');
   });
 });
 
