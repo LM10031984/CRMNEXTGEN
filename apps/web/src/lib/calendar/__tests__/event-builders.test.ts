@@ -92,6 +92,30 @@ describe('buildRappelEvents', () => {
     expect(overrides.every((o) => o.method === 'popup')).toBe(true);
     expect(overrides.some((o) => o.method === 'email')).toBe(false);
   });
+
+  it('chaque rappel porte les 4 pièces jointes de la formation (programme + 3 docs)', () => {
+    for (const ev of buildRappelEvents(baseCtx)) {
+      expect(ev.attachments?.length).toBe(4);
+      const urls = (ev.attachments ?? []).map((a) => a.fileUrl ?? '');
+      expect(urls.some((u) => u.includes('1bNZhx2mfPIjizEMo6Z3GGpP_Uj6CGIv7'))).toBe(true);
+    }
+  });
+
+  it('sans programmeDriveId : chaque rappel porte 3 pièces jointes (docs statiques)', () => {
+    const events = buildRappelEvents({ ...baseCtx, programmeDriveId: undefined });
+    for (const ev of events) {
+      expect(ev.attachments?.length).toBe(3);
+    }
+  });
+
+  it('corps du rappel : ligne programme présente si programmeDriveId, absente sinon', () => {
+    const withProg = buildRappelEvents(baseCtx)[0]!;
+    expect(withProg.description ?? '').toContain('Programme de la formation');
+    expect(withProg.description ?? '').toContain('1bNZhx2mfPIjizEMo6Z3GGpP_Uj6CGIv7');
+
+    const noProg = buildRappelEvents({ ...baseCtx, programmeDriveId: undefined })[0]!;
+    expect(noProg.description ?? '').not.toContain('Programme de la formation');
+  });
 });
 
 describe('buildFroidEvents', () => {
