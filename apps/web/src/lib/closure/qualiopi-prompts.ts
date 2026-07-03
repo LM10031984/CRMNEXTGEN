@@ -5,9 +5,27 @@
  * Centralisés ici pour avoir une source unique de vérité, versionnée.
  * Si on les améliore plus tard (par benchmark), bumper PROMPT_VERSION
  * et tracer dans AIGenerationJob.aiPromptVersion.
+ *
+ * ── Re-tune Claude v10 (Phase 16, 2026-07 — D-04c) ──────────────────────────
+ * Ces prompts ont été écrits pour `mistral-small:24b`. Avec la migration cloud
+ * (OpenRouter → Claude Haiku/Sonnet, cf. AI_PROVIDER=openrouter), on ALLÈGE les
+ * rappels de FORMAT défensifs spécifiques mistral : l'injonction « Réponds
+ * UNIQUEMENT en JSON, sans markdown » n'est gardée qu'UNE fois par prompt (en
+ * fin), et les MAJUSCULES d'insistance en excès sont ramenées à une formulation
+ * normale. Claude respecte mieux les consignes de format → ces répétitions ne
+ * sont plus nécessaires.
+ * En revanche les GARDE-FOUS MÉTIER Qualiopi sont CONSERVÉS INTÉGRALEMENT (voix
+ * 1re/3e personne, ancrage individuel anti-jumelage, ancrage strict au thème,
+ * distribution A/B des niveaux, verbes de Bloom, cohérence horaire 9h-13h/14h-18h
+ * du déroulé, seuils QCM/satisfaction) : ce ne sont PAS des anti-dérape mistral,
+ * c'est la valeur d'audit — on ne retire RIEN de la sémantique métier.
+ * Les schémas Zod en aval sont INCHANGÉS (chaîne prompt→LLM→Zod→null→stub intacte).
+ * Coexistence mistral/Claude tracée par PROMPT_VERSION dans AIGenerationJob :
+ * les produits déjà FIGÉS (TrainingProduct.derouleJson, prompt v9 mistral) gardent
+ * leur contenu — un re-run des produits figés est HORS scope (dette documentée).
  */
 
-export const PROMPT_VERSION = 'qualiopi-gen-v9-2026-06-18';
+export const PROMPT_VERSION = 'claude-v10-2026-07';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -202,7 +220,7 @@ RÈGLE ABSOLUE — VERBES D'ACTION ÉVALUABLES :
 Chaque intitulé de contenu commence par un VERBE D'ACTION évaluable (Identifier, Appliquer, Analyser, Mettre en œuvre, Construire, Argumenter, Élaborer, Évaluer, Concevoir, Utiliser, Distinguer, Rédiger, Optimiser, Structurer). JAMAIS d'intitulé nominal (« Les techniques de… », « Présentation de… ») : reformule-le en verbe d'action (« Appliquer les techniques de… »).
 
 FORMAT DE RENDU — MARKDOWN PLAT réutilisable directement :
-Réponds en JSON { "programmeMd": "..." }. Le champ programmeMd est un markdown propre :
+Le résultat est un objet JSON { "programmeMd": "..." } dont le champ programmeMd est un markdown propre :
 - Une section « ### Organisation des journées » en tête qui rappelle l'horaire UNE SEULE FOIS (les horaires sont identiques chaque jour, plus l'éventuel dernier jour partiel). NE répète PAS l'horaire dans chaque jour.
 - Structure ensuite le CONTENU par JOUR (### Jour K) quand la formation comporte plusieurs jours ; répartis les thèmes source sur les jours sans en inventer ni en retirer, et SANS y recopier les horaires (ils sont déjà donnés une fois plus haut). Pour une formation d'une seule journée, une structure plate matin/après-midi suffit.
 - Les contenus déclinés sur les blocs matin et après-midi de chaque jour, chaque intitulé en verbe d'action évaluable (titres ## / ### ou items de liste en gras).
@@ -232,8 +250,8 @@ COHÉRENCE HORAIRE OBLIGATOIRE (un auditeur additionne tes créneaux) :
 - La somme des créneaux de TRAVAIL (hors pauses) = 8h00 PILE : matin 9h00–13h00 (4h) + après-midi 14h00–18h00 (4h).
 - Le bloc final d'évaluation (QCM Kahoot 12 questions) dure 20 à 30 min — ex : 17h30–18h00 (30 min), pas 15 min.
 
-FORMAT DE RENDU — TABLEAU 6 COLONNES, SOIS CONCIS :
-Le déroulé est rendu en TABLEAU à 6 colonnes étroites (Durée / Objectifs / Contenu / Outils / Exercice / Évaluation). Chaque champ = QUELQUES LIGNES MAXIMUM, style synthétique et télégraphique. INTERDIT : paragraphes numérotés à rallonge ("1)…2)…3)…"), listes de 5 micro-étapes, pavés. La qualité vient de la PRÉCISION, pas de la longueur. Cible : un déroulé lisible en colonnes, pas un mur de texte.
+Format de rendu — tableau 6 colonnes, sois concis :
+Le déroulé est rendu en tableau à 6 colonnes étroites (Durée / Objectifs / Contenu / Outils / Exercice / Évaluation). Chaque champ tient en quelques lignes maximum, style synthétique et télégraphique. Pas de paragraphes numérotés à rallonge ("1)…2)…3)…"), pas de listes de 5 micro-étapes, pas de pavés. La qualité vient de la précision, pas de la longueur. Cible : un déroulé lisible en colonnes, pas un mur de texte.
 
 EXIGENCES PAR SÉQUENCE (champs non-pause) :
 
