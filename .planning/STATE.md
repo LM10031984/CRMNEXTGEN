@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-07-03T14:03:23.093Z"
+stopped_at: Completed 16-04-PLAN.md
+last_updated: "2026-07-03T14:10:59.573Z"
 last_activity: 2026-07-03
 progress:
   total_phases: 17
   completed_phases: 11
   total_plans: 88
-  completed_plans: 62
+  completed_plans: 63
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 ## Current Position
 
 Phase: 16 (migration-ia-ollama-vers-claude-api) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-03 — **Plan 16-04 livré** (Wave 2, alignement des tiers des générateurs closure sur D-01a — REQ-16-04 + REQ-16-06). Le routage `cloud ? callLlm({ tier }) : callOllama` existait DÉJÀ dans `tryOnce`/`runOllamaJson` (tous les générateurs y passent) — ce plan n'est PAS un re-wire mais une CORRECTION des `tier` positionnels INVERSÉS par l'audit "routage 17/06" (qui avait tout mis en quality). **6 tiers corrigés** dans `apps/web/src/lib/closure/ollama-generators.ts` : `generate-rapport-formateur` `'fast'`→**`'quality'`** (Sonnet — doc rédactionnel critique audit D-01a) ; `generate-qcm` / `generate-analyse-besoin` / `generate-grille` / `generate-positionnement` / `generate-grille-obs-session` `'quality'`→**`'fast'`** (Haiku — docs volume/structurés, coût). **INCHANGÉS** : déroulé (L874/L917 quality), programme normalisé (L1010 quality — figé au produit), satisfaction chaud/froid (défaut `fast`). Les 5 commentaires "audit routage 17/06" remplacés par "D-01a Phase 16". **`tryOnce`/`runOllamaJson` NON touchés** : retry `MAX_ATTEMPTS` (=`CLOSURE_OLLAMA_RETRIES`??2, 1+1) puis `failJob`→`null`→le worker sert le stub (`stub-content.ts`) intact ; **AUCUN fallback Ollama ajouté** (D-03b — le switch cloud env-piloté est la seule voie). **Test HERMÉTIQUE** `apps/web/src/lib/closure/__tests__/generators-routing.test.ts` (3) : mock direct `@/lib/llm-client` (`callLlm`) + `@qualiof/db` + `@/lib/ai-ollama`, `AI_PROVIDER=openrouter` + `CLOSURE_OLLAMA_RETRIES=2` forcés via `vi.hoisted` AVANT import, `tenantId=null` (aucune écriture Prisma requise) — Test 1 `generateRapportFormateur`→`callLlm` `tier:'quality'` (`objectContaining`), Test 2 `generateAnalyseBesoinContent`→`tier:'fast'` (choisi car plus simple à satisfaire que QCM+`attachQcmScoring`), Test 3 `parsedJson:null` → `null` + `callLlm` appelé **exactement 2 fois** (`toHaveBeenCalledTimes(2)`). **Mutation-of-power prouvée** (jamais commitée) : (a) rapport `'quality'`→`'fast'` → Test 1 ROUGE (`expected quality got fast`) ; (c) `MAX_ATTEMPTS=1` → Test 3 ROUGE (`expected 2 calls got 1`) ; restaurés → `git diff --stat` vide + 3/3 verts. TDD : source Task 1 déjà correcte au moment du test → RED prouvé par la mutation (pas un rouge transitoire). **tsc `--noEmit` exit 0** (apps/web). Suite complète **1141 verts + 1 échec** = `shared-template.test.ts:175` MIME jpeg/jpg **PRÉ-EXISTANT hors scope** (documenté 15-01→16-03, non touché). Déroulé non-régressé (6/6). Acceptance grep OK : `audit routage 17/06`=0 ; tiers conformes ; test contient `tier:'quality'`/`tier:'fast'`/`toHaveBeenCalledTimes`/`@/lib/llm-client`. 2 commits `1ad035e`(fix)/`4b006e1`(test). **1 micro-adaptation** (sans scope) : mock `callLlm` déclaré via `vi.hoisted` (les factories `vi.mock` sont hoistées au-dessus des `const`) — corrigé au 1er run. ⚠ Rappel D-02b : migration vision PII (16-03) reste gatée hors code par le checkpoint DPA du Plan 16-06 (sans impact ici — docs closure = texte). REQ-16-04 (retry→stub prouvé, pas de fallback Ollama) + REQ-16-06 (tiers D-01a par générateur) satisfaits. Prochain : Plan 16-05 (re-tuning prompts Claude).
 
 - 2026-07-03 — **Plan 16-03 livré** (Wave 2, migration vision/OCR du PILIER #4 pré-inscriptions IA — REQ-16-02, chemin PII CNI/RIB/CFP). Les 2 call sites vision/OCR basculent de `callOllamaVision`/`callOllama` direct (`@/lib/ai-ollama`) vers **`callLlm`** (`@/lib/llm-client`). (1) `apps/web/src/lib/pdf-extract.ts` `extractTextFromImage` → **`callLlm({ imageBuffer })`** : `imageBuffer` force le tier `vision` côté client unifié (Claude Haiku vision cloud / llama3.2-vision local selon `AI_PROVIDER`) ; message d'erreur du catch NETTOYÉ (plus de `ollama pull qwen2.5vl` → message cloud-compatible `OPENROUTER_API_KEY`/réseau + « saisissez les champs manuellement ») ; header + commentaires purgés des refs Ollama vision codées. (2) `apps/web/src/lib/preinscription-extractor.ts` `extractOne` → **`callLlm({ tier: 'fast' })`** : suppression du `model: process.env.OLLAMA_MODEL_FAST` (le TIER gouverne le modèle, plus de nom codé au call site) ; le champ persisté **`aiModel: 'qwen3:30b-a3b'` (figé, faux) devient `resolveModel('fast')` DYNAMIQUE** (reflète le modèle réel selon provider). Comportement d'échec CONSERVÉ (D-03c) : vision KO → `{ text:'', pages:0 }`, extraction KO → `null` → **saisie manuelle admin, PAS de stub** (contrat PII : pas d'invention sur identité/bancaire). **D-04 respecté** : `callLlm` gateway OpenRouter, **aucun `@anthropic-ai/sdk`** ajouté. **2 tests HERMÉTIQUES** (mock `@/lib/llm-client` direct — vitest ne charge pas `.env` ; +mock `@/lib/pdf-extract` pour l'extracteur) : `pdf-extract.test.ts` (3 : imageBuffer câblé mutation-safe / raw vide → warning / throw → text:'',pages:0) + `preinscription-extractor.test.ts` (3 : `tier:'fast'`+`jsonOutput` mutation-safe / mock unique = 0 chemin Ollama / parsedJson null → null). TDD RED prouvé par **hang réseau** (Task 2 RED : Tests 1&2 timeout car la source appelait encore le vrai `callOllama`=localhost:11434 pendu → preuve que le mock `@/lib/llm-client` n'était pas consommé) → GREEN 6/6 en ~5ms hermétique. **tsc `--noEmit` exit 0** (node_modules réparé au root — symlink vitest résolu, plus la dette 16-01/16-02). Acceptance grep OK : callLlm≥1 / callOllamaVision=0 / callOllama=0 / qwen3:30b-a3b=0 / OLLAMA_MODEL_FAST=0 / resolveModel≥1 / `ollama pull`=∅. 4 commits `6cf93d0`(test)/`a55b1f2`(feat)/`0156ee0`(test)/`1e8609b`(feat). **0 déviation** (plan à la lettre). ⚠ Note filtre : `pnpm test -- <name>` ne narrow pas ici (lance toute la suite) → isolé via `pnpm --filter @qualiof/web exec vitest run <path>`. ⚠⚠ **RGPD D-02b GATÉ** : le CODE vision est livré mais la PROD vision cloud (`AI_PROVIDER=openrouter` sur les PII OCR) reste gatée hors code par le checkpoint:decision DPA du Plan 16-06 (wave 4) — ne pas router les PII vers OpenRouter en prod sans DPA. ⚠ 1 hors-scope inchangé : échec `shared-template.test.ts:175` MIME jpeg/jpg PRÉ-EXISTANT (non touché). REQ-16-02 satisfait. Patron de migration call site (imageBuffer / tier:'fast' / message cloud / aiModel dynamique) prouvé pour Waves 3+ (closure generators, pack témoin). Prochain : Plan 16-04.
 
@@ -261,7 +263,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 16-03-PLAN.md
+Stopped at: Completed 16-04-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
