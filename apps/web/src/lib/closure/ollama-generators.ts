@@ -396,7 +396,8 @@ function buildFaitsSession(s: SessionRapportCtx): string {
  * Génère les narratifs du « Rapport formateur » du déroulé (adaptations / remarques
  * groupe / bilan) par LLM, ANCRÉS au programme réel — au lieu des pools génériques
  * codés en dur (qui faisaient fuiter des thèmes hors programme, ex. « prompts/IA »
- * sur une formation Tracfin). tier 'fast' = Haiku en cloud (texte court).
+ * sur une formation Tracfin). tier 'quality' = Sonnet en cloud : doc rédactionnel
+ * critique audit (D-01a Phase 16 — fast=Haiku volume / quality=Sonnet rédactionnel).
  * Avec un `sessionCtx` (quick 260618-skk), les narratifs sont en plus ancrés sur
  * les faits concrets de la session → distincts d'une session à l'autre.
  * Retourne null sur échec → l'appelant retombe sur les pools (fallback).
@@ -438,7 +439,7 @@ Rédige tes trois narratifs (adaptations pédagogiques / observations, remarques
     refId,
     tenantId,
     undefined,
-    'fast',
+    'quality', // rédactionnel critique audit → Sonnet (D-01a Phase 16)
   );
 }
 
@@ -465,7 +466,7 @@ ${formation.programmeMd || '(programme à compléter)'}`;
     refId,
     tenantId,
     undefined,
-    'quality', // rédactionnel → Sonnet (audit routage 17/06)
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
   if (!raw) return null;
   return attachQcmScoring(raw.questions);
@@ -558,7 +559,7 @@ L'analyse doit donner l'impression que le stagiaire a réellement répondu à un
     refId,
     tenantId,
     undefined,
-    'quality', // rédactionnel → Sonnet (audit routage 17/06)
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -610,7 +611,7 @@ La grille doit être positive (valorise le parcours) tout en étant crédible (p
     refId,
     tenantId,
     undefined,
-    'quality', // rédactionnel → Sonnet (audit routage 17/06)
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -722,7 +723,7 @@ Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majorita
     refId,
     tenantId,
     undefined,
-    'quality', // rédactionnel (objectifs/prérequis) → Sonnet (audit routage 17/06)
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -1143,7 +1144,7 @@ Pour "observations", produis exactement ${stagiaires.length} entrées (1 par par
     refId,
     tenantId,
     undefined,
-    'quality', // rédactionnel (observations perso) → Sonnet (audit routage 17/06)
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
   if (!result) return null;
 
