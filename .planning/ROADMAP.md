@@ -315,12 +315,18 @@ Plans:
 **Goal:** Sortir Ollama (mistral-small:24b local) au profit de l'API Claude pour la génération des docs Qualiopi (QCM, analyse besoin, grille, positionnement, satisfaction, déroulé, rapport formateur…). Objectif : fiabilité (fini les stubs/échecs sous charge), qualité (contenu varié, ex. écarts positionnement), et cap cloud (milestone v6).
 **Scope repéré:** point d'entrée UNIQUE `callOllama` (`lib/ai-ollama`) via `tryOnce`/`runOllamaJson` dans `ollama-generators.ts` (10 générateurs) ; `AI_PROVIDER` env supporte déjà `'anthropic'` (branchement amorcé). Approche : SDK `@anthropic-ai/sdk` + sorties structurées `messages.parse()` sur les schémas Zod existants + re-tuning des 5 prompts (écrits pour mistral-small) + env `ANTHROPIC_API_KEY`.
 **Décision à trancher au cadrage:** modèle (Opus 4.8 par défaut qualité ; Sonnet+Haiku pour coût, cf. milestone v6). Garder le stub comme fallback.
-**Requirements**: TBD (dérivés au /gsd:plan-phase 16)
+**Requirements**: REQ-16-01 (env openrouter) · REQ-16-02 (vision→callLlm) · REQ-16-03 (veille→callLlm) · REQ-16-04 (retry+stub) · REQ-16-05 (re-tuning prompts) · REQ-16-06 (tiers Haiku/Sonnet) · REQ-16-07 (migration tests + pack témoin)
+**Voie technique retenue (D-04):** RÉUTILISER la passerelle OpenRouter existante (`callLlm`), PAS de SDK `@anthropic-ai/sdk` natif. Le closure route DÉJÀ via callLlm quand AI_PROVIDER=openrouter — le vrai re-câblage callOllama→callLlm ne concerne que vision + veille.
 **Depends on:** Phase 15
-**Plans:** 0 plans
+**Plans:** 1/6 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 16 to break down)
+- [x] 16-01-PLAN.md — env.ts : enum openrouter + 7 clés OPENROUTER_* + turbo/.env.example (Wave 1)
+- [ ] 16-02-PLAN.md — veille classify.ts → callLlm tier fast + test migré (Wave 2)
+- [ ] 16-03-PLAN.md — OCR vision (pdf-extract + preinscription-extractor) → callLlm + test (Wave 2)
+- [ ] 16-04-PLAN.md — closure : tiers D-01a par générateur + test routage/retry→stub (Wave 2)
+- [ ] 16-05-PLAN.md — re-tuning 5 prompts Claude + bump PROMPT_VERSION (Wave 3)
+- [ ] 16-06-PLAN.md — pack témoin réel 0-stub + gate RGPD vision (checkpoint, Wave 4)
 
 ---
 
