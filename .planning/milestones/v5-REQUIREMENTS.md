@@ -1,3 +1,12 @@
+# Requirements Archive: v5 Audit UX/QA + Features métier
+
+**Archived:** 2026-07-04
+**Status:** SHIPPED
+
+For current requirements, see `.planning/REQUIREMENTS.md`.
+
+---
+
 # Requirements — Milestone "Audit UX/QA + Features métier"
 
 **Project:** QualiOF · **Milestone target:** v5 (post paliers 2.2/2.3/3/4)

@@ -2,7 +2,13 @@
 
 ## What This Is
 
-QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de formation Qualiopi spécialisé dans la formation IA des agents commerciaux immobilier. Il couvre tout le cycle de vie d'une formation — du lead à la fin de prestation — en automatisant la production des documents Qualiopi, le suivi de trésorerie OPCO/AGEFICE, et la gestion des apprenants multi-casquette (EI + Enseigne). L'outil est interne, déployé local sur Mac M-series avec Ollama, et n'est pas vendu à d'autres OF.
+QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de formation Qualiopi spécialisé dans la formation IA des agents commerciaux immobilier. Il couvre tout le cycle de vie d'une formation — du lead à la fin de prestation — en automatisant la production des documents Qualiopi, le suivi de trésorerie OPCO/AGEFICE, et la gestion des apprenants multi-casquette (EI + Enseigne). L'outil est interne, multi-utilisateurs (RBAC 6 rôles), génération IA via **Claude API (OpenRouter)** depuis v5/Phase 16 ; il tourne encore en local (Docker) avec un cap prod cloud Supabase+Vercel cadré pour v6. Il n'est pas vendu à d'autres OF.
+
+## Current State (post-v5, 2026-07-04)
+
+**Shipped v5 « Audit UX/QA + Features métier »** — 17 phases, 88 plans, 469 commits (2026-05-12 → 2026-07-04). L'app est fonctionnellement complète pour l'usage interne : responsive, RBAC, factures, veille, calendrier, centralisation documentaire, IA cloud (0 stub, pack ~3 min). Branche de travail : `cloud-migration`. Runtime : local Docker (Postgres/Redis/MinIO/Gotenberg/WeasyPrint) + `AI_PROVIDER=openrouter`.
+
+**Next Milestone Goals (v6 Prod Cloud)** : app sur Vercel, Postgres+Storage sur Supabase (région EU), Redis Upstash, workers+PDF sur un 3ᵉ hôte (Railway/Fly) — pour libérer l'usage du Mac de Laurent et onboarder l'équipe. Plan directeur discuté 2026-07-04 (voir ROADMAP). Y intégrer les Known Gaps arbitrés : DPA RGPD (prioritaire — OpenRouter/Anthropic/Supabase/Vercel), DOC-01/02 RGPD, CI-01, TEST-01/02.
 
 ## Core Value
 
@@ -63,68 +69,29 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 - ✓ **NAV-05** : Toasts sonner mounted globally + audit cohérence — palier 3 QW4
 - ✓ **DATA-01** : Import legacy SmartOF via xlsx — `packages/db/scripts/import-smartof.ts`
 
+**v5 Audit UX/QA + Features métier (2026-07-04)** — 51/61 requirements livrés et validés, détail dans `milestones/v5-REQUIREMENTS.md` :
+- ✓ BUG-01..03, RESP-01..05, UX-01..13 (audit 2026-05-12 intégralement traité) — v5 Ph. 1-6
+- ✓ SET-01..03, RBAC-01..05 (paramètres éditables + multi-utilisateurs) — v5 Ph. 7-8
+- ✓ LEAD-01/02, CENTRAL-01..05, RECON (réconciliation 3 sources), NAVDOC — v5 Ph. 9-9.3
+- ✓ FACT-01..04 (factures cycle complet), MOD-01/02 (stubs tranchés) — v5 Ph. 11-12
+- ✓ VEILLE, GCAL (rappels/convocations), SESSION-TABS — v5 Ph. 13-15
+- ✓ IA-CLOUD : migration Ollama → Claude API openrouter, tiers Haiku/Sonnet, prompts claude-v10, 0 stub — v5 Ph. 16 (remplace PACK-04/PACK-06 : plus de dépendance GPU locale, timeout à recalibrer)
+
 ### Active
 
-<!-- Milestone "Audit UX/QA + nouvelles features métier" — current scope. -->
+<!-- Backlog post-v5 : Known Gaps v5 + périmètre v6 à cadrer via /gsd:new-milestone. -->
 
-**Bugs critiques de l'audit 2026-05-12 (court terme)**
-- [ ] **BUG-01** : Vérifier et re-tester en runtime le bug "FileText is not defined" sur `/app/sessions/[id]` (suspecté faux positif — import présent ligne 4) — ✅ ou retire de la liste
-- [ ] **BUG-02** : Investiguer + corriger le header sticky qui se décolle au scroll dashboard (suspect `min-h-screen` sur parent) — `components/layout/main-content.tsx`
-- [ ] **BUG-03** : Ajouter redirects `/app/pre-inscriptions` → `/app/preinscriptions` et `/app/modeles` → `/app/templates` dans `next.config.mjs` (ou renommer)
+**Known Gaps v5 (reportés, à arbitrer au cadrage v6)**
+- [ ] **QBLANC-01/02/03** : audit Qualiopi blanc in-app (urgence retombée — audit BCI réel passé 03/07/2026)
+- [ ] **DOC-01/02** : export RGPD Art. 20 + suppression pseudonymisée Art. 17
+- [ ] **TEST-01/02** : E2E Playwright closure + smoke routes protégées
+- [ ] **AI-01** : embeddings recherche sémantique
+- [ ] **MOBILE-01** : PWA formateurs terrain
+- [ ] **CI-01** : GitHub Actions lint+tsc+tests
+- [ ] **RGPD-DPA** : documenter les sous-traitants (OpenRouter, Anthropic — et Supabase/Vercel/Upstash dès v6) au registre des traitements — **prioritaire, engagé par le GO vision du 2026-07-04**
 
-**Responsive (court/moyen terme — bloque mobile/tablette)**
-- [ ] **RESP-01** : Restaurer breakpoints Tailwind par défaut (sm/md/lg/xl) — déplacer `screens` dans `theme.extend` — `tailwind.config.ts`
-- [ ] **RESP-02** : Sidebar responsive (hidden md:block desktop + drawer hamburger mobile)
-- [ ] **RESP-03** : MainContent responsive (`ml-0 md:ml-64`)
-- [ ] **RESP-04** : Audit grilles dashboard et fiches (KPI/Pipeline/Financeurs) pour reflow correct < 1456px
-- [ ] **RESP-05** : Vérifier zones de saisie en mobile (formulaires apprenant, session, dossier)
-
-**UX gaps de l'audit (moyen terme)**
-- [ ] **UX-01** : Panneau aperçu notifications derrière la cloche "53" — `components/layout/notifications-bell.tsx` (modèle `Notification` + route `api/notifications` déjà présents)
-- [ ] **UX-02** : Déconnexion dans dropdown sur avatar (Radix DropdownMenu) avec confirmation — `components/layout/top-bar.tsx`
-- [ ] **UX-03** : CTA "Générer un document" dans onglet Documents fiche apprenant — `app/app/apprenants/[id]/`
-- [ ] **UX-04** : CTA "Déposer un dossier AGEFICE" pré-rempli depuis fiche apprenant
-- [ ] **UX-05** : Compteurs cliquables (Sessions/Heures) dans onglet Activité formation → drill-down
-- [ ] **UX-06** : Sélecteur d'année sur bloc Budget AGEFICE fiche apprenant (cohérence avec page Budget AGEFICE globale)
-- [ ] **UX-07** : Tooltip explicite sur badge orange "1" onglet Activité (sens du chiffre)
-- [ ] **UX-08** : Protéger le bouton "Supprimer" fiche apprenant (double confirm + RGPD)
-- [ ] **UX-09** : Afficher la liste des champs manquants directement (sans expand) sur badge "X champs à renseigner"
-- [ ] **UX-10** : Breadcrumb sur pages profondes (fiche apprenant, fiche produit)
-- [ ] **UX-11** : Hiérarchisation visuelle des 3-4 KPI prioritaires sur dashboard (densité actuelle anxiogène)
-- [ ] **UX-12** : Harmoniser libellés codes financeurs (OPCOMMERCE vs OPCO_EP)
-- [ ] **UX-13** : Audit contraste WCAG AA sur badges "ACTIVE" et navigation clavier sur listes
-
-**Paramètres organisme (moyen terme)**
-- [ ] **SET-01** : Édition SIRET / Déclaration d'activité / RCS dans Paramètres
-- [ ] **SET-02** : Édition adresse + logo + mentions légales OF
-- [ ] **SET-03** : Préférences globales (numérotation factures, signatures, etc.)
-
-**Multi-utilisateurs + RBAC (moyen terme)**
-- [ ] **RBAC-01** : Page Paramètres → Utilisateurs (liste, ajout, désactivation)
-- [ ] **RBAC-02** : Invitation par email avec mot de passe défini à la première connexion
-- [ ] **RBAC-03** : Permissions effectives par rôle dans la sidebar (cacher Factures pour FORMATEUR, etc.)
-- [ ] **RBAC-04** : Guards systématiques dans server actions selon rôle (au-delà du `tenantId` actuel)
-- [ ] **RBAC-05** : Audit log lisible des actions sensibles (`AuditLog` modèle déjà présent)
-
-**Nouvelles features métier**
-- ✓ **LEAD-01** : Distribution automatique Lead → Commercial (round-robin équilibré) + notif cloche + email — `server/actions/leads.ts` + `lib/lead-notifications.ts` + `lib/auto-assign-leads.ts` — Phase 9 (2026-05-18)
-- ✓ **LEAD-02** : Vue de charge par commercial (leads ouverts, gagnés ce mois, taux conversion, temps moyen) — `app/app/leads/charge/page.tsx` + `lib/lead-load-stats.ts` — Phase 9 (2026-05-18)
-- ✓ **CENTRAL-01** : Matrice visuelle stagiaire × document sur fiche session — pastilles 3 états (GENERATED / MANUAL_OK / MISSING) + bloc séparé docs session-only + tri/filtres sauvés localStorage — Phase 9.1 (2026-05-18)
-- ✓ **CENTRAL-02** : Génération doc ciblée 1 stagiaire — action ⋮ par cellule (5 actions) + sélection multi via worker BullMQ closure-pack mode `single-participant` (kinds + force) — Phase 9.1 (2026-05-18)
-- ✓ **CENTRAL-03** : Fiche apprenant timeline verticale par année + 3 PrioCard + bandeau alerte conditionnel — Phase 9.1 (2026-05-18)
-- ✓ **CENTRAL-04** : Fiche produit 4 onglets URL-state Stats / Sessions / Apprenants formés / Programme — Phase 9.1 (2026-05-18)
-- ✓ **CENTRAL-05** : Cross-navigation Airtable-style + Bug P0 « Programme dupliqué N fois » résolu structurellement (1 PDF session-wide + N statuts via `SessionParticipant.docStatus Json?`) — Phase 9.1 (2026-05-18)
-- [ ] **QBLANC-01** : Audit Qualiopi blanc — checklist auto des 32 indicateurs (`QualiopiDocCatalog`) par session/apprenant
-- [ ] **QBLANC-02** : Alertes dossiers incomplets avant fin de session
-- [ ] **QBLANC-03** : Simulation passage audit Qualiopi (rapport téléchargeable)
-- [ ] **FACT-01** : Stabiliser le module Factures (auditer ce qui marche / ce qui manque suite aux commits récents `feat(web): hub documents par inscrit + factures`)
-- [ ] **FACT-02** : Numérotation factures séquentielle conforme + gestion avoirs
-- [ ] **FACT-03** : Suivi paiements (`InvoicePayment` modèle existe) + relances impayés
-- [ ] **FACT-04** : Export comptable (FEC ou format expert-comptable)
-
-**Modules stub à clarifier (long terme)**
-- [ ] **MOD-01** : Module "Inscriptions" — déterminer périmètre vs Sessions+Participants existant
-- [ ] **MOD-02** : Module "Modèles de documents" — éditeur de templates ou simple liste lecture seule ?
+**v6 Prod Cloud (à formaliser via /gsd:new-milestone)**
+- [ ] Vercel (app) + Supabase Postgres/Storage EU + Upstash Redis + 3ᵉ hôte workers/Gotenberg/WeasyPrint + bascule prod + monitoring coûts/latences
 
 ### Out of Scope
 
@@ -132,8 +99,8 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 
 - **SaaS multi-OF / commercialisation externe** — Start Academy uniquement, pas de plan de revente. Le multi-tenant Prisma existe mais reste un seul tenant en prod. Permet de fixer plus tard si besoin sans payer la dette d'architecture.
 - **Verticalisation autres secteurs qu'immobilier** — Vocabulaire et règles métier (AGEFICE 3000€/an, EI+Enseigne) sont conçus pour les agents commerciaux immobilier. Pas d'effort d'abstraction pour BTP, santé, etc.
-- **Hébergement cloud / SaaS hosting** — Déploiement local-first sur Mac M-series (Ollama natif pour GPU Metal). Pas de plan AWS/GCP/Vercel court-moyen terme — coûts d'inférence LLM cloud incompatibles avec le modèle interne.
-- **CI/CD GitHub Actions** — Tests locaux + code review humain suffisent à ce stade. Si l'équipe grossit, à reconsidérer.
+- ~~**Hébergement cloud / SaaS hosting**~~ — **INVALIDÉ 2026-07-04** : la Phase 16 (LLM → Claude API) a levé le blocant coût/GPU ; v6 = prod cloud Supabase+Vercel. (Le multi-OF/SaaS commercial reste hors scope.)
+- **CI/CD GitHub Actions** — reconsidéré : CI-01 en backlog v6 (le passage cloud + multi-users justifie lint+tsc+tests sur PR).
 - **Tests unitaires extensifs sur templates / composants** — ROI faible, brittle. Priorité aux tests d'intégration smoke + E2E Playwright sur les workflows clés.
 - **Couverture i18n (anglais ou autres langues)** — Marché FR uniquement, vocabulaire métier FR figé.
 - **Edge runtime / Vercel Edge** — Prisma + BullMQ nécessitent Node runtime, edge n'apporte rien ici.
@@ -143,7 +110,7 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 **Stack technique** (cartographié dans `.planning/codebase/`):
 - Monorepo pnpm + Turborepo, Next.js 14.2.21 App Router + RSC + Server Actions
 - TypeScript strict, Prisma 5.22 + Postgres 16, Redis + BullMQ pour les jobs IA
-- Ollama natif Mac avec 4 modèles (mistral-small:24b FAST, qwen3:30b-a3b REASONING, qwen2.5vl:7b VISION, nomic-embed-text)
+- LLM : Claude API via OpenRouter (`callLlm` — Haiku fast / Sonnet quality, prompts claude-v10), Ollama conservé en fallback dev local uniquement (Phase 16, 2026-07-04)
 - Auth Lucia v3 + Argon2, UI Radix + Tailwind + sonner + cmdk
 - PDF via Gotenberg (Chromium) + WeasyPrint fallback, stockage MinIO
 
@@ -171,13 +138,13 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 
 ## Constraints
 
-- **Tech stack** : Next.js 14 App Router + Prisma + BullMQ + Ollama — figé. Pas de migration React Native ni Remix prévue.
-- **Runtime** : Mac M-series local (Ollama natif Metal). Pas de production cloud court terme.
-- **Performance LLM** : concurrency=3 sur worker closure, timeout 600s. Ne pas augmenter sans observer impact stub rate.
+- **Tech stack** : Next.js 14 App Router + Prisma + BullMQ + Claude API (OpenRouter) — figé. Pas de migration React Native ni Remix prévue.
+- **Runtime** : local Docker aujourd'hui ; cap prod cloud v6 (Vercel + Supabase EU + 3ᵉ hôte workers). Le Mac reste le poste dev.
+- **Performance LLM** : héritage local concurrency=3/timeout 600s — À RECALIBRER pour le cloud (latences observées 6-12 s/doc, témoin SES-0093). Surveiller stub rate ET coût OpenRouter.
 - **PDF rendering** : Gotenberg sans footer natif (illisible), footer en HTML dans body. Ne pas régresser ce pattern.
 - **Multi-tenant** : Tenant table + tenantId FK partout. Toute nouvelle server action DOIT scope par tenantId.
 - **RGPD** : `Person.ribKey` pointe vers MinIO (PII), bucket privé, signed URLs. Données sensibles séparées dans `SensitiveData`.
-- **Budget** : pas de SaaS cloud, donc pas de coût d'infra externe. Coût = temps dev Laurent + LLM local.
+- **Budget** : coût API OpenRouter à l'usage depuis Phase 16 (≈ centimes/pack) ; cible infra v6 ≈ 60-80 €/mois (Supabase+Vercel+Upstash+3ᵉ hôte).
 - **Timeline** : pas de deadline produit externe ; cadence interne pilotée par retours formateurs/admin Start Academy.
 
 ## Key Decisions
@@ -218,4 +185,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-04 — Phase 16 complete : migration IA Ollama → Claude API (OpenRouter). env boot-safe `openrouter`, veille/vision/closure routés `callLlm`, tiers D-01a (Haiku fast / Sonnet quality), prompts `claude-v10-2026-07`. Témoin SES-0093 : 0 stub, 16/16 docs, ~3 min, variété inter-stagiaires prouvée, approuvé Laurent. RGPD vision GO (dette : documentation DPA OpenRouter+Anthropic). Vérification 7/7. ⚠ Constraints « Runtime local sans cloud / timeout 600s » partiellement caduques (AI_PROVIDER=openrouter global, coût API réel) — à réviser au prochain milestone.*
+*Last updated: 2026-07-04 after v5 milestone — full evolution review (What This Is, Current State, Requirements v5→Validated, Out of Scope cloud invalidé, Constraints recalibrées).*
