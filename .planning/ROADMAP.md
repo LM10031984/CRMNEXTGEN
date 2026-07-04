@@ -76,7 +76,10 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   2. Un round-trip Prisma read/write depuis un worker réussit via `DATABASE_URL` poolée (`:6543 ?pgbouncer=true&connection_limit=1`) sans erreur `prepared statement already exists`
   3. Les 4 extensions (pgcrypto, uuid-ossp, pg_trgm, unaccent) résolvent au runtime — une recherche trigram et un `unaccent` fonctionnent
   4. Un INSERT test après restore ne collisionne pas de PK (séquences réalignées via `setval`)
-**Plans**: TBD
+**Plans**: 3 plans
+- [x] 19-01-PLAN.md — Script de preuve cloud `db-smoke-cloud.ts` (round-trip poolé 5 hits + tx Serializable + extensions trigram/unaccent + INSERT UUID) — DB-01/DB-02 [autonome]
+- [ ] 19-02-PLAN.md — Câbler les 2 URLs pooler (:6543 ?pgbouncer=true / :5432 session) + baseline collapse `0_init` + archiver 29 migrations + migrate deploy/status verts + extensions actives — DB-01/DB-02 [checkpoint: password+hostname+backup]
+- [ ] 19-03-PLAN.md — Smoke cloud gaté Laurent : exécuter les 4 preuves + `19-SMOKE.md` (0 séquence documenté, PK UUID) — DB-01/DB-02 [checkpoint: human-verify]
 **Research flags** (à reprendre au plan) : [VERIFY] hostname Supavisor exact (dashboard, pas training data) · `unaccent` dans la liste d'extensions Supabase · IPv4 add-on pour connexion directe :5432 depuis l'hôte worker · audit des `$transaction(async` interactifs (closure batch, avoirs, réconciliation) → batch array / session mode / déporter worker.
 
 ### Phase 20: Worker 3ᵉ hôte + doc engines
@@ -126,7 +129,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 |-------|-----------|----------------|--------|-----------|
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
-| 19. Base Postgres | v6 | 0/TBD | Not started | - |
+| 19. Base Postgres | v6 | 1/3 | In Progress|  |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |

@@ -19,8 +19,8 @@
 
 ### DB — Supabase Postgres
 
-- [ ] **DB-01** : Supabase Postgres EU provisionné, historique migrations Prisma baseliné (résolution drift `db push`), `prisma migrate deploy` vert via `DIRECT_URL` :5432
-- [ ] **DB-02** : `DATABASE_URL` poolée (`:6543 ?pgbouncer=true&connection_limit=1`) + `DIRECT_URL` directe câblées, 4 extensions actives (pgcrypto, uuid-ossp, pg_trgm, unaccent), séquences alignées post-restore
+- [x] **DB-01** : Supabase Postgres EU provisionné, historique migrations Prisma baseliné (résolution drift `db push`), `prisma migrate deploy` vert via `DIRECT_URL` :5432
+- [x] **DB-02** : `DATABASE_URL` poolée (`:6543 ?pgbouncer=true&connection_limit=1`) + `DIRECT_URL` directe câblées, 4 extensions actives (pgcrypto, uuid-ossp, pg_trgm, unaccent), séquences alignées post-restore
 
 ### WORK — Worker 3ᵉ hôte
 
@@ -76,8 +76,8 @@
 | STOR-01 | Phase 18 | Complete |
 | STOR-02 | Phase 18 | Complete |
 | STOR-03 | Phase 18 | Complete |
-| DB-01 | Phase 19 | Pending |
-| DB-02 | Phase 19 | Pending |
+| DB-01 | Phase 19 | Complete |
+| DB-02 | Phase 19 | Complete |
 | WORK-01 | Phase 20 | Pending |
 | WORK-02 | Phase 20 | Pending |
 | WORK-03 | Phase 20 | Pending |

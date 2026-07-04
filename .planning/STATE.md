@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 18-04-PLAN.md — Phase 18 ready_for_verification
-last_updated: "2026-07-04T19:27:30.028Z"
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-07-04T20:48:45.567Z"
 last_activity: 2026-07-04
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
 ---
 
 # STATE — QualiOF
@@ -21,18 +21,20 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service — désormais à faire tourner en prod cloud multi-utilisateurs sans le Mac de Laurent.
 
-**Current focus:** Phase 18 — supabase-storage-migration-objets-direct-to-storage
+**Current focus:** Phase 19 — base-postgres-supabase-pooler-migrations-baselin-es
 
 ---
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
+Phase: 19 (base-postgres-supabase-pooler-migrations-baselin-es) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-04 — **Plan 19-01 livré** (Wave 1, script de PREUVE cloud DB-01/DB-02 — 100 % autonome, aucune base cloud requise pour l'écrire). Créé `apps/web/scripts/db-smoke-cloud.ts` : runner tsx **worker/CLI-safe** (importe UNIQUEMENT `@qualiof/db`, aucun import React/auth), **4 fonctions distinctes** appelées en séquence sous try/catch/finally `$disconnect` : (1) **`proveRoundTripPooled`** — `tenant.findFirstOrThrow` + boucle `for (let i=0; i<5; i++)` de `trainingSession.count()` = 5 lectures d'affilée pour révéler tout `prepared statement "s0" already exists` du **pooler transaction mode :6543** (pitfall #2) ; (2) **`proveSerializableInteractiveTx`** — `prisma.$transaction(async (tx) => { count×2 }, { isolationLevel: 'Serializable' })` reproduit le pattern EXACT de `closure/worker.ts:334` **`bumpAndFinalize`** SANS toucher de ClosureBatch réel → prouve qu'une transaction interactive Serializable passe sous le pooler (pitfall #1, chemin worker) ; (3) **`proveExtensions`** — `$queryRawUnsafe similarity('Dupont','Dupond') > 0` (pg_trgm) + `unaccent('Éléonore') === 'Eleonore'` avec throw explicite si KO ; (4) **`proveInsertNoPkCollision`** — INSERT réel dans **`AuditLog`** (id `@default(uuid())`, champs NOT NULL confirmés `schema.prisma:1230` : tenantId/entity/entityId/action/diff, `action:'DB_SMOKE_TEST'`) + **`delete` immédiat** (ne pollue pas la base cloud), commenté « 0 autoincrement dans schema.prisma → collision de séquence IMPOSSIBLE ». **Garde d'entrée robuste aux espaces** `import.meta.url === pathToFileURL(process.argv[1]).href` (leçon 18-SMOKE bug #1, %20). **0 PII loggé** (IDs UUID + compteurs seulement, RGPD). npm script racine **`db:smoke:cloud`** (`dotenv -e .env -- pnpm --filter @qualiof/web exec tsx …`). **Le script NE crée AUCUNE clé env, NE modifie PAS `.env`** — consomme `DATABASE_URL`/`DIRECT_URL` déjà validées au boot (Phase 17). **`tsc --noEmit` exit 0**. Acceptance greps tous verts (`from '@qualiof/db'`=1 / `for (let i=0; i<5`=1 / `Serializable`=1 / `similarity(`=2 / `unaccent(`=2 / `$disconnect`=1 / `pathToFileURL`=3 / `DB_SMOKE_TEST|.delete(`=2 / `"db:smoke:cloud"`=1 / PII console.log=0). **0 déviation** (seul ajustement mécanique : optional chaining `?.` + `Number()` sur les résultats `$queryRawUnsafe` pour `noUncheckedIndexedAccess`). Commit purement additif (nouveau script + 1 ligne scripts, aucun fichier métier touché) → suite Vitest structurellement inchangée. 1 commit `82c2fbc`(feat, `--no-verify` parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **⚠ Script LIVRÉ, NON EXÉCUTÉ contre le cloud** : DB-01/DB-02 marqués dans REQUIREMENTS (déclarés au plan) mais la **preuve réelle** (round-trip/extensions/INSERT contre le Supabase réel) est l'**étape gatée Laurent du plan 19-03** (« destructif/cloud réel = étape séparée ») ; le plan 19-02 renseigne d'abord les URLs poolée :6543 / directe :5432 + active les extensions au SQL Editor. Prochain : Plan 19-02 (câblage URLs cloud + extensions Supabase).
 
 - 2026-07-04 — **Plan 18-04 livré — PHASE 18 COMPLÈTE (4/4)** (Wave 3, CÔTÉ CLIENT direct-to-storage — STOR-03). **Composant partagé `direct-upload-field.tsx`** (`'use client'`) : `requestUploadUrl` injecté (diffère public vs admin) génère la signed URL, puis **XHR PUT DIRECT** du `File` brut vers Supabase avec **barre de progression réelle** (`xhr.upload.onprogress`, D-06), **1 retry auto silencieux** puis bouton « Réessayer » (D-07), limite **50 Mo** (D-05), aperçu PII `<img>` natif (jamais `next/image`). **Formulaire public `/p/[token]` refondu** (`fileToBase64` retiré, `DirectUploadField` sur `createPreEnrollmentUploadUrl`+`confirmPreEnrollmentUpload` — **0 octet via Vercel**, anti-413) ; **admin** (`create-person-button`) basculé sur le même composant via `createApprenantUploadUrl` (D-08). **CHECKPOINT human-verify résolu sur infra Supabase RÉELLE** (Laurent a délégué : « je te laisse gérer ») — projet **`gntlqyscahbgjrmsbzil`, région West EU Irlande** (PAS `eu-west-3` Paris : projet staging du 2026-06-03 réutilisé sur décision Laurent ; Irlande=UE → RGPD conforme, écart acté non bloquant). **STOR-01 VALIDÉ** (bucket privé : public brut→HTTP 400, signed URL TTL 600s→200, token falsifié→400 ; `preinscriptions` créé privé 50 Mo). **STOR-02 VALIDÉ** (`3109/3109 migrés, 0 orphelin, 0 clé invalide, 0 lien mort` → rapport `.planning/audit/STORAGE-MIGRATION-REPORT-2026-07-04.md` ; **bascule `STORAGE_PROVIDER=supabase`** ajoutée au `.env` racine + 4 clés SUPABASE_* de `.env.local.cloud-backup`, backup `.env.bak-phase18`). **STOR-03 VALIDÉ** (Playwright local contre Supabase réel, **photo CNI 11,27 Mo** : `PUT .../storage/v1/object/upload/sign/preinscriptions/{token}/… → 200` **aucun octet via Next** ; `PreEnrollment` SUBMITTED→EXTRACTING→**EXTRACTED**, cniKey/ribKey sur nouvelles clés Supabase ; **OCR réussi, warnings:[]**, données CNI réelles). **Open Q1 TRANCHÉE** : le XHR PUT direct (x-upsert) fonctionne → **pas de fallback `uploadToSignedUrl`**, progression D-06 réelle conservée. **3 bugs réels révélés par le smoke + corrigés** (commits `9956438`,`d35aa27`) : (1) `migrate-storage.ts` **ne s'exécutait JAMAIS** — garde `file://argv[1]` ne matche pas un chemin à **espaces** (%20) → `pathToFileURL` + rapport ancré racine via `fileURLToPath` ; (2) `storage-upload.ts` exportait `guessContentType` **sync sous `'use server'`** → build error « Server actions must be async » → dé-exporté ; (3) **Known Stub 18-03 RÉSOLU** — `downscaleForOcr` exportée mais **jamais câblée** → OCR KO sur 11 Mo → **déplacée** vers `apps/web/src/lib/ocr-downscale.ts` (module neutre sans auth, règle worker) et **câblée** dans `preinscription-extractor.ts` (CNI/RIB/CFP). **Suite complète 1163/1164** (seul échec = `shared-template.test.ts` MIME jpeg/jpg PRÉ-EXISTANT hors scope, baseline 15-01) ; `tsc --noEmit` exit 0. **3 items PENDING documentés** (PAS des échecs) : Vercel prod réel (413 impossible par design mais app non déployée — Phase 21), retry sur coupure réseau mobile réelle, expiration signed URL 11 min temps réel (refus token invalide même mécanisme JWT exp prouvé à la place). 6 commits `4c2485d`(feat composant)/`84a990c`(feat câblage)/`e483091`(docs SMOKE)/`9956438`(fix chemin)/`d35aa27`(fix compile+OCR)/`0bb74b8`(docs résultats SMOKE). STOR-03 satisfait → **Phase 18 = 4/4 (STOR-01 bucket privé + STOR-02 migration 0 lien mort + STOR-03 direct-to-storage prouvé bout-en-bout)**. ⚠ Rappels Phase 21 : re-valider 413/direct-to-storage sur Vercel déployé + retry coupure réseau mobile ; arbitrer région Paris vs Irlande (Supabase région = immuable → recréer+migrer si Paris dédié voulu). Prochain : `/gsd:verify-work 18` puis `/gsd:plan-phase 19` (Base Postgres Supabase).
 
@@ -278,7 +280,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 18-04-PLAN.md — Phase 18 ready_for_verification
+Stopped at: Completed 19-01-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
