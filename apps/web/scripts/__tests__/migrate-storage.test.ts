@@ -67,6 +67,15 @@ vi.mock('@qualiof/db', () => ({
   },
 }));
 
+// `@/lib/storage` exécute createEnv() au load (sharedEnv) → le harness ne charge
+// pas `.env` en test, il throwait « Invalid environment variables ». On mocke
+// donc les DEUX constantes de bucket importées par migrate-storage.ts (politique
+// hermétique projet : mocker le module qui exécute createEnv au load).
+vi.mock('@/lib/storage', () => ({
+  PREENROLLMENT_BUCKET: 'preinscriptions',
+  DOCS_BUCKET: 'qualiof-docs',
+}));
+
 import { prisma } from '@qualiof/db';
 import { collectAllKeys, isInvalidSupabaseKey, runMigration } from '../migrate-storage';
 
