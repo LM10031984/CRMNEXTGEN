@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v6
-milestone_name: Prod Cloud (Supabase + Vercel)
-status: not_started
-stopped_at: Roadmap v6 créé — Phases 17-22, prêt pour /gsd:plan-phase 17
-last_updated: "2026-07-04T09:30:00.000Z"
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-07-04T13:39:59.556Z"
 last_activity: 2026-07-04
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
 ---
 
 # STATE — QualiOF
@@ -21,18 +21,20 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service — désormais à faire tourner en prod cloud multi-utilisateurs sans le Mac de Laurent.
 
-**Current focus:** Phase 17 — Fondations cloud (région EU + env)
+**Current focus:** Phase 17 — fondations-cloud-r-gion-eu-env
 
 ---
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 17 (fondations-cloud-r-gion-eu-env) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-04 — **Plan 17-01 livré** (Wave 1, verrouillage écrit des régions cloud EU — CLOUDENV-01). Doc-only, aucune création de projet cloud. Créé `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGIONS.md` = **source de vérité auditable pré-création** des régions des 4 plateformes : **D-01 Paris** (Supabase `eu-west-3` + Vercel `cdg1`, résidence FR RGPD/Qualiopi prime sur ~10ms latence pour un OF FR 2-5 users), worker `europe-west4` (Railway) **/** `cdg` (Fly) EU — plateforme exacte tranchée Phase 20, **D-02 Upstash CONDITIONNEL** (`eu-central-1` Frankfurt SI Redis retenu Phase 20 WORK-02 ; aucun compte/DB créé). Réponse critère « 4 plateformes » = **3 fermes (Supabase/Vercel/Railway-Fly) + 1 conditionnelle (Upstash)**. Section irréversibilité : **SEULE Supabase immuable** (recréer + migrer) ; le vrai risque = **défaut US silencieux** à la création (Vercel `iad1`, Supabase us-east). **Checklist pré-création anti-défaut-US 4 items** pour Phases 18/19/20. Sources docs officielles vérifiées (Supabase regions/change-region, Vercel functions region, Railway/Fly regions, Upstash Global 2.0). 8 acceptance grep verts (eu-west-3=4, cdg1=4, europe-west4|cdg=8, eu-central-1=4, CONDITIONNEL=3, immuable/irréversible/recréer=6, checklist=4, 4 plateformes présentes). 1 commit `25defba`(docs, `--no-verify` parallel executor). **0 déviation** (plan à la lettre). CLOUDENV-01 satisfait. Prochain : Plan 17-02 (CLOUDENV-02 : refonte `env.ts` fail-loud + 5 clés cloud + `turbo.json` globalEnv + retrait `DOC_ENGINE_URL`).
 
 - 2026-07-04 — **Roadmap v6 Prod Cloud créé — Phases 17-22** (numérotation continue après v5 qui finit à Ph. 16). 21 REQ-IDs mappés 21/21, 0 orphelin, granularité `fine`. Ordre de build (dépendances dures recherche) : **17 Fondations cloud** (région EU + `env.ts` fail-loud + `DOC_ENGINE_TOKEN` câblé — CLOUDENV-01/02/03) → **18 Supabase Storage** (buckets privés + migration objets MinIO 0 lien mort + upload direct-to-storage CNI/RIB contre cap 4,5 MB Vercel — STOR-01/02/03) → **19 Base Postgres** (drift `db push` résolu + `migrate deploy` vert via DIRECT_URL + pooler :6543 + extensions/séquences — DB-01/02) → **20 Worker 3ᵉ hôte** (image prunée 3 workers+Gotenberg+WeasyPrint+poppler Railway/Fly EU, décision Redis 24h, pack closure Mac éteint, OCR non dégradé silencieux — WORK-01..04) → **21 App Vercel + filet CI** (déploiement EU, cookies Lucia, 9 PDF synchrones via ingress public authentifié, GitHub Actions + E2E closure + smoke routes verts AVANT bascule — APP-01/02/03 + CI-01 + TEST-01/02 ; **UI hint: yes**) → **22 Bascule prod + RGPD** (runbook+rollback, dump final, DNS, invitations, pack témoin go/no-go, alertes coûts+backups, DPA 6 sous-traitants gaté AVANT PII prod — CUT-01/02 + RGPD-01). Chaque phase porte ses flags [VERIFY] recherche (hostname Supavisor, pricing Upstash, DNS privé Railway/Fly, `unaccent`, `@supabase/supabase-js`, volume MinIO, SMTP OVH, IPv4 add-on) pour les chercheurs de plan-phase. Décisions déjà verrouillées (ne pas re-litiguer) : OpenRouter LLM (v5 Ph.16), Option A dual-ingress public authentifié, liste anti-features. `commit_docs=false` → fichiers écrits, non commités. Prochain : `/gsd:plan-phase 17`.
 
@@ -267,10 +269,9 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 | 260530-f0l | Bloc "Nos résultats {année}" ajouté sur /catalogue — résout Top 2 risque audit Qualiopi Ind 2 (indicateurs de résultats chiffrés). Réutilise `getQualiopiBilan(tenantId, year)` existant. 4 KPI cards : stagiaires formés, heures formation, satisfaction moyenne (/5), taux recommandation (%). Double fallback année (currentYear → availableYears[0]). Null-safety "Données en cours de consolidation" si pas de satisfaction. Style aligné cards produits. 1 fichier modifié (+89 lignes). | 2026-05-30 | 05c0abc | [260530-f0l-bloc-r-sultats-ann-e-sur-catalogue-r-sou](./quick/260530-f0l-bloc-r-sultats-ann-e-sur-catalogue-r-sou/) |
 | 260703-g65 | Rappels Google Calendar quotidiens (J-15…J-1) : les 3 docs Qualiopi (Charte accueil handicap / Règlement intérieur / CGV) deviennent des liens Drive cliquables dans le corps + ligne « Programme de la formation » optionnelle (champ `programmeUrl` dans CalendarTextCtx, visible seulement si URL dispo) + les rappels portent les mêmes attachments Drive que l'événement [Formation] (`buildFormationAttachments`). Formulation Qualiopi figée intacte. 66/66 tests calendar, test de puissance OK. Découverte : `programmeDriveId` toujours undefined en prod (programme en MinIO) → infra prête, source Drive du programme = chantier séparé. | 2026-07-03 | 5d31ee6 | [260703-g65-rappels-calendrier-liens-docs-charte-ri-](./quick/260703-g65-rappels-calendrier-liens-docs-charte-ri-/) |
 
-
 ## Last session
 
-Stopped at: Roadmap v6 Prod Cloud créé — Phases 17-22 mappées (21/21 REQ), prêt pour /gsd:plan-phase 17
+Stopped at: Completed 17-01-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
