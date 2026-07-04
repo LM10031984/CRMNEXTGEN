@@ -125,7 +125,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
-| 18. Supabase Storage | v6 | 4/4 | Complete   | 2026-07-04 |
+| 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 0/TBD | Not started | - |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |

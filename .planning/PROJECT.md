@@ -10,6 +10,8 @@ QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de form
 
 **v6 Phase 17 complete (2026-07-04)** — Fondations cloud : régions EU verrouillées par écrit (`17-REGIONS.md` : Supabase `eu-west-3` Paris irréversible, Vercel `cdg1`, worker EU, Upstash conditionnel), boot fail-loud réel sur 5 clés cloud (chokepoint `next.config.mjs` + 2 workers — `sharedEnv` n'était importé nulle part avant), `DOC_ENGINE_TOKEN` câblé en Bearer sur Gotenberg/WeasyPrint. CLOUDENV-01/02/03 validés (4/4 must-haves).
 
+**v6 Phase 18 complete (2026-07-04)** — Supabase Storage : STOR-01/02/03 validés sur infra réelle (projet `gntlqyscahbgjrmsbzil`, **West EU Irlande** — réutilisation du projet staging sur décision Laurent, dérogation actée au `eu-west-3` Paris de 17-REGIONS ; RGPD conforme). Migration MinIO→Supabase 3109/3109 objets, 0 lien mort ; `STORAGE_PROVIDER=supabase` actif en local ; direct-to-storage prouvé bout-en-bout (photo CNI réelle 11,27 Mo → PUT direct 200 → OCR EXTRACTED 0 warning, downscale sharp câblé). 3 items reportés Phase 21 (Vercel non déployé) : 413 prod, retry mobile réel, expiry TTL temps réel.
+
 ## Current Milestone: v6 Prod Cloud (Supabase + Vercel)
 
 **Goal :** QualiOF tourne en production cloud multi-utilisateurs — l'équipe Start Academy travaille sans que le Mac de Laurent soit allumé.
@@ -201,4 +203,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-04 after Phase 17 (fondations cloud région EU + env) — CLOUDENV-01/02/03 validés.*
+*Last updated: 2026-07-04 after Phase 18 (Supabase Storage migration + direct-to-storage) — STOR-01/02/03 validés sur infra réelle.*
