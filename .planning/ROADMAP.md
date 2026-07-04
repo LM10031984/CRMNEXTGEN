@@ -28,7 +28,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 
 **Ordre de dépendances (build order recherche) :** Fondations (région + env.ts + token) → Storage → Base Postgres → Worker 3ᵉ hôte + doc engines → App Vercel + ingress public + filet CI → Bascule prod + RGPD.
 
-- [ ] **Phase 17: Fondations cloud (région EU + env)** — Verrouiller la région EU des 4 plateformes et fermer le gap `env.ts` (5 clés cloud + `DOC_ENGINE_TOKEN` câblé) avant toute création de projet
+- [x] **Phase 17: Fondations cloud (région EU + env)** — Verrouiller la région EU des 4 plateformes et fermer le gap `env.ts` (5 clés cloud + `DOC_ENGINE_TOKEN` câblé) avant toute création de projet (completed 2026-07-04)
 - [ ] **Phase 18: Supabase Storage (migration objets + direct-to-storage)** — Buckets privés opérationnels, objets MinIO migrés sans lien mort, upload photos CNI/RIB direct-to-storage (contourne le cap 4,5 MB Vercel)
 - [ ] **Phase 19: Base Postgres Supabase (pooler + migrations baselinées)** — Postgres EU provisionné, drift `db push` résolu, `migrate deploy` vert, URLs poolée/directe câblées, extensions + séquences alignées
 - [ ] **Phase 20: Worker 3ᵉ hôte + doc engines** — Image Docker prunée (3 workers + Gotenberg + WeasyPrint + poppler) sur Railway/Fly EU, décision Redis tranchée, pack closure généré 100 % cloud, OCR non dégradé silencieusement
@@ -49,7 +49,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 **Plans**: 3 plans
 - [x] 17-01-PLAN.md — Doc région EU auditable des 4 plateformes (Paris, Upstash conditionnel) — CLOUDENV-01
 - [x] 17-02-PLAN.md — 5 clés cloud env.ts fail-loud + chokepoint boot + storage.ts sharedEnv + turbo/.env.example, DOC_ENGINE_URL retiré — CLOUDENV-02
-- [ ] 17-03-PLAN.md — DOC_ENGINE_TOKEN Bearer sur Gotenberg+WeasyPrint + URLs sharedEnv (pdf-render.ts) — CLOUDENV-03
+- [x] 17-03-PLAN.md — DOC_ENGINE_TOKEN Bearer sur Gotenberg+WeasyPrint + URLs sharedEnv (pdf-render.ts) — CLOUDENV-03
 **Research flags** (à reprendre au plan) : [VERIFY] défaut régional US des providers (Vercel `iad1`, Supabase us-east) — choisir EU explicite AVANT création · irréversibilité région (recréer projet si erreur).
 
 ### Phase 18: Supabase Storage (migration objets + direct-to-storage)
@@ -120,7 +120,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 17. Fondations cloud | v6 | 2/3 | In Progress|  |
+| 17. Fondations cloud | v6 | 3/3 | Complete   | 2026-07-04 |
 | 18. Supabase Storage | v6 | 0/TBD | Not started | - |
 | 19. Base Postgres | v6 | 0/TBD | Not started | - |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
