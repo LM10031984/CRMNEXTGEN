@@ -24,7 +24,8 @@
     "e2e:closure": "dotenv -e ../../.env -- tsx scripts/closure-e2e-test.ts",
     "calendar:purge": "dotenv -e ../../.env -- tsx scripts/calendar-purge-broken.ts",
     "calendar:backfill": "dotenv -e ../../.env -- tsx scripts/calendar-backfill.ts",
-    "closure:close-zombies": "dotenv -e ../../.env -- tsx scripts/close-zombie-batches.ts"
+    "closure:close-zombies": "dotenv -e ../../.env -- tsx scripts/close-zombie-batches.ts",
+    "storage:migrate": "tsx scripts/migrate-storage.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
@@ -59,6 +60,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
     "rss-parser": "^3.13.0",
+    "sharp": "^0.35.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

@@ -26,7 +26,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * de confirmPreEnrollmentUpload → Test 4 ROUGE → restaurer → 5/5.
  */
 
-const createSignedUploadUrlMock = vi.fn();
+// vi.hoisted : les factories vi.mock sont hoistées AU-DESSUS des const → le mock
+// doit être créé dans un bloc lui-même hoisté pour être accessible dans la factory.
+const { createSignedUploadUrlMock } = vi.hoisted(() => ({
+  createSignedUploadUrlMock: vi.fn(),
+}));
 
 vi.mock('@/lib/storage', () => ({
   createSignedUploadUrl: createSignedUploadUrlMock,
