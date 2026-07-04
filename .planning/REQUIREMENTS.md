@@ -66,7 +66,28 @@
 
 ## Traceability
 
-*(rempli par le roadmap)*
+**Coverage : 21/21 REQ-IDs mappés — aucun orphelin, aucun doublon.**
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
+| CLOUDENV-01 | Phase 17 | Pending |
+| CLOUDENV-02 | Phase 17 | Pending |
+| CLOUDENV-03 | Phase 17 | Pending |
+| STOR-01 | Phase 18 | Pending |
+| STOR-02 | Phase 18 | Pending |
+| STOR-03 | Phase 18 | Pending |
+| DB-01 | Phase 19 | Pending |
+| DB-02 | Phase 19 | Pending |
+| WORK-01 | Phase 20 | Pending |
+| WORK-02 | Phase 20 | Pending |
+| WORK-03 | Phase 20 | Pending |
+| WORK-04 | Phase 20 | Pending |
+| APP-01 | Phase 21 | Pending |
+| APP-02 | Phase 21 | Pending |
+| APP-03 | Phase 21 | Pending |
+| CI-01 | Phase 21 | Pending |
+| TEST-01 | Phase 21 | Pending |
+| TEST-02 | Phase 21 | Pending |
+| CUT-01 | Phase 22 | Pending |
+| CUT-02 | Phase 22 | Pending |
+| RGPD-01 | Phase 22 | Pending |
