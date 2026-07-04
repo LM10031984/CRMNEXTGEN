@@ -59,7 +59,7 @@ Ce que Laurent doit faire (aucune génération n'a été lancée par l'agent —
 - **Variété entre stagiaires :** hashes `PedagogicalAsset` tous distincts (QCM, GRILLE_OBS, POSITIONNEMENT, SATISFACTION_CHAUD) entre les 2 stagiaires.
 - **Satisfaction froid :** sautée (fin < 90j) — attendu.
 
-_Jugement qualité (lecture des PDF) : **à compléter par Laurent** — pending._
+**Jugement qualité : APPROUVÉ par Laurent (2026-07-04)** — pack témoin validé (« approuvé »), 0 stub + qualité OK. Checkpoint Task 2 levé.
 
 ---
 
@@ -76,14 +76,15 @@ _Jugement qualité (lecture des PDF) : **à compléter par Laurent** — pending
 
 **Resume-signal :** choisir **go** (DPA OK, vision cloud prod) ou **gate** (vision local jusqu'au DPA). Consigner le choix ici.
 
-_Décision RGPD vision : **à trancher par Laurent** — pending._
+**Décision RGPD vision : GO (Laurent, 2026-07-04)** — vision cloud autorisée en prod (`AI_PROVIDER=openrouter` global, OCR CNI/RIB via Claude).
+⚠ **Action de conformité restante (hors code, niveau organisme) :** documenter la base légale / le DPA avec OpenRouter + Anthropic comme sous-traitants (registre des traitements, mention dans la politique RGPD). Le go est opérationnel ; la documentation DPA reste à produire — consignée comme dette de conformité.
 
 ---
 
 ## Récapitulatif d'état
 
 - ✅ Task 1 — Pré-checks : suite verte (1 échec pré-existant connu), grep legacy clean, clé API présente.
-- ⏳ Task 2 — Pack témoin : PENDING (génération + revue par Laurent sur `:3010`).
-- ⏳ Task 3 — Gate RGPD vision : PENDING (décision go/gate par Laurent).
+- ✅ Task 2 — Pack témoin SES-0093 : 0 stub, 16/16, tiers D-01a, variété prouvée — **APPROUVÉ par Laurent (2026-07-04)**.
+- ✅ Task 3 — Gate RGPD vision : **GO** (dette de conformité : documentation DPA à produire au niveau organisme).
 
-**Le plan 16-06 N'EST PAS complet** : 2 checkpoints humains restent. Pas de SUMMARY final tant que le pack témoin et la décision RGPD ne sont pas tranchés.
+**Plan 16-06 COMPLET (2026-07-04)** — les 2 checkpoints humains sont levés. REQ-16-07 satisfait.

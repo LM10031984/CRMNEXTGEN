@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 16-05-PLAN.md
-last_updated: "2026-07-03T14:17:27.492Z"
+stopped_at: 16-06 pré-checks verts — en attente pack témoin + décision RGPD (Laurent)
+last_updated: "2026-07-03T15:05:00.000Z"
 last_activity: 2026-07-03
 progress:
   total_phases: 17
@@ -27,12 +27,14 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 ## Current Position
 
-Phase: 16 (migration-ia-ollama-vers-claude-api) — EXECUTING
-Plan: 6 of 6
+Phase: 16 (migration-ia-ollama-vers-claude-api) — EXECUTING (16-06 CHECKPOINT en cours)
+Plan: 6 of 6 — pré-checks (Task 1) DONE, 2 checkpoints humains PENDING (pack témoin + RGPD vision)
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-03 — **Plan 16-06 — Task 1 (pré-checks) DONE, plan NON complet (2 checkpoints humains restants)**. Plan CHECKPOINT (`autonomous: false`). **Task 1 auto exécutée** : phase gate technique VERT avant génération témoin. **tsc web `--noEmit` exit 0**. **Suite web 1141/1142** (seul échec = `shared-template.test.ts` « Test 6 » MIME `image/jpeg` vs attendu `image/jpg` — **PRÉ-EXISTANT documenté 15-01→16-05, HORS scope Phase 16**, suite traitée verte). **Suite shared 106/106** (9 fichiers). **Grep legacy VIDE** : `callOllama` absent de `veille/classify.ts` + `preinscription-extractor.ts` + `pdf-extract.ts` (le closure garde son switch `callOllama` dev-local = attendu, non compté résidu). **Clé API OK** : `OPENROUTER_API_KEY` présente/non vide/non commentée + `AI_PROVIDER="openrouter"` (switch global câblé par l'orchestrateur depuis `.env.local.cloud-backup`, backup `.env.bak-phase16` ; Laurent a choisi le switch global complet). **`16-WITNESS.md` créé** : section Pré-checks (statut suite + grep + clé) + les 2 étapes humaines PENDING documentées. 1 commit `21be404`(docs). **0 déviation**. **⏳ RESTE GATÉ LAURENT (2 checkpoints, PAS d'appel OpenRouter facturé lancé par l'agent)** : (1) **checkpoint:human-verify** — Laurent lance `pnpm dev:full` (:3010), génère 1 pack témoin (~3-5 stagiaires), vérifie 0 stub + `provider='openrouter'` + `promptVersion='claude-v10-2026-07'` + contenu Qualiopi varié/conforme + tiers (déroulé+rapport=Sonnet ; QCM/analyse/grille/positionnement/satisfaction=Haiku), consigne dans `16-WITNESS.md`, tape « approuvé » (sinon retour 16-05 pour re-tune) ; (2) **checkpoint:decision RGPD/DPA vision** — go (DPA OK → vision cloud prod) ou gate (vision Ollama local jusqu'au DPA), le code vision (16-03) est livré mais les PII CNI/RIB ne doivent PAS partir au cloud en prod sans ce feu vert (D-02b). **Pas de SUMMARY final** tant que les 2 checkpoints ne sont pas tranchés. REQ-16-05 / REQ-16-07 en attente de validation réelle. Prochain : reprise 16-06 après « approuvé » + décision RGPD de Laurent.
 
 - 2026-07-03 — **Plan 16-05 livré** (Wave 3, re-tuning des prompts Qualiopi mistral→Claude — REQ-16-05). `apps/web/src/lib/closure/qualiopi-prompts.ts` : **`PROMPT_VERSION` bumpé `'qualiopi-gen-v9-2026-06-18'`→`'claude-v10-2026-07'`** (distingue mistral vs Claude dans `AIGenerationJob.promptVersion` — leçon audit : re-gen a posteriori possible seulement si version tracée). **Header daté** ajouté (politique re-tune Claude). **Allègement défensif mistral CONSERVATEUR** : (a) `SYSTEM_PROMPT_NORMALIZE_PROGRAMME` avait DEUX rappels JSON (mid-body « Réponds en JSON {programmeMd} » + fin « Réponds UNIQUEMENT en JSON, sans texte autour. ») → mid-body rendu descriptif (« Le résultat est un objet JSON {…} »), UNE seule instruction format subsiste en fin ; (b) `SYSTEM_PROMPT_DEROULE` bloc « FORMAT DE RENDU — TABLEAU 6 COLONNES, SOIS CONCIS » : CAPS d'insistance (SOIS CONCIS/QUELQUES LIGNES MAXIMUM/INTERDIT/PRÉCISION) ramenées en formulation normale, **règle de concision INTÉGRALEMENT conservée**. **Audit du fichier** = chaque prompt n'avait déjà qu'UNE instruction format (grep « Réponds UNIQUEMENT en JSON »=1/prompt) → pas d'autre redondance à retirer, le reste des CAPS marque des RÈGLES MÉTIER. **Garde-fous MÉTIER Qualiopi CONSERVÉS verbatim** (valeur audit, PAS anti-dérape mistral) : voix 1re/3e personne (satisfaction chaud/froid, rapport formateur, analyse besoin), ancrage individuel anti-jumelage, ancrage strict au thème, distribution A/B des niveaux (grille, positionnement), verbes de Bloom (normalize, analyse besoin), cohérence horaire 9h00–13h00/14h00–18h00=8h pile (déroulé), seuils QCM (>90%, 12/9) et satisfaction (≥90% « Très bien »/« Bien », jamais « Mauvais »). **Schémas Zod aval INCHANGÉS** (chaîne prompt→LLM→Zod→null→stub intacte). **tsc `--noEmit` exit 0** ; **suite 1141/1142** (seul échec = `shared-template.test.ts:175` MIME jpeg/jpg **PRÉ-EXISTANT hors scope**, baseline identique à 16-04 — les prompts ne sont pas assertés littéralement). Acceptance grep OK : `PROMPT_VERSION = 'claude-v10-2026-07'`=1 / `claude`=5 / Bloom=2 / première-personne=6 / horaire=14 / 3e-personne=7 / anti-jumelage=2. 1 commit `9958000`(feat). **0 déviation** (seul ajustement : commande verify via `pnpm --filter @qualiof/web exec tsc/vitest` car pas de script npm `tsc`/`test`). **Dette documentée** : produits FIGÉS (`TrainingProduct.derouleJson`, prompt v9 mistral) gardent leur contenu — **re-run des produits figés HORS scope**, coexistence mistral/Claude tracée par `PROMPT_VERSION`. **Qualité réelle** non vérifiable ici (prompts non assertés au contenu) → validée sur **pack témoin en 16-06** (D-04c : changement observable). REQ-16-05 satisfait. Prochain : Plan 16-06 (pack témoin + validation qualité Claude + checkpoint DPA RGPD vision).
 
