@@ -16,6 +16,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -174,6 +175,65 @@ export async function createSignedDownloadUrl(
   throw new Error(
     'createSignedDownloadUrl non implémenté pour MinIO en local — utiliser une route API /api/documents/[id]',
   );
+}
+
+// ─── createSignedUploadUrl (upload direct navigateur→Supabase) ─────
+/**
+ * Génère un signed upload URL/token qui permet au NAVIGATEUR d'uploader
+ * DIRECTEMENT vers Supabase (via uploadToSignedUrl), sans faire transiter
+ * le fichier par le serveur Next → contourne le cap 4,5 Mo body Vercel
+ * (STOR-03). Supabase UNIQUEMENT : en MinIO local, l'upload passe par le
+ * serveur (uploadFile), pas de direct-to-storage.
+ *
+ * Le token porte la signature — aucun credential (service_role) n'est
+ * exposé au client.
+ */
+export async function createSignedUploadUrl(
+  bucket: string,
+  key: string,
+): Promise<{ path: string; token: string; signedUrl: string }> {
+  if (PROVIDER !== 'supabase') {
+    throw new Error(
+      'createSignedUploadUrl : Supabase uniquement (MinIO local = upload serveur, pas de direct-to-storage)',
+    );
+  }
+  await ensureBucket(bucket);
+  const { data, error } = await supabase()
+    .storage.from(bucket)
+    .createSignedUploadUrl(key, { upsert: true });
+  if (error) throw new Error(`Supabase signed upload URL failed : ${error.message}`);
+  return { path: data.path, token: data.token, signedUrl: data.signedUrl };
+}
+
+// ─── objectExists (vérif 0 lien mort SANS télécharger l'objet) ─────
+/**
+ * Teste l'existence d'un objet sans transférer son contenu (STOR-02 :
+ * vérif de 0 lien mort sur potentiellement des milliers d'objets — ne
+ * jamais télécharger 50 Mo juste pour tester la présence, cf. Pitfall 6).
+ *   - Supabase : list(prefix, { search: name }) = métadonnées seules.
+ *   - MinIO    : HeadObjectCommand (exists → true, 404/NotFound → false).
+ */
+export async function objectExists(bucket: string, key: string): Promise<boolean> {
+  const idx = key.lastIndexOf('/');
+  const prefix = idx >= 0 ? key.slice(0, idx) : '';
+  const name = idx >= 0 ? key.slice(idx + 1) : key;
+
+  if (PROVIDER === 'supabase') {
+    const { data, error } = await supabase()
+      .storage.from(bucket)
+      .list(prefix, { search: name });
+    if (error) throw new Error(`Supabase list failed : ${error.message}`);
+    return (data ?? []).some((o) => o.name === name);
+  }
+
+  // MinIO : HeadObjectCommand — existe → true, 404/NotFound → false.
+  try {
+    await s3().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
+  } catch (e: any) {
+    if (e?.name === 'NotFound' || e?.$metadata?.httpStatusCode === 404) return false;
+    throw e;
+  }
 }
 
 export const _internals = { PROVIDER };
