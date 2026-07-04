@@ -38,6 +38,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { prisma } from '@qualiof/db';
@@ -268,7 +269,11 @@ function contentTypeFor(key: string): string {
 // ─── Rapport Markdown daté ─────────────────────────────────────────
 function writeReport(report: MigrationReport, write: boolean): string {
   const date = new Date().toISOString().slice(0, 10);
-  const dir = path.resolve(process.cwd(), '.planning/audit');
+  // Ancré sur l'emplacement du script (apps/web/scripts → racine = 3 niveaux au-dessus),
+  // pas sur process.cwd() : pnpm --filter exécute avec cwd=apps/web, et .planning/audit
+  // vit à la racine du monorepo.
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  const dir = path.join(repoRoot, '.planning/audit');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `STORAGE-MIGRATION-REPORT-${date}.md`);
 
@@ -359,7 +364,9 @@ async function main() {
 }
 
 // require.main === module en ESM tsx : exécute main() seulement en CLI direct.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL (et pas `file://${argv[1]}`) : le chemin projet contient des espaces
+// → import.meta.url est URL-encodé (%20), la concaténation brute ne matche jamais.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(async (err) => {
     console.error('Erreur fatale migration :', err);
     await prisma.$disconnect();
