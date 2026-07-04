@@ -10,8 +10,21 @@
  *   répété et lisible sur chaque page. Utilisé pour les docs closure.
  */
 
-const GOTENBERG_URL = process.env.GOTENBERG_URL ?? 'http://localhost:3001';
-const WEASYPRINT_URL = process.env.WEASYPRINT_URL ?? 'http://localhost:5001';
+import { sharedEnv } from '@qualiof/shared/env';
+
+const GOTENBERG_URL = sharedEnv.GOTENBERG_URL;
+const WEASYPRINT_URL = sharedEnv.WEASYPRINT_URL;
+
+/**
+ * En-tête `Authorization: Bearer <DOC_ENGINE_TOKEN>` CONDITIONNEL au token
+ * (Phase 17, fondement Option A dual-ingress public authentifié).
+ * Token absent (dev local) → objet vide → aucun header ajouté, le rendu marche
+ * toujours. L'enforcement server-side Gotenberg/WeasyPrint est Phase 20/21.
+ */
+function authHeaders(): Record<string, string> {
+  const token = sharedEnv.DOC_ENGINE_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function renderHtmlToPdf(
   html: string,
@@ -41,8 +54,12 @@ export async function renderHtmlToPdf(
   // (et le contenu vient se superposer au footer.html sur les pages 2+).
   form.append('preferCssPageSize', options?.footerHtml ? 'false' : 'true');
 
+  // Gotenberg multipart : NE PAS fixer Content-Type manuel (fetch génère le
+  // boundary FormData). On ajoute UNIQUEMENT le Bearer — le body FormData
+  // (footer HTML dans body) reste intact (CLAUDE.md, anti-pattern documenté).
   const res = await fetch(`${GOTENBERG_URL}/forms/chromium/convert/html`, {
     method: 'POST',
+    headers: authHeaders(),
     body: form,
   });
   if (!res.ok) {
@@ -62,7 +79,7 @@ export async function renderHtmlToPdf(
 export async function renderHtmlToPdfWeasy(html: string): Promise<Buffer> {
   const res = await fetch(`${WEASYPRINT_URL}/pdf`, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...authHeaders() },
     body: html,
   });
   if (!res.ok) {
