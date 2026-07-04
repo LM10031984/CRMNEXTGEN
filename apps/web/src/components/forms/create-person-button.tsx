@@ -7,8 +7,13 @@ import { createPerson } from '@/server/actions/crud-edits';
 import { lookupSiret } from '@/server/actions/sirene-lookup';
 import { extractApprenantDocs } from '@/server/actions/extract-apprenant-docs';
 import { uploadApprenantDocs } from '@/server/actions/upload-apprenant-docs';
+import {
+  createApprenantUploadUrl,
+  confirmApprenantUpload,
+} from '@/server/actions/storage-upload';
 import { addParticipant } from '@/server/actions/sessions';
 import { DIPLOME_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/agefice-options';
+import { DirectUploadField } from '@/components/shared/direct-upload-field';
 import { EnseignePicker } from './enseigne-picker';
 
 type ExtractedExtras = {
@@ -87,10 +92,13 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
       setSiretBusy(false);
     }
   }
-  // Uploads
+  // Uploads pour l'extraction IA (pré-remplissage — bytes envoyés via FormData).
   const [cniFile, setCniFile] = useState<File | null>(null);
   const [ribFile, setRibFile] = useState<File | null>(null);
   const [cfpFile, setCfpFile] = useState<File | null>(null);
+  // Clés confirmées des fichiers uploadés en DIRECT-TO-STORAGE (D-08). Si non
+  // vide, remplace le chemin legacy uploadApprenantDocs au submit (0 octet via Vercel).
+  const [directKeys, setDirectKeys] = useState<Partial<Record<'CNI' | 'RIB' | 'CFP', string>>>({});
   const [extras, setExtras] = useState<ExtractedExtras | null>(null);
   // Enseigne / réseau immobilier (2e LegalLink AGENT_COMMERCIAL)
   const [enseigneOrgId, setEnseigneOrgId] = useState<string | null>(null);
@@ -103,6 +111,7 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
     setProfessionalStatus(''); setSiret(''); setActivityCode(''); setSocialSecurityNb('');
     setDiplomas(''); setProfessionalExperience('');
     setCniFile(null); setRibFile(null); setCfpFile(null);
+    setDirectKeys({});
     setExtras(null); setError(null); setWarnings([]);
     setEnseigneOrgId(null); setEnseigneLabel(null); setEnseigneNewName(null);
   }
@@ -156,9 +165,20 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
     setBusy(true);
     setError(null);
     try {
-      // 1) Upload des fichiers fournis sur MinIO (si présents)
+      // 1) Récupération des clés des documents (CNI/RIB/CFP).
+      //    D-08 : chemin PRIORITAIRE = direct-to-storage (fichiers déjà chez Supabase
+      //    via DirectUploadField, 0 octet par Vercel). Confirmé côté serveur.
+      //    Fallback non régressif : uploadApprenantDocs (FormData) si des fichiers ont
+      //    été choisis via le bloc d'extraction IA mais PAS via l'upload direct.
       let docKeys: { CNI?: string; RIB?: string; CFP?: string } = {};
-      if (cniFile || ribFile || cfpFile) {
+      if (Object.keys(directKeys).length > 0) {
+        const conf = await confirmApprenantUpload(directKeys);
+        if (!conf.ok) {
+          setError(conf.error ?? 'Confirmation des documents échouée.');
+          return;
+        }
+        docKeys = conf.keys;
+      } else if (cniFile || ribFile || cfpFile) {
         const fd = new FormData();
         if (cniFile) fd.append('CNI', cniFile);
         if (ribFile) fd.append('RIB', ribFile);
@@ -340,6 +360,60 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
                   <div className="text-[10px] italic mt-1">Le SIRET, code NAF et N° sécu sont reportés dans le formulaire ci-dessous.</div>
                 </div>
               )}
+            </div>
+
+            {/* Upload direct-to-storage (D-08) — les documents persistés partent DIRECTEMENT
+                chez Supabase (jusqu'à 50 Mo, pas de 413), pas via une server action.
+                Le bloc d'extraction IA ci-dessus reste pour le pré-remplissage. */}
+            <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-3 mb-4 space-y-2">
+              <div className="text-xs font-medium text-emerald-800 inline-flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5" /> Pièces à conserver au dossier (envoi direct)
+              </div>
+              <DirectUploadField
+                kind="CNI"
+                label="Pièce d'identité"
+                description="CNI / Passeport — PDF ou photo"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
+              <DirectUploadField
+                kind="RIB"
+                label="RIB"
+                description="PDF ou photo du RIB"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
+              <DirectUploadField
+                kind="CFP"
+                label="Attestation CFP AGEFICE"
+                description="Attestation URSSAF (PDF)"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
             </div>
 
             <form onSubmit={onSubmit} className="space-y-3">
