@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-07-04T13:39:59.556Z"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-07-04T13:48:48.829Z"
 last_activity: 2026-07-04
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # STATE — QualiOF
@@ -34,6 +34,7 @@ Plan: 2 of 3
 
 ### Roadmap Evolution
 
+- 2026-07-04 — **Plan 17-02 livré** (Wave 1, boot fail-loud 5 clés cloud + chokepoint RÉEL — CLOUDENV-02). **DÉCOUVERTE CRITIQUE corrigée** : `sharedEnv` n'était importé NULLE PART dans `apps/web` → `createEnv()` ne tournait jamais au boot → l'affirmation CLAUDE.md « Boots fail loud at import time » était FICTIVE. Rendue RÉELLE. **5 clés cloud déclarées** (`DIRECT_URL` requise, `STORAGE_PROVIDER` enum default minio, `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` optional, `WEASYPRINT_URL` url default :5001) dans `env.ts` server+runtimeEnv + 3 schémas Zod isolés testables (`env-schemas.ts`). **Alias mort `DOC_ENGINE_URL` retiré** (env.ts + turbo.json + .env.example), `DOC_ENGINE_TOKEN` conservé (17-03). **Chokepoint boot câblé** : `await import('@qualiof/shared/env')` dans `next.config.mjs` (après dotenv, avant nextConfig) + `import '@qualiof/shared/env'` en tête de `closure-worker.ts` ET `closure-worker-postgres.ts`. **storage.ts migré vers sharedEnv** (0 process.env brut sur les 3 clés, throw conditionnel Supabase préservé D-03). **turbo.json globalEnv** +5 clés. **FAIL-LOUD PROUVÉ mécaniquement** : build POSITIF vert (`BUILD_VALID_OK`, exit 0, env valide) + build NÉGATIF throw (`FAILLOUD_OK` : `Invalid environment variables { DIRECT_URL:['Invalid url'], SUPABASE_URL:['Invalid url'] }`, stack `next.config.mjs:20 → env.ts:37 createEnv`). Variable forçante = **SUPABASE_URL** (clé NEUVE absente des .env locaux → non écrasée par le `override:true` dotenv). **TDD Task 1** RED (4 tests rouges sur schémas absents) → GREEN, suite shared 113/113 (was 106, +7). Suite web **1141/1142** (seul échec = `shared-template.test.ts:175` MIME jpeg/jpg PRÉ-EXISTANT hors scope, logué `deferred-items.md`). **2 déviations auto** : **Rule 3** (extension `.ts` explicite sur `./env-schemas` + `allowImportingTsExtensions` dans apps/web+shared tsconfig — raw Node ESM du next.config exige une extension ; noEmit-safe ; c'est le test POSITIF de la `<verify>` qui l'a attrapé, comportement prévu) + **Rule 1** (mock `@/lib/storage` dans `preinscription-extractor.test.ts` — la migration fait exécuter createEnv au load, cassait l'hermeticité). 2 commits `0c9d960`(feat env+test) / `53bb34e`(feat chokepoint+storage+turbo). **⚠ ACTION LAURENT** : `DIRECT_URL` désormais REQUISE au boot (déjà dans son `.env` → OK local ; toute machine/CI sans elle échouera = effet voulu). CLOUDENV-02 satisfait. `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify` (parallel executor). Prochain : Plan 17-03 (`DOC_ENGINE_TOKEN` Bearer dans `pdf-render.ts` + `WEASYPRINT_URL` call site).
 - 2026-07-04 — **Plan 17-01 livré** (Wave 1, verrouillage écrit des régions cloud EU — CLOUDENV-01). Doc-only, aucune création de projet cloud. Créé `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGIONS.md` = **source de vérité auditable pré-création** des régions des 4 plateformes : **D-01 Paris** (Supabase `eu-west-3` + Vercel `cdg1`, résidence FR RGPD/Qualiopi prime sur ~10ms latence pour un OF FR 2-5 users), worker `europe-west4` (Railway) **/** `cdg` (Fly) EU — plateforme exacte tranchée Phase 20, **D-02 Upstash CONDITIONNEL** (`eu-central-1` Frankfurt SI Redis retenu Phase 20 WORK-02 ; aucun compte/DB créé). Réponse critère « 4 plateformes » = **3 fermes (Supabase/Vercel/Railway-Fly) + 1 conditionnelle (Upstash)**. Section irréversibilité : **SEULE Supabase immuable** (recréer + migrer) ; le vrai risque = **défaut US silencieux** à la création (Vercel `iad1`, Supabase us-east). **Checklist pré-création anti-défaut-US 4 items** pour Phases 18/19/20. Sources docs officielles vérifiées (Supabase regions/change-region, Vercel functions region, Railway/Fly regions, Upstash Global 2.0). 8 acceptance grep verts (eu-west-3=4, cdg1=4, europe-west4|cdg=8, eu-central-1=4, CONDITIONNEL=3, immuable/irréversible/recréer=6, checklist=4, 4 plateformes présentes). 1 commit `25defba`(docs, `--no-verify` parallel executor). **0 déviation** (plan à la lettre). CLOUDENV-01 satisfait. Prochain : Plan 17-02 (CLOUDENV-02 : refonte `env.ts` fail-loud + 5 clés cloud + `turbo.json` globalEnv + retrait `DOC_ENGINE_URL`).
 
 - 2026-07-04 — **Roadmap v6 Prod Cloud créé — Phases 17-22** (numérotation continue après v5 qui finit à Ph. 16). 21 REQ-IDs mappés 21/21, 0 orphelin, granularité `fine`. Ordre de build (dépendances dures recherche) : **17 Fondations cloud** (région EU + `env.ts` fail-loud + `DOC_ENGINE_TOKEN` câblé — CLOUDENV-01/02/03) → **18 Supabase Storage** (buckets privés + migration objets MinIO 0 lien mort + upload direct-to-storage CNI/RIB contre cap 4,5 MB Vercel — STOR-01/02/03) → **19 Base Postgres** (drift `db push` résolu + `migrate deploy` vert via DIRECT_URL + pooler :6543 + extensions/séquences — DB-01/02) → **20 Worker 3ᵉ hôte** (image prunée 3 workers+Gotenberg+WeasyPrint+poppler Railway/Fly EU, décision Redis 24h, pack closure Mac éteint, OCR non dégradé silencieux — WORK-01..04) → **21 App Vercel + filet CI** (déploiement EU, cookies Lucia, 9 PDF synchrones via ingress public authentifié, GitHub Actions + E2E closure + smoke routes verts AVANT bascule — APP-01/02/03 + CI-01 + TEST-01/02 ; **UI hint: yes**) → **22 Bascule prod + RGPD** (runbook+rollback, dump final, DNS, invitations, pack témoin go/no-go, alertes coûts+backups, DPA 6 sous-traitants gaté AVANT PII prod — CUT-01/02 + RGPD-01). Chaque phase porte ses flags [VERIFY] recherche (hostname Supavisor, pricing Upstash, DNS privé Railway/Fly, `unaccent`, `@supabase/supabase-js`, volume MinIO, SMTP OVH, IPv4 add-on) pour les chercheurs de plan-phase. Décisions déjà verrouillées (ne pas re-litiguer) : OpenRouter LLM (v5 Ph.16), Option A dual-ingress public authentifié, liste anti-features. `commit_docs=false` → fichiers écrits, non commités. Prochain : `/gsd:plan-phase 17`.
@@ -271,7 +272,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 17-01-PLAN.md
+Stopped at: Completed 17-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)

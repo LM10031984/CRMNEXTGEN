@@ -48,7 +48,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   4. Un appel Gotenberg/WeasyPrint depuis `pdf-render.ts` porte un header `Authorization: Bearer` issu de `DOC_ENGINE_TOKEN` (le token déclaré `env.ts:38` mais jamais consommé est câblé)
 **Plans**: 3 plans
 - [x] 17-01-PLAN.md — Doc région EU auditable des 4 plateformes (Paris, Upstash conditionnel) — CLOUDENV-01
-- [ ] 17-02-PLAN.md — 5 clés cloud env.ts fail-loud + chokepoint boot + storage.ts sharedEnv + turbo/.env.example, DOC_ENGINE_URL retiré — CLOUDENV-02
+- [x] 17-02-PLAN.md — 5 clés cloud env.ts fail-loud + chokepoint boot + storage.ts sharedEnv + turbo/.env.example, DOC_ENGINE_URL retiré — CLOUDENV-02
 - [ ] 17-03-PLAN.md — DOC_ENGINE_TOKEN Bearer sur Gotenberg+WeasyPrint + URLs sharedEnv (pdf-render.ts) — CLOUDENV-03
 **Research flags** (à reprendre au plan) : [VERIFY] défaut régional US des providers (Vercel `iad1`, Supabase us-east) — choisir EU explicite AVANT création · irréversibilité région (recréer projet si erreur).
 
@@ -120,7 +120,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 17. Fondations cloud | v6 | 1/3 | In Progress|  |
+| 17. Fondations cloud | v6 | 2/3 | In Progress|  |
 | 18. Supabase Storage | v6 | 0/TBD | Not started | - |
 | 19. Base Postgres | v6 | 0/TBD | Not started | - |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
