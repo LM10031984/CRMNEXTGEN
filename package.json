@@ -18,7 +18,8 @@
     "db:seed": "pnpm --filter @qualiof/db prisma db seed",
     "db:studio": "pnpm --filter @qualiof/db prisma studio",
     "db:reset": "pnpm --filter @qualiof/db prisma migrate reset",
-    "import:smartof": "pnpm --filter @qualiof/web exec tsx scripts/import-smartof.ts"
+    "import:smartof": "pnpm --filter @qualiof/web exec tsx scripts/import-smartof.ts",
+    "db:smoke:cloud": "dotenv -e .env -- pnpm --filter @qualiof/web exec tsx scripts/db-smoke-cloud.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
