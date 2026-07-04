@@ -8,7 +8,21 @@ QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de form
 
 **Shipped v5 « Audit UX/QA + Features métier »** — 17 phases, 88 plans, 469 commits (2026-05-12 → 2026-07-04). L'app est fonctionnellement complète pour l'usage interne : responsive, RBAC, factures, veille, calendrier, centralisation documentaire, IA cloud (0 stub, pack ~3 min). Branche de travail : `cloud-migration`. Runtime : local Docker (Postgres/Redis/MinIO/Gotenberg/WeasyPrint) + `AI_PROVIDER=openrouter`.
 
-**Next Milestone Goals (v6 Prod Cloud)** : app sur Vercel, Postgres+Storage sur Supabase (région EU), Redis Upstash, workers+PDF sur un 3ᵉ hôte (Railway/Fly) — pour libérer l'usage du Mac de Laurent et onboarder l'équipe. Plan directeur discuté 2026-07-04 (voir ROADMAP). Y intégrer les Known Gaps arbitrés : DPA RGPD (prioritaire — OpenRouter/Anthropic/Supabase/Vercel), DOC-01/02 RGPD, CI-01, TEST-01/02.
+## Current Milestone: v6 Prod Cloud (Supabase + Vercel)
+
+**Goal :** QualiOF tourne en production cloud multi-utilisateurs — l'équipe Start Academy travaille sans que le Mac de Laurent soit allumé.
+
+**Target features :**
+- App Next.js sur Vercel (dégel staging : flag `NEXT_PUBLIC_APP_ENV`, filigrane, garde PDF, vercel.json)
+- Supabase région EU : Postgres (pooler :6543 app / :5432 migrations, `prisma migrate deploy`) + Storage S3-compatible (remplace MinIO + migration objets)
+- Upstash Redis + 3ᵉ hôte (Railway/Fly) : 3 workers BullMQ (closure/veille/factures) + Gotenberg + WeasyPrint + poppler-utils
+- Bascule prod : dump final, DNS, invitations utilisateurs, recalibrage worker (timeout 600s→~120s, concurrency)
+- Conformité : documentation DPA en une fois (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway) — engagée par le GO vision 2026-07-04
+- Gaps v5 intégrés (décision 2026-07-04) : CI-01 (GitHub Actions lint+tsc+tests) + TEST-01/02 (E2E closure + smoke routes) comme filet avant bascule prod
+
+**Hors scope v6 (backlog) :** QBLANC-01..03, DOC-01/02, AI-01, MOBILE-01.
+
+**Key context :** LLM déjà cloud (Ph. 16) · restore Supabase prouvé (staging E1-E4, 5822=5822) · budget cible ~60-80 €/mois · plan directeur discuté 2026-07-04.
 
 ## Core Value
 

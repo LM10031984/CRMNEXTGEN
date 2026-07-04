@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 16-05-PLAN.md
-last_updated: "2026-07-04T08:51:30.878Z"
+stopped_at: Milestone v6 Prod Cloud démarré — définition requirements
+last_updated: "2026-07-04T08:57:21.386Z"
 last_activity: 2026-07-04
 progress:
-  total_phases: 17
-  completed_phases: 12
-  total_plans: 88
-  completed_plans: 65
+  total_phases: 19
+  completed_phases: 13
+  total_plans: 100
+  completed_plans: 76
 ---
 
 # STATE — QualiOF
@@ -267,7 +267,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 16-05-PLAN.md
+Stopped at: Milestone v6 Prod Cloud démarré — définition requirements
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
