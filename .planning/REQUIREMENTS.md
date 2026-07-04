@@ -9,7 +9,7 @@
 
 - [x] **CLOUDENV-01** : Région EU verrouillée et documentée pour les 4 plateformes (Supabase, Vercel, Upstash, Railway/Fly) AVANT toute création de projet — choix irréversible
 - [x] **CLOUDENV-02** : Les 5 clés cloud (`DIRECT_URL`, `STORAGE_PROVIDER`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WEASYPRINT_URL`) déclarées et validées dans `packages/shared/src/env.ts` (t3-env fail-loud) + `turbo.json` globalEnv ; alias périmé `DOC_ENGINE_URL` remplacé
-- [ ] **CLOUDENV-03** : `DOC_ENGINE_TOKEN` (déclaré `env.ts:38`, jamais consommé) câblé dans `pdf-render.ts` — bearer sur tous les appels Gotenberg/WeasyPrint
+- [x] **CLOUDENV-03** : `DOC_ENGINE_TOKEN` (déclaré `env.ts:38`, jamais consommé) câblé dans `pdf-render.ts` — bearer sur tous les appels Gotenberg/WeasyPrint
 
 ### STOR — Supabase Storage
 
@@ -72,7 +72,7 @@
 |--------|-------|--------|
 | CLOUDENV-01 | Phase 17 | Complete |
 | CLOUDENV-02 | Phase 17 | Complete |
-| CLOUDENV-03 | Phase 17 | Pending |
+| CLOUDENV-03 | Phase 17 | Complete |
 | STOR-01 | Phase 18 | Pending |
 | STOR-02 | Phase 18 | Pending |
 | STOR-03 | Phase 18 | Pending |

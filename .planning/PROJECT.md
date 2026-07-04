@@ -8,6 +8,8 @@ QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de form
 
 **Shipped v5 « Audit UX/QA + Features métier »** — 17 phases, 88 plans, 469 commits (2026-05-12 → 2026-07-04). L'app est fonctionnellement complète pour l'usage interne : responsive, RBAC, factures, veille, calendrier, centralisation documentaire, IA cloud (0 stub, pack ~3 min). Branche de travail : `cloud-migration`. Runtime : local Docker (Postgres/Redis/MinIO/Gotenberg/WeasyPrint) + `AI_PROVIDER=openrouter`.
 
+**v6 Phase 17 complete (2026-07-04)** — Fondations cloud : régions EU verrouillées par écrit (`17-REGIONS.md` : Supabase `eu-west-3` Paris irréversible, Vercel `cdg1`, worker EU, Upstash conditionnel), boot fail-loud réel sur 5 clés cloud (chokepoint `next.config.mjs` + 2 workers — `sharedEnv` n'était importé nulle part avant), `DOC_ENGINE_TOKEN` câblé en Bearer sur Gotenberg/WeasyPrint. CLOUDENV-01/02/03 validés (4/4 must-haves).
+
 ## Current Milestone: v6 Prod Cloud (Supabase + Vercel)
 
 **Goal :** QualiOF tourne en production cloud multi-utilisateurs — l'équipe Start Academy travaille sans que le Mac de Laurent soit allumé.
@@ -199,4 +201,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-04 after v5 milestone — full evolution review (What This Is, Current State, Requirements v5→Validated, Out of Scope cloud invalidé, Constraints recalibrées).*
+*Last updated: 2026-07-04 after Phase 17 (fondations cloud région EU + env) — CLOUDENV-01/02/03 validés.*
