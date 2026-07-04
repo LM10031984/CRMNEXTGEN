@@ -43,6 +43,15 @@ vi.mock('@/lib/pdf-extract', () => ({
   extractTextFromFile: extractTextFromFileMock,
 }));
 
+// Phase 17-02 : `@/lib/storage` consomme désormais `sharedEnv` (createEnv au load).
+// L'extracteur l'importe statiquement (downloadFile/PREENROLLMENT_BUCKET) mais
+// `extractDocsFromBuffers` (chemin buffer) ne l'appelle jamais. Mock hermétique
+// pour respecter la règle « ne JAMAIS importer un module qui exécute createEnv() ».
+vi.mock('@/lib/storage', () => ({
+  downloadFile: vi.fn(),
+  PREENROLLMENT_BUCKET: 'preinscriptions',
+}));
+
 import { extractDocsFromBuffers } from '@/lib/preinscription-extractor';
 
 const BUF = Buffer.from('MR NOEL STEVE 12 RUE DES LILAS 06140 VENCE');

@@ -9,6 +9,7 @@
  * traités. En prod : tourne en service systemd / pm2 / docker.
  */
 
+import '@qualiof/shared/env'; // fail-loud au démarrage worker (ne passe pas par next.config.mjs)
 import { startClosureWorker } from '../src/lib/closure/worker';
 import { requeueStuckClosureJobs } from '../src/lib/closure/requeue';
 

@@ -19,8 +19,9 @@ import {
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { sharedEnv } from '@qualiof/shared/env';
 
-const PROVIDER = (process.env.STORAGE_PROVIDER ?? 'minio') as 'minio' | 'supabase';
+const PROVIDER = sharedEnv.STORAGE_PROVIDER;
 
 // ─── Constantes communes ───────────────────────────────────────────
 export const PREENROLLMENT_BUCKET = 'preinscriptions';
@@ -46,8 +47,8 @@ function s3(): S3Client {
 }
 
 // ─── Supabase Storage (cloud) ──────────────────────────────────────
-const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const SUPABASE_URL = sharedEnv.SUPABASE_URL ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = sharedEnv.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 let _supabaseClient: SupabaseClient | null = null;
 

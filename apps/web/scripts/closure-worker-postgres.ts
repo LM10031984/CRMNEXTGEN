@@ -15,6 +15,7 @@
  * les 30s par Vercel Cron (1 invocation = 1 batch). Cf sub-phase G.
  */
 
+import '@qualiof/shared/env'; // fail-loud au démarrage worker (ne passe pas par next.config.mjs)
 import { processNextClosureJobs } from '../src/lib/closure/queue-postgres';
 
 const POLL_INTERVAL_MS = Number(process.env.QUEUE_POLL_INTERVAL_MS ?? 3000);

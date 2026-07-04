@@ -14,20 +14,25 @@ import { z } from 'zod';
  * ici pour compat : `createEnv` ci-dessous valide TOUT l'env au chargement, donc
  * les tests importent depuis `env-schemas` pour rester hermétiques (pas de .env requis).
  */
+// NB extension `.ts` explicite : le chokepoint boot (Phase 17) importe ce module
+// via `await import('@qualiof/shared/env')` dans next.config.mjs, évalué par Node
+// ESM BRUT (avant le bundler Next) — Node ESM exige une extension sur les imports
+// relatifs. Node 20+/25 résout nativement le `.ts`. Next (transpilePackages) et
+// Vitest (moduleResolution Bundler) acceptent aussi le `.ts` explicite.
 export {
   AI_PROVIDER_SCHEMA,
   OPENROUTER_MODEL_FAST_SCHEMA,
   STORAGE_PROVIDER_SCHEMA,
   WEASYPRINT_URL_SCHEMA,
   DIRECT_URL_SCHEMA,
-} from './env-schemas';
+} from './env-schemas.ts';
 import {
   AI_PROVIDER_SCHEMA,
   OPENROUTER_MODEL_FAST_SCHEMA,
   STORAGE_PROVIDER_SCHEMA,
   WEASYPRINT_URL_SCHEMA,
   DIRECT_URL_SCHEMA,
-} from './env-schemas';
+} from './env-schemas.ts';
 
 export const sharedEnv = createEnv({
   server: {

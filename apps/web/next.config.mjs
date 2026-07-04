@@ -11,6 +11,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, '../../.env') });
 loadEnv({ path: path.resolve(__dirname, '../../.env.local'), override: true });
 
+// Chokepoint fail-loud (Phase 17) : force createEnv() de @qualiof/shared/env à
+// s'exécuter au boot. Sans cet import, sharedEnv n'était chargé nulle part et la
+// validation t3-env ne tournait jamais (CLAUDE.md « fail loud » était fictif).
+// Une des 5 clés cloud manquante/malformée fait désormais échouer next build/dev.
+// `await import` dynamique (pas import statique en tête) : dotenv doit avoir chargé
+// .env AVANT que createEnv lise process.env, sinon l'env serait vide.
+await import('@qualiof/shared/env');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
