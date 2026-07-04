@@ -60,7 +60,11 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   1. Un bucket Supabase Storage privé fonctionne avec `STORAGE_PROVIDER=supabase` : une signed URL à TTL court (minutes) donne accès à un objet, un accès non signé est refusé (bucket bien `public=false`)
   2. Après le script de migration idempotent (DRY→WRITE), chaque `Person.ribKey` / `Document.pdfUrl` / `PedagogicalAsset.pdfUrl` résout à un objet existant — 0 lien mort vérifié par script
   3. Une vraie photo CNI de 10 MB prise au smartphone passe l'upload en prod (direct-to-storage via signed upload URL) et déclenche l'OCR — pas de 413, pas d'échec silencieux
-**Plans**: TBD
+**Plans**: 4 plans
+- [x] 18-01-PLAN.md — Adaptateur storage.ts + createSignedUploadUrl + objectExists (interface-first) — STOR-01
+- [ ] 18-02-PLAN.md — Script migration idempotent DRY→WRITE (8 champs / 2 buckets) + rapport 0 lien mort — STOR-02
+- [ ] 18-03-PLAN.md — Server actions signed upload URL + confirmation OCR + downscale + routes redirect 302 + env client — STOR-03
+- [ ] 18-04-PLAN.md — Composant upload direct partagé (progress/retry/50Mo) + formulaires public+admin + 18-SMOKE.md [checkpoint] — STOR-03
 **Research flags** (à reprendre au plan) : [VERIFY] volume d'objets MinIO (sizing migration) · contraintes de nommage de clé Supabase (`//`, préfixe bucket) ≠ MinIO — table de correspondance ancienne→nouvelle clé · accès privé re-modélisé RLS/service_role (pas de policy S3 IAM JSON) · TTL signed URL courte pour PII · `unoptimized` sur les aperçus CNI/RIB (jamais `next/image` sur PII).
 
 ### Phase 19: Base Postgres Supabase (pooler + migrations baselinées)
@@ -121,7 +125,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
-| 18. Supabase Storage | v6 | 0/TBD | Not started | - |
+| 18. Supabase Storage | v6 | 1/4 | In Progress|  |
 | 19. Base Postgres | v6 | 0/TBD | Not started | - |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
