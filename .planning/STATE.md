@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: 16-06 pré-checks verts — en attente pack témoin + décision RGPD (Laurent)
-last_updated: "2026-07-03T15:05:00.000Z"
-last_activity: 2026-07-03
+stopped_at: Completed 16-05-PLAN.md
+last_updated: "2026-07-04T07:03:11.195Z"
+last_activity: 2026-07-04
 progress:
   total_phases: 17
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 88
-  completed_plans: 64
+  completed_plans: 65
 ---
 
 # STATE — QualiOF
@@ -27,8 +27,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-12)
 
 ## Current Position
 
-Phase: 16 (migration-ia-ollama-vers-claude-api) — EXECUTING (16-06 CHECKPOINT en cours)
-Plan: 6 of 6 — pré-checks (Task 1) DONE, 2 checkpoints humains PENDING (pack témoin + RGPD vision)
+Phase: 16
+Plan: Not started
 
 ## Accumulated Context
 
@@ -272,7 +272,7 @@ Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' 
 Last completed plan: 260530-f0l (bloc Résultats Ind 2)
 Next plan: Top 3 risques audit — Ind 11 procédure évaluation OU Ind 21 CV formateurs OU Ind 26 réseau handicap PACA
 
-Last activity: 2026-07-03
+Last activity: 2026-07-04
 
 ### Roadmap Evolution
 
