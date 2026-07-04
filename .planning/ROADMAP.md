@@ -29,7 +29,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 **Ordre de dépendances (build order recherche) :** Fondations (région + env.ts + token) → Storage → Base Postgres → Worker 3ᵉ hôte + doc engines → App Vercel + ingress public + filet CI → Bascule prod + RGPD.
 
 - [x] **Phase 17: Fondations cloud (région EU + env)** — Verrouiller la région EU des 4 plateformes et fermer le gap `env.ts` (5 clés cloud + `DOC_ENGINE_TOKEN` câblé) avant toute création de projet (completed 2026-07-04)
-- [ ] **Phase 18: Supabase Storage (migration objets + direct-to-storage)** — Buckets privés opérationnels, objets MinIO migrés sans lien mort, upload photos CNI/RIB direct-to-storage (contourne le cap 4,5 MB Vercel)
+- [x] **Phase 18: Supabase Storage (migration objets + direct-to-storage)** — Buckets privés opérationnels, objets MinIO migrés sans lien mort, upload photos CNI/RIB direct-to-storage (contourne le cap 4,5 MB Vercel) (completed 2026-07-04)
 - [ ] **Phase 19: Base Postgres Supabase (pooler + migrations baselinées)** — Postgres EU provisionné, drift `db push` résolu, `migrate deploy` vert, URLs poolée/directe câblées, extensions + séquences alignées
 - [ ] **Phase 20: Worker 3ᵉ hôte + doc engines** — Image Docker prunée (3 workers + Gotenberg + WeasyPrint + poppler) sur Railway/Fly EU, décision Redis tranchée, pack closure généré 100 % cloud, OCR non dégradé silencieusement
 - [ ] **Phase 21: App Vercel + filet CI/tests** — App Next.js sur Vercel EU (staging dégelé, cookies Lucia OK, PDF synchrones via ingress public authentifié) + GitHub Actions + E2E closure + smoke routes verts avant bascule
@@ -64,7 +64,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 - [x] 18-01-PLAN.md — Adaptateur storage.ts + createSignedUploadUrl + objectExists (interface-first) — STOR-01
 - [x] 18-02-PLAN.md — Script migration idempotent DRY→WRITE (8 champs / 2 buckets) + rapport 0 lien mort — STOR-02
 - [x] 18-03-PLAN.md — Server actions signed upload URL + confirmation OCR + downscale + routes redirect 302 + env client — STOR-03
-- [ ] 18-04-PLAN.md — Composant upload direct partagé (progress/retry/50Mo) + formulaires public+admin + 18-SMOKE.md [checkpoint] — STOR-03
+- [x] 18-04-PLAN.md — Composant upload direct partagé (progress/retry/50Mo) + formulaires public+admin + 18-SMOKE.md [checkpoint] — STOR-03
 **Research flags** (à reprendre au plan) : [VERIFY] volume d'objets MinIO (sizing migration) · contraintes de nommage de clé Supabase (`//`, préfixe bucket) ≠ MinIO — table de correspondance ancienne→nouvelle clé · accès privé re-modélisé RLS/service_role (pas de policy S3 IAM JSON) · TTL signed URL courte pour PII · `unoptimized` sur les aperçus CNI/RIB (jamais `next/image` sur PII).
 
 ### Phase 19: Base Postgres Supabase (pooler + migrations baselinées)
@@ -125,7 +125,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
-| 18. Supabase Storage | v6 | 3/4 | In Progress|  |
+| 18. Supabase Storage | v6 | 4/4 | Complete   | 2026-07-04 |
 | 19. Base Postgres | v6 | 0/TBD | Not started | - |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
