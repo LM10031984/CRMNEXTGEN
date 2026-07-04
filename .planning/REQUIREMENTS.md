@@ -14,8 +14,8 @@
 ### STOR — Supabase Storage
 
 - [x] **STOR-01** : Buckets Supabase Storage privés opérationnels, `STORAGE_PROVIDER=supabase` testé, signed URLs vérifiées (TTL minutes)
-- [ ] **STOR-02** : Objets MinIO migrés vers Supabase Storage (script idempotent DRY→WRITE), 0 lien mort vérifié sur `Person.ribKey` / `Document.pdfUrl` / `PedagogicalAsset.pdfUrl`
-- [ ] **STOR-03** : Upload direct-to-storage pour les pièces apprenants CNI/RIB (signed upload URL côté client, contourne le cap 4,5 MB body Vercel) — preuve : photo 10 MB uploadée + OCR déclenché
+- [x] **STOR-02** : Objets MinIO migrés vers Supabase Storage (script idempotent DRY→WRITE), 0 lien mort vérifié sur `Person.ribKey` / `Document.pdfUrl` / `PedagogicalAsset.pdfUrl`
+- [x] **STOR-03** : Upload direct-to-storage pour les pièces apprenants CNI/RIB (signed upload URL côté client, contourne le cap 4,5 MB body Vercel) — preuve : photo 10 MB uploadée + OCR déclenché
 
 ### DB — Supabase Postgres
 
@@ -74,8 +74,8 @@
 | CLOUDENV-02 | Phase 17 | Complete |
 | CLOUDENV-03 | Phase 17 | Complete |
 | STOR-01 | Phase 18 | Complete |
-| STOR-02 | Phase 18 | Pending |
-| STOR-03 | Phase 18 | Pending |
+| STOR-02 | Phase 18 | Complete |
+| STOR-03 | Phase 18 | Complete |
 | DB-01 | Phase 19 | Pending |
 | DB-02 | Phase 19 | Pending |
 | WORK-01 | Phase 20 | Pending |
