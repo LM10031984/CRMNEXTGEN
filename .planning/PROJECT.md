@@ -197,6 +197,7 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 | Tailwind `screens` top-level (current) | Probablement involontaire (override = breakpoints défaut tués) | ⚠️ Revisit — corriger dans le nouveau milestone (RESP-01) |
 | 4 Core Values co-essentielles | Pack 1-clic + Trésorerie OPCO/AGEFICE + CRM 360° + Pré-inscriptions IA forment un tout indivisible | — Pending validation produit après milestone |
 | Audience interne uniquement | Pas de plan SaaS B2B, pas d'effort architecture pour multi-OF | — Pending — pourrait évoluer si autres OF demandent |
+| Migration IA → Claude via OpenRouter (Phase 16) | Fiabilité (0 stub), qualité (variété), cap cloud v6 ; passerelle `callLlm` existante réutilisée (pas de SDK Anthropic) ; Haiku=fast/Sonnet=quality | ✓ Good — témoin SES-0093 0 stub, pack ~3 min vs ~12, RGPD vision GO (dette DPA) |
 
 ## Evolution
 
@@ -217,4 +218,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-18 — Phase 9.1 complete (INSERTED mid-milestone) : CENTRAL-01..05 livrés. Matrice docs fiche session (pastilles 3 états + 16 DocTypes + RBAC) + timeline apprenant + 4 onglets fiche produit + Bug P0 résolu structurellement. 6/6 plans, 182 nouveaux tests Vitest (suite 421/421), 0 nouvelle dépendance, override Typography UI-SPEC documenté Phase 6 a11y. 9 flows DevTools en attente (`09.1-HUMAN-UAT.md`).*
+*Last updated: 2026-07-04 — Phase 16 complete : migration IA Ollama → Claude API (OpenRouter). env boot-safe `openrouter`, veille/vision/closure routés `callLlm`, tiers D-01a (Haiku fast / Sonnet quality), prompts `claude-v10-2026-07`. Témoin SES-0093 : 0 stub, 16/16 docs, ~3 min, variété inter-stagiaires prouvée, approuvé Laurent. RGPD vision GO (dette : documentation DPA OpenRouter+Anthropic). Vérification 7/7. ⚠ Constraints « Runtime local sans cloud / timeout 600s » partiellement caduques (AI_PROVIDER=openrouter global, coût API réel) — à réviser au prochain milestone.*
