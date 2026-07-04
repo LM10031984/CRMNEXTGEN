@@ -15,6 +15,7 @@
 import { prisma } from '@qualiof/db';
 import { downloadFile, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { extractTextFromFile } from '@/lib/pdf-extract';
+import { downscaleForOcr } from '@/lib/ocr-downscale';
 import { callLlm, resolveModel } from '@/lib/llm-client';
 
 const PROMPT_VERSION = 'v1-2026-04';
@@ -171,7 +172,9 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
     // CNI
     if (pe.cniKey) {
       try {
-        const buf = await downloadFile(PREENROLLMENT_BUCKET, pe.cniKey);
+        const raw = await downloadFile(PREENROLLMENT_BUCKET, pe.cniKey);
+        // Pitfall 3 : photo smartphone 10-50 Mo → downscale AVANT vision (sinon échec provider).
+        const buf = await downscaleForOcr(raw, guessContentType(pe.cniKey));
         const ext = await extractTextFromFile(buf, guessContentType(pe.cniKey));
         result.warnings.push(...ext.warnings.map((w) => `[CNI] ${w}`));
         if (ext.text) {
@@ -185,7 +188,8 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
     // RIB
     if (pe.ribKey) {
       try {
-        const buf = await downloadFile(PREENROLLMENT_BUCKET, pe.ribKey);
+        const raw = await downloadFile(PREENROLLMENT_BUCKET, pe.ribKey);
+        const buf = await downscaleForOcr(raw, guessContentType(pe.ribKey));
         const ext = await extractTextFromFile(buf, guessContentType(pe.ribKey));
         result.warnings.push(...ext.warnings.map((w) => `[RIB] ${w}`));
         if (ext.text) {
@@ -199,7 +203,8 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
     // CFP
     if (pe.cfpKey) {
       try {
-        const buf = await downloadFile(PREENROLLMENT_BUCKET, pe.cfpKey);
+        const raw = await downloadFile(PREENROLLMENT_BUCKET, pe.cfpKey);
+        const buf = await downscaleForOcr(raw, guessContentType(pe.cfpKey));
         const ext = await extractTextFromFile(buf, guessContentType(pe.cfpKey));
         result.warnings.push(...ext.warnings.map((w) => `[CFP] ${w}`));
         if (ext.text) {

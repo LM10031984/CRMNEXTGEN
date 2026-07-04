@@ -29,8 +29,11 @@ function safeExt(name: string): string {
   return /^[a-z0-9]+$/.test(ext) ? ext : 'bin';
 }
 
-/** Content-type déduit de l'extension — reprend upload-apprenant-docs.ts. */
-export function guessContentType(name: string, fallback?: string): string {
+/**
+ * Content-type déduit de l'extension — reprend upload-apprenant-docs.ts.
+ * PAS exporté : fichier 'use server' → Next n'autorise que des exports async.
+ */
+function guessContentType(name: string, fallback?: string): string {
   if (fallback && fallback !== 'application/octet-stream') return fallback;
   const ext = safeExt(name);
   if (ext === 'pdf') return 'application/pdf';
@@ -179,33 +182,6 @@ export async function confirmApprenantUpload(
   return { ok: true, keys };
 }
 
-// ─── Downscale avant vision OCR (Pitfall 3) ────────────────────────
-const OCR_DOWNSCALE_THRESHOLD = 4 * 1024 * 1024; // 4 Mo
-
-/**
- * Réduit une image trop lourde AVANT de l'envoyer à la vision OCR (Pitfall 3 :
- * photo smartphone 10-50 Mo → échec vision silencieux). Décision RESEARCH Open Q2 :
- * sharp ajouté (le NO-OP risquait l'échec OCR silencieux, critère de succès #3).
- *
- * - Non-image ou < seuil → renvoie le buffer tel quel.
- * - Image ≥ seuil → resize width 2000 (withoutEnlargement) + jpeg qualité 80.
- * - sharp échoue (format exotique, native binding) → fallback buffer original.
- *
- * sharp importé dynamiquement pour ne pas charger la native lib au load du module
- * (server actions collectées au build) ni dans les tests hermétiques.
- */
-export async function downscaleForOcr(buffer: Buffer, contentType: string): Promise<Buffer> {
-  if (!contentType.startsWith('image/')) return buffer;
-  if (buffer.length <= OCR_DOWNSCALE_THRESHOLD) return buffer;
-  try {
-    const sharp = (await import('sharp')).default;
-    return await sharp(buffer)
-      .resize({ width: 2000, withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toBuffer();
-  } catch (e) {
-    // Fallback : mieux vaut tenter la vision sur l'original que perdre le doc.
-    console.error('downscaleForOcr : sharp a échoué, fallback buffer original', e);
-    return buffer;
-  }
-}
+// Downscale avant vision OCR (Pitfall 3) : déplacé dans @/lib/ocr-downscale
+// (module neutre sans auth — consommé par l'extracteur, qui tourne aussi côté
+// worker) et câblé dans preinscription-extractor.ts.
