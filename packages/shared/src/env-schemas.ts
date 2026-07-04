@@ -16,3 +16,13 @@ export const AI_PROVIDER_SCHEMA = z
   .default('ollama');
 
 export const OPENROUTER_MODEL_FAST_SCHEMA = z.string().default('anthropic/claude-haiku-4.5');
+
+/**
+ * Cloud v6 (Phase 17 Plan 17-02) — schémas isolés des 3 clés cloud
+ * qui ont un comportement testable (enum / défaut / requise).
+ * SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY restent optional() en ligne dans env.ts
+ * (throw runtime conditionnel dans storage.ts si STORAGE_PROVIDER=supabase — D-03).
+ */
+export const STORAGE_PROVIDER_SCHEMA = z.enum(['minio', 'supabase']).default('minio');
+export const WEASYPRINT_URL_SCHEMA = z.string().url().default('http://localhost:5001');
+export const DIRECT_URL_SCHEMA = z.string().url();

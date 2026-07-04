@@ -14,8 +14,20 @@ import { z } from 'zod';
  * ici pour compat : `createEnv` ci-dessous valide TOUT l'env au chargement, donc
  * les tests importent depuis `env-schemas` pour rester hermétiques (pas de .env requis).
  */
-export { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from './env-schemas';
-import { AI_PROVIDER_SCHEMA, OPENROUTER_MODEL_FAST_SCHEMA } from './env-schemas';
+export {
+  AI_PROVIDER_SCHEMA,
+  OPENROUTER_MODEL_FAST_SCHEMA,
+  STORAGE_PROVIDER_SCHEMA,
+  WEASYPRINT_URL_SCHEMA,
+  DIRECT_URL_SCHEMA,
+} from './env-schemas';
+import {
+  AI_PROVIDER_SCHEMA,
+  OPENROUTER_MODEL_FAST_SCHEMA,
+  STORAGE_PROVIDER_SCHEMA,
+  WEASYPRINT_URL_SCHEMA,
+  DIRECT_URL_SCHEMA,
+} from './env-schemas';
 
 export const sharedEnv = createEnv({
   server: {
@@ -34,8 +46,14 @@ export const sharedEnv = createEnv({
 
     // Doc engine + Gotenberg
     GOTENBERG_URL: z.string().url().default('http://localhost:3001'),
-    DOC_ENGINE_URL: z.string().url().default('http://localhost:5000'),
     DOC_ENGINE_TOKEN: z.string().optional(),
+
+    // Cloud v6 (Phase 17) — Supabase Postgres/Storage + WeasyPrint
+    DIRECT_URL: DIRECT_URL_SCHEMA,                              // Prisma directUrl (schema.prisma:22) — requise
+    STORAGE_PROVIDER: STORAGE_PROVIDER_SCHEMA,                  // 'minio' (défaut) | 'supabase'
+    SUPABASE_URL: z.string().url().optional(),                 // requise en runtime si STORAGE_PROVIDER=supabase (throw storage.ts)
+    SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),          // secret, idem
+    WEASYPRINT_URL: WEASYPRINT_URL_SCHEMA,                      // moteur PDF secondaire réel (:5001), remplace l'alias mort du palier 3
 
     // IA
     AI_PROVIDER: AI_PROVIDER_SCHEMA,
@@ -95,8 +113,12 @@ export const sharedEnv = createEnv({
     S3_BUCKET_TEMPLATES: process.env.S3_BUCKET_TEMPLATES,
     S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE,
     GOTENBERG_URL: process.env.GOTENBERG_URL,
-    DOC_ENGINE_URL: process.env.DOC_ENGINE_URL,
     DOC_ENGINE_TOKEN: process.env.DOC_ENGINE_TOKEN,
+    DIRECT_URL: process.env.DIRECT_URL,
+    STORAGE_PROVIDER: process.env.STORAGE_PROVIDER,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    WEASYPRINT_URL: process.env.WEASYPRINT_URL,
     AI_PROVIDER: process.env.AI_PROVIDER,
     OLLAMA_URL: process.env.OLLAMA_URL,
     OLLAMA_MODEL_FAST: process.env.OLLAMA_MODEL_FAST,
