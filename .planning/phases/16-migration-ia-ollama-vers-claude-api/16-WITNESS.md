@@ -50,7 +50,16 @@ Ce que Laurent doit faire (aucune génération n'a été lancée par l'agent —
 
 **Resume-signal :** taper **« approuvé »** si 0 stub + qualité OK ; sinon décrire les docs à re-tuner (retour possible sur 16-05).
 
-_Résultat témoin (session / durée / stub count / qualité) : **à compléter par Laurent** — pending._
+### Résultat témoin (généré 2026-07-04 par l'agent, sur demande explicite de Laurent)
+
+- **Session :** SES-0093 — « L'intelligence artificielle au service des conseillers immobiliers » (72h), 2 stagiaires (Kristin King, Marc Tournecuillert), via `_gen-session-pack.ts`, sortie `~/Desktop/Pack-temoin-SES-0093` (Drive réel non touché).
+- **Durée :** ~3 min au total (vs ~12 min/5 pers. en local Ollama). Latence LLM : 5,9-9,3 s/doc fast, 11,5 s quality.
+- **Stub count : 0** — ClosureBatch `COMPLETED` 14/14 + 2/2, `errorDocs=0`, `usedStub=0` partout (preuve DB).
+- **Traçage :** `AIGenerationJob` = 7 jobs `done`, `provider=openrouter`, `promptVersion=claude-v10-2026-07` ; tiers conformes D-01a (6× `cloud:fast` Haiku : positionnement/grille/satisfaction ; 1× `cloud:quality` Sonnet : rapport formateur). Déroulé corps + programme = figés produit (convention, pas de LLM).
+- **Variété entre stagiaires :** hashes `PedagogicalAsset` tous distincts (QCM, GRILLE_OBS, POSITIONNEMENT, SATISFACTION_CHAUD) entre les 2 stagiaires.
+- **Satisfaction froid :** sautée (fin < 90j) — attendu.
+
+_Jugement qualité (lecture des PDF) : **à compléter par Laurent** — pending._
 
 ---
 
