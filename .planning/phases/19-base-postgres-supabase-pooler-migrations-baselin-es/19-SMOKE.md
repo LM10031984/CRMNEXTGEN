@@ -9,7 +9,37 @@ de la Phase 19** (équivalent `18-SMOKE.md`). Étape ops **gatée Laurent** — 
 
 ---
 
-<!-- RÉSULTATS DE VALIDATION insérés en tête à la Task 2, après exécution réelle. -->
+## ✅ RÉSULTATS DE VALIDATION — 2026-07-05
+
+**Validation exécutée par l'orchestrateur sur l'infra Supabase RÉELLE** (Laurent a délégué : « gère tout
+toi stp » — même modalité qu'en Phase 18). Le smoke n'est PAS une action manuelle Laurent : il a été **exécuté
+et son evidence brute consignée** ci-dessous comme base d'approbation du checkpoint.
+
+**Base cloud :** Supabase `gntlqyscahbgjrmsbzil`, **West EU Irlande**, **PostgreSQL 17.6**, hôte
+`aws-0-eu-west-1.pooler.supabase.com`. `DATABASE_URL` :6543 (pgbouncer) / `DIRECT_URL` :5432 (session).
+
+**Bilan : DB-01 = VALIDÉ ✓ · DB-02 = VALIDÉ ✓** — les **4 critères sont PROUVÉS runtime** contre le Supabase réel.
+
+- **DB-01 VALIDÉ** — `migrate status` = « Database schema is up to date! » + `migrate deploy` = « No pending
+  migrations to apply. » via `DIRECT_URL` :5432 ; `_prisma_migrations` = **uniquement `0_init`**.
+- **DB-02 VALIDÉ** — `pnpm db:smoke:cloud` **exit 0** avec **« [db-smoke] ALL 4 CRITERIA PROVEN »** :
+  round-trip poolé 5 hits **SANS** « prepared statement already exists » (#2), tx interactive Serializable OK
+  sous pooler (#2), `similarity('Dupont','Dupond')=0.5555556 > 0` + `unaccent('Éléonore')='Eleonore'` (#3),
+  INSERT+delete UUID sur `AuditLog` sans collision de PK (#4). Run exécuté **2× → idempotent** (UUID différent
+  à chaque run, aucune collision).
+
+**Aucun bug applicatif révélé** par le smoke (contrairement aux 3 bugs de 18-SMOKE). **Aucune dette** : la tx
+Serializable **passe** sous le pooler → le repli worker → :5432 (dette Phase 20) **n'est PAS nécessaire**.
+
+**⚠ Déviation d'exécution (Rule 3 — blocage outillage, PAS un échec de critère) :** le npm script
+`db:smoke:cloud` invoque `dotenv -e .env` mais le binaire `dotenv-cli` **n'est pas installé** (`node_modules/.bin/dotenv`
+absent) → `sh: dotenv: command not found`. **Contournement** : exécution via **`tsx --env-file=../../.env`**
+(chargement natif du même `.env`) — le script `db-smoke-cloud.ts` et les URLs cloud sont **rigoureusement
+identiques**, seul le loader d'env change. Les migrations Prisma chargent le `.env` racine automatiquement
+(« Environment variables loaded from .env »). Le fix pérenne (ajouter `dotenv-cli` en devDep ou remplacer le
+loader du script) est consigné en dette légère ci-dessous.
+
+---
 
 ## Pré-requis
 
@@ -36,9 +66,26 @@ aucune migration en attente.
 
 | Étape | Commande | Attendu | Résultat | Date |
 |-------|----------|---------|----------|------|
-| 1 — migrate status | `pnpm --filter @qualiof/db exec prisma migrate status` (DIRECT_URL :5432) | « Database schema is up to date! » | | |
-| 2 — migrate deploy | `pnpm --filter @qualiof/db exec prisma migrate deploy` (DIRECT_URL :5432) | « No pending migrations to apply. » | | |
-| 3 — _prisma_migrations | `SELECT migration_name FROM _prisma_migrations` | uniquement `0_init` | | |
+| 1 — migrate status | `prisma migrate status --schema packages/db/prisma/schema.prisma` (DIRECT_URL :5432) | « Database schema is up to date! » | ✅ **passed** — `at aws-0-eu-west-1.pooler.supabase.com:5432` · `1 migration found` · **« Database schema is up to date! »** | 2026-07-05 |
+| 2 — migrate deploy | `prisma migrate deploy --schema packages/db/prisma/schema.prisma` (DIRECT_URL :5432) | « No pending migrations to apply. » | ✅ **passed** — `1 migration found` · **« No pending migrations to apply. »** | 2026-07-05 |
+| 3 — _prisma_migrations | `SELECT migration_name FROM _prisma_migrations` | uniquement `0_init` | ✅ **passed** — `MIGRATIONS=["0_init"]` (aucune ligne stale) | 2026-07-05 |
+
+**Sortie brute (DB-01) :**
+```
+$ prisma migrate status --schema packages/db/prisma/schema.prisma
+Environment variables loaded from .env
+Datasource "db": PostgreSQL database "postgres", schema "public" at "aws-0-eu-west-1.pooler.supabase.com:5432"
+1 migration found in prisma/migrations
+Database schema is up to date!
+
+$ prisma migrate deploy --schema packages/db/prisma/schema.prisma
+1 migration found in prisma/migrations
+No pending migrations to apply.
+
+$ SELECT migration_name FROM _prisma_migrations   → MIGRATIONS=["0_init"]
+$ pg_extension                                     → pg_trgm(public), pgcrypto(extensions), unaccent(public), uuid-ossp(extensions)  [4/4]
+$ SELECT version()                                 → PostgreSQL 17.6
+```
 
 ---
 
@@ -50,8 +97,8 @@ interactive Serializable** (le pattern EXACT de `closure/worker.ts:334 bumpAndFi
 
 | Étape | Commande | Attendu | Résultat | Date |
 |-------|----------|---------|----------|------|
-| 1 — round-trip 5 hits | `pnpm db:smoke:cloud` | `[round-trip] 5 reads OK` — **AUCUN** « prepared statement already exists » | | |
-| 2 — tx Serializable | `pnpm db:smoke:cloud` | `[serializable-tx] interactive tx OK under pooler` | | |
+| 1 — round-trip 5 hits | `db:smoke:cloud` (tsx --env-file) | `[round-trip] 5 reads OK` — **AUCUN** « prepared statement already exists » | ✅ **passed** — `[round-trip] 5 reads OK, tenant=db191440-a144-48d1-93c1-767e6f647f2c` · 5× `BEGIN/DEALLOCATE ALL/COUNT/COMMIT` sans erreur `s0` | 2026-07-05 |
+| 2 — tx Serializable | `db:smoke:cloud` (tsx --env-file) | `[serializable-tx] interactive tx OK under pooler` | ✅ **passed** — `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` → 2 COUNT → COMMIT · `[serializable-tx] interactive tx OK under pooler` (chemin worker `bumpAndFinalize` reproduit) | 2026-07-05 |
 
 ---
 
@@ -62,8 +109,8 @@ Prouve que `pg_trgm` (`similarity`) et `unaccent` **résolvent au runtime** (sea
 
 | Étape | Commande | Attendu | Résultat | Date |
 |-------|----------|---------|----------|------|
-| 1 — pg_trgm | `pnpm db:smoke:cloud` | `similarity('Dupont','Dupond') > 0` → `[extensions] pg_trgm similarity=…` | | |
-| 2 — unaccent | `pnpm db:smoke:cloud` | `unaccent('Éléonore') === 'Eleonore'` → `[extensions] … unaccent OK` | | |
+| 1 — pg_trgm | `db:smoke:cloud` (tsx --env-file) | `similarity('Dupont','Dupond') > 0` → `[extensions] pg_trgm similarity=…` | ✅ **passed** — **`similarity=0.5555556`** (> 0) résolu au runtime cloud | 2026-07-05 |
+| 2 — unaccent | `db:smoke:cloud` (tsx --env-file) | `unaccent('Éléonore') === 'Eleonore'` → `[extensions] … unaccent OK` | ✅ **passed** — `[extensions] pg_trgm similarity=0.5555556, unaccent OK` (`unaccent('Éléonore')='Eleonore'`) | 2026-07-05 |
 
 ---
 
@@ -73,7 +120,17 @@ Prouve qu'un INSERT réel (UUID PK) + delete immédiat passe sans collision.
 
 | Étape | Commande | Attendu | Résultat | Date |
 |-------|----------|---------|----------|------|
-| 1 — INSERT+delete UUID | `pnpm db:smoke:cloud` | `[insert-test] UUID PK INSERT+delete OK` (AuditLog, id `@default(uuid())`, delete immédiat) | | |
+| 1 — INSERT+delete UUID | `db:smoke:cloud` (tsx --env-file) | `[insert-test] UUID PK INSERT+delete OK` (AuditLog, id `@default(uuid())`, delete immédiat) | ✅ **passed** — `[insert-test] UUID PK INSERT+delete OK, id=0c13e623-382a-4de5-9e2a-bdb990659738 (no sequence, no collision)` · run 2 → `id=d2d5de81-…` (idempotent, aucune collision) | 2026-07-05 |
+
+**Sortie brute (DB-02, `db:smoke:cloud` — exit 0) :**
+```
+[round-trip] 5 reads OK, tenant=db191440-a144-48d1-93c1-767e6f647f2c
+[serializable-tx] interactive tx OK under pooler
+[extensions] pg_trgm similarity=0.5555556, unaccent OK
+[insert-test] UUID PK INSERT+delete OK, id=0c13e623-382a-4de5-9e2a-bdb990659738 (no sequence, no collision)
+[db-smoke] ALL 4 CRITERIA PROVEN
+EXIT=0   — grep 'prepared statement already exists' = 0 occurrence
+```
 
 **Note documentée — absence de séquence (critère #4 structurellement trivial) :**
 Le schéma n'a **AUCUN `@default(autoincrement())`** — audit `grep -c 'autoincrement()' packages/db/prisma/schema.prisma` = **0**.
@@ -83,7 +140,11 @@ L'INSERT test le confirme empiriquement (UUID inséré sans dépendre d'une séq
 
 ---
 
-## Repli documenté (si round-trip Serializable échoue)
+## Repli documenté (si round-trip Serializable échoue) — NON DÉCLENCHÉ
+
+> **Statut 2026-07-05 : NON nécessaire.** La tx interactive Serializable a **passé** sous le pooler :6543
+> (aucun `40001`, aucun `prepared statement already exists`). Le repli ci-dessous reste documenté pour
+> mémoire ; il n'a **pas** été appliqué et n'a **pas** généré de dette Phase 20.
 
 Si la transaction interactive Serializable lève **UNIQUEMENT sur le chemin worker** une erreur `40001`
 (serialization failure) ou `prepared statement already exists` sous le pooler :6543 :
@@ -98,9 +159,16 @@ Cas d'échec prévus et leur retour au plan concerné :
 
 ---
 
+## Dette légère consignée (Phase 20/outillage)
+
+- **`db:smoke:cloud` dépend de `dotenv-cli` non installé** → le script racine échoue (`sh: dotenv: command not found`).
+  Fix pérenne (Phase 20 ou quick) : ajouter `dotenv-cli` en devDep racine **OU** remplacer l'invocation par
+  `tsx --env-file=.env`. Contourné ici sans impact sur les preuves (même `.env`, même script). PAS bloquant.
+
 ## Phase gate
 
-- [ ] `pnpm db:smoke:cloud` exit 0 avec **« [db-smoke] ALL 4 CRITERIA PROVEN »**, aucun « prepared statement already exists ».
-- [ ] `prisma migrate status` (DIRECT_URL :5432) = « Database schema is up to date! ».
-- [ ] Les 4 critères (DB-01 status+deploy, DB-02 #2/#3/#4) portent un Résultat + date.
-- [ ] Statut DB-01 / DB-02 explicite (VALIDÉ ou échec détaillé), dette/bugs éventuels consignés.
+- [x] `db:smoke:cloud` exit 0 avec **« [db-smoke] ALL 4 CRITERIA PROVEN »**, **aucun** « prepared statement already exists » (grep=0).
+- [x] `prisma migrate status` (DIRECT_URL :5432) = « Database schema is up to date! » + `migrate deploy` = « No pending migrations to apply. ».
+- [x] Les 4 critères (DB-01 status+deploy, DB-02 #2/#3/#4) portent un Résultat + date (2026-07-05).
+- [x] Statut **DB-01 = VALIDÉ ✓ / DB-02 = VALIDÉ ✓** explicite ; **0 bug**, **0 dette bloquante** (repli worker NON déclenché), 1 dette légère outillage consignée.
+- [x] → `/gsd:verify-work 19` peut être lancé. **Phase 19 prouvée.**
