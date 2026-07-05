@@ -95,7 +95,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 - [x] 20-01-PLAN.md — Porter veille + relances factures hors BullMQ vers cron interne `croner` (lundi 8h / quotidien 8h Europe/Paris) — WORK-02 [Wave 1]
 - [x] 20-02-PLAN.md — Relocaliser l'OCR pré-inscription du fire-and-forget Vercel vers un worker qui poll les PreEnrollment SUBMITTED (SKIP LOCKED, pdftoppm sur l'hôte) — WORK-04 [Wave 1]
 - [x] 20-03-PLAN.md — Enforcement Bearer server-side : check Flask WeasyPrint + proxy Caddy Bearer devant Gotenberg (basic-auth only) — WORK-01 [Wave 1]
-- [ ] 20-04-PLAN.md — Image Docker `turbo prune` + poppler + pm2-runtime ×4 + retrait deps/fichiers BullMQ morts + recalibrage cloud env + runbook Railway 20-DEPLOY.md — WORK-01/WORK-03 [Wave 2]
+- [x] 20-04-PLAN.md — Image Docker `turbo prune` + poppler + pm2-runtime ×4 + retrait deps/fichiers BullMQ morts + recalibrage cloud env + runbook Railway 20-DEPLOY.md — WORK-01/WORK-03 [Wave 2]
 - [ ] 20-05-PLAN.md — Déploiement Railway (Pro europe-west4) + smokes réels 20-SMOKE.md : pack closure Mac éteint 0 stub + OCR PDF scanné + Bearer 401/200 + SMTP :465 + stabilité 24h/coût — WORK-01/02/03/04 [checkpoint: deploy + human-verify]
 **Research flags** (repris au plan) : Railway Pro tranché (dashboard-first D-01, egress SMTP :465 Pro-only) · Redis viré D-03 (Postgres SKIP LOCKED + croner, `maxRetriesPerRequest:null` caduc) · OCR relocalisé worker D-05 (poppler apt image) · pricing/stabilité 24h = preuve runtime plan 20-05 · DNS privé `*.railway.internal`.
 
@@ -135,6 +135,6 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
-| 20. Worker 3ᵉ hôte | v6 | 3/5 | In Progress|  |
+| 20. Worker 3ᵉ hôte | v6 | 4/5 | In Progress|  |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
