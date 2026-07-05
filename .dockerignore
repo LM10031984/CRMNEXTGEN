@@ -1,0 +1,31 @@
+# Ne JAMAIS embarquer de secrets ni d'artefacts lourds dans une couche d'image
+# (worker Dockerfile fait `COPY . .` avant `turbo prune`). Les variables de
+# service Railway (chiffrees) fournissent l'env au runtime — CLAUDE.md.
+.env
+.env.*
+.env.local
+.env.local.cloud-backup
+*.backup
+
+# VCS / planning / docs
+.git
+.gitignore
+.planning
+
+# Dependances et build (reconstruits dans l'image)
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+out
+**/out
+.turbo
+**/.turbo
+
+# Divers
+*.log
+.DS_Store
+coverage
+**/coverage

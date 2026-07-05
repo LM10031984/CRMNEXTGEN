@@ -19,7 +19,11 @@
  */
 
 import { prisma } from '@qualiof/db';
-import { sendInvoiceReminder } from '@/server/actions/invoices';
+// Worker-safe : le cœur neutre (invoice-reminder-core) évite d'importer
+// `@/server/actions/invoices` ('use server' → next/cache + @/lib/auth →
+// `import { cache } from 'react'`), qui casse le boot pm2 en Node ESM brut
+// (révélé au smoke conteneur 20-05, règle « Worker jamais d'imports auth React »).
+import { sendInvoiceReminderCron } from '@/lib/invoice-reminders/invoice-reminder-core';
 
 /**
  * R2 (RESEARCH §Risques) — Date de mise en service Phase 11.
@@ -88,10 +92,7 @@ export async function processReminderJob(input: {
       // Niveau max atteint
       if (inv.reminderCount >= maxLevel) continue;
 
-      const result = await sendInvoiceReminder({
-        invoiceId: inv.id,
-        triggered_by: 'cron',
-      });
+      const result = await sendInvoiceReminderCron({ invoiceId: inv.id });
       if (result.ok) processed += 1;
     }
   }

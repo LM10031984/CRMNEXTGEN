@@ -22,33 +22,58 @@
 //   script: 'tsx', args: 'apps/web/scripts/<worker>.ts'
 // (à ajuster au smoke conteneur, plan 20-05).
 
+// Les scripts importent l'alias `@/*` → `apps/web/src/*` (apps/web/tsconfig.json).
+// Deux réglages OBLIGATOIRES (révélés au smoke conteneur 20-05) :
+//  1. cwd: 'apps/web' → parité avec le lancement local (pnpm exécute les scripts
+//     avec cwd = dossier du package).
+//  2. TSX_TSCONFIG_PATH → tsx découvre son tsconfig depuis process.cwd() par
+//     défaut ; sous pm2 (interpreter 'tsx'), le cwd seul ne suffisait pas à faire
+//     charger apps/web/tsconfig.json → `ERR_MODULE_NOT_FOUND Cannot find package
+//     '@/lib'`. On pointe tsx EXPLICITEMENT sur le bon tsconfig (chemin absolu
+//     dans l'image = /app/apps/web/tsconfig.json) pour résoudre les `paths`.
+const TSCONFIG = '/app/apps/web/tsconfig.json';
+
 module.exports = {
   apps: [
     {
       name: 'closure',
-      script: 'apps/web/scripts/closure-worker-postgres.ts',
+      script: 'scripts/closure-worker-postgres.ts',
+      cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,
-      env: { QUEUE_CONCURRENCY: '3', QUEUE_POLL_INTERVAL_MS: '3000' },
+      env: {
+        QUEUE_CONCURRENCY: '3',
+        QUEUE_POLL_INTERVAL_MS: '3000',
+        TSX_TSCONFIG_PATH: TSCONFIG,
+      },
     },
     {
       name: 'veille',
-      script: 'apps/web/scripts/veille-worker.ts',
+      script: 'scripts/veille-worker.ts',
+      cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,
+      env: { TSX_TSCONFIG_PATH: TSCONFIG },
     },
     {
       name: 'reminders',
-      script: 'apps/web/scripts/invoice-reminder-worker.ts',
+      script: 'scripts/invoice-reminder-worker.ts',
+      cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,
+      env: { TSX_TSCONFIG_PATH: TSCONFIG },
     },
     {
       name: 'ocr',
-      script: 'apps/web/scripts/preinscription-ocr-worker.ts',
+      script: 'scripts/preinscription-ocr-worker.ts',
+      cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,
-      env: { OCR_CONCURRENCY: '2', OCR_POLL_INTERVAL_MS: '5000' },
+      env: {
+        OCR_CONCURRENCY: '2',
+        OCR_POLL_INTERVAL_MS: '5000',
+        TSX_TSCONFIG_PATH: TSCONFIG,
+      },
     },
   ],
 };

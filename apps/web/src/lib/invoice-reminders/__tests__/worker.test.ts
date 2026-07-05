@@ -11,8 +11,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * MÉTIER inchangée du handler (statuts, R2, idempotence 24h, niveau max).
  *
  * Stratégie de mock :
- *  - `@qualiof/db`                                    → prisma mocké (tenant.findMany + invoice.findMany)
- *  - `@/server/actions/invoices` (sendInvoiceReminder) → mocké (on vérifie l'appel sans relancer la chaîne action)
+ *  - `@qualiof/db`                                       → prisma mocké (tenant.findMany + invoice.findMany)
+ *  - `@/lib/invoice-reminders/invoice-reminder-core`     → mocké (cœur neutre worker-safe, 20-05 : le
+ *                                                          handler n'importe plus la server action
+ *                                                          `@/server/actions/invoices` qui casse le boot
+ *                                                          pm2 via `import { cache } from 'react'`).
  *
  * Coverage (7 cas métier — la logique reste inchangée) :
  *  1. `processReminderJob` scan Invoice WHERE status ∈ {ISSUED, PARTIAL, OVERDUE}
@@ -20,7 +23,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  3. Pour chaque tenant : lit Tenant.invoiceReminderDays par tick
  *  4. Skip facture si reminderCount >= invoiceReminderDays.length (niveau max)
  *  5. Skip facture si lastReminderAt > now - 24h (idempotence D-13b defense-in-depth)
- *  6. Appelle sendInvoiceReminder({ triggered_by: 'cron' }) pour chaque facture éligible
+ *  6. Appelle sendInvoiceReminderCron({ invoiceId }) pour chaque facture éligible
  *  7. `REMINDER_START_DATE` est exportée et figée au 2026-05-19 UTC
  */
 
@@ -50,12 +53,12 @@ vi.mock('@qualiof/db', () => ({
   },
 }));
 
-vi.mock('@/server/actions/invoices', () => ({
-  sendInvoiceReminder: vi.fn(),
+vi.mock('@/lib/invoice-reminders/invoice-reminder-core', () => ({
+  sendInvoiceReminderCron: vi.fn(),
 }));
 
 import { prisma } from '@qualiof/db';
-import { sendInvoiceReminder } from '@/server/actions/invoices';
+import { sendInvoiceReminderCron } from '@/lib/invoice-reminders/invoice-reminder-core';
 import { processReminderJob, REMINDER_START_DATE } from '../worker';
 
 const tenantFindMany = prisma.tenant.findMany as unknown as ReturnType<
@@ -64,7 +67,7 @@ const tenantFindMany = prisma.tenant.findMany as unknown as ReturnType<
 const invoiceFindMany = prisma.invoice.findMany as unknown as ReturnType<
   typeof vi.fn
 >;
-const sendReminderMock = sendInvoiceReminder as unknown as ReturnType<
+const sendReminderMock = sendInvoiceReminderCron as unknown as ReturnType<
   typeof vi.fn
 >;
 
@@ -161,7 +164,7 @@ describe('invoice-reminder-worker — processReminderJob', () => {
     );
   });
 
-  it("Test 6 — appelle sendInvoiceReminder({ triggered_by: 'cron' }) pour chaque facture éligible", async () => {
+  it('Test 6 — appelle sendInvoiceReminderCron({ invoiceId }) pour chaque facture éligible', async () => {
     invoiceFindMany.mockResolvedValueOnce([
       { id: 'inv-1', reminderCount: 0, lastReminderAt: null },
       { id: 'inv-2', reminderCount: 1, lastReminderAt: null },
@@ -170,14 +173,8 @@ describe('invoice-reminder-worker — processReminderJob', () => {
     const result = await processReminderJob(makeInput());
 
     expect(sendReminderMock).toHaveBeenCalledTimes(2);
-    expect(sendReminderMock).toHaveBeenCalledWith({
-      invoiceId: 'inv-1',
-      triggered_by: 'cron',
-    });
-    expect(sendReminderMock).toHaveBeenCalledWith({
-      invoiceId: 'inv-2',
-      triggered_by: 'cron',
-    });
+    expect(sendReminderMock).toHaveBeenCalledWith({ invoiceId: 'inv-1' });
+    expect(sendReminderMock).toHaveBeenCalledWith({ invoiceId: 'inv-2' });
     expect(result).toEqual({ processed: 2 });
   });
 });
