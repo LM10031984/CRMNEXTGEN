@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-07-04T20:48:45.567Z"
-last_activity: 2026-07-04
+stopped_at: Completed 19-02-PLAN.md
+last_updated: "2026-07-05T06:24:22.513Z"
+last_activity: 2026-07-05
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 19 (base-postgres-supabase-pooler-migrations-baselin-es) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-05 — **Plan 19-02 livré** (Wave 2, câblage URLs cloud + baseline collapse — DB-01 + moitié DB-02). **Checkpoint Task 0 résolu AUTONOME** sur délégation explicite de Laurent (« j'en sais rien pour le password et gère tout toi stp ») : credentials de `.env.local.cloud-backup` **VÉRIFIÉES par connexion réelle** (`select version()` OK sur pooler :6543 ET direct :5432 → PostgreSQL 17.6, hostname `aws-0-eu-west-1` confirmé). Pas de psql/pg installés → vérif via `PrismaClient` datasources override. **Task 1** : `.env` racine câblé — `DATABASE_URL` = transaction pooler :6543 avec `?pgbouncer=true&connection_limit=1` (le `&connection_limit=1` était ABSENT du backup, ajouté), `DIRECT_URL` = session pooler :5432 sans pgbouncer ; `.env.example` documente le format (placeholders, aucun secret). `.env` gitignore → non commité (secret sauf). **Task 2 — baseline collapse** : `migrate status` AVANT montrait « up to date » avec 29 lignes `_prisma_migrations` (héritées du dump) MAIS `migrate diff` a révélé que la base cloud **divergeait de `schema.prisma`** — 3 objets db-push manquants (`TrainingProduct.derouleJson`, `RevenueTarget`, `SessionCalendarSync`, ajoutés localement après le dump). **`0_init` généré** via `migrate diff --from-empty` (1493 lignes, 47 CREATE TABLE, 28 CREATE TYPE), **29 migrations archivées** dans `packages/db/prisma/archived-db-push/` (+ README collapse). **Drift db-push APPLIQUÉ** à la base cloud en forward (`db execute`, 0 DROP) → `migrate diff` post = « No difference detected ». **`_prisma_migrations` réconcilié** : 29 lignes stale supprimées (snapshotées AVANT dans `artifacts/prisma-migrations-before-baseline.json` — filet de sécurité, pg_dump absent) puis `resolve --applied 0_init`. **`migrate deploy` = « No pending migrations » (vert via DIRECT_URL :5432)**, **`migrate status` = « up to date »**, `_prisma_migrations` = uniquement `0_init`. **Task 3 — extensions** : les 4 (`pgcrypto`, `uuid-ossp`, `pg_trgm`, `unaccent`) confirmées via `pg_extension` (COUNT=4/4) — jouées via Prisma `$executeRawUnsafe` sur DIRECT_URL (PAS le SQL Editor, sur instruction Laurent ; role suffisamment privilégié). `pg_trgm`/`unaccent` restent en schéma `public` (setup Supabase d'origine, `if not exists` idempotent), `pgcrypto`/`uuid-ossp` en `extensions`. **3 déviations** : **Rule 2** (application du drift db-push — le plan résolvait l'historique mais pas la désync réelle du schéma ; sans les 3 objets, worker/app cassent) ; **Rule 3** (archive déplacée de `migrations/` vers `prisma/` — Prisma échouait `P3015` sur le README sans migration.sql) ; **Rule 3** (nettoyage des 29 lignes stale pour un collapse propre). **Sorties CLI brutes consignées dans 19-02-SUMMARY** (alimentent 19-SMOKE.md du plan 19-03). 2 commits `bbe7fcd`(feat URLs)/`4f70475`(feat baseline+archive+snapshot). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **⚠ `.env` racine pointe désormais le cloud Supabase en local** (worker/app parlent au cloud) — restaurer un backup local si retour Docker voulu. DB-01 (baseline + migrate deploy vert + status clean) et moitié DB-02 (2 URLs câblées + 4 extensions) satisfaits. Prochain : Plan 19-03 (`db:smoke:cloud` — preuve runtime round-trip pooler / tx Serializable / extensions / INSERT contre la base réelle).
 
 - 2026-07-04 — **Plan 19-01 livré** (Wave 1, script de PREUVE cloud DB-01/DB-02 — 100 % autonome, aucune base cloud requise pour l'écrire). Créé `apps/web/scripts/db-smoke-cloud.ts` : runner tsx **worker/CLI-safe** (importe UNIQUEMENT `@qualiof/db`, aucun import React/auth), **4 fonctions distinctes** appelées en séquence sous try/catch/finally `$disconnect` : (1) **`proveRoundTripPooled`** — `tenant.findFirstOrThrow` + boucle `for (let i=0; i<5; i++)` de `trainingSession.count()` = 5 lectures d'affilée pour révéler tout `prepared statement "s0" already exists` du **pooler transaction mode :6543** (pitfall #2) ; (2) **`proveSerializableInteractiveTx`** — `prisma.$transaction(async (tx) => { count×2 }, { isolationLevel: 'Serializable' })` reproduit le pattern EXACT de `closure/worker.ts:334` **`bumpAndFinalize`** SANS toucher de ClosureBatch réel → prouve qu'une transaction interactive Serializable passe sous le pooler (pitfall #1, chemin worker) ; (3) **`proveExtensions`** — `$queryRawUnsafe similarity('Dupont','Dupond') > 0` (pg_trgm) + `unaccent('Éléonore') === 'Eleonore'` avec throw explicite si KO ; (4) **`proveInsertNoPkCollision`** — INSERT réel dans **`AuditLog`** (id `@default(uuid())`, champs NOT NULL confirmés `schema.prisma:1230` : tenantId/entity/entityId/action/diff, `action:'DB_SMOKE_TEST'`) + **`delete` immédiat** (ne pollue pas la base cloud), commenté « 0 autoincrement dans schema.prisma → collision de séquence IMPOSSIBLE ». **Garde d'entrée robuste aux espaces** `import.meta.url === pathToFileURL(process.argv[1]).href` (leçon 18-SMOKE bug #1, %20). **0 PII loggé** (IDs UUID + compteurs seulement, RGPD). npm script racine **`db:smoke:cloud`** (`dotenv -e .env -- pnpm --filter @qualiof/web exec tsx …`). **Le script NE crée AUCUNE clé env, NE modifie PAS `.env`** — consomme `DATABASE_URL`/`DIRECT_URL` déjà validées au boot (Phase 17). **`tsc --noEmit` exit 0**. Acceptance greps tous verts (`from '@qualiof/db'`=1 / `for (let i=0; i<5`=1 / `Serializable`=1 / `similarity(`=2 / `unaccent(`=2 / `$disconnect`=1 / `pathToFileURL`=3 / `DB_SMOKE_TEST|.delete(`=2 / `"db:smoke:cloud"`=1 / PII console.log=0). **0 déviation** (seul ajustement mécanique : optional chaining `?.` + `Number()` sur les résultats `$queryRawUnsafe` pour `noUncheckedIndexedAccess`). Commit purement additif (nouveau script + 1 ligne scripts, aucun fichier métier touché) → suite Vitest structurellement inchangée. 1 commit `82c2fbc`(feat, `--no-verify` parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **⚠ Script LIVRÉ, NON EXÉCUTÉ contre le cloud** : DB-01/DB-02 marqués dans REQUIREMENTS (déclarés au plan) mais la **preuve réelle** (round-trip/extensions/INSERT contre le Supabase réel) est l'**étape gatée Laurent du plan 19-03** (« destructif/cloud réel = étape séparée ») ; le plan 19-02 renseigne d'abord les URLs poolée :6543 / directe :5432 + active les extensions au SQL Editor. Prochain : Plan 19-02 (câblage URLs cloud + extensions Supabase).
 
@@ -280,12 +282,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 19-01-PLAN.md
+Stopped at: Completed 19-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
 
-Last activity: 2026-07-04
+Last activity: 2026-07-05
 
 ### Roadmap Evolution
 
