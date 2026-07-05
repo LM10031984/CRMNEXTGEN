@@ -92,7 +92,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   3. La décision Redis (Upstash vs Redis co-localisé sur le worker host) est tranchée sur facturation observée 24 h et le coût mensuel projeté est sous budget, le worker stable 24 h
   4. L'OCR/pdftoppm est explicitement tranché et implémenté (rasterisation relocalisée worker OU dégradation texte-seul avec message utilisateur) — aucune dégradation silencieuse du pilier #4
 **Plans**: 5 plans (Railway tranché vs Fly ; Redis viré partout D-03 ; OCR relocalisé worker D-05)
-- [ ] 20-01-PLAN.md — Porter veille + relances factures hors BullMQ vers cron interne `croner` (lundi 8h / quotidien 8h Europe/Paris) — WORK-02 [Wave 1]
+- [x] 20-01-PLAN.md — Porter veille + relances factures hors BullMQ vers cron interne `croner` (lundi 8h / quotidien 8h Europe/Paris) — WORK-02 [Wave 1]
 - [x] 20-02-PLAN.md — Relocaliser l'OCR pré-inscription du fire-and-forget Vercel vers un worker qui poll les PreEnrollment SUBMITTED (SKIP LOCKED, pdftoppm sur l'hôte) — WORK-04 [Wave 1]
 - [x] 20-03-PLAN.md — Enforcement Bearer server-side : check Flask WeasyPrint + proxy Caddy Bearer devant Gotenberg (basic-auth only) — WORK-01 [Wave 1]
 - [ ] 20-04-PLAN.md — Image Docker `turbo prune` + poppler + pm2-runtime ×4 + retrait deps/fichiers BullMQ morts + recalibrage cloud env + runbook Railway 20-DEPLOY.md — WORK-01/WORK-03 [Wave 2]
@@ -135,6 +135,6 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
-| 20. Worker 3ᵉ hôte | v6 | 2/5 | In Progress|  |
+| 20. Worker 3ᵉ hôte | v6 | 3/5 | In Progress|  |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
