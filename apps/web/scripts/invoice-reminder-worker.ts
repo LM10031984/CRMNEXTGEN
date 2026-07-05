@@ -1,49 +1,44 @@
 /**
- * Phase 11 Plan 11-06 — Entry-point du worker BullMQ "invoice-reminders-daily".
+ * Phase 11 Plan 11-06 → Phase 20 Plan 20-01 — Entry-point cron relances (croner).
+ *
+ * WORK-02 (D-03 « Redis viré partout ») : plus de BullMQ ni de Redis. La
+ * planification quotidienne (8h Europe/Paris) renaît du code au boot du process
+ * via `croner` (timezone via Intl → DST Europe/Paris correct ; `catch` intégré →
+ * une erreur d'exécution n'arrête pas le process). Le process reste vivant grâce
+ * au cron enregistré (plus de keepalive artificiel).
  *
  * Lancé via :
  *   pnpm --filter @qualiof/web worker:reminders
  *
- * Process indépendant de Next.js. À garder ouvert pendant le dev pour que
- * le job repeatable cron daily (8h00 Europe/Paris) soit déclenché et que les
- * factures éligibles soient relancées automatiquement.
- *
- * En prod : tourne en service systemd / pm2 / docker — même pattern que
- * `closure-worker.ts` Phase 2.2.
- *
- * Mode dégradé Redis : si Redis n'est pas joignable au boot (CI/test sans
- * docker), on log un warning + keepalive setInterval pour ne pas faire planter
- * concurrently (cf `pnpm dev:full`).
+ * En conteneur (plan 20-04) : lancé par pm2 (pas par ce script pnpm).
  */
 
-import {
-  startInvoiceReminderWorker,
-  scheduleDailyReminders,
-} from '../src/lib/invoice-reminders/worker';
+import '@qualiof/shared/env'; // fail-loud au boot (parité closure-worker-postgres.ts)
+import { Cron } from 'croner';
+import { processReminderJob } from '../src/lib/invoice-reminders/worker';
 
-async function main() {
-  try {
-    const worker = startInvoiceReminderWorker();
-    await scheduleDailyReminders();
+// Quotidien 8h Europe/Paris (remplace repeat { pattern:'0 8 * * *', tz:'Europe/Paris' } BullMQ)
+const job = new Cron(
+  '0 8 * * *',
+  {
+    name: 'invoice-reminders',
+    timezone: 'Europe/Paris',
+    catch: (e: unknown) =>
+      console.error('[invoice-reminder-worker] cron error', e),
+  },
+  async () => {
+    await processReminderJob({ triggered_by: 'cron' });
+  },
+);
+console.log(
+  '[invoice-reminder-worker] croner registered (quotidien 08:00 Europe/Paris), next:',
+  job.nextRun(),
+);
 
-    const shutdown = async (signal: string) => {
-      console.log(
-        `[invoice-reminder-worker] received ${signal}, shutting down…`,
-      );
-      await worker.close();
-      process.exit(0);
-    };
-
-    process.on('SIGINT', () => void shutdown('SIGINT'));
-    process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  } catch (e) {
-    console.warn(
-      '[invoice-reminder-worker] Redis indisponible — worker désactivé en mode dégradé.',
-      e,
-    );
-    // Keepalive pour ne pas faire planter concurrently
-    setInterval(() => {}, 60_000);
-  }
-}
-
-void main();
+const shutdown = (signal: string) => {
+  console.log(`[invoice-reminder-worker] received ${signal}, stopping cron…`);
+  job.stop();
+  process.exit(0);
+};
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

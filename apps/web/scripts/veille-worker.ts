@@ -1,46 +1,43 @@
 /**
- * Phase 13 Plan 13-05 — Entry-point du worker BullMQ "veille".
+ * Phase 13 Plan 13-05 → Phase 20 Plan 20-01 — Entry-point cron veille (croner).
+ *
+ * WORK-02 (D-03 « Redis viré partout ») : plus de BullMQ ni de Redis. La
+ * planification hebdo (lundi 8h Europe/Paris) renaît du code au boot du process
+ * via `croner` (timezone via Intl → DST Europe/Paris correct ; `catch` intégré →
+ * une erreur d'exécution n'arrête pas le process). Le process reste vivant grâce
+ * au cron enregistré (plus de keepalive artificiel).
  *
  * Lancé via :
  *   pnpm --filter @qualiof/web worker:veille
  *
- * Process indépendant de Next.js. À garder ouvert pour que le cron hebdo
- * (lundi 8h Europe/Paris) se déclenche. En prod : tourne en service
- * systemd / pm2 / docker (même pattern que `closure-worker.ts` et
- * `invoice-reminder-worker.ts`).
- *
- * Mode dégradé Redis (clone Phase 11 invoice-reminder-worker.ts:39-46) :
- * si Redis n'est pas joignable au boot (CI / test sans Docker), on log
- * un warning + keepalive setInterval pour ne pas faire planter
- * `concurrently` (cf `pnpm dev:full`).
+ * En conteneur (plan 20-04) : lancé par pm2 (pas par ce script pnpm).
  */
 
-import {
-  startVeilleWorker,
-} from '../src/lib/veille/worker';
-import { scheduleWeeklyVeille } from '../src/lib/veille/queue';
+import '@qualiof/shared/env'; // fail-loud au boot (parité closure-worker-postgres.ts)
+import { Cron } from 'croner';
+import { processVeilleJob } from '../src/lib/veille/worker';
 
-async function main() {
-  try {
-    const worker = startVeilleWorker();
-    await scheduleWeeklyVeille();
+// Hebdo lundi 8h Europe/Paris (remplace repeat { pattern:'0 8 * * 1', tz:'Europe/Paris' } BullMQ)
+const job = new Cron(
+  '0 8 * * 1',
+  {
+    name: 'veille',
+    timezone: 'Europe/Paris',
+    catch: (e: unknown) => console.error('[veille-worker] cron error', e),
+  },
+  async () => {
+    await processVeilleJob({ triggered_by: 'cron' });
+  },
+);
+console.log(
+  '[veille-worker] croner registered (lundi 08:00 Europe/Paris), next:',
+  job.nextRun(),
+);
 
-    const shutdown = async (signal: string) => {
-      console.log(`[veille-worker] received ${signal}, shutting down…`);
-      await worker.close();
-      process.exit(0);
-    };
-
-    process.on('SIGINT', () => void shutdown('SIGINT'));
-    process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  } catch (e) {
-    console.warn(
-      '[veille-worker] Redis indisponible — worker désactivé en mode dégradé.',
-      e,
-    );
-    // Keepalive : empêche concurrently de planter en dev:full sans Redis.
-    setInterval(() => {}, 60_000);
-  }
-}
-
-void main();
+const shutdown = (signal: string) => {
+  console.log(`[veille-worker] received ${signal}, stopping cron…`);
+  job.stop();
+  process.exit(0);
+};
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
