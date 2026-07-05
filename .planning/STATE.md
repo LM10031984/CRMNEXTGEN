@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 19-03-PLAN.md — Phase 19 ready_for_verification
-last_updated: "2026-07-05T06:32:38.487Z"
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-07-05T09:20:35.230Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 15
+  completed_plans: 12
 ---
 
 # STATE — QualiOF
@@ -21,14 +21,14 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service — désormais à faire tourner en prod cloud multi-utilisateurs sans le Mac de Laurent.
 
-**Current focus:** Phase 19 — base-postgres-supabase-pooler-migrations-baselin-es
+**Current focus:** Phase 20 — worker-3-h-te-doc-engines
 
 ---
 
 ## Current Position
 
-Phase: 19 (base-postgres-supabase-pooler-migrations-baselin-es) — READY FOR VERIFICATION
-Plan: 3 of 3 (complete)
+Phase: 20 (worker-3-h-te-doc-engines) — EXECUTING
+Plan: 3 of 5
 
 ## Accumulated Context
 
@@ -284,7 +284,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 19-03-PLAN.md — Phase 19 ready_for_verification
+Stopped at: Completed 20-02-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)

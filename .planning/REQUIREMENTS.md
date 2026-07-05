@@ -24,10 +24,10 @@
 
 ### WORK — Worker 3ᵉ hôte
 
-- [ ] **WORK-01** : Image Docker prunée (`turbo prune`, pm2-runtime × 3 workers closure/veille/factures, poppler-utils) déployée sur Railway ou Fly EU ; Gotenberg + WeasyPrint en services privés siblings
+- [x] **WORK-01** : Image Docker prunée (`turbo prune`, pm2-runtime × 3 workers closure/veille/factures, poppler-utils) déployée sur Railway ou Fly EU ; Gotenberg + WeasyPrint en services privés siblings
 - [ ] **WORK-02** : Décision Redis tranchée (Upstash vs Redis co-localisé sur le worker host) sur facturation observée 24 h
 - [ ] **WORK-03** : Pack closure complet généré 100 % cloud (Mac éteint de la boucle), worker recalibré (timeout 600s→~120s, concurrency ajustée)
-- [ ] **WORK-04** : Décision pdftoppm/OCR tranchée et implémentée — soit dégradation texte-seul assumée sur Vercel avec message utilisateur, soit rasterisation relocalisée worker. Pas de dégradation silencieuse (pilier #4)
+- [x] **WORK-04** : Décision pdftoppm/OCR tranchée et implémentée — soit dégradation texte-seul assumée sur Vercel avec message utilisateur, soit rasterisation relocalisée worker. Pas de dégradation silencieuse (pilier #4)
 
 ### APP — Vercel
 
@@ -78,10 +78,10 @@
 | STOR-03 | Phase 18 | Complete |
 | DB-01 | Phase 19 | Complete |
 | DB-02 | Phase 19 | Complete |
-| WORK-01 | Phase 20 | Pending |
+| WORK-01 | Phase 20 | Complete |
 | WORK-02 | Phase 20 | Pending |
 | WORK-03 | Phase 20 | Pending |
-| WORK-04 | Phase 20 | Pending |
+| WORK-04 | Phase 20 | Complete |
 | APP-01 | Phase 21 | Pending |
 | APP-02 | Phase 21 | Pending |
 | APP-03 | Phase 21 | Pending |
