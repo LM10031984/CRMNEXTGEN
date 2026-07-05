@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-07-05T06:24:22.513Z"
+stopped_at: Completed 19-03-PLAN.md — Phase 19 ready_for_verification
+last_updated: "2026-07-05T06:32:38.487Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # STATE — QualiOF
@@ -27,12 +27,14 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 
 ## Current Position
 
-Phase: 19 (base-postgres-supabase-pooler-migrations-baselin-es) — EXECUTING
-Plan: 3 of 3
+Phase: 19 (base-postgres-supabase-pooler-migrations-baselin-es) — READY FOR VERIFICATION
+Plan: 3 of 3 (complete)
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-05 — **Plan 19-03 livré — PHASE 19 PROUVÉE (3/3, ready_for_verification)** (Wave 3, smoke runtime cloud DB-01/DB-02 — phase gate). **Checkpoint human-verify résolu AUTONOME** sur délégation explicite de Laurent (« gère tout toi stp », même modalité Phase 18) : le smoke a été **exécuté par l'orchestrateur** et son evidence brute consignée dans `19-SMOKE.md` comme base d'approbation. **`db:smoke:cloud` exit 0 → « [db-smoke] ALL 4 CRITERIA PROVEN »** contre le Supabase réel (`gntlqyscahbgjrmsbzil`, **West EU Irlande**, **PostgreSQL 17.6**, `aws-0-eu-west-1`). **DB-02 les 4 preuves runtime** : (#2 round-trip poolé) `[round-trip] 5 reads OK` sur :6543 + `[serializable-tx] interactive tx OK under pooler` (pattern EXACT `bumpAndFinalize`) — **AUCUN « prepared statement already exists »** (grep=0) ; (#3 extensions) `similarity('Dupont','Dupond')=0.5555556 > 0` + `unaccent('Éléonore')='Eleonore'` → `[extensions] pg_trgm similarity=0.5555556, unaccent OK` ; (#4 INSERT) `[insert-test] UUID PK INSERT+delete OK` sur `AuditLog` (id UUID, delete immédiat), run 2× → UUID différent, **aucune collision**. **DB-01** (via `DIRECT_URL` :5432) : `prisma migrate status` = **« Database schema is up to date! »** + `migrate deploy` = **« No pending migrations to apply. »**, `_prisma_migrations` = **`["0_init"]`** (aucune ligne stale) ; extensions re-confirmées 4/4 (`pg_trgm`/`unaccent` public, `pgcrypto`/`uuid-ossp` extensions). **`19-SMOKE.md` créé** (calqué `18-SMOKE.md`) : section RÉSULTATS DE VALIDATION datée, 4 tableaux Étape|Commande|Attendu|Résultat|Date remplis, sorties brutes DB-01/DB-02, note **0 autoincrement** (collision PK structurellement impossible), phase gate coché. **Repli worker → :5432 (dette Phase 20) NON déclenché** : la tx Serializable **passe** sous le pooler (aucun 40001). **0 bug applicatif** révélé (contrairement aux 3 bugs de 18-SMOKE). **1 déviation Rule 3** : le binaire `dotenv-cli` (invoqué par le script racine `db:smoke:cloud`) **n'est pas installé** → `sh: dotenv: command not found` → **contourné par `tsx --env-file=../../.env`** (même `.env`, même script, mêmes URLs cloud — seul le loader change) ; **dette légère** consignée (ajouter `dotenv-cli` en devDep OU passer à `tsx --env-file`, Phase 20/quick). 2 commits `a41c1f8`(docs squelette)/`065db29`(docs finalisé). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **DB-01 + DB-02 satisfaits RUNTIME** → Phase 19 = **saine ET prouvée**. Prochain : `/gsd:verify-work 19` puis `/gsd:plan-phase 20` (Worker 3ᵉ hôte).
 
 - 2026-07-05 — **Plan 19-02 livré** (Wave 2, câblage URLs cloud + baseline collapse — DB-01 + moitié DB-02). **Checkpoint Task 0 résolu AUTONOME** sur délégation explicite de Laurent (« j'en sais rien pour le password et gère tout toi stp ») : credentials de `.env.local.cloud-backup` **VÉRIFIÉES par connexion réelle** (`select version()` OK sur pooler :6543 ET direct :5432 → PostgreSQL 17.6, hostname `aws-0-eu-west-1` confirmé). Pas de psql/pg installés → vérif via `PrismaClient` datasources override. **Task 1** : `.env` racine câblé — `DATABASE_URL` = transaction pooler :6543 avec `?pgbouncer=true&connection_limit=1` (le `&connection_limit=1` était ABSENT du backup, ajouté), `DIRECT_URL` = session pooler :5432 sans pgbouncer ; `.env.example` documente le format (placeholders, aucun secret). `.env` gitignore → non commité (secret sauf). **Task 2 — baseline collapse** : `migrate status` AVANT montrait « up to date » avec 29 lignes `_prisma_migrations` (héritées du dump) MAIS `migrate diff` a révélé que la base cloud **divergeait de `schema.prisma`** — 3 objets db-push manquants (`TrainingProduct.derouleJson`, `RevenueTarget`, `SessionCalendarSync`, ajoutés localement après le dump). **`0_init` généré** via `migrate diff --from-empty` (1493 lignes, 47 CREATE TABLE, 28 CREATE TYPE), **29 migrations archivées** dans `packages/db/prisma/archived-db-push/` (+ README collapse). **Drift db-push APPLIQUÉ** à la base cloud en forward (`db execute`, 0 DROP) → `migrate diff` post = « No difference detected ». **`_prisma_migrations` réconcilié** : 29 lignes stale supprimées (snapshotées AVANT dans `artifacts/prisma-migrations-before-baseline.json` — filet de sécurité, pg_dump absent) puis `resolve --applied 0_init`. **`migrate deploy` = « No pending migrations » (vert via DIRECT_URL :5432)**, **`migrate status` = « up to date »**, `_prisma_migrations` = uniquement `0_init`. **Task 3 — extensions** : les 4 (`pgcrypto`, `uuid-ossp`, `pg_trgm`, `unaccent`) confirmées via `pg_extension` (COUNT=4/4) — jouées via Prisma `$executeRawUnsafe` sur DIRECT_URL (PAS le SQL Editor, sur instruction Laurent ; role suffisamment privilégié). `pg_trgm`/`unaccent` restent en schéma `public` (setup Supabase d'origine, `if not exists` idempotent), `pgcrypto`/`uuid-ossp` en `extensions`. **3 déviations** : **Rule 2** (application du drift db-push — le plan résolvait l'historique mais pas la désync réelle du schéma ; sans les 3 objets, worker/app cassent) ; **Rule 3** (archive déplacée de `migrations/` vers `prisma/` — Prisma échouait `P3015` sur le README sans migration.sql) ; **Rule 3** (nettoyage des 29 lignes stale pour un collapse propre). **Sorties CLI brutes consignées dans 19-02-SUMMARY** (alimentent 19-SMOKE.md du plan 19-03). 2 commits `bbe7fcd`(feat URLs)/`4f70475`(feat baseline+archive+snapshot). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **⚠ `.env` racine pointe désormais le cloud Supabase en local** (worker/app parlent au cloud) — restaurer un backup local si retour Docker voulu. DB-01 (baseline + migrate deploy vert + status clean) et moitié DB-02 (2 URLs câblées + 4 extensions) satisfaits. Prochain : Plan 19-03 (`db:smoke:cloud` — preuve runtime round-trip pooler / tx Serializable / extensions / INSERT contre la base réelle).
 
@@ -282,7 +284,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 19-02-PLAN.md
+Stopped at: Completed 19-03-PLAN.md — Phase 19 ready_for_verification
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)

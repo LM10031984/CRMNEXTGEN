@@ -30,7 +30,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 
 - [x] **Phase 17: Fondations cloud (région EU + env)** — Verrouiller la région EU des 4 plateformes et fermer le gap `env.ts` (5 clés cloud + `DOC_ENGINE_TOKEN` câblé) avant toute création de projet (completed 2026-07-04)
 - [x] **Phase 18: Supabase Storage (migration objets + direct-to-storage)** — Buckets privés opérationnels, objets MinIO migrés sans lien mort, upload photos CNI/RIB direct-to-storage (contourne le cap 4,5 MB Vercel) (completed 2026-07-04)
-- [ ] **Phase 19: Base Postgres Supabase (pooler + migrations baselinées)** — Postgres EU provisionné, drift `db push` résolu, `migrate deploy` vert, URLs poolée/directe câblées, extensions + séquences alignées
+- [x] **Phase 19: Base Postgres Supabase (pooler + migrations baselinées)** — Postgres EU provisionné, drift `db push` résolu, `migrate deploy` vert, URLs poolée/directe câblées, extensions + séquences alignées (completed 2026-07-05)
 - [ ] **Phase 20: Worker 3ᵉ hôte + doc engines** — Image Docker prunée (3 workers + Gotenberg + WeasyPrint + poppler) sur Railway/Fly EU, décision Redis tranchée, pack closure généré 100 % cloud, OCR non dégradé silencieusement
 - [ ] **Phase 21: App Vercel + filet CI/tests** — App Next.js sur Vercel EU (staging dégelé, cookies Lucia OK, PDF synchrones via ingress public authentifié) + GitHub Actions + E2E closure + smoke routes verts avant bascule
 - [ ] **Phase 22: Bascule prod + conformité RGPD** — Runbook + rollback, dump final restauré, DNS pointé, invitations équipe, pack témoin go/no-go, alertes coûts + backups, DPA des 6 sous-traitants soldé
@@ -79,7 +79,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 **Plans**: 3 plans
 - [x] 19-01-PLAN.md — Script de preuve cloud `db-smoke-cloud.ts` (round-trip poolé 5 hits + tx Serializable + extensions trigram/unaccent + INSERT UUID) — DB-01/DB-02 [autonome]
 - [x] 19-02-PLAN.md — Câbler les 2 URLs pooler (:6543 ?pgbouncer=true / :5432 session) + baseline collapse `0_init` + archiver 29 migrations + migrate deploy/status verts + extensions actives — DB-01/DB-02 [checkpoint: password+hostname+backup]
-- [ ] 19-03-PLAN.md — Smoke cloud gaté Laurent : exécuter les 4 preuves + `19-SMOKE.md` (0 séquence documenté, PK UUID) — DB-01/DB-02 [checkpoint: human-verify]
+- [x] 19-03-PLAN.md — Smoke cloud gaté Laurent : exécuter les 4 preuves + `19-SMOKE.md` (0 séquence documenté, PK UUID) — DB-01/DB-02 [checkpoint: human-verify]
 **Research flags** (à reprendre au plan) : [VERIFY] hostname Supavisor exact (dashboard, pas training data) · `unaccent` dans la liste d'extensions Supabase · IPv4 add-on pour connexion directe :5432 depuis l'hôte worker · audit des `$transaction(async` interactifs (closure batch, avoirs, réconciliation) → batch array / session mode / déporter worker.
 
 ### Phase 20: Worker 3ᵉ hôte + doc engines
@@ -129,7 +129,7 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 |-------|-----------|----------------|--------|-----------|
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
-| 19. Base Postgres | v6 | 2/3 | In Progress|  |
+| 19. Base Postgres | v6 | 3/3 | Complete   | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 0/TBD | Not started | - |
 | 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
