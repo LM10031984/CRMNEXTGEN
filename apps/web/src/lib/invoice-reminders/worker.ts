@@ -1,14 +1,14 @@
 /**
- * Phase 11 Plan 11-06 — Worker BullMQ "invoice-reminders-daily" (FACT-03).
+ * Phase 11 Plan 11-06 → Phase 20 Plan 20-01 — Handler relances factures (croner).
  *
- * Clone-strict du pattern Phase 2.2 `closure/worker.ts` :
- *  - `startInvoiceReminderWorker()` enregistre les listeners completed/failed/error
- *  - `scheduleDailyReminders()` inscrit un job repeatable cron via `getInvoiceReminderQueue()`
- *  - `processReminderJob()` (handler interne, exporté pour testabilité) scan
- *    tous les tenants, pour chaque tenant lit `invoiceReminderDays`, scanne les
- *    factures éligibles (filtre R2 + skip lastReminderAt < 24h + skip niveau
- *    max atteint), puis appelle `sendInvoiceReminder({triggered_by:'cron'})` pour
- *    chaque ligne.
+ * WORK-02 (D-03 « Redis viré partout ») : ce handler ne dépend plus de BullMQ.
+ * Il accepte un payload neutre `{ triggered_by }` et est appelé par le cron
+ * interne `scripts/invoice-reminder-worker.ts` (croner, quotidien 8h Europe/Paris).
+ *
+ *  - `processReminderJob()` scanne tous les tenants, pour chaque tenant lit
+ *    `invoiceReminderDays`, scanne les factures éligibles (filtre R2 + skip
+ *    lastReminderAt < 24h + skip niveau max atteint), puis appelle
+ *    `sendInvoiceReminder({triggered_by:'cron'})` pour chaque ligne.
  *
  * D-09 : la server action `sendInvoiceReminder` est partagée cron + manual.
  * D-13b : idempotence 24h appliquée côté worker (defense-in-depth) ET côté action.
@@ -18,14 +18,8 @@
  * au premier démarrage en prod.
  */
 
-import { Worker, type Job } from 'bullmq';
 import { prisma } from '@qualiof/db';
-import { getWorkerRedis } from '../closure/redis';
 import { sendInvoiceReminder } from '@/server/actions/invoices';
-import {
-  getInvoiceReminderQueue,
-  INVOICE_REMINDER_QUEUE_NAME,
-} from './queue';
 
 /**
  * R2 (RESEARCH §Risques) — Date de mise en service Phase 11.
@@ -34,23 +28,19 @@ import {
  */
 export const REMINDER_START_DATE = new Date('2026-05-19T00:00:00Z');
 
-interface ReminderJobPayload {
-  triggered_by: 'cron' | 'manual_admin_trigger';
-}
-
 const REMINDER_DEDUP_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Scan tous les tenants → toutes les factures éligibles → appelle
  * `sendInvoiceReminder({triggered_by:'cron'})` pour chacune.
  * Retourne le nombre de relances effectivement envoyées (ok=true) — utile pour
- * les logs `worker.on('completed')` et pour les tests.
+ * les logs et pour les tests.
  */
-export async function processReminderJob(
-  job: Job<ReminderJobPayload>,
-): Promise<{ processed: number }> {
+export async function processReminderJob(input: {
+  triggered_by: 'cron' | 'manual_admin_trigger';
+}): Promise<{ processed: number }> {
   console.log('[invoice-reminder-worker] tick', {
-    triggered_by: job.data.triggered_by,
+    triggered_by: input.triggered_by,
   });
 
   const tenants = await prisma.tenant.findMany({
@@ -108,57 +98,4 @@ export async function processReminderJob(
 
   console.log('[invoice-reminder-worker] processed', { processed });
   return { processed };
-}
-
-export function startInvoiceReminderWorker(): Worker<ReminderJobPayload> {
-  const worker = new Worker<ReminderJobPayload>(
-    INVOICE_REMINDER_QUEUE_NAME,
-    processReminderJob as never,
-    {
-      connection: getWorkerRedis(),
-      concurrency: 1,
-    },
-  );
-
-  worker.on('completed', (job, result) => {
-    console.log('[invoice-reminder-worker] completed', {
-      jobId: job.id,
-      result,
-    });
-  });
-  worker.on('failed', (job, err) => {
-    console.error('[invoice-reminder-worker] failed', {
-      jobId: job?.id,
-      err: err.message,
-    });
-  });
-  worker.on('error', (err) => {
-    console.error('[invoice-reminder-worker] error', err);
-  });
-
-  console.log(
-    `[invoice-reminder-worker] started (queue="${INVOICE_REMINDER_QUEUE_NAME}")`,
-  );
-  return worker;
-}
-
-/**
- * Inscrit le job repeatable cron daily à 8h00 Europe/Paris.
- * Idempotent grâce au `jobId` fixe `'daily-reminders-cron'` (BullMQ dédoublonne).
- *
- * Doit être appelé au boot du process worker (cf `scripts/invoice-reminder-worker.ts`).
- */
-export async function scheduleDailyReminders(): Promise<void> {
-  const queue = getInvoiceReminderQueue();
-  await queue.add(
-    'daily-reminders',
-    { triggered_by: 'cron' as const },
-    {
-      repeat: { pattern: '0 8 * * *', tz: 'Europe/Paris' },
-      jobId: 'daily-reminders-cron',
-    },
-  );
-  console.log(
-    '[invoice-reminder-worker] daily cron registered (08:00 Europe/Paris)',
-  );
 }
