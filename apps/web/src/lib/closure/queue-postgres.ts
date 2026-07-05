@@ -29,6 +29,35 @@ const MAX_ATTEMPTS = 3;
 const STALL_RECLAIM_AFTER_MIN = 15; // jobs PROCESSING > 15min → re-claim
 
 /**
+ * Nom logique de la file (conservé pour compat / logs). Il n'y a plus de
+ * broker externe : la file EST la table `ClosureJob`.
+ */
+export const CLOSURE_QUEUE_NAME = 'closure-generation';
+
+/**
+ * « Enqueue » d'un job closure dans la file Postgres.
+ *
+ * Depuis la bascule cloud v6 (Redis viré), l'enfilement réel = l'INSERT de la
+ * ligne `ClosureJob` (fait par closure-pack.ts / prepare-training.ts /
+ * dispatch-generate-doc.ts). Cette fonction est donc IDEMPOTENTE : elle garantit
+ * simplement que le job existe en statut `QUEUED` (reset propre d'un job déjà
+ * inséré, ou d'un orphelin en PROCESSING/ERROR relancé). Le worker
+ * `closure-worker-postgres.ts` le récupérera au prochain poll via
+ * `FOR UPDATE SKIP LOCKED`. AUCUNE connexion Redis n'est ouverte.
+ */
+export async function enqueueClosureJob(payload: ClosureJobPayload): Promise<void> {
+  await prisma.closureJob.update({
+    where: { id: payload.jobId },
+    data: {
+      status: 'QUEUED',
+      startedAt: null,
+      completedAt: null,
+      errorMessage: null,
+    },
+  });
+}
+
+/**
  * Claim atomique : passe `limit` jobs en PROCESSING et retourne leurs payloads.
  * `FOR UPDATE SKIP LOCKED` garantit qu'un autre worker ne prendra pas les
  * mêmes jobs, même si on lance la query en parallèle.

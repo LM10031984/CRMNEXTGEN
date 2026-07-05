@@ -85,15 +85,6 @@ vi.mock('../../of-config', () => ({
   loadOfConfig: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock('../redis', () => ({
-  getWorkerRedis: vi.fn().mockReturnValue({}),
-}));
-
-vi.mock('../queue', () => ({
-  CLOSURE_QUEUE_NAME: 'closure-generation',
-  enqueueClosureJob: vi.fn(),
-}));
-
 import { prisma } from '@qualiof/db';
 import { processClosureJobPayload } from '../worker';
 import type { ClosureJobPayload } from '../types';

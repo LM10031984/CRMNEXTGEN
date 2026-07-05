@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 
 const { prisma } = await import('@qualiof/db');
-const { enqueueClosureJob } = await import('../src/lib/closure/queue');
+const { enqueueClosureJob } = await import('../src/lib/closure/queue-postgres');
 const { CLOSURE_DOC_KINDS } = await import('../src/lib/closure/types');
 const { downloadFile, DOCS_BUCKET } = await import('../src/lib/storage');
 const { normalizeGender } = await import('../src/lib/closure/shared-template');

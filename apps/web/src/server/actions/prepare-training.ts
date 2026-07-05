@@ -9,7 +9,7 @@ import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
-import { enqueueClosureJob } from '@/lib/closure/queue';
+import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
 
 export interface PrepareTrainingResult {

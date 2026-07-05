@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { prisma } from '@qualiof/db';
-import { enqueueClosureJob } from '../src/lib/closure/queue';
+import { enqueueClosureJob } from '../src/lib/closure/queue-postgres';
 import { downloadFile, DOCS_BUCKET } from '../src/lib/storage';
 const sess = await prisma.trainingSession.findFirstOrThrow({ where: { code: 'SES-0032' }, select: { id: true, tenantId: true, participants: { where: { person: { firstName: { contains: 'Caroline', mode: 'insensitive' } } }, select: { id: true } } } });
 const p = sess.participants[0]!;

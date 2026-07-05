@@ -10,7 +10,7 @@ const { findMany, updateMany, enqueue } = vi.hoisted(() => ({
 vi.mock('@qualiof/db', () => ({
   prisma: { closureJob: { findMany, updateMany } },
 }));
-vi.mock('../queue', () => ({ enqueueClosureJob: enqueue }));
+vi.mock('../queue-postgres', () => ({ enqueueClosureJob: enqueue }));
 
 import { requeueStuckClosureJobs } from '../requeue';
 

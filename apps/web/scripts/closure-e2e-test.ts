@@ -17,7 +17,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { prisma } from '@qualiof/db';
 import { CLOSURE_DOC_KINDS } from '../src/lib/closure/types';
-import { enqueueClosureJob } from '../src/lib/closure/queue';
+import { enqueueClosureJob } from '../src/lib/closure/queue-postgres';
 
 const SESSION_CODE = process.argv[2] ?? 'SES-0010';
 const RESUME_BATCH_ID = process.env.RESUME_BATCH_ID ?? null;

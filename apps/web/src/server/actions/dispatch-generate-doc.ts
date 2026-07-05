@@ -27,7 +27,7 @@ import { generateConventionForParticipant } from './convention-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
-import { enqueueClosureJob } from '@/lib/closure/queue';
+import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import type {
   DispatchableDocType,
   DispatchGenerateDocInput,

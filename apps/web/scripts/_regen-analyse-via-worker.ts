@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 
 const { prisma } = await import('@qualiof/db');
-const { enqueueClosureJob } = await import('../src/lib/closure/queue');
+const { enqueueClosureJob } = await import('../src/lib/closure/queue-postgres');
 const { downloadFile, DOCS_BUCKET } = await import('../src/lib/storage');
 
 const sp = await prisma.sessionParticipant.findFirstOrThrow({

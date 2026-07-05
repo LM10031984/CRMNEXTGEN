@@ -60,9 +60,8 @@ vi.mock('@/lib/rbac', async () => {
   };
 });
 
-vi.mock('../queue', () => ({
+vi.mock('../queue-postgres', () => ({
   enqueueClosureJob: vi.fn().mockResolvedValue(undefined),
-  getClosureQueue: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('../../storage', () => ({
@@ -93,7 +92,7 @@ vi.mock('next/cache', () => ({
 
 import { prisma } from '@qualiof/db';
 import { requireRole } from '@/lib/rbac';
-import { enqueueClosureJob } from '../queue';
+import { enqueueClosureJob } from '../queue-postgres';
 import { generateClosurePack } from '@/server/actions/closure-pack';
 
 const sessionFindFirst = prisma.trainingSession.findFirst as unknown as ReturnType<typeof vi.fn>;

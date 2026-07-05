@@ -1,5 +1,5 @@
 import { prisma } from '@qualiof/db';
-import { enqueueClosureJob } from '../src/lib/closure/queue';
+import { enqueueClosureJob } from '../src/lib/closure/queue-postgres';
 const sess = await prisma.trainingSession.findFirstOrThrow({
   where: { code: 'SES-0032' },
   select: { id: true, tenantId: true, participants: { where: { enrollmentStatus: { in: ['PRE_ENROLLED','CONFIRMED','ATTENDED'] } }, select: { id: true } } },

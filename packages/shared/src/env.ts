@@ -38,7 +38,6 @@ export const sharedEnv = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     DATABASE_URL: z.string().url(),
-    REDIS_URL: z.string().url().optional(),
 
     // Storage
     S3_ENDPOINT: z.string().url().default('http://localhost:9000'),
@@ -114,7 +113,6 @@ export const sharedEnv = createEnv({
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
-    REDIS_URL: process.env.REDIS_URL,
     S3_ENDPOINT: process.env.S3_ENDPOINT,
     S3_REGION: process.env.S3_REGION,
     S3_ACCESS_KEY: process.env.S3_ACCESS_KEY,
