@@ -19,7 +19,6 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { createSignedUploadUrl, DOCS_BUCKET, PREENROLLMENT_BUCKET } from '@/lib/storage';
-import { extractPreEnrollmentDocuments } from '@/lib/preinscription-extractor';
 
 export type ApprenantDocKind = 'CNI' | 'RIB' | 'CFP';
 
@@ -158,12 +157,10 @@ export async function confirmPreEnrollmentUpload(
 
   revalidatePath('/app/inscriptions');
 
-  // Recâblage OCR (Pitfall 4) : fire-and-forget, l'utilisateur a déjà sa confirmation.
-  Promise.resolve().then(() =>
-    extractPreEnrollmentDocuments(pe.id).catch((err) =>
-      console.error('Extraction IA échouée pour', pe.id, err),
-    ),
-  );
+  // Phase 20 WORK-04 : l'OCR n'est PLUS déclenché ici (fire-and-forget mort en
+  // serverless Vercel + pas de pdftoppm). La PreEnrollment reste en statut SUBMITTED ;
+  // le worker cloud (preinscription-ocr-worker) la poll et exécute l'extraction sur
+  // l'hôte qui possède poppler. Flux utilisateur identique (confirmation immédiate).
 
   return { ok: true };
 }

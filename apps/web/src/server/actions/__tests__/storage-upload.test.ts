@@ -18,12 +18,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     createSignedUploadUrl appelé avec DOCS_BUCKET.
  *  2. createApprenantUploadUrl sans user → { ok:false, error:'Non authentifié' }.
  *  3. createPreEnrollmentUploadUrl('badtok',…) prisma → null → { ok:false, error:'Lien invalide' }.
- *  4. confirmPreEnrollmentUpload valide → extractPreEnrollmentDocuments appelé
- *     EXACTEMENT 1 fois (recâblage OCR prouvé, mutation-safe).
+ *  4. (WORK-04) confirmPreEnrollmentUpload valide → laisse la row en SUBMITTED
+ *     (queue OCR alimentée) et NE déclenche PLUS extractPreEnrollmentDocuments
+ *     (l'OCR fire-and-forget est mort en serverless — le worker long-vivant poll).
  *  5. createPreEnrollmentUploadUrl token expiré → { ok:false, error:'Ce lien a expiré' }.
- *
- * Test de puissance (convention projet) : retirer l'appel extractPreEnrollmentDocuments
- * de confirmPreEnrollmentUpload → Test 4 ROUGE → restaurer → 5/5.
  */
 
 // vi.hoisted : les factories vi.mock sont hoistées AU-DESSUS des const → le mock
@@ -111,7 +109,11 @@ describe('storage-upload server actions', () => {
     expect(createSignedUploadUrlMock).not.toHaveBeenCalled();
   });
 
-  it('Test 4: confirmPreEnrollmentUpload valide → OCR recâblé exactement 1 fois', async () => {
+  it('Test 4 (WORK-04): confirmPreEnrollmentUpload valide → laisse SUBMITTED, NE déclenche PLUS l’OCR', async () => {
+    // Phase 20 WORK-04 : l'OCR n'est plus déclenché en fire-and-forget dans la
+    // server action (mort en serverless Vercel + pas de pdftoppm). La row reste
+    // SUBMITTED et le worker OCR long-vivant la poll. On prouve donc l'INVERSE :
+    // status SUBMITTED persisté (queue alimentée) ET extractMock jamais appelé.
     findUniqueMock.mockResolvedValue({
       id: 'pe1',
       token: 'goodtok',
@@ -133,11 +135,13 @@ describe('storage-upload server actions', () => {
       },
     );
     expect(res.ok).toBe(true);
-    // Laisse la microtask fire-and-forget s'exécuter.
+    // Queue OCR alimentée : la row est persistée en statut SUBMITTED.
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock.mock.calls[0]![0].data.status).toBe('SUBMITTED');
+    // L'OCR n'est PLUS déclenché ici (le worker prend le relais via poll).
     await Promise.resolve();
     await Promise.resolve();
-    expect(extractMock).toHaveBeenCalledTimes(1);
-    expect(extractMock).toHaveBeenCalledWith('pe1');
+    expect(extractMock).not.toHaveBeenCalled();
   });
 
   it('Test 5: createPreEnrollmentUploadUrl token expiré → Ce lien a expiré', async () => {
