@@ -53,12 +53,14 @@ export function BatchRegenBar({
   const [selectedKinds, setSelectedKinds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
-  if (selectedParticipantsCount === 0) return null;
-
+  // Hook AVANT tout early-return : sinon l'ordre des hooks change entre renders
+  // (rules-of-hooks, révélé par le 1er passage ESLint réel, 21-03).
   const batchableKinds = useMemo(
     () => Object.keys(DOC_TYPE_TO_CLOSURE_KIND).filter((k) => DOC_TYPE_TO_CLOSURE_KIND[k] != null),
     [],
   );
+
+  if (selectedParticipantsCount === 0) return null;
 
   function toggleKind(kind: string, next: boolean) {
     setSelectedKinds((prev) => {
