@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Completed 21-06-PLAN.md — Phase 21 complète, prête pour /gsd:verify-work 21"
-last_updated: "2026-07-06T15:35:13.937Z"
+stopped_at: Completed 22-01-PLAN.md (runbook de bascule + rollback)
+last_updated: "2026-07-06T20:29:33.047Z"
 last_activity: 2026-07-06
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 31
+  completed_plans: 22
 ---
 
 # STATE — QualiOF
@@ -21,18 +21,20 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 
 **Core value:** 4 piliers co-essentiels : Pack 1-clic Qualiopi + Trésorerie OPCO/AGEFICE + CRM 360° multi-casquette + Pré-inscriptions IA self-service — désormais à faire tourner en prod cloud multi-utilisateurs sans le Mac de Laurent.
 
-**Current focus:** Phase 21 — app-vercel-filet-ci-tests
+**Current focus:** Phase 22 — bascule-prod-conformit-rgpd
 
 ---
 
 ## Current Position
 
-Phase: 21 (app-vercel-filet-ci-tests) — EXECUTING
-Plan: 6 of 6
+Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
+Plan: 2 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-06 — **Plan 22-01 livré — runbook de bascule + rollback ÉCRITS AVANT la fenêtre (CUT-01 partie littérale)** (Wave 1). `22-CUTOVER-RUNBOOK.md` (415 lignes, sections §0–§9 référençables par 22-06..22-10) : §0 checklist fenêtre (Phase 20 close + 22-DATA-GAP-AUDIT PASS + storage 0 lien mort + sanity env + gate RGPD 7 fiches DPA + CI verte), §1 sanity env D-18 ② (sanity-check-env.ts regex `[^\x20-\x7E]|#| +$`, sensitive NON relisibles → re-pose assainie + preuve auto-fill), §2 Flip 1 (3 vars Google sensitive — Pitfall 3, valeurs par chemin de fichier jamais copiées ; `NEXT_PUBLIC_APP_ENV=production` + redeploy OBLIGATOIRE, MAIL_DRY_RUN reste true partout), §3 gate SES-0094 6 critères (0 stub, footer 22 OF_*, 0 404, %PDF-, sans filigrane D-08), §4 Flip 2 séquence stricte D-06 (22-PENDING-SENDS-REPORT.md incl. relances brûlées dry-run Pitfall 1 → validation Laurent → `MAIL_DRY_RUN=false` Vercel ET Railway — Pitfall 10 → messageId réel), §5 invitations via inviteUser, §6 alertes coûts 4 plateformes SANS auto-pause/hard limit bas (Pitfall 5) + backups Supabase eu-west-1, §7 avertissements (case notifier apprenants devient réelle, 402 OpenRouter, MinIO non purgé → 22-10), **§8 rollback D-04** (tableau exact 3 lignes re-flag staging ~5 min, base cloud RESTE la vérité, 3 vars Google conservables — garde sync-session.ts:84), **§9 gabarit evidence 9.1–9.7**. Chemin nominal 100 % dashboard (commandes CLI = Claude, pattern 21-04). 0 déviation. Commits `3cfaefe`(§0–§7)/`f7be03e`(§8–§9), `--no-verify` (parallel executor). ⚠ CUT-01 NON coché (partagé par 8 plans — même logique que TEST-01/02 au 21-02). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : plans 22-02..22-05 (Wave 1) puis exécution du runbook (22-06+).
 
 - 2026-07-06 — **Plan 21-06 livré — TEST-01 + APP-03 prouvés, PHASE 21 COMPLÈTE (6/6)**. closure-flow.spec.ts vert contre https://qualiof.vercel.app : session E2E- créée via wizard UI (produit E2E- Prisma, 2 participants via picker), pack closure IA OpenRouter RÉEL consommé par le worker Railway = 16/16 « Terminé » en 89 s, 0 stub (UI + Prisma usedStub=false), %PDF- sur un doc du pack ET sur la convocation SYNCHRONE rendue par Vercel (doc-engine public + Bearer = APP-03 ; ce PDF porte le filigrane STAGING, les docs worker non — attendu). teardown-e2e-data.ts idempotent (purge exclusive E2E-, garde anti-deleteMany-global, storage inclus) : run à blanc ET post-run = tous compteurs 0. 21-SMOKE.md consolidé (6 requirements, sorties brutes, 4 items MANUAL/reportés) + 21-VALIDATION 17/17 green. PR #7 mergée en MERGE COMMIT (77c3f20) après gate CI vert — main = cloud-migration (0/0), CI + Deploy migrations success post-merge. 4 déviations outillage test (poll waitFor vs count post-reload, reporter html open:never, retries=0 sur E2E payant, .gitignore pwd local). Coût OpenRouter ~centimes (3 packs dont 2 de mise au point).
 
@@ -296,7 +298,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 21-06-PLAN.md — Phase 21 complète, prête pour /gsd:verify-work 21
+Stopped at: Completed 22-01-PLAN.md (runbook de bascule + rollback)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
