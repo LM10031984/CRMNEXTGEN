@@ -53,6 +53,31 @@ const SUPABASE_SERVICE_ROLE_KEY = sharedEnv.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 let _supabaseClient: SupabaseClient | null = null;
 
+/**
+ * Polyfill WebSocket global pour Node < 22 (conteneur worker Railway = node:20).
+ * @supabase/supabase-js@2.107 embarque realtime-js dont la websocket-factory
+ * throw « Node.js 20 detected without native WebSocket support » dès qu'un client
+ * est construit sur Node 20 (WebSocket n'est global-stable qu'en Node 22+). On
+ * n'utilise QUE Storage (pas Realtime), mais le client l'évalue quand même →
+ * on fournit l'implémentation `ws` sur globalThis (idempotent, no-op si déjà
+ * présent, ex. Node 22+/Next.js). Bug révélé au smoke runtime Railway (Phase 20-05).
+ */
+function ensureWebSocketPolyfill(): void {
+  if (typeof (globalThis as { WebSocket?: unknown }).WebSocket !== 'undefined') return;
+  try {
+    // Import CJS de `ws` (déjà dans l'arbre de deps via @supabase/*).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createRequire } = require('node:module') as typeof import('node:module');
+    const require2 = createRequire(import.meta.url);
+    (globalThis as { WebSocket?: unknown }).WebSocket = require2('ws');
+  } catch (e) {
+    console.warn(
+      '[storage] WebSocket polyfill (ws) indisponible — Supabase realtime-js peut échouer sur Node < 22 :',
+      (e as Error).message,
+    );
+  }
+}
+
 function supabase(): SupabaseClient {
   if (_supabaseClient) return _supabaseClient;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -60,6 +85,7 @@ function supabase(): SupabaseClient {
       'Supabase Storage : SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY requis dans .env.local',
     );
   }
+  ensureWebSocketPolyfill();
   _supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

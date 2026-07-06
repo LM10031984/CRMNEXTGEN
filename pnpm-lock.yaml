@@ -128,6 +128,9 @@ importers:
       unpdf:
         specifier: ^1.6.2
         version: 1.6.2(@napi-rs/canvas@0.1.100)
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
