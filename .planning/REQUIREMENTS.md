@@ -33,7 +33,7 @@
 
 - [x] **APP-01** : App Next.js déployée Vercel Pro région EU, staging dégelé (flag `NEXT_PUBLIC_APP_ENV`, filigrane staging, garde PDF, `vercel.json` maxDuration par route)
 - [x] **APP-02** : Auth Lucia fonctionnelle sur Vercel (login/logout, cookies secure) + formulaire public `/p/[token]` accessible
-- [ ] **APP-03** : Les ~9 server actions PDF synchrones (convocation, factures, programme, déroulé, veille-export…) passent par l'endpoint doc-engine public authentifié (DOC_ENGINE_TOKEN)
+- [x] **APP-03** : Les ~9 server actions PDF synchrones (convocation, factures, programme, déroulé, veille-export…) passent par l'endpoint doc-engine public authentifié (DOC_ENGINE_TOKEN)
 
 ### CI-TEST — Filet de sécurité
 
@@ -84,7 +84,7 @@
 | WORK-04 | Phase 20 | Complete |
 | APP-01 | Phase 21 | Complete |
 | APP-02 | Phase 21 | Complete |
-| APP-03 | Phase 21 | Pending |
+| APP-03 | Phase 21 | Complete |
 | CI-01 | Phase 21 | Complete |
 | TEST-01 | Phase 21 | Pending |
 | TEST-02 | Phase 21 | Pending |

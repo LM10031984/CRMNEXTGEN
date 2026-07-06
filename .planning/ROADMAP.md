@@ -114,7 +114,7 @@ Plans:
 - [x] 21-01-PLAN.md — Gardes staging code : flag NEXT_PUBLIC_APP_ENV + filigrane PDF testé + garde calendar + sameSite lax + vercel.json cdg1 + postinstall prisma — APP-01/APP-02 [Wave 1]
 - [x] 21-02-PLAN.md — Backfill MinIO→Supabase (D-06, bug SES-0094) : DRY→WRITE + rapport 0 lien mort, MinIO non purgé — prérequis TEST-01/02 [Wave 1]
 - [x] 21-03-PLAN.md — CI GitHub Actions (lint+tsc+vitest, Postgres 16 service, image worker) + merge cloud-migration→main + branch protection + PR témoin — CI-01 [Wave 2]
-- [ ] 21-04-PLAN.md — Runbook + déploiement Vercel Pro cdg1 (env ~35 clés dont 22 OF_*, domaine final, WAF rate-limit /preinscription) + vérif curl — APP-01/02/03 [Wave 3, checkpoint: dashboard]
+- [x] 21-04-PLAN.md — Runbook + déploiement Vercel Pro cdg1 (env ~35 clés dont 22 OF_*, domaine final, WAF rate-limit /preinscription) + vérif curl — APP-01/02/03 [Wave 3, checkpoint: dashboard]
 - [ ] 21-05-PLAN.md — Playwright infra (user e2e dédié, storageState) + smoke ~10 routes 4 piliers + re-validation upload 10 Mo sans 413 — TEST-02/APP-02 [Wave 4]
 - [ ] 21-06-PLAN.md — E2E closure session E2E- jetable (IA réelle, 0 stub, %PDF) + teardown idempotent + 21-SMOKE.md + PR finale — TEST-01/APP-03 [Wave 5]
 **UI hint**: yes
@@ -143,5 +143,5 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 4/5 | In Progress|  |
-| 21. App Vercel + CI | v6 | 3/6 | In Progress|  |
+| 21. App Vercel + CI | v6 | 4/6 | In Progress|  |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
