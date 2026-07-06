@@ -109,6 +109,10 @@ export const sharedEnv = createEnv({
     // se fait au call site upload direct (throw si absent en mode supabase).
     NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+    // Environnement applicatif (Phase 21 APP-01) — staging = filigrane PDF +
+    // bandeau UI + gardes sorties (calendar skip, MAIL_DRY_RUN). Inlinée au
+    // build côté client, lue au runtime côté serveur — les deux via sharedEnv.
+    NEXT_PUBLIC_APP_ENV: z.enum(['development', 'staging', 'production']).default('development'),
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
@@ -160,6 +164,7 @@ export const sharedEnv = createEnv({
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_APP_ENV: process.env.NEXT_PUBLIC_APP_ENV,
   },
   emptyStringAsUndefined: true,
   skipValidation: process.env.SKIP_ENV_VALIDATION === 'true',

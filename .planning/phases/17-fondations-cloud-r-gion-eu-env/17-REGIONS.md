@@ -19,6 +19,17 @@
 
 ---
 
+## Amendement D-05 (Phase 21, 2026-07-06) : Supabase = `eu-west-1` Irlande DÉFINITIVE
+
+**La cible `eu-west-3` (Paris) pour Supabase est caduque.** Le projet Supabase réellement utilisé est **`gntlqyscahbgjrmsbzil`, région West EU (Irlande, `eu-west-1`)** — projet staging du 2026-06-03 réutilisé sur décision de Laurent (Phase 18).
+
+- **RGPD conforme** : l'Irlande est dans l'UE — l'exigence CLOUDENV-01 « région EU » est satisfaite. Seul l'argument secondaire « données en France » tombe.
+- **Preuves d'usage** : base Postgres 17.6 migrée et prouvée (Phase 19 — baseline `0_init`, smoke `db:smoke:cloud` 4/4) + **3109 objets Storage migrés, 0 lien mort** (Phase 18).
+- **Dérogation actée par Laurent** (Phase 18, confirmée arbitrage Phase 21) : la région Supabase étant **immuable** (recréer + migrer sinon), le coût d'un retour Paris n'est pas justifié pour 2-5 utilisateurs internes.
+- **Conséquence** : **ne plus re-proposer Paris pour Supabase.** Les lignes `eu-west-3` ci-dessous sont conservées pour l'historique de la décision D-01 mais sont SUPERSÉDÉES par cet amendement. Vercel reste `cdg1` (Paris), Railway reste `europe-west4`.
+
+---
+
 ## Table des 4 plateformes
 
 | Plateforme | Rôle | Région EU cible | Code région | Statut décision | Immutable ? | Comment fixer EU explicitement |
