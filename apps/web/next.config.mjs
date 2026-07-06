@@ -33,8 +33,11 @@ const nextConfig = {
     // dans le store pnpm à la racine du mono-repo et n'est pas tracé dans le
     // bundle des fonctions (PrismaClientInitializationError au runtime, toutes
     // les routes DB en 500). Copie forcée pour toutes les routes.
+    // ⚠ Pas de `**` récursif dans le chemin : ça fait scanner tout le store
+    // pnpm en phase « Collecting build traces » (build bloqué >10 min).
+    // `@prisma+client*` = un seul segment, résolu par simple listing de .pnpm.
     outputFileTracingIncludes: {
-      '**': ['../../node_modules/.pnpm/**/.prisma/client/*.node'],
+      '**': ['../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/*.node'],
     },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
