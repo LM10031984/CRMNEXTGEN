@@ -23,9 +23,17 @@
  * Coexistence mistral/Claude tracée par PROMPT_VERSION dans AIGenerationJob :
  * les produits déjà FIGÉS (TrainingProduct.derouleJson, prompt v9 mistral) gardent
  * leur contenu — un re-run des produits figés est HORS scope (dette documentée).
+ *
+ * ── v11 (quick 260706-bya) ──────────────────────────────────────────────────
+ * SYSTEM_PROMPT_POSITIONNEMENT : progression avant/après VARIÉE et crédible (fin
+ * du motif tampon 1→4 uniforme qui « faisait faux » pour un auditeur — même risque
+ * ind.2 que les satisfactions uniformes). Départ possible à 3, jamais tout à 4,
+ * motif ancré sur le profil (anti-jumelage). La progression stricte après > avant
+ * est CONSERVÉE = preuve Qualiopi ind.2 de l'acquis. Le garde-fou est verrouillé
+ * en aval par PositionnementSchema.superRefine (après>avant, avant≤3, anti-tampon).
  */
 
-export const PROMPT_VERSION = 'claude-v10-2026-07';
+export const PROMPT_VERSION = 'claude-v11-2026-07';
 
 export const SYSTEM_PROMPT_QCM = `Tu es un expert en ingénierie pédagogique et évaluation de formation professionnelle.
 Tu génères des QCM d'évaluation des acquis pour des formations professionnelles.
@@ -142,8 +150,10 @@ Le questionnaire évalue la maîtrise du stagiaire sur 6 à 8 compétences clés
 
 Règles strictes :
 - Les compétences doivent être SPÉCIFIQUES au programme de la formation (pas génériques).
-- Niveaux AVANT : majoritairement 1 ou 2 (le stagiaire vient se former parce qu'il ne maîtrise pas), 1 ou 2 compétences max en niveau 3.
-- Niveaux APRÈS : majoritairement 3 ou 4 (la formation a apporté une réelle progression). JAMAIS de niveau 1 après. Au moins 70% en niveau 4.
+- PROGRESSION OBLIGATOIRE : pour CHAQUE compétence, le niveau APRÈS est STRICTEMENT supérieur au niveau AVANT (apres > avant, sans aucune exception) — c'est la preuve Qualiopi de l'acquis. Jamais après ≤ avant, jamais de stagnation ni de régression.
+- Niveaux AVANT : entre 1 et 3, JAMAIS 4 (un stagiaire qui vient se former ne maîtrise pas déjà tout). Majoritairement 1 ou 2, MAIS 1 ou 2 compétences peuvent démarrer à 3 quand le profil du stagiaire (ancienneté, fonction) rend une base crédible sur ce thème.
+- Niveaux APRÈS : entre 2 et 4, PAS uniforme. Ne mets PAS 4 partout : certaines compétences finissent à 3 (maîtrise partielle réaliste), d'autres à 4. L'ampleur de la progression VARIE d'une compétence à l'autre (parfois +1, parfois +2, parfois +3).
+- ANTI-TAMPON / ANCRAGE INDIVIDUEL (anti-jumelage) : le MOTIF avant/après doit être PROPRE à ce stagiaire. Deux stagiaires d'une même session ne doivent JAMAIS produire des vecteurs avant/après identiques. Ancre les niveaux de départ et l'ampleur de la progression sur le profil réel (ancienneté, statut, fonction) : un profil expérimenté part de plus haut sur les compétences proches de son métier ; un profil junior part plus bas et progresse plus fort. INTERDIT : un motif « tout 1 → tout 4 » répété tel quel pour chaque stagiaire (ça fait faux pour un auditeur).
 - Le ton du contexte (objectifs, demande, prérequis, commentaires) doit être professionnel et naturel — comme rédigé par le stagiaire.
 
 Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
@@ -152,8 +162,8 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
   "demande_specifique": "string (1-2 phrases — un thème particulier ou une attente précise)",
   "prerequis": "string (1-2 phrases — connaissances préalables du stagiaire)",
   "competences": [
-    { "label": "string (compétence concrète liée au programme)", "avant": 1|2|3, "apres": 3|4 }
-  ] (6 à 8 compétences),
+    { "label": "string (compétence concrète liée au programme)", "avant": 1|2|3, "apres": 2|3|4 }
+  ] (6 à 8 compétences, avec apres > avant pour chacune),
   "commentaires": "string (1-2 phrases — bilan / objectifs personnels)"
 }`;
 
