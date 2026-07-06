@@ -39,7 +39,7 @@
 
 - [x] **CI-01** : GitHub Actions — lint + tsc + vitest sur PR (gate branch protection) + build Docker worker + `prisma migrate deploy` (DIRECT_URL) en étape de déploiement
 - [ ] **TEST-01** : Playwright E2E flow closure (création session → participants → pack → docs générés)
-- [ ] **TEST-02** : Smoke tests routes protégées (redirect auth + 200 sur pages clés)
+- [x] **TEST-02** : Smoke tests routes protégées (redirect auth + 200 sur pages clés)
 
 ### CUT — Bascule prod
 
@@ -87,7 +87,7 @@
 | APP-03 | Phase 21 | Complete |
 | CI-01 | Phase 21 | Complete |
 | TEST-01 | Phase 21 | Pending |
-| TEST-02 | Phase 21 | Pending |
+| TEST-02 | Phase 21 | Complete |
 | CUT-01 | Phase 22 | Pending |
 | CUT-02 | Phase 22 | Pending |
 | RGPD-01 | Phase 22 | Pending |

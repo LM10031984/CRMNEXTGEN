@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@lucia-auth/adapter-prisma": "^4.0.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@types/archiver": "^7.0.0",
     "@types/node": "^22.10.0",

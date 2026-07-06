@@ -42,6 +42,11 @@ coverage/
 playwright-report/
 test-results/
 
+# Playwright (Phase 21) — storageState de session + artefacts de run, jamais commités
+apps/web/e2e/.auth/
+apps/web/test-results/
+apps/web/playwright-report/
+
 # TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
 packages/*/tsconfig.tsbuildinfo
 
@@ -64,3 +69,4 @@ data/uploads/
 .env.*.backup
 backups/
 secrets/
+.e2e-tmp-admin-pwd.txt

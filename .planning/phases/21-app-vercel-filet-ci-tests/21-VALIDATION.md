@@ -1,9 +1,9 @@
 ---
 phase: 21
 slug: app-vercel-filet-ci-tests
-status: planned
+status: executed
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-07-06
 ---
 
@@ -38,23 +38,23 @@ created: 2026-07-06
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 21-01-01 | 01 | 1 | APP-01 | config/grep | grep vercel.json cdg1 + tsc --noEmit shared | ✅ (grep) | ⬜ pending |
-| 21-01-02 | 01 | 1 | APP-01 | unit (TDD) | `… vitest run src/lib/__tests__/pdf-render.watermark.test.ts` | ❌ W0 (créé par la task, RED d'abord) | ⬜ pending |
-| 21-01-03 | 01 | 1 | APP-01/APP-02 | grep + unit | greps sameSite/StagingBanner/maxDuration + vitest calendar | ✅ (tests calendar existants) | ⬜ pending |
-| 21-02-01 | 02 | 1 | TEST-01/02 (préreq D-06) | script DRY | `… tsx scripts/migrate-storage.ts` (DRY) | ✅ (script Phase 18) | ⬜ pending |
-| 21-02-02 | 02 | 1 | TEST-01/02 (préreq D-06) | script WRITE + rapport | `WRITE=1 … tsx scripts/migrate-storage.ts` + grep rapport | ✅ | ⬜ pending |
-| 21-03-01 | 03 | 2 | CI-01 | grep workflows | greps ci.yml/deploy.yml | ✅ (grep) | ⬜ pending |
-| 21-03-02 | 03 | 2 | CI-01 | CI runtime | `gh run list --branch main` success + `gh api …/protection` | ✅ (gh) | ⬜ pending |
-| 21-03-03 | 03 | 2 | CI-01 | PR témoin | `gh pr list --state merged --search "PR témoin"` | ✅ (gh) | ⬜ pending |
-| 21-04-01 | 04 | 3 | APP-01/02/03 | doc/grep | greps runbook (env checklist, WAF, 22 OF_*) | ✅ (grep) | ⬜ pending |
-| 21-04-02 | 04 | 3 | APP-01/02/03 | checkpoint human-action | dashboard Vercel + DNS (runbook) | — | ⬜ pending |
-| 21-04-03 | 04 | 3 | APP-01/02, D-13 | curl runtime | curl 200/cdg1/STAGING/307/429 + evidence runbook | ✅ (curl) | ⬜ pending |
-| 21-05-01 | 05 | 4 | APP-02 | setup + tsc | greps config/user script + tsc + run create-e2e-user | ❌ W0 (créés par la task) | ⬜ pending |
-| 21-05-02 | 05 | 4 | TEST-02, APP-02 | e2e | `STAGING_BASE_URL=… playwright test e2e/auth.setup.ts e2e/smoke-routes.spec.ts` | ❌ W0 | ⬜ pending |
-| 21-05-03 | 05 | 4 | TEST-02 (PENDING 18) | e2e | `… playwright test e2e/upload-preenrollment.spec.ts` | ❌ W0 | ⬜ pending |
-| 21-06-01 | 06 | 5 | TEST-01 (teardown) | script | `… tsx e2e/teardown-e2e-data.ts` (idempotent, compteurs 0) | ❌ W0 | ⬜ pending |
-| 21-06-02 | 06 | 5 | TEST-01, APP-03 | e2e long | `… playwright test e2e/closure-flow.spec.ts` (15 min) | ❌ W0 | ⬜ pending |
-| 21-06-03 | 06 | 5 | phase gate | doc + gh | greps 21-SMOKE.md + `gh pr list --state merged` | ✅ (grep/gh) | ⬜ pending |
+| 21-01-01 | 01 | 1 | APP-01 | config/grep | grep vercel.json cdg1 + tsc --noEmit shared | ✅ (grep) | ✅ green (2026-07-06) |
+| 21-01-02 | 01 | 1 | APP-01 | unit (TDD) | `… vitest run src/lib/__tests__/pdf-render.watermark.test.ts` | ✅ créé (RED→GREEN) | ✅ green — 5/5 |
+| 21-01-03 | 01 | 1 | APP-01/APP-02 | grep + unit | greps sameSite/StagingBanner/maxDuration + vitest calendar | ✅ | ✅ green (suite 1176/1176) |
+| 21-02-01 | 02 | 1 | TEST-01/02 (préreq D-06) | script DRY | `… tsx scripts/migrate-storage.ts` (DRY) | ✅ (script Phase 18) | ✅ green — 899 clés, audit d'écart 733 manquants identifiés |
+| 21-02-02 | 02 | 1 | TEST-01/02 (préreq D-06) | script WRITE + rapport | `WRITE=1 … tsx scripts/migrate-storage.ts` + grep rapport | ✅ | ✅ green — 871 copiés, re-audit 899/899, 0 lien mort |
+| 21-03-01 | 03 | 2 | CI-01 | grep workflows | greps ci.yml/deploy.yml | ✅ (grep) | ✅ green |
+| 21-03-02 | 03 | 2 | CI-01 | CI runtime | `gh run list --branch main` success + `gh api …/protection` | ✅ (gh) | ✅ green — CI+Deploy success, contexts ["test"], force-push off |
+| 21-03-03 | 03 | 2 | CI-01 | PR témoin | `gh pr list --state merged --search "PR témoin"` | ✅ (gh) | ✅ green — PR #1 BLOCKED→merged |
+| 21-04-01 | 04 | 3 | APP-01/02/03 | doc/grep | greps runbook (env checklist, WAF, 22 OF_*) | ✅ (grep) | ✅ green |
+| 21-04-02 | 04 | 3 | APP-01/02/03 | checkpoint human-action | dashboard Vercel + DNS (runbook) | — | ✅ green — exécuté par API/CLI (autorisation Laurent) ; ⚠ DNS domaine final PENDING webmaster |
+| 21-04-03 | 04 | 3 | APP-01/02, D-13 | curl runtime | curl 200/cdg1/STAGING/307/429 + evidence runbook | ✅ (curl) | ✅ green — ⚠ WAF deny = 403 (équivalent accepté, pas 429) |
+| 21-05-01 | 05 | 4 | APP-02 | setup + tsc | greps config/user script + tsc + run create-e2e-user | ✅ créés | ✅ green |
+| 21-05-02 | 05 | 4 | TEST-02, APP-02 (login+logout) | e2e | `STAGING_BASE_URL=… playwright test e2e/auth.setup.ts e2e/smoke-routes.spec.ts e2e/auth-logout.spec.ts` | ✅ créés | ✅ green — 22/22 (43 s) |
+| 21-05-03 | 05 | 4 | TEST-02 (PENDING 18) | e2e | `… playwright test e2e/upload-preenrollment.spec.ts` | ✅ créé | ✅ green — 10 Mo, zéro 413, aucun body ≥4 Mo via Vercel |
+| 21-06-01 | 06 | 5 | TEST-01 (teardown) | script | `… tsx e2e/teardown-e2e-data.ts` (idempotent, compteurs 0) | ✅ créé | ✅ green — run à blanc + post-run = tous compteurs 0 |
+| 21-06-02 | 06 | 5 | TEST-01, APP-03 | e2e long | `… playwright test e2e/closure-flow.spec.ts` (15 min) | ✅ créé | ✅ green — 2 passed (2.3 min), pack 16/16 en 89 s, 0 stub, %PDF- ×2 |
+| 21-06-03 | 06 | 5 | phase gate | doc + gh | greps 21-SMOKE.md + `gh pr list --state merged` | ✅ (grep/gh) | ✅ green — 21-SMOKE.md consolidé, PR finale mergée |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -64,13 +64,14 @@ created: 2026-07-06
 
 Les artefacts de test MANQUANTS sont créés par les tasks elles-mêmes, en interface-first / RED d'abord :
 
-- [ ] `apps/web/src/lib/__tests__/pdf-render.watermark.test.ts` — APP-01 (plan 21-01 Task 2, TDD RED→GREEN)
-- [ ] `apps/web/playwright.config.ts` + `e2e/auth.setup.ts` — APP-02 (plan 21-05 Task 1)
-- [ ] `apps/web/e2e/smoke-routes.spec.ts` — TEST-02 (plan 21-05 Task 2)
-- [ ] `apps/web/e2e/upload-preenrollment.spec.ts` — PENDING 18 (plan 21-05 Task 3)
-- [ ] `apps/web/e2e/teardown-e2e-data.ts` + `closure-flow.spec.ts` — TEST-01 (plan 21-06 Tasks 1-2)
-- [ ] Install `@playwright/test` + chromium (plan 21-05 Task 1)
-- [ ] User E2E dédié en base (`scripts/create-e2e-user.ts`) + secrets locaux `E2E_LOGIN_*` (plan 21-05 Task 1)
+- [x] `apps/web/src/lib/__tests__/pdf-render.watermark.test.ts` — APP-01 (plan 21-01 Task 2, TDD RED→GREEN)
+- [x] `apps/web/playwright.config.ts` + `e2e/auth.setup.ts` — APP-02 (plan 21-05 Task 1)
+- [x] `apps/web/e2e/smoke-routes.spec.ts` — TEST-02 (plan 21-05 Task 2)
+- [x] `apps/web/e2e/auth-logout.spec.ts` — APP-02 logout, session fraîche sans storageState (plan 21-05 Task 2)
+- [x] `apps/web/e2e/upload-preenrollment.spec.ts` — PENDING 18 (plan 21-05 Task 3)
+- [x] `apps/web/e2e/teardown-e2e-data.ts` + `closure-flow.spec.ts` — TEST-01 (plan 21-06 Tasks 1-2)
+- [x] Install `@playwright/test` + chromium (plan 21-05 Task 1)
+- [x] User E2E dédié en base (`scripts/create-e2e-user.ts`) + secrets locaux `E2E_LOGIN_*` (plan 21-05 Task 1)
 
 ---
 
@@ -94,4 +95,6 @@ Les artefacts de test MANQUANTS sont créés par les tasks elles-mêmes, en inte
 - [x] Feedback latency < 120s (hors E2E closure long, à la demande D-10)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (rempli à l'exécution — plan 21-06 Task 3)
+**Approval:** ✅ approved — 2026-07-06 (plan 21-06 Task 3). Toutes les vérifications automatisées sont
+vertes (map ci-dessus), evidence consolidée dans `21-SMOKE.md`. Restent MANUAL/reportés (pas des échecs) :
+retry réseau mobile réel, expiration signed URL 11 min (équivalence 18-04), domaine final PENDING DNS.
