@@ -38,6 +38,8 @@ import { shouldShowInbox, parseTab, tabToTheme } from './page-helpers';
  */
 
 export const dynamic = 'force-dynamic';
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
 
 interface SearchParams {
   tab?: string;

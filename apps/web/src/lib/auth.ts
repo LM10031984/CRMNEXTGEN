@@ -20,6 +20,9 @@ export const lucia = new Lucia(adapter, {
     expires: false,
     attributes: {
       secure: process.env.NODE_ENV === 'production',
+      // Phase 21 APP-02 : lax explicite (défaut Lucia rendu grep-vérifiable).
+      // Vercel force NODE_ENV=production → secure activé automatiquement.
+      sameSite: 'lax',
     },
   },
   getUserAttributes: (data) => ({

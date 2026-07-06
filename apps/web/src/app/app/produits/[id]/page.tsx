@@ -29,6 +29,9 @@ import {
 } from '@/lib/product-stats';
 import { getProductEvaluationStats, type EvaluationStats } from '@/lib/evaluation-stats';
 
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
+
 /**
  * Phase 9.1 Plan 09.1-05 Task 3 — Fiche produit refondue en 4 onglets URL-state.
  *

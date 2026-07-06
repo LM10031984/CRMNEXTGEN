@@ -29,6 +29,8 @@ import { InvoicesExportButton } from '@/components/invoices/invoices-export-butt
  * `dynamic = 'force-dynamic'` : KPI temps réel + searchParams toujours frais.
  */
 export const dynamic = 'force-dynamic';
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
 
 interface SP {
   status?: string | string[];

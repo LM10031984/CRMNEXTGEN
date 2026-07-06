@@ -62,6 +62,9 @@ import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
+
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 
 export default async function SessionDetailPage({

@@ -22,6 +22,7 @@
  */
 
 import type { calendar_v3 } from 'googleapis';
+import { sharedEnv } from '@qualiof/shared/env';
 import { getCalendarClient, CALENDAR_ID } from './google-client';
 import { QUALIOF_KEY_PROP, type CalendarEventType } from './idempotency';
 import { upsertSyncRecord, type SyncMode, type SentUpdates } from './sync-state';
@@ -76,6 +77,14 @@ function keyOf(event: GEvent): string {
 export async function syncSessionCalendar(
   input: SyncSessionInput,
 ): Promise<SyncSessionRecap> {
+  // Garde staging (D-02, Phase 21) : AUCUN événement Google Calendar créé en
+  // staging. Au-delà de D-02 : le token OAuth vit dans files/secrets/
+  // google-token.json, ABSENT du déploiement Vercel — sans cette garde, tout
+  // sync staging échouerait bruyamment.
+  if (sharedEnv.NEXT_PUBLIC_APP_ENV === 'staging') {
+    console.info('[calendar] sync skipped — staging guard (D-02, Phase 21)');
+    return { inserted: 0, updated: 0, skipped: 0, total: 0, errors: [] };
+  }
   const { ctx, tenantId, sessionId } = input;
   const cal = getCalendarClient();
 
