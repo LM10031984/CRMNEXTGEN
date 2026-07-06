@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-07-06T20:31:39.395Z"
+stopped_at: Completed 22-04-PLAN.md
+last_updated: "2026-07-06T20:34:54.272Z"
 last_activity: 2026-07-06
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 31
-  completed_plans: 23
+  completed_plans: 24
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-06 — **Plan 22-04 livré — outillage pré-vérification des sorties : sanity env (D-18 ②) + rapport relances (D-06/Pitfall 1)** (Wave 1). ① `sanity-check-env.ts` (regex `[^\x20-\x7E]|#| +$`, sortie clé+index+codepoint JAMAIS la valeur) : scan du pull Vercel prod (71 vars) = **PROPRE** — OPENROUTER_API_KEY confirmée saine post-fix PROD-0674 ; seul flag = OF_ADDRESS_STREET (U+00E9 « é » d'adresse, faux positif métier conservé — hors header HTTP) ; le `.env` racine porte encore **5 commentaires inline classe PROD-0674** (SESSION_LIFETIME, OPENROUTER_MODEL_FAST/QUALITY/VISION, OPENROUTER_SITE_URL) → nettoyage délégué runbook §1 (22-06, aucune mutation d'env prod en Wave 1) ; `.env.vercel-prod` détruit post-scan (déjà gitignoré `.env*`) ; absentes du pull : SMTP_*/CRON_SECRET (Pitfall 2 : re-pose assainie + preuve comportementale au flip) → rapport `22-ENV-SANITY.md`. ② `pending-reminders-report.ts` LECTURE SEULE (100 % SELECT vérifié) : réplique EXACTE de la sélection du cron Railway (`REMINDER_START_DATE` IMPORTÉE du worker, status IN, OR échéance, dedup 24 h, reminderCount<maxLevel) + cascade destinataire du core avec **flag ⚠ APPRENANT** (règle payeur) — **VERDICT : Pitfall 1 NON matérialisé, 0 relance brûlée ET 0 envoi en attente** (contre-vérifié anti-artefact du filtre Json : 0 AuditLog `invoices.reminder_sent` TOTAL, 0 facture reminderCount>0 — le cron dry-run n'a JAMAIS consommé de niveau) ; **horizon : FAC-000006/007/008 (AKORIMMO/Imagimmo/KING Kristin, ~3,4 k€) éligibles le 2026-07-20** → **re-jouer le rapport le jour du flip MAIL_DRY_RUN** ; checkpoint 22-07 SANS reset de compteurs à arbitrer → rapport `22-PENDING-SENDS-REPORT.md` (3 options ①reset/②sélectif/③acceptation). 2 déviations Rule 2 (contre-vérification + section Horizon). ⚠ tsx non hoisté racine → exécuter depuis apps/web. CUT-01/CUT-02 NON cochés (préparatoire — preuve aux 22-06/22-07). Commits `04de274`/`88161f9`, `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : runbook §1/§4 adossés à des rapports réels — flip 22-07 décidable sans inconnue.
 
 - 2026-07-06 — **Plan 22-02 livré — portage Google Calendar env-first (D-07) + audit logs PII (D-17) + label IA (D-18 ③)** (Wave 1, seul vrai code de la phase). **TDD RED→GREEN** : `loadOAuthConfig()` exporté de `google-client.ts` — env-first sur les 3 vars `GOOGLE_OAUTH_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN` (optionnelles t3-env + runtimeEnv + turbo.json globalEnv + bloc commenté .env.example, AUCUNE valeur réelle), **all-or-nothing** (env partiel = fallback `files/secrets/` COMPLET, jamais de mélange), cascade `installed ?? web ?? racine` préservée, `getCalendarClient()` sans readFileSync direct (mémoïsation/CALENDAR_ID intacts), règle worker-safe étendue à `@qualiof/shared/env` (déjà importé au boot worker). 4 tests hermétiques `google-client.test.ts` (mock sharedEnv getter vi.hoisted + node:fs + googleapis, pattern cron-workers). **Audit D-17** : 51 console.* scannés (lib/closure+veille+invoice-reminders+calendar, preinscription-extractor, mailer, scripts *worker*) → `22-PII-LOGS-AUDIT.md` (tableau verdicts + scan reproductible) ; **2 PII corrigés** : mailer.ts:79 dry-run email masqué (`l***@domaine` — les relances Railway ne logguent plus l'email apprenant/payeur), closure/worker.ts:409 notif par `user=${batch.createdByUserId}` (le select ne remonte pas user.id) ; 1 JUSTIFIÉ (test-veille : tenant.name = raison sociale). Gate grep RGPD-01 = 0. `ai-fill-product.ts:297` « Erreur Ollama » → « Erreur IA ». **PREUVES** : suite turbo 3/3 (web **1180/1180** dont 4 nouveaux + shared 113), tsc exit 0 web+shared, 0 secret dans le diff (client_id/refresh_token réels grep=0). 0 déviation ; 2 issues consignées (faux positif grep doc-comment `files/secrets` — leçon 21-01 ; `pnpm vitest` direct ≠ `pnpm test` dotenv, échec sync-session pré-existant hors pattern projet). ⚠ CUT-01/RGPD-01 NON cochés (partagés — registre/DPA 22-03, flip 22-06+). **Runbook 22-04/22-05 : poser les 3 vars Google sensitive sur Vercel (sanity D-18 ② : ni espace/`#`/non-ASCII)**. Commits `dde3881`(test RED)/`6df4375`(feat GREEN)/`6871aac`(fix PII), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : plans 22-03..22-05 (Wave 1).
 
@@ -300,7 +302,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-02-PLAN.md
+Stopped at: Completed 22-04-PLAN.md
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)

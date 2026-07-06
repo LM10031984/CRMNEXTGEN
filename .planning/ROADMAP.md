@@ -134,7 +134,7 @@ Plans:
 - [x] 22-01-PLAN.md — Runbook de bascule + plan de rollback (écrits AVANT la fenêtre) — CUT-01 [Wave 1]
 - [x] 22-02-PLAN.md — Portage Google 3 vars env-first TDD + audit/fixes logs PII + label Ollama — CUT-01/RGPD-01 [Wave 1]
 - [ ] 22-03-PLAN.md — Audit d'écart local↔cloud (cloud=vérité D-01) + re-audit storage final 0 lien mort — CUT-01 [Wave 1]
-- [ ] 22-04-PLAN.md — Sanity check env Vercel (D-18②) + rapport envois en attente/relances brûlées (D-06) — CUT-01/CUT-02 [Wave 1]
+- [x] 22-04-PLAN.md — Sanity check env Vercel (D-18②) + rapport envois en attente/relances brûlées (D-06) — CUT-01/CUT-02 [Wave 1]
 - [ ] 22-05-PLAN.md — Registre traitements art. 30 + 7 fiches DPA + export PDF + GATE D-13 [checkpoint] — RGPD-01 [Wave 1]
 - [ ] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
 - [ ] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
@@ -155,4 +155,4 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 5/5 | In Progress (reste : relevé obs. 24 h le 07-07 + verify-work) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
-| 22. Bascule prod + RGPD | v6 | 2/10 | In Progress|  |
+| 22. Bascule prod + RGPD | v6 | 3/10 | In Progress|  |
