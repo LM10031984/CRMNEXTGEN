@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 21-05-PLAN.md
-last_updated: "2026-07-06T13:14:59.293Z"
+stopped_at: "Completed 21-06-PLAN.md — Phase 21 complète, prête pour /gsd:verify-work 21"
+last_updated: "2026-07-06T15:35:13.937Z"
 last_activity: 2026-07-06
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # STATE — QualiOF
@@ -33,6 +33,8 @@ Plan: 6 of 6
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-06 — **Plan 21-06 livré — TEST-01 + APP-03 prouvés, PHASE 21 COMPLÈTE (6/6)**. closure-flow.spec.ts vert contre https://qualiof.vercel.app : session E2E- créée via wizard UI (produit E2E- Prisma, 2 participants via picker), pack closure IA OpenRouter RÉEL consommé par le worker Railway = 16/16 « Terminé » en 89 s, 0 stub (UI + Prisma usedStub=false), %PDF- sur un doc du pack ET sur la convocation SYNCHRONE rendue par Vercel (doc-engine public + Bearer = APP-03 ; ce PDF porte le filigrane STAGING, les docs worker non — attendu). teardown-e2e-data.ts idempotent (purge exclusive E2E-, garde anti-deleteMany-global, storage inclus) : run à blanc ET post-run = tous compteurs 0. 21-SMOKE.md consolidé (6 requirements, sorties brutes, 4 items MANUAL/reportés) + 21-VALIDATION 17/17 green. PR #7 mergée en MERGE COMMIT (77c3f20) après gate CI vert — main = cloud-migration (0/0), CI + Deploy migrations success post-merge. 4 déviations outillage test (poll waitFor vs count post-reload, reporter html open:never, retries=0 sur E2E payant, .gitignore pwd local). Coût OpenRouter ~centimes (3 packs dont 2 de mise au point).
 
 - 2026-07-06 — **Plan 21-05 livré — TEST-02 + APP-02 COMPLETS, PENDING 18-SMOKE ① fermé** (Wave 4, filet Playwright contre le staging). **Infra** : `@playwright/test` 1.61.1 + Chromium, `playwright.config.ts` 4 projets (setup/anonymous/logout/authenticated), baseURL `STAGING_BASE_URL` (défaut localhost:3010), storageState `e2e/.auth/user.json` sur `authenticated` SEUL, pas de webServer (D-10), **workers=1** (WAF /preinscription 30 req/60 s → 403). **User e2e dédié** `e2e@start-academy.fr` ADMIN (`create-e2e-user.ts` upsert idempotent worker-safe, garde pathToFileURL — `E2E_LOGIN_*` UNIQUEMENT dans le .env racine gitignoré, jamais le compte de Laurent). **Run final contre https://qualiof.vercel.app : 22/22 verts (43 s)** — ① smoke TEST-02 : 8 routes protégées des 4 piliers + `/app/sessions/[id]` (id via Prisma, jamais en dur) = redirect `/login` anonyme + 200 avec contenu authentifié ; `/login` 200 + **bandeau STAGING (preuve APP-01 runtime)** ; `/preinscription/<token E2E->` 200 public + token bidon 404 propre (jamais /p/ — Pitfall 1) ; ② logout APP-02 : login FRAIS sans storageState → UserMenu → Dialog confirm → `/login` puis `/app` re-redirige = **session invalidée EN BASE** (les 8 specs authenticated passent APRÈS dans le même run → storageState partagé intact) ; ③ **upload CNI 10 Mo direct-to-storage** : PUT `*.supabase.co/.../upload/sign/preinscriptions/` 200, **zéro 413**, **aucun body ≥4 Mo vers Vercel** (preuve anti-413 structurelle — PENDING 18-SMOKE ① RE-VALIDÉ ; ② retry coupure mobile = manual-only ; ③ expiration 11 min = couverte JWT exp 18-04, non re-testée). Données de test E2E- créées/supprimées via Prisma + supabase-js service role (count=0 post-run prouvé). tsc exit 0, vitest 1176/1176 inchangée (e2e/ hors glob vitest). **1 déviation actée** (« domaine final » → qualiof.vercel.app, décision utilisateur 21-04 — re-pointage futur = STAGING_BASE_URL, zéro code). Commits `4cc20c6`(infra)/`5e4ef00`(smoke+logout)/`d73c89d`(upload). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : plan 21-06 (E2E closure — le projet authenticated matche déjà closure-flow.spec.ts).
 - 2026-07-06 — **Plan 21-04 livré — APP-01/APP-02/APP-03 satisfaits, staging Vercel LIVE** (Wave 3, déploiement app — checkpoint human-action exécuté par l'orchestrateur via API/CLI Vercel sur AUTORISATION EXPLICITE de Laurent, pattern dashboard remplacé). **Plan Vercel Pro activé** (20 $/mois, add-on Speed Insights 10 $/mois d'un vieux projet désactivé avant) ; projet **`qualiof`** (prj_uI2HKJRGchDOXkI7fKuX9ckpfyY5, team laurents-projects-3806ab87), repo LM10031984/CRMNEXTGEN, Root Directory `apps/web`, **Node 24.x**, région fonctions **cdg1**, production branch `main`, prod PUBLIQUE (ssoProtection→preview-only). **50 vars env posées via API** (28 app + 22 OF_* copiées du worker Railway, secrets sensitive, MAIL_DRY_RUN=true, 0 clé morte). **Crons Vercel : zéro.** **5 déviations** : ① buildCommand = **`next build`** (défaut `turbo run build` KO sur cycle pré-existant db↔shared, deferred 21-03) ; ② **PrismaClientInitializationError runtime** (moteur rhel-openssl-3.0.x non tracé, store pnpm) → `experimental.outputFileTracingIncludes` dans next.config.mjs, **glob RESSERRÉ `*.node`** (le `**` récursif bloque « Collecting build traces » >10 min) — PRs #2 (38be3eb, squashée fee1a0d) + #3 (main=7022c5c) ; ⚠ le squash de PR #2 a fait diverger main/cloud-migration (résolu addecc3) → **PRs cloud-migration→main = MERGE COMMIT, JAMAIS squash** ; ③ **WAF deny = 403, PAS 429** (règle rule_rate_limit_preinscription_t0PSkN, /preinscription starts-with, fixed window 30 req/60 s par IP, publiée via API — équivalent fonctionnel prouvé) ; ④ previews PR échouent volontairement (env Production only, fail-loud t3-env — gate CI couvre) ; ⑤ **domaine final `app.start-academy.fr` PENDING DNS webmaster** (zone OVH du webmaster, registrar Scaleway/bookmydomain ; à demander : CNAME `app`→`cname.vercel-dns.com.` + TXT `_vercel`=vc-domain-verify=app.start-academy.fr,c75f8d7f67609b827823) — **DÉCISION UTILISATEUR : 21-05/21-06 ciblent `https://qualiof.vercel.app`** (⚠ NEXT_PUBLIC_APP_URL/OPENROUTER_SITE_URL à re-pointer quand le DNS tombe). **PREUVES Task 3 (evidence datée section 9 du runbook 21-DEPLOY-VERCEL.md)** : /login **200 + x-vercel-id cdg1::cdg1**, bandeau STAGING grep=1, /app anonyme **307 location:/login**, token bidon **404 propre** (jamais 500), rafale 40× /preinscription → **29× 404 puis 11× 403** (blocage à exactement 30 req/fenêtre) ; cookie secure=NODE_ENV, sameSite lax (21-01), preuve login finale au 21-05. Commits `b25d99c`(runbook)/`38be3eb`+`f3ab56e`+`addecc3`(fix Prisma)/`85e9102`(evidence). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : plan 21-05 (Playwright auth sur qualiof.vercel.app).
@@ -294,7 +296,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 21-05-PLAN.md
+Stopped at: Completed 21-06-PLAN.md — Phase 21 complète, prête pour /gsd:verify-work 21
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
