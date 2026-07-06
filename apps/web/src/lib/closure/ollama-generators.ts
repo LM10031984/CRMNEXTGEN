@@ -163,23 +163,63 @@ const GrilleSchema = z.object({
 });
 
 // Positionnement : 6-8 compétences avec niveaux avant/après (progression nette).
+// Garde-fou de PROGRESSION (quick 260706-bya) verrouillé par superRefine — cohérent
+// avec SYSTEM_PROMPT_POSITIONNEMENT v11 (prompt↔schéma). VALIDATION déterministe
+// (aucun Math.random/Date.now) : un échec → runOllamaJson retente puis retombe sur
+// le stub (chaîne prompt→LLM→Zod→null→stub intacte, fail-loud, pas de tampon muet).
+// Exporté pour être testable de façon hermétique (positionnement-progression.test.ts).
 const NiveauPositionnement = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
-const PositionnementSchema = z.object({
-  objectifs_formation: z.string().min(10),
-  demande_specifique: z.string().nullable().optional(),
-  prerequis: z.string().min(10),
-  competences: z
-    .array(
-      z.object({
-        label: z.string().min(5),
-        avant: NiveauPositionnement,
-        apres: NiveauPositionnement,
-      }),
-    )
-    .min(6)
-    .max(10),
-  commentaires: z.string().nullable().optional(),
-});
+export const PositionnementSchema = z
+  .object({
+    objectifs_formation: z.string().min(10),
+    demande_specifique: z.string().nullable().optional(),
+    prerequis: z.string().min(10),
+    competences: z
+      .array(
+        z.object({
+          label: z.string().min(5),
+          avant: NiveauPositionnement,
+          apres: NiveauPositionnement,
+        }),
+      )
+      .min(6)
+      .max(10),
+    commentaires: z.string().nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const comps = data.competences;
+    comps.forEach((c, i) => {
+      // AVANT ≤ 3 : un stagiaire qui vient se former ne maîtrise pas déjà tout.
+      if (c.avant >= 4) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['competences', i, 'avant'],
+          message: 'AVANT ne peut pas valoir 4 — le stagiaire vient se former.',
+        });
+      }
+      // Progression stricte : preuve Qualiopi de l'acquis (ind. 2).
+      if (c.apres <= c.avant) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['competences', i, 'apres'],
+          message: 'APRÈS doit être strictement supérieur à AVANT — progression obligatoire.',
+        });
+      }
+    });
+    // Anti-tampon (garde LÉGÈRE) : on ne bloque QUE le motif totalement plat
+    // (tous les AVANT identiques ET tous les deltas identiques). Toute vraie
+    // variation (avants variés OU deltas variés) passe → pas de sur-blocage → pas de stub.
+    const avants = new Set(comps.map((c) => c.avant));
+    const deltas = new Set(comps.map((c) => c.apres - c.avant));
+    if (avants.size === 1 && deltas.size === 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['competences'],
+        message:
+          "Motif avant/après uniforme (tampon) — varie les niveaux de départ ou l'ampleur de la progression.",
+      });
+    }
+  });
 
 // Grille observation session (C3.i11) : 7 compétences × N stagiaires + 1 obs/stagiaire.
 // Niveaux A/B/C autorisés en sortie IA — D refusé pour garder un ton bienveillant.
@@ -698,6 +738,8 @@ export async function generatePositionnementContent(
     `Nom : ${stagiaire.nom}`,
     stagiaire.fonction ? `Fonction : ${stagiaire.fonction}` : null,
     stagiaire.entreprise ? `Entreprise : ${stagiaire.entreprise}` : null,
+    stagiaire.professionalStatus ? `Statut professionnel : ${stagiaire.professionalStatus}` : null,
+    stagiaire.anciennete ? `Ancienneté dans le métier : ${stagiaire.anciennete}` : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -712,7 +754,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 Stagiaire :
 ${stagiaireBlock || '(profil non détaillé)'}
 
-Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.${genderDirective(stagiaire.civilite)}`;
+Génère 6-8 compétences spécifiques au PROGRAMME ci-dessus (chaque libellé reprend un thème réel du programme). Attribue à chacune un niveau AVANT (1 à 3, jamais 4) et un niveau APRÈS STRICTEMENT supérieur (après > avant, toujours). Fais VARIER la progression (parfois +1, parfois +2/+3), ne finis pas tout à 4, et ancre les niveaux de départ sur le profil réel du stagiaire (ancienneté, fonction) pour que son motif avant/après soit DISTINCT de celui des autres stagiaires de la session.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-positionnement',
