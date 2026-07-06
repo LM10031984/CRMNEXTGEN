@@ -18,10 +18,14 @@ export default async function LoginPage() {
           </div>
           <LoginForm />
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Compte de démonstration : <code className="font-mono">admin@startacademy.fr</code> /{' '}
-          <code className="font-mono">admin</code>
-        </p>
+        {/* Indice de compte réservé au dev local : ne JAMAIS afficher l'email
+            admin sur une URL publique (staging/prod Vercel). */}
+        {process.env.NODE_ENV === 'development' && (
+          <p className="text-center text-xs text-muted-foreground mt-6">
+            Compte de démonstration : <code className="font-mono">admin@startacademy.fr</code> /{' '}
+            <code className="font-mono">admin</code>
+          </p>
+        )}
       </div>
     </div>
   );
