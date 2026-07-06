@@ -284,3 +284,132 @@ backups Supabase.
   gate n'est pas soldé. La purge (conteneurs Docker locaux, avec pg_dump d'archive +
   snapshot MinIO préalables) est le **plan 22-10 séparé**, étape destructive avec
   liste finale + mot de validation de Laurent, en tours distincts (convention projet).
+
+---
+
+## §8 Plan de rollback (D-04 — retour au mode staging gardé, ~5 min, réversible)
+
+**Principe** : le rollback est un **re-flag** `NEXT_PUBLIC_APP_ENV=staging` +
+`MAIL_DRY_RUN=true` — exactement l'état staging gardé validé en Phase 21. Aucune
+donnée n'est touchée.
+
+### 8.1 Critères de déclenchement (l'un suffit)
+
+- Pack témoin SES-0094 **NO-GO** au gate §3 (un critère rouge) ;
+- **login cassé** en production (impossible d'atteindre `/app`) ;
+- **PDF cassés** (documents illisibles, 404 en série, erreurs de rendu) ;
+- **erreur d'environnement non diagnostiquée en moins de 30 minutes** — on ne
+  débogue PAS en prod ouverte : on re-flag, on diagnostique à froid.
+
+### 8.2 Le re-flag — tableau exact var → valeur
+
+| Variable | Plateforme | Valeur rollback |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APP_ENV` | Vercel (Production) | `staging` |
+| `MAIL_DRY_RUN` | Vercel (Production) | `true` |
+| `MAIL_DRY_RUN` | Railway (service worker) | `true` |
+
+Puis :
+
+- **Redeploy Vercel OBLIGATOIRE** (Deployments → ⋯ → Redeploy) — `NEXT_PUBLIC_*`
+  est inliné au build, le re-flag seul ne change rien tant que l'app n'est pas
+  redéployée (même mécanique qu'au §2.3) ;
+- **Railway redéploie seul** au changement de variable — rien d'autre à faire.
+
+### 8.3 Ce que le rollback NE touche PAS
+
+- **La base cloud Supabase RESTE la vérité** — il n'y a PAS de rollback vers le
+  Postgres du Mac local (obsolète depuis l'audit d'écart D-01 ; un restore local
+  écraserait le travail cloud). Les données créées pendant la fenêtre restent en base.
+- **Les 3 variables Google (§2.1) peuvent rester posées** : la garde staging de
+  `sync-session.ts:84` (early-return quand `NEXT_PUBLIC_APP_ENV=staging`) re-bloque
+  le sync calendrier d'elle-même — inutile de dé-poser les secrets.
+- **Le storage Supabase** : aucun objet n'est supprimé.
+
+### 8.4 Vérification post-rollback (~2 min, par Claude)
+
+- `/login` répond 200 **AVEC bandeau STAGING** (retour de la garde) ;
+- un PDF de test porte à nouveau le **filigrane STAGING** ;
+- aucun email réel ne part (log `dryRun` au lieu d'un `messageId`).
+
+---
+
+## §9 Evidence (gabarit — rempli au fil de l'eau par les plans 22-06..22-10)
+
+> Modèle : §9 de `21-DEPLOY-VERCEL.md` (evidence datée, sorties brutes en annexe).
+> Chaque sous-section est remplie AU MOMENT de l'exécution, avec date UTC.
+> Aucun secret en clair — captures avec valeurs masquées.
+
+### 9.1 Sanity env (§1) — plan 22-06
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Sortie `sanity-check-env.ts` sur `.env.vercel-prod` | 0 clé suspecte | _(à remplir)_ | |
+| Re-pose des sensitive depuis source assainie | liste des clés re-posées | _(à remplir)_ | |
+| Re-test auto-fill IA produit | remplissage réussi (0 ByteString) | _(à remplir)_ | |
+
+### 9.2 Flip production (§2) — plan 22-06
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Capture vars Vercel | `NEXT_PUBLIC_APP_ENV=production`, `MAIL_DRY_RUN=true`, 3 vars Google posées (masquées) | _(à remplir)_ | |
+| `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | _(à remplir)_ | |
+| Login → `/app` | accès OK | _(à remplir)_ | |
+
+### 9.3 Pack témoin SES-0094 (§3) — plan 22-07
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Compteurs stub (Prisma) | `usedStub=false` sur 100 % des docs du pack | _(à remplir)_ | |
+| curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | _(à remplir)_ | |
+| PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | _(à remplir)_ | |
+| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | _(à remplir)_ | |
+
+### 9.4 Rapport relances + flip emails (§4) — plans 22-07/22-08
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| `22-PENDING-SENDS-REPORT.md` | liste nominative + relances brûlées dry-run | _(à remplir)_ | |
+| Décision Laurent | validation + décision remédiation compteurs | _(à remplir)_ | |
+| Flip `MAIL_DRY_RUN=false` ×2 | capture Vercel (+ redeploy) ET Railway (redeploy auto) | _(à remplir)_ | |
+| Email test réel | `messageId` SMTP vers laurent@start-academy.fr (pas `dryRun`) | _(à remplir)_ | |
+
+### 9.5 Invitations équipe (§5) — plan 22-08
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Liste des invités | nom + rôle RBAC par personne (sans PII inutile) | _(à remplir)_ | |
+| Envoi des invitations | emails d'invitation réellement partis (flux `inviteUser`) | _(à remplir)_ | |
+
+### 9.6 Alertes coûts + backups (§6) — plan 22-09
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Capture Vercel Spend Management | budget ~45 $, alertes email, auto-pause OFF | _(à remplir)_ | |
+| Capture Railway Usage Limits | soft alert ~35 €, hard limit absent/haut | _(à remplir)_ | |
+| Capture Supabase Billing | spend cap ON | _(à remplir)_ | |
+| Capture OpenRouter Credits/Keys | Auto Top-Up OFF, solde ~15 €, credit limit clé prod | _(à remplir)_ | |
+| Capture Supabase Database → Backups | snapshots daily actifs, 7 j, projet eu-west-1 | _(à remplir)_ | |
+
+### 9.7 Purge locale (§7 dernier point) — plan 22-10 (destructif, gate séparé)
+
+| Preuve | Attendu | Résultat | Date |
+| --- | --- | --- | --- |
+| Archives préalables | pg_dump local (via `docker exec`) + snapshot MinIO conservés | _(à remplir)_ | |
+| Mot de validation Laurent | liste finale présentée + mot explicite reçu (tours distincts) | _(à remplir)_ | |
+| Preuve de purge | conteneurs Docker locaux supprimés, archives intactes | _(à remplir)_ | |
+
+---
+
+## Récapitulatif
+
+- **La bascule = 2 flips de variables** : `NEXT_PUBLIC_APP_ENV=production` (§2, Vercel
+  + redeploy) puis, après gate SES-0094 (§3) et rapport validé (§4),
+  `MAIL_DRY_RUN=false` sur **Vercel ET Railway**.
+- **Fenêtre** : n'ouvre que si TOUTE la checklist §0 est verte (Phase 20 close, audit
+  d'écart `22-DATA-GAP-AUDIT.md` PASS, storage 0 lien mort, sanity env
+  `sanity-check-env.ts` 0 suspect, gate RGPD validé, CI verte).
+- **Rollback (§8)** : re-flag `NEXT_PUBLIC_APP_ENV=staging` + `MAIL_DRY_RUN=true`
+  (~5 min) ; la base cloud reste la vérité, jamais de restore local.
+- **Preuves** : chaque section produit son evidence datée en §9 — le runbook n'est
+  « exécuté » que quand §9 est rempli.
