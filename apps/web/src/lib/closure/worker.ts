@@ -1,38 +1,31 @@
 /**
- * Worker BullMQ "closure-generation".
+ * Cœur métier "closure-generation" — logique d'un job de génération de doc.
  *
- * Lancé via `pnpm --filter @qualiof/web worker:closure` (script séparé).
- * Process indépendant de Next.js — robuste aux redémarrages SSR.
+ * Le driver de queue est Postgres (`FOR UPDATE SKIP LOCKED`, cf
+ * `queue-postgres.ts`), plus aucun broker Redis/BullMQ. Ce module n'expose que
+ * `processClosureJobPayload`, agnostique du driver, réutilisé par :
+ *   - le worker Postgres `closure-worker-postgres.ts` (prod cloud)
+ *   - les scripts de régénération one-shot (`scripts/_gen-session-pack.ts`, …)
  *
  * Responsabilités :
  *   1. Charger les données nécessaires (participant + session + product)
- *   2. Appeler le renderer (mock pour Day 1, réel à partir de Day 2)
- *   3. Uploader le PDF dans MinIO
+ *   2. Appeler le renderer
+ *   3. Uploader le PDF dans le storage
  *   4. Créer Document (ATTESTATION, CERTIFICAT) ou PedagogicalAsset
  *      (QCM, GRILLE_OBS, ANALYSE_BESOIN)
  *   5. Mettre à jour ClosureJob + ClosureBatch (compteurs, status)
  */
 
 import { createHash } from 'node:crypto';
-import { Worker, type Job } from 'bullmq';
 import { prisma, type ClosureBatchStatus, type ClosureDocKind, type DocType, type PedagogicalKind } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { sendMail } from '@/lib/mailer';
-import { getWorkerRedis } from './redis';
-import { CLOSURE_QUEUE_NAME } from './queue';
 import { renderClosureDoc } from './renderer';
 import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
 import { loadOfConfig } from '@/lib/of-config';
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-
-// Concurrency 3 par défaut : sur Apple Silicon avec mistral-small:24b en
-// local, 5 contextes en parallèle saturent le GPU et font traîner toutes
-// les requêtes (latence moyenne 4-5 min, timeouts en cascade). 3 workers
-// laissent assez de bande passante pour que chaque génération se termine
-// en ~2 min. À monter jusqu'à 8 quand on bascule sur Claude API.
-const CONCURRENCY = Number(process.env.CLOSURE_WORKER_CONCURRENCY ?? 3);
 
 // Mapping kind → DocType pour les documents écrits dans `Document`
 const DOC_TYPE_BY_KIND: Partial<Record<ClosureDocKind, DocType>> = {
@@ -52,43 +45,35 @@ const PEDAGOGICAL_KIND_BY_KIND: Partial<Record<ClosureDocKind, PedagogicalKind>>
   EMARGEMENT: 'EMARGEMENT',
 };
 
-export function startClosureWorker(): Worker<ClosureJobPayload> {
-  const worker = new Worker<ClosureJobPayload>(
-    CLOSURE_QUEUE_NAME,
-    async (job) => processClosureJob(job),
-    {
-      connection: getWorkerRedis(),
-      concurrency: CONCURRENCY,
-    },
-  );
-
-  worker.on('completed', (job) => {
-    console.log(`[closure-worker] ✓ ${job.id} (${job.data.kind} for ${job.data.participantId})`);
-  });
-  worker.on('failed', (job, err) => {
-    console.error(`[closure-worker] ✗ ${job?.id} — ${err.message}`);
-  });
-  worker.on('error', (err) => {
-    console.error('[closure-worker] error:', err);
-  });
-
-  console.log(`[closure-worker] started (concurrency=${CONCURRENCY}, queue="${CLOSURE_QUEUE_NAME}")`);
-  return worker;
+export interface ProcessJobOptions {
+  attemptsMade: number;
+  maxAttempts: number;
+  /** Si true, marque ClosureJob.status='PROCESSING' avant de traiter.
+   *  Postgres driver le fait dans claim → false côté Postgres. */
+  markProcessing?: boolean;
 }
 
-async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
-  const payload = job.data;
-
-  // 1. Marque le job en PROCESSING dans Postgres
-  await prisma.closureJob.update({
-    where: { id: payload.jobId },
-    data: {
-      status: 'PROCESSING',
-      attempts: { increment: 1 },
-      startedAt: new Date(),
-      errorMessage: null,
-    },
-  });
+/**
+ * Logique métier d'un job closure — agnostique du driver de queue.
+ * Utilisée par le worker Postgres `FOR UPDATE SKIP LOCKED` (cloud) et les
+ * scripts de régénération one-shot.
+ */
+export async function processClosureJobPayload(
+  payload: ClosureJobPayload,
+  opts: ProcessJobOptions,
+): Promise<void> {
+  // 1. Marque le job en PROCESSING dans Postgres si pas déjà fait (BullMQ path).
+  if (opts.markProcessing) {
+    await prisma.closureJob.update({
+      where: { id: payload.jobId },
+      data: {
+        status: 'PROCESSING',
+        attempts: { increment: 1 },
+        startedAt: new Date(),
+        errorMessage: null,
+      },
+    });
+  }
   await markBatchRunningIfNeeded(payload.batchId);
 
   try {
@@ -190,18 +175,31 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
 
     const docType = DOC_TYPE_BY_KIND[payload.kind];
     if (docType) {
-      const doc = await prisma.document.create({
-        data: {
-          tenantId: payload.tenantId,
-          type: docType,
-          entityType: 'participant',
-          entityId: payload.participantId,
-          pdfUrl: key,
-          hashSha256: hash,
-          sessionId: payload.sessionId,
-          participantId: payload.participantId,
-        },
-      });
+      // Idempotence : 1 seul Document par (session, participant, type).
+      // deleteMany + create dans la MÊME transaction → pas de fenêtre où
+      // 0 doc existe si le process casse entre les deux (atomicité).
+      const [, doc] = await prisma.$transaction([
+        prisma.document.deleteMany({
+          where: {
+            tenantId: payload.tenantId,
+            sessionId: payload.sessionId,
+            participantId: payload.participantId,
+            type: docType,
+          },
+        }),
+        prisma.document.create({
+          data: {
+            tenantId: payload.tenantId,
+            type: docType,
+            entityType: 'participant',
+            entityId: payload.participantId,
+            pdfUrl: key,
+            hashSha256: hash,
+            sessionId: payload.sessionId,
+            participantId: payload.participantId,
+          },
+        }),
+      ]);
       documentId = doc.id;
     }
 
@@ -251,8 +249,8 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
     if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Si BullMQ va retry, on garde le job en PROCESSING (pas ERROR définitif)
-    const isFinalAttempt = (job.attemptsMade + 1) >= (job.opts.attempts ?? 1);
+    // Si le driver va retry, on remet le job en QUEUED (pas ERROR définitif).
+    const isFinalAttempt = opts.attemptsMade + 1 >= opts.maxAttempts;
     await prisma.closureJob.update({
       where: { id: payload.jobId },
       data: {
@@ -264,7 +262,7 @@ async function processClosureJob(job: Job<ClosureJobPayload>): Promise<void> {
       const finalized = await bumpAndFinalize(payload.batchId, 'error');
       if (finalized) await notifyBatchCompletion(payload.batchId, finalized);
     }
-    throw err; // BullMQ doit voir l'erreur pour gérer retry
+    throw err; // Le caller doit voir l'erreur (BullMQ retry, Postgres log).
   }
 }
 

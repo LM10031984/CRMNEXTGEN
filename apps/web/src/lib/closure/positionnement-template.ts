@@ -84,7 +84,7 @@ export function renderPositionnementHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Questionnaire de positionnement et auto-évaluation</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 4 — Recueil des besoins en début et fin de formation</p>
+  <p class="doc-subtitle">Recueil des besoins en début et fin de formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}

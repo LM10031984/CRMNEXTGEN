@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useMemo } from 'react';
+import { useState, useTransition, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -17,9 +17,11 @@ import {
   X,
   Sparkles,
   GraduationCap,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { computeEndDateISO, isBusinessDayISO } from '@/lib/business-days';
+import { isBusinessDayISO } from '@/lib/business-days';
 import { Badge } from '@/components/ui/badge';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
 import { QuickCreateProductButton } from '@/components/wizards/quick-create-product';
@@ -29,6 +31,18 @@ import {
   createSessionFull,
   type CreateSessionInput,
 } from '@/server/actions/sessions-create';
+import {
+  proposeScheduleAction,
+  checkMultipleTrainersAvailabilityAction,
+  persistSessionSlotsAction,
+} from '@/server/actions/schedule-wizard';
+
+type TrainerAvail = {
+  hasConflict: boolean;
+  totalDates: number;
+  availableDates: number;
+  conflicts: { dateIso: string; reason: 'session_taken' | 'unavailable'; sessionCode?: string }[];
+};
 
 type Modality = 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
 type FinancingMode = 'OPCO' | 'CPF' | 'ENTREPRISE' | 'AUTOFINANCEMENT' | 'POLE_EMPLOI' | 'AUTRE';
@@ -100,6 +114,12 @@ export function SessionWizard({
   const [pricePerLearner, setPricePerLearner] = useState<string>('');
   const [capacityMax, setCapacityMax] = useState<string>('');
   const [internalNotes, setInternalNotes] = useState('');
+  // Étape 2 — agenda généré + dispos formateurs
+  const [proposedDates, setProposedDates] = useState<string[]>([]); // ISO YYYY-MM-DD
+  const [proposedNbDays, setProposedNbDays] = useState<number>(0);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [trainerAvail, setTrainerAvail] = useState<Record<string, TrainerAvail>>({});
+  const [trainerAvailLoading, setTrainerAvailLoading] = useState(false);
 
   // Étape 3
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
@@ -116,13 +136,79 @@ export function SessionWizard({
     setModality(p.modality);
     setCapacityMax(String(p.capacityMax));
     setPricePerLearner(Number(p.priceHT) > 0 ? String(p.priceHT) : '');
-    if (p.durationHours && startDate) {
-      // Règle métier : 8h = 1 journée, skip week-ends + jours fériés FR
-      setEndDate(computeEndDateISO(startDate, p.durationHours));
-    }
+    // L'agenda (dates+endDate) sera calculé par l'effect ci-dessous.
     // Avance auto à l'étape 2 si on est encore à l'étape 1
     setStep((prev) => (prev === 1 ? 2 : prev));
   };
+
+  // Effect — recalculer l'agenda dès que produit/startDate change.
+  // Skip W-E + fériés FR, 8h/jour 9-13/14-18, nbJours = ceil(durationH/8).
+  useEffect(() => {
+    if (!selectedProduct?.durationHours || !startDate) {
+      setProposedDates([]);
+      setProposedNbDays(0);
+      return;
+    }
+    let cancelled = false;
+    setScheduleLoading(true);
+    (async () => {
+      const r = await proposeScheduleAction({
+        startDate,
+        durationHours: selectedProduct.durationHours,
+      });
+      if (cancelled) return;
+      if (r.ok && r.dates && r.endDate && r.nbDays !== undefined) {
+        setProposedDates(r.dates);
+        setProposedNbDays(r.nbDays);
+        setEndDate(r.endDate);
+      }
+      setScheduleLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProduct?.durationHours, startDate]);
+
+  // Effect — recalculer la dispo de TOUS les formateurs candidats dès que
+  // les dates changent, pour afficher un badge Dispo / X conflits.
+  useEffect(() => {
+    if (proposedDates.length === 0 || initialTrainers.length === 0) {
+      setTrainerAvail({});
+      return;
+    }
+    let cancelled = false;
+    setTrainerAvailLoading(true);
+    (async () => {
+      const r = await checkMultipleTrainersAvailabilityAction({
+        trainerPersonIds: initialTrainers.map((t) => t.id),
+        dates: proposedDates,
+      });
+      if (cancelled) return;
+      if (r.ok && r.results) {
+        const map: Record<string, TrainerAvail> = {};
+        for (const res of r.results) {
+          map[res.trainerId] = {
+            hasConflict: res.hasConflict,
+            totalDates: res.totalDates,
+            availableDates: res.availableDates,
+            conflicts: res.conflicts.map((c) => ({
+              dateIso:
+                typeof c.date === 'string'
+                  ? (c.date as string).slice(0, 10)
+                  : new Date(c.date as Date).toISOString().slice(0, 10),
+              reason: c.reason,
+              sessionCode: c.sessionCode,
+            })),
+          };
+        }
+        setTrainerAvail(map);
+      }
+      setTrainerAvailLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [proposedDates, initialTrainers]);
 
   const runProductSearch = (q: string) => {
     setProductQuery(q);
@@ -138,6 +224,15 @@ export function SessionWizard({
       if (!startDate || !endDate) return 'Dates obligatoires';
       if (new Date(endDate) < new Date(startDate)) return 'Date fin doit être ≥ date début';
       if (trainerIds.length === 0) return 'Au moins un formateur est requis';
+      // Bloque si un formateur sélectionné est totalement indispo sur la plage
+      const blocking = trainerIds.find((id) => {
+        const a = trainerAvail[id];
+        return a && a.totalDates > 0 && a.availableDates === 0;
+      });
+      if (blocking) {
+        const t = initialTrainers.find((tr) => tr.id === blocking);
+        return `Formateur ${t?.firstName ?? ''} ${t?.lastName ?? ''} indisponible sur toutes les dates — change de formateur ou de dates`;
+      }
     }
     if (s === 3 && participants.length === 0) return 'Au moins un participant est requis';
     return null;
@@ -189,11 +284,26 @@ export function SessionWizard({
 
     startTransition(async () => {
       const r = await createSessionFull(payload);
-      if (r.ok && r.sessionId) {
-        router.push(`/app/sessions/${r.sessionId}`);
-      } else {
+      if (!r.ok || !r.sessionId) {
         setError(r.error ?? 'Erreur lors de la création');
+        return;
       }
+      // Persist les SessionSlot 9-13/14-18 sur les dates ouvrées calculées.
+      // Échec non-bloquant : la session existe, on log et on continue (l'admin
+      // pourra re-générer le planning depuis la fiche).
+      try {
+        const slotsRes = await persistSessionSlotsAction({
+          sessionId: r.sessionId,
+          durationHours: selectedProduct.durationHours,
+          startDate,
+        });
+        if (!slotsRes.ok) {
+          console.warn('[wizard] persistSessionSlots a échoué :', slotsRes.error);
+        }
+      } catch (e) {
+        console.warn('[wizard] persistSessionSlots exception :', e);
+      }
+      router.push(`/app/sessions/${r.sessionId}`);
     });
   };
 
@@ -352,14 +462,7 @@ export function SessionWizard({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setStartDate(next);
-                  // Auto-calcul date de fin : 8h = 1 journée, skip W-E + fériés FR
-                  if (next && selectedProduct?.durationHours) {
-                    setEndDate(computeEndDateISO(next, selectedProduct.durationHours));
-                  }
-                }}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {startDate && !isBusinessDayISO(startDate) && (
@@ -367,24 +470,24 @@ export function SessionWizard({
                   ⚠ {(() => {
                     const d = new Date(startDate + 'T00:00:00Z');
                     const dow = d.getUTCDay();
-                    if (dow === 0 || dow === 6) return 'C\'est un week-end';
-                    return 'C\'est un jour férié français';
+                    if (dow === 0 || dow === 6) return 'C\'est un week-end — l\'agenda démarrera lundi suivant';
+                    return 'C\'est un jour férié français — l\'agenda démarrera le jour ouvré suivant';
                   })()}
                 </p>
               )}
             </Field>
-            <Field label="Date de fin" required>
+            <Field label="Date de fin (auto)">
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                readOnly
+                className="w-full h-10 px-3 rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed"
               />
               {selectedProduct?.durationHours ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Auto-calculée : {Math.max(1, Math.ceil(selectedProduct.durationHours / 8))} jour
-                  {Math.ceil(selectedProduct.durationHours / 8) > 1 ? 's' : ''} ouvré
-                  {Math.ceil(selectedProduct.durationHours / 8) > 1 ? 's' : ''} ({selectedProduct.durationHours}h ÷ 8h/j)
+                  Auto-calculée — {proposedNbDays || Math.ceil(selectedProduct.durationHours / 8)}{' '}
+                  jour{proposedNbDays > 1 ? 's' : ''} de formation ({selectedProduct.durationHours}h
+                  · 8h/jour 9h-13h/14h-18h)
                 </p>
               ) : null}
             </Field>
@@ -440,6 +543,84 @@ export function SessionWizard({
             </Field>
           </div>
 
+          {/* Agenda généré — lecture seule V1, source de vérité = startDate + duration produit */}
+          {selectedProduct && (
+            <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    Agenda généré
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Horaires figés Start Academy : <strong>9h-13h / 14h-18h</strong> · 8h/jour ·
+                    skip samedi, dimanche, jours fériés FR
+                  </p>
+                </div>
+                {scheduleLoading && (
+                  <span className="text-[11px] text-muted-foreground">Calcul…</span>
+                )}
+              </div>
+
+              {proposedDates.length > 0 ? (
+                <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {proposedDates.map((iso, i) => {
+                    const d = new Date(iso + 'T00:00:00');
+                    const lastDay = i === proposedDates.length - 1;
+                    const remainingHours =
+                      selectedProduct.durationHours - i * 8;
+                    const isHalfDay = lastDay && remainingHours > 0 && remainingHours <= 4;
+                    return (
+                      <li
+                        key={iso}
+                        className="rounded-lg border border-border bg-white px-3 py-2 text-xs"
+                      >
+                        <div className="font-medium text-foreground">
+                          J{i + 1} ·{' '}
+                          {d.toLocaleDateString('fr-FR', {
+                            weekday: 'short',
+                            day: '2-digit',
+                            month: 'short',
+                          })}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Sun className="h-3 w-3" /> 9h-13h
+                          </span>
+                          {!isHalfDay && (
+                            <span className="inline-flex items-center gap-1">
+                              <Moon className="h-3 w-3" /> 14h-18h
+                            </span>
+                          )}
+                          {isHalfDay && (
+                            <Badge variant="muted" className="text-[9px]">
+                              demi-journée
+                            </Badge>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  Choisis une date de début pour générer l'agenda.
+                </p>
+              )}
+
+              {/* Alerte mismatch programme ↔ planning */}
+              {proposedNbDays > 0 &&
+                selectedProduct.durationHours > 0 &&
+                proposedNbDays !== Math.ceil(selectedProduct.durationHours / 8) && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+                    ⚠ Incohérence : {proposedNbDays} jour(s) générés vs{' '}
+                    {Math.ceil(selectedProduct.durationHours / 8)} jour(s) attendus pour{' '}
+                    {selectedProduct.durationHours}h. À vérifier.
+                  </div>
+                )}
+            </div>
+          )}
+
           <Field label="Formateur(s) — au moins 1" required>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {initialTrainers.length === 0 ? (
@@ -449,11 +630,32 @@ export function SessionWizard({
               ) : (
                 initialTrainers.map((t) => {
                   const selected = trainerIds.includes(t.id);
+                  const avail = trainerAvail[t.id];
+                  const allBusy =
+                    !!avail && avail.totalDates > 0 && avail.availableDates === 0;
+                  const conflictCount = avail?.conflicts.length ?? 0;
+                  const conflictTooltip =
+                    conflictCount > 0
+                      ? avail!.conflicts
+                          .slice(0, 4)
+                          .map(
+                            (c) =>
+                              `${new Date(c.dateIso + 'T00:00:00').toLocaleDateString(
+                                'fr-FR',
+                                { day: '2-digit', month: '2-digit' },
+                              )}${c.sessionCode ? ` (${c.sessionCode})` : ''}`,
+                          )
+                          .join(' · ') +
+                        (conflictCount > 4 ? ` · +${conflictCount - 4}` : '')
+                      : '';
                   return (
                     <button
                       key={t.id}
                       type="button"
+                      disabled={allBusy && !selected}
+                      title={conflictTooltip || undefined}
                       onClick={() => {
+                        if (allBusy && !selected) return;
                         setTrainerIds(
                           selected ? trainerIds.filter((id) => id !== t.id) : [...trainerIds, t.id],
                         );
@@ -462,19 +664,46 @@ export function SessionWizard({
                         'flex items-center gap-2 px-3 h-10 rounded-md border text-sm transition-colors',
                         selected
                           ? 'border-primary-300 bg-primary-50 text-primary-800'
-                          : 'border-border bg-white hover:border-primary-200',
+                          : allBusy
+                            ? 'border-red-200 bg-red-50/50 text-red-700 cursor-not-allowed opacity-60'
+                            : 'border-border bg-white hover:border-primary-200',
                       )}
                     >
                       <GraduationCap className="h-4 w-4" />
-                      <span className="flex-1 text-left">
+                      <span className="flex-1 text-left truncate">
                         {t.firstName} {t.lastName}
                       </span>
+                      {proposedDates.length > 0 && (
+                        <>
+                          {trainerAvailLoading && !avail ? (
+                            <span className="text-[10px] text-muted-foreground">…</span>
+                          ) : allBusy ? (
+                            <Badge variant="danger" className="text-[10px]">
+                              Indispo
+                            </Badge>
+                          ) : conflictCount > 0 ? (
+                            <Badge variant="warning" className="text-[10px]">
+                              {conflictCount} conflit{conflictCount > 1 ? 's' : ''}
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" className="text-[10px]">
+                              Dispo
+                            </Badge>
+                          )}
+                        </>
+                      )}
                       {selected && <Check className="h-4 w-4 text-primary shrink-0" />}
                     </button>
                   );
                 })
               )}
             </div>
+            {proposedDates.length > 0 && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Disponibilités croisées avec les sessions existantes sur les{' '}
+                {proposedDates.length} jour(s) prévu(s).
+              </p>
+            )}
           </Field>
 
           <Field label="Notes internes (optionnel)">

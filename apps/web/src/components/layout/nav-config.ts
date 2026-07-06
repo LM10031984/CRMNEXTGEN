@@ -19,6 +19,7 @@ import {
   Sliders,
   Newspaper,
   FilePlus,
+  BarChart3,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -83,6 +84,17 @@ export const NAV: NavSection[] = [
   {
     title: 'Suivi',
     items: [
+      // Pilotage Direction (quick 260620-d42) : ADMIN+MANAGER uniquement — vue
+      // CA réalisé vs objectif vs prévisionnel. Réservée à la direction (pas de
+      // COMMERCIAL/COMPTABLE/LECTEUR/FORMATEUR). Sécurité réelle : garde hasRole
+      // côté page.tsx + requireRole côté setRevenueTarget. BarChart3 la distingue
+      // de "Vue de charge" (TrendingUp).
+      {
+        label: 'Pilotage',
+        href: '/app/pilotage',
+        icon: BarChart3,
+        allowedRoles: ['ADMIN', 'MANAGER'],
+      },
       // Dossiers OPCO : ADMIN/MANAGER/COMMERCIAL/COMPTABLE/LECTEUR (FORMATEUR exclu)
       {
         label: 'Dossiers OPCO',
@@ -112,6 +124,14 @@ export const NAV: NavSection[] = [
         href: '/app/budget-agefice',
         icon: Wallet,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE', 'LECTEUR'],
+      },
+      // Audit Trésorerie : réplique vue Excel Tréso AGEFICE avec les 2 formules
+      // statut Airtable (Statut_Opco + Statut_encaissement).
+      {
+        label: 'Audit Tréso',
+        href: '/app/audit-treso',
+        icon: Wallet,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMPTABLE', 'LECTEUR'],
       },
       // Leads : ADMIN/MANAGER/COMMERCIAL uniquement
       {

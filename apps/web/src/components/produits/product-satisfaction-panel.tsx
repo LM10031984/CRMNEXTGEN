@@ -128,8 +128,18 @@ export async function ProductSatisfactionPanel({
         </span>
       </div>
 
-      {/* KPIs — grid-cols-3 OK même mobile : 3 cards compactes (note/% + label court) */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      {/* KPIs — 4 cards : 2×2 mobile, 4 colonnes md+ (note /5 = métrique de suivi prioritaire) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className={`rounded-xl border-2 p-3 text-center ${scoreColor(agg.noteSur5 * 20)}`}>
+          <div className="text-[10px] uppercase tracking-wide opacity-70">Note /5</div>
+          <div className="text-2xl font-bold tabular-nums">
+            {agg.noteSur5.toLocaleString('fr-FR', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            })}
+            /5
+          </div>
+        </div>
         <div className={`rounded-xl border-2 p-3 text-center ${scoreColor(agg.globalScore)}`}>
           <div className="text-[10px] uppercase tracking-wide opacity-70">Score global</div>
           <div className="text-2xl font-bold tabular-nums">{agg.globalScore}%</div>

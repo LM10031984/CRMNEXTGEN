@@ -1,8 +1,13 @@
 /**
- * Phase 13 Plan 13-05 — Classifier Ollama RSS → thème Qualiopi.
+ * Phase 13 Plan 13-05 — Classifier RSS → thème Qualiopi.
+ * Phase 16 Plan 16-02 — Migration Ollama→Claude API : route via `callLlm`
+ * (tier 'fast' = Claude Haiku en OpenRouter, Ollama en local selon AI_PROVIDER).
  *
- * D-06 : modèle figé `mistral-small:24b` (pas de switch dynamique qwen3:30b-a3b
- * en V1). Si on change : bump PROMPT_VERSION_VEILLE + tracer dans AIGenerationJob.
+ * Le backend est choisi par `AI_PROVIDER` dans `llm-client.ts` — ce call site
+ * ne connaît plus de modèle codé en dur. Le tracing AIGenerationJob lit
+ * provider/model DYNAMIQUEMENT sur le résultat (r.provider / r.model). Si on
+ * re-tune le prompt : bump PROMPT_VERSION_VEILLE (ici on ne re-tune PAS, seul
+ * le backend change).
  *
  * Guard-rails (RESEARCH §6.4) :
  *  - Zod validation stricte (theme enum + confidence 0-100 + exploitation 10-500).
@@ -11,21 +16,19 @@
  *    (la décision skip est prise dans persist.ts).
  *  - Exception (timeout, HTTP error) → return null + AIGenerationJob status='error'.
  *
- * Worker safety : 0 import React / server-action / rbac. Importable depuis
- * scripts/veille-worker.ts (tsx) sans crash "react cache".
+ * Worker safety : 0 import React / server-action / rbac. `callLlm` est un fetch
+ * pur → importable depuis scripts/veille-worker.ts (tsx) sans crash "react cache".
  */
 
 import { createHash } from 'node:crypto';
 import { prisma } from '@qualiof/db';
-import { callOllama } from '@/lib/ai-ollama';
+import { callLlm } from '@/lib/llm-client';
 import {
   PROMPT_VERSION_VEILLE,
   SYSTEM_PROMPT_VEILLE_CLASSIFY,
   buildVeilleClassifyUserPrompt,
   VeilleClassifyOutputSchema,
 } from './prompts';
-
-const OLLAMA_MODEL_VEILLE = 'mistral-small:24b' as const;
 
 export interface ClassifyInput {
   title: string;
@@ -58,8 +61,8 @@ export async function classifyItem(
     .slice(0, 32);
 
   try {
-    const r = await callOllama({
-      model: OLLAMA_MODEL_VEILLE,
+    const r = await callLlm({
+      tier: 'fast',
       systemPrompt: SYSTEM_PROMPT_VEILLE_CLASSIFY,
       prompt: buildVeilleClassifyUserPrompt(input),
       jsonOutput: true,
@@ -71,8 +74,8 @@ export async function classifyItem(
       await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'ollama',
-          model: OLLAMA_MODEL_VEILLE,
+          provider: r.provider,
+          model: r.model,
           promptVersion: PROMPT_VERSION_VEILLE,
           inputHash,
           status: 'error',
@@ -89,8 +92,8 @@ export async function classifyItem(
     await prisma.aIGenerationJob.create({
       data: {
         tenantId,
-        provider: 'ollama',
-        model: OLLAMA_MODEL_VEILLE,
+        provider: r.provider,
+        model: r.model,
         promptVersion: PROMPT_VERSION_VEILLE,
         inputHash,
         status: parsed.data.theme === 'OTHER' ? 'skipped_other' : 'ok',
@@ -101,11 +104,15 @@ export async function classifyItem(
     return parsed.data;
   } catch (e) {
     const msg = (e as Error).message ?? String(e);
+    // Le throw précède la réponse → `r` n'existe pas ici. On trace un provider
+    // de repli (dérivé de AI_PROVIDER) et model='unknown' (aucun modèle résolu).
+    const fallbackProvider =
+      (process.env.AI_PROVIDER ?? 'ollama') === 'openrouter' ? 'openrouter' : 'ollama';
     await prisma.aIGenerationJob.create({
       data: {
         tenantId,
-        provider: 'ollama',
-        model: OLLAMA_MODEL_VEILLE,
+        provider: fallbackProvider,
+        model: 'unknown',
         promptVersion: PROMPT_VERSION_VEILLE,
         inputHash,
         status: 'error',

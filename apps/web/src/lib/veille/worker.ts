@@ -1,21 +1,21 @@
 /**
- * Phase 13 Plan 13-05 — BullMQ Worker veille.
+ * Phase 13 Plan 13-05 → Phase 20 Plan 20-01 — Handler veille (croner).
  *
- * Clone-strict pattern Phase 11 `invoice-reminders/worker.ts:startInvoiceReminderWorker`.
+ * WORK-02 (D-03 « Redis viré partout ») : ce handler ne dépend plus de BullMQ.
+ * Il accepte un payload neutre `{ triggered_by }` et est appelé par le cron
+ * interne `scripts/veille-worker.ts` (croner, lundi 8h Europe/Paris) — plus de
+ * `Worker`/Redis. La planification renaît du code au boot du process.
  *
  * Multi-tenant : itère sur tous les tenants (typiquement 1 seul pour Start Academy
  * mono-tenant en V1, mais le worker est prêt pour multi-tenant).
  *
- * Concurrency=1 : ingestion séquentielle pour ne pas saturer Ollama local
- * (mistral-small:24b prend ~5-10s par item, 12 sources × 5 items = ~10 min).
+ * Ingestion séquentielle pour ne pas saturer le LLM
+ * (~5-10s par item, 12 sources × 5 items = ~10 min).
  *
  * Worker safety : 0 import server-action / rbac / React.
  */
 
-import { Worker, type Job } from 'bullmq';
 import { prisma } from '@qualiof/db';
-import { getWorkerRedis } from '../closure/redis';
-import { VEILLE_QUEUE_NAME, type VeilleJobPayload } from './queue';
 import { ingestRssOnceForTenant, type IngestResult } from './core';
 
 interface TenantIngestSummary extends IngestResult {
@@ -23,11 +23,11 @@ interface TenantIngestSummary extends IngestResult {
   tenantName: string;
 }
 
-export async function processVeilleJob(
-  job: Job<VeilleJobPayload>,
-): Promise<TenantIngestSummary[]> {
+export async function processVeilleJob(input: {
+  triggered_by: string;
+}): Promise<TenantIngestSummary[]> {
   console.log(
-    `[veille-worker] tick jobId=${job.id} triggered_by=${job.data.triggered_by}`,
+    `[veille-worker] tick jobId=cron triggered_by=${input.triggered_by}`,
   );
 
   const tenants = await prisma.tenant.findMany({
@@ -39,36 +39,4 @@ export async function processVeilleJob(
     summaries.push({ tenantId: t.id, tenantName: t.name, ...r });
   }
   return summaries;
-}
-
-export function startVeilleWorker(): Worker<VeilleJobPayload> {
-  const worker = new Worker<VeilleJobPayload>(
-    VEILLE_QUEUE_NAME,
-    processVeilleJob as never,
-    {
-      connection: getWorkerRedis(),
-      concurrency: 1,
-    },
-  );
-
-  worker.on('completed', (job, result) => {
-    console.log('[veille-worker] completed', {
-      jobId: job.id,
-      summaries: result,
-    });
-  });
-  worker.on('failed', (job, err) => {
-    console.error('[veille-worker] failed', {
-      jobId: job?.id,
-      err: err.message,
-    });
-  });
-  worker.on('error', (err) => {
-    console.error('[veille-worker] error', err);
-  });
-
-  console.log(
-    `[veille-worker] started (queue="${VEILLE_QUEUE_NAME}", concurrency=1)`,
-  );
-  return worker;
 }

@@ -1,19 +1,22 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Upload, Check, X, Loader2, FileText, CreditCard, Building2, Sparkles, AlertCircle } from 'lucide-react';
+import { Upload, Check, Loader2, FileText, CreditCard, Building2, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { submitPreEnrollmentForm } from '@/server/actions/preinscription-public';
+import {
+  createPreEnrollmentUploadUrl,
+  confirmPreEnrollmentUpload,
+} from '@/server/actions/storage-upload';
+import { DirectUploadField } from '@/components/shared/direct-upload-field';
 
 type FileKind = 'CNI' | 'RIB' | 'CFP';
 
-interface FileSlot {
+interface UploadSlotMeta {
   kind: FileKind;
   label: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   required: boolean;
-  file: File | null;
 }
 
 const STATUS_OPTIONS = [
@@ -59,14 +62,15 @@ export function PublicPreEnrollmentForm({
   const [experience, setExperience] = useState('');
   const [rgpd, setRgpd] = useState(false);
 
-  const [slots, setSlots] = useState<FileSlot[]>([
+  // Métadonnées des 3 slots — l'upload lui-même est géré par <DirectUploadField>
+  // (fichier envoyé DIRECTEMENT à Supabase au choix du fichier, pas à la soumission).
+  const slotMeta: UploadSlotMeta[] = [
     {
       kind: 'CNI',
       label: 'Pièce d\'identité',
       description: 'CNI, passeport ou titre de séjour — photo (JPG/PNG) ou PDF',
       icon: CreditCard,
       required: true,
-      file: null,
     },
     {
       kind: 'RIB',
@@ -74,7 +78,6 @@ export function PublicPreEnrollmentForm({
       description: 'PDF ou photo du RIB de ton compte professionnel',
       icon: Building2,
       required: true,
-      file: null,
     },
     {
       kind: 'CFP',
@@ -82,26 +85,11 @@ export function PublicPreEnrollmentForm({
       description: "Attestation URSSAF de versement de la contribution à la formation pro (recommandée pour pré-remplir le dossier)",
       icon: FileText,
       required: false,
-      file: null,
     },
-  ]);
+  ];
 
-  const setSlot = (kind: FileKind, file: File | null) => {
-    setSlots(slots.map((s) => (s.kind === kind ? { ...s, file } : s)));
-  };
-
-  const fileToBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // result = "data:application/pdf;base64,XXX..."
-        const base64 = result.split(',')[1] ?? '';
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  // Clés confirmées des fichiers DÉJÀ uploadés directement chez Supabase.
+  const [uploadedKeys, setUploadedKeys] = useState<Partial<Record<FileKind, string>>>({});
 
   const handleSubmit = async () => {
     setError(null);
@@ -113,25 +101,16 @@ export function PublicPreEnrollmentForm({
       setError('Tu dois accepter le traitement RGPD');
       return;
     }
-    const filesToUpload = slots.filter((s) => s.file !== null);
-    if (filesToUpload.length === 0) {
+    if (Object.keys(uploadedKeys).length === 0) {
       setError('Dépose au moins une pièce justificative');
       return;
     }
 
     startTransition(async () => {
       try {
-        const fileData = await Promise.all(
-          filesToUpload.map(async (s) => ({
-            kind: s.kind,
-            name: s.file!.name,
-            contentType: s.file!.type,
-            base64: await fileToBase64(s.file!),
-          })),
-        );
-
-        const r = await submitPreEnrollmentForm({
-          token,
+        // Les fichiers sont DÉJÀ uploadés (direct-to-storage au choix du fichier).
+        // La soumission ne fait que confirmer les clés + persister les champs texte.
+        const r = await confirmPreEnrollmentUpload(token, uploadedKeys, {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
@@ -143,7 +122,6 @@ export function PublicPreEnrollmentForm({
           educationLevel: educationLevel.trim() || undefined,
           professionalExperience: experience.trim() || undefined,
           rgpdAccepted: true,
-          files: fileData,
         });
 
         if (r.ok) {
@@ -153,7 +131,7 @@ export function PublicPreEnrollmentForm({
         }
       } catch (e) {
         console.error(e);
-        setError('Erreur technique lors de l\'envoi des fichiers');
+        setError('Erreur technique lors de l\'envoi du dossier');
       }
     });
   };
@@ -275,14 +253,29 @@ export function PublicPreEnrollmentForm({
       {/* Section pièces */}
       <Section title="Tes pièces justificatives" icon={Upload}>
         <p className="text-sm text-muted-foreground -mt-1 mb-3">
-          Glisse-dépose ou clique pour choisir. PDF, JPG ou PNG. Max 10 Mo par fichier.
+          Clique pour choisir. PDF, JPG ou PNG. Max 50 Mo par fichier — l'envoi démarre
+          tout de suite (barre de progression), même sur une photo prise au smartphone.
         </p>
         <div className="space-y-3">
-          {slots.map((s) => (
-            <FileDrop
+          {slotMeta.map((s) => (
+            <DirectUploadField
               key={s.kind}
-              slot={s}
-              onChange={(f) => setSlot(s.kind, f)}
+              kind={s.kind}
+              label={s.label}
+              description={s.description}
+              required={s.required}
+              icon={s.icon}
+              requestUploadUrl={(kind, ext) => createPreEnrollmentUploadUrl(token, kind, ext)}
+              onUploaded={(kind, path) =>
+                setUploadedKeys((prev) => ({ ...prev, [kind]: path }))
+              }
+              onCleared={(kind) =>
+                setUploadedKeys((prev) => {
+                  const next = { ...prev };
+                  delete next[kind];
+                  return next;
+                })
+              }
             />
           ))}
         </div>
@@ -380,55 +373,3 @@ function Field({
   );
 }
 
-function FileDrop({ slot, onChange }: { slot: FileSlot; onChange: (f: File | null) => void }) {
-  const Icon = slot.icon;
-  const inputId = `file-${slot.kind}`;
-  return (
-    <label
-      htmlFor={inputId}
-      className={cn(
-        'flex items-center gap-4 p-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
-        slot.file
-          ? 'border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50'
-          : 'border-border hover:border-primary-300 hover:bg-muted/30',
-      )}
-    >
-      <div className={cn(
-        'h-10 w-10 rounded-lg inline-flex items-center justify-center shrink-0',
-        slot.file ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground',
-      )}>
-        {slot.file ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm">
-          {slot.label}{' '}
-          {slot.required && <span className="text-red-500">*</span>}
-        </div>
-        {slot.file ? (
-          <div className="text-xs text-emerald-700 truncate">{slot.file.name} ({(slot.file.size / 1024).toFixed(0)} ko)</div>
-        ) : (
-          <div className="text-xs text-muted-foreground">{slot.description}</div>
-        )}
-      </div>
-      {slot.file ? (
-        <button
-          type="button"
-          onClick={(e) => { e.preventDefault(); onChange(null); }}
-          className="h-7 w-7 rounded-md hover:bg-red-50 text-red-600 inline-flex items-center justify-center shrink-0"
-          title="Retirer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      ) : (
-        <span className="text-xs text-primary font-medium shrink-0">Choisir</span>
-      )}
-      <input
-        id={inputId}
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-        className="hidden"
-      />
-    </label>
-  );
-}

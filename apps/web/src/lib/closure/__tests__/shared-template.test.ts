@@ -172,7 +172,7 @@ describe('loadAssetDataUrl (via loadLogoColorDataUrl) — cascade tenant → bun
     writeFixture(tenantId, 'logo.jpg', TINY_JPG);
 
     const url = loadLogoColorDataUrl(tenantId);
-    expect(url).toMatch(/^data:image\/jpg;base64,/);
+    expect(url).toMatch(/^data:image\/jpeg;base64,/);
     expect(url).toContain(TINY_JPG.toString('base64'));
   });
 });

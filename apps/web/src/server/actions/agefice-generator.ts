@@ -12,6 +12,10 @@ import {
   type AgeficeFormData,
   type ExperienceTranche,
   type EvaluationType,
+  type FormationType,
+  type FormationNiveau,
+  type FormationCertif,
+  type AttestationType,
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
 
@@ -65,9 +69,24 @@ function splitDureeByModality(
 
 export async function generateAgeficeForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; warnings?: string[] }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
+
+  // Idempotence inconditionnelle : delete les Document AGEFICE existants pour
+  // ce participant AVANT de générer, sinon le hash SHA256 idempotent renvoie
+  // l'ancien doc (avec adresse buggée ou prix faux) et on empile des doublons.
+  // Laurent 2026-06-04 : "je ne peux pas régénérer un doc". Le paramètre
+  // `force` reste accepté dans la signature pour compat appelants mais ne
+  // conditionne plus la suppression.
+  await prisma.document.deleteMany({
+    where: {
+      tenantId: user.tenantId,
+      type: 'AGEFICE',
+      participantId,
+    },
+  });
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -203,16 +222,66 @@ export async function generateAgeficeForParticipant(
     theme: product.theme,
     title: product.title,
   });
+  // Format "Raison sociale — Nom du lieu\nadresse\nCP Ville" (cf demande Laurent
+  // 2026-06-03 : Cerfa AGEFICE exige SARL X — Agence Y + adresse).
+  // Normalise une adresse pour comparaison tolérante (accents, ponctuation,
+  // abréviations FR courantes) — sert à détecter une rue déjà présente dans le
+  // libellé du lieu.
+  const normalizeAddr = (s: string): string =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\bav\b/g, 'avenue')
+      .replace(/\bbd\b|\bbld\b|\bboul\b/g, 'boulevard')
+      .replace(/\bimp\b/g, 'impasse')
+      .replace(/\bch\b|\bchem\b/g, 'chemin')
+      .replace(/\bpl\b/g, 'place')
+      .replace(/\brte\b/g, 'route')
+      .replace(/\bst\b/g, 'saint')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
   const lieuAdresseComplete = session.location
-    ? [
-        (session.location.address as any)?.street,
-        [(session.location.address as any)?.postalCode, (session.location.address as any)?.city]
+    ? (() => {
+        const nameLine = [
+          (session.location as { legalName?: string | null }).legalName,
+          session.location.name,
+        ]
           .filter(Boolean)
-          .join(' '),
-      ]
-        .filter(Boolean)
-        .join('\n')
+          .join(' — ');
+        const street = (session.location.address as any)?.street as string | null | undefined;
+        // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
+        // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
+        // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
+        // 2026-07). CP + Ville ont leurs propres champs Cerfa.
+        const appendStreet =
+          !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
+        return [nameLine, appendStreet ? street : null].filter(Boolean).join('\n');
+      })()
     : of.addressFull;
+
+  // ── Conformité Cerfa (Section C/D) ───────────────────────────
+  // Lit les valeurs depuis TrainingProduct si renseignées, sinon fallback
+  // sur les défauts V1 (= comportement historique avant la Section C).
+  const pAny = product as Record<string, unknown>;
+  const ageficeFormationType =
+    ((pAny.ageficeFormationType as FormationType | null | undefined) ?? 'ACTION') as FormationType;
+  const ageficeNiveau =
+    ((pAny.ageficeNiveau as FormationNiveau | null | undefined) ?? 'PERFECTIONNEMENT') as FormationNiveau;
+  const ageficeCertif =
+    ((pAny.ageficeCertif as FormationCertif | null | undefined) ?? 'SANS_QUALIFICATION') as FormationCertif;
+  const ageficeAttestation =
+    ((pAny.ageficeAttestation as AttestationType | null | undefined) ?? 'ATTESTATION_STAGE') as AttestationType;
+  const productEvals = pAny.ageficeEvaluations as string[] | null | undefined;
+  const ageficeEvaluations: EvaluationType[] =
+    productEvals && productEvals.length > 0
+      ? (productEvals as EvaluationType[])
+      : (['QUIZ', 'FEUILLES_PRESENCE'] satisfies EvaluationType[]);
+  const ageficeObligatoire = (pAny.ageficeObligatoire as boolean | null | undefined) ?? false;
+  const ageficeReconversion = (pAny.ageficeReconversion as boolean | null | undefined) ?? false;
+  const ageficeEnEntreprise = (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? false;
+  const ageficeMandat = (pAny.ageficeMandat as boolean | null | undefined) ?? true;
 
   const data: AgeficeFormData = {
     pa: {
@@ -229,14 +298,23 @@ export async function generateAgeficeForParticipant(
     },
     entreprise: {
       raisonSociale: eiOrg.legalName,
-      nomCommercial: eiOrg.network ?? null,
+      // Nom commercial = nom de l'apprenant suffixé « EI » (Laurent 2026-06-16).
+      nomCommercial: `${participant.person.firstName} ${participant.person.lastName} EI`.trim(),
       naf: eiOrg.naf,
       siret: eiOrg.siret,
-      activite: eiOrg.activityDescription,
+      // Activité principale exercée : TOUJOURS « Immobilier » (Laurent 2026-06-16).
+      activite: 'Immobilier',
       formeJuridique: eiOrg.legalForm,
-      address: orgAddress?.street ?? null,
-      postalCode: orgAddress?.postalCode ?? null,
-      city: orgAddress?.city ?? null,
+      // AGEFICE refuse les dossiers si la raison sociale n'apparaît pas dans
+      // le champ "Adresse Entreprise" du Cerfa (Laurent 2026-06-04). On force le
+      // format "Raison Sociale — Rue", la rue venant du DOMICILE de l'apprenant
+      // si l'EI n'a pas d'adresse propre (auto-entrepreneur : adresse entreprise
+      // = domicile ; Laurent 2026-06-16).
+      address:
+        [eiOrg.legalName, orgAddress?.street ?? personalAddress?.street].filter(Boolean).join(' — ') ||
+        null,
+      postalCode: orgAddress?.postalCode ?? personalAddress?.postalCode ?? null,
+      city: orgAddress?.city ?? personalAddress?.city ?? null,
     },
     stagiaire: {
       civilite: inferCivilite(participant.person.civility),
@@ -251,14 +329,14 @@ export async function generateAgeficeForParticipant(
       experience: inferExperience(participant.person.professionalExperience),
     },
     of,
-    formationType: 'ACTION',
-    obligatoire: false,
-    reconversion: false,
+    formationType: ageficeFormationType,
+    obligatoire: ageficeObligatoire,
+    reconversion: ageficeReconversion,
     formation: {
       intitule: product.title,
       thematique: product.theme ?? 'immobilier',
-      niveau: 'PERFECTIONNEMENT',
-      certif: 'SANS_QUALIFICATION',
+      niveau: ageficeNiveau,
+      certif: ageficeCertif,
       dateDebut: session.startDate,
       dateFin: session.endDate,
       dureePresentielIndividuel: duree.presIndiv,
@@ -266,18 +344,26 @@ export async function generateAgeficeForParticipant(
       dureeFoadSynchrone: duree.foadSync,
       dureeFoadAsynchrone: duree.foadAsync,
       formateur: formateur || 'À confirmer',
-      lieuPostalCode:
-        (session.location?.address as any)?.postalCode ?? of.addressCp,
-      lieuVille: (session.location?.address as any)?.city ?? of.addressVille,
+      // Lieu de formation : si une Location est rattachée, on prend SON CP/ville
+      // (jamais ceux de l'OF — c'était le bug du CP 06800 OF affiché pour un lieu
+      // à Nice, Laurent 2026-06-16). Fallback OF UNIQUEMENT si aucune Location
+      // (formation intra-OF). Si la Location existe mais sans CP/ville structurés,
+      // on laisse vide (à corriger sur la fiche lieu) plutôt que d'afficher l'OF.
+      lieuPostalCode: session.location
+        ? ((session.location.address as any)?.postalCode ?? null)
+        : of.addressCp,
+      lieuVille: session.location
+        ? ((session.location.address as any)?.city ?? null)
+        : of.addressVille,
       lieuAdresseComplete,
       prixHT: effectivePrice,
-      enEntreprise: false,
+      enEntreprise: ageficeEnEntreprise,
       deroulementPedago,
     },
-    evaluations: ['QUIZ', 'FEUILLES_PRESENCE'] satisfies EvaluationType[],
+    evaluations: ageficeEvaluations,
     evaluationAutreDetail: null,
-    attestation: 'ATTESTATION_STAGE',
-    mandat: true,
+    attestation: ageficeAttestation,
+    mandat: ageficeMandat,
     signature: {
       lieu: of.addressVille || null,
       // Date du jour : on génère le PDF juste avant la signature, donc c'est la date réelle

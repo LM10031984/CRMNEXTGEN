@@ -33,11 +33,14 @@ describe('ProductTabs (compound) smoke (Plan 09.1-05)', () => {
     expect(src).toMatch(/usePathname|useSearchParams/);
   });
 
-  it('declares the 4 tab ids stats|sessions|apprenants|programme', () => {
+  it('declares the 5 tab ids stats|sessions|apprenants|programme|docs', () => {
     expect(src).toMatch(/'stats'/);
     expect(src).toMatch(/'sessions'/);
     expect(src).toMatch(/'apprenants'/);
     expect(src).toMatch(/'programme'/);
+    // Phase 9.3 NAV-02(b)(c) — onglet Documents.
+    expect(src).toMatch(/'docs'/);
+    expect(src).toMatch(/['"`]Documents['"`]/);
   });
 
   it('uses tab labels EXACTS UI-SPEC §Copywriting (Stats, Sessions, Apprenants formés, Programme)', () => {
@@ -159,5 +162,23 @@ describe('ProductProgrammeTab smoke (Plan 09.1-05)', () => {
 
   it('integrates GenerateProductProgrammeButton (existing CTA)', () => {
     expect(src).toMatch(/GenerateProductProgrammeButton/);
+  });
+});
+
+describe('ProductDocsTab smoke (Phase 9.3 Plan 03 — NAV-02(b)(c))', () => {
+  const src = readSrc('product-docs-tab.tsx');
+
+  it('exports ProductDocsTab (Server Component async)', () => {
+    expect(src).toMatch(/export\s+async\s+function\s+ProductDocsTab/);
+  });
+
+  it('aggregates via getDocsForProduct + renders UnifiedDocsList', () => {
+    expect(src).toMatch(/getDocsForProduct/);
+    expect(src).toMatch(/UnifiedDocsList/);
+  });
+
+  it('takes productId + tenantId props (scope tenant réel)', () => {
+    expect(src).toMatch(/productId/);
+    expect(src).toMatch(/tenantId/);
   });
 });

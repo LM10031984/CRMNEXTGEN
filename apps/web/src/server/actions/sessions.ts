@@ -15,6 +15,7 @@ import {
 } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { normalizeNullableText } from '@/lib/sessions/normalize-nullable-text';
 import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
 
@@ -95,23 +96,59 @@ export async function addParticipant(input: {
       },
     });
 
-    // Auto-génère la convention de formation (Code du Travail L6353-1) si elle
-    // n'existe pas déjà pour ce participant. Template pur (pas Ollama) → ~1s.
-    // Fire-and-forget pour ne pas bloquer l'inscription si génération échoue.
-    const existingConvention = await prisma.document.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        type: 'CONVENTION',
-        participantId: part.id,
-      },
-      select: { id: true },
-    });
+    // Auto-génération en parallèle des docs pré-formation pour CE participant.
+    // Tous fire-and-forget pour ne pas bloquer l'inscription si une génération
+    // échoue. Idempotent : skip si déjà existant.
+    // 1) Convention (Code du Travail L6353-1) — template pur ~1s
+    // 2) Convocation
+    // 3) Demande AGEFICE — uniquement si TNS éligible (sponsor AGEFICE OU
+    //    LegalLink EI_SELF/AGENT_COMMERCIAL sur une org rattachée AGEFICE).
+    //    Bug remonté Laurent 2026-06-04 : "AGEFICE doit se créer automatiquement
+    //    sans que je clique sur un bouton".
+    const [existingConvention, existingConvocation, existingAgefice] = await Promise.all([
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'CONVENTION', participantId: part.id },
+        select: { id: true },
+      }),
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId: part.id },
+        select: { id: true },
+      }),
+      prisma.document.findFirst({
+        where: { tenantId: user.tenantId, type: 'AGEFICE', participantId: part.id },
+        select: { id: true },
+      }),
+    ]);
+
     if (!existingConvention) {
       generateConventionForParticipant(part.id).catch((e) => {
-        console.warn(
-          `[addParticipant] auto-gen convention failed for ${part.id}:`,
-          e?.message ?? e,
-        );
+        console.warn(`[addParticipant] auto-gen convention failed for ${part.id}:`, e?.message ?? e);
+      });
+    }
+    if (!existingConvocation) {
+      const { generateConvocationForParticipant } = await import('./convocation-generator');
+      generateConvocationForParticipant(part.id).catch((e) => {
+        console.warn(`[addParticipant] auto-gen convocation failed for ${part.id}:`, e?.message ?? e);
+      });
+    }
+    // Eligibilité AGEFICE : sponsor AGEFICE OU EI/AGENT_COMMERCIAL sur org AGEFICE
+    const isAgeficeEligible =
+      sponsor.opcoCode === 'AGEFICE' ||
+      (await prisma.legalLink.findFirst({
+        where: {
+          personId: input.personId,
+          OR: [
+            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { opcoCode: 'AGEFICE' } },
+            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { ageficeProfile: { isNot: null } } },
+          ],
+        },
+        select: { id: true },
+      })) !== null;
+
+    if (isAgeficeEligible && !existingAgefice) {
+      const { generateAgeficeForParticipant } = await import('./agefice-generator');
+      generateAgeficeForParticipant(part.id).catch((e) => {
+        console.warn(`[addParticipant] auto-gen AGEFICE failed for ${part.id}:`, e?.message ?? e);
       });
     }
 
@@ -629,14 +666,23 @@ export async function updateSessionLogistics(input: {
   });
   if (!session) return { ok: false, error: 'Session introuvable.' };
 
+  // Normalisation "champ vidé" via helper unique partagé avec
+  // updateSessionDetails (commit ui-e2). Pattern '?.trim() || null'
+  // remplacé pour garder un seul chemin de normalisation.
   await prisma.trainingSession.update({
     where: { id: input.sessionId },
     data: {
       ...(input.needsTrainerLodging !== undefined ? { needsTrainerLodging: input.needsTrainerLodging } : {}),
-      ...(input.trainerLodgingPlace !== undefined ? { trainerLodgingPlace: input.trainerLodgingPlace?.trim() || null } : {}),
-      ...(input.trainerLodgingDates !== undefined ? { trainerLodgingDates: input.trainerLodgingDates?.trim() || null } : {}),
+      ...(input.trainerLodgingPlace !== undefined
+        ? { trainerLodgingPlace: normalizeNullableText(input.trainerLodgingPlace) }
+        : {}),
+      ...(input.trainerLodgingDates !== undefined
+        ? { trainerLodgingDates: normalizeNullableText(input.trainerLodgingDates) }
+        : {}),
       ...(input.hasDisabledLearner !== undefined ? { hasDisabledLearner: input.hasDisabledLearner } : {}),
-      ...(input.disabilityAdaptations !== undefined ? { disabilityAdaptations: input.disabilityAdaptations?.trim() || null } : {}),
+      ...(input.disabilityAdaptations !== undefined
+        ? { disabilityAdaptations: normalizeNullableText(input.disabilityAdaptations) }
+        : {}),
     },
   });
   revalidatePath(`/app/sessions/${input.sessionId}`);
@@ -712,6 +758,7 @@ export async function updateSessionLocation(input: {
 export async function createLocationAndAttachToSession(input: {
   sessionId: string;
   name: string;
+  legalName?: string | null;
   city?: string | null;
   street?: string | null;
   postalCode?: string | null;
@@ -754,6 +801,7 @@ export async function createLocationAndAttachToSession(input: {
       data: {
         tenantId: user.tenantId,
         name,
+        legalName: input.legalName?.trim() || null,
         address: Object.keys(address).length > 0 ? address : Prisma.JsonNull,
       },
       select: { id: true },
@@ -989,9 +1037,13 @@ export async function updateSessionDetails(
     return merged;
   };
 
+  // Normalisation "champ vidé" — SOURCE UNIQUE importée depuis
+  // `lib/sessions/normalize-nullable-text.ts`. Consommée par CHAQUE chemin
+  // d'écriture (modale, inline, futur SettingsDrawer).
+
   // name (nullable)
   if (data.name !== undefined) {
-    const newName = data.name === null || data.name === '' ? null : data.name;
+    const newName = normalizeNullableText(data.name);
     if (newName !== session.name) {
       updateData.name = newName;
       before.name = session.name;
@@ -1072,10 +1124,9 @@ export async function updateSessionDetails(
     after.language = data.language;
   }
 
-  // internalNotes (nullable)
+  // internalNotes (nullable) — normalisation via normalizeNullableText.
   if (data.internalNotes !== undefined) {
-    const newNotes =
-      data.internalNotes === null || data.internalNotes === '' ? null : data.internalNotes;
+    const newNotes = normalizeNullableText(data.internalNotes);
     if (newNotes !== session.internalNotes) {
       updateData.internalNotes = newNotes;
       before.internalNotes = session.internalNotes;

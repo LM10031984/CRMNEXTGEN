@@ -185,13 +185,16 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
       },
     });
 
-    // Trainers
-    for (const trainerPersonId of input.trainerPersonIds) {
+    // Trainers — le premier est LEAD + isPrimary (signataire des docs Qualiopi).
+    // Sans isPrimary, la session est flaggée "formateur principal manquant"
+    // par getSessionCompleteness et bloque le pack de fin de formation.
+    for (const [idx, trainerPersonId] of input.trainerPersonIds.entries()) {
       await tx.sessionTrainer.create({
         data: {
           sessionId: created.id,
           personId: trainerPersonId,
-          role: input.trainerPersonIds[0] === trainerPersonId ? 'LEAD' : 'CO',
+          role: idx === 0 ? 'LEAD' : 'CO',
+          isPrimary: idx === 0,
         },
       });
     }

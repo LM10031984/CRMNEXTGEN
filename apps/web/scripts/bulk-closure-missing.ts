@@ -20,7 +20,7 @@
 
 import { prisma, type ClosureDocKind } from '@qualiof/db';
 import { CLOSURE_DOC_KINDS } from '@/lib/closure/types';
-import { enqueueClosureJob } from '@/lib/closure/queue';
+import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
 
 const COMMIT = process.argv.includes('--commit');

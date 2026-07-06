@@ -8,10 +8,16 @@ import { uploadFile, downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
+import { generateProgrammeForProductCore } from '@/lib/closure/programme-core';
 
 // Phase 7 — Plan 07-01 : suppression de l'objet `const OF_DEFAULTS = { ... }`
 // local qui bypassait `getOfConfig()`. Les fonctions ci-dessous appellent
 // désormais `await loadOfConfig(user.tenantId)` pour lire BDD avec fallback ENV.
+//
+// quick 260618-gux : le cœur SANS auth `generateProgrammeForProductCore` vit
+// désormais dans `@/lib/closure/programme-core` (ne tire pas `@/lib/auth`), pour
+// que les scripts tsx pipeline puissent l'importer sans `react cache`. Ce fichier
+// reste un wrapper (validateRequest → core → revalidatePath).
 
 /**
  * Programme = asset PRODUIT (1 fois pour tous les apprenants — cf décision
@@ -176,117 +182,9 @@ export async function generateProgrammeForProduct(
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
-  const product = await prisma.trainingProduct.findFirst({
-    where: { id: productId, tenantId: user.tenantId },
-  });
-  if (!product) return { ok: false, error: 'Produit introuvable' };
-
-  if (Number(product.priceHT) <= 0) {
-    return {
-      ok: false,
-      error:
-        'Prix HT manquant sur le produit. Renseignez-le sur la fiche produit avant de générer le programme.',
-    };
-  }
-
-  // Mode find-or-create par défaut : si un programme existe déjà pour ce
-  // produit (peu importe le hash), on le réutilise. Le bouton "Régénérer"
-  // sur la fiche produit passe `force: true` pour forcer une nouvelle
-  // génération (ex: après modification du programmeMd).
-  if (!opts.force) {
-    const existing = await prisma.document.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        type: 'PROGRAMME',
-        entityType: 'product',
-        entityId: productId,
-      },
-      select: { id: true, pdfUrl: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    // Invalidation cache : si le produit a été modifié APRÈS la dernière
-    // génération (ex : priceHT renseigné après coup), on régénère.
-    if (existing && product.updatedAt <= existing.createdAt) {
-      return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
-    }
-  }
-
-  const objectives = (product.objectives as string[] | null) ?? [];
-
-  // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
-  const of = await loadOfConfig(user.tenantId);
-
-  const data: ProgrammeData = {
-    // Pas d'apprenant ni de session — programme generique
-    produitTitre: product.title,
-    produitCode: product.code,
-    produitDureeHeures: product.durationHours,
-    produitPriceHT: Number(product.priceHT),
-    produitObjectifs: objectives,
-    produitProgrammeMd: typeof product.programMd === 'string' ? product.programMd : '',
-    produitPrerequisites: product.prerequisites,
-    produitTargetAudience: product.targetAudience,
-    produitPedagogicalMethods: product.pedagogicalMethods,
-    produitEvaluationMethods: product.evaluationMethods,
-    produitAccessibility: product.accessibility,
-    produitAccessConditions: product.accessConditions,
-    produitTrainerProfile: product.trainerProfile,
-    produitPedagogicalSupport: product.pedagogicalSupport,
-    ofName: of.name,
-    ofSiret: of.siret,
-    ofAddress: of.addressFull,
-    ofRnq: of.rnq,
-    ofPhone: of.phone,
-    ofEmail: of.email,
-    // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
-    tenantId: user.tenantId,
-  };
-
-  let pdfBuffer: Buffer;
-  try {
-    const html = renderProgrammeHtml(data, of);
-    pdfBuffer = await renderHtmlToPdfWeasy(html);
-  } catch (e: any) {
-    return { ok: false, error: `Erreur generation PDF programme : ${e?.message ?? e}` };
-  }
-
-  const hash = createHash('sha256').update(pdfBuffer).digest('hex');
-
-  // Reutilise un Document existant pour ce produit avec le meme hash
-  const existing = await prisma.document.findFirst({
-    where: {
-      tenantId: user.tenantId,
-      type: 'PROGRAMME',
-      entityType: 'product',
-      entityId: productId,
-      hashSha256: hash,
-    },
-  });
-  if (existing) {
-    return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
-  }
-
-  const safeSlug = product.code.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const objectKey = `programmes/produits/${safeSlug}-${hash.slice(0, 8)}.pdf`;
-  try {
-    await uploadFile(DOCS_BUCKET, objectKey, pdfBuffer, 'application/pdf');
-  } catch (e: any) {
-    return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}` };
-  }
-
-  const doc = await prisma.document.create({
-    data: {
-      tenantId: user.tenantId,
-      type: 'PROGRAMME',
-      entityType: 'product',
-      entityId: productId,
-      pdfUrl: objectKey,
-      hashSha256: hash,
-    },
-  });
-
+  const r = await generateProgrammeForProductCore(user.tenantId, productId, opts);
   revalidatePath(`/app/produits/${productId}`);
-  return { ok: true, documentId: doc.id, pdfUrl: objectKey };
+  return r;
 }
 
 /**

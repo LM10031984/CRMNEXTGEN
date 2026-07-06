@@ -108,8 +108,8 @@ describe('detectLearnerAlerts', () => {
       emptyParticipantDocs,
       emptyPedAssets,
     );
-    // 14 MATRIX_DOC_TYPES, tous MISSING quand rien n'existe
-    expect(fullyMissing.missingDocsCount).toBe(14);
+    // 13 MATRIX_DOC_TYPES (D-09.3-07 : PRE_ACCORD_OPCO retiré), tous MISSING quand rien n'existe
+    expect(fullyMissing.missingDocsCount).toBe(13);
 
     // Maintenant ajoutons PROGRAMME au niveau product (Bug P0 anti-régression) → 1 doc rempli
     const productDocs = new Map<string, Map<string, { id: string }>>();
@@ -124,7 +124,7 @@ describe('detectLearnerAlerts', () => {
       emptyParticipantDocs,
       emptyPedAssets,
     );
-    expect(withProgramme.missingDocsCount).toBe(13);
+    expect(withProgramme.missingDocsCount).toBe(12);
   });
 
   it('Test 5 — compte les paiements pending par paymentStatus', () => {
@@ -169,7 +169,7 @@ describe('detectLearnerAlerts', () => {
       new Map(),
       new Map(),
     );
-    // 14 MATRIX - 2 MANUAL_OK = 12 MISSING
-    expect(result.missingDocsCount).toBe(12);
+    // 13 MATRIX (D-09.3-07 : PRE_ACCORD_OPCO retiré) - 2 MANUAL_OK = 11 MISSING
+    expect(result.missingDocsCount).toBe(11);
   });
 });

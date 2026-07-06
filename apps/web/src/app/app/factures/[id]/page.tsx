@@ -9,6 +9,8 @@ import { CreateCreditNoteDialog } from '@/components/invoices/create-credit-note
 import { SendReminderButton } from '@/components/invoices/send-reminder-button';
 
 export const dynamic = 'force-dynamic';
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const fmtDateTime = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

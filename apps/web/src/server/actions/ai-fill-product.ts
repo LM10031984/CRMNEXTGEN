@@ -13,7 +13,7 @@
  */
 
 import { validateRequest } from '@/lib/auth';
-import { callOllama } from '@/lib/ai-ollama';
+import { callLlm } from '@/lib/llm-client';
 
 export interface AiProductDraft {
   objectives: string[];
@@ -218,8 +218,11 @@ export async function aiPreFillProduct(input: {
     .replace('{{PRICE}}', String(input.priceHT ?? 0));
 
   try {
-    const r = await callOllama({
-      model: process.env.OLLAMA_MODEL_FAST,
+    // Tier 'quality' = Claude Sonnet 4.6 sur OpenRouter (doc audit Qualiopi),
+    // fallback Ollama qwen3:30b-a3b si AI_PROVIDER=ollama. Le programme est
+    // un doc critique audit → on prend le meilleur modèle disponible.
+    const r = await callLlm({
+      tier: 'quality',
       systemPrompt: SYSTEM_PROMPT + '\n\n' + FEW_SHOT,
       prompt: userPrompt,
       jsonOutput: true,

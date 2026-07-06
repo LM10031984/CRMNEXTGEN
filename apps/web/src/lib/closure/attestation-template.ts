@@ -30,7 +30,11 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
   // Phase 7 (Plan 07-03) — résolution signature pédago uploadée via Paramètres
   // (signature-pedago.png), fallback bundled signature-laurent.png.
   const signatureDataUrl = loadSignatureDataUrl(ctx.tenantId, 'pedago');
-  const today = formatDateFr(new Date());
+  // Date d'émission = fin de la session (l'attestation se délivre à l'issue de la
+  // formation), JAMAIS la date de génération. Sinon une régénération a posteriori
+  // daterait l'attestation du jour — marqueur visible en audit. Cohérent avec le
+  // certificat (qui utilise déjà sessionEndDate).
+  const dateAttestation = formatDateFr(ctx.sessionEndDate);
   const dateStr =
     ctx.sessionStartDate.toDateString() === ctx.sessionEndDate.toDateString()
       ? `le ${formatDateFr(ctx.sessionStartDate)}`
@@ -41,10 +45,10 @@ export function renderAttestationHtml(ctx: ClosureContext): string {
 
   const body = `
 ${renderBrandHeader(ctx.of, ctx.tenantId)}
-${renderOfficialBadges()}
+${renderOfficialBadges({ qualiopi: false })}
 <main class="body">
   <h1 class="doc-title center">ATTESTATION DE FIN DE FORMATION</h1>
-  <p class="doc-subtitle center">Conformément à l'article L.6353-1 du Code du travail — indicateur Qualiopi 11</p>
+  <p class="doc-subtitle center">Conformément à l'article L.6353-1 du Code du travail</p>
   <hr class="doc-rule" />
 
   <section class="attestation-body">
@@ -61,7 +65,7 @@ ${renderOfficialBadges()}
     <p>Cette attestation est délivrée pour servir et valoir ce que de droit.</p>
   </section>
 
-  <p style="margin-top: 24px;">Fait à ${escapeHtml(lieuFait)}, le ${escapeHtml(today)}.</p>
+  <p style="margin-top: 24px;">Fait à ${escapeHtml(lieuFait)}, le ${escapeHtml(dateAttestation)}.</p>
 
   <div class="signature-block">
     <div class="col">

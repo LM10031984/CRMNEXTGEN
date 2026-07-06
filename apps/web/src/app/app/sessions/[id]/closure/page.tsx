@@ -87,7 +87,8 @@ export default async function ClosureHubPage({
             Aucun pack généré pour cette session pour l&apos;instant.
           </p>
           <p className="text-xs text-muted-foreground">
-            Cliquez sur « Pack fin de formation » en haut à droite pour en lancer un.
+            Lancez-en un via le bouton <strong>« Pack fin de formation »</strong> en
+            tête de page.
           </p>
         </section>
       ) : (

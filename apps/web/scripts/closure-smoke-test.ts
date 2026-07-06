@@ -14,7 +14,7 @@
  */
 
 import { prisma } from '@qualiof/db';
-import { enqueueClosureJob } from '../src/lib/closure/queue';
+import { enqueueClosureJob } from '../src/lib/closure/queue-postgres';
 import { CLOSURE_DOC_KINDS } from '../src/lib/closure/types';
 
 const argSessionCode = process.argv[2] ?? null;

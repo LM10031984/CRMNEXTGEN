@@ -20,16 +20,22 @@
  * Usage :
  *   pnpm tsx scripts/dedupe.ts            # dry-run (defaut)
  *   pnpm tsx scripts/dedupe.ts --apply    # fusion réelle (transaction)
+ *
+ * Refacto 09.2 : extraction mergeOrgsTx/mergePersonsTx pour testabilité.
+ * Le mécanisme de repointage FK est INCHANGÉ — seules l'extraction (un duplicate
+ * par appel, dans un tx injecté), les exports nommés et la garde main() sont
+ * ajoutés. Cf. RECONCILE-RULES section 0 / 7c. Permet à dedupe.merge.test.ts de
+ * prouver l'invariant ExternalIdentity perdant→survivant en transaction réelle.
  */
 
 import dotenv from 'dotenv';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-import { prisma } from '@qualiof/db';
+import { prisma, Prisma } from '@qualiof/db';
 
 const APPLY = process.argv.includes('--apply');
 const skipArg = process.argv.find((a) => a.startsWith('--skip='))?.split('=')[1] ?? '';
@@ -43,7 +49,7 @@ function shouldSkip(labels: string[]): boolean {
   return SKIP_PATTERNS.some((p) => labels.some((l) => l.toLowerCase().includes(p)));
 }
 
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return s
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
@@ -111,167 +117,181 @@ async function pickCanonical<T>(
 
 // ── Fusion Organization ────────────────────────────────────────
 
-async function mergeOrgs(canonical: string, duplicates: string[]): Promise<void> {
-  for (const dup of duplicates) {
-    await prisma.$transaction(async (tx) => {
-      // 1. LegalLinks : update pointing-to-dup. Si conflit unique (personId, orgCanonical, role), on supprime le LL du dup.
-      const lls = await tx.legalLink.findMany({ where: { organizationId: dup } });
-      for (const ll of lls) {
-        const existsCanon = await tx.legalLink.findFirst({
-          where: { personId: ll.personId, organizationId: canonical, role: ll.role },
-        });
-        if (existsCanon) {
-          await tx.legalLink.delete({ where: { id: ll.id } });
-        } else {
-          await tx.legalLink.update({
-            where: { id: ll.id },
-            data: { organizationId: canonical },
-          });
-        }
-      }
-      // 2. SessionParticipant.sponsorOrgId
-      await tx.sessionParticipant.updateMany({
-        where: { sponsorOrgId: dup },
-        data: { sponsorOrgId: canonical },
-      });
-      // 3. Invoice.payerOrgId
-      await tx.invoice.updateMany({
-        where: { payerOrgId: dup },
-        data: { payerOrgId: canonical },
-      });
-      // 4. AgeficeProfile (organizationId @unique) : si canonical en a un, on supprime celui du dup
-      const dupProf = await tx.ageficeProfile.findUnique({
-        where: { organizationId: dup },
-      });
-      if (dupProf) {
-        const canonProf = await tx.ageficeProfile.findUnique({
-          where: { organizationId: canonical },
-        });
-        if (canonProf) {
-          await tx.ageficeProfile.delete({ where: { id: dupProf.id } });
-        } else {
-          await tx.ageficeProfile.update({
-            where: { id: dupProf.id },
-            data: { organizationId: canonical },
-          });
-        }
-      }
-      // 5. ExternalIdentity entityType='Organization'
-      await tx.externalIdentity.updateMany({
-        where: { entityType: 'Organization', entityId: dup },
-        data: { entityId: canonical },
-      });
-      // 6. Document polymorphique
-      await tx.document.updateMany({
-        where: { entityType: 'organization', entityId: dup },
-        data: { entityId: canonical },
-      });
-      // 7. Contact.organizationId
-      await tx.contact.updateMany({
-        where: { organizationId: dup },
+// Fusion d'UN duplicate dans le tx fourni (injectable pour test). Mécanisme INCHANGÉ.
+export async function mergeOrgsTx(
+  tx: Prisma.TransactionClient,
+  canonical: string,
+  dup: string,
+): Promise<void> {
+  // 1. LegalLinks : update pointing-to-dup. Si conflit unique (personId, orgCanonical, role), on supprime le LL du dup.
+  const lls = await tx.legalLink.findMany({ where: { organizationId: dup } });
+  for (const ll of lls) {
+    const existsCanon = await tx.legalLink.findFirst({
+      where: { personId: ll.personId, organizationId: canonical, role: ll.role },
+    });
+    if (existsCanon) {
+      await tx.legalLink.delete({ where: { id: ll.id } });
+    } else {
+      await tx.legalLink.update({
+        where: { id: ll.id },
         data: { organizationId: canonical },
       });
-      // 8. Delete dup
-      await tx.organization.delete({ where: { id: dup } });
+    }
+  }
+  // 2. SessionParticipant.sponsorOrgId
+  await tx.sessionParticipant.updateMany({
+    where: { sponsorOrgId: dup },
+    data: { sponsorOrgId: canonical },
+  });
+  // 3. Invoice.payerOrgId
+  await tx.invoice.updateMany({
+    where: { payerOrgId: dup },
+    data: { payerOrgId: canonical },
+  });
+  // 4. AgeficeProfile (organizationId @unique) : si canonical en a un, on supprime celui du dup
+  const dupProf = await tx.ageficeProfile.findUnique({
+    where: { organizationId: dup },
+  });
+  if (dupProf) {
+    const canonProf = await tx.ageficeProfile.findUnique({
+      where: { organizationId: canonical },
     });
+    if (canonProf) {
+      await tx.ageficeProfile.delete({ where: { id: dupProf.id } });
+    } else {
+      await tx.ageficeProfile.update({
+        where: { id: dupProf.id },
+        data: { organizationId: canonical },
+      });
+    }
+  }
+  // 5. ExternalIdentity entityType='Organization'
+  await tx.externalIdentity.updateMany({
+    where: { entityType: 'Organization', entityId: dup },
+    data: { entityId: canonical },
+  });
+  // 6. Document polymorphique
+  await tx.document.updateMany({
+    where: { entityType: 'organization', entityId: dup },
+    data: { entityId: canonical },
+  });
+  // 7. Contact.organizationId
+  await tx.contact.updateMany({
+    where: { organizationId: dup },
+    data: { organizationId: canonical },
+  });
+  // 8. Delete dup
+  await tx.organization.delete({ where: { id: dup } });
+}
+
+export async function mergeOrgs(canonical: string, duplicates: string[]): Promise<void> {
+  for (const dup of duplicates) {
+    await prisma.$transaction((tx) => mergeOrgsTx(tx, canonical, dup));
   }
 }
 
 // ── Fusion Person ───────────────────────────────────────────────
 
-async function mergePersons(canonical: string, duplicates: string[]): Promise<void> {
-  for (const dup of duplicates) {
-    await prisma.$transaction(async (tx) => {
-      // 1. LegalLinks
-      const lls = await tx.legalLink.findMany({ where: { personId: dup } });
-      for (const ll of lls) {
-        const existsCanon = await tx.legalLink.findFirst({
-          where: { personId: canonical, organizationId: ll.organizationId, role: ll.role },
-        });
-        if (existsCanon) {
-          await tx.legalLink.delete({ where: { id: ll.id } });
-        } else {
-          await tx.legalLink.update({
-            where: { id: ll.id },
-            data: { personId: canonical },
-          });
-        }
-      }
-      // 2. SessionParticipant.personId — unique(sessionId, personId)
-      const sps = await tx.sessionParticipant.findMany({ where: { personId: dup } });
-      for (const sp of sps) {
-        const existsCanon = await tx.sessionParticipant.findFirst({
-          where: { sessionId: sp.sessionId, personId: canonical },
-        });
-        if (existsCanon) {
-          // On garde le canonical, on supprime le doublon
-          await tx.sessionParticipant.delete({ where: { id: sp.id } });
-        } else {
-          await tx.sessionParticipant.update({
-            where: { id: sp.id },
-            data: { personId: canonical },
-          });
-        }
-      }
-      // 3. SessionTrainer.personId
-      const sts = await tx.sessionTrainer.findMany({ where: { personId: dup } });
-      for (const st of sts) {
-        const existsCanon = await tx.sessionTrainer.findFirst({
-          where: { sessionId: st.sessionId, personId: canonical },
-        });
-        if (existsCanon) {
-          await tx.sessionTrainer.delete({ where: { id: st.id } });
-        } else {
-          await tx.sessionTrainer.update({
-            where: { id: st.id },
-            data: { personId: canonical },
-          });
-        }
-      }
-      // 4. SensitiveData (personId @unique 1:1)
-      const dupSensit = await tx.sensitiveData.findUnique({ where: { personId: dup } });
-      if (dupSensit) {
-        const canonSensit = await tx.sensitiveData.findUnique({
-          where: { personId: canonical },
-        });
-        if (canonSensit) {
-          await tx.sensitiveData.delete({ where: { id: dupSensit.id } });
-        } else {
-          await tx.sensitiveData.update({
-            where: { id: dupSensit.id },
-            data: { personId: canonical },
-          });
-        }
-      }
-      // 5. ExternalIdentity entityType='Person'
-      await tx.externalIdentity.updateMany({
-        where: { entityType: 'Person', entityId: dup },
-        data: { entityId: canonical },
-      });
-      // 6. Document polymorphique
-      await tx.document.updateMany({
-        where: { entityType: 'person', entityId: dup },
-        data: { entityId: canonical },
-      });
-      // 7. Lead.personId
-      await tx.lead.updateMany({
-        where: { personId: dup },
-        data: { personId: canonical },
-      });
-      // 8. InternalComment.personId
-      await tx.internalComment.updateMany({
-        where: { personId: dup },
-        data: { personId: canonical },
-      });
-      // 9. Delete dup
-      await tx.person.delete({ where: { id: dup } });
+// Fusion d'UNE Person duplicate dans le tx fourni (injectable pour test). Mécanisme INCHANGÉ.
+export async function mergePersonsTx(
+  tx: Prisma.TransactionClient,
+  canonical: string,
+  dup: string,
+): Promise<void> {
+  // 1. LegalLinks
+  const lls = await tx.legalLink.findMany({ where: { personId: dup } });
+  for (const ll of lls) {
+    const existsCanon = await tx.legalLink.findFirst({
+      where: { personId: canonical, organizationId: ll.organizationId, role: ll.role },
     });
+    if (existsCanon) {
+      await tx.legalLink.delete({ where: { id: ll.id } });
+    } else {
+      await tx.legalLink.update({
+        where: { id: ll.id },
+        data: { personId: canonical },
+      });
+    }
+  }
+  // 2. SessionParticipant.personId — unique(sessionId, personId)
+  const sps = await tx.sessionParticipant.findMany({ where: { personId: dup } });
+  for (const sp of sps) {
+    const existsCanon = await tx.sessionParticipant.findFirst({
+      where: { sessionId: sp.sessionId, personId: canonical },
+    });
+    if (existsCanon) {
+      // On garde le canonical, on supprime le doublon
+      await tx.sessionParticipant.delete({ where: { id: sp.id } });
+    } else {
+      await tx.sessionParticipant.update({
+        where: { id: sp.id },
+        data: { personId: canonical },
+      });
+    }
+  }
+  // 3. SessionTrainer.personId
+  const sts = await tx.sessionTrainer.findMany({ where: { personId: dup } });
+  for (const st of sts) {
+    const existsCanon = await tx.sessionTrainer.findFirst({
+      where: { sessionId: st.sessionId, personId: canonical },
+    });
+    if (existsCanon) {
+      await tx.sessionTrainer.delete({ where: { id: st.id } });
+    } else {
+      await tx.sessionTrainer.update({
+        where: { id: st.id },
+        data: { personId: canonical },
+      });
+    }
+  }
+  // 4. SensitiveData (personId @unique 1:1)
+  const dupSensit = await tx.sensitiveData.findUnique({ where: { personId: dup } });
+  if (dupSensit) {
+    const canonSensit = await tx.sensitiveData.findUnique({
+      where: { personId: canonical },
+    });
+    if (canonSensit) {
+      await tx.sensitiveData.delete({ where: { id: dupSensit.id } });
+    } else {
+      await tx.sensitiveData.update({
+        where: { id: dupSensit.id },
+        data: { personId: canonical },
+      });
+    }
+  }
+  // 5. ExternalIdentity entityType='Person'
+  await tx.externalIdentity.updateMany({
+    where: { entityType: 'Person', entityId: dup },
+    data: { entityId: canonical },
+  });
+  // 6. Document polymorphique
+  await tx.document.updateMany({
+    where: { entityType: 'person', entityId: dup },
+    data: { entityId: canonical },
+  });
+  // 7. Lead.personId
+  await tx.lead.updateMany({
+    where: { personId: dup },
+    data: { personId: canonical },
+  });
+  // 8. InternalComment.personId
+  await tx.internalComment.updateMany({
+    where: { personId: dup },
+    data: { personId: canonical },
+  });
+  // 9. Delete dup
+  await tx.person.delete({ where: { id: dup } });
+}
+
+export async function mergePersons(canonical: string, duplicates: string[]): Promise<void> {
+  for (const dup of duplicates) {
+    await prisma.$transaction((tx) => mergePersonsTx(tx, canonical, dup));
   }
 }
 
 // ── Détection ──────────────────────────────────────────────────
 
-async function detectOrgsBySiret(tenantId: string): Promise<
+export async function detectOrgsBySiret(tenantId: string): Promise<
   Array<{ siret: string; ids: string[]; names: string[] }>
 > {
   const groups = await prisma.organization.groupBy({
@@ -362,10 +382,13 @@ async function detectEiSelfOrgsPerPerson(tenantId: string): Promise<
   return result;
 }
 
-async function detectPersonsByName(tenantId: string): Promise<
-  Array<{ key: string; ids: string[]; names: string[] }>
-> {
-  const persons = await prisma.person.findMany({
+export async function detectPersonsByName(
+  tenantId: string,
+  // Client injectable (testabilité 09.2) : par défaut le singleton (CLI inchangé).
+  // Le test passe un client lié à qualiof_test pour ne JAMAIS lire/écrire la prod-locale.
+  client: Pick<typeof prisma, 'person'> = prisma,
+): Promise<Array<{ key: string; ids: string[]; names: string[] }>> {
+  const persons = await client.person.findMany({
     where: { tenantId },
     select: { id: true, firstName: true, lastName: true, email: true },
   });
@@ -397,7 +420,7 @@ async function detectPersonsByName(tenantId: string): Promise<
 
 // ── Main ────────────────────────────────────────────────────────
 
-(async () => {
+async function main(): Promise<void> {
   console.log(`Mode : ${APPLY ? '🟢 APPLY (fusion réelle)' : '🟡 DRY-RUN'}`);
   const tenant = await prisma.tenant.findFirst({ select: { id: true } });
   if (!tenant) throw new Error('No tenant');
@@ -437,7 +460,14 @@ async function detectPersonsByName(tenantId: string): Promise<
 
   console.log('\nDone.');
   process.exit(0);
-})().catch((e) => {
-  console.error('FATAL:', e);
-  process.exit(1);
-});
+}
+
+// Garde : n'exécute la détection complète que lancé directement (jamais à l'import,
+// que le test fait pour réutiliser mergeOrgsTx/mergePersonsTx/detectPersonsByName).
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (isMain) {
+  main().catch((e) => {
+    console.error('FATAL:', e);
+    process.exit(1);
+  });
+}

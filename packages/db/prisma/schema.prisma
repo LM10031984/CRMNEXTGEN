@@ -14,6 +14,12 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
+  // directUrl utilisé par `prisma migrate` (session mode, port 5432) car le
+  // pooler transaction mode (DATABASE_URL port 6543) ne supporte pas les
+  // prepared statements requises par les migrations Prisma. En local Docker
+  // sans pooler, DIRECT_URL = DATABASE_URL → no-op. Sur Supabase prod, les 2
+  // URLs sont distinctes (cf .env.local migration cloud).
+  directUrl  = env("DIRECT_URL")
   extensions = [pgcrypto, uuid_ossp(map: "uuid-ossp"), pg_trgm, unaccent]
 }
 
@@ -332,6 +338,11 @@ model TrainingProduct {
   targetAudience     String?
   objectives         Json // string[]
   programMd          String
+  // quick 260618-rkj — Corps figé du déroulé pédagogique (jours[]) — identique sur
+  // toutes les sessions du produit. Seul le bilan/rapport formateur reste par session.
+  // NB prod : poussé via `prisma db push` en local/sandbox ; un `prisma migrate deploy`
+  // formel sera requis avant déploiement cloud (cf. mémoire feedback_prisma_migrate_deploy).
+  derouleJson        Json?
   pedagogicalMethods String?
   evaluationMethods  String?
   accessibility      String?
@@ -350,6 +361,23 @@ model TrainingProduct {
   bpfLevel           String?
   capacityMin        Int               @default(1)
   capacityMax        Int               @default(12)
+  // ── Conformité Cerfa AGEFICE (Section C/D) ─────────────────────────────
+  // Valeurs unions définies dans `lib/agefice-form-fill.ts` (FormationType,
+  // FormationNiveau, FormationCertif, AttestationType, EvaluationType).
+  // String? côté BDD pour souplesse : si null → fallback default dans le
+  // mapping agefice-generator (cohérent avec V1 hardcodée).
+  ageficeFormationType String? // ACTION | BILAN | VAE — default ACTION
+  ageficeNiveau        String? // INITIATION | MISE_A_JOUR | PERFECTIONNEMENT — default PERFECTIONNEMENT
+  ageficeCertif        String? // TITRE_HOMOLOGUE | QUALIF_BRANCHE | CQP | SANS_QUALIFICATION — default SANS_QUALIFICATION
+  ageficeAttestation   String? // RNCP | AUTRE_DIPLOME | DIPLOME_ETAT | ATTESTATION_STAGE — default ATTESTATION_STAGE
+  /// Cases à cocher Cerfa "Évaluation" — array Postgres. Valeurs : QUIZ,
+  /// CONTROLE_CONTINU, RELEVES, FEUILLES_PRESENCE, AUTRE. Si vide → default
+  /// ['QUIZ', 'FEUILLES_PRESENCE'].
+  ageficeEvaluations   String[]
+  ageficeObligatoire   Boolean? // null = aucune case cochée (cohérent avec PDF)
+  ageficeReconversion  Boolean?
+  ageficeEnEntreprise  Boolean? // formation chez le client final = true
+  ageficeMandat        Boolean? // délégation gestion AGEFICE par stagiaire — default true
   // BUG-P0-02 — quand le produit a été auto-rempli par l'IA (createProduct
   // avec autoFillWithAI=true), on horodate ici. Tant que non-null, le
   // contenu est considéré "Brouillon IA" → bannière dans le tab Programme,
@@ -435,6 +463,7 @@ model TrainingSession {
   preEnrollments        PreEnrollment[]
   tasks                 Task[]
   comments              InternalComment[]
+  calendarSyncs         SessionCalendarSync[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
@@ -443,12 +472,17 @@ model TrainingSession {
 }
 
 model Location {
-  id       String            @id @default(uuid())
-  tenantId String
-  name     String
-  address  Json
-  capacity Int?
-  sessions TrainingSession[]
+  id        String            @id @default(uuid())
+  tenantId  String
+  name      String
+  /// Raison sociale du lieu — ex : "SARL XYZ" si la formation se tient dans
+  /// l'agence d'un partenaire. Optionnel : laissé vide pour les salles propres.
+  /// Utilisé dans la convention de formation et la demande AGEFICE
+  /// (concaténé "{legalName} — {name}, adresse").
+  legalName String?
+  address   Json
+  capacity  Int?
+  sessions  TrainingSession[]
 }
 
 model SessionTrainer {
@@ -1529,4 +1563,48 @@ enum RegulatoryWatchSource {
   USER
   IMPORT
   AUTO
+}
+
+// Pilotage Direction (quick 260620-d42) — objectif CA annuel par tenant/année.
+// Pas de relation inverse sur Tenant : tenantId reste une colonne FK logique non contrainte
+// (évite de toucher le model Tenant). Objectif stocké en euros HT entiers (pas de centimes).
+model RevenueTarget {
+  id        String   @id @default(uuid())
+  tenantId  String
+  year      Int
+  amountHT  Int // objectif annuel en euros HT (entier — pas de centimes pour un objectif)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([tenantId, year])
+  @@index([tenantId])
+}
+
+// =====================================================
+// === Synchro Google Calendar (Phase 14)
+// =====================================================
+
+/// Phase 14 — trace de synchro Google Calendar par session.
+/// Second filet d'idempotence (en complément de la clé déterministe écrite dans
+/// extendedProperties.private côté Google) ET preuve d'audit Qualiopi du backfill :
+/// quelle session a quels événements créés, quand, en quel mode, avec quel
+/// sendUpdates appliqué. L'orchestrateur (Plan 14-04) upsert une ligne par
+/// événement (clé composite sessionId + eventKey), ce qui permet à un re-run de
+/// décider skip/update au lieu de dupliquer.
+model SessionCalendarSync {
+  id            String          @id @default(uuid())
+  tenantId      String
+  sessionId     String
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventKey      String // buildEventKey(...) déterministe — Plan 14-01
+  googleEventId String // id retourné par events.insert
+  eventType     String // 'formation' | 'rappel' | 'froid'
+  dayIndex      Int? // index du rappel quotidien / relance froid
+  syncMode      String // 'backfill' | 'auto'
+  sentUpdates   String // 'all' | 'none' — sendUpdates appliqué à l'insert
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([sessionId, eventKey])
+  @@index([tenantId, sessionId])
 }

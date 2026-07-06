@@ -98,6 +98,21 @@ export function addBusinessDaysISO(startIso: string, n: number): string {
 }
 
 /**
+ * Retire `n` jours ouvrés à une date ISO (miroir de addBusinessDaysISO).
+ * Le résultat est garanti ouvré (sam/dim/fériés exclus). n<=0 → même date.
+ */
+export function subtractBusinessDaysISO(startIso: string, n: number): string {
+  if (n <= 0) return startIso;
+  let cur = new Date(startIso + 'T00:00:00Z');
+  let removed = 0;
+  while (removed < n) {
+    cur = addUtcDays(cur, -1);
+    if (isBusinessDayISO(isoFromUtc(cur))) removed++;
+  }
+  return isoFromUtc(cur);
+}
+
+/**
  * Calcule la date de fin d'une session : `startDate` + (nbJours - 1)
  * jours ouvrés, où nbJours = ceil(durationHours / 8) selon la règle
  * Start Academy (8h = 1 journée).

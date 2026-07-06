@@ -13,6 +13,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { getOfConfig, type OfConfig } from '@/lib/of-config';
+import { DOC_VERSION } from '@/lib/doc-version';
 
 export const BRAND_BLUE = '#00B4E6';
 export const BRAND_DARK = '#00527A';
@@ -58,7 +59,7 @@ function loadAssetDataUrl(filenames: string[], tenantId?: string): string {
         const buf = fs.readFileSync(p);
         const ext = path.extname(name).slice(1) || 'png';
         // SVG content-type quirk : doit être `image/svg+xml` (pas `image/svg`)
-        const mime = ext === 'svg' ? 'svg+xml' : ext;
+        const mime = ext === 'svg' ? 'svg+xml' : ext === 'jpg' ? 'jpeg' : ext;
         const url = `data:image/${mime};base64,${buf.toString('base64')}`;
         fileCache.set(cacheKey, url);
         return url;
@@ -74,7 +75,7 @@ function loadAssetDataUrl(filenames: string[], tenantId?: string): string {
       const p = path.join(process.cwd(), 'src', 'assets', name);
       const buf = fs.readFileSync(p);
       const ext = path.extname(name).slice(1) || 'png';
-      const mime = ext === 'svg' ? 'svg+xml' : ext;
+      const mime = ext === 'svg' ? 'svg+xml' : ext === 'jpg' ? 'jpeg' : ext;
       const url = `data:image/${mime};base64,${buf.toString('base64')}`;
       fileCache.set(cacheKey, url);
       return url;
@@ -166,11 +167,33 @@ export function loadSignatureDataUrl(
   role: 'pedago' | 'dirigeant' = 'pedago',
 ): string {
   const filename = role === 'pedago' ? 'signature-pedago.png' : 'signature-dirigeant.png';
+  // Laurent 2026-06-04 : "sur le certificat il y a la signature de Julien il
+  // faut la mienne". Le tampon-signature-fusion contenait Julien — on le
+  // retire des fallbacks. signature-laurent.png devient la source unique
+  // de vérité tant qu'un tenant n'a pas uploadé son signature-{role}.png.
   const fallbacks =
     role === 'pedago'
-      ? [filename, 'signature-laurent.png', 'tampon-signature-fusion.png']
-      : [filename, 'tampon-signature-fusion.png', 'tampon-signature.png'];
+      ? [filename, 'signature-laurent.png']
+      : [filename, 'signature-laurent.png'];
   return loadAssetDataUrl(fallbacks, tenantId);
+}
+
+/**
+ * Signature à embarquer selon le FORMATEUR (Laurent 2026-06-16) :
+ *  - Laurent Marx → signature pédago (signature-laurent.png).
+ *  - Jean-Guy → `signature-jean-guy.png` (à déposer dans
+ *    public/of-assets/{tenantId}/ OU bundlé dans src/assets/).
+ * Retourne '' si formateur non reconnu (pas de signature auto → emplacement vide).
+ */
+export function loadTrainerSignatureDataUrl(tenantId?: string, trainerName?: string | null): string {
+  const n = (trainerName ?? '').toLowerCase();
+  if (n.includes('jean') && n.includes('guy')) {
+    return loadAssetDataUrl(['signature-jean-guy.jpg', 'signature-jean-guy.png'], tenantId);
+  }
+  if (n.includes('laurent') && n.includes('marx')) {
+    return loadSignatureDataUrl(tenantId, 'pedago');
+  }
+  return '';
 }
 
 export function escapeHtml(s: string | null | undefined): string {
@@ -282,8 +305,9 @@ export const SHARED_STYLES = `
 <style>
   /* CSS Paged Media (WeasyPrint) — footer répété nativement sur chaque page
    * via running element. Marges @page : 25mm haut (pages 2+), 0 page 1
-   * (bandeau brand pleine largeur), 22mm bas réservés pour le footer running. */
-  @page { size: A4; margin: 25mm 0 22mm 0; @bottom-center { content: element(corpfooter); } }
+   * (bandeau brand pleine largeur), 28mm bas réservés pour le footer running
+   * (3 lignes : adresse longue Vence sur 2 lignes + contact + version doc). */
+  @page { size: A4; margin: 25mm 0 28mm 0; @bottom-center { content: element(corpfooter); } }
   @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
   body {
@@ -453,6 +477,9 @@ export const SHARED_STYLES = `
     flex-wrap: wrap;
     gap: 40px;
     align-items: flex-start;
+    /* Empêche le bloc signature/cachet de basculer seul en page 2. */
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .signature-block .col {
     min-width: 220px;
@@ -541,9 +568,12 @@ export function renderBrandHeader(of?: OfConfig, tenantId?: string): string {
  * Conforme au modèle DOCX C3_i11 fourni par Laurent (cert. de réalisation).
  * Apparaît sur la PAGE 1 uniquement (en flow normal après le bandeau brand).
  */
-export function renderOfficialBadges(): string {
+export function renderOfficialBadges(opts: { qualiopi?: boolean } = {}): string {
+  // qualiopi=false : retire le logo « Qualiopi processus certifié » (Kaïna 2026-06-16,
+  // pour le certificat de réalisation). Le logo Ministère est conservé.
+  const showQualiopi = opts.qualiopi !== false;
   const ministere = loadLogoMinistereDataUrl();
-  const qualiopi = loadLogoQualiopiDataUrl();
+  const qualiopi = showQualiopi ? loadLogoQualiopiDataUrl() : null;
   return `
 <div class="official-badges">
   ${ministere ? `<img class="badge-left" src="${ministere}" alt="Ministère du Travail" />` : '<span></span>'}
@@ -619,7 +649,7 @@ export function renderCorpFooter(of?: OfConfig): string {
   return `
 <footer class="corp">
   <strong>${escapeHtml(cfg.name)}</strong> – Siège social : ${escapeHtml(cfg.addressFull)} - SIRET : ${escapeHtml(cfg.siret)} – NDA ${escapeHtml(cfg.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
 </footer>
 `.trim();
 }
@@ -632,13 +662,20 @@ export function renderCorpFooter(of?: OfConfig): string {
  * `@bottom-center` de la page 1 (WeasyPrint le découvre seulement quand
  * la pagination atteint son emplacement dans le flux).
  */
-export function wrapHtml(opts: { title: string; bodyHtml: string; of?: OfConfig }): string {
+export function wrapHtml(opts: {
+  title: string;
+  bodyHtml: string;
+  of?: OfConfig;
+  /** Force l'orientation paysage (déroulé 6 colonnes). Override le @page A4 portrait. */
+  landscape?: boolean;
+}): string {
+  const orientation = opts.landscape ? '\n  <style>@page { size: A4 landscape; }</style>' : '';
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <title>${escapeHtml(opts.title)}</title>
-  ${SHARED_STYLES}
+  ${SHARED_STYLES}${orientation}
 </head>
 <body>
 ${renderCorpFooter(opts.of)}

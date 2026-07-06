@@ -68,6 +68,8 @@ export interface GrilleSessionTemplateData {
   formateurs: string[];
   stagiaires: GrilleSessionStagiaire[];
   content: GrilleSessionContent;
+  /** Signature du formateur (data URL). Si absente → ligne de signature manuelle. */
+  signatureDataUrl?: string;
 }
 
 function moyenneNiveau(niveaux: GrilleSessionNiveau[]): GrilleSessionNiveau {
@@ -159,7 +161,7 @@ export function renderGrilleObsSessionHtml(data: GrilleSessionTemplateData): str
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">GRILLE D'AMÉLIORATION STAGIAIRE</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi C3.i11 — Évaluation consolidée par session</p>
+  <p class="doc-subtitle">Évaluation consolidée par session</p>
   <hr class="doc-rule" />
 
   <div class="info-box">
@@ -205,7 +207,11 @@ ${renderBrandHeader()}
     <div class="col">
       <div class="label">Formateur</div>
       <div class="role">${escapeHtml(formateurStr)}</div>
-      <div style="margin-top: 22mm; border-top: 1px dashed ${BRAND_DARK}; width: 70mm; padding-top: 4px; font-size: 9pt; color: #64748B;">Signature</div>
+      ${
+        data.signatureDataUrl
+          ? `<img src="${data.signatureDataUrl}" alt="Signature ${escapeHtml(formateurStr)}" style="height: 20mm; margin-top: 6px;" />`
+          : `<div style="margin-top: 22mm; border-top: 1px dashed ${BRAND_DARK}; width: 70mm; padding-top: 4px; font-size: 9pt; color: #64748B;">Signature</div>`
+      }
     </div>
   </div>
 </main>

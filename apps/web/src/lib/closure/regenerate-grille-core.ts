@@ -47,6 +47,7 @@ export async function regenerateGrilleCore(
         anciennete: ctx.stagiaireMeta?.anciennete ?? null,
         diplomes: ctx.stagiaireMeta?.diplomes ?? null,
         professionalStatus: ctx.stagiaireMeta?.professionalStatus ?? null,
+        civilite: ctx.apprenantCivility ?? null,
       },
       'PedagogicalAsset',
       null,

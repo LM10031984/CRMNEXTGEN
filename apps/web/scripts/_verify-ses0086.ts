@@ -1,0 +1,11 @@
+const { prisma } = await import('@qualiof/db');
+const s = await prisma.trainingSession.findFirstOrThrow({ where: { code: 'SES-0086' }, select: { id: true } });
+const docs = await prisma.document.groupBy({ by: ['type'], where: { sessionId: s.id }, _count: true });
+console.log('=== Documents DB SES-0086 ===');
+for (const d of docs.sort((a,b)=>String(a.type).localeCompare(String(b.type)))) console.log(`  ${d.type}: ${d._count}`);
+const assets = await prisma.pedagogicalAsset.groupBy({ by: ['kind'], where: { sessionId: s.id }, _count: true });
+console.log('=== PedagogicalAssets ===');
+for (const a of assets) console.log(`  ${a.kind}: ${a._count}`);
+const emarg = await prisma.document.count({ where: { sessionId: s.id, type: 'EMARGEMENT' as never } });
+console.log('\nÉMARGEMENT en base :', emarg, emarg===0 ? '✓ (bien exclu)' : '⚠');
+await prisma.$disconnect();

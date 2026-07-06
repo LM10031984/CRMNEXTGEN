@@ -31,25 +31,44 @@ const DateOnlyString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date attendue au format YYYY-MM-DD');
 
+// ─── Schemas par champ — source UNIQUE de validation ─────────────────────
+// Réutilisés par la modale "Modifier la session" (bulk) ET par les éditeurs
+// inline `EditableField` (commit ui-e2). Garde-fou Laurent 2026-06-06 :
+// "même action ET même schéma. Sinon la modale refuse un tarif négatif et
+// l'inline le laisse passer."
+
+export const SessionNameSchema = z
+  .string()
+  .trim()
+  .max(200, 'Nom trop long (200 max)')
+  .nullable();
+
+export const SessionPricePerLearnerSchema = z
+  .number()
+  .nonnegative('Prix HT ≥ 0')
+  .nullable();
+
+export const SessionInternalNotesSchema = z.string().nullable();
+
 // ─── UpdateSessionDetailsInputSchema (Quick task 260523-oze) ─────────────
 
 export const UpdateSessionDetailsInputSchema = z
   .object({
     sessionId: z.string().uuid('sessionId doit être un UUID valide'),
-    name: z.string().trim().max(200, 'Nom trop long (200 max)').nullable().optional(),
+    name: SessionNameSchema.optional(),
     startDate: DateOnlyString.optional(),
     endDate: DateOnlyString.optional(),
     capacityMin: z.number().int().min(1, 'Capacité min ≥ 1').optional(),
     capacityMax: z.number().int().min(1, 'Capacité max ≥ 1').optional(),
     modality: ModalityEnum.optional(),
-    pricePerLearner: z.number().nonnegative('Prix HT ≥ 0').nullable().optional(),
+    pricePerLearner: SessionPricePerLearnerSchema.optional(),
     language: z
       .string()
       .trim()
       .min(1, 'Langue obligatoire')
       .max(8, 'Code langue trop long')
       .optional(),
-    internalNotes: z.string().nullable().optional(),
+    internalNotes: SessionInternalNotesSchema.optional(),
   })
   .refine(
     (d) => d.startDate === undefined || d.endDate === undefined || d.endDate >= d.startDate,

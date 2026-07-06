@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
+import { downloadFile, createSignedDownloadUrl, DOCS_BUCKET, _internals } from '@/lib/storage';
 
 const KIND_TO_LABEL: Record<string, string> = {
   cni: 'cni',
@@ -58,6 +58,13 @@ export async function GET(
   if (!key) return new NextResponse('Document non disponible', { status: 404 });
 
   try {
+    // Prod Supabase : redirect 302 vers une signed URL FRAÎCHE (TTL 600s) —
+    // contourne le cap 4,5 Mo réponse Vercel sur les scans CNI/RIB/CFP.
+    if (_internals.PROVIDER === 'supabase') {
+      const url = await createSignedDownloadUrl(DOCS_BUCKET, key, 600);
+      return NextResponse.redirect(url, 302);
+    }
+    // MinIO local : proxy inchangé.
     const buffer = await downloadFile(DOCS_BUCKET, key);
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

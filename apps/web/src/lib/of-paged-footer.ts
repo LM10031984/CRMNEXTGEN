@@ -18,6 +18,7 @@
  */
 
 import { getOfConfig } from './of-config';
+import { DOC_VERSION } from './doc-version';
 
 const BRAND_DARK = '#00527A';
 
@@ -53,7 +54,7 @@ export const OF_PAGED_FOOTER_STYLES = `
  * pour réserver la place au footer (border-top + 2 lignes 11pt).
  */
 export const OF_PAGED_PAGE_RULE = `
-  @page { size: A4; margin: 22mm 18mm 22mm 18mm; @bottom-center { content: element(corpfooter); } }
+  @page { size: A4; margin: 22mm 18mm 28mm 18mm; @bottom-center { content: element(corpfooter); } }
 `;
 
 /**
@@ -66,6 +67,6 @@ export function renderOfPagedFooter(): string {
   const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
   return `<footer class="corp">
   <strong>${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
 </footer>`;
 }

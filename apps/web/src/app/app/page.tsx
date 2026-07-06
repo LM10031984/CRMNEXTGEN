@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Users, Calendar, BookOpen, AlertCircle, AlertTriangle, Building2,
   Euro, TrendingUp, Banknote, Clock, Sparkles, FileCheck, Inbox,
   Megaphone, Target, Activity, BarChart3, Trophy, Wallet, ChevronRight,
   PieChart,
 } from 'lucide-react';
+import logoStartAcademy from '@/assets/logo-start-academy.png';
 import { validateRequest } from '@/lib/auth';
 import { getDashboardStats } from '@/lib/dashboard-stats';
 import { getAgeficeBudgetSummary } from '@/server/actions/budget-agefice';
@@ -59,12 +61,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Bonjour {user.firstName} 👋</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Pilotage Start Academy · <strong>{yearLabel}</strong>
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-5 min-w-0">
+          <Image
+            src={logoStartAcademy}
+            alt="Start Academy"
+            priority
+            className="h-14 w-auto shrink-0 object-contain"
+            sizes="(max-width: 768px) 100px, 140px"
+          />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight truncate">
+              Bonjour {user.firstName} 👋
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Pilotage Start Academy · <strong>{yearLabel}</strong>
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link

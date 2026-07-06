@@ -32,6 +32,7 @@ export function SessionLocationPicker({ sessionId }: Props) {
   const [selected, setSelected] = useState('');
   const [mode, setMode] = useState<'pick' | 'create'>('pick');
   const [newName, setNewName] = useState('');
+  const [newLegalName, setNewLegalName] = useState('');
   const [newStreet, setNewStreet] = useState('');
   const [newPostalCode, setNewPostalCode] = useState('');
   const [newCity, setNewCity] = useState('');
@@ -66,6 +67,7 @@ export function SessionLocationPicker({ sessionId }: Props) {
       const r = await createLocationAndAttachToSession({
         sessionId,
         name: newName.trim(),
+        legalName: newLegalName.trim() || null,
         street: newStreet.trim() || null,
         postalCode: newPostalCode.trim() || null,
         city: newCity.trim() || null,
@@ -73,6 +75,7 @@ export function SessionLocationPicker({ sessionId }: Props) {
       if (r.ok) {
         toast.success('Nouveau lieu créé et défini');
         setNewName('');
+        setNewLegalName('');
         setNewStreet('');
         setNewPostalCode('');
         setNewCity('');
@@ -110,9 +113,16 @@ export function SessionLocationPicker({ sessionId }: Props) {
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nom du lieu (ex : Salle Cagnes-sur-Mer)"
+          placeholder="Nom du lieu (ex : Agence Nice Centre)"
           className="w-full h-9 rounded-md border border-border px-2 text-sm"
           autoFocus
+        />
+        <input
+          type="text"
+          value={newLegalName}
+          onChange={(e) => setNewLegalName(e.target.value)}
+          placeholder="Raison sociale (ex : SARL XYZ) — optionnel"
+          className="w-full h-9 rounded-md border border-border px-2 text-sm"
         />
         <input
           type="text"

@@ -15,6 +15,8 @@ import {
   BRAND_DARK,
   escapeHtml,
   formatDateFr,
+  loadStampDataUrl,
+  loadTrainerSignatureDataUrl,
   renderBrandHeader,
   renderInfoBox,
   renderStagiaireBlock,
@@ -59,6 +61,17 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
   const days = computeFormationDays(ctx.sessionStartDate, ctx.sessionEndDate);
   const trainer = ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À renseigner';
 
+  // Bloc certification Qualiopi (Laurent 2026-06-16) : « Certifié exact par
+  // [formateur] », « Fait à [lieu EXACT de formation], le [date fin] » + tampon/
+  // signature (signature-pedago = Laurent Marx). Le lieu exact est OBLIGATOIRE :
+  // sans lieu, l'émargement n'est pas valide → on signale explicitement.
+  // Signature du formateur réel de la session (Jean-Guy pour ses sessions),
+  // PAS la signature pédago Laurent. + tampon Start Academy.
+  const signatureDataUrl = loadTrainerSignatureDataUrl(ctx.tenantId, trainer);
+  const stampDataUrl = loadStampDataUrl(ctx.tenantId);
+  const lieuFormation = ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
+  const dateCertif = formatDateFr(ctx.sessionEndDate);
+
   const rows = days
     .map((d) => {
       const dateLabel = formatDateFr(d);
@@ -75,7 +88,7 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title" style="margin: 4px 0 8px 0;">FICHE D'ÉMARGEMENT</h1>
-  <p class="doc-subtitle" style="margin: 0 0 6px 0;">Indicateur Qualiopi 11 — Présence du stagiaire en formation</p>
+  <p class="doc-subtitle" style="margin: 0 0 6px 0;">Présence du stagiaire en formation</p>
   <hr class="doc-rule" style="margin: 6px 0;" />
 
   ${renderInfoBox(ctx)}
@@ -89,8 +102,8 @@ ${renderBrandHeader()}
     <thead>
       <tr>
         <th style="text-align: center; vertical-align: middle;">Date</th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Matin · ${HORAIRE_MATIN}</span></th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #64748B;">Après-midi · ${HORAIRE_APREM}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Matin · ${HORAIRE_MATIN}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Après-midi · ${HORAIRE_APREM}</span></th>
       </tr>
     </thead>
     <tbody>
@@ -98,25 +111,50 @@ ${renderBrandHeader()}
     </tbody>
   </table>
 
-  <!-- 2 cases signature formateur en bas de page (matin + après-midi) -->
-  <div style="margin-top: 14mm; display: flex; gap: 12mm;">
-    <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
-      <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Matin · ${HORAIRE_MATIN}
+  <!-- Bloc bas de page (Laurent 2026-07-01) : signatures formateur + certification.
+       IMPORTANT — PAS de break-inside:avoid ici. Ce dernier FORÇAIT tout le bloc à
+       basculer en page 2 dès que le moteur estimait qu'il ne tenait pas dans
+       l'espace restant, laissant du vide en page 1 ("certifié exact en page 2
+       alors qu'il y a la place"). Sans lui + hauteurs compactées, le contenu coule
+       naturellement et tient sur la page 1 pour une session courte. -->
+  <div style="margin-top: 6mm;">
+    <!-- 2 cases signature formateur (matin + après-midi). Horaires retirés
+         (Laurent 2026-06-04) : "une signature le matin et l'aprem sans les horaires". -->
+    <div style="display: flex; gap: 12mm;">
+      <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 6px 10px;">
+        <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;">
+          Signature formateur — Matin
+        </div>
+        <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
+          ${escapeHtml(trainer)}
+        </div>
+        <div style="height: 12mm;"></div>
       </div>
-      <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
-        ${escapeHtml(trainer)}
+      <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 6px 10px;">
+        <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;">
+          Signature formateur — Après-midi
+        </div>
+        <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
+          ${escapeHtml(trainer)}
+        </div>
+        <div style="height: 12mm;"></div>
       </div>
-      <div style="height: 26mm;"></div>
     </div>
-    <div style="flex: 1; border: 1px solid #CBD5E1; border-radius: 4px; padding: 8px 10px;">
-      <div style="font-size: 9pt; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-        Signature formateur — Après-midi · ${HORAIRE_APREM}
+
+    <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
+         par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
+         (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
+    <div style="margin-top: 5mm; padding-top: 6px; border-top: 1px solid #CBD5E1;">
+      <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 3px 0;">
+        Certifié exact par ${escapeHtml(trainer)}, formateur.
+      </p>
+      <p style="font-size: 10pt; margin: 0;">
+        Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
+      </p>
+      <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 4px;">
+        ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 20mm;" />` : ''}
+        ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="height: 26mm;" />` : ''}
       </div>
-      <div style="font-size: 10pt; font-weight: 600; color: ${BRAND_DARK};">
-        ${escapeHtml(trainer)}
-      </div>
-      <div style="height: 26mm;"></div>
     </div>
   </div>
 </main>

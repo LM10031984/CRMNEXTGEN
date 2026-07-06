@@ -26,6 +26,8 @@ export const PRODUCT_TABS = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'apprenants', label: 'Apprenants formés' },
   { id: 'programme', label: 'Programme' },
+  // Phase 9.3 NAV-02(b)(c) — onglet Documents (liste unifiée toutes sources).
+  { id: 'docs', label: 'Documents' },
 ] as const;
 
 export type ProductTabId = (typeof PRODUCT_TABS)[number]['id'];

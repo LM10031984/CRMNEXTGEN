@@ -1,0 +1,21 @@
+name: Deploy migrations
+on:
+  push:
+    branches: [main]
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # schema.prisma lit `url` (pooler :6543) + `directUrl` (:5432) — les DEUX
+      # secrets chiffrés sont requis ; la migration passe par directUrl.
+      - run: pnpm --filter @qualiof/db exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}

@@ -26,6 +26,17 @@ const RATING_SCORE: Record<RatingValue, number> = {
   'Mauvais': 0,
 };
 
+// Barème /5 = colonne K du tableau de suivi Qualiopi de Laurent.
+// DÉDIÉ à noteSur5 — NE PAS réutiliser RATING_SCORE (0-100).
+// allRatings ne contient aujourd'hui que des RatingValue (SECTION_CRITERIA exclut benefice),
+// donc ces 4 entrées suffisent.
+const RATING_SCORE_5: Record<RatingValue, number> = {
+  'Très bien': 5,
+  'Bien': 4,
+  'Moyen': 3,
+  'Mauvais': 2,
+};
+
 const SECTION_CRITERIA: Array<{
   section: keyof Omit<SatisfactionChaudContent, 'benefice' | 'recommandation' | 'remarques'>;
   label: string;
@@ -80,6 +91,7 @@ const SECTION_CRITERIA: Array<{
 export interface SatisfactionSessionAgg {
   totalStagiaires: number;
   globalScore: number; // 0-100
+  noteSur5: number; // 0-5, 1 décimale, barème colonne K (TB=5/Bien=4/Moyen=3/Mauvais=2)
   recommandationRate: number; // 0-100 (% Oui)
   satisfactionFavorableRate: number; // 0-100 (% Très bien + Bien sur l'ensemble)
   byCriterion: Array<{
@@ -100,6 +112,7 @@ export function aggregateSatisfactions(
     return {
       totalStagiaires: 0,
       globalScore: 0,
+      noteSur5: 0,
       recommandationRate: 0,
       satisfactionFavorableRate: 0,
       byCriterion: [],
@@ -141,6 +154,14 @@ export function aggregateSatisfactions(
   const globalScore = Math.round(
     allRatings.reduce((s, r) => s + RATING_SCORE[r], 0) / allRatings.length,
   );
+  // Note /5 sur la MÊME base allRatings que globalScore, arrondie à 1 décimale.
+  // (allRatings est non-vide quand total>0 ; le garde length===0 reste défensif.)
+  const noteSur5 =
+    allRatings.length === 0
+      ? 0
+      : Math.round(
+          (allRatings.reduce((s, r) => s + RATING_SCORE_5[r], 0) / allRatings.length) * 10,
+        ) / 10;
   const recommandationRate = Math.round(
     (contents.filter((c) => c.recommandation === 'Oui').length / total) * 100,
   );
@@ -164,6 +185,7 @@ export function aggregateSatisfactions(
   return {
     totalStagiaires: total,
     globalScore,
+    noteSur5,
     recommandationRate,
     satisfactionFavorableRate,
     byCriterion,
@@ -253,7 +275,7 @@ export function renderSatisfactionSessionHtml(data: SatisfactionSessionTemplateD
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">BILAN DE SATISFACTION — SESSION</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 30 — Évaluation à chaud agrégée</p>
+  <p class="doc-subtitle">Évaluation à chaud agrégée</p>
   <hr class="doc-rule" />
 
   <div style="background: #F8FAFC; border-left: 4px solid ${BRAND_DARK}; padding: 10px 14px; margin: 10px 0;">

@@ -16,13 +16,18 @@ export type { ClosureDocKind };
  * désormais généré au niveau PRODUIT (1 fois pour tous) via
  * `generateDerouleForProduct`. Le déroulé apparaît toujours dans la matrice
  * de conformité comme un asset partagé.
+ *
+ * `ANALYSE_BESOIN` n'est PLUS dans cette liste depuis 2026-07 (Phase 15) : c'est
+ * un doc AVANT la formation (onglet « Avant »), pas un doc du pack de fin de
+ * formation. Elle reste générable à la demande par apprenant via
+ * `dispatchGenerateDoc({ docType: 'ANALYSE_BESOIN' })` — même modèle que
+ * `ASSIDUITE_AGEFICE` (générable, hors pack). Suit la logique Avant/Après.
  */
 export const CLOSURE_DOC_KINDS = [
   'ATTESTATION',
   'CERTIFICAT',
   'QCM',
   'GRILLE_OBS',
-  'ANALYSE_BESOIN',
   'POSITIONNEMENT',
   'SATISFACTION_CHAUD',
   'SATISFACTION_FROID',

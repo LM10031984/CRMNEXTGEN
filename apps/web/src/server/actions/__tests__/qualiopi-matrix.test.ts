@@ -94,6 +94,17 @@ vi.mock('@/lib/storage', () => ({
   uploadFile: vi.fn().mockResolvedValue({ key: 'k', bucket: 'qualiof-docs', size: 1 }),
 }));
 
+// Phase 17-03 : `@/lib/pdf-render` consomme désormais `sharedEnv` (createEnv au load).
+// Ce test importe transitivement pdf-render via les générateurs non-mockés
+// (`convocation-generator`, `agefice-attendance-generator`) → createEnv throwait
+// « Invalid environment variables » (vitest ne charge pas .env). Politique hermétique
+// documentée 17-02 : mocker le module qui exécute createEnv au load. Ces fonctions ne
+// sont jamais invoquées ici (les chemins de génération sont pilotés par les mocks).
+vi.mock('@/lib/pdf-render', () => ({
+  renderHtmlToPdf: vi.fn(),
+  renderHtmlToPdfWeasy: vi.fn(),
+}));
+
 vi.mock('../closure-pack', () => ({
   generateClosurePack: vi.fn(),
 }));

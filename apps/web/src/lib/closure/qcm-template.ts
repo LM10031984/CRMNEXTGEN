@@ -94,7 +94,7 @@ export function renderQcmHtml(ctx: ClosureContext, content: QcmContent): string 
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">QCM d'évaluation des acquis</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 11 — Évaluation des connaissances en fin de formation</p>
+  <p class="doc-subtitle">Évaluation des connaissances en fin de formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}
@@ -103,6 +103,7 @@ ${renderBrandHeader()}
   <div style="display:inline-block; background:${scoreColor}; color:white; padding:8px 16px; border-radius:4px; margin: 4px 0 14px 0;">
     <div style="font-size:14pt; font-weight:700;">Score : ${score}%</div>
     <div style="font-size:9.5pt; margin-top:2px;">${correctCount}/${total} bonnes réponses</div>
+    <div style="font-size:8.5pt; margin-top:2px; opacity:0.92;">Seuil de réussite : ${Math.ceil(total * 0.7)}/${total} · QCM réalisé sur Kahoot</div>
   </div>
 
   <div class="legend-box">

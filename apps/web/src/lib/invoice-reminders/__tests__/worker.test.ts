@@ -1,25 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Tests Phase 11 Plan 11-06 Task 2 — Worker BullMQ relances.
+ * Tests Phase 11 Plan 11-06 → Phase 20 Plan 20-01 — Handler relances (croner).
  *
- * Stratégie de mock (clone-strict patterns Phase 11 `send-reminder.test.ts` +
- * Phase 2.2 `closure/__tests__/single-participant.test.ts`) :
- *  - `@qualiof/db`                                    → prisma mocké (tenant.findMany + invoice.findMany)
- *  - `@/server/actions/invoices` (sendInvoiceReminder) → mocké (on vérifie l'appel sans relancer la chaîne action)
- *  - `bullmq` (Queue/Worker classes)                  → mockées (on ne touche pas Redis dans les tests)
- *  - `../closure/redis` (getQueueRedis/getWorkerRedis) → mockés
+ * MISE À JOUR 20-01 (WORK-02, D-03 Redis viré) : le handler `processReminderJob`
+ * accepte désormais un payload NEUTRE `{ triggered_by }` (plus de `Job` BullMQ).
+ * Les fonctions `startInvoiceReminderWorker`/`scheduleDailyReminders` (BullMQ)
+ * ont été supprimées → la planification croner est testée dans
+ * `scripts/__tests__/cron-workers.test.ts`. Ce fichier conserve la couverture
+ * MÉTIER inchangée du handler (statuts, R2, idempotence 24h, niveau max).
  *
- * Coverage (9 cas — cf <behavior> plan 11-06) :
+ * Stratégie de mock :
+ *  - `@qualiof/db`                                       → prisma mocké (tenant.findMany + invoice.findMany)
+ *  - `@/lib/invoice-reminders/invoice-reminder-core`     → mocké (cœur neutre worker-safe, 20-05 : le
+ *                                                          handler n'importe plus la server action
+ *                                                          `@/server/actions/invoices` qui casse le boot
+ *                                                          pm2 via `import { cache } from 'react'`).
+ *
+ * Coverage (7 cas métier — la logique reste inchangée) :
  *  1. `processReminderJob` scan Invoice WHERE status ∈ {ISSUED, PARTIAL, OVERDUE}
  *  2. `processReminderJob` filtre issueDate ≥ REMINDER_START_DATE (mitigation R2)
  *  3. Pour chaque tenant : lit Tenant.invoiceReminderDays par tick
  *  4. Skip facture si reminderCount >= invoiceReminderDays.length (niveau max)
  *  5. Skip facture si lastReminderAt > now - 24h (idempotence D-13b defense-in-depth)
- *  6. Appelle sendInvoiceReminder({ triggered_by: 'cron' }) pour chaque facture éligible
- *  7. `scheduleDailyReminders` inscrit job repeatable `jobId='daily-reminders-cron'`
- *  8. `scheduleDailyReminders` utilise pattern cron `'0 8 * * *'` tz `Europe/Paris`
- *  9. `REMINDER_START_DATE` est exportée et figée au 2026-05-19 UTC
+ *  6. Appelle sendInvoiceReminderCron({ invoiceId }) pour chaque facture éligible
+ *  7. `REMINDER_START_DATE` est exportée et figée au 2026-05-19 UTC
  */
 
 vi.mock('@qualiof/db', () => ({
@@ -48,36 +53,13 @@ vi.mock('@qualiof/db', () => ({
   },
 }));
 
-vi.mock('@/server/actions/invoices', () => ({
-  sendInvoiceReminder: vi.fn(),
-}));
-
-vi.mock('bullmq', () => {
-  const queueAdd = vi.fn().mockResolvedValue(undefined);
-  return {
-    Queue: vi.fn().mockImplementation(() => ({ add: queueAdd })),
-    Worker: vi.fn().mockImplementation(() => ({
-      on: vi.fn(),
-      close: vi.fn().mockResolvedValue(undefined),
-    })),
-    // expose for assertions
-    __queueAdd: queueAdd,
-  };
-});
-
-vi.mock('../../closure/redis', () => ({
-  getQueueRedis: vi.fn().mockReturnValue({}),
-  getWorkerRedis: vi.fn().mockReturnValue({}),
+vi.mock('@/lib/invoice-reminders/invoice-reminder-core', () => ({
+  sendInvoiceReminderCron: vi.fn(),
 }));
 
 import { prisma } from '@qualiof/db';
-import { sendInvoiceReminder } from '@/server/actions/invoices';
-import * as bullmq from 'bullmq';
-import {
-  processReminderJob,
-  scheduleDailyReminders,
-  REMINDER_START_DATE,
-} from '../worker';
+import { sendInvoiceReminderCron } from '@/lib/invoice-reminders/invoice-reminder-core';
+import { processReminderJob, REMINDER_START_DATE } from '../worker';
 
 const tenantFindMany = prisma.tenant.findMany as unknown as ReturnType<
   typeof vi.fn
@@ -85,19 +67,15 @@ const tenantFindMany = prisma.tenant.findMany as unknown as ReturnType<
 const invoiceFindMany = prisma.invoice.findMany as unknown as ReturnType<
   typeof vi.fn
 >;
-const sendReminderMock = sendInvoiceReminder as unknown as ReturnType<
+const sendReminderMock = sendInvoiceReminderCron as unknown as ReturnType<
   typeof vi.fn
 >;
-const queueAddMock = (bullmq as unknown as { __queueAdd: ReturnType<typeof vi.fn> })
-  .__queueAdd;
 
-function makeJob(
+/** Payload neutre `{ triggered_by }` (plus de Job BullMQ depuis 20-01). */
+function makeInput(
   overrides: Partial<{ triggered_by: 'cron' | 'manual_admin_trigger' }> = {},
 ) {
-  return {
-    id: 'job-1',
-    data: { triggered_by: 'cron' as const, ...overrides },
-  } as Parameters<typeof processReminderJob>[0];
+  return { triggered_by: 'cron' as const, ...overrides };
 }
 
 beforeEach(() => {
@@ -105,7 +83,6 @@ beforeEach(() => {
   tenantFindMany.mockReset();
   invoiceFindMany.mockReset();
   sendReminderMock.mockReset();
-  queueAddMock.mockClear();
 
   // Defaults
   tenantFindMany.mockResolvedValue([
@@ -117,7 +94,7 @@ beforeEach(() => {
 
 describe('invoice-reminder-worker — processReminderJob', () => {
   it('Test 1 — scan Invoice WHERE status ∈ {ISSUED, PARTIAL, OVERDUE}', async () => {
-    await processReminderJob(makeJob());
+    await processReminderJob(makeInput());
 
     expect(invoiceFindMany).toHaveBeenCalled();
     const whereArg = invoiceFindMany.mock.calls[0]![0]!.where;
@@ -127,7 +104,7 @@ describe('invoice-reminder-worker — processReminderJob', () => {
   });
 
   it('Test 2 — filtre issueDate ≥ REMINDER_START_DATE (mitigation R2)', async () => {
-    await processReminderJob(makeJob());
+    await processReminderJob(makeInput());
 
     const whereArg = invoiceFindMany.mock.calls[0]![0]!.where;
     expect(whereArg.issueDate).toEqual({ gte: REMINDER_START_DATE });
@@ -139,7 +116,7 @@ describe('invoice-reminder-worker — processReminderJob', () => {
       { id: 'tenant-B', invoiceReminderDays: [15, 30, 60] },
     ]);
 
-    await processReminderJob(makeJob());
+    await processReminderJob(makeInput());
 
     expect(tenantFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -161,7 +138,7 @@ describe('invoice-reminder-worker — processReminderJob', () => {
       { id: 'inv-2', reminderCount: 0, lastReminderAt: null },
     ]);
 
-    await processReminderJob(makeJob());
+    await processReminderJob(makeInput());
 
     expect(sendReminderMock).toHaveBeenCalledTimes(1);
     expect(sendReminderMock).toHaveBeenCalledWith(
@@ -179,7 +156,7 @@ describe('invoice-reminder-worker — processReminderJob', () => {
       { id: 'inv-old', reminderCount: 0, lastReminderAt: twoDaysAgo },
     ]);
 
-    await processReminderJob(makeJob());
+    await processReminderJob(makeInput());
 
     expect(sendReminderMock).toHaveBeenCalledTimes(1);
     expect(sendReminderMock).toHaveBeenCalledWith(
@@ -187,49 +164,26 @@ describe('invoice-reminder-worker — processReminderJob', () => {
     );
   });
 
-  it("Test 6 — appelle sendInvoiceReminder({ triggered_by: 'cron' }) pour chaque facture éligible", async () => {
+  it('Test 6 — appelle sendInvoiceReminderCron({ invoiceId }) pour chaque facture éligible', async () => {
     invoiceFindMany.mockResolvedValueOnce([
       { id: 'inv-1', reminderCount: 0, lastReminderAt: null },
       { id: 'inv-2', reminderCount: 1, lastReminderAt: null },
     ]);
 
-    const result = await processReminderJob(makeJob());
+    const result = await processReminderJob(makeInput());
 
     expect(sendReminderMock).toHaveBeenCalledTimes(2);
-    expect(sendReminderMock).toHaveBeenCalledWith({
-      invoiceId: 'inv-1',
-      triggered_by: 'cron',
-    });
-    expect(sendReminderMock).toHaveBeenCalledWith({
-      invoiceId: 'inv-2',
-      triggered_by: 'cron',
-    });
+    expect(sendReminderMock).toHaveBeenCalledWith({ invoiceId: 'inv-1' });
+    expect(sendReminderMock).toHaveBeenCalledWith({ invoiceId: 'inv-2' });
     expect(result).toEqual({ processed: 2 });
   });
 });
 
-describe('invoice-reminder-worker — scheduleDailyReminders', () => {
-  it("Test 7 — inscrit job repeatable jobId='daily-reminders-cron'", async () => {
-    await scheduleDailyReminders();
-
-    expect(queueAddMock).toHaveBeenCalled();
-    const opts = queueAddMock.mock.calls[0]![2]!;
-    expect(opts.jobId).toBe('daily-reminders-cron');
-  });
-
-  it("Test 8 — utilise pattern cron '0 8 * * *' tz Europe/Paris", async () => {
-    await scheduleDailyReminders();
-
-    const opts = queueAddMock.mock.calls[0]![2]!;
-    expect(opts.repeat).toEqual({
-      pattern: '0 8 * * *',
-      tz: 'Europe/Paris',
-    });
-  });
-});
+// Tests 7 & 8 (scheduleDailyReminders BullMQ) supprimés 20-01 : la planification
+// est désormais assurée par croner (cf scripts/__tests__/cron-workers.test.ts).
 
 describe('invoice-reminder-worker — REMINDER_START_DATE', () => {
-  it('Test 9 — figée au 2026-05-19T00:00:00Z (mitigation R2 cascade)', () => {
+  it('Test 7 — figée au 2026-05-19T00:00:00Z (mitigation R2 cascade)', () => {
     expect(REMINDER_START_DATE).toBeInstanceOf(Date);
     expect(REMINDER_START_DATE.toISOString()).toBe('2026-05-19T00:00:00.000Z');
   });

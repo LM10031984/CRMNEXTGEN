@@ -52,7 +52,7 @@
 
 **Databases:**
 - PostgreSQL 16 (Alpine container `postgres:16-alpine`)
-  - Connection: `DATABASE_URL=postgresql://qualiof:qualiof_dev@localhost:5432/qualiof?schema=public`
+  - Connection: `DATABASE_URL=postgresql://qualiof:***@localhost:5432/qualiof?schema=public`
   - Client: Prisma 5.22.0
   - Singleton at `packages/db/src/index.ts` (re-exports all `@prisma/client` types)
   - Schema: `packages/db/prisma/schema.prisma` (1263 lines)
@@ -80,7 +80,7 @@
 - MinIO (container `minio/minio:latest`)
   - Endpoints: API `http://localhost:9000`, Console `http://localhost:9001`
   - Env vars: `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE=true`
-  - Credentials (dev): `qualiof / qualiof_dev_minio`
+  - Credentials (dev): `qualiof / ***_minio`
   - Buckets:
     - `qualiof-docs` (`S3_BUCKET_DOCS`) - generated PDFs (attestations, conventions, AGEFICE…)
     - `qualiof-templates` (`S3_BUCKET_TEMPLATES`) - DOCX/PDF templates

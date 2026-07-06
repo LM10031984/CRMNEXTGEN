@@ -15,6 +15,8 @@ import { ProductStatsTab } from '@/components/produits/tabs/product-stats-tab';
 import { ProductSessionsTab } from '@/components/produits/tabs/product-sessions-tab';
 import { ProductLearnersTab } from '@/components/produits/tabs/product-learners-tab';
 import { ProductProgrammeTab } from '@/components/produits/tabs/product-programme-tab';
+// Phase 9.3 Plan 09.3-03 — NAV-02(b)(c) : onglet Documents (liste unifiée toutes sources).
+import { ProductDocsTab } from '@/components/produits/tabs/product-docs-tab';
 import { ProductSatisfactionPanel } from '@/components/produits/product-satisfaction-panel';
 import { PriceMissingBanner } from '@/components/produits/price-missing-banner';
 import {
@@ -25,6 +27,10 @@ import {
   type ProductSessionRow,
   type ProductLearnerRow,
 } from '@/lib/product-stats';
+import { getProductEvaluationStats, type EvaluationStats } from '@/lib/evaluation-stats';
+
+// Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
+export const maxDuration = 300;
 
 /**
  * Phase 9.1 Plan 09.1-05 Task 3 — Fiche produit refondue en 4 onglets URL-state.
@@ -58,6 +64,7 @@ const VALID_TABS: readonly ProductTabId[] = [
   'sessions',
   'apprenants',
   'programme',
+  'docs',
 ] as const;
 
 function coerceTab(raw: string | undefined): ProductTabId {
@@ -90,12 +97,16 @@ export default async function ProductDetailPage({
   // Lazy load par tab — seulement les data nécessaires à l'onglet courant.
   // Le programmePdfId est chargé pour le tab "programme" (lien PDF si présent).
   let stats: ProductStats | null = null;
+  let evalStats: EvaluationStats | null = null;
   let sessions: ProductSessionRow[] | null = null;
   let learners: ProductLearnerRow[] | null = null;
   let programmePdfId: string | null = null;
 
   if (activeTab === 'stats') {
-    stats = await getProductStats(id, user.tenantId);
+    [stats, evalStats] = await Promise.all([
+      getProductStats(id, user.tenantId),
+      getProductEvaluationStats(id, user.tenantId),
+    ]);
   } else if (activeTab === 'sessions') {
     sessions = await listProductSessions(id, user.tenantId);
   } else if (activeTab === 'apprenants') {
@@ -114,6 +125,7 @@ export default async function ProductDetailPage({
     programmePdfId = programmeDoc?.id ?? null;
   }
 
+  const pAny = product as Record<string, unknown>;
   const editCurrent = {
     title: product.title,
     theme: product.theme,
@@ -127,6 +139,15 @@ export default async function ProductDetailPage({
     trainerProfile: product.trainerProfile,
     accessibility: product.accessibility,
     accessConditions: product.accessConditions,
+    ageficeFormationType: (pAny.ageficeFormationType as string | null | undefined) ?? null,
+    ageficeNiveau: (pAny.ageficeNiveau as string | null | undefined) ?? null,
+    ageficeCertif: (pAny.ageficeCertif as string | null | undefined) ?? null,
+    ageficeAttestation: (pAny.ageficeAttestation as string | null | undefined) ?? null,
+    ageficeEvaluations: (pAny.ageficeEvaluations as string[] | null | undefined) ?? null,
+    ageficeObligatoire: (pAny.ageficeObligatoire as boolean | null | undefined) ?? null,
+    ageficeReconversion: (pAny.ageficeReconversion as boolean | null | undefined) ?? null,
+    ageficeEnEntreprise: (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? null,
+    ageficeMandat: (pAny.ageficeMandat as boolean | null | undefined) ?? null,
   };
 
   return (
@@ -191,7 +212,7 @@ export default async function ProductDetailPage({
       >
         {activeTab === 'stats' && stats && (
           <div className="space-y-5">
-            <ProductStatsTab stats={stats} productId={product.id} />
+            <ProductStatsTab stats={stats} evalStats={evalStats} productId={product.id} />
             {/* Satisfaction agrégée toutes sessions confondues — Qualiopi 2026 :
                 indicateur 30 ouvert au niveau produit en plus du niveau session */}
             <ProductSatisfactionPanel productId={product.id} tenantId={user.tenantId} />
@@ -211,6 +232,10 @@ export default async function ProductDetailPage({
             aiDraftedAt={product.aiDraftedAt}
             canValidateAiDraft={['ADMIN', 'MANAGER'].includes(user.role)}
           />
+        )}
+        {/* Phase 9.3 NAV-02(b)(c) — onglet Documents (lazy : fetch côté ProductDocsTab). */}
+        {activeTab === 'docs' && (
+          <ProductDocsTab productId={product.id} tenantId={user.tenantId} />
         )}
       </div>
     </div>

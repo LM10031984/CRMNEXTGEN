@@ -14,153 +14,25 @@
  * sponsorOrgId) qui agrège.
  */
 
-import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
-import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
-import {
-  renderConventionHtml,
-  type ConventionData,
-  type ConventionStagiaire,
-} from '@/lib/convention-template';
-import { loadOfConfig } from '@/lib/of-config';
+import { generateConventionCore } from '@/lib/closure/convention-core';
+
+// Le cœur SANS auth `generateConventionCore` vit désormais dans
+// `@/lib/closure/convention-core` (quick 260618-gux) : ce fichier reste un
+// wrapper server action (validateRequest → core → revalidatePath). Le cœur
+// N'IMPORTE PAS `@/lib/auth`, ce qui permet aux scripts tsx pipeline de
+// l'importer sans tirer `validateRequest` → `react cache`.
 
 export async function generateConventionForParticipant(
   participantId: string,
+  options?: { force?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
-  const participant = await prisma.sessionParticipant.findFirst({
-    where: { id: participantId, session: { tenantId: user.tenantId } },
-    include: {
-      person: {
-        include: {
-          legalLinks: { include: { organization: true } },
-        },
-      },
-      sponsorOrg: true,
-      session: {
-        include: {
-          product: true,
-          location: true,
-          trainers: { include: { person: true } },
-        },
-      },
-    },
-  });
-  if (!participant) return { ok: false, error: 'Inscription introuvable' };
-  if (!participant.session.product) return { ok: false, error: 'Produit lié à la session manquant' };
-
-  const participantPrice = Number(participant.priceHT);
-  const productPrice = Number(participant.session.product.priceHT);
-  const effectivePrice = participantPrice > 0 ? participantPrice : productPrice;
-  if (effectivePrice <= 0) {
-    return {
-      ok: false,
-      error:
-        "Prix HT non défini : ni sur l'inscription (fiche session, bouton Éditer) ni sur le produit (/app/produits). Renseignez l'un des deux avant de générer la convention.",
-    };
-  }
-
-  // Détermine si l'apprenant est rattaché à son sponsorOrg via EI_SELF
-  // (= auto-entreprise perso) ou via SALARIE/DIRIGEANT (= structure employeur).
-  const linkToSponsor = participant.person.legalLinks.find(
-    (l) => l.organizationId === participant.sponsorOrgId,
-  );
-  const isSelfEmployed = linkToSponsor?.role === 'EI_SELF';
-
-  // Représentant qui signe la convention
-  const representantNom = isSelfEmployed
-    ? `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`.trim()
-    : (participant.sponsorOrg.representative?.trim() || `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`.trim());
-
-  // Stagiaire(s) couverts par cette convention. Pour le MVP, 1 seule personne.
-  const stagiaires: ConventionStagiaire[] = [
-    {
-      prenom: participant.person.firstName,
-      nom: participant.person.lastName,
-      email: participant.person.email,
-    },
-  ];
-
-  // Lieu : on prend l'adresse de la session si elle existe, sinon le siège OF
-  const of = await loadOfConfig(user.tenantId);
-  const locAddress = participant.session.location?.address as Record<string, string> | string | null;
-  let lieu: string;
-  if (typeof locAddress === 'string') lieu = locAddress;
-  else if (locAddress && typeof locAddress === 'object') {
-    const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = parts.length ? parts.join(', ') : (participant.session.location?.name ?? of.addressFull);
-  } else {
-    lieu = participant.session.location?.name ?? of.addressFull;
-  }
-
-  // RCS ville : heuristique depuis le code postal de l'org si possible
-  const orgAddr = (participant.sponsorOrg.address as Record<string, string> | null) ?? null;
-  const rcsVille = orgAddr?.city ?? null;
-
-  // Produit : objectifs depuis la fiche produit
-  const objectives = (participant.session.product.objectives as string[] | null) ?? [];
-
-  const data: ConventionData = {
-    beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
-    beneficiaireSiret: participant.sponsorOrg.siret,
-    beneficiaireRcsVille: rcsVille,
-    beneficiaireRepresentantNom: representantNom,
-    stagiaires,
-    sessionStartDate: participant.session.startDate,
-    sessionEndDate: participant.session.endDate,
-    sessionLieu: lieu,
-    produitTitre: participant.session.name ?? participant.session.product.title,
-    produitDureeHeures: participant.session.product.durationHours,
-    produitObjectifs: objectives,
-    produitProgrammeMd: typeof participant.session.product.programMd === 'string' ? participant.session.product.programMd : '',
-    produitTrainerProfile: participant.session.product.trainerProfile,
-    produitPriceHTPerStagiaire: effectivePrice,
-    // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
-    tenantId: user.tenantId,
-  };
-
-  let pdfBuffer: Buffer;
-  try {
-    const html = renderConventionHtml(data, of);
-    pdfBuffer = await renderHtmlToPdfWeasy(html);
-  } catch (e: any) {
-    return { ok: false, error: `Erreur génération PDF convention : ${e?.message ?? e}` };
-  }
-
-  const hash = createHash('sha256').update(pdfBuffer).digest('hex');
-  const safePersonSlug = `${participant.person.lastName}-${participant.person.firstName}`
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  const objectKey = `conventions/${participant.session.code}/${safePersonSlug}-${hash.slice(0, 8)}.pdf`;
-
-  try {
-    await uploadFile(DOCS_BUCKET, objectKey, pdfBuffer, 'application/pdf');
-  } catch (e: any) {
-    return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}` };
-  }
-
-  const document = await prisma.document.create({
-    data: {
-      tenantId: user.tenantId,
-      type: 'CONVENTION',
-      entityType: 'participant',
-      entityId: participant.id,
-      sessionId: participant.session.id,
-      participantId: participant.id,
-      pdfUrl: objectKey,
-      hashSha256: hash,
-    },
-  });
-
-  revalidatePath(`/app/sessions/${participant.session.id}`);
-  revalidatePath(`/app/apprenants/${participant.person.id}`);
-  return { ok: true, documentId: document.id };
+  const r = await generateConventionCore(user.tenantId, participantId, options);
+  if (r.sessionId) revalidatePath(`/app/sessions/${r.sessionId}`);
+  if (r.personId) revalidatePath(`/app/apprenants/${r.personId}`);
+  return { ok: r.ok, documentId: r.documentId, error: r.error };
 }

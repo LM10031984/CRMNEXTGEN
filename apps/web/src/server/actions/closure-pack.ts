@@ -7,7 +7,7 @@ import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { CLOSURE_DOC_KINDS, CLOSURE_DOC_KIND_LABELS } from '@/lib/closure/types';
-import { enqueueClosureJob, getClosureQueue } from '@/lib/closure/queue';
+import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateGrilleObsSessionForSession } from './generate-grille-obs-session';
 import { generateProgrammeForProduct } from './programme-generator';
@@ -570,27 +570,20 @@ export async function retryClosureBatchErrors(
     }),
   ]);
 
-  // BullMQ refuse silencieusement queue.add({ jobId }) si le job existe déjà
-  // côté Redis (typiquement en état "failed" après les 3 attempts initiaux).
-  // → on supprime explicitement avant de re-enqueue. Cf B2 du code review.
-  const queue = getClosureQueue();
+  // Driver Postgres : re-enfiler = remettre chaque job en QUEUED (idempotent,
+  // sans Redis). Le worker les reprendra au prochain poll SKIP LOCKED. Plus
+  // besoin de purger un état Redis "failed" comme sous BullMQ (cf B2 legacy).
   await Promise.all(
-    batch.jobs.map(async (job) => {
-      try {
-        const existing = await queue.getJob(job.id);
-        if (existing) await existing.remove();
-      } catch {
-        /* job déjà parti, OK */
-      }
-      await enqueueClosureJob({
+    batch.jobs.map((job) =>
+      enqueueClosureJob({
         jobId: job.id,
         batchId,
         tenantId: user.tenantId,
         sessionId: batch.sessionId,
         participantId: job.participantId,
         kind: job.kind,
-      });
-    }),
+      }),
+    ),
   );
 
   revalidatePath(`/app/sessions/${batch.sessionId}/closure/${batchId}`);

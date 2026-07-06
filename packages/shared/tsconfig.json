@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // Type-check only (script `lint`/`test` = tsc --noEmit / vitest ; jamais émis).
+    // noEmit requis pour autoriser allowImportingTsExtensions (env.ts importe
+    // ./env-schemas.ts avec extension explicite pour le chokepoint boot Node ESM).
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*"]
 }

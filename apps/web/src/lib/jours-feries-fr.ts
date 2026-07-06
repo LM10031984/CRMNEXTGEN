@@ -3,6 +3,8 @@
  * hardcoder année par année. Pâques via algorithme de Gauss.
  */
 
+import { subtractBusinessDaysISO } from './business-days';
+
 function easterSunday(year: number): Date {
   // Algorithme de Gauss (computus grégorien)
   const a = year % 19;
@@ -61,29 +63,26 @@ export function isOffDayFR(d: Date): boolean {
 
 /**
  * Trouve une date "analyse réalisée le" pour un doc Qualiopi : au moins
- * `minDaysBefore` jours avant `sessionStart`, pas un dimanche, pas un jour
- * férié FR. Recul jour par jour jusqu'à trouver une date valide.
+ * `minDaysBefore` jours OUVRÉS avant `sessionStart` (samedi, dimanche et
+ * fériés FR exclus du décompte ET du résultat). Règle Kaïna 16/06 : le recueil
+ * du besoin se fait J-15 jours ouvrés en amont du 1er jour de session.
  *
- * Déterministe via un seed (utilise l'ID participant ou similaire pour que
- * la date soit stable d'un render à l'autre).
+ * Déterministe via un seed (ID participant) : variation de 0-7 jours ouvrés
+ * en plus, pour que deux stagiaires d'une même session n'aient pas la même
+ * date tout en gardant une date stable d'un render à l'autre.
  */
 export function computeAnalyseDate(
   sessionStart: Date,
   minDaysBefore: number = 15,
   seed: string = '',
 ): Date {
-  // Stable offset additionnel basé sur le seed : 0-7 jours en plus pour varier
+  // Offset additionnel stable basé sur le seed : 0-7 jours OUVRÉS en plus.
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   const extraDays = h % 8; // 0-7
 
-  let candidate = addDays(sessionStart, -(minDaysBefore + extraDays));
-  let attempts = 0;
-  while (isOffDayFR(candidate) && attempts < 30) {
-    candidate = addDays(candidate, -1);
-    attempts++;
-  }
-  return candidate;
+  const iso = subtractBusinessDaysISO(ymd(sessionStart), minDaysBefore + extraDays);
+  return new Date(iso + 'T00:00:00Z');
 }
 
 const FORMATEURS_RESPONSABLES = ['Laurent MARX', 'Jean-Guy Ourmières'] as const;

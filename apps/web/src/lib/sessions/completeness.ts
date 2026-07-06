@@ -33,8 +33,11 @@ export type SessionCompletenessBlocker = {
    * BUG-5/BUG-17 — chaque blocker pointe vers le bon endroit :
    *  - no_program → URL absolue vers la fiche produit
    *  - autres → anchor #id de section sur la fiche session
+   *
+   * `external: true` → ouvrir dans un nouvel onglet (préserve le contexte
+   * session pour les fixes hors-page comme la validation IA produit).
    */
-  fix: { href: string; label: string };
+  fix: { href: string; label: string; external?: boolean };
 };
 
 export interface SessionCompletenessInputWithProductId
@@ -144,10 +147,10 @@ export function getSessionCompleteness(
     blockers.push({
       key: 'product_ai_unreviewed',
       label: 'Programme IA en attente de validation humaine',
-      hint: 'Un humain doit relire et valider le programme généré par IA avant de l\'utiliser pour des conventions Qualiopi',
-      fix: s.productId
-        ? { href: `/app/produits/${s.productId}?tab=programme`, label: 'Valider le brouillon IA' }
-        : { href: '#section-produit', label: 'Voir le produit' },
+      hint: 'Un humain doit relire et valider le programme avant de l\'utiliser pour des conventions Qualiopi',
+      // Pointe sur l'inline validator de Step 1 — validation 1-clic sans
+      // quitter la session (Laurent 2026-06-04).
+      fix: { href: '#step-1', label: 'Valider depuis la session' },
     });
   }
 

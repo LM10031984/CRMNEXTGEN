@@ -17,8 +17,8 @@ import {
   SECTION_BLUE,
   escapeHtml,
   formatDateFr,
+  normalizeGender,
   renderBrandHeader,
-  renderInfoBox,
   renderStagiaireBlock,
   wrapHtml,
 } from './shared-template';
@@ -66,10 +66,10 @@ export function renderAnalyseBesoinHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Analyse des besoins du stagiaire</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 4 — Recueil des besoins en amont de la formation</p>
+  <p class="doc-subtitle">Recueil des besoins en amont de la formation</p>
   <hr class="doc-rule" />
 
-  ${renderInfoBox(ctx)}
+  <p style="margin: 4px 0 10px 0; font-size: 10.5pt; color: #475569;">Formation envisagée : <strong style="color: ${BRAND_DARK};">${escapeHtml(ctx.sessionTitle)}</strong></p>
   ${renderStagiaireBlock(ctx)}
 
   ${renderParagraphSection('Contexte professionnel', content.contexte_professionnel)}
@@ -86,9 +86,18 @@ ${renderBrandHeader()}
       : ''
   }
 
+  <h2 class="section">Situation de handicap</h2>
+  <p class="paragraph">À la question «&nbsp;Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante&nbsp;?&nbsp;», ${normalizeGender(ctx.apprenantCivility) === 'F' ? 'la stagiaire a répondu' : 'le stagiaire a répondu'} <strong>&#9745; NON</strong> — aucun besoin d'adaptation signalé.</p>
+  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap).</p>
+
   ${(() => {
     const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;
-    const responsable = pickResponsablePedagogique(seed);
+    // L'analyse du besoin est réalisée par le formateur de la session (c'est lui
+    // qui mène le positionnement amont). Fallback responsable pédagogique si
+    // aucun formateur n'est renseigné sur la session.
+    const hasTrainer = ctx.sessionTrainers.length > 0;
+    const realisePar = hasTrainer ? ctx.sessionTrainers.join(', ') : pickResponsablePedagogique(seed);
+    const roleLabel = hasTrainer ? 'Formateur — Start Academy' : 'Responsable pédagogique Start Academy';
     const date = computeAnalyseDate(ctx.sessionStartDate, 15, seed);
     return `
   <div style="margin-top: 18mm; padding: 12px 14px; border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC;">
@@ -96,10 +105,10 @@ ${renderBrandHeader()}
       Réalisé par
     </div>
     <div style="font-size: 12pt; font-weight: 700; color: ${BRAND_DARK};">
-      ${escapeHtml(responsable)}
+      ${escapeHtml(realisePar)}
     </div>
     <div style="font-size: 9.5pt; color: #475569; margin-top: 2px;">
-      Le ${escapeHtml(formatDateFr(date))} — Responsable pédagogique Start Academy
+      Le ${escapeHtml(formatDateFr(date))} — ${escapeHtml(roleLabel)}
     </div>
   </div>`;
   })()}

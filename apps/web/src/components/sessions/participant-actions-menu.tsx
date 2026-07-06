@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import * as Dialog from '@radix-ui/react-dialog';
 import { MoreHorizontal, FileText, Receipt, Loader2, ExternalLink, UserMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -33,15 +32,22 @@ export function ParticipantActionsMenu({
   const [pending, startTransition] = useTransition();
   const [docs, setDocs] = useState<{ CONVENTION?: string | null; PROGRAMME?: string | null; AGEFICE?: string | null }>(initialDocs);
   const [activeKind, setActiveKind] = useState<DocLink['type'] | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handleUnenroll() {
+    // Confirmation NATIVE (pas de Radix Dialog) : dans ce repo, les clics dans un
+    // Dialog Radix ouvert depuis un DropdownMenu ne se déclenchent pas de façon
+    // fiable (cf suppression de session passée en window.prompt). window.confirm
+    // est synchrone et ne peut pas être avalé par la fermeture du dropdown.
+    if (!window.confirm(
+      `Désinscrire ${participantName} de la session ?\n\nL'inscription sera supprimée. Les documents déjà générés (convention, programme, AGEFICE) restent disponibles dans la fiche apprenant.`,
+    )) {
+      return;
+    }
     startTransition(async () => {
       try {
         const r = await unenrollParticipant(participantId);
         if (r.ok) {
           toast.success(`${participantName} désinscrit(e) de la session`);
-          setConfirmOpen(false);
           router.refresh();
         } else {
           toast.error(r.error ?? 'Erreur lors de la désinscription');
@@ -188,9 +194,8 @@ export function ParticipantActionsMenu({
             <DropdownMenu.Item
               disabled={pending}
               onSelect={(e) => {
-                // Empêcher la fermeture du dropdown d'avaler l'ouverture du Dialog
                 e.preventDefault();
-                setConfirmOpen(true);
+                handleUnenroll();
               }}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded text-sm cursor-pointer outline-none text-red-700 data-[highlighted]:bg-red-50"
             >
@@ -202,42 +207,6 @@ export function ParticipantActionsMenu({
       </DropdownMenu.Root>
       {activeKind ? <span className="hidden">{activeKind}</span> : null}
     </div>
-    {/* Dialog de confirmation — Portal hors flex shrink-0 du conteneur ci-dessus */}
-    <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-foreground/40 backdrop-blur-sm z-40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[440px] max-w-[90vw] rounded-lg border border-border bg-white p-6 shadow-xl data-[state=open]:animate-in data-[state=open]:zoom-in-95 data-[state=open]:fade-in-0">
-          <Dialog.Title className="text-lg font-semibold">
-            Désinscrire {participantName} ?
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-            Cette action est définitive. L&apos;inscription sera supprimée de la session.
-            Les documents déjà générés (convention, programme, AGEFICE) restent
-            disponibles dans la fiche apprenant.
-          </Dialog.Description>
-          <div className="mt-5 flex justify-end gap-2">
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                disabled={pending}
-                className="h-9 px-4 rounded-md border border-input bg-white text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
-              >
-                Annuler
-              </button>
-            </Dialog.Close>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={handleUnenroll}
-              className="h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
-            >
-              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Désinscrire
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
     </>
   );
 }

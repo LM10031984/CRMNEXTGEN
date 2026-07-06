@@ -108,7 +108,7 @@ const RATING_SCORE: Record<RatingValue, number> = {
   'Mauvais': 0,
 };
 
-function computeGlobalScore(content: SatisfactionChaudContent): number {
+export function computeGlobalScore(content: SatisfactionChaudContent): number {
   const allRatings: RatingValue[] = [
     content.organisation.communication,
     content.organisation.delai,
@@ -148,7 +148,7 @@ export function renderSatisfactionChaudHtml(
 ${renderBrandHeader()}
 <main class="body">
   <h1 class="doc-title">Questionnaire de satisfaction à chaud</h1>
-  <p class="doc-subtitle">Indicateur Qualiopi 30 — Évaluation immédiate de la formation</p>
+  <p class="doc-subtitle">Évaluation immédiate de la formation</p>
   <hr class="doc-rule" />
 
   ${renderInfoBox(ctx)}
@@ -202,10 +202,11 @@ ${renderBrandHeader()}
 
   <p style="margin: 14px 0 4px 0;"><strong style="color: ${BRAND_DARK};">Recommanderiez-vous cette formation ?</strong> ${escapeHtml(content.recommandation)}</p>
 
-  ${content.remarques ? `
-  <p style="margin: 8px 0 4px 0;"><strong style="color: ${BRAND_DARK};">Autres remarques :</strong></p>
-  <p class="paragraph" style="margin-left: 6px;">${escapeHtml(content.remarques)}</p>
-  ` : ''}
+  <p style="margin: 8px 0 4px 0;"><strong style="color: ${BRAND_DARK};">Appréciations et réclamations :</strong></p>
+  ${content.remarques
+    ? `<p class="paragraph" style="margin-left: 6px;">${escapeHtml(content.remarques)}</p>`
+    : `<div style="border: 1px solid #CBD5E1; border-radius: 4px; min-height: 16mm; margin-left: 6px;"></div>`}
+  <p style="margin: 6px 0 0 0; font-size: 8.5pt; color: #64748B;">Pour toute réclamation formelle, vous pouvez écrire à <strong>formation@start-academy.fr</strong> — accusé de réception sous 15 jours, réponse motivée sous 30 jours.</p>
 </main>
 `;
 

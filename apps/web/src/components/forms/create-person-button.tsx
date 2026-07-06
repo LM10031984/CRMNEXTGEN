@@ -4,10 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Upload, Loader2, Check, AlertTriangle, Sparkles, Building2 } from 'lucide-react';
 import { createPerson } from '@/server/actions/crud-edits';
+import { lookupSiret } from '@/server/actions/sirene-lookup';
 import { extractApprenantDocs } from '@/server/actions/extract-apprenant-docs';
 import { uploadApprenantDocs } from '@/server/actions/upload-apprenant-docs';
+import {
+  createApprenantUploadUrl,
+  confirmApprenantUpload,
+} from '@/server/actions/storage-upload';
 import { addParticipant } from '@/server/actions/sessions';
 import { DIPLOME_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/agefice-options';
+import { DirectUploadField } from '@/components/shared/direct-upload-field';
 import { EnseignePicker } from './enseigne-picker';
 
 type ExtractedExtras = {
@@ -53,11 +59,46 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
   const [professionalExperience, setProfessionalExperience] = useState('');
   const [siret, setSiret] = useState('');
   const [activityCode, setActivityCode] = useState('');
+  const [siretBusy, setSiretBusy] = useState(false);
+  const [siretMsg, setSiretMsg] = useState<string | null>(null);
   const [socialSecurityNb, setSocialSecurityNb] = useState('');
-  // Uploads
+
+  // Auto-remplissage depuis le SIRET via l'API SIRENE gratuite : code APE
+  // toujours rempli ; adresse seulement si les champs sont encore vides (ne pas
+  // écraser la saisie manuelle / l'extraction IA).
+  async function onLookupSiret() {
+    const s = siret.replace(/\s/g, '');
+    if (!/^\d{14}$/.test(s)) {
+      setSiretMsg('SIRET : 14 chiffres attendus.');
+      return;
+    }
+    setSiretBusy(true);
+    setSiretMsg(null);
+    try {
+      const r = await lookupSiret(s);
+      if (!r.ok || !r.company) {
+        setSiretMsg(r.error ?? 'Entreprise introuvable.');
+        return;
+      }
+      const c = r.company;
+      if (c.codeApe) setActivityCode(c.codeApe);
+      if (c.street && !addressStreet) setAddressStreet(c.street);
+      if (c.postalCode && !addressPostalCode) setAddressPostalCode(c.postalCode);
+      if (c.city && !addressCity) setAddressCity(c.city);
+      setSiretMsg(
+        `✓ ${c.denomination ?? 'Entreprise trouvée'} — APE ${c.codeApe ?? '?'}${c.cessee ? ' (⚠ cessée)' : ''}`,
+      );
+    } finally {
+      setSiretBusy(false);
+    }
+  }
+  // Uploads pour l'extraction IA (pré-remplissage — bytes envoyés via FormData).
   const [cniFile, setCniFile] = useState<File | null>(null);
   const [ribFile, setRibFile] = useState<File | null>(null);
   const [cfpFile, setCfpFile] = useState<File | null>(null);
+  // Clés confirmées des fichiers uploadés en DIRECT-TO-STORAGE (D-08). Si non
+  // vide, remplace le chemin legacy uploadApprenantDocs au submit (0 octet via Vercel).
+  const [directKeys, setDirectKeys] = useState<Partial<Record<'CNI' | 'RIB' | 'CFP', string>>>({});
   const [extras, setExtras] = useState<ExtractedExtras | null>(null);
   // Enseigne / réseau immobilier (2e LegalLink AGENT_COMMERCIAL)
   const [enseigneOrgId, setEnseigneOrgId] = useState<string | null>(null);
@@ -70,6 +111,7 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
     setProfessionalStatus(''); setSiret(''); setActivityCode(''); setSocialSecurityNb('');
     setDiplomas(''); setProfessionalExperience('');
     setCniFile(null); setRibFile(null); setCfpFile(null);
+    setDirectKeys({});
     setExtras(null); setError(null); setWarnings([]);
     setEnseigneOrgId(null); setEnseigneLabel(null); setEnseigneNewName(null);
   }
@@ -123,9 +165,20 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
     setBusy(true);
     setError(null);
     try {
-      // 1) Upload des fichiers fournis sur MinIO (si présents)
+      // 1) Récupération des clés des documents (CNI/RIB/CFP).
+      //    D-08 : chemin PRIORITAIRE = direct-to-storage (fichiers déjà chez Supabase
+      //    via DirectUploadField, 0 octet par Vercel). Confirmé côté serveur.
+      //    Fallback non régressif : uploadApprenantDocs (FormData) si des fichiers ont
+      //    été choisis via le bloc d'extraction IA mais PAS via l'upload direct.
       let docKeys: { CNI?: string; RIB?: string; CFP?: string } = {};
-      if (cniFile || ribFile || cfpFile) {
+      if (Object.keys(directKeys).length > 0) {
+        const conf = await confirmApprenantUpload(directKeys);
+        if (!conf.ok) {
+          setError(conf.error ?? 'Confirmation des documents échouée.');
+          return;
+        }
+        docKeys = conf.keys;
+      } else if (cniFile || ribFile || cfpFile) {
         const fd = new FormData();
         if (cniFile) fd.append('CNI', cniFile);
         if (ribFile) fd.append('RIB', ribFile);
@@ -309,6 +362,60 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
               )}
             </div>
 
+            {/* Upload direct-to-storage (D-08) — les documents persistés partent DIRECTEMENT
+                chez Supabase (jusqu'à 50 Mo, pas de 413), pas via une server action.
+                Le bloc d'extraction IA ci-dessus reste pour le pré-remplissage. */}
+            <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-3 mb-4 space-y-2">
+              <div className="text-xs font-medium text-emerald-800 inline-flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5" /> Pièces à conserver au dossier (envoi direct)
+              </div>
+              <DirectUploadField
+                kind="CNI"
+                label="Pièce d'identité"
+                description="CNI / Passeport — PDF ou photo"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
+              <DirectUploadField
+                kind="RIB"
+                label="RIB"
+                description="PDF ou photo du RIB"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
+              <DirectUploadField
+                kind="CFP"
+                label="Attestation CFP AGEFICE"
+                description="Attestation URSSAF (PDF)"
+                icon={Upload}
+                requestUploadUrl={(kind, ext) => createApprenantUploadUrl(kind, ext)}
+                onUploaded={(kind, path) => setDirectKeys((p) => ({ ...p, [kind]: path }))}
+                onCleared={(kind) =>
+                  setDirectKeys((p) => {
+                    const n = { ...p };
+                    delete n[kind];
+                    return n;
+                  })
+                }
+              />
+            </div>
+
             <form onSubmit={onSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
@@ -397,8 +504,24 @@ export function CreatePersonButton({ enrollInSessionId, defaultPrice = 0, button
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">SIRET (auto-entreprise)</label>
-                  <input type="text" value={siret} onChange={(e) => setSiret(e.target.value)} placeholder="14 chiffres" className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono" />
-                  <p className="text-[10px] text-muted-foreground mt-1">Si rempli : crée auto-entreprise + lien EI_SELF</p>
+                  <div className="flex gap-1.5">
+                    <input type="text" value={siret} onChange={(e) => { setSiret(e.target.value); setSiretMsg(null); }} placeholder="14 chiffres" className="flex-1 px-3 py-2 border border-border rounded-lg text-sm font-mono" />
+                    <button
+                      type="button"
+                      onClick={onLookupSiret}
+                      disabled={siretBusy || !siret.trim()}
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 disabled:opacity-50"
+                      title="Récupérer code APE + adresse depuis le registre SIRENE (gratuit)"
+                    >
+                      {siretBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      Compléter
+                    </button>
+                  </div>
+                  {siretMsg ? (
+                    <p className={`text-[10px] mt-1 ${siretMsg.startsWith('✓') ? 'text-emerald-600' : 'text-amber-600'}`}>{siretMsg}</p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-1">Si rempli : crée auto-entreprise + lien EI_SELF. « Compléter » → code APE + adresse auto.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Code NAF</label>

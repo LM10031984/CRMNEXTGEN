@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { callOllama } from '@/lib/ai-ollama';
+import { callLlm, type LlmTier } from '@/lib/llm-client';
 import { getDayStartEnd, PAUSE_DEJEUNER } from '@/lib/formation-horaires';
 import {
   PROMPT_VERSION,
@@ -20,11 +21,18 @@ import {
   SYSTEM_PROMPT_DEROULE,
   SYSTEM_PROMPT_GRILLE_OBSERVATION,
   SYSTEM_PROMPT_GRILLE_OBSERVATION_SESSION,
+  SYSTEM_PROMPT_NORMALIZE_PROGRAMME,
   SYSTEM_PROMPT_POSITIONNEMENT,
   SYSTEM_PROMPT_QCM,
+  SYSTEM_PROMPT_RAPPORT_FORMATEUR,
   SYSTEM_PROMPT_SATISFACTION_CHAUD,
   SYSTEM_PROMPT_SATISFACTION_FROID,
 } from './qualiopi-prompts';
+import {
+  buildHoraireScaffold,
+  renderHoraireScaffoldMd,
+  enforceProgrammeFidelity,
+} from '@/lib/programme-normalize';
 import type { QcmContent } from './qcm-template';
 import type { GrilleContent } from './grille-observation-template';
 import type { AnalyseBesoinContent } from './analyse-besoin-template';
@@ -33,6 +41,7 @@ import type { SatisfactionChaudContent } from './satisfaction-chaud-template';
 import type { SatisfactionFroidContent } from './satisfaction-froid-template';
 import type { DerouleContent } from './deroule-template';
 import type { GrilleSessionContent } from './grille-obs-session-template';
+import { normalizeGender } from './shared-template';
 
 // mistral-small:24b est le meilleur compromis qualité/vitesse/JSON-compliance
 // pour ces 3 docs. qwen3:30b-a3b a un comportement instable avec
@@ -42,12 +51,36 @@ const MODEL = process.env.CLOSURE_OLLAMA_MODEL ?? 'mistral-small:24b';
 // Override de modèle par kind. Permet d'utiliser un modèle plus léger (gpt-oss:20b)
 // pour les docs longs comme le déroulé pédagogique sans toucher au reste.
 const MODEL_DEROULE = process.env.CLOSURE_OLLAMA_MODEL_DEROULE ?? MODEL;
-const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 13);
+const QCM_QUESTIONS_DEFAULT = Number(process.env.CLOSURE_QCM_QUESTIONS ?? 12);
 
 export interface FormationCtx {
   titre: string;
   programmeMd: string;
   nombreHeures: number;
+}
+
+/**
+ * Contexte de SESSION optionnel passé à `generateRapportFormateur` (quick
+ * 260618-skk, CAUSE 2). Ancre les narratifs du rapport formateur sur des FAITS
+ * concrets propres à la session (effectif, profils/enseignes, période, lieu,
+ * résultats agrégés) pour qu'ils diffèrent d'une session à l'autre du MÊME
+ * produit — sans jamais sortir du périmètre du programme (garde anti hors-sujet
+ * conservée). Tous les champs résultats sont optionnels : le prompt les omet
+ * proprement quand ils sont absents.
+ */
+export interface SessionRapportCtx {
+  nbApprenants: number;
+  /** brandName/legalName distincts des enseignes des apprenants (peut être vide). */
+  enseignes: string[];
+  dateDebut: Date | null;
+  dateFin: Date | null;
+  lieu: string | null;
+  /** Score QCM moyen 0-100 (optionnel — agrégation lecture hors scope de ce quick). */
+  qcmScoreMoyen?: number | null;
+  /** Libellé satisfaction agrégé, ex. « Très bien » (optionnel). */
+  satisfactionMoyenne?: string | null;
+  /** Progression positionnement avant/après observée (optionnel). */
+  positionnementProgressed?: boolean | null;
 }
 
 export interface StagiaireCtx {
@@ -58,6 +91,21 @@ export interface StagiaireCtx {
   anciennete: string | null;
   diplomes: string | null;
   professionalStatus: string | null;
+  civilite: string | null;
+}
+
+/**
+ * Directive d'accord en genre injectée dans les prompts rédactionnels : sans
+ * elle, le modèle défaute au masculin générique (« dirigeant », « ce
+ * professionnel ») même pour une femme. Source de vérité = normalizeGender.
+ */
+function genderDirective(civilite: string | null): string {
+  const g = normalizeGender(civilite);
+  if (g === 'F')
+    return `\n\nGENRE DU STAGIAIRE : FÉMININ. Accorde au FÉMININ tous les mots qui la désignent (ex : dirigeante, conseillère, indépendante, engagée, elle). N'emploie JAMAIS le masculin générique ni « ce professionnel » : écris « cette professionnelle » / « elle ».`;
+  if (g === 'M')
+    return `\n\nGENRE DU STAGIAIRE : MASCULIN. Accorde au masculin les mots qui le désignent (il, dirigeant, conseiller…).`;
+  return '';
 }
 
 // =====================================================
@@ -115,23 +163,63 @@ const GrilleSchema = z.object({
 });
 
 // Positionnement : 6-8 compétences avec niveaux avant/après (progression nette).
+// Garde-fou de PROGRESSION (quick 260706-bya) verrouillé par superRefine — cohérent
+// avec SYSTEM_PROMPT_POSITIONNEMENT v11 (prompt↔schéma). VALIDATION déterministe
+// (aucun Math.random/Date.now) : un échec → runOllamaJson retente puis retombe sur
+// le stub (chaîne prompt→LLM→Zod→null→stub intacte, fail-loud, pas de tampon muet).
+// Exporté pour être testable de façon hermétique (positionnement-progression.test.ts).
 const NiveauPositionnement = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
-const PositionnementSchema = z.object({
-  objectifs_formation: z.string().min(10),
-  demande_specifique: z.string().nullable().optional(),
-  prerequis: z.string().min(10),
-  competences: z
-    .array(
-      z.object({
-        label: z.string().min(5),
-        avant: NiveauPositionnement,
-        apres: NiveauPositionnement,
-      }),
-    )
-    .min(6)
-    .max(10),
-  commentaires: z.string().nullable().optional(),
-});
+export const PositionnementSchema = z
+  .object({
+    objectifs_formation: z.string().min(10),
+    demande_specifique: z.string().nullable().optional(),
+    prerequis: z.string().min(10),
+    competences: z
+      .array(
+        z.object({
+          label: z.string().min(5),
+          avant: NiveauPositionnement,
+          apres: NiveauPositionnement,
+        }),
+      )
+      .min(6)
+      .max(10),
+    commentaires: z.string().nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const comps = data.competences;
+    comps.forEach((c, i) => {
+      // AVANT ≤ 3 : un stagiaire qui vient se former ne maîtrise pas déjà tout.
+      if (c.avant >= 4) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['competences', i, 'avant'],
+          message: 'AVANT ne peut pas valoir 4 — le stagiaire vient se former.',
+        });
+      }
+      // Progression stricte : preuve Qualiopi de l'acquis (ind. 2).
+      if (c.apres <= c.avant) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['competences', i, 'apres'],
+          message: 'APRÈS doit être strictement supérieur à AVANT — progression obligatoire.',
+        });
+      }
+    });
+    // Anti-tampon (garde LÉGÈRE) : on ne bloque QUE le motif totalement plat
+    // (tous les AVANT identiques ET tous les deltas identiques). Toute vraie
+    // variation (avants variés OU deltas variés) passe → pas de sur-blocage → pas de stub.
+    const avants = new Set(comps.map((c) => c.avant));
+    const deltas = new Set(comps.map((c) => c.apres - c.avant));
+    if (avants.size === 1 && deltas.size === 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['competences'],
+        message:
+          "Motif avant/après uniforme (tampon) — varie les niveaux de départ ou l'ampleur de la progression.",
+      });
+    }
+  });
 
 // Grille observation session (C3.i11) : 7 compétences × N stagiaires + 1 obs/stagiaire.
 // Niveaux A/B/C autorisés en sortie IA — D refusé pour garder un ton bienveillant.
@@ -241,12 +329,15 @@ const DerouleSequenceSchema = z
   })
   .superRefine((seq, ctx) => {
     if (seq.isPause) return; // pauses : champs vides tolérés
+    // Minimums BAS (Kaïna 16/06) : on garantit juste des cellules non vides et
+    // signifiantes. La CONCISION (quelques lignes/cellule, format 6 colonnes)
+    // est pilotée par le prompt, pas par un plancher de caractères.
     const checks: Array<[keyof typeof seq, number, string]> = [
-      ['objectifs', 120, 'Objectifs trop courts (min 120 caractères) — détailler les objectifs pédagogiques actionnables.'],
-      ['contenu', 200, 'Contenu trop court (min 200 caractères) — détailler le déroulement étape par étape.'],
-      ['outils', 60, 'Outils trop succincts (min 60 caractères) — lister 3-5 supports concrets.'],
-      ['exercice', 100, 'Exercice trop succinct (min 100 caractères) — préciser consigne, durée, modalité, livrable.'],
-      ['evaluation', 60, 'Évaluation trop succincte (min 60 caractères) — préciser type, critères, feedback.'],
+      ['objectifs', 15, 'Objectifs vides ou trop courts — au moins un objectif actionnable.'],
+      ['contenu', 20, 'Contenu vide ou trop court — au moins la notion-clé de la séquence.'],
+      ['outils', 6, 'Outils manquants — au moins un support.'],
+      ['exercice', 15, 'Exercice manquant — au moins l\'intitulé de la mise en situation.'],
+      ['evaluation', 8, 'Évaluation manquante — au moins le type.'],
     ];
     for (const [field, min, msg] of checks) {
       const v = seq[field];
@@ -267,9 +358,130 @@ const DerouleSchema = z.object({
     .min(1),
 });
 
+/**
+ * Variante LOCALE de DerouleSchema avec un plancher de séquences ADAPTATIF à la
+ * durée du jour (quick 260618-vg2). Utilisée par la boucle multi-jours pour valider
+ * CHAQUE jour : le DERNIER jour d'une formation non multiple de 8h est PARTIEL
+ * (ex. PROD-0670 = 105h → 14 jours, jour 14 = 1h) et ne peut pas produire ≥5
+ * séquences. Le `DerouleSchema` global (l.310, cas nbJours===1) reste INCHANGÉ.
+ *
+ * minSeq = max(2, min(5, round(heuresJour)) :
+ *   - jour plein 8h → min(5, 8) = 5 (plancher historique inchangé)
+ *   - jour 1h/2h → max(2, 1|2) = 2 (Accueil/contenu + bloc clôture)
+ *   - jour 5h → min(5, 5) = 5 (plafonné — palier simple, corrections §1)
+ *
+ * PUR : aucun plancher de cellule touché (DerouleSequenceSchema réutilisé tel quel).
+ * Forme IDENTIQUE à DerouleSchema ({ jours: [...] }) → compatible runOllamaJson<T>.
+ */
+export function buildDerouleJourSchema(heuresJour: number) {
+  const minSeq = Math.max(2, Math.min(5, Math.round(heuresJour)));
+  return z.object({
+    jours: z
+      .array(
+        z.object({
+          theme: z.string().min(10),
+          sequences: z.array(DerouleSequenceSchema).min(minSeq),
+        }),
+      )
+      .min(1),
+  });
+}
+
+const RapportFormateurSchema = z.object({
+  adaptations: z.string().min(10),
+  remarquesGroupe: z.string().min(10),
+  bilan: z.string().min(10),
+});
+
 // =====================================================
 // Generators
 // =====================================================
+
+/**
+ * Construit les lignes factuelles compactes décrivant la session, filtrées sur
+ * les valeurs non nulles (pure, sans IO). Renvoie '' si rien d'exploitable.
+ */
+function buildFaitsSession(s: SessionRapportCtx): string {
+  const fmtDate = (d: Date | null): string | null =>
+    d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : null;
+  const lines: string[] = [];
+
+  const effectif =
+    s.nbApprenants > 0
+      ? `- Effectif : ${s.nbApprenants} apprenant${s.nbApprenants > 1 ? 's' : ''}${
+          s.enseignes.length ? `, issus de ${s.enseignes.join(', ')}` : ''
+        }`
+      : null;
+  if (effectif) lines.push(effectif);
+
+  const debut = fmtDate(s.dateDebut);
+  const fin = fmtDate(s.dateFin);
+  if (debut && fin) lines.push(`- Période : du ${debut} au ${fin}`);
+  else if (debut) lines.push(`- Date : ${debut}`);
+
+  if (s.lieu) lines.push(`- Lieu : ${s.lieu}`);
+
+  if (typeof s.qcmScoreMoyen === 'number') {
+    lines.push(`- Score QCM moyen du groupe : ${Math.round(s.qcmScoreMoyen)}%`);
+  }
+  if (s.satisfactionMoyenne) lines.push(`- Satisfaction moyenne : ${s.satisfactionMoyenne}`);
+  if (s.positionnementProgressed === true) {
+    lines.push(`- Progression mesurée au positionnement avant/après`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Génère les narratifs du « Rapport formateur » du déroulé (adaptations / remarques
+ * groupe / bilan) par LLM, ANCRÉS au programme réel — au lieu des pools génériques
+ * codés en dur (qui faisaient fuiter des thèmes hors programme, ex. « prompts/IA »
+ * sur une formation Tracfin). tier 'quality' = Sonnet en cloud : doc rédactionnel
+ * critique audit (D-01a Phase 16 — fast=Haiku volume / quality=Sonnet rédactionnel).
+ * Avec un `sessionCtx` (quick 260618-skk), les narratifs sont en plus ancrés sur
+ * les faits concrets de la session → distincts d'une session à l'autre.
+ * Retourne null sur échec → l'appelant retombe sur les pools (fallback).
+ */
+export async function generateRapportFormateur(
+  formation: FormationCtx,
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+  sessionCtx: SessionRapportCtx | null = null,
+): Promise<z.infer<typeof RapportFormateurSchema> | null> {
+  const hasProgramme = !!formation.programmeMd && formation.programmeMd.trim().length > 10;
+
+  // CAUSE 2 (quick 260618-skk) : bloc de FAITS CONCRETS de la session. Construit
+  // uniquement si un sessionCtx est fourni ; chaque ligne est filtrée sur les
+  // valeurs non nulles → narratifs distincts d'une session à l'autre.
+  const faitsSession = sessionCtx ? buildFaitsSession(sessionCtx) : '';
+
+  const prompt = `Tu remplis ton rapport de formateur APRÈS avoir animé cette formation.
+
+Titre : ${formation.titre}
+Durée : ${formation.nombreHeures} heures
+
+${hasProgramme ? `PROGRAMME DE LA FORMATION (ancre-toi STRICTEMENT dessus, n'introduis aucun thème absent) :
+${formation.programmeMd}` : `Aucun programme détaillé disponible — reste strictement sur le thème « ${formation.titre} » sans introduire d'autre sujet.`}
+${faitsSession ? `
+FAITS CONCRETS DE CETTE SESSION PRÉCISE :
+${faitsSession}
+Ancre tes trois narratifs sur CES FAITS CONCRETS de la session (effectif, profils/enseignes, période, lieu, résultats) pour qu'ils soient DISTINCTS d'une session à l'autre, tout en restant STRICTEMENT dans le périmètre du programme ci-dessus (aucun thème hors programme).` : ''}
+
+Rédige tes trois narratifs (adaptations pédagogiques / observations, remarques sur le groupe, bilan de la formation), à la première personne, 1 à 2 phrases chacun.`;
+
+  return runOllamaJson(
+    'generate-rapport-formateur',
+    SYSTEM_PROMPT_RAPPORT_FORMATEUR,
+    prompt,
+    RapportFormateurSchema,
+    refTable,
+    refId,
+    tenantId,
+    undefined,
+    'quality', // rédactionnel critique audit → Sonnet (D-01a Phase 16)
+  );
+}
 
 export async function generateQcmContent(
   formation: FormationCtx,
@@ -293,6 +505,8 @@ ${formation.programmeMd || '(programme à compléter)'}`;
     refTable,
     refId,
     tenantId,
+    undefined,
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
   if (!raw) return null;
   return attachQcmScoring(raw.questions);
@@ -374,7 +588,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 Stagiaire :
 ${stagiaireBlock || '(profil non détaillé)'}
 
-L'analyse doit donner l'impression que le stagiaire a réellement répondu à un questionnaire en amont de la formation.`;
+L'analyse doit donner l'impression que le stagiaire a réellement répondu à un questionnaire en amont de la formation.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-analyse-besoin',
@@ -384,6 +598,8 @@ L'analyse doit donner l'impression que le stagiaire a réellement répondu à un
     refTable,
     refId,
     tenantId,
+    undefined,
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -424,7 +640,7 @@ Consignes (impératives) :
    - "commentaire" : bilan global personnalisé du parcours de ${stagiaire.prenom} en formation (2-3 phrases, mentionne son prénom)
    - "axe_amelioration" : 1-2 phrases sur ce que ${stagiaire.prenom} peut continuer à développer après la formation
 
-La grille doit être positive (valorise le parcours) tout en étant crédible (pas tout du A, pas de phrases creuses).`;
+La grille doit être positive (valorise le parcours) tout en étant crédible (pas tout du A, pas de phrases creuses).${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-grille',
@@ -434,6 +650,8 @@ La grille doit être positive (valorise le parcours) tout en étant crédible (p
     refTable,
     refId,
     tenantId,
+    undefined,
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -452,20 +670,35 @@ async function tryOnce<T>(
   userPrompt: string,
   schema: z.ZodSchema<T>,
   modelOverride?: string,
+  tier: LlmTier = 'fast',
 ): Promise<{ ok: true; data: T; latencyMs: number } | { ok: false; reason: string; latencyMs: number }> {
   const startedAt = Date.now();
-  const modelUsed = modelOverride ?? MODEL;
+  const cloud = (process.env.AI_PROVIDER ?? 'ollama') === 'openrouter';
+  const modelUsed = cloud ? `cloud:${tier}` : modelOverride ?? MODEL;
   try {
-    const result = await callOllama({
-      model: modelUsed,
-      systemPrompt,
-      prompt: userPrompt,
-      jsonOutput: true,
-      temperature: 0.3,
-      maxTokens: 8192,
-      // 10 min : avec saturation GPU sur Apple Silicon, le QCM peut prendre 5+ min
-      timeoutMs: 600_000,
-    });
+    // Wiring cloud (Kaïna 16/06) : si AI_PROVIDER=openrouter, le déroulé et les
+    // docs rédactionnels passent par callLlm (tier quality = Sonnet). Sinon
+    // Ollama local inchangé. `tier` est ignoré côté Ollama (modelOverride prime).
+    const result = cloud
+      ? await callLlm({
+          tier,
+          systemPrompt,
+          prompt: userPrompt,
+          jsonOutput: true,
+          temperature: 0.3,
+          maxTokens: 8192,
+          timeoutMs: 240_000,
+        })
+      : await callOllama({
+          model: modelUsed,
+          systemPrompt,
+          prompt: userPrompt,
+          jsonOutput: true,
+          temperature: 0.3,
+          maxTokens: 8192,
+          // 10 min : avec saturation GPU sur Apple Silicon, le QCM peut prendre 5+ min
+          timeoutMs: 600_000,
+        });
     const latencyMs = Date.now() - startedAt;
 
     if (result.parsedJson === null) {
@@ -505,6 +738,8 @@ export async function generatePositionnementContent(
     `Nom : ${stagiaire.nom}`,
     stagiaire.fonction ? `Fonction : ${stagiaire.fonction}` : null,
     stagiaire.entreprise ? `Entreprise : ${stagiaire.entreprise}` : null,
+    stagiaire.professionalStatus ? `Statut professionnel : ${stagiaire.professionalStatus}` : null,
+    stagiaire.anciennete ? `Ancienneté dans le métier : ${stagiaire.anciennete}` : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -519,7 +754,7 @@ ${formation.programmeMd || '(programme à compléter)'}
 Stagiaire :
 ${stagiaireBlock || '(profil non détaillé)'}
 
-Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majoritairement 1-2) et niveaux APRÈS (majoritairement 4) — la formation doit montrer une progression nette.`;
+Génère 6-8 compétences spécifiques au PROGRAMME ci-dessus (chaque libellé reprend un thème réel du programme). Attribue à chacune un niveau AVANT (1 à 3, jamais 4) et un niveau APRÈS STRICTEMENT supérieur (après > avant, toujours). Fais VARIER la progression (parfois +1, parfois +2/+3), ne finis pas tout à 4, et ancre les niveaux de départ sur le profil réel du stagiaire (ancienneté, fonction) pour que son motif avant/après soit DISTINCT de celui des autres stagiaires de la session.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-positionnement',
@@ -529,6 +764,8 @@ Génère 6-8 compétences spécifiques au programme avec niveaux AVANT (majorita
     refTable,
     refId,
     tenantId,
+    undefined,
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
 }
 
@@ -544,7 +781,9 @@ export async function generateSatisfactionChaudContent(
 Programme :
 ${formation.programmeMd || '(programme à compléter)'}
 
-Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.`;
+Le stagiaire est satisfait : au moins 90% de "Très bien" / "Bien", aucun "Mauvais", maximum 1-2 "Moyen". Recommandation : Oui. Commentaires courts et naturels par section.
+
+Rédige TOUS les commentaires à la 1re personne du stagiaire (« j'ai », « ma pratique »), sans jamais citer son prénom ni utiliser la 3e personne, en restant STRICTEMENT sur le thème de la formation "${formation.titre}" ; n'introduis aucun autre domaine.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-chaud',
@@ -571,7 +810,9 @@ ${formation.programmeMd || '(programme à compléter)'}
 
 Profil : ${stagiaire.fonction ?? 'professionnel'}${stagiaire.entreprise ? ` chez ${stagiaire.entreprise}` : ''}.
 
-Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.`;
+Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'application des acquis depuis la formation.
+
+Rédige TOUS les commentaires à la 1re personne du stagiaire (« j'applique », « mon activité »), sans jamais citer son prénom ni utiliser la 3e personne, en restant STRICTEMENT sur le thème de la formation "${formation.titre}" ; n'introduis aucun autre domaine.${genderDirective(stagiaire.civilite)}`;
 
   return runOllamaJson(
     'generate-satisfaction-froid',
@@ -584,6 +825,55 @@ Au moins 90% des ratings en "Très bien" / "Bien". Commentaires concrets sur l'a
   );
 }
 
+/**
+ * Réassemble N déroulés partiels (1 par jour) en UN seul DerouleContent.
+ * PURE : `flatMap` préserve l'ordre d'entrée, gère 0/1/N partiels ET les partiels
+ * multi-jours (cas dégénéré LLM → tous les jours aplatis dans l'ordre). Source
+ * unique du réassemblage chunké de generateDerouleContent (testée en déterministe).
+ */
+export function assembleDeroule(partiels: DerouleContent[]): DerouleContent {
+  return { jours: partiels.flatMap((p) => p.jours) };
+}
+
+/**
+ * Construit le prompt user d'UN jour (k sur N) pour le déroulé chunké. Réutilise
+ * SYSTEM_PROMPT_DEROULE (qui décrit déjà une journée 9h-18h) et cadre le périmètre
+ * « jour k » dans le user prompt. La grille figée du jour vient de buildHoraireScaffold.
+ */
+function buildDerouleJourPrompt(
+  formation: FormationCtx,
+  k: number,
+  nbJours: number,
+  jourGrille: string,
+  hasProgramme: boolean,
+  heuresJour: number,
+): string {
+  const jourCourt =
+    heuresJour < 8
+      ? `\nATTENTION : ce jour ne fait que ${heuresJour}h — produis un nombre de séquences PROPORTIONNÉ à cette durée (pas de remplissage artificiel pour atteindre une journée pleine).`
+      : '';
+  return `Génère le déroulé pédagogique du JOUR ${k} sur ${nbJours} de la formation suivante.
+
+Titre : ${formation.titre}
+Durée totale : ${formation.nombreHeures} heures réparties sur ${nbJours} jours.
+
+Tu génères UNIQUEMENT le Jour ${k} (un seul élément dans "jours"). N'invente pas les autres jours.${jourCourt}
+
+GRILLE HORAIRE IMPOSÉE DU JOUR ${k} (à recopier telle quelle) :
+${jourGrille}
+
+${hasProgramme ? `PROGRAMME DE RÉFÉRENCE COMPLET (reprendre EXACTEMENT ses blocs horaires et titres pour la part qui revient au Jour ${k}) :
+${formation.programmeMd}
+
+INSTRUCTION : chaque bloc de contenu du programme attribué à ce jour devient une séquence. Reformule et structure le CONTENU dans objectifs/contenu, SANS rien ajouter (aucun concept, outil, framework ou exemple absent du programme). Tu peux préciser les MODALITÉS (durée, format de travail, type d'exercice et d'évaluation).` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour le Jour ${k} de "${formation.titre}".`}
+
+Ajoute obligatoirement pour ce jour :
+${k === 1 ? '- Accueil en début de journée (9h00, 15-30 min) — UNIQUEMENT au Jour 1.' : "- PAS d'accueil ni de tour de table d'ouverture (réservé au Jour 1)."}
+- Pause déjeuner ${PAUSE_DEJEUNER.start}–${PAUSE_DEJEUNER.end} (1h) (isPause: true, objectifs: "Pause déjeuner", autres champs vides) SI le jour comporte un après-midi.
+- Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
+${k === nbJours ? '- Dernier bloc : "Évaluation des acquis et clôture" — QCM Kahoot final (12 questions) et remise des attestations — UNIQUEMENT ce dernier jour.' : '- PAS de bloc d\'évaluation finale / QCM Kahoot (réservé au dernier jour).'}`;
+}
+
 export async function generateDerouleContent(
   formation: FormationCtx,
   refTable = 'PedagogicalAsset',
@@ -591,12 +881,14 @@ export async function generateDerouleContent(
   tenantId: string | null = null,
 ): Promise<DerouleContent | null> {
   const nbJours = Math.max(1, Math.ceil(formation.nombreHeures / 8));
-  const heuresParJour = Math.round(formation.nombreHeures / nbJours);
-  const { start, end } = getDayStartEnd(heuresParJour);
+  const hasProgramme = !!formation.programmeMd && formation.programmeMd.trim().length > 10;
 
-  const hasProgramme = formation.programmeMd && formation.programmeMd.trim().length > 10;
+  // ── Cas 1 jour : comportement HISTORIQUE strictement inchangé (non-régression). ──
+  if (nbJours === 1) {
+    const heuresParJour = Math.round(formation.nombreHeures / nbJours);
+    const { start, end } = getDayStartEnd(heuresParJour);
 
-  const prompt = `Génère un déroulé pédagogique pour la formation suivante.
+    const prompt = `Génère un déroulé pédagogique pour la formation suivante.
 
 Titre : ${formation.titre}
 Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 1 ? 's' : ''} (${heuresParJour}h/jour, ${start}–${end})
@@ -604,7 +896,7 @@ Durée totale : ${formation.nombreHeures} heures — ${nbJours} jour${nbJours > 
 ${hasProgramme ? `PROGRAMME DE RÉFÉRENCE (reprendre EXACTEMENT ces blocs horaires et titres) :
 ${formation.programmeMd}
 
-INSTRUCTION : chaque bloc horaire du programme ci-dessus devient une séquence du déroulé. Copie les horaires et les titres tels quels. Détaille les champs objectifs/contenu/outils/exercice/évaluation à partir du contenu du programme.` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour "${formation.titre}" (${formation.nombreHeures}h).`}
+INSTRUCTION : chaque bloc horaire du programme ci-dessus devient une séquence du déroulé. Copie les horaires et les titres tels quels. Reformule et structure le CONTENU du programme dans les champs objectifs/contenu, SANS rien y ajouter (aucun concept, outil, framework ou exemple absent du programme). Tu peux préciser les MODALITÉS (durée, format de travail, type d'exercice et d'évaluation) qui ne figurent pas dans le programme.` : `Aucun programme détaillé disponible — génère un déroulé cohérent pour "${formation.titre}" (${formation.nombreHeures}h).`}
 
 Ajoute obligatoirement :
 - Accueil en début de journée (9h00, 15-30 min)
@@ -612,16 +904,165 @@ Ajoute obligatoirement :
 - Pause café si la journée dépasse 6h (isPause: true, objectifs: "Pause", autres champs vides)
 - Dernier bloc du dernier jour : "Évaluation des acquis et clôture" avec QCM et remise des attestations`;
 
-  return runOllamaJson(
-    'generate-deroule',
-    SYSTEM_PROMPT_DEROULE,
-    prompt,
-    DerouleSchema,
-    refTable,
-    refId,
+    const deroule = await runOllamaJson(
+      'generate-deroule',
+      SYSTEM_PROMPT_DEROULE,
+      prompt,
+      DerouleSchema,
+      refTable,
+      refId,
+      tenantId,
+      MODEL_DEROULE,
+      'quality', // tier quality → Sonnet 4.6 quand AI_PROVIDER=openrouter (Kaïna 16/06)
+    );
+    if (!deroule) return null;
+    // Rapport formateur ancré au programme — UN seul appel, échec → champ absent
+    // (renderBilanFormateur fallback pool), le déroulé n'est PAS avorté.
+    const rapport = await generateRapportFormateur(formation, refTable, refId, tenantId);
+    return rapport ? { ...deroule, rapportFormateur: rapport } : deroule;
+  }
+
+  // ── Multi-jours (quick 260618-jy1) : 1 appel LLM PAR JOUR, puis réassemblage pur. ──
+  // Évite le timeout/troncature d'un déroulé monolithique sur formation longue
+  // (PROD-0042 9j, jusqu'à 14j). Échec d'UN jour → null GLOBAL (console.error) :
+  // pas de PDF partiel trompeur, l'appelant fallback sur le stub.
+  const scaffold = buildHoraireScaffold(formation.nombreHeures);
+  const partiels: DerouleContent[] = [];
+  for (let k = 1; k <= nbJours; k++) {
+    const jourGrille = renderHoraireScaffoldMd({
+      durationHours: formation.nombreHeures,
+      nbJours: 1,
+      jours: [scaffold.jours[k - 1]!],
+      multiDayDeferred: false,
+    });
+    // Plancher de séquences PROPORTIONNÉ à la durée du jour (quick 260618-vg2) :
+    // débloque le DERNIER jour PARTIEL (durationHours non multiple de 8). Le jour
+    // plein garde min 5 ; un jour court accepte 2. DerouleSchema global inchangé.
+    const heuresJour = scaffold.jours[k - 1]!.travailTotalMin / 60;
+    const jourPrompt = buildDerouleJourPrompt(
+      formation,
+      k,
+      nbJours,
+      jourGrille,
+      hasProgramme,
+      heuresJour,
+    );
+    const partiel = await runOllamaJson(
+      'generate-deroule',
+      SYSTEM_PROMPT_DEROULE,
+      jourPrompt,
+      buildDerouleJourSchema(heuresJour),
+      refTable,
+      refId,
+      tenantId,
+      MODEL_DEROULE,
+      'quality',
+    );
+    if (!partiel) {
+      console.error(
+        `[generate-deroule] jour ${k}/${nbJours} échoué — déroulé GLOBAL abandonné (null), pas de troncature silencieuse.`,
+      );
+      return null;
+    }
+    partiels.push(partiel);
+  }
+
+  // 1 seul DerouleContent → 1 seul PDF (renderDerouleHtml pagine les N jours + rapport unique).
+  const deroule = assembleDeroule(partiels);
+  // Rapport formateur ancré au programme — UN seul appel APRÈS assemblage (pas par jour),
+  // échec → champ absent (fallback pool), le déroulé multi-jours n'est PAS avorté.
+  const rapport = await generateRapportFormateur(formation, refTable, refId, tenantId);
+  return rapport ? { ...deroule, rapportFormateur: rapport } : deroule;
+}
+
+/** Schéma de sortie du générateur de programme normalisé : markdown plat,
+ *  réutilisable directement par renderProgrammeHtml / renderConventionHtml
+ *  (qui font marked.parse). */
+const NormalizedProgrammeSchema = z.object({
+  programmeMd: z.string().min(20),
+});
+
+/**
+ * Normalise un programme (Laurent 2026-06-18) : impose une grille horaire FIGÉE
+ * (9h00–13h00 / 14h00–18h00 = 8h pile, cas 1 jour PROD-0062) et reformule chaque
+ * intitulé en verbe d'action évaluable, en DÉCLINANT le programme source SANS
+ * inventer ni retirer de thème. Le markdown retourné alimente À LA FOIS
+ * Programme.pdf ET Convention.pdf (source unique).
+ *
+ * - tier 'quality' → Sonnet quand AI_PROVIDER=openrouter.
+ * - Post-traitement de fidélité NON bloquant : si des thèmes étrangers sont
+ *   détectés, on WARN (on ne bloque pas — on veut voir le rendu témoin).
+ * - Retourne null si le LLM échoue (l'appelant fallback sur le programMd brut).
+ *
+ * MULTI-JOURS (quick 260618-jy1) : la grille imposée est désormais MULTI-JOURS
+ * (buildHoraireScaffold rend N journées). Le mapping reste UN SEUL appel LLM par
+ * défaut : le programme normalisé est un markdown PLAT (pas de N séquences riches
+ * comme le déroulé), donc le risque de troncature est faible même à 14 jours, et
+ * un appel unique préserve la cohérence transversale (répartition des thèmes sur
+ * les jours). Le chunking par jour est réservé au DÉROULÉ (generateDerouleContent),
+ * lui beaucoup plus lourd en tokens. Signature publique inchangée.
+ */
+export async function generateNormalizedProgramme(
+  programMd: string,
+  objectives: string[],
+  durationHours: number,
+  titre: string,
+  tenantId: string | null = null,
+): Promise<string | null> {
+  // 1) Grille horaire IMPOSÉE (déterministe) injectée dans le prompt user.
+  const scaffold = buildHoraireScaffold(durationHours);
+  const grilleImposee = renderHoraireScaffoldMd(scaffold);
+
+  // Titres de modules source (pour le post-traitement de fidélité).
+  const sourceModuleTitles = [
+    titre,
+    ...objectives,
+    ...programMd.split('\n').map((l) => l.trim()).filter(Boolean),
+  ];
+
+  const objectifsBlock = objectives.length
+    ? objectives.map((o) => `- ${o}`).join('\n')
+    : '(objectifs non détaillés)';
+
+  const userPrompt = `Normalise le programme de la formation suivante.
+
+Titre : ${titre}
+Durée : ${durationHours} heures réparties sur ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''}
+
+GRILLE HORAIRE IMPOSÉE — ${scaffold.nbJours} jour${scaffold.nbJours > 1 ? 's' : ''} (à recopier telle quelle, NE PAS recalculer) :
+${grilleImposee}
+
+Objectifs de la formation :
+${objectifsBlock}
+
+PROGRAMME SOURCE (à RÉPARTIR sur les ${scaffold.nbJours} journées de la grille, SANS rien ajouter ni retirer ; les horaires éventuels de ce programme source sont OBSOLÈTES et remplacés par la grille imposée) :
+${programMd || '(programme source vide — structure les objectifs ci-dessus en contenus, sans inventer)'}
+
+Produis le programme normalisé en markdown : ${scaffold.nbJours > 1 ? 'une section ### Jour K par journée, ' : ''}intitulés en verbes d'action évaluables, contenus strictement issus de la source répartis sur les journées, horaires = grille imposée.`;
+
+  const result = await runOllamaJson(
+    'generate-normalized-programme',
+    SYSTEM_PROMPT_NORMALIZE_PROGRAMME,
+    userPrompt,
+    NormalizedProgrammeSchema,
+    'PedagogicalAsset',
+    null,
     tenantId,
-    MODEL_DEROULE,
+    undefined,
+    'quality',
   );
+
+  if (!result) return null;
+
+  // Post-traitement fidélité (NON bloquant) : on signale, on ne bloque pas.
+  const fidelity = enforceProgrammeFidelity(result.programmeMd, sourceModuleTitles);
+  if (!fidelity.ok) {
+    console.warn(
+      `[generate-normalized-programme] ⚠ thèmes potentiellement étrangers au programme source : ${fidelity.extraneous.join(' | ')}`,
+    );
+  }
+
+  return result.programmeMd;
 }
 
 const MAX_ATTEMPTS = Number(process.env.CLOSURE_OLLAMA_RETRIES ?? 2); // 1 essai initial + 1 retry par défaut
@@ -635,14 +1076,16 @@ async function runOllamaJson<T>(
   refId: string | null,
   tenantId: string | null,
   modelOverride?: string,
+  tier: LlmTier = 'fast',
 ): Promise<T | null> {
-  const modelUsed = modelOverride ?? MODEL;
+  const cloud = (process.env.AI_PROVIDER ?? 'ollama') === 'openrouter';
+  const modelUsed = cloud ? `cloud:${tier}` : modelOverride ?? MODEL;
   const inputHash = simpleHash(`${taskName}:${userPrompt}`);
   const jobLog = tenantId
     ? await prisma.aIGenerationJob.create({
         data: {
           tenantId,
-          provider: 'ollama',
+          provider: cloud ? 'openrouter' : 'ollama',
           model: modelUsed,
           promptVersion: PROMPT_VERSION,
           inputHash,
@@ -656,7 +1099,7 @@ async function runOllamaJson<T>(
   let lastReason = '';
   let totalLatency = 0;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const r = await tryOnce(taskName, systemPrompt, userPrompt, schema, modelOverride);
+    const r = await tryOnce(taskName, systemPrompt, userPrompt, schema, modelOverride, tier);
     totalLatency += r.latencyMs;
     if (r.ok) {
       if (jobLog) {
@@ -699,6 +1142,7 @@ export interface GrilleSessionStagiaireInput {
   nom: string;
   fonction: string | null;
   professionalStatus: string | null;
+  civilite: string | null;
 }
 
 export async function generateGrilleSessionContent(
@@ -711,8 +1155,11 @@ export async function generateGrilleSessionContent(
   if (stagiaires.length === 0) return null;
   const stagiairesList = stagiaires
     .map(
-      (s) =>
-        `- participantId="${s.participantId}" — ${s.prenom} ${s.nom}${s.fonction ? ` (${s.fonction})` : ''}${s.professionalStatus ? ` [${s.professionalStatus}]` : ''}`,
+      (s) => {
+        const g = normalizeGender(s.civilite);
+        const genre = g === 'F' ? ' {genre: féminin}' : g === 'M' ? ' {genre: masculin}' : '';
+        return `- participantId="${s.participantId}" — ${s.prenom} ${s.nom}${s.fonction ? ` (${s.fonction})` : ''}${s.professionalStatus ? ` [${s.professionalStatus}]` : ''}${genre}`;
+      },
     )
     .join('\n');
 
@@ -728,7 +1175,7 @@ Stagiaires présents (${stagiaires.length}) :
 ${stagiairesList}
 
 Pour chaque compétence, l'objet "niveaux" doit OBLIGATOIREMENT contenir une clé pour CHAQUE participantId listé ci-dessus avec un niveau A, B ou C.
-Pour "observations", produis exactement ${stagiaires.length} entrées (1 par participantId) avec une observation positive et personnalisée (2-3 phrases).`;
+Pour "observations", produis exactement ${stagiaires.length} entrées (1 par participantId) avec une observation positive et personnalisée (2-3 phrases). Accorde chaque observation au genre indiqué entre accolades {genre: …} pour le stagiaire concerné (féminin → conseillère, engagée, elle ; masculin → conseiller, il).`;
 
   const result = await runOllamaJson(
     'generate-grille-obs-session',
@@ -738,6 +1185,8 @@ Pour "observations", produis exactement ${stagiaires.length} entrées (1 par par
     refTable,
     refId,
     tenantId,
+    undefined,
+    'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
   );
   if (!result) return null;
 

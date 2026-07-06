@@ -21,6 +21,7 @@ import {
   type GrilleSessionTemplateData,
   type GrilleSessionStagiaire,
 } from '@/lib/closure/grille-obs-session-template';
+import { loadTrainerSignatureDataUrl } from '@/lib/closure/shared-template';
 import {
   generateGrilleSessionContent,
   type GrilleSessionStagiaireInput,
@@ -87,6 +88,7 @@ export async function generateGrilleObsSessionForSession(
     nom: p.person.lastName,
     fonction: p.person.legalLinks[0]?.function ?? null,
     professionalStatus: p.person.professionalStatus,
+    civilite: p.person.civility ?? null,
   }));
 
   const formation: FormationCtx = {
@@ -136,13 +138,15 @@ export async function generateGrilleObsSessionForSession(
     prenom: p.person.firstName,
     nom: p.person.lastName,
   }));
+  const formateurs = session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim());
   const data: GrilleSessionTemplateData = {
     formationTitre: session.product.title,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
-    formateurs: session.trainers.map((t) => `${t.person.firstName} ${t.person.lastName}`.trim()),
+    formateurs,
     stagiaires,
     content,
+    signatureDataUrl: loadTrainerSignatureDataUrl(user.tenantId, formateurs[0]) || undefined,
   };
 
   let pdfBuffer: Buffer;

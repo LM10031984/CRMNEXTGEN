@@ -1,0 +1,40 @@
+# Mini reverse-proxy Bearer devant Gotenberg.
+#
+# Gotenberg 8 ne connait QUE basic-auth (--api-enable-basic-auth), PAS le
+# Bearer. Le client pdf-render.ts (Phase 17) envoie deja
+# `Authorization: Bearer <DOC_ENGINE_TOKEN>`. Ce proxy valide le Bearer
+# server-side PUIS forward vers Gotenberg (service prive Railway), pour que
+# Vercel/worker (Phase 21) attaquent Gotenberg par un domaine PUBLIC
+# authentifie SANS toucher le client (parite homogene, aucune bascule
+# basic-auth).
+#
+# Ce proxy est le service PUBLIC ; Gotenberg reste prive
+# (gotenberg.railway.internal:3000).
+{
+	# Railway termine le TLS en amont : pas d'auto-HTTPS interne, on sert en
+	# clair sur le PORT injecte.
+	auto_https off
+	admin off
+}
+
+# Ecoute sur le PORT injecte par Railway (defaut 8080 en local).
+:{$PORT:8080} {
+	# Probe liveness : /health ouvert, sans auth (Railway healthcheck).
+	handle /health {
+		respond "ok" 200
+	}
+
+	# Toutes les autres routes : Bearer obligatoire.
+	handle {
+		# Requetes dont l'Authorization n'est PAS exactement le bon Bearer.
+		@unauthorized {
+			not header Authorization "Bearer {$DOC_ENGINE_TOKEN}"
+		}
+		respond @unauthorized "Unauthorized" 401
+
+		# Bearer valide : on forward vers Gotenberg. Caddy streame le body
+		# multipart tel quel (boundary FormData intact, parite Pitfall 3
+		# Phase 17) — on ne bufferise ni ne reecrit le Content-Type.
+		reverse_proxy {$GOTENBERG_UPSTREAM:gotenberg.railway.internal:3000}
+	}
+}

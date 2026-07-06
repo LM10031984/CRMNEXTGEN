@@ -1,0 +1,184 @@
+'use server';
+
+/**
+ * Server actions direct-to-storage (Phase 18 STOR-03, côté serveur).
+ *
+ * Principe : aucun octet de fichier ne transite par une server action. Le
+ * navigateur upload DIRECTEMENT vers Supabase via un signed upload URL (contourne
+ * le cap 4,5 Mo body Vercel = Pitfall 2/413). Ces actions ne font QUE :
+ *   1. générer un signed upload URL scopé (admin par tenant / public par token PE)
+ *   2. confirmer l'upload post-facto et recâbler l'OCR (Pitfall 4 : l'OCR ne meurt pas)
+ *
+ * Le composant client d'upload (progression, retry) vient au plan 18-04.
+ * ⚠ upload-apprenant-docs.ts et submitPreEnrollmentForm restent en place jusqu'à
+ * la bascule client (plan 04) — ne rien casser.
+ */
+
+import { randomUUID } from 'crypto';
+import { revalidatePath } from 'next/cache';
+import { prisma } from '@qualiof/db';
+import { validateRequest } from '@/lib/auth';
+import { createSignedUploadUrl, DOCS_BUCKET, PREENROLLMENT_BUCKET } from '@/lib/storage';
+
+export type ApprenantDocKind = 'CNI' | 'RIB' | 'CFP';
+
+/** Extension nettoyée (alphanum only) — reprend upload-apprenant-docs.ts. */
+function safeExt(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? 'bin';
+  return /^[a-z0-9]+$/.test(ext) ? ext : 'bin';
+}
+
+/**
+ * Content-type déduit de l'extension — reprend upload-apprenant-docs.ts.
+ * PAS exporté : fichier 'use server' → Next n'autorise que des exports async.
+ */
+function guessContentType(name: string, fallback?: string): string {
+  if (fallback && fallback !== 'application/octet-stream') return fallback;
+  const ext = safeExt(name);
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'png') return 'image/png';
+  return 'application/octet-stream';
+}
+
+// ─── Résultats discriminés (erreurs en FRANÇAIS) ───────────────────
+type SignedUploadOk = { ok: true; path: string; token: string; signedUrl: string };
+type ActionError = { ok: false; error: string };
+type SignedUploadResult = SignedUploadOk | ActionError;
+
+// ─── ADMIN : signed upload URL scopé tenant ────────────────────────
+/**
+ * Génère un signed upload URL pour un doc apprenant (CNI/RIB/CFP), scopé par
+ * user.tenantId. Path : apprenants/{tenantId}/{uuid}/{kind}.{ext}. Le service_role
+ * n'est JAMAIS exposé au client — seul le token signé part au navigateur.
+ */
+export async function createApprenantUploadUrl(
+  kind: ApprenantDocKind,
+  ext: string,
+): Promise<SignedUploadResult> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const folder = randomUUID();
+  const path = `apprenants/${user.tenantId}/${folder}/${kind.toLowerCase()}.${safeExt('x.' + ext)}`;
+  try {
+    const { token, signedUrl } = await createSignedUploadUrl(DOCS_BUCKET, path);
+    return { ok: true, path, token, signedUrl };
+  } catch (e: any) {
+    return { ok: false, error: `Préparation upload échouée : ${e?.message ?? e}` };
+  }
+}
+
+// ─── PUBLIC : signed upload URL validé par PreEnrollment.token ──────
+/**
+ * Génère un signed upload URL pour le formulaire PUBLIC /p/[token] : PAS de
+ * session Lucia → validation via PreEnrollment.token (jamais validateRequest).
+ * Path : {peToken}/{kind}-{stamp}.{ext} dans le bucket preinscriptions.
+ */
+export async function createPreEnrollmentUploadUrl(
+  peToken: string,
+  kind: ApprenantDocKind,
+  ext: string,
+): Promise<SignedUploadResult> {
+  const pe = await prisma.preEnrollment.findUnique({ where: { token: peToken } });
+  if (!pe) return { ok: false, error: 'Lien invalide' };
+  if (pe.expiresAt < new Date()) return { ok: false, error: 'Ce lien a expiré' };
+
+  const stamp = Date.now();
+  const path = `${peToken}/${kind.toLowerCase()}-${stamp}.${safeExt('x.' + ext)}`;
+  try {
+    const { token, signedUrl } = await createSignedUploadUrl(PREENROLLMENT_BUCKET, path);
+    return { ok: true, path, token, signedUrl };
+  } catch (e: any) {
+    return { ok: false, error: `Préparation upload échouée : ${e?.message ?? e}` };
+  }
+}
+
+// ─── PUBLIC : confirmation post-upload + recâblage OCR ──────────────
+interface PreEnrollmentFields {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  birthDate?: string;
+  birthPlace?: string;
+  professionalStatus?: string;
+  diploma?: string;
+  educationLevel?: string;
+  professionalExperience?: string;
+  rgpdAccepted: boolean;
+}
+
+/**
+ * Confirme un upload direct côté PUBLIC : met à jour la PreEnrollment avec les
+ * keys uploadées + les champs texte du formulaire (reprend submitPreEnrollmentForm),
+ * PUIS recâble l'OCR (Pitfall 4 : extractPreEnrollmentDocuments fire-and-forget).
+ */
+export async function confirmPreEnrollmentUpload(
+  peToken: string,
+  keys: Partial<Record<ApprenantDocKind, string>>,
+  fields: PreEnrollmentFields,
+): Promise<{ ok: boolean; error?: string }> {
+  const pe = await prisma.preEnrollment.findUnique({ where: { token: peToken } });
+  if (!pe) return { ok: false, error: 'Lien invalide' };
+  if (pe.expiresAt < new Date()) return { ok: false, error: 'Ce lien a expiré' };
+  if (pe.status !== 'PENDING_FORM' && pe.status !== 'SUBMITTED') {
+    return { ok: false, error: 'Ce dossier a déjà été traité' };
+  }
+
+  if (!fields.firstName?.trim() || !fields.lastName?.trim() || !fields.email?.trim()) {
+    return { ok: false, error: 'Nom, prénom et email sont obligatoires' };
+  }
+  if (!fields.rgpdAccepted) {
+    return { ok: false, error: 'Tu dois accepter le traitement RGPD pour continuer' };
+  }
+
+  await prisma.preEnrollment.update({
+    where: { id: pe.id },
+    data: {
+      firstName: fields.firstName.trim(),
+      lastName: fields.lastName.trim(),
+      email: fields.email.trim().toLowerCase(),
+      phone: fields.phone?.trim() || null,
+      birthDate: fields.birthDate ? new Date(fields.birthDate) : null,
+      birthPlace: fields.birthPlace?.trim() || null,
+      professionalStatus: fields.professionalStatus?.trim() || null,
+      diploma: fields.diploma?.trim() || null,
+      educationLevel: fields.educationLevel?.trim() || null,
+      professionalExperience: fields.professionalExperience?.trim() || null,
+      cniKey: keys.CNI ?? pe.cniKey,
+      ribKey: keys.RIB ?? pe.ribKey,
+      cfpKey: keys.CFP ?? pe.cfpKey,
+      rgpdAcceptedAt: new Date(),
+      submittedAt: new Date(),
+      status: 'SUBMITTED',
+    },
+  });
+
+  revalidatePath('/app/inscriptions');
+
+  // Phase 20 WORK-04 : l'OCR n'est PLUS déclenché ici (fire-and-forget mort en
+  // serverless Vercel + pas de pdftoppm). La PreEnrollment reste en statut SUBMITTED ;
+  // le worker cloud (preinscription-ocr-worker) la poll et exécute l'extraction sur
+  // l'hôte qui possède poppler. Flux utilisateur identique (confirmation immédiate).
+
+  return { ok: true };
+}
+
+// ─── ADMIN : confirmation (retourne les keys pour le wizard) ───────
+/**
+ * Confirme un upload direct côté ADMIN : retourne simplement les keys au wizard,
+ * qui les persiste et déclenche son extraction (extractDocsFromBuffers) comme
+ * aujourd'hui — pas de régression du contrat wizard.
+ */
+export async function confirmApprenantUpload(
+  keys: Partial<Record<ApprenantDocKind, string>>,
+): Promise<{ ok: true; keys: Partial<Record<ApprenantDocKind, string>> } | ActionError> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+  return { ok: true, keys };
+}
+
+// Downscale avant vision OCR (Pitfall 3) : déplacé dans @/lib/ocr-downscale
+// (module neutre sans auth — consommé par l'extracteur, qui tourne aussi côté
+// worker) et câblé dans preinscription-extractor.ts.

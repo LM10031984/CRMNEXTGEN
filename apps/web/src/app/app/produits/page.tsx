@@ -62,65 +62,65 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         aiDraftedAt: true,
       },
     }),
-    // BUG-P0-01 follow-up — stats agrégées du catalogue : total apprenants uniques,
-    // total CA cumulé, produits en draft IA. Affichées dans un bandeau au-dessus
-    // de la grille. Tenant-scopé.
+    // Stats agrégées du catalogue : total apprenants uniques, CA cumulé,
+    // produits en draft IA. Bug 2026-06-04 : l'ancien $queryRaw plantait
+    // avec `operator does not exist: text = jsonb` (cause Postgres opaque).
+    // Remplacé par 3 queries Prisma typées robustes.
     (async () => {
-      const learnerRows = await prisma.$queryRaw<
-        Array<{
-          total_learners: bigint;
-          total_revenue: number | null;
-          ai_drafts: bigint;
-        }>
-      >`
-        SELECT
-          COUNT(DISTINCT sp."personId")::bigint AS total_learners,
-          COALESCE(SUM(sp."priceHT"), 0)::float AS total_revenue,
-          (
-            SELECT COUNT(*)::bigint
-            FROM "TrainingProduct" p2
-            WHERE p2."tenantId" = ${user.tenantId}
-              AND p2."isActive" = true
-              AND p2."aiDraftedAt" IS NOT NULL
-          ) AS ai_drafts
-        FROM "TrainingProduct" p
-        LEFT JOIN "TrainingSession" s ON s."productId" = p.id
-        LEFT JOIN "SessionParticipant" sp ON sp."sessionId" = s.id
-        WHERE p."tenantId" = ${user.tenantId} AND p."isActive" = true
-      `;
-      const r = learnerRows[0];
+      const productScope = {
+        session: { product: { tenantId: user.tenantId, isActive: true } },
+      };
+      const [learnersAgg, revenueAgg, aiDrafts] = await Promise.all([
+        prisma.sessionParticipant.findMany({
+          where: productScope,
+          select: { personId: true },
+          distinct: ['personId'],
+        }),
+        prisma.sessionParticipant.aggregate({
+          where: productScope,
+          _sum: { priceHT: true },
+        }),
+        prisma.trainingProduct.count({
+          where: { tenantId: user.tenantId, isActive: true, aiDraftedAt: { not: null } },
+        }),
+      ]);
       return {
-        totalLearners: Number(r?.total_learners ?? 0),
-        totalRevenue: Number(r?.total_revenue ?? 0),
-        aiDrafts: Number(r?.ai_drafts ?? 0),
+        totalLearners: learnersAgg.length,
+        totalRevenue: Number(revenueAgg._sum.priceHT ?? 0),
+        aiDrafts,
       };
     })(),
   ]);
 
-  // Map productId → { learners, sessions } pour afficher les compteurs sur chaque carte
-  // sans faire N+1 sur la page courante. Tenant-scopé via la jointure indirecte.
+  // Map productId → { learners, sessions } — remplacé le $queryRaw par
+  // 1 query Prisma typée (Laurent 2026-06-04 : "operator does not exist:
+  // text = jsonb" — bug Postgres opaque que l'API Prisma évite).
   const productIds = rows.map((p) => p.id);
-  const learnerCounts = productIds.length
-    ? await prisma.$queryRaw<
-        Array<{ productId: string; learners: bigint; sessions: bigint }>
-      >`
-        SELECT
-          p.id AS "productId",
-          COUNT(DISTINCT sp."personId")::bigint AS learners,
-          COUNT(DISTINCT s.id)::bigint AS sessions
-        FROM "TrainingProduct" p
-        LEFT JOIN "TrainingSession" s ON s."productId" = p.id
-        LEFT JOIN "SessionParticipant" sp ON sp."sessionId" = s.id
-        WHERE p.id IN (${Prisma.join(productIds)})
-        GROUP BY p.id
-      `
-    : [];
-  const learnerByProduct = new Map<string, { learners: number; sessions: number }>(
-    learnerCounts.map((r) => [
-      r.productId,
-      { learners: Number(r.learners), sessions: Number(r.sessions) },
-    ]),
-  );
+  const learnerByProduct = new Map<string, { learners: number; sessions: number }>();
+  if (productIds.length > 0) {
+    const sessions = await prisma.trainingSession.findMany({
+      where: { productId: { in: productIds }, tenantId: user.tenantId },
+      select: {
+        id: true,
+        productId: true,
+        participants: { select: { personId: true } },
+      },
+    });
+    // Aggrège côté JS : distinct personId par productId + count sessions par productId
+    const acc = new Map<string, { sessions: Set<string>; personIds: Set<string> }>();
+    for (const s of sessions) {
+      let entry = acc.get(s.productId);
+      if (!entry) {
+        entry = { sessions: new Set(), personIds: new Set() };
+        acc.set(s.productId, entry);
+      }
+      entry.sessions.add(s.id);
+      for (const p of s.participants) entry.personIds.add(p.personId);
+    }
+    for (const [pid, e] of acc) {
+      learnerByProduct.set(pid, { learners: e.personIds.size, sessions: e.sessions.size });
+    }
+  }
 
   return (
     <div className="space-y-6">

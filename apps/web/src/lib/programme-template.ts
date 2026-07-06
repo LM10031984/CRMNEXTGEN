@@ -283,8 +283,7 @@ function escapeHtml(s: string): string {
 const DEFAULT_TARGET_AUDIENCE =
   "Professionnels de l'immobilier (agents commerciaux, conseillers, négociateurs, gérants d'agences) souhaitant développer leurs compétences.";
 const DEFAULT_PREREQUISITES = "Aucun prérequis spécifique.";
-const DEFAULT_PEDAGOGICAL_METHODS =
-  "La formation se déroule en présentiel.\nLes formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.";
+const DEFAULT_PEDAGOGICAL_METHODS = "La formation se déroule en présentiel.";
 const DEFAULT_PEDAGOGICAL_SUPPORT =
   "Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.";
 const DEFAULT_TRAINER_PROFILE =
@@ -295,6 +294,42 @@ const DEFAULT_ACCESS_CONDITIONS =
   "Afin de vous inscrire à notre formation, merci de contacter minimum 14 jours avant le début de la formation.\nUne fois votre inscription validée, nous vous adresserons une convention de formation et une convocation vous sera envoyée par mail 7 jours avant le début de la formation.\nEn cas de subrogation de paiement, un accord du financeur doit nous être parvenu avec le début de la formation.";
 const DEFAULT_ACCESSIBILITY =
   "La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l'accès à l'emploi des personnes en situation de handicap.\nNotre organisme tente de donner à tous les mêmes chances d'accéder ou de maintenir l'emploi.\nNous pouvons adapter certaines de nos modalités de formation, pour cela, nous étudierons ensemble vos besoins.";
+
+/**
+ * Référent handicap unique de l'OF (ind. 26) — DOIT être identique sur tous les
+ * docs (analyse besoin, programme…). Laurent 17/06 : Jean-Guy Ourmières.
+ */
+const HANDICAP_REFERENT_LINE =
+  'Référent handicap : Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60.';
+
+/**
+ * Nettoie la liste d'objectifs (champ SmartOF souvent brouillé) :
+ *  - retire l'amorce dupliquée (« … sera capable de : »), déjà affichée comme titre
+ *  - retire les puces « ● » de tête (le <ul> en ajoute)
+ *  - remplace le verbe NON évaluable « Comprendre » par « Identifier » (process ind. 5)
+ */
+export function cleanObjectifs(objectifs: string[]): string[] {
+  return objectifs
+    .map((o) => o.replace(/^\s*[●•·‣*-]\s*/, '').trim())
+    .filter((o) => o.length > 0 && !/sera capable de\s*:?\s*$|à l['’]issue de la formation/i.test(o))
+    .map((o) => o.replace(/^Comprendre\b/i, 'Identifier'));
+}
+
+/** Retire un contact nominatif parti (Julien LAFITTE) → contact générique OF. */
+export function replaceDepartedContact(text: string): string {
+  return text
+    .replace(/Julien\s+LAFITTE\s*/gi, '')
+    .replace(/07\s*80\s*91\s*95\s*31/g, '06 31 05 63 90');
+}
+
+/**
+ * Nettoie les modalités d'inscription (champ SmartOF) :
+ *  - retire le bloc « ACCESSIBILITÉ … HANDICAP » embarqué (doublon de la section dédiée)
+ *  - retire le contact d'une personne nommée (Julien LAFITTE, parti) → contact générique
+ */
+export function cleanAccessConditions(text: string): string {
+  return replaceDepartedContact(text.split(/ACCESSIBILIT[ÉE]\s+AUX\s+PERSONNES/i)[0]!).trim();
+}
 
 /**
  * Convertit "70" en "70 heures (1 journée de 7 heures)" / "21" en
@@ -320,8 +355,9 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
   // pour respecter l'upload UI Paramètres, fallback bundled `src/assets/`.
   const logoDataUrl = loadLogoColorDataUrl(data.tenantId);
 
-  const objectifs = data.produitObjectifs.length > 0
-    ? data.produitObjectifs
+  const objectifsRaw = cleanObjectifs(data.produitObjectifs);
+  const objectifs = objectifsRaw.length > 0
+    ? objectifsRaw
     : ['Objectifs à définir dans la fiche produit.'];
 
   // Normalise le markdown : l'IA peut generer "##Titre" sans espace ou
@@ -344,9 +380,33 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
   // Méthodes pédagogiques : on s'assure que la phrase générique livret/Canva
   // apparaît toujours en dernière ligne (pattern Start Academy)
   let methods = (data.produitPedagogicalMethods ?? DEFAULT_PEDAGOGICAL_METHODS).trim();
+  // Retrait de l'ancienne phrase « prospection » (remplacée par alternance +
+  // tours de table, Kaïna 16/06) — catch-all : default, données produit, imports.
+  methods = methods
+    .replace(
+      /Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection[^.]*\.\s*/gi,
+      '',
+    )
+    .trim();
   let support = (data.produitPedagogicalSupport ?? DEFAULT_PEDAGOGICAL_SUPPORT).trim();
   if (!methods.toLowerCase().includes('livret') && !support.toLowerCase().includes('livret')) {
     support = DEFAULT_PEDAGOGICAL_SUPPORT;
+  }
+
+  // Méthode pédagogique ind. 12 (Kaïna 16/06) : garantir l'alternance théorie/
+  // pratique + les tours de table, même si le produit a des méthodes custom.
+  const PEDAGOGY_ALTERNANCE =
+    'La pédagogie repose sur une alternance entre apports théoriques et mises en situation pratiques.';
+  const PEDAGOGY_TOURS_TABLE =
+    "Des tours de table réguliers et temps d'échange ponctuent la formation pour ajuster le rythme et favoriser la participation.";
+  if (!methods.toLowerCase().includes('alternance')) {
+    methods = `${methods}\n${PEDAGOGY_ALTERNANCE}`;
+  }
+  if (
+    !methods.toLowerCase().includes('tour de table') &&
+    !methods.toLowerCase().includes('tours de table')
+  ) {
+    methods = `${methods}\n${PEDAGOGY_TOURS_TABLE}`;
   }
 
   return `<!DOCTYPE html>
@@ -435,7 +495,7 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="section">Modalités d'inscription et délai d'accès à notre formation</h2>
-  ${escapeHtml(data.produitAccessConditions ?? DEFAULT_ACCESS_CONDITIONS)
+  ${escapeHtml(cleanAccessConditions(data.produitAccessConditions ?? DEFAULT_ACCESS_CONDITIONS))
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -445,12 +505,13 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="section">Accessibilité aux personnes en situation de handicap</h2>
-  ${escapeHtml(data.produitAccessibility ?? DEFAULT_ACCESSIBILITY)
+  ${escapeHtml(replaceDepartedContact(data.produitAccessibility ?? DEFAULT_ACCESSIBILITY))
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => `<p>${line}</p>`)
     .join('')}
+  <p><strong>${escapeHtml(HANDICAP_REFERENT_LINE)}</strong></p>
 </section>
 
 <section class="contact-block">

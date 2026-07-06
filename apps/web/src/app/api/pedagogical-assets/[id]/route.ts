@@ -8,7 +8,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
+import { downloadFile, createSignedDownloadUrl, DOCS_BUCKET, _internals } from '@/lib/storage';
 
 export async function GET(
   _req: Request,
@@ -25,13 +25,23 @@ export async function GET(
   if (!asset.pdfUrl) return new NextResponse('PDF non encore généré', { status: 404 });
 
   try {
+    // Prod Supabase : redirect 302 vers une signed URL FRAÎCHE (TTL 600s, régénérée
+    // à chaque hit = préserve le no-store) — contourne le cap 4,5 Mo réponse Vercel.
+    if (_internals.PROVIDER === 'supabase') {
+      const url = await createSignedDownloadUrl(DOCS_BUCKET, asset.pdfUrl, 600);
+      return NextResponse.redirect(url, 302);
+    }
+    // MinIO local : proxy inchangé.
     const buffer = await downloadFile(DOCS_BUCKET, asset.pdfUrl);
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${asset.kind.toLowerCase()}-${asset.id.slice(0, 8)}.pdf"`,
-        'Cache-Control': 'private, max-age=3600',
+        // no-store : un doc régénéré garde le MÊME id/URL. Avec un cache navigateur
+        // (avant : max-age=3600), l'ancienne version était resservie jusqu'à 1h après
+        // régénération (« je revois l'ancienne version », Laurent 2026-07-01).
+        'Cache-Control': 'no-store, must-revalidate',
       },
     });
   } catch (e: unknown) {
