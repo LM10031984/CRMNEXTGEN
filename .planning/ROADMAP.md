@@ -109,7 +109,14 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   3. Les ~9 server actions PDF synchrones (convocation, factures, programme, déroulé, veille-export…) rendent leur PDF via l'endpoint doc-engine public authentifié (DOC_ENGINE_TOKEN) — plus aucun binaire natif dans le périmètre Vercel
   4. GitHub Actions (lint + tsc + vitest) est vert sur PR en gate branch protection, l'échec pré-existant `shared-template.test.ts` est corrigé ou quarantiné explicitement
   5. Playwright E2E du flow closure (session → participants → pack → docs) et les smoke tests des routes protégées (redirect auth + 200) passent
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 21-01-PLAN.md — Gardes staging code : flag NEXT_PUBLIC_APP_ENV + filigrane PDF testé + garde calendar + sameSite lax + vercel.json cdg1 + postinstall prisma — APP-01/APP-02 [Wave 1]
+- [ ] 21-02-PLAN.md — Backfill MinIO→Supabase (D-06, bug SES-0094) : DRY→WRITE + rapport 0 lien mort, MinIO non purgé — prérequis TEST-01/02 [Wave 1]
+- [ ] 21-03-PLAN.md — CI GitHub Actions (lint+tsc+vitest, Postgres 16 service, image worker) + merge cloud-migration→main + branch protection + PR témoin — CI-01 [Wave 2]
+- [ ] 21-04-PLAN.md — Runbook + déploiement Vercel Pro cdg1 (env ~35 clés dont 22 OF_*, domaine final, WAF rate-limit /preinscription) + vérif curl — APP-01/02/03 [Wave 3, checkpoint: dashboard]
+- [ ] 21-05-PLAN.md — Playwright infra (user e2e dédié, storageState) + smoke ~10 routes 4 piliers + re-validation upload 10 Mo sans 413 — TEST-02/APP-02 [Wave 4]
+- [ ] 21-06-PLAN.md — E2E closure session E2E- jetable (IA réelle, 0 stub, %PDF) + teardown idempotent + 21-SMOKE.md + PR finale — TEST-01/APP-03 [Wave 5]
 **UI hint**: yes
 **Research flags** (à reprendre au plan) : [VERIFY] `@supabase/supabase-js` dans package.json · Vercel Pro `maxDuration` par route (défaut 300s / max 800s, pas 1800s beta) · vérif `NODE_ENV`/`APP_ENV` réellement `production` en HTTPS (sinon cookie non-secure = login en boucle) · vérif origine CSRF Lucia derrière proxy Vercel · rate-limit form public `/p/[token]` (bruteforce token / coût OCR).
 
@@ -136,5 +143,5 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 4/5 | In Progress|  |
-| 21. App Vercel + CI | v6 | 0/TBD | Not started | - |
+| 21. App Vercel + CI | v6 | 0/6 | Planned | - |
 | 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
