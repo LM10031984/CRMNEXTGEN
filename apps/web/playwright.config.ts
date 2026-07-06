@@ -24,6 +24,9 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   retries: 1,
+  // `open: 'never'` : le serveur HTML auto-servi sur échec BLOQUE les runs
+  // automatisés (constat 21-06) — le rapport reste écrit dans playwright-report/.
+  reporter: [['list'], ['html', { open: 'never' }]],
   // Cible distante partagée + rate-limit WAF sur /preinscription (30 req/60 s,
   // D-13) : on sérialise pour rester déterministe sous la fenêtre.
   workers: 1,

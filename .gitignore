@@ -69,3 +69,4 @@ data/uploads/
 .env.*.backup
 backups/
 secrets/
+.e2e-tmp-admin-pwd.txt
