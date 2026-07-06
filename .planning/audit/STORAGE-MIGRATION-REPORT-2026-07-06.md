@@ -1,15 +1,15 @@
 # Rapport migration storage MinIO→Supabase — 2026-07-06
 
-- **Mode** : DRY (simulation, aucune écriture)
+- **Mode** : WRITE (écriture réelle Supabase)
 
 ## Total par bucket
 
 | Bucket | Total clés | Simulés (DRY) | Migrés (WRITE) |
 | --- | --- | --- | --- |
-| qualiof-docs | 893 | 866 | 0 |
-| preinscriptions | 6 | 5 | 0 |
+| qualiof-docs | 893 | 0 | 866 |
+| preinscriptions | 6 | 0 | 5 |
 
-## Migrés : 0
+## Migrés : 871
 
 ## Orphelins (clé en base, objet absent de MinIO — AUCUNE action auto, D-04)
 
