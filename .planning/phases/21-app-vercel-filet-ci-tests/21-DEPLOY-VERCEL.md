@@ -40,8 +40,11 @@ Supabase, le compute PDF/workers reste sur Railway (Phase 20).
 1. **Vercel Dashboard → Add New… → Project** → importer le repo GitHub
    **`LM10031984/CRMNEXTGEN`**.
 2. **Root Directory = `apps/web`** (⚠ Pitfall 6 — cliquer « Edit » à côté de Root Directory).
-   Vercel détecte le monorepo pnpm workspace + Turborepo et installe depuis la racine :
-   ne rien changer aux commandes de build.
+   Vercel détecte le monorepo pnpm workspace + Turborepo et installe depuis la racine.
+   ⚠ **Build Command = `next build`** (Override dans Build & Deployment) — RETOUR TERRAIN
+   2026-07-06 : le défaut `turbo run build` échoue sur le cycle workspace pré-existant
+   `@qualiof/db#build ↔ @qualiof/shared#build` (cf. deferred-items 21-03) ; les packages
+   ne buildent pas d'artefacts (pattern projet), `next build` seul suffit.
 3. **Framework Preset = Next.js** (auto-détecté).
 4. **⚠ NE PAS CLIQUER « Deploy » tout de suite** : `next.config.mjs` est **fail-loud**
    (Pitfall 4) — sans les variables d'environnement de la section 3, le build échoue
@@ -189,6 +192,13 @@ communique pas le domaine à l'équipe avant la Phase 22).
    - `@prisma/client did not initialize` → vérifier que l'install a bien joué le
      `postinstall prisma generate` de `packages/db` (plan 21-01) — Root Directory
      `apps/web` mal posé en est la cause classique ;
+   - `PrismaClientInitializationError` au **runtime** (build vert, 500 sur toutes les
+     routes DB) → le moteur `rhel-openssl-3.0.x` du store pnpm n'est pas tracé dans le
+     bundle serverless. RETOUR TERRAIN 2026-07-06 : fixé dans le repo via
+     `experimental.outputFileTracingIncludes` de `apps/web/next.config.mjs` (glob
+     resserré sur `@prisma+client*/node_modules/.prisma/client/*.node` — un glob `**`
+     récursif bloque « Collecting build traces » > 10 min). Déjà mergé dans `main`
+     (PRs #2/#3), rien à refaire ;
    - erreur `createEnv` / « Invalid environment variables » → une clé du tableau
      manque ou est mal orthographiée, relire la section 3 (le nom exact fautif est
      dans le log de build) ;
@@ -262,20 +272,69 @@ Le `apps/web/vercel.json` du repo ne contient volontairement AUCUN bloc `crons`.
 
 ## 9. RÉSULTATS DE VALIDATION
 
-> Rempli en Task 3 du plan 21-04 (vérification runtime curl, evidence datée).
+> Rempli en Task 3 du plan 21-04 (vérification runtime curl, evidence datée du 2026-07-06).
+>
+> ⚠ **Domaine final : PENDING DNS webmaster** — `app.start-academy.fr` est attaché au
+> projet côté Vercel mais la zone DNS est gérée par le compte OVH du webmaster de Laurent
+> (registrar Scaleway/bookmydomain). En attente : **CNAME `app` → `cname.vercel-dns.com.`**
+> \+ **TXT `_vercel` = `vc-domain-verify=app.start-academy.fr,c75f8d7f67609b827823`**.
+> DÉCISION UTILISATEUR : les vérifications ci-dessous et les vagues suivantes (21-05/21-06)
+> se font sur **`https://qualiof.vercel.app`** en attendant.
+
+`DOMAIN = qualiof.vercel.app`
 
 | Étape | Commande | Attendu | Résultat | Date |
 | --- | --- | --- | --- | --- |
-| Région + HTTPS | `curl -sI https://DOMAIN/login` | 200 + `x-vercel-id` contient `cdg1` | | |
-| Bandeau staging (APP-01) | `curl -s https://DOMAIN/login \| grep -c "STAGING"` | ≥ 1 | | |
-| Redirect auth (APP-02) | `curl -s -o /dev/null -w "%{http_code}" https://DOMAIN/app` | 307 + `location: /login` | | |
-| Route publique (Pitfall 1) | `curl … https://DOMAIN/preinscription/token-bidon-e2e` | 200 ou 404, JAMAIS 500 | | |
-| Rate-limit (D-13) | rafale 40× `/preinscription/rl-probe-$i` | ≥ 1 réponse `429` | | |
-| Cookie flags (APP-02 partiel) | `curl -sI https://DOMAIN/login` | note : secure garanti par NODE_ENV=production, sameSite lax (21-01) — preuve finale au 21-05 | | |
+| Région + HTTPS | `curl -sI https://DOMAIN/login` | 200 + `x-vercel-id` contient `cdg1` | ✅ `HTTP/2 200`, `x-vercel-id: cdg1::cdg1::j45qd-…` | 2026-07-06 |
+| Bandeau staging (APP-01) | `curl -s https://DOMAIN/login \| grep -c "STAGING"` | ≥ 1 | ✅ `1` | 2026-07-06 |
+| Redirect auth (APP-02) | `curl -s -o /dev/null -w "%{http_code}" https://DOMAIN/app` | 307 + `location: /login` | ✅ `307`, `location: /login` | 2026-07-06 |
+| Route publique (Pitfall 1) | `curl … https://DOMAIN/preinscription/token-bidon-e2e` | 200 ou 404, JAMAIS 500 | ✅ `404` (refus propre) | 2026-07-06 |
+| Rate-limit (D-13) | rafale 40× `/preinscription/rl3-probe-$i` | ≥ 1 réponse de blocage | ✅ `29× 404` puis **`11× 403`** — ⚠ déviation : la WAF Vercel répond **403**, PAS 429 (voir note) | 2026-07-06 |
+| Cookie flags (APP-02 partiel) | `curl -sI https://DOMAIN/login` | note : secure garanti par NODE_ENV=production, sameSite lax (21-01) — preuve finale au 21-05 | ✅ Aucun `set-cookie` sur le GET (attendu — le cookie Lucia n'apparaît qu'au POST login) ; `secure` vient de NODE_ENV=production Vercel (Pitfall 7), `sameSite: 'lax'` explicite posé au 21-01 ; preuve finale = 21-05 auth.setup Playwright | 2026-07-06 |
 
-### Annexe — sorties brutes
+**Note rate-limit 403 vs 429** : la règle WAF `rule_rate_limit_preinscription_t0PSkN`
+(fixed window 30 req/60 s par IP, action **deny**, path starts-with `/preinscription`,
+posée et PUBLIÉE via API le 2026-07-06) bloque avec un **403** et non le 429 attendu au
+plan. Protection fonctionnellement équivalente (le blocage mord après exactement
+30 requêtes dans la fenêtre : le 404 du check « route publique » comptait dans la même
+fenêtre → 1 + 29 = 30 passées, puis 10-11 blocages). Fenêtre de 60 s respectée avant
+tout autre appel `/preinscription`.
 
-_(à coller en Task 3)_
+### Annexe — sorties brutes (2026-07-06, UTC)
+
+```
+$ curl -sI https://qualiof.vercel.app/login          # 2026-07-06T11:54:26Z
+HTTP/2 200
+age: 0
+cache-control: private, no-cache, no-store, max-age=0, must-revalidate
+content-type: text/html; charset=utf-8
+date: Mon, 06 Jul 2026 11:54:26 GMT
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+x-matched-path: /login
+x-powered-by: Next.js
+x-vercel-cache: MISS
+x-vercel-id: cdg1::cdg1::j45qd-1783338866100-7c3bd4da8a60
+
+$ curl -s https://qualiof.vercel.app/login | grep -c "STAGING"   # 2026-07-06T12:01:43Z
+1
+
+$ curl -s -o /dev/null -w "%{http_code}\n" https://qualiof.vercel.app/app
+307
+$ curl -sI https://qualiof.vercel.app/app | grep -i "^location\|^HTTP"
+HTTP/2 307
+location: /login
+
+$ curl -s -o /dev/null -w "%{http_code}\n" https://qualiof.vercel.app/preinscription/token-bidon-e2e
+404
+
+$ for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code}\n" \
+    https://qualiof.vercel.app/preinscription/rl3-probe-$i; done | sort | uniq -c
+  11 403
+  29 404
+# 2026-07-06T12:02:08Z — blocage WAF = 403 (déviation vs 429 attendu), voir note ci-dessus
+```
 
 ---
 
