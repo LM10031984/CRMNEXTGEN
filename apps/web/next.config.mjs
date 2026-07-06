@@ -29,6 +29,13 @@ const nextConfig = {
       // Le serveur autorise 10 Mo / fichier × 3 fichiers + champs déclaratifs.
       bodySizeLimit: '40mb',
     },
+    // Vercel serverless : le moteur Prisma (libquery_engine-rhel-*.so.node) vit
+    // dans le store pnpm à la racine du mono-repo et n'est pas tracé dans le
+    // bundle des fonctions (PrismaClientInitializationError au runtime, toutes
+    // les routes DB en 500). Copie forcée pour toutes les routes.
+    outputFileTracingIncludes: {
+      '**': ['../../node_modules/.pnpm/**/.prisma/client/*.node'],
+    },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
   // Redirects pour URLs "naturelles" tapées à la main par les utilisateurs.
