@@ -29,15 +29,19 @@ const nextConfig = {
       // Le serveur autorise 10 Mo / fichier × 3 fichiers + champs déclaratifs.
       bodySizeLimit: '40mb',
     },
-    // Vercel serverless : le moteur Prisma (libquery_engine-rhel-*.so.node) vit
-    // dans le store pnpm à la racine du mono-repo et n'est pas tracé dans le
-    // bundle des fonctions (PrismaClientInitializationError au runtime, toutes
-    // les routes DB en 500). Copie forcée pour toutes les routes.
+    // Vercel serverless : les binaires natifs chargés dynamiquement (moteur
+    // Prisma rhel, prebuild argon2 via node-gyp-build) vivent dans le store
+    // pnpm à la racine du mono-repo et ne sont PAS tracés dans le bundle des
+    // fonctions → PrismaClientInitializationError / « No native build was
+    // found » au runtime. Copie forcée pour toutes les routes.
     // ⚠ Pas de `**` récursif dans le chemin : ça fait scanner tout le store
     // pnpm en phase « Collecting build traces » (build bloqué >10 min).
-    // `@prisma+client*` = un seul segment, résolu par simple listing de .pnpm.
+    // `@prisma+client*` / `argon2*` = un seul segment, simple listing de .pnpm.
     outputFileTracingIncludes: {
-      '**': ['../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/*.node'],
+      '**': [
+        '../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/*.node',
+        '../../node_modules/.pnpm/argon2*/node_modules/argon2/prebuilds/linux-x64/*.node',
+      ],
     },
   },
   transpilePackages: ['@qualiof/db', '@qualiof/shared'],
