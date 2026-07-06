@@ -20,6 +20,7 @@ import {
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createRequire } from 'node:module';
 import { sharedEnv } from '@qualiof/shared/env';
 
 const PROVIDER = sharedEnv.STORAGE_PROVIDER;
@@ -65,9 +66,8 @@ let _supabaseClient: SupabaseClient | null = null;
 function ensureWebSocketPolyfill(): void {
   if (typeof (globalThis as { WebSocket?: unknown }).WebSocket !== 'undefined') return;
   try {
-    // Import CJS de `ws` (déjà dans l'arbre de deps via @supabase/*).
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createRequire } = require('node:module') as typeof import('node:module');
+    // `require` n'existe pas en contexte ESM (worker tsx) → createRequire.
+    // Import CJS de `ws` (dépendance directe de @qualiof/web).
     const require2 = createRequire(import.meta.url);
     (globalThis as { WebSocket?: unknown }).WebSocket = require2('ws');
   } catch (e) {
