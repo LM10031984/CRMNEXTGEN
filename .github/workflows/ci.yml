@@ -21,9 +21,13 @@ jobs:
       # pnpm/action-setup@v4 lit `packageManager: pnpm@10.33.2` du package.json
       # racine — ne PAS fixer `version:` ici (source unique de vérité).
       - uses: pnpm/action-setup@v4
+      # Node 24 (PAS 20) : next.config.mjs fait `await import('@qualiof/shared/env')`
+      # sur un .ts BRUT (chokepoint fail-loud Phase 17) — le type-stripping natif
+      # n'existe qu'à partir de Node 23.6/24. Node 20 → ERR_UNKNOWN_FILE_EXTENSION
+      # sur `next lint`/`next build` (révélé au 1er run CI, 2026-07-06). Local = v25.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       # postinstall de @qualiof/db = `prisma generate` (plan 21-01) → le client
       # Prisma est généré dès l'install ; l'étape explicite plus bas reste en

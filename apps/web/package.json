@@ -81,7 +81,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.1",
     "dotenv-cli": "^7.4.4",
-    "eslint": "^9.17.0",
+    "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.21",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.49",

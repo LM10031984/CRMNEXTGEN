@@ -34,7 +34,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=pruner /app/out/json/ .
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts : le postinstall de @qualiof/db (`prisma generate`, plan 21-01
+# pour Vercel/CI) échouerait ici — au stade out/json/ le schema.prisma n'existe
+# pas encore (révélé au build CI worker-image, 2026-07-06). Le generate explicite
+# ci-dessous (après COPY out/full/) reste la source de vérité de l'image.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY --from=pruner /app/out/full/ .
 # Le client Prisma vit dans @qualiof/db (schema packages/db/prisma/schema.prisma),
 # PAS @qualiof/web (revele au build Railway, 20-05). pnpm 10 saute aussi le
