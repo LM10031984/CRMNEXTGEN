@@ -1,0 +1,58 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qualiof
+          POSTGRES_PASSWORD: qualiof
+          POSTGRES_DB: qualiof_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm/action-setup@v4 lit `packageManager: pnpm@10.33.2` du package.json
+      # racine — ne PAS fixer `version:` ici (source unique de vérité).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      # postinstall de @qualiof/db = `prisma generate` (plan 21-01) → le client
+      # Prisma est généré dès l'install ; l'étape explicite plus bas reste en
+      # fallback documentaire.
+      - run: pnpm install --frozen-lockfile
+      - name: Write CI .env (env.ts est fail-loud — valeurs factices VALIDES)
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_URL=postgresql://qualiof:qualiof@localhost:5432/qualiof_test
+          DIRECT_URL=postgresql://qualiof:qualiof@localhost:5432/qualiof_test
+          TEST_DATABASE_URL=postgresql://qualiof:qualiof@localhost:5432/qualiof_test
+          AUTH_SECRET=ci-secret-0123456789abcdef0123456789abcdef
+          STORAGE_PROVIDER=minio
+          EOF
+      - run: pnpm --filter @qualiof/db exec prisma generate
+      - name: Push schema to test DB (tests intégration dedupe/match-treso)
+        run: pnpm --filter @qualiof/db exec dotenv -e ../../.env -- prisma db push --skip-generate
+      - run: pnpm lint
+      - run: pnpm --filter @qualiof/web exec tsc --noEmit
+      - run: pnpm test
+  worker-image:
+    # CI-01 « build Docker worker » — preuve que l'image compile, PAS de push.
+    # Sur push main uniquement : garde le gate PR rapide (D-10, Open Q2 RESEARCH).
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/worker/Dockerfile
+          push: false

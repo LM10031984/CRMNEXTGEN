@@ -60,9 +60,7 @@
       "persistent": true
     },
     "lint": {},
-    "test": {
-      "dependsOn": ["^build"]
-    },
+    "test": {},
     "db:generate": {
       "cache": false
     }
