@@ -294,6 +294,6 @@ export async function aiPreFillProduct(input: {
 
     return { ok: true, draft, durationMs: r.durationMs };
   } catch (e: any) {
-    return { ok: false, error: `Erreur Ollama : ${e?.message ?? e}` };
+    return { ok: false, error: `Erreur IA : ${e?.message ?? e}` };
   }
 }

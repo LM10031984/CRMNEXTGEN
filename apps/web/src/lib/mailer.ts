@@ -76,7 +76,9 @@ function getTransporter(): Transporter {
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const from = getFromAddress();
   if (isDryRun()) {
-    console.log(`[mailer:dry-run] to=${input.to} subject="${input.subject}" (no SMTP_HOST configuré)`);
+    // RGPD (Phase 22 D-17) : jamais d'email destinataire en clair dans les logs.
+    const maskedTo = String(input.to).replace(/^(.)[^@]*(@.+)$/, '$1***$2');
+    console.log(`[mailer:dry-run] to=${maskedTo} subject="${input.subject}" (no SMTP_HOST configuré)`);
     return { ok: true, dryRun: true };
   }
   try {
