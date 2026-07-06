@@ -37,7 +37,7 @@
 
 ### CI-TEST — Filet de sécurité
 
-- [ ] **CI-01** : GitHub Actions — lint + tsc + vitest sur PR (gate branch protection) + build Docker worker + `prisma migrate deploy` (DIRECT_URL) en étape de déploiement
+- [x] **CI-01** : GitHub Actions — lint + tsc + vitest sur PR (gate branch protection) + build Docker worker + `prisma migrate deploy` (DIRECT_URL) en étape de déploiement
 - [ ] **TEST-01** : Playwright E2E flow closure (création session → participants → pack → docs générés)
 - [ ] **TEST-02** : Smoke tests routes protégées (redirect auth + 200 sur pages clés)
 
@@ -85,7 +85,7 @@
 | APP-01 | Phase 21 | Complete |
 | APP-02 | Phase 21 | Complete |
 | APP-03 | Phase 21 | Pending |
-| CI-01 | Phase 21 | Pending |
+| CI-01 | Phase 21 | Complete |
 | TEST-01 | Phase 21 | Pending |
 | TEST-02 | Phase 21 | Pending |
 | CUT-01 | Phase 22 | Pending |
