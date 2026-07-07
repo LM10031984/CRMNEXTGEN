@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 22-05-PLAN.md (gate D-13 levé)
-last_updated: "2026-07-07T04:31:12.203Z"
+stopped_at: Completed 22-03-PLAN.md (D-01+D-02 PASS après report sélectif)
+last_updated: "2026-07-07T04:46:42.059Z"
 last_activity: 2026-07-07
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 31
-  completed_plans: 25
+  completed_plans: 26
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-07 — **Plan 22-03 livré — GATE DATA CUT-01 : D-01 + D-02 PROUVÉS, cloud déclaré UNIQUE SOURCE DE VÉRITÉ après remédiation** (Wave 1, checkpoint decision exécuté). **① Audit d'écart local↔cloud** (`audit-data-gap.ts` lecture seule stricte, 48 tables, count exact + max timestamps, gardes anti-inversion, verdict exit-code) : **verdict initial FAIL + DÉCOUVERTE MAJEURE — la base cloud était le snapshot staging du 16/06, le dump frais du 03/07 (15 118 lignes) n'a JAMAIS été restauré** (Phase 19 a baseliné la base du 16/06 ; preuves : max(Person.createdAt) cloud=16/06 10h04, SessionCalendarSync cloud=0 vs 1349 local, SES-0101 absente). Données métier 16/06→03/07 absentes du cloud : **SES-0101 (session réelle 27/07/2026, 11 inscrits)**, 11 Person, 12 Org, 23 LegalLink, 2 SensitiveData, 1 RevenueTarget, **1349 mappings d'idempotence Google Calendar** (sans eux : doublons d'events à tout re-backfill). **② Décision Laurent (option 1) : report sélectif** — `report-data-gap.ts` (DRY/WRITE=1, upserts INSERT-ONLY par id — jamais d'écrasement cloud, 0 suppression, 0 écriture locale, séquentiel FK-safe) : **1414/1414 lignes reportées, re-DRY=0 manquant (idempotence)**. Artefacts de génération des 68 sessions NON reportés (versions 16/06 assumées, regénérables). **Re-run audit : PASS exit 0** (résidu assumé borné 04/07 : artefacts SES-0093 + touch PreEnrollment Phase 18, mécanisé dans le script) → **déclaration D-01 émise** (22-DATA-GAP-AUDIT.md), local obsolète, purge 22-10 (⚠ pg_dump d'archive AVANT : l'historique générations 16/06→04/07 + AuditLog local n'existent QUE là). **③ Re-audit storage final D-02** (DRY migrate-storage.ts 0 modif + audit d'écart 21-02, script temporaire supprimé) : **903/903 clés résolvent Supabase, 0 manquante, 0 orpheline, AUCUN WRITE storage** (avant ET après report — les 1414 lignes n'apportent 0 nouvelle clé), MinIO NON purgé → STORAGE-REAUDIT-FINAL.md. ⚠ Docs cloud des 68 sessions = versions 16/06 (pré-corrections Kaïna/Tracfin), regénérables ; pack témoin SES-0094 non affecté (protocole = régénération). **Fenêtre de bascule OUVERTE côté données** (runbook §0). 1 déviation Rule 4 (découverte→décision user, branche FAIL prévue au plan) + 1 Rule 3 (tsx depuis apps/web). CUT-01 NON coché (gate complet = 22-06/22-07). Commits `0b930b6`(audit FAIL)/`46c1b22`(storage)/`7e8d291`(report+PASS), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`.
 
 - 2026-07-07 — **Plan 22-05 livré — GATE D-13 LEVÉ : registre RGPD art. 30 + 7 fiches DPA VALIDÉS par Laurent (RGPD-01 COMPLET)** (Wave 1, checkpoint human-verify exécuté). `docs/rgpd/REGISTRE-TRAITEMENTS.md` v1.1 (8 traitements : CRM 360°, préinscriptions+OCR, closure IA, facturation, emails, Calendar, RBAC, veille ; localisation sourcée 17-REGIONS.md eu-west-1/cdg1/europe-west4/OVH FR ; transferts hors UE ; mesures réelles signed URLs/SensitiveData/RBAC) + 7 fiches `docs/rgpd/dpa/` (URLs re-vérifiées HTTP 200) + export PDF 209 Ko via `_export-registre-rgpd.ts` (marked→renderHtmlToPdf, footer in-body fixed 11pt, 0 nouvelle lib). **Caveats honnêtes D-16** : OpenRouter DPA signé = enterprise only (mitigations non-rétention défaut + ZDR/logging OFF à capturer au runbook), Anthropic = sous-sous-traitant via OpenRouter (0 relation directe). **Réponses Laurent au checkpoint (2026-07-07)** : ① compte Google = **WORKSPACE** (CDPA processeur — google.md figée, variante gratuite supprimée) ; ② **AMENDEMENT : conservation CNI/RIB ÉTENDUE** — alignée sur le dossier de financement/formation, PAS de suppression après justification (contrôles a posteriori AGEFICE/OPCO/DREETS + cycle Qualiopi) ; ③ autres durées validées telles quelles ; ④ 2 limites acceptées (OpenRouter self-serve, backups Supabase non off-site — pg_dump hors vendor backlog D-12). **Statut registre : « Validé le 2026-07-07 par Laurent MARX, responsable de traitement »** → **Wave 2 (bascule 22-06) AUTORISÉE côté RGPD**. RGPD-01 coché (registre/DPA = 22-05 + audit logs PII = 22-02, sur-couverture 7 vs 6 sous-traitants D-14). 3 actions de preuve déléguées au runbook : ZDR OpenRouter, DPA dashboard Supabase, CDPA console Workspace. 0 déviation. Commits `42f41b1`(registre)/`73187cf`(7 fiches)/`c2aaf2e`(PDF)/`f4241a9`(validation), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`.
 
@@ -304,7 +306,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-05-PLAN.md (gate D-13 levé)
+Stopped at: Completed 22-03-PLAN.md (D-01+D-02 PASS après report sélectif)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
