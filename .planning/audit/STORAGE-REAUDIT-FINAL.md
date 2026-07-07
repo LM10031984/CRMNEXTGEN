@@ -56,4 +56,17 @@ Note : comme au 21-02, les « orphelins MinIO » du DRY ne sont **pas** des orph
 
 ## ⚠ Portée du verdict (lien avec 22-DATA-GAP-AUDIT.md)
 
-Ce re-audit prouve la cohérence **base cloud ACTUELLE ↔ storage Supabase**. Il ne préjuge PAS de la complétude de la base cloud elle-même : l'audit d'écart D-01 (22-DATA-GAP-AUDIT.md) a un verdict **FAIL** (base cloud = snapshot du 16/06, données métier locales 16/06→03/07 absentes). **Si la décision Laurent conduit à reporter des données vers le cloud (ex. SES-0101), ce re-audit storage devra être re-joué après le report** (les clés référencées changeront) — ré-exécution triviale : DRY + audit d'écart, même méthode.
+Ce re-audit prouve la cohérence **base cloud ACTUELLE ↔ storage Supabase**. Il ne préjuge PAS de la complétude de la base cloud elle-même : l'audit d'écart D-01 (22-DATA-GAP-AUDIT.md) avait un verdict **FAIL** au 06/07 (base cloud = snapshot du 16/06, données métier locales 16/06→03/07 absentes). **Si la décision Laurent conduit à reporter des données vers le cloud (ex. SES-0101), ce re-audit storage devra être re-joué après le report** (les clés référencées changeront) — ré-exécution triviale : DRY + audit d'écart, même méthode.
+
+## Post-report — 2026-07-07 (re-vérification après remédiation D-01)
+
+Le report sélectif `report-data-gap.ts` (décision Laurent option 1, 1 414 lignes reportées — voir 22-DATA-GAP-AUDIT.md §Remédiation) a été suivi d'un re-run de l'audit d'écart storage lecture seule (même méthode, script temporaire supprimé après) :
+
+| Compteur | Valeur |
+| --- | ---: |
+| Clés référencées en base (cloud, post-report) | **903** (897 `qualiof-docs` + 6 `preinscriptions`) — **inchangé** |
+| Présentes côté Supabase | **903 / 903** |
+| Manquantes | **0** |
+| Orphelines | **0** |
+
+Les 1 414 lignes reportées n'introduisent **aucune nouvelle clé storage** (les champs `Person.ribKey` / `SensitiveData.idDocumentUrl` des lignes reportées sont vides). **La preuve « 0 lien mort » reste valide sur l'état final post-remédiation** — aucun WRITE storage n'a été nécessaire à aucun moment du plan 22-03.

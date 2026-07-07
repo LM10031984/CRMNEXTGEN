@@ -59,6 +59,26 @@ const DUMP_DATE = new Date('2026-07-03T23:59:59Z');
 // archivées, cloud = baseline 0_init) — notée « informatif » dans le rapport.
 const INFORMATIVE_TABLES = new Set(['_prisma_migrations']);
 
+// ─── Résidu assumé (décision Laurent 2026-07-07, option 1 — remédiation D-01) ──
+// Le report sélectif (report-data-gap.ts) a porté les données MÉTIER manquantes
+// vers le cloud (1 414 lignes : SES-0101 + inscriptions, personnes/orgs/LegalLinks,
+// SensitiveData, RevenueTarget, 1 349 SessionCalendarSync). Restent en local,
+// POSTÉRIEURS au dump mais explicitement ABANDONNÉS (regénérables / effet de bord) :
+//   - artefacts du pack témoin SES-0093 générés le 04/07 06:53-06:55 UTC
+//     (ClosureBatch/ClosureJob/AIGenerationJob/Document — validation Phase 16) ;
+//   - 1 touch updatedAt PreEnrollment du 04/07 19:16 (re-clé storage Phase 18).
+// Ces tables passent en « PASS (résidu assumé) » SI ET SEULEMENT SI leurs max
+// timestamps restent ≤ ASSUMED_RESIDUAL_BOUND : toute écriture locale plus
+// récente ferait de nouveau FAIL (le local est figé).
+const ASSUMED_RESIDUAL_BOUND = new Date('2026-07-04T23:59:59Z');
+const ASSUMED_RESIDUAL_TABLES = new Set([
+  'AIGenerationJob',
+  'ClosureBatch',
+  'ClosureJob',
+  'Document',
+  'PreEnrollment',
+]);
+
 const local = new PrismaClient({ datasources: { db: { url: LOCAL_URL } } });
 const cloud = new PrismaClient({ datasources: { db: { url: CLOUD_URL } } });
 
@@ -158,8 +178,16 @@ async function main(): Promise<void> {
       (maxCreated !== null && maxCreated > DUMP_DATE) ||
       (maxUpdated !== null && maxUpdated > DUMP_DATE)
     ) {
-      verdict = 'FAIL — donnée locale postérieure au dump';
-      anyFail = true;
+      const withinResidualBound =
+        (maxCreated === null || maxCreated <= ASSUMED_RESIDUAL_BOUND) &&
+        (maxUpdated === null || maxUpdated <= ASSUMED_RESIDUAL_BOUND);
+      if (ASSUMED_RESIDUAL_TABLES.has(table) && withinResidualBound) {
+        verdict =
+          'PASS (résidu assumé — décision Laurent 2026-07-07 : artefacts SES-0093 du 04/07 regénérables / touch PreEnrollment Phase 18)';
+      } else {
+        verdict = 'FAIL — donnée locale postérieure au dump';
+        anyFail = true;
+      }
     } else if (maxCreated === null && maxUpdated === null) {
       verdict = 'PASS (aucune colonne createdAt/updatedAt ou table vide)';
     } else {
@@ -188,9 +216,11 @@ async function main(): Promise<void> {
       'Le cloud ne peut PAS être déclaré unique source de vérité en l’état : décision utilisateur requise (report manuel ou abandon des lignes fautives).',
     );
   } else {
-    console.log('## VERDICT : PASS — aucune donnée locale postérieure au dump du 2026-07-03.');
     console.log(
-      'Les déltas cloud > local listés ci-dessus sont attendus (E2E, backfill storage, régénérations post-dump).',
+      '## VERDICT : PASS — aucune donnée MÉTIER locale postérieure au dump du 2026-07-03 (résidus assumés listés par table le cas échéant).',
+    );
+    console.log(
+      'Les déltas cloud > local listés ci-dessus sont attendus (E2E, backfill storage, régénérations post-dump, report sélectif 22-03).',
     );
   }
 

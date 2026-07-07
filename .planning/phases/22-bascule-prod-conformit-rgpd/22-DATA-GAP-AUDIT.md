@@ -1,5 +1,9 @@
 # 22-DATA-GAP-AUDIT — Audit d'écart local↔cloud (D-01)
 
+> **STATUT FINAL : PASS (2026-07-07) — cloud déclaré UNIQUE SOURCE DE VÉRITÉ après remédiation** (report sélectif de 1 414 lignes, décision Laurent option 1). L'audit initial du 2026-07-06 (verdict FAIL, découverte majeure) est conservé ci-dessous à titre d'historique ; la remédiation et le verdict final sont en fin de document (§Remédiation).
+
+## Audit initial — 2026-07-06 (verdict FAIL, historique)
+
 - **Date d'exécution :** 2026-07-06T20:25:35Z
 - **Commande exacte :** `LOCAL_DATABASE_URL=postgresql://qualiof:***@localhost:5432/qualiof CLOUD_DATABASE_URL=postgresql://postgres.gntlqyscahbgjrmsbzil:***@aws-0-eu-west-1.pooler.supabase.com:5432/postgres pnpm tsx scripts/audit-data-gap.ts` (depuis `apps/web/`)
 - **Script :** `apps/web/scripts/audit-data-gap.ts` — LECTURE SEULE STRICTE (SELECT uniquement, comptages exacts `count(*)`, jamais reltuples)
@@ -59,9 +63,9 @@
 | UserInvitation | 1 | 1 | 0 | 2026-05-25T14:23:04.493Z | — | PASS |
 | _prisma_migrations | 29 | 1 | -28 | — | — | informatif (hors verdict — écart migrations attendu : local = 29 migrations archivées, cloud = baseline 0_init) |
 
-## VERDICT : FAIL — le cloud ne peut PAS être déclaré unique source de vérité en l'état
+## Verdict initial (2026-07-06) : FAIL — le cloud ne pouvait PAS être déclaré unique source de vérité en l'état
 
-**La déclaration « cloud = unique source de vérité (D-01) » N'EST PAS émise.** Décision utilisateur requise (voir §Lignes fautives et §Découverte majeure).
+**La déclaration « cloud = unique source de vérité (D-01) » n'a pas été émise à ce stade.** Décision utilisateur requise (voir §Lignes fautives et §Découverte majeure). → Résolu le 2026-07-07, voir §Remédiation.
 
 ---
 
@@ -133,5 +137,55 @@ Déclarer aujourd'hui « cloud = unique source de vérité » abandonnerait sile
 
 ---
 
-*Rapport généré par `apps/web/scripts/audit-data-gap.ts` (exit 1 = FAIL) — Phase 22, plan 22-03, Task 1.*
-*Aucune écriture effectuée sur aucune des deux bases. Aucun re-dump.*
+# Remédiation — 2026-07-07 (décision Laurent : option 1, report sélectif)
+
+## Décision
+
+**Laurent a retenu l'option 1 (2026-07-07) : report sélectif LOCAL → CLOUD des données métier manquantes.** Les artefacts de génération (Document/ClosureBatch/ClosureJob/AIGenerationJob/PedagogicalAsset des 68 sessions) ne sont PAS reportés : versions du 16/06 assumées côté cloud, regénérables à la demande. AuditLog local non reporté (archivé avec le pg_dump du plan 22-10).
+
+## Report exécuté (`apps/web/scripts/report-data-gap.ts`)
+
+Script one-shot idempotent, DRY-RUN par défaut / `WRITE=1`, **INSERT-ONLY** (upsert par id avec update vide — aucune ligne cloud existante modifiée), aucune suppression, aucune écriture locale, séquentiel, ordre FK-safe.
+
+| Étape | Résultat |
+| --- | --- |
+| DRY-RUN (2026-07-07) | 1 414 lignes manquantes identifiées — périmètre conforme à l'inventaire de l'audit initial |
+| `WRITE=1` | **1 414 / 1 414 lignes reportées, 0 erreur** |
+| Re-DRY (preuve d'idempotence) | **0 manquant** sur les 11 tables du périmètre |
+
+Détail des 1 414 lignes reportées :
+
+| Table | Lignes | Contenu |
+| --- | ---: | --- |
+| Location | 2 | Century 21 Mandelieu, Ashley & Parker – Agence Le Port |
+| Person | 11 | les 11 personnes listées dans l'audit initial |
+| Organization | 12 | CENTURY 21 MANDELIEU + 11 EI |
+| LegalLink | 23 | multi-casquette EI + Enseigne |
+| SensitiveData | 2 | J. TOUATI, K. COMMISSAIRE |
+| TrainingSession | 1 | **SES-0101** (27/07/2026) |
+| SessionTrainer | 1 | formateur SES-0101 |
+| SessionParticipant | 12 | 11 inscrits SES-0101 + 1 inscription TOUATI |
+| RevenueTarget | 1 | objectif CA 2026 (350 000 € HT) |
+| SessionCalendarSync | 1 349 | mappings d'idempotence Google Calendar |
+
+## Re-run de l'audit — 2026-07-07T04:40:57Z : VERDICT PASS (exit 0)
+
+Commande identique à l'audit initial (URLs masquées). Toutes les tables métier sont à **délta 0 ou positif cloud** : Person 327/327, Organization 275/275, LegalLink 512/512, SensitiveData 185/185, Location 52/52, RevenueTarget 1/1, **SessionCalendarSync 1349/1349**, TrainingSession 75/76 (+1 cloud), SessionParticipant 301/303 (+2 cloud).
+
+**Résidu assumé** (décision Laurent 2026-07-07, mécanisme `ASSUMED_RESIDUAL_TABLES` borné au 2026-07-04T23:59:59Z dans `audit-data-gap.ts` — toute écriture locale plus récente referait FAIL) :
+
+- AIGenerationJob / ClosureBatch / ClosureJob / Document : artefacts du pack témoin SES-0093 du 04/07 (validation Phase 16), 100 % regénérables — les documents cloud des 68 sessions restent en version du 16/06, regénérables à la demande ;
+- PreEnrollment : 1 touch `updatedAt` du 04/07 (re-clé storage Phase 18), aucune donnée métier.
+
+## Vérification storage post-report
+
+Re-run de l'audit d'écart storage lecture seule (méthode 21-02) après le report : **903 clés référencées (inchangé — les lignes reportées n'introduisent aucune nouvelle clé storage), 903/903 présentes Supabase, 0 manquante, 0 orpheline.** Voir `.planning/audit/STORAGE-REAUDIT-FINAL.md` (§Post-report).
+
+## DÉCLARATION FINALE (D-01)
+
+**Verdict PASS — aucune donnée MÉTIER locale postérieure au dump du 2026-07-03 (résidu technique du 04/07 explicitement assumé et regénérable). La base cloud Supabase (projet gntlqyscahbgjrmsbzil, eu-west-1) est déclarée UNIQUE SOURCE DE VÉRITÉ (D-01). Le Postgres local Docker est obsolète et sera purgé au plan 22-10 après archive** (pg_dump + snapshot MinIO, validation utilisateur explicite — convention destructif = étape séparée).
+
+---
+
+*Audit initial : exit 1 (FAIL) le 2026-07-06 — remédiation option 1 le 2026-07-07 — re-run : exit 0 (PASS).*
+*Écritures effectuées : 1 414 upserts insert-only sur la base CLOUD uniquement (report-data-gap.ts WRITE=1). Aucune écriture locale, aucun re-dump.*
