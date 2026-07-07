@@ -15,4 +15,4 @@
 
 - ⚠ **Aucun lien contractuel direct** : Start Academy ne peut pas produire de DPA signé avec Anthropic. Le document opposable est la relation avec OpenRouter (elle-même limitée en self-serve — voir [openrouter.md](openrouter.md)).
 - La politique du model provider (anthropic.com/legal) est référencée à titre d'information sur les pratiques du fournisseur de modèles, pas comme engagement contractuel envers Start Academy.
-- ⚠ À VALIDER PAR LE RESPONSABLE DE TRAITEMENT : acceptation de cette chaîne de sous-traitance à deux niveaux (OpenRouter → Anthropic) pour les flux IA.
+- Chaîne de sous-traitance à deux niveaux (OpenRouter → Anthropic) pour les flux IA : **acceptée par le responsable de traitement le 2026-07-07** (validation du registre, gate D-13 — cf. registre § Limites connues, limite OpenRouter).

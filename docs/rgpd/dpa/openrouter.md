@@ -25,6 +25,6 @@
 
 ## Points ouverts / limites
 
-- ⚠ **Pas de DPA signé** (self-serve) — limite assumée, à valider par le responsable de traitement (gate D-13, cf. registre § Limites connues).
+- ⚠ **Pas de DPA signé** (self-serve) — limite assumée, **acceptée par le responsable de traitement le 2026-07-07** (validation du registre, gate D-13, cf. registre § Limites connues).
 - ⚠ Réglages ZDR/logging OFF **à vérifier et capturer** (screenshot) avant la bascule prod — action à intégrer au runbook.
 - Mitigation possible si exigence renforcée un jour : ZDR enforcement systématique ; tier enterprise (DPA signé).

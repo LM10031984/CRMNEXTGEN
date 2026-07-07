@@ -20,4 +20,4 @@
 
 ## Points ouverts / limites
 
-- ⚠ Transit edge global (POP hors UE possibles pour la couche réseau) — inhérent au CDN Vercel ; à noter dans le registre, pas de mitigation applicative simple. ⚠ À VALIDER PAR LE RESPONSABLE DE TRAITEMENT (acceptation).
+- ⚠ Transit edge global (POP hors UE possibles pour la couche réseau) — inhérent au CDN Vercel ; documenté au registre (§ Localisation des données), pas de mitigation applicative simple. **Accepté via la validation du registre par le responsable de traitement le 2026-07-07** (gate D-13).

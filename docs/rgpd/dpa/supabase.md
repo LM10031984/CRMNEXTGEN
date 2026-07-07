@@ -20,4 +20,4 @@
 ## Points ouverts / limites
 
 - ⚠ **Statut d'acceptation du DPA dashboard à vérifier/capturer** avant la bascule (action runbook).
-- ⚠ **Backups non off-site** : rétention 7 jours dans la même région que le projet — pas de copie hors vendor (backlog `pg_dump` externe, décision D-12). Limite assumée, à valider par le responsable de traitement.
+- ⚠ **Backups non off-site** : rétention 7 jours dans la même région que le projet — pas de copie hors vendor (backlog `pg_dump` externe, décision D-12). Limite assumée, **acceptée par le responsable de traitement le 2026-07-07** (validation du registre, gate D-13).
