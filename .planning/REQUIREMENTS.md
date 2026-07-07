@@ -48,7 +48,7 @@
 
 ### RGPD — Conformité
 
-- [ ] **RGPD-01** : Registre des traitements complet — DPA documenté pour les 6 sous-traitants (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway/Fly) — solde la dette engagée par le GO vision 2026-07-04
+- [x] **RGPD-01** : Registre des traitements complet — DPA documenté pour les 6 sous-traitants (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway/Fly) — solde la dette engagée par le GO vision 2026-07-04
 
 ## Future Requirements (backlog, hors v6)
 
@@ -90,4 +90,4 @@
 | TEST-02 | Phase 21 | Complete |
 | CUT-01 | Phase 22 | Pending |
 | CUT-02 | Phase 22 | Pending |
-| RGPD-01 | Phase 22 | Pending |
+| RGPD-01 | Phase 22 | Complete |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 22-04-PLAN.md
-last_updated: "2026-07-06T20:34:54.272Z"
-last_activity: 2026-07-06
+stopped_at: Completed 22-05-PLAN.md (gate D-13 levé)
+last_updated: "2026-07-07T04:31:12.203Z"
+last_activity: 2026-07-07
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 31
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
-Plan: 4 of 10
+Plan: 5 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-07-07 — **Plan 22-05 livré — GATE D-13 LEVÉ : registre RGPD art. 30 + 7 fiches DPA VALIDÉS par Laurent (RGPD-01 COMPLET)** (Wave 1, checkpoint human-verify exécuté). `docs/rgpd/REGISTRE-TRAITEMENTS.md` v1.1 (8 traitements : CRM 360°, préinscriptions+OCR, closure IA, facturation, emails, Calendar, RBAC, veille ; localisation sourcée 17-REGIONS.md eu-west-1/cdg1/europe-west4/OVH FR ; transferts hors UE ; mesures réelles signed URLs/SensitiveData/RBAC) + 7 fiches `docs/rgpd/dpa/` (URLs re-vérifiées HTTP 200) + export PDF 209 Ko via `_export-registre-rgpd.ts` (marked→renderHtmlToPdf, footer in-body fixed 11pt, 0 nouvelle lib). **Caveats honnêtes D-16** : OpenRouter DPA signé = enterprise only (mitigations non-rétention défaut + ZDR/logging OFF à capturer au runbook), Anthropic = sous-sous-traitant via OpenRouter (0 relation directe). **Réponses Laurent au checkpoint (2026-07-07)** : ① compte Google = **WORKSPACE** (CDPA processeur — google.md figée, variante gratuite supprimée) ; ② **AMENDEMENT : conservation CNI/RIB ÉTENDUE** — alignée sur le dossier de financement/formation, PAS de suppression après justification (contrôles a posteriori AGEFICE/OPCO/DREETS + cycle Qualiopi) ; ③ autres durées validées telles quelles ; ④ 2 limites acceptées (OpenRouter self-serve, backups Supabase non off-site — pg_dump hors vendor backlog D-12). **Statut registre : « Validé le 2026-07-07 par Laurent MARX, responsable de traitement »** → **Wave 2 (bascule 22-06) AUTORISÉE côté RGPD**. RGPD-01 coché (registre/DPA = 22-05 + audit logs PII = 22-02, sur-couverture 7 vs 6 sous-traitants D-14). 3 actions de preuve déléguées au runbook : ZDR OpenRouter, DPA dashboard Supabase, CDPA console Workspace. 0 déviation. Commits `42f41b1`(registre)/`73187cf`(7 fiches)/`c2aaf2e`(PDF)/`f4241a9`(validation), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`.
 
 - 2026-07-06 — **Plan 22-04 livré — outillage pré-vérification des sorties : sanity env (D-18 ②) + rapport relances (D-06/Pitfall 1)** (Wave 1). ① `sanity-check-env.ts` (regex `[^\x20-\x7E]|#| +$`, sortie clé+index+codepoint JAMAIS la valeur) : scan du pull Vercel prod (71 vars) = **PROPRE** — OPENROUTER_API_KEY confirmée saine post-fix PROD-0674 ; seul flag = OF_ADDRESS_STREET (U+00E9 « é » d'adresse, faux positif métier conservé — hors header HTTP) ; le `.env` racine porte encore **5 commentaires inline classe PROD-0674** (SESSION_LIFETIME, OPENROUTER_MODEL_FAST/QUALITY/VISION, OPENROUTER_SITE_URL) → nettoyage délégué runbook §1 (22-06, aucune mutation d'env prod en Wave 1) ; `.env.vercel-prod` détruit post-scan (déjà gitignoré `.env*`) ; absentes du pull : SMTP_*/CRON_SECRET (Pitfall 2 : re-pose assainie + preuve comportementale au flip) → rapport `22-ENV-SANITY.md`. ② `pending-reminders-report.ts` LECTURE SEULE (100 % SELECT vérifié) : réplique EXACTE de la sélection du cron Railway (`REMINDER_START_DATE` IMPORTÉE du worker, status IN, OR échéance, dedup 24 h, reminderCount<maxLevel) + cascade destinataire du core avec **flag ⚠ APPRENANT** (règle payeur) — **VERDICT : Pitfall 1 NON matérialisé, 0 relance brûlée ET 0 envoi en attente** (contre-vérifié anti-artefact du filtre Json : 0 AuditLog `invoices.reminder_sent` TOTAL, 0 facture reminderCount>0 — le cron dry-run n'a JAMAIS consommé de niveau) ; **horizon : FAC-000006/007/008 (AKORIMMO/Imagimmo/KING Kristin, ~3,4 k€) éligibles le 2026-07-20** → **re-jouer le rapport le jour du flip MAIL_DRY_RUN** ; checkpoint 22-07 SANS reset de compteurs à arbitrer → rapport `22-PENDING-SENDS-REPORT.md` (3 options ①reset/②sélectif/③acceptation). 2 déviations Rule 2 (contre-vérification + section Horizon). ⚠ tsx non hoisté racine → exécuter depuis apps/web. CUT-01/CUT-02 NON cochés (préparatoire — preuve aux 22-06/22-07). Commits `04de274`/`88161f9`, `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. Prochain : runbook §1/§4 adossés à des rapports réels — flip 22-07 décidable sans inconnue.
 
@@ -302,12 +304,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-04-PLAN.md
+Stopped at: Completed 22-05-PLAN.md (gate D-13 levé)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
 
-Last activity: 2026-07-06
+Last activity: 2026-07-07
 
 ### Roadmap Evolution
 
