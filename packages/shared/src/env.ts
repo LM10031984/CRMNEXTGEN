@@ -59,6 +59,11 @@ export const sharedEnv = createEnv({
     SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),          // secret, idem
     WEASYPRINT_URL: WEASYPRINT_URL_SCHEMA,                      // moteur PDF secondaire réel (:5001), remplace l'alias mort du palier 3
 
+    // Google Calendar OAuth (Phase 22 D-07) — portage cloud ; fallback files/secrets/ en dev local
+    GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_OAUTH_REFRESH_TOKEN: z.string().optional(),
+
     // IA
     AI_PROVIDER: AI_PROVIDER_SCHEMA,
     OLLAMA_URL: z.string().url().default('http://localhost:11434'),
@@ -131,6 +136,9 @@ export const sharedEnv = createEnv({
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     WEASYPRINT_URL: process.env.WEASYPRINT_URL,
+    GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_OAUTH_REFRESH_TOKEN: process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
     AI_PROVIDER: process.env.AI_PROVIDER,
     OLLAMA_URL: process.env.OLLAMA_URL,
     OLLAMA_MODEL_FAST: process.env.OLLAMA_MODEL_FAST,

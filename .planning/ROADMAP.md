@@ -32,7 +32,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 - [x] **Phase 18: Supabase Storage (migration objets + direct-to-storage)** — Buckets privés opérationnels, objets MinIO migrés sans lien mort, upload photos CNI/RIB direct-to-storage (contourne le cap 4,5 MB Vercel) (completed 2026-07-04)
 - [x] **Phase 19: Base Postgres Supabase (pooler + migrations baselinées)** — Postgres EU provisionné, drift `db push` résolu, `migrate deploy` vert, URLs poolée/directe câblées, extensions + séquences alignées (completed 2026-07-05)
 - [ ] **Phase 20: Worker 3ᵉ hôte + doc engines** — Image Docker prunée (3 workers + Gotenberg + WeasyPrint + poppler) sur Railway/Fly EU, décision Redis tranchée, pack closure généré 100 % cloud, OCR non dégradé silencieusement
-- [ ] **Phase 21: App Vercel + filet CI/tests** — App Next.js sur Vercel EU (staging dégelé, cookies Lucia OK, PDF synchrones via ingress public authentifié) + GitHub Actions + E2E closure + smoke routes verts avant bascule
+- [x] **Phase 21: App Vercel + filet CI/tests** — App Next.js sur Vercel EU (staging dégelé, cookies Lucia OK, PDF synchrones via ingress public authentifié) + GitHub Actions + E2E closure + smoke routes verts avant bascule (completed 2026-07-06)
 - [ ] **Phase 22: Bascule prod + conformité RGPD** — Runbook + rollback, dump final restauré, DNS pointé, invitations équipe, pack témoin go/no-go, alertes coûts + backups, DPA des 6 sous-traitants soldé
 
 ## Phase Details
@@ -116,7 +116,7 @@ Plans:
 - [x] 21-03-PLAN.md — CI GitHub Actions (lint+tsc+vitest, Postgres 16 service, image worker) + merge cloud-migration→main + branch protection + PR témoin — CI-01 [Wave 2]
 - [x] 21-04-PLAN.md — Runbook + déploiement Vercel Pro cdg1 (env ~35 clés dont 22 OF_*, domaine final, WAF rate-limit /preinscription) + vérif curl — APP-01/02/03 [Wave 3, checkpoint: dashboard]
 - [x] 21-05-PLAN.md — Playwright infra (user e2e dédié, storageState) + smoke ~10 routes 4 piliers + re-validation upload 10 Mo sans 413 — TEST-02/APP-02 [Wave 4]
-- [ ] 21-06-PLAN.md — E2E closure session E2E- jetable (IA réelle, 0 stub, %PDF) + teardown idempotent + 21-SMOKE.md + PR finale — TEST-01/APP-03 [Wave 5]
+- [x] 21-06-PLAN.md — E2E closure session E2E- jetable (IA réelle, 0 stub, %PDF) + teardown idempotent + 21-SMOKE.md + PR finale — TEST-01/APP-03 [Wave 5]
 **UI hint**: yes
 **Research flags** (à reprendre au plan) : [VERIFY] `@supabase/supabase-js` dans package.json · Vercel Pro `maxDuration` par route (défaut 300s / max 800s, pas 1800s beta) · vérif `NODE_ENV`/`APP_ENV` réellement `production` en HTTPS (sinon cookie non-secure = login en boucle) · vérif origine CSRF Lucia derrière proxy Vercel · rate-limit form public `/p/[token]` (bruteforce token / coût OCR).
 
@@ -129,7 +129,18 @@ Plans:
   2. Un pack témoin généré post-bascule sert de gate go/no-go et réussit (0 stub, docs Qualiopi conformes, aucun 404 sur les preuves)
   3. Les alertes coûts (OpenRouter, Upstash/Redis, Supabase) et les backups daily sont confirmés actifs
   4. Le registre des traitements est complet : DPA documenté pour les 6 sous-traitants (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway/Fly) — et l'audit des `console.*` du worker/generators ne loggue aucun PII brut — AVANT que les PII prod ne circulent
-**Plans**: TBD
+**Plans**: 10 plans
+Plans:
+- [x] 22-01-PLAN.md — Runbook de bascule + plan de rollback (écrits AVANT la fenêtre) — CUT-01 [Wave 1]
+- [x] 22-02-PLAN.md — Portage Google 3 vars env-first TDD + audit/fixes logs PII + label Ollama — CUT-01/RGPD-01 [Wave 1]
+- [x] 22-03-PLAN.md — Audit d'écart local↔cloud (cloud=vérité D-01) + re-audit storage final 0 lien mort — CUT-01 [Wave 1]
+- [x] 22-04-PLAN.md — Sanity check env Vercel (D-18②) + rapport envois en attente/relances brûlées (D-06) — CUT-01/CUT-02 [Wave 1]
+- [x] 22-05-PLAN.md — Registre traitements art. 30 + 7 fiches DPA + export PDF + GATE D-13 [checkpoint] — RGPD-01 [Wave 1]
+- [ ] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
+- [ ] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
+- [ ] 22-08-PLAN.md — Alertes coûts 4 plateformes + preuve backups Supabase daily EU [checkpoint] — CUT-02 [Wave 3]
+- [ ] 22-09-PLAN.md — Invitations équipe RBAC via flux existant + première connexion prouvée [checkpoint] — CUT-01 [Wave 4]
+- [ ] 22-10-PLAN.md — Purge locale : archives pg_dump/MinIO → mot de validation → purge [checkpoints, destructif] — CUT-01 [Wave 5]
 **Research flags** (à reprendre au plan) : [VERIFY] région des backups Supabase (EU) · scrubber logs (logger des IDs, pas CNI/RIB) · destructif = étape séparée (pg_dump + vérif invariants avant de couper le local — convention projet) · gate RGPD/DPA doit précéder le flux PII prod (D-02b hérité Phase 16).
 
 ## Progress
@@ -142,6 +153,6 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
-| 20. Worker 3ᵉ hôte | v6 | 4/5 | In Progress|  |
-| 21. App Vercel + CI | v6 | 5/6 | In Progress|  |
-| 22. Bascule prod + RGPD | v6 | 0/TBD | Not started | - |
+| 20. Worker 3ᵉ hôte | v6 | 5/5 | In Progress (reste : relevé obs. 24 h le 07-07 + verify-work) |  |
+| 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
+| 22. Bascule prod + RGPD | v6 | 5/10 | In Progress|  |

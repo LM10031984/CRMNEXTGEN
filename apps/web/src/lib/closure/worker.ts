@@ -406,7 +406,8 @@ Ouvrir le pack : ${link}
 
     const r = await sendMail({ to: user.email, subject, html, text });
     if (r.ok && !r.dryRun) {
-      console.log(`[closure-worker] ✉ notif sent to ${user.email} (batch=${batch.id}, status=${finalStatus})`);
+      // RGPD (Phase 22 D-17) : logger l'id utilisateur, jamais l'email en clair.
+      console.log(`[closure-worker] ✉ notif sent to user=${batch.createdByUserId} (batch=${batch.id}, status=${finalStatus})`);
     }
   } catch (e) {
     // Une erreur d'email ne doit jamais casser le worker.
