@@ -340,21 +340,33 @@ Puis :
 > Chaque sous-section est remplie AU MOMENT de l'exécution, avec date UTC.
 > Aucun secret en clair — captures avec valeurs masquées.
 
+### 9.0 Preuves RGPD complémentaires (22-05) — statut
+
+Les 3 actions de preuve déléguées au runbook par le plan 22-05 (capture ZDR/logging
+OFF OpenRouter, capture acceptation DPA dashboard Supabase, capture CDPA console
+Google Workspace) sont **abandonnées par décision du responsable de traitement**
+(Laurent MARX, décision du 2026-07-07, confirmée au GO bascule du 2026-07-30).
+Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
+
 ### 9.1 Sanity env (§1) — plan 22-06
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Sortie `sanity-check-env.ts` sur `.env.vercel-prod` | 0 clé suspecte | _(à remplir)_ | |
-| Re-pose des sensitive depuis source assainie | liste des clés re-posées | _(à remplir)_ | |
-| Re-test auto-fill IA produit | remplissage réussi (0 ByteString) | _(à remplir)_ | |
+| Sortie `sanity-check-env.ts` sur `.env.vercel-prod` | 0 clé suspecte | ✅ **74 variables scannées, 0 danger ByteString** (pull post-pose ; seul flag = `OF_ADDRESS_STREET` U+00E9, faux positif métier assumé 22-04). Fichier de pull supprimé après scan. | 2026-07-30 |
+| Nettoyage `.env` racine (source des re-poses) | 0 commentaire inline classe PROD-0674 | ✅ **5 commentaires inline déplacés en lignes dédiées** (`SESSION_LIFETIME`, `OPENROUTER_MODEL_FAST/QUALITY/VISION`, `OPENROUTER_SITE_URL`) — re-scan : 85 vars, seul reste le faux positif `OF_ADDRESS_STREET`. Backup `.env.bak-22-06` (gitignoré `.env*`). | 2026-07-30 |
+| Re-pose des sensitive depuis source assainie | liste des clés re-posées | ✅ **Aucune clé Vercel polluée à re-poser** (scan 22-04 : les 50 vars 21-04 déjà propres, `OPENROUTER_API_KEY` incluse). Seules poses nouvelles : 3 vars `GOOGLE_OAUTH_*` (voir §9.2), chaque valeur sanity-checkée AVANT pose (regex `[^\x20-\x7E]|#| +$` = 0 match sur les 3, champ `installed` du JSON source). | 2026-07-30 |
+| Re-test auto-fill IA produit | remplissage réussi (0 ByteString) | ✅ **Preuve par référence** : `OPENROUTER_API_KEY` n'a PAS été touchée dans cette fenêtre (aucune re-pose — la preuve comportementale vise les clés re-posées). Auto-fill E2E re-testé OK le 2026-07-06 post-fix D-18 ① ; clé confirmée saine par scan 22-04 puis par le scan post-pose ci-dessus. Le flux OpenRouter côté worker est re-prouvé par le pack SES-0094 (§9.3). | 2026-07-30 |
 
 ### 9.2 Flip production (§2) — plan 22-06
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Capture vars Vercel | `NEXT_PUBLIC_APP_ENV=production`, `MAIL_DRY_RUN=true`, 3 vars Google posées (masquées) | _(à remplir)_ | |
-| `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | _(à remplir)_ | |
-| Login → `/app` | accès OK | _(à remplir)_ | |
+| PR `cloud-migration`→`main` | merge commit, CI verte, diff = 0 | ✅ PR **#8** mergée **MERGE COMMIT** `42d69c7` (2026-07-30T13:23:32Z), gate `test` pass (1m31s), `git diff origin/main origin/cloud-migration` = **0 ligne**. (Check « Vercel » preview en fail = comportement volontaire connu 21-04, non-requis.) | 2026-07-30 |
+| Capture vars Vercel | `NEXT_PUBLIC_APP_ENV=production`, `MAIL_DRY_RUN=true`, 3 vars Google posées (masquées) | ✅ 3 vars `GOOGLE_OAUTH_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN` posées **HTTP 201, type `sensitive`, target `["production"]`** via API REST (payload JSON exact — jamais de ligne .env brute). `NEXT_PUBLIC_APP_ENV=production` (type encrypted, relisible) — pull de contrôle : `NEXT_PUBLIC_APP_ENV="production"` + `MAIL_DRY_RUN="true"`. ⚠ Incident consigné : 1ʳᵉ pose via `printf \| vercel env add` (stdin sans newline) a stocké des **valeurs VIDES** — détecté par vérification de longueur post-pose, 4 vars supprimées puis re-posées par API REST (leçon : pose par API JSON, jamais stdin CLI sans newline). | 2026-07-30 |
+| `MAIL_DRY_RUN=true` sur les DEUX plateformes | Vercel ET Railway | ✅ Vercel : `MAIL_DRY_RUN="true"` (pull). ⚠ **Railway worker : la variable ÉTAIT ABSENTE** (avec `SMTP_HOST` posé, `isDryRun()` aurait rendu false — seul filet : absence de `SMTP_USER/SMTP_PASS`, le relais OVH refuse sans auth) → **posée `MAIL_DRY_RUN=true`** (déviation Rule 2, redeploy auto Railway). Vérifiée post-pose : `MAIL_DRY_RUN=true` dans `railway variables --service worker`. | 2026-07-31 |
+| Redeploy production | build avec le nouvel env (`NEXT_PUBLIC_*` inliné) | ✅ `vercel redeploy` du deployment production issu du merge PR #8 → **Ready en 3 min**, aliasé `https://qualiof.vercel.app`. | 2026-07-30 |
+| `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | ✅ `HTTP 200` ; `STAGING occurrences: 0` (bandeau disparu) ; `x-vercel-id: cdg1::cdg1::…` | 2026-07-30T18:29:19Z |
+| Login → `/app` | accès OK | ✅ Login réel `e2e@start-academy.fr` via Playwright `--project=setup` contre `https://qualiof.vercel.app` : **1 passed (7.0s)**, storageState créé (session posée, `/app` atteint). | 2026-07-31 |
 
 ### 9.3 Pack témoin SES-0094 (§3) — plan 22-07
 
