@@ -24,6 +24,8 @@ import { OfBankingForm } from '@/components/settings/of-banking-form';
 import { OfEmailForm } from '@/components/settings/of-email-form';
 import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-form';
 import { LegalDocsForm } from '@/components/parametres/legal-docs-form';
+import { EmailSettingsForm } from '@/components/parametres/email-settings-form';
+import { EMAIL_CATEGORY_LABELS, EMAIL_CATEGORY_FIELD } from '@/lib/email-policy';
 import { formatIban } from '@/lib/iban-format';
 
 const ICON_CLASS = 'h-5 w-5 mt-0.5 text-primary shrink-0';
@@ -58,6 +60,47 @@ export default async function ParametresPage() {
     where: { tenantId: user.tenantId },
   });
   const usersCount = await prisma.user.count({ where: { tenantId: user.tenantId } });
+
+  // Phase 22 Plan 22-11 — réglages envois emails (nullable → défauts tout OFF).
+  const emailSettings = await prisma.tenantEmailSettings.findUnique({
+    where: { tenantId: user.tenantId },
+  });
+  const emailSettingsInitial = {
+    emailsEnabled: emailSettings?.emailsEnabled ?? false,
+    invoiceRemindersEnabled: emailSettings?.invoiceRemindersEnabled ?? false,
+    preinscriptionRemindersEnabled: emailSettings?.preinscriptionRemindersEnabled ?? false,
+    opcoRemindersEnabled: emailSettings?.opcoRemindersEnabled ?? false,
+    opcoSubmissionsEnabled: emailSettings?.opcoSubmissionsEnabled ?? false,
+    internalNotificationsEnabled: emailSettings?.internalNotificationsEnabled ?? false,
+    userInvitationsEnabled: emailSettings?.userInvitationsEnabled ?? false,
+    testSessionIds: emailSettings?.testSessionIds ?? [],
+  };
+  // Sessions sélectionnables : 30 plus récentes ∪ celles déjà en mode test
+  // (jamais masquer une sélection existante).
+  const recentSessions = await prisma.trainingSession.findMany({
+    where: { tenantId: user.tenantId },
+    orderBy: { startDate: 'desc' },
+    take: 30,
+    select: { id: true, code: true, startDate: true, product: { select: { title: true } } },
+  });
+  const missingTestIds = emailSettingsInitial.testSessionIds.filter(
+    (id) => !recentSessions.some((s) => s.id === id),
+  );
+  const extraSessions = missingTestIds.length
+    ? await prisma.trainingSession.findMany({
+        where: { id: { in: missingTestIds }, tenantId: user.tenantId },
+        select: { id: true, code: true, startDate: true, product: { select: { title: true } } },
+      })
+    : [];
+  const sessionDateFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short' });
+  const selectableSessions = [...recentSessions, ...extraSessions].map((s) => ({
+    id: s.id,
+    label: `${s.code} · ${s.product.title} · ${sessionDateFmt.format(s.startDate)}`,
+  }));
+  const enabledCategories = Object.entries(EMAIL_CATEGORY_FIELD)
+    .filter(([, field]) => emailSettingsInitial[field])
+    .map(([category]) => EMAIL_CATEGORY_LABELS[category as keyof typeof EMAIL_CATEGORY_LABELS]);
+
   const opcos = await prisma.opcoCatalog.findMany({ orderBy: { name: 'asc' } });
   const docCatalog = await prisma.qualiopiDocCatalog.findMany({
     orderBy: { phase: 'asc' },
@@ -275,6 +318,57 @@ export default async function ParametresPage() {
                     : [30, 45],
                 creditNotePrefix: tenant.creditNotePrefix,
               }}
+              onSaved={onSaved}
+              onCancel={onCancel}
+            />
+          )}
+        />
+
+        {/* ─── 4bis-2. Envois d'emails (Phase 22 Plan 22-11 — D-06) ────── */}
+        <SettingsSection
+          icon={<Mail className={ICON_CLASS} aria-hidden="true" />}
+          title="Envois d'emails"
+          description="Garde-fou applicatif : rien ne part sans activation explicite (fail-closed)"
+          readView={
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                {emailSettingsInitial.emailsEnabled ? (
+                  <Badge variant="success">Actifs</Badge>
+                ) : (
+                  <Badge variant="muted">Coupés — mode test</Badge>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {emailSettingsInitial.emailsEnabled
+                    ? 'Les catégories cochées envoient pour tout le parc.'
+                    : 'Aucun email ne part, sauf sessions de test autorisées (catégories cochées).'}
+                </span>
+              </div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <Field
+                  label="Catégories autorisées"
+                  value={
+                    enabledCategories.length > 0 ? enabledCategories.join(', ') : (
+                      <span className="text-muted-foreground italic">
+                        Aucune — tout est décoché (défaut)
+                      </span>
+                    )
+                  }
+                />
+                <Field
+                  label="Sessions en mode test"
+                  value={
+                    emailSettingsInitial.testSessionIds.length > 0
+                      ? `${emailSettingsInitial.testSessionIds.length} session${emailSettingsInitial.testSessionIds.length > 1 ? 's' : ''}`
+                      : null
+                  }
+                />
+              </dl>
+            </div>
+          }
+          editView={(onSaved, onCancel) => (
+            <EmailSettingsForm
+              initial={emailSettingsInitial}
+              sessions={selectableSessions}
               onSaved={onSaved}
               onCancel={onCancel}
             />
