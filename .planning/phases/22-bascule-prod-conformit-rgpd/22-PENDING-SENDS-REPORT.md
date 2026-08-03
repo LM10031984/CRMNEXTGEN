@@ -2,7 +2,8 @@
 
 > Rapport vivant du plan 22-07 : la version Wave 1 (2026-07-06) et le relevé intermédiaire
 > (2026-07-27) sont conservés en historique ; la section « Rafraîchi le 2026-08-03 » est
-> l'état du jour J, base de la décision de Laurent (checkpoint 22-07 Task 2).
+> l'état du jour J ; la décision de Laurent et la remédiation appliquée sont tracées en fin
+> de document.
 
 ---
 
@@ -72,7 +73,7 @@ Au sens strict du script (AuditLog `diff.dryRun = true`) : **0 relance brûlée*
 
 **Le bug de conception qui a brûlé les compteurs** : `invoice-reminder-core.ts:149-166` n'utilise `mailResult` QUE pour lire `dryRun` — **il incrémente `reminderCount` et pose `lastReminderAt` même quand `mailResult.ok === false`**, et l'AuditLog ne trace ni `ok` ni `error` dans ce chemin. Résultat : FAC-000006 et FAC-000008 sont à `reminderCount = 2/2` (niveau MAX) **alors que leurs payeurs n'ont JAMAIS reçu un seul email** → sans remédiation, silence définitif sur 2 448 € d'impayés.
 
-### État exact des compteurs au 2026-08-03
+### État exact des compteurs au 2026-08-03 (AVANT remédiation)
 
 | Facture | Payeur | Destinataire (cascade actuelle) | reminderCount | lastReminderAt | Emails réellement reçus | Restant dû |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -90,26 +91,64 @@ Aucun des 3 destinataires n'est un APPRENANT (cascade `payerOrg` dans les 3 cas 
 | **② Reset sélectif** — Laurent coche facture par facture (FAC-000006 et/ou FAC-000008) | 0 à 2 factures | **0 à 2 emails** selon cochage | 0 | Contrôle nominal total |
 | **③ Acceptation en l'état** | aucune | **0 email** (1 tentative FAC-000007 → échec `no_email_recipient`) | 0 | AKORIMMO et KING Kristin ne seront **JAMAIS** relancées (2 448 € en silence définitif) alors qu'elles n'ont rien reçu |
 
-**Action data complémentaire (hors options, recommandée quel que soit le choix)** : renseigner l'email de facturation d'**Imagimmo** dans QualiOF (fiche organisation) — sinon FAC-000007 échouera chaque matin en boucle (`no_email_recipient` quotidien depuis le 21/07).
-
 ### ⚠ Pré-requis SMTP découverts (bloquants pour le flip, indépendants de la décision compteurs)
 
-1. **Les credentials SMTP n'existent NULLE PART** : `.env` racine et `.env.bak-22-06` → `SMTP_HOST=""`, `SMTP_USER=""`, `SMTP_PASS=""` (vides) ; Vercel Production → **aucune** variable `SMTP_*` ; Railway → host/port/secure/from sans user/pass. **Laurent doit fournir le couple SMTP_USER/SMTP_PASS** (et confirmer le fournisseur : le runbook et la 7ᵉ fiche DPA disent OVH `ssl0.ovh.net:465`, mais 20-SMOKE note que la boîte est Google Workspace, pas OVH).
-2. **Egress SMTP Railway** : bloqué en plan Hobby (preuve P5 du 05/07). Si le workspace est toujours Hobby, le flip Railway produirait de nouveaux échecs silencieux qui re-brûleraient des compteurs. À vérifier/upgrader avant tout flip côté worker.
+1. **Les credentials SMTP n'existent NULLE PART** : `.env` racine et `.env.bak-22-06` → `SMTP_HOST=""`, `SMTP_USER=""`, `SMTP_PASS=""` (vides) ; Vercel Production → **aucune** variable `SMTP_*` ; Railway → host/port/secure/from sans user/pass. **Laurent doit fournir le couple SMTP_USER/SMTP_PASS** (voir décision fournisseur ci-dessous).
+2. **Egress SMTP Railway** : bloqué en plan Hobby (preuve P5 du 05/07). Voir décision Railway ci-dessous.
 3. **Coquilles config** : `SMTP_FROM` Railway = `noreply@startacademy.fr` (tiret manquant) ET le mailer lit `MAIL_FROM`, pas `SMTP_FROM` (mailer.ts:40) — la variable posée est morte ; le from réel retombe sur la cascade of-config (`formation@start-academy.fr`).
 4. **Bug core à corriger avant le flip** (candidat plan 22-11) : ne plus incrémenter `reminderCount` quand `mailResult.ok === false` (et tracer `ok`/`error` dans l'AuditLog) — sinon tout échec SMTP futur re-brûle des niveaux en silence.
 
 ### 🚦 FLIP SUSPENDU — décision Laurent du 2026-08-03
 
-**Le flip `MAIL_DRY_RUN=false` N'EST PAS exécuté dans ce plan**, même après validation de la liste ci-dessus : Laurent exige d'abord un **garde-fou applicatif granulaire** (interrupteur général d'envois OFF par défaut + cases par type d'email + mode test par session) — plan dédié **22-11** à créer et exécuter AVANT toute sortie du dry-run. État au 2026-08-03 : `MAIL_DRY_RUN=true` sur Railway, aucune var SMTP sur Vercel (dry-run structurel) — **aucun email réel ne peut partir**.
-
-## Décision requise (checkpoint plan 22-07 — Task 2)
-
-Avant toute sortie du dry-run, Laurent tranche :
-
-1. **① / ② / ③** — le sort des compteurs brûlés (voir chiffrage ci-dessus). ⚠ Croiser avec la connaissance terrain : AKORIMMO ou KING Kristin ont-ils déjà été relancés manuellement (téléphone, email direct) depuis le 20/06 ?
-2. **Validation (ou amendement) de la liste nominative** des relances qui partiront au premier run réel.
-3. **Fourniture des credentials SMTP** + confirmation du fournisseur (OVH vs Google Workspace) + statut du plan Railway (Hobby/Pro — egress SMTP).
+**Le flip `MAIL_DRY_RUN=false` N'EST PAS exécuté dans ce plan**, même après validation de la liste ci-dessus : Laurent exige d'abord un **garde-fou applicatif granulaire** (interrupteur général d'envois OFF par défaut + cases par type d'email + mode test par session) — plan dédié **22-11** (en cours) AVANT toute sortie du dry-run. État au 2026-08-03 : `MAIL_DRY_RUN=true` sur Railway, aucune var SMTP sur Vercel (dry-run structurel) — **aucun email réel ne peut partir**.
 
 ---
-*Phase 22 — créé au plan 22-04 (Task 2), rafraîchi au plan 22-07 (Task 1) le 2026-08-03. Script lecture seule — aucune écriture DB, aucun email envoyé.*
+
+## ✅ DÉCISION LAURENT — 2026-08-03 (checkpoint Task 2, tracée)
+
+1. **Remédiation compteurs : OPTION ① RESET COMPLET** — FAC-000006 et FAC-000008 remises à l'état pré-brûlage (`reminderCount=0`, `lastReminderAt=null`). Appliquée le jour même (voir section suivante).
+2. **Liste d'envoi VALIDÉE** : au premier run réel = 2 emails (n.albin@akorimmo.com niveau 1, kristin@riviera-king.com niveau 1) + 1 échec loggé FAC-000007 (0 email). 0 apprenant.
+3. **Fournisseur SMTP = GOOGLE WORKSPACE** (pas OVH) : `smtp.gmail.com` (465 SSL ou 587 STARTTLS), **`SMTP_USER` = `formation@start-academy.fr`** (adresse d'ENVOI officielle de l'app — précision Laurent, PAS laurent@), `SMTP_PASS` = mot de passe d'application Google **à générer pour CETTE boîte — PAS ENCORE DISPONIBLE** (aucune pose possible avant). **`MAIL_FROM`** (la var réellement lue par mailer.ts:40 — `SMTP_FROM` est morte) à poser = `QualiOF <formation@start-academy.fr>`. L'email de preuve du futur flip (Task 4) partira **vers** laurent@start-academy.fr **depuis** formation@. ⚠ Dette RGPD consignée (deferred-items) : registre « emails transactionnels » + fiche DPA référencent OVH SMTP → à amender vers Google Workspace (CDPA validé le 07/07) quand le circuit sera actif.
+4. **Railway : PAS d'upgrade maintenant** (« on passera par Railway dans un second temps ») : tant que le plan reste Hobby, l'egress SMTP est bloqué → les relances du cron worker **ne peuvent pas partir**. Post-22-11 (fix core), les échecs seront **sans dégât** (compteurs préservés, retentative quotidienne). Recommandation : laisser la catégorie « relances factures » **décochée** dans le garde-fou 22-11 jusqu'à l'upgrade Pro. Les envois côté Vercel (invitations, notifications) fonctionneront normalement dès credentials posés + flip.
+5. **Imagimmo : Laurent saisira lui-même** l'email de facturation dans l'app (fiche Organisation) — aucune action agent.
+
+## ✅ REMÉDIATION APPLIQUÉE (Task 3 — option ①, exécutée le 2026-08-03)
+
+Script : `apps/web/scripts/_reset-burned-reminders.ts` (DRY par défaut, `WRITE=1` — pattern migrate-storage). Définition « brûlé » élargie à la classe découverte : `diff.dryRun=true` OU (`diff.dryRun=false` ET createdAt ∈ fenêtre mode réel raté 2026-07-20 → 2026-07-31). `lastReminderAt` recalé sur la dernière relance réellement partie hors fenêtre (aucune ici → `null`).
+
+**Snapshot AVANT (réversibilité)** :
+
+```
+{"id":"cf0a0ed8-558f-4f08-a39f-0cd6909f1b3b","number":"FAC-000006","status":"ISSUED","reminderCount":2,"lastReminderAt":"2026-07-23T06:02:01.219Z"}
+{"id":"c50c7f47-16aa-4f1c-8f0d-b047c95ce693","number":"FAC-000008","status":"ISSUED","reminderCount":2,"lastReminderAt":"2026-07-23T06:04:02.759Z"}
+```
+
+**Sortie DRY (identique au plan validé)** :
+
+```
+FAC-000006: reminderCount 2 → 0 (décrément=2 brûlée(s) : 2026-07-21, 2026-07-23), lastReminderAt 2026-07-23T06:02:01.219Z → null
+FAC-000008: reminderCount 2 → 0 (décrément=2 brûlée(s) : 2026-07-21, 2026-07-23), lastReminderAt 2026-07-23T06:04:02.759Z → null
+```
+
+**Sortie WRITE=1 + contrôle post-write** :
+
+```
+FAC-000006: reminderCount=0, lastReminderAt=null   → WRITE OK (update + AuditLog invoices.reminder_reset)
+FAC-000008: reminderCount=0, lastReminderAt=null   → WRITE OK (update + AuditLog invoices.reminder_reset)
+AuditLog invoices.reminder_reset (total en base) : 2
+```
+
+Chaque update est tracé en AuditLog `invoices.reminder_reset`, `diff: { reason: 'phase22-burned-dryrun', before, after }` (requête de contrôle : `count(action='invoices.reminder_reset') = 2`).
+
+**Tableau A re-généré post-remédiation** (`pending-reminders-report.ts` ré-exécuté le 2026-08-03T13:49:21Z après WRITE) — **écart 0 avec la liste validée par Laurent** :
+
+| Facture | Payeur | Email destinataire | Source cascade | Niveau qui partirait | reminderCount actuel | maxLevel | Dernière relance | Restant dû | Flag |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| FAC-000006 | AKORIMMO | n.albin@akorimmo.com | `payerOrg.email` | 1 | 0 | 2 | — | 1 440,00 € |  |
+| FAC-000007 | Imagimmo | — | `aucune` | 1 | 0 | 2 | — | 1 008,00 € | ⚠ AUCUN EMAIL (échec loggé, pas d'envoi) |
+| FAC-000008 | KING Kristin | kristin@riviera-king.com | `payerOrg.email` | 1 | 0 | 2 | — | 1 008,00 € |  |
+
+**Total : 3 relances éligibles = 2 emails réels + 1 échec loggé, 0 apprenant.** Tableau B post-remédiation : toujours 0 `dryRun=true` ; horizon vide. ⚠ Ces relances ne partiront qu'après : livraison 22-11 (garde-fou + fix core) + credentials Workspace posés + flip — et côté Railway, pas avant l'upgrade Pro (catégorie recommandée décochée d'ici là).
+
+---
+*Phase 22 — créé au plan 22-04 (Task 2), rafraîchi + décision + remédiation au plan 22-07 (Tasks 1-3) le 2026-08-03. Le flip (Task 4) reste gaté par 22-11 + credentials SMTP Workspace.*
