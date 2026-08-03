@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Completed 22-06-PLAN.md (bascule GATÉE GO — Wave 3 à lancer : 22-07/22-08)"
-last_updated: "2026-08-03T10:05:59.980Z"
+stopped_at: "22-07 EN PAUSE au checkpoint Task 2 (décision Laurent : remédiation compteurs ①②③ + liste nominative + credentials SMTP) — Task 1 faite (rapport jour J 38ece67, découverte brûlage mode réel raté FAC-000006/008), runbook §4/§9.4 à jour (82fd11b), flip SUSPENDU attente 22-11. PAS de SUMMARY (plan incomplet)."
+last_updated: "2026-08-03T13:24:04.800Z"
 last_activity: 2026-08-03
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 32
+  total_plans: 33
   completed_plans: 27
 ---
 
@@ -33,6 +33,8 @@ Plan: 7 of 10
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-08-03 — **Plan 22-07 EN PAUSE mi-plan — rapport jour J re-joué, FLIP SUSPENDU (décision Laurent : garde-fou UI 22-11 d'abord)** (Wave 3, Task 1/4 faite, checkpoint Task 2 présenté). **① Rapport rafraîchi** (commit `38ece67`, historique Wave 1 + 27/07 conservés) : Tableau A = 1 tentative FAC-000007 → **0 email réel** (payeur Imagimmo SANS email — 15× `no_email_recipient` quotidiens depuis le 21/07), 0 apprenant, horizon vide. **② 🔴 DÉCOUVERTE — 4 niveaux brûlés en « mode réel raté »** (variante Pitfall 1 invisible au script qui ne filtre que `dryRun=true`) : 21-23/07, `MAIL_DRY_RUN` absent du worker (posée 31/07 seulement) + `SMTP_HOST` posé → cron en mode réel ; MAIS `SMTP_USER/PASS` JAMAIS posés (20-SMOKE P5 = dette différée — l'affirmation du runbook §4 « posées/prouvées au 20-05 » était ERRONÉE, corrigée) + egress SMTP :465/:587 BLOQUÉ par Railway plan Hobby → 0 email parti ; or **`invoice-reminder-core.ts:149-166` incrémente `reminderCount` même sur `mailResult.ok=false`** (bug de conception) → **FAC-000006 (AKORIMMO, 1 440 €) et FAC-000008 (KING Kristin, 1 008 €) à `reminderCount=2/2` MAX avec 0 email reçu = silence définitif 2 448 € sans remédiation**. Chiffrage checkpoint : ① reset complet → 2 emails au 1er run réel (n.albin@akorimmo.com, kristin@riviera-king.com, 0 apprenant) ; ③ acceptation → 0 email jamais. **③ Pose SMTP IMPOSSIBLE** : credentials inexistants PARTOUT (`.env` racine + `.env.bak-22-06` : `SMTP_HOST/USER/PASS` vides ; Vercel Production : 0 var SMTP → dry-run structurel ; Railway : host/port/secure/from sans user/pass) → à fournir par Laurent + trancher fournisseur (runbook/DPA disent OVH ssl0.ovh.net:465, 20-SMOKE dit boîte = Google Workspace) + statut plan Railway (Hobby bloque l'egress). **④ FLIP `MAIL_DRY_RUN=false` SUSPENDU** (changement de périmètre Laurent 03/08) : garde-fou applicatif granulaire requis d'abord — **plan 22-11** (interrupteur général OFF défaut + cases par type d'email + mode test par session) ; runbook §4 amendé + §9.4 partiellement rempli (`82fd11b`), `deferred-items.md` créé (6 items dont fix core AVANT flip, `SMTP_FROM` var morte ignorée du mailer qui lit `MAIL_FROM`, email Imagimmo à saisir = 1 édition UI). État sûr vérifié 03/08 : aucun email réel ne peut partir (double filet Vercel, `MAIL_DRY_RUN=true` Railway). **PAS de SUMMARY** (plan incomplet). Checkpoint en attente : décision ①②③ + validation liste + credentials SMTP. Commits `38ece67`/`82fd11b`, `--no-verify`.
 
 - 2026-08-03 — **Plan 22-06 livré — BASCULE PROD EXÉCUTÉE ET GATÉE GO (CUT-01 + CUT-02 COMPLETS)** (Wave 2, 2 checkpoints human-verify exécutés : « GO bascule » Laurent 30/07 après §0 6/6 — Phase 20 close 24 j de stabilité Railway, audit data re-joué PASS 30/07 docs inclus — puis **verdict GO gate SES-0094 Laurent 2026-08-03**). **① §1–§2** : PR **#8** cloud-migration→main en **MERGE COMMIT `42d69c7`** (gate test vert, diff post-merge 0) ; `.env` racine assaini (5 commentaires inline PROD-0674 → lignes dédiées) ; **3 vars `GOOGLE_OAUTH_*` posées sensitive Production via API REST** (sanity pré-pose 0 suspect) ; **flip `NEXT_PUBLIC_APP_ENV=production` + redeploy Ready** → `/login` 200, **0 STAGING**, cdg1, login e2e→/app prouvé (Playwright setup 7 s) ; `MAIL_DRY_RUN=true` prouvé Vercel ET Railway — **0 email réel**. **② Gate SES-0094 (§3)** : batch `08fd14dc` **21/21 en 93 s via worker Railway** (enqueue Prisma file Postgres, Mac hors boucle), **0 stub** (ClosureJob — `usedStub` n'existe PAS sur Document/PedagogicalAsset, key_link du plan inexacte), **21/21 signed URLs 200+%PDF-, 0×404**, positionnement varié/satisfaction non uniforme/QCM 1-session scoring 92 %/85 %, **D-08 prouvé : 0 filigrane worker ET PDF synchrone Vercel** (devis témoin jetable `/api/quotes/[id]/pdf`, teardown 0 résidu) → `22-GONOGO-SES-0094.md`, runbook §9.0–9.3 remplis. **3 DÉVIATIONS ENV (leçons)** : ⓐ pose stdin CLI Vercel sans newline = **valeurs VIDES silencieuses** (sensitive irrelisibles !) → re-pose **API REST** + vérif longueur post-pose systématique ; ⓑ **MAIL_DRY_RUN ABSENT du worker Railway** (SMTP_HOST posé → isDryRun()=false, seul filet = SMTP_USER/PASS absents) → posé true (Rule 2) ; ⓒ **22 OF_* Railway polluées par guillemets littéraux** (re-pose 06/07 — la regex sanity ne flagge pas `"`) → footers `"START ACADEMY"`/contacts `""` → 12 re-posées propres + 10 vides SUPPRIMÉES (cascade pick() restaurée), worker redéployé, **pack re-régénéré** (batch 1 `4af3d823` 21/21 97 s aussi 0 stub). **§9.0 : 3 preuves RGPD complémentaires ABANDONNÉES par le responsable de traitement**. Contrôle Laurent analyse des besoins : **hors pack by design** (Avant/Après types.ts:23), 3/3 présentes en base (04/06). 2 observations non bloquantes : adresse tenant BDD (Cagnes) ≠ env (Vence, siège Qualiopi) sur l'attestation → 1 édition Paramètres organisme ; détection guillemets à ajouter à sanity-check-env.ts. Commits `26d1df2`(chore script docs-gap)/`42d69c7`(merge #8)/`69e21f8`(evidence §9.1-9.2)/`5af1497`(gate+GO), `--no-verify`. **Wave 3 OUVERTE : 22-07 (flip emails — ⚠ 1 envoi en attente relevé 30/07, re-jouer le rapport le jour J, SMTP_USER/PASS à poser ×2) + 22-08**. Rollback §8 (~5 min) reste possible tant que les emails ne sont pas flippés.
 
@@ -308,7 +310,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-06-PLAN.md (bascule GATÉE GO — Wave 3 à lancer : 22-07/22-08)
+Stopped at: 22-07 EN PAUSE au checkpoint Task 2 (décision Laurent : remédiation compteurs ①②③ + liste nominative + credentials SMTP) — Task 1 faite (rapport jour J 38ece67, découverte brûlage mode réel raté FAC-000006/008), runbook §4/§9.4 à jour (82fd11b), flip SUSPENDU attente 22-11. PAS de SUMMARY (plan incomplet).
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
