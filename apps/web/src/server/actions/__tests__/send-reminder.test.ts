@@ -347,11 +347,40 @@ describe('sendInvoiceReminder', () => {
       expect.objectContaining({
         to: 'paiement@opco-ep.fr',
         subject: 'Mock subject',
+        // Phase 22-11 : contexte requis (catégorie + tenant + session).
+        context: expect.objectContaining({
+          tenantId: 'tenant-1',
+          category: 'invoice_reminder',
+          sessionId: null,
+        }),
       }),
     );
   });
 
-  it('Test 10 — SMTP_HOST vide → result.dryRun=true + AuditLog diff.dryRun=true', async () => {
+  it('Test 9b — sessionId de la facture (fallback participant) transmis au contexte', async () => {
+    invoiceFindFirst.mockResolvedValueOnce(
+      makeInvoice({
+        sessionId: null,
+        participant: {
+          sessionId: 'ses-42',
+          person: { firstName: 'Jean', lastName: 'Dupont', email: null },
+        },
+      }),
+    );
+
+    await sendInvoiceReminder({
+      invoiceId: VALID_INVOICE_ID,
+      triggered_by: 'manual',
+    });
+
+    expect(sendMailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ sessionId: 'ses-42' }),
+      }),
+    );
+  });
+
+  it('Test 10 — SMTP_HOST vide → result.dryRun=true + AuditLog diff.dryRun=true + compteur NON consommé', async () => {
     sendMailMock.mockResolvedValueOnce({ ok: true, dryRun: true });
     invoiceFindFirst.mockResolvedValueOnce(makeInvoice());
 
@@ -362,10 +391,38 @@ describe('sendInvoiceReminder', () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.dryRun).toBe(true);
+    // Phase 22-11 (Pitfall 1) : dry-run env ne brûle AUCUN niveau de relance.
+    expect(invoiceUpdate).not.toHaveBeenCalled();
     expect(logInvoiceEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'invoices.reminder_sent',
-        diff: expect.objectContaining({ dryRun: true }),
+        diff: expect.objectContaining({ dryRun: true, counterConsumed: false }),
+      }),
+    );
+  });
+
+  it('Test 10b — suppression par réglages (suppressed:true) → compteur NON consommé + diff.suppressedBySettings=true', async () => {
+    sendMailMock.mockResolvedValueOnce({ ok: true, dryRun: true, suppressed: true });
+    invoiceFindFirst.mockResolvedValueOnce(makeInvoice());
+
+    const res = await sendInvoiceReminder({
+      invoiceId: VALID_INVOICE_ID,
+      triggered_by: 'manual',
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.dryRun).toBe(true);
+    // Phase 22-11 (Pitfall 1 fermé à la racine) : suppression réglages
+    // = 0 niveau brûlé, mais AuditLog tracé avec suppressedBySettings.
+    expect(invoiceUpdate).not.toHaveBeenCalled();
+    expect(logInvoiceEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'invoices.reminder_sent',
+        diff: expect.objectContaining({
+          dryRun: true,
+          suppressedBySettings: true,
+          counterConsumed: false,
+        }),
       }),
     );
   });
@@ -389,7 +446,7 @@ describe('sendInvoiceReminder', () => {
     );
   });
 
-  it('Test 12 — AuditLog invoices.reminder_sent avec diff {level, channel:email, triggered_by, dryRun, daysOverdue}', async () => {
+  it('Test 12 — AuditLog invoices.reminder_sent avec diff {level, channel:email, triggered_by, dryRun, suppressedBySettings, counterConsumed, daysOverdue}', async () => {
     invoiceFindFirst.mockResolvedValueOnce(makeInvoice());
 
     await sendInvoiceReminder({
@@ -406,6 +463,8 @@ describe('sendInvoiceReminder', () => {
           channel: 'email',
           triggered_by: 'manual',
           dryRun: false,
+          suppressedBySettings: false,
+          counterConsumed: true,
           daysOverdue: expect.any(Number),
         }),
       }),

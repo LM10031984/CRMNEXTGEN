@@ -43,8 +43,8 @@
 
 ### CUT — Bascule prod
 
-- [ ] **CUT-01** : Runbook bascule + plan rollback écrits AVANT la fenêtre de bascule ; dump final restauré, DNS pointé, invitations équipe envoyées (RBAC Phase 8)
-- [ ] **CUT-02** : Pack témoin post-bascule = gate go/no-go ; alertes coûts (OpenRouter/Upstash/Supabase) + backups daily confirmés actifs
+- [x] **CUT-01** : Runbook bascule + plan rollback écrits AVANT la fenêtre de bascule ; dump final restauré, DNS pointé, invitations équipe envoyées (RBAC Phase 8)
+- [x] **CUT-02** : Pack témoin post-bascule = gate go/no-go ; alertes coûts (OpenRouter/Upstash/Supabase) + backups daily confirmés actifs
 
 ### RGPD — Conformité
 
@@ -88,6 +88,6 @@
 | CI-01 | Phase 21 | Complete |
 | TEST-01 | Phase 21 | Complete |
 | TEST-02 | Phase 21 | Complete |
-| CUT-01 | Phase 22 | Pending |
-| CUT-02 | Phase 22 | Pending |
+| CUT-01 | Phase 22 | Complete |
+| CUT-02 | Phase 22 | Complete |
 | RGPD-01 | Phase 22 | Complete |

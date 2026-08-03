@@ -57,6 +57,7 @@ export async function sendDossierReminderEmail(
       sponsorOrg: { select: { legalName: true, opcoCode: true, email: true, emailBilling: true } },
       session: {
         select: {
+          id: true,
           code: true,
           startDate: true,
           endDate: true,
@@ -136,7 +137,17 @@ export async function sendDossierReminderEmail(
 
   const text = `Bonjour,\n\n${body}\n\nStagiaire : ${stagiaire}\nFormation : ${formationTitre}\nSession : ${p.session.code} (${sessionDates})\nMontant HT : ${montant}\n\nCordialement,\n${of.name}`;
 
-  const r = await sendMail({ to: recipient, subject, html, text });
+  const r = await sendMail({
+    to: recipient,
+    subject,
+    html,
+    text,
+    context: {
+      tenantId: user.tenantId,
+      category: 'opco_reminder',
+      sessionId: p.session.id,
+    },
+  });
   if (!r.ok) return { ok: false, to: recipient, error: r.error };
   return { ok: true, to: recipient, reminderType, dryRun: r.dryRun };
 }

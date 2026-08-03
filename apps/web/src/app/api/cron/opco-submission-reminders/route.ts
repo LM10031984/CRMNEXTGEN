@@ -95,12 +95,24 @@ export async function GET(req: Request) {
       to: sub.recipientEmail,
       subject: subjectRel,
       html,
+      context: {
+        tenantId: sub.tenantId,
+        category: 'opco_reminder',
+        sessionId: sub.participant.sessionId,
+      },
     });
     if (!r.ok) {
       errors++;
       continue;
     }
-    if (r.dryRun) dryRunCount++;
+
+    // Phase 22 Plan 22-11 (fermeture Pitfall 1) : compteur consommé UNIQUEMENT
+    // sur départ réel — dry-run env ou suppression réglages = skipped.
+    if (r.dryRun) {
+      dryRunCount++;
+      skipped++;
+      continue;
+    }
     sent++;
 
     await prisma.opcoSubmission.update({

@@ -126,9 +126,32 @@ export const tenantLegalDocsSchema = z.object({
     .optional(),
 });
 
+/**
+ * Phase 22 Plan 22-11 (D-06) — Réglages d'envoi d'emails par tenant.
+ *
+ * 7 booleans (interrupteur général + 6 catégories, tous default false =
+ * fail-closed) + sessions autorisées en mode test (UUIDs, cap 20).
+ * Consommé par `updateEmailSettings` (server action) et le formulaire
+ * Paramètres organisme « Envois d'emails ».
+ */
+export const EmailSettingsSchema = z.object({
+  emailsEnabled: z.boolean().default(false),
+  invoiceRemindersEnabled: z.boolean().default(false),
+  preinscriptionRemindersEnabled: z.boolean().default(false),
+  opcoRemindersEnabled: z.boolean().default(false),
+  opcoSubmissionsEnabled: z.boolean().default(false),
+  internalNotificationsEnabled: z.boolean().default(false),
+  userInvitationsEnabled: z.boolean().default(false),
+  testSessionIds: z
+    .array(z.string().uuid('Identifiant de session invalide'))
+    .max(20, 'Maximum 20 sessions de test')
+    .default([]),
+});
+
 // Types inférés — consommés par tenant-settings.ts (signatures Server Actions)
 export type TenantIdentityInput = z.infer<typeof tenantIdentitySchema>;
 export type TenantAddressInput = z.infer<typeof tenantAddressSchema>;
 export type TenantBillingInput = z.infer<typeof tenantBillingSchema>;
 export type TenantEmailInput = z.infer<typeof tenantEmailSchema>;
 export type TenantLegalDocsInput = z.infer<typeof tenantLegalDocsSchema>;
+export type EmailSettingsInput = z.infer<typeof EmailSettingsSchema>;

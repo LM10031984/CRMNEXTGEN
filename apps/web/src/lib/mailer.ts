@@ -1,9 +1,19 @@
 /**
  * Service mail QualiOF — abstraction sur nodemailer/SMTP.
  *
- * Si SMTP_HOST n'est pas configuré dans .env → mode "log-only" (dry-run) :
- * le mail n'est PAS envoyé, juste loggé en console. Permet de développer
- * sans risquer de spammer en production.
+ * DEUX COUCHES DE GARDE (Phase 22 Plan 22-11, D-06) :
+ *  1. env (plomberie), PRIORITAIRE : si MAIL_DRY_RUN=true ou SMTP_HOST vide →
+ *     mode "log-only" (dry-run), AUCUNE lecture BDD. Permet de développer sans
+ *     risquer de spammer, et garde le dev local intact.
+ *  2. BDD (métier), fail-closed : `TenantEmailSettings` par tenant (interrupteur
+ *     général + toggles par catégorie + sessions autorisées en mode test),
+ *     piloté depuis Paramètres organisme. Sans réglage explicite de l'ADMIN,
+ *     TOUT est supprimé — même après MAIL_DRY_RUN=false. Une suppression est
+ *     tracée `[mailer:suppressed-by-settings]` (destinataire masqué, D-17) et
+ *     retournée `{ ok:true, dryRun:true, suppressed:true }` — jamais de throw.
+ *
+ * Le champ `context` de SendMailInput est REQUIS : impossible d'ajouter un
+ * envoi non catégorisé (tsc échoue). Voir `email-policy.ts` pour la matrice.
  *
  * Variables .env :
  *   MAIL_DRY_RUN         — true pour forcer log-only même si SMTP configuré
@@ -17,7 +27,20 @@
  */
 
 import nodemailer, { type Transporter } from 'nodemailer';
+import { prisma } from '@qualiof/db';
 import { getOfConfig } from './of-config';
+import { resolveEmailPolicy, type EmailCategory } from './email-policy';
+
+/**
+ * Contexte métier REQUIS de tout envoi (Phase 22 Plan 22-11) :
+ * la catégorie pilote le toggle Paramètres, le sessionId permet le mode
+ * « session test » quand l'interrupteur général est OFF.
+ */
+export interface SendMailContext {
+  tenantId: string;
+  category: EmailCategory;
+  sessionId?: string | null;
+}
 
 export interface SendMailInput {
   to: string;
@@ -25,12 +48,15 @@ export interface SendMailInput {
   html: string;
   text?: string;
   attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
+  context: SendMailContext;
 }
 
 export interface SendMailResult {
   ok: boolean;
   messageId?: string;
   dryRun?: boolean;
+  /** true si l'envoi a été bloqué par les réglages tenant (TenantEmailSettings). */
+  suppressed?: boolean;
   error?: string;
 }
 
@@ -54,6 +80,11 @@ function isDryRun(): boolean {
   return !process.env.SMTP_HOST;
 }
 
+/** RGPD (Phase 22 D-17) : jamais d'email destinataire en clair dans les logs. */
+function maskRecipient(to: string): string {
+  return String(to).replace(/^(.)[^@]*(@.+)$/, '$1***$2');
+}
+
 function getTransporter(): Transporter {
   if (_transporter) return _transporter;
   const host = process.env.SMTP_HOST;
@@ -75,12 +106,36 @@ function getTransporter(): Transporter {
 
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const from = getFromAddress();
+
+  // ① Couche env (plomberie) — prioritaire, AUCUNE lecture BDD.
   if (isDryRun()) {
-    // RGPD (Phase 22 D-17) : jamais d'email destinataire en clair dans les logs.
-    const maskedTo = String(input.to).replace(/^(.)[^@]*(@.+)$/, '$1***$2');
-    console.log(`[mailer:dry-run] to=${maskedTo} subject="${input.subject}" (no SMTP_HOST configuré)`);
+    console.log(
+      `[mailer:dry-run] to=${maskRecipient(input.to)} subject="${input.subject}" category=${input.context.category} (no SMTP_HOST configuré)`,
+    );
     return { ok: true, dryRun: true };
   }
+
+  // ② Couche BDD (métier) — fail-closed : pas de cache (volume faible, réglage
+  // Paramètres pris en compte immédiatement).
+  const settings = await prisma.tenantEmailSettings.findUnique({
+    where: { tenantId: input.context.tenantId },
+  });
+
+  // ③ Décision pure (matrice email-policy.ts).
+  const policy = resolveEmailPolicy(settings, {
+    category: input.context.category,
+    sessionId: input.context.sessionId ?? null,
+  });
+
+  // ④ Suppression tracée — retour dry-run côté call-site, jamais d'erreur.
+  if (policy.decision === 'suppress') {
+    console.log(
+      `[mailer:suppressed-by-settings] category=${input.context.category} reason=${policy.reason} to=${maskRecipient(input.to)} subject="${input.subject}"`,
+    );
+    return { ok: true, dryRun: true, suppressed: true };
+  }
+
+  // ⑤ Envoi SMTP normal (chemin existant intact).
   try {
     const info = await getTransporter().sendMail({
       from,

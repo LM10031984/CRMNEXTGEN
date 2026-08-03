@@ -341,6 +341,7 @@ async function notifyBatchCompletion(
       where: { id: batchId },
       select: {
         id: true,
+        tenantId: true,
         sessionId: true,
         totalDocs: true,
         doneDocs: true,
@@ -404,7 +405,17 @@ ${batch.doneDocs} / ${batch.totalDocs} documents générés${batch.errorDocs > 0
 Ouvrir le pack : ${link}
 `;
 
-    const r = await sendMail({ to: user.email, subject, html, text });
+    const r = await sendMail({
+      to: user.email,
+      subject,
+      html,
+      text,
+      context: {
+        tenantId: batch.tenantId,
+        category: 'internal_notification',
+        sessionId: batch.sessionId,
+      },
+    });
     if (r.ok && !r.dryRun) {
       // RGPD (Phase 22 D-17) : logger l'id utilisateur, jamais l'email en clair.
       console.log(`[closure-worker] ✉ notif sent to user=${batch.createdByUserId} (batch=${batch.id}, status=${finalStatus})`);

@@ -158,7 +158,13 @@ export async function inviteUser(
       },
       of,
     );
-    const mailResult = await sendMail({ to: email, subject, html, text });
+    const mailResult = await sendMail({
+      to: email,
+      subject,
+      html,
+      text,
+      context: { tenantId: admin.tenantId, category: 'user_invitation', sessionId: null },
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,
@@ -318,7 +324,13 @@ export async function resetUserPassword(
       },
       of,
     );
-    const mailResult = await sendMail({ to: target.email, subject, html, text });
+    const mailResult = await sendMail({
+      to: target.email,
+      subject,
+      html,
+      text,
+      context: { tenantId: admin.tenantId, category: 'user_invitation', sessionId: null },
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,
@@ -442,7 +454,13 @@ export async function resendInvitation(
       },
       of,
     );
-    const mailResult = await sendMail({ to: target.email, subject, html, text });
+    const mailResult = await sendMail({
+      to: target.email,
+      subject,
+      html,
+      text,
+      context: { tenantId: admin.tenantId, category: 'user_invitation', sessionId: null },
+    });
 
     await logUserAction({
       tenantId: admin.tenantId,

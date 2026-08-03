@@ -179,6 +179,48 @@ PDF échantillon sans filigrane.
 
 ## §4 Flip 2 — emails réels (D-06 — séquence STRICTE, dans cet ordre)
 
+> 🚦 **AMENDEMENT 2026-08-03 (décision Laurent)** : le flip `MAIL_DRY_RUN=false` est
+> **SUSPENDU** — même après validation de la liste nominative — tant que le
+> **garde-fou applicatif granulaire** n'est pas livré (plan **22-11** : interrupteur
+> général d'envois OFF par défaut dans Paramètres organisme + cases par type d'email
+> + mode test par session). Le flip ne s'exécutera qu'APRÈS 22-11, garde-fou en place
+> tout décoché.
+>
+> ⚠ **CORRECTION 2026-08-03 (22-07 Task 1)** : la mention ci-dessous « valeurs depuis
+> le dashboard Railway worker (déjà posées et prouvées au 20-05) » est **ERRONÉE** —
+> 20-SMOKE P5 = dette différée : `SMTP_USER`/`SMTP_PASS` n'ont JAMAIS été posés
+> (vérifié CLI 03/08), et l'**egress SMTP :465/:587 est bloqué par Railway en plan
+> Hobby** (P5a/P5b TIMEOUT prouvés 05/07). Les credentials SMTP n'existent nulle part
+> (`.env` racine et backup : vides ; Vercel : 0 var SMTP) → **à fournir par Laurent**
+> avant toute pose. Voir 22-PENDING-SENDS-REPORT.md § « Pré-requis SMTP découverts ».
+>
+> ✅ **DÉCISIONS LAURENT 2026-08-03 (checkpoint 22-07 Task 2)** :
+> 1. **Remédiation compteurs = option ① reset complet** — APPLIQUÉE (Task 3, script
+>    `_reset-burned-reminders.ts` DRY→WRITE, snapshot + AuditLog `invoices.reminder_reset`
+>    ×2 : FAC-000006 et FAC-000008 → `reminderCount=0`, `lastReminderAt=null`).
+>    Liste validée au 1er run réel : **2 emails** (n.albin@akorimmo.com niv. 1,
+>    kristin@riviera-king.com niv. 1) + 1 échec loggé FAC-000007 (Imagimmo sans email —
+>    Laurent saisira lui-même l'email de facturation dans la fiche Organisation). 0 apprenant.
+> 2. **SMTP = GOOGLE WORKSPACE** (pas OVH — remplace les valeurs OVH du point 3 ci-dessous) :
+>    `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` + `SMTP_SECURE=true` (SSL) ou
+>    `SMTP_PORT=587` + `SMTP_SECURE=false` (STARTTLS),
+>    **`SMTP_USER=formation@start-academy.fr`** (adresse d'ENVOI officielle de l'app),
+>    `SMTP_PASS` = **mot de passe d'application Google généré pour la boîte formation@**
+>    (à fournir par Laurent — pas encore disponible),
+>    **`MAIL_FROM=QualiOF <formation@start-academy.fr>`** — ⚠ c'est `MAIL_FROM` que lit
+>    le mailer (mailer.ts:40) ; la var `SMTP_FROM` posée sur Railway est MORTE (ignorée,
+>    et porte une coquille `startacademy.fr` sans tiret) → la corriger/supprimer à la pose.
+>    L'email test de preuve (point 4) partira **vers** laurent@start-academy.fr
+>    **depuis** formation@. Dette RGPD : registre + fiche DPA « OVH SMTP » à amender
+>    vers Google Workspace (CDPA validé 07/07) quand le circuit sera actif.
+> 3. **Railway : pas d'upgrade maintenant** (« second temps ») : plan Hobby = egress SMTP
+>    bloqué → les relances du CRON worker ne peuvent pas partir même après flip. Post-22-11
+>    (fix core : plus d'incrément sur échec), ces échecs seront SANS dégât (compteurs
+>    préservés, retentative quotidienne). **Recommandation : laisser la catégorie
+>    « relances factures » DÉCOCHÉE dans le garde-fou 22-11 jusqu'à l'upgrade Pro.**
+>    Les envois côté Vercel (invitations, notifications) fonctionneront normalement dès
+>    credentials posés + flip.
+
 ⚠ **Exigence forte de Laurent (répétée 2×)** : JAMAIS d'envoi de masse vers les
 apprenants sans action explicite. Ce flip ne s'exécute qu'après le rapport et la
 validation ci-dessous.
@@ -340,39 +382,52 @@ Puis :
 > Chaque sous-section est remplie AU MOMENT de l'exécution, avec date UTC.
 > Aucun secret en clair — captures avec valeurs masquées.
 
+### 9.0 Preuves RGPD complémentaires (22-05) — statut
+
+Les 3 actions de preuve déléguées au runbook par le plan 22-05 (capture ZDR/logging
+OFF OpenRouter, capture acceptation DPA dashboard Supabase, capture CDPA console
+Google Workspace) sont **abandonnées par décision du responsable de traitement**
+(Laurent MARX, décision du 2026-07-07, confirmée au GO bascule du 2026-07-30).
+Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
+
 ### 9.1 Sanity env (§1) — plan 22-06
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Sortie `sanity-check-env.ts` sur `.env.vercel-prod` | 0 clé suspecte | _(à remplir)_ | |
-| Re-pose des sensitive depuis source assainie | liste des clés re-posées | _(à remplir)_ | |
-| Re-test auto-fill IA produit | remplissage réussi (0 ByteString) | _(à remplir)_ | |
+| Sortie `sanity-check-env.ts` sur `.env.vercel-prod` | 0 clé suspecte | ✅ **74 variables scannées, 0 danger ByteString** (pull post-pose ; seul flag = `OF_ADDRESS_STREET` U+00E9, faux positif métier assumé 22-04). Fichier de pull supprimé après scan. | 2026-07-30 |
+| Nettoyage `.env` racine (source des re-poses) | 0 commentaire inline classe PROD-0674 | ✅ **5 commentaires inline déplacés en lignes dédiées** (`SESSION_LIFETIME`, `OPENROUTER_MODEL_FAST/QUALITY/VISION`, `OPENROUTER_SITE_URL`) — re-scan : 85 vars, seul reste le faux positif `OF_ADDRESS_STREET`. Backup `.env.bak-22-06` (gitignoré `.env*`). | 2026-07-30 |
+| Re-pose des sensitive depuis source assainie | liste des clés re-posées | ✅ **Aucune clé Vercel polluée à re-poser** (scan 22-04 : les 50 vars 21-04 déjà propres, `OPENROUTER_API_KEY` incluse). Seules poses nouvelles : 3 vars `GOOGLE_OAUTH_*` (voir §9.2), chaque valeur sanity-checkée AVANT pose (regex `[^\x20-\x7E]|#| +$` = 0 match sur les 3, champ `installed` du JSON source). | 2026-07-30 |
+| Re-test auto-fill IA produit | remplissage réussi (0 ByteString) | ✅ **Preuve par référence** : `OPENROUTER_API_KEY` n'a PAS été touchée dans cette fenêtre (aucune re-pose — la preuve comportementale vise les clés re-posées). Auto-fill E2E re-testé OK le 2026-07-06 post-fix D-18 ① ; clé confirmée saine par scan 22-04 puis par le scan post-pose ci-dessus. Le flux OpenRouter côté worker est re-prouvé par le pack SES-0094 (§9.3). | 2026-07-30 |
 
 ### 9.2 Flip production (§2) — plan 22-06
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Capture vars Vercel | `NEXT_PUBLIC_APP_ENV=production`, `MAIL_DRY_RUN=true`, 3 vars Google posées (masquées) | _(à remplir)_ | |
-| `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | _(à remplir)_ | |
-| Login → `/app` | accès OK | _(à remplir)_ | |
+| PR `cloud-migration`→`main` | merge commit, CI verte, diff = 0 | ✅ PR **#8** mergée **MERGE COMMIT** `42d69c7` (2026-07-30T13:23:32Z), gate `test` pass (1m31s), `git diff origin/main origin/cloud-migration` = **0 ligne**. (Check « Vercel » preview en fail = comportement volontaire connu 21-04, non-requis.) | 2026-07-30 |
+| Capture vars Vercel | `NEXT_PUBLIC_APP_ENV=production`, `MAIL_DRY_RUN=true`, 3 vars Google posées (masquées) | ✅ 3 vars `GOOGLE_OAUTH_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN` posées **HTTP 201, type `sensitive`, target `["production"]`** via API REST (payload JSON exact — jamais de ligne .env brute). `NEXT_PUBLIC_APP_ENV=production` (type encrypted, relisible) — pull de contrôle : `NEXT_PUBLIC_APP_ENV="production"` + `MAIL_DRY_RUN="true"`. ⚠ Incident consigné : 1ʳᵉ pose via `printf \| vercel env add` (stdin sans newline) a stocké des **valeurs VIDES** — détecté par vérification de longueur post-pose, 4 vars supprimées puis re-posées par API REST (leçon : pose par API JSON, jamais stdin CLI sans newline). | 2026-07-30 |
+| `MAIL_DRY_RUN=true` sur les DEUX plateformes | Vercel ET Railway | ✅ Vercel : `MAIL_DRY_RUN="true"` (pull). ⚠ **Railway worker : la variable ÉTAIT ABSENTE** (avec `SMTP_HOST` posé, `isDryRun()` aurait rendu false — seul filet : absence de `SMTP_USER/SMTP_PASS`, le relais OVH refuse sans auth) → **posée `MAIL_DRY_RUN=true`** (déviation Rule 2, redeploy auto Railway). Vérifiée post-pose : `MAIL_DRY_RUN=true` dans `railway variables --service worker`. | 2026-07-31 |
+| Redeploy production | build avec le nouvel env (`NEXT_PUBLIC_*` inliné) | ✅ `vercel redeploy` du deployment production issu du merge PR #8 → **Ready en 3 min**, aliasé `https://qualiof.vercel.app`. | 2026-07-30 |
+| `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | ✅ `HTTP 200` ; `STAGING occurrences: 0` (bandeau disparu) ; `x-vercel-id: cdg1::cdg1::…` | 2026-07-30T18:29:19Z |
+| Login → `/app` | accès OK | ✅ Login réel `e2e@start-academy.fr` via Playwright `--project=setup` contre `https://qualiof.vercel.app` : **1 passed (7.0s)**, storageState créé (session posée, `/app` atteint). | 2026-07-31 |
 
-### 9.3 Pack témoin SES-0094 (§3) — plan 22-07
+### 9.3 Pack témoin SES-0094 (§3) — plan 22-06 (rapport complet : `22-GONOGO-SES-0094.md`)
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Compteurs stub (Prisma) | `usedStub=false` sur 100 % des docs du pack | _(à remplir)_ | |
-| curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | _(à remplir)_ | |
-| PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | _(à remplir)_ | |
-| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | _(à remplir)_ | |
+| Compteurs stub (Prisma) | `usedStub=false` sur 100 % des docs du pack | ✅ Batch `08fd14dc` COMPLETED **21/21 en 93 s** (worker Railway, Mac hors boucle) — **`usedStub=true` : 0/21** (ClosureJob), pdfKey 21/21 | 2026-08-03 |
+| curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | ✅ **21/21 en HTTP 200 + `%PDF-` — 0×404** | 2026-08-03T06:51:35Z |
+| PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | ✅ ATTESTATION + ÉMARGEMENT : footer propre (SIRET/NDA/contact), 0 filigrane. ⚠ Pré-requis découvert et corrigé : **22 OF_* Railway polluées par guillemets littéraux** (re-pose 06/07) → 12 re-posées propres + 10 vides supprimées, redeploy, pack re-régénéré. **PDF SYNCHRONE Vercel** (devis témoin `GET /api/quotes/[id]/pdf`, Gotenberg) : 200, `%PDF-`, **sans filigrane** (D-08 prouvé sur le chemin qui le portait en 21-06), teardown 0 résidu | 2026-08-03T09:32:53Z |
+| Contrôle analyse des besoins (ajout Laurent 30/07) | présence par stagiaire OU explication | ✅ Hors pack **by design** (Avant/Après, types.ts:23) ; 3/3 stagiaires ont leur `PedagogicalAsset ANALYSE_BESOIN` (04/06/2026, pdf oui) — fond traité au todo dédié | 2026-08-03 |
+| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | ✅ **GO — validé par Laurent le 2026-08-03** (proposition Claude GO, 6 critères verts — aucun rollback, Wave 3 ouverte) | 2026-08-03 |
 
 ### 9.4 Rapport relances + flip emails (§4) — plans 22-07/22-08
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| `22-PENDING-SENDS-REPORT.md` | liste nominative + relances brûlées dry-run | _(à remplir)_ | |
-| Décision Laurent | validation + décision remédiation compteurs | _(à remplir)_ | |
-| Flip `MAIL_DRY_RUN=false` ×2 | capture Vercel (+ redeploy) ET Railway (redeploy auto) | _(à remplir)_ | |
-| Email test réel | `messageId` SMTP vers laurent@start-academy.fr (pas `dryRun`) | _(à remplir)_ | |
+| `22-PENDING-SENDS-REPORT.md` | liste nominative + relances brûlées dry-run | ✅ **Re-joué jour J** (commit `38ece67`) : Tableau A = 1 tentative FAC-000007 → **0 email réel** (payeur Imagimmo sans email), 0 apprenant. 🔴 **Découverte : 4 niveaux brûlés en « mode réel raté »** 21-23/07 (`dryRun=false` — MAIL_DRY_RUN absent du worker jusqu'au 31/07, SMTP sans auth + egress Hobby bloqué → 0 email parti, mais le core incrémente même sur `ok:false`, invoice-reminder-core.ts:149-166) : FAC-000006 et FAC-000008 à `reminderCount=2/2` (MAX) avec **0 email reçu** — 2 448 € en silence définitif sans remédiation. Chiffrage : ① reset → 2 emails au 1er run réel, ③ acceptation → 0 email. | 2026-08-03 |
+| Décision Laurent | validation + décision remédiation compteurs | ✅ **Rendue le 2026-08-03** : ① **reset complet** (FAC-000006/008), liste validée (2 emails : n.albin@akorimmo.com + kristin@riviera-king.com, 0 apprenant), **SMTP = Google Workspace** (`smtp.gmail.com`, `SMTP_USER=formation@start-academy.fr`, mdp d'application à générer — pas encore fourni), **Railway = second temps** (Hobby, egress bloqué → catégorie relances à laisser décochée dans 22-11 jusqu'à l'upgrade Pro), email Imagimmo saisi par Laurent lui-même. **Remédiation APPLIQUÉE** : `_reset-burned-reminders.ts` DRY→WRITE=1, snapshot collé au rapport, 2 AuditLog `invoices.reminder_reset` (`reason: phase22-burned-dryrun`), contrôle post-write `reminderCount=0/lastReminderAt=null` ×2, tableau A re-généré = **écart 0** avec la liste validée. | 2026-08-03 |
+| Flip `MAIL_DRY_RUN=false` ×2 | capture Vercel (+ redeploy) ET Railway (redeploy auto) | 🚦 **SUSPENDU (décision Laurent 2026-08-03)** — attente garde-fou UI granulaire (plan 22-11). État vérifié 03/08 : Railway `MAIL_DRY_RUN=true` + SMTP_USER/PASS absents ; Vercel `MAIL_DRY_RUN=true` + **0 var SMTP** (dry-run structurel `SMTP_HOST` vide) → aucun email réel ne peut partir. | 2026-08-03 |
+| Email test réel | `messageId` SMTP vers laurent@start-academy.fr (pas `dryRun`) | ⏳ Reporté APRÈS 22-11 + pose SMTP (credentials à fournir par Laurent — inexistants sur toutes les sources au 03/08) | |
 
 ### 9.5 Invitations équipe (§5) — plan 22-08
 

@@ -146,23 +146,51 @@ export async function sendInvoiceReminderCron(input: {
     of,
   );
 
-  const mailResult = await sendMail({ to: recipientEmail, subject, html, text });
-  const dryRun = mailResult.dryRun === true;
-
-  await prisma.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      lastReminderAt: new Date(),
-      reminderCount: { increment: 1 },
+  const mailResult = await sendMail({
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+    context: {
+      tenantId,
+      category: 'invoice_reminder',
+      // Facture groupée : sessionId au niveau facture, sinon celui du participant.
+      sessionId: invoice.sessionId ?? invoice.participant?.sessionId ?? null,
     },
   });
+  const dryRun = mailResult.dryRun === true;
+  const suppressedBySettings = mailResult.suppressed === true;
+
+  // Phase 22 Plan 22-11 (fermeture Pitfall 1) : le compteur de relance n'est
+  // consommé QUE sur départ RÉEL d'email — ni dry-run env, ni suppression par
+  // les réglages tenant, ni échec SMTP ne brûlent de niveau. Conséquence
+  // assumée : tant que les réglages sont fermés, le cron re-tente chaque jour
+  // (AuditLog quotidien par facture éligible) sans consommer de niveau.
+  const counterConsumed = mailResult.ok && !dryRun;
+  if (counterConsumed) {
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        lastReminderAt: new Date(),
+        reminderCount: { increment: 1 },
+      },
+    });
+  }
 
   await logInvoiceEvent({
     tenantId,
     actorUserId: userId,
     targetInvoiceId: invoice.id,
     action: 'invoices.reminder_sent',
-    diff: { level, channel: 'email', triggered_by: 'cron', dryRun, daysOverdue },
+    diff: {
+      level,
+      channel: 'email',
+      triggered_by: 'cron',
+      dryRun,
+      suppressedBySettings,
+      counterConsumed,
+      daysOverdue,
+    },
   });
 
   return { ok: true, level, dryRun };

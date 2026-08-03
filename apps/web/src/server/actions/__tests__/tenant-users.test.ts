@@ -178,6 +178,12 @@ describe('inviteUser', () => {
     const mailCall = sendMailMock.mock.calls[0]![0];
     expect(mailCall.to).toBe('new@x.fr');
     expect(mailCall.subject).toMatch(/Bienvenue/);
+    // Phase 22-11 : contexte requis (invitation utilisateur, pas de session).
+    expect(mailCall.context).toEqual({
+      tenantId: 'tenant-1',
+      category: 'user_invitation',
+      sessionId: null,
+    });
     expect(auditLogCreate).toHaveBeenCalledTimes(1);
     const auditCall = auditLogCreate.mock.calls[0]![0];
     expect(auditCall.data.entity).toBe('User');
