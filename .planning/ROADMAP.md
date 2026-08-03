@@ -130,7 +130,7 @@ Plans:
   2. Un pack témoin généré post-bascule sert de gate go/no-go et réussit (0 stub, docs Qualiopi conformes, aucun 404 sur les preuves)
   3. Les alertes coûts (OpenRouter, Upstash/Redis, Supabase) et les backups daily sont confirmés actifs
   4. Le registre des traitements est complet : DPA documenté pour les 6 sous-traitants (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway/Fly) — et l'audit des `console.*` du worker/generators ne loggue aucun PII brut — AVANT que les PII prod ne circulent
-**Plans**: 10 plans
+**Plans**: 11 plans
 Plans:
 - [x] 22-01-PLAN.md — Runbook de bascule + plan de rollback (écrits AVANT la fenêtre) — CUT-01 [Wave 1]
 - [x] 22-02-PLAN.md — Portage Google 3 vars env-first TDD + audit/fixes logs PII + label Ollama — CUT-01/RGPD-01 [Wave 1]
@@ -138,8 +138,9 @@ Plans:
 - [x] 22-04-PLAN.md — Sanity check env Vercel (D-18②) + rapport envois en attente/relances brûlées (D-06) — CUT-01/CUT-02 [Wave 1]
 - [x] 22-05-PLAN.md — Registre traitements art. 30 + 7 fiches DPA + export PDF + GATE D-13 [checkpoint] — RGPD-01 [Wave 1]
 - [x] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
+- [ ] 22-11-PLAN.md — Garde-fou applicatif envois emails : TenantEmailSettings (tout OFF par défaut) + garde mailer + mode session test + UI Paramètres — CUT-02 [Wave 3 — débloque le flip 22-07]
 - [ ] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
-- [ ] 22-08-PLAN.md — Alertes coûts 4 plateformes + preuve backups Supabase daily EU [checkpoint] — CUT-02 [Wave 3]
+- [x] 22-08-PLAN.md — Alertes coûts 4 plateformes + preuve backups Supabase daily EU [checkpoint] — CUT-02 [Wave 3]
 - [ ] 22-09-PLAN.md — Invitations équipe RBAC via flux existant + première connexion prouvée [checkpoint] — CUT-01 [Wave 4]
 - [ ] 22-10-PLAN.md — Purge locale : archives pg_dump/MinIO → mot de validation → purge [checkpoints, destructif] — CUT-01 [Wave 5]
 **Research flags** (à reprendre au plan) : [VERIFY] région des backups Supabase (EU) · scrubber logs (logger des IDs, pas CNI/RIB) · destructif = étape séparée (pg_dump + vérif invariants avant de couper le local — convention projet) · gate RGPD/DPA doit précéder le flux PII prod (D-02b hérité Phase 16).
@@ -156,4 +157,4 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 5/6 | In Progress (obs. 24 j ✓, vérif 3/4 — reste : exécuter 20-06 gap OCR) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
-| 22. Bascule prod + RGPD | v6 | 6/10 | In Progress|  |
+| 22. Bascule prod + RGPD | v6 | 7/11 | In Progress|  |
