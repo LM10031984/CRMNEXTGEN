@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 22-08-PLAN.md (alertes coûts + backups — CUT-02 soldé)
-last_updated: "2026-08-03T14:24:20.860Z"
+stopped_at: Completed 22-11-PLAN.md (garde-fou emails déployé — 22-07 Task 4 débloquée)
+last_updated: "2026-08-03T14:40:12.908Z"
 last_activity: 2026-08-03
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 33
-  completed_plans: 28
+  completed_plans: 29
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
-Plan: 8 of 10
+Plan: 9 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-08-03 — **Plan 22-11 livré — GARDE-FOU APPLICATIF ENVOIS EMAILS déployé (fail-closed), 22-07 Task 4 DÉBLOQUÉE** (Wave 3, TDD, demande Laurent « décocher les mails puis activer sur une session test »). **① `TenantEmailSettings`** (FK-less pattern RevenueTarget, migration additive `20260803134935` `migrate deploy` cloud, re-deploy = No pending) : interrupteur général + 6 catégories + `testSessionIds`, **TOUT à default(false)** — sans action ADMIN, AUCUN email applicatif ne part même après `MAIL_DRY_RUN=false`. **② Chokepoint `mailer.ts` 2 couches** : env dry-run PRIORITAIRE (0 lecture BDD, dev intact) → `resolveEmailPolicy` pure (`email-policy.ts`, matrice 21 tests : null→no-settings, category-off, master-off, session test = SEUL chemin master-off) → suppression tracée `[mailer:suppressed-by-settings]` destinataire masqué D-17, retour `{ ok:true, dryRun:true, suppressed:true }` jamais de throw. **`context: { tenantId, category, sessionId? }` REQUIS par le type** → tsc = filet d'exhaustivité (12 call-sites/10 fichiers contextualisés, grep hors tests = 0). **③ Pitfall 1 FERMÉ À LA RACINE** : `reminderCount` (Invoice/PreEnrollment/OpcoSubmission) incrémenté UNIQUEMENT sur départ réel (`ok && !dryRun`) — AuditLog enrichi `suppressedBySettings`+`counterConsumed` ; conséquence voulue : cron re-tente quotidiennement en mode suppressed (1 AuditLog/jour/facture éligible), tableau B du 22-07 structurellement vide à l'avenir. Transitions statut (`sendOpcoSubmission` DRAFT→SENT) et toggles legacy lead NON touchés. **④ UI Paramètres organisme** section « Envois d'emails » après Facturation (badge Coupés—mode test/Actifs, hints par catégorie dont ⚠ règle payeur, sélecteur sessions 30 récentes ∪ sélection, `updateEmailSettings` ADMIN upsert scopé tenant + AuditLog). **⑤ Circuit 22-06** : PR **#9** merge commit `7e59abe` (gate test vert, diff 0, previews Vercel fail = attendu ④ 21-04), Vercel prod Ready, **worker Railway re-buildé `railway up`** (PAS redeploy — aurait rejoué l'ancienne image) → `76defe0a` RUNNING 4 apps pm2. MAIL_DRY_RUN reste true partout. **Pour le 22-07 Task 4** : script de preuve → catégorie `internal_notification` + sessionId ∈ testSessionIds cochés par Laurent (master OFF + sessionId null = suppress) ; ⚠ décision Laurent 22-07 : catégorie « Relances factures » à laisser DÉCOCHÉE jusqu'à l'upgrade Railway Pro. Suites : web **1208/1208** + shared 113/113, tsc web+shared exit 0. 2 déviations mineures (selects `session.id`/`batch.tenantId` manquants au recensement). Commits `0951337`(test RED)/`20a6d87`(feat GREEN)/`eb6af1d`(call-sites)/`7d2e88d`(UI), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`.
 
 - 2026-08-03 — **Plan 22-08 livré — CUT-02 alertes coûts + backups SOLDÉ** (Wave 3, checkpoint human-action exécuté via le navigateur de Laurent — Claude in Chrome, pattern 21-04 étendu). **① Maximum automatisé AVANT checkpoint** : **Railway soft limit 35 $ POSÉE PAR API GraphQL** (`usageLimitSet`, `hardLimit: null` vérifié post-pose — anti Pitfall 5, usage courant 10,43 $) ; **backups Supabase daily PROUVÉS par API management** (`region: eu-west-1`, `walg_enabled: true` physique, 6 snapshots COMPLETED 27/07→02/08 ~05h37 UTC, rétention 7 jours Pro — obs. non bloquante : trou au 01/08, 03/08 pas encore listé au relevé 10h30Z) ; OpenRouter solde **19,20 $** + usage mensuel 0,13 $ relevés par API ; Vercel Spend Management = **AUCUNE API publique** (sondes 404). **② Checkpoint 4 écrans (03/08)** : Vercel budget On-Demand **45 $** + Notifications ON + « Pause Production Deployments » **OFF** ; Supabase « **Spend cap is enabled** » (org LM10031984's Org Pro — ⚠ piège : le bon compte = login GitHub LM10031984, l'org Free homonyme laurent@ n'a PAS le projet) ; OpenRouter Auto Top-Up **OFF** + **credit limit clé prod 25 $/MENSUEL**. **⚠ LEÇON MAJEURE (déviation)** : la credit limit OpenRouter par défaut = **TOTAL LIFETIME** de la clé (38,93 $ déjà consommés) — « 25 $ » simple passait la clé à 100 % et **coupait la prod IA** → TOUJOURS « Reset limit = Monthly » (jauge post-pose 0,13/25 $). **Emails réels des alertes** (cible D-11 laurent@start-academy.fr, écarts acceptés par Laurent) : Vercel=compte owner, **Railway=laurentmarx@msn.com** (email compte/billing non modifiable par API — distinct de l'expéditeur applicatif formation@), OpenRouter=julien@start-academy.fr. **Aucun garde-fou ne peut éteindre la prod** (auto-pause OFF, hard limit null, spend cap sans coupure DB — seul plafond dur assumé : OpenRouter, 402→recharger runbook §7 ; backups non off-site assumé Pitfall 7, pg_dump hors vendor backlog D-12). Preuves : `22-COSTS-BACKUPS.md` (0 item en attente) + 5 JSON `evidence/` + runbook **§9.6 rempli**. Commits `360f0b7`(evidence API)/`39985bc`(docs), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`. **CUT-02 intégralement soldé** (gate SES-0094 22-06 + garde-fous 22-08). Restent Wave 3+ : 22-07 Task 4 (flip, gaté 22-11+credentials), 22-09/22-10.
 
@@ -312,7 +314,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-08-PLAN.md (alertes coûts + backups — CUT-02 soldé)
+Stopped at: Completed 22-11-PLAN.md (garde-fou emails déployé — 22-07 Task 4 débloquée)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
