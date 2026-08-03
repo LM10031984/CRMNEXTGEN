@@ -1608,3 +1608,29 @@ model SessionCalendarSync {
   @@unique([sessionId, eventKey])
   @@index([tenantId, sessionId])
 }
+
+// =====================================================
+// === Garde-fou applicatif envois emails (Phase 22)
+// =====================================================
+
+/// Phase 22 Plan 22-11 D-06 : garde-fou applicatif envois — fail-closed par défaut.
+/// Couche MÉTIER de la décision d'envoi (la couche env MAIL_DRY_RUN reste la
+/// plomberie, prioritaire) : interrupteur général + toggles par catégorie +
+/// sessions autorisées en mode test, pilotés depuis Paramètres organisme.
+/// Tout à false au déploiement : sans action explicite de l'ADMIN, AUCUN email
+/// applicatif ne part — même après MAIL_DRY_RUN=false.
+/// Pattern FK-less (précédent RevenueTarget) : évite de toucher le model Tenant.
+model TenantEmailSettings {
+  id                             String   @id @default(uuid())
+  tenantId                       String   @unique
+  emailsEnabled                  Boolean  @default(false)
+  invoiceRemindersEnabled        Boolean  @default(false)
+  preinscriptionRemindersEnabled Boolean  @default(false)
+  opcoRemindersEnabled           Boolean  @default(false)
+  opcoSubmissionsEnabled         Boolean  @default(false)
+  internalNotificationsEnabled   Boolean  @default(false)
+  userInvitationsEnabled         Boolean  @default(false)
+  testSessionIds                 String[] @default([])
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @default(now()) @updatedAt
+}
