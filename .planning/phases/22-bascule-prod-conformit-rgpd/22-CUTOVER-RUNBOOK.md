@@ -192,8 +192,34 @@ PDF échantillon sans filigrane.
 > (vérifié CLI 03/08), et l'**egress SMTP :465/:587 est bloqué par Railway en plan
 > Hobby** (P5a/P5b TIMEOUT prouvés 05/07). Les credentials SMTP n'existent nulle part
 > (`.env` racine et backup : vides ; Vercel : 0 var SMTP) → **à fournir par Laurent**
-> (+ trancher fournisseur OVH vs Google Workspace, + statut plan Railway) avant toute
-> pose. Voir 22-PENDING-SENDS-REPORT.md § « Pré-requis SMTP découverts ».
+> avant toute pose. Voir 22-PENDING-SENDS-REPORT.md § « Pré-requis SMTP découverts ».
+>
+> ✅ **DÉCISIONS LAURENT 2026-08-03 (checkpoint 22-07 Task 2)** :
+> 1. **Remédiation compteurs = option ① reset complet** — APPLIQUÉE (Task 3, script
+>    `_reset-burned-reminders.ts` DRY→WRITE, snapshot + AuditLog `invoices.reminder_reset`
+>    ×2 : FAC-000006 et FAC-000008 → `reminderCount=0`, `lastReminderAt=null`).
+>    Liste validée au 1er run réel : **2 emails** (n.albin@akorimmo.com niv. 1,
+>    kristin@riviera-king.com niv. 1) + 1 échec loggé FAC-000007 (Imagimmo sans email —
+>    Laurent saisira lui-même l'email de facturation dans la fiche Organisation). 0 apprenant.
+> 2. **SMTP = GOOGLE WORKSPACE** (pas OVH — remplace les valeurs OVH du point 3 ci-dessous) :
+>    `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` + `SMTP_SECURE=true` (SSL) ou
+>    `SMTP_PORT=587` + `SMTP_SECURE=false` (STARTTLS),
+>    **`SMTP_USER=formation@start-academy.fr`** (adresse d'ENVOI officielle de l'app),
+>    `SMTP_PASS` = **mot de passe d'application Google généré pour la boîte formation@**
+>    (à fournir par Laurent — pas encore disponible),
+>    **`MAIL_FROM=QualiOF <formation@start-academy.fr>`** — ⚠ c'est `MAIL_FROM` que lit
+>    le mailer (mailer.ts:40) ; la var `SMTP_FROM` posée sur Railway est MORTE (ignorée,
+>    et porte une coquille `startacademy.fr` sans tiret) → la corriger/supprimer à la pose.
+>    L'email test de preuve (point 4) partira **vers** laurent@start-academy.fr
+>    **depuis** formation@. Dette RGPD : registre + fiche DPA « OVH SMTP » à amender
+>    vers Google Workspace (CDPA validé 07/07) quand le circuit sera actif.
+> 3. **Railway : pas d'upgrade maintenant** (« second temps ») : plan Hobby = egress SMTP
+>    bloqué → les relances du CRON worker ne peuvent pas partir même après flip. Post-22-11
+>    (fix core : plus d'incrément sur échec), ces échecs seront SANS dégât (compteurs
+>    préservés, retentative quotidienne). **Recommandation : laisser la catégorie
+>    « relances factures » DÉCOCHÉE dans le garde-fou 22-11 jusqu'à l'upgrade Pro.**
+>    Les envois côté Vercel (invitations, notifications) fonctionneront normalement dès
+>    credentials posés + flip.
 
 ⚠ **Exigence forte de Laurent (répétée 2×)** : JAMAIS d'envoi de masse vers les
 apprenants sans action explicite. Ce flip ne s'exécute qu'après le rapport et la
@@ -399,7 +425,7 @@ Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
 | `22-PENDING-SENDS-REPORT.md` | liste nominative + relances brûlées dry-run | ✅ **Re-joué jour J** (commit `38ece67`) : Tableau A = 1 tentative FAC-000007 → **0 email réel** (payeur Imagimmo sans email), 0 apprenant. 🔴 **Découverte : 4 niveaux brûlés en « mode réel raté »** 21-23/07 (`dryRun=false` — MAIL_DRY_RUN absent du worker jusqu'au 31/07, SMTP sans auth + egress Hobby bloqué → 0 email parti, mais le core incrémente même sur `ok:false`, invoice-reminder-core.ts:149-166) : FAC-000006 et FAC-000008 à `reminderCount=2/2` (MAX) avec **0 email reçu** — 2 448 € en silence définitif sans remédiation. Chiffrage : ① reset → 2 emails au 1er run réel, ③ acceptation → 0 email. | 2026-08-03 |
-| Décision Laurent | validation + décision remédiation compteurs | ⏳ **Checkpoint 22-07 Task 2 présenté** (remédiation ①②③ + liste + credentials SMTP à fournir) | |
+| Décision Laurent | validation + décision remédiation compteurs | ✅ **Rendue le 2026-08-03** : ① **reset complet** (FAC-000006/008), liste validée (2 emails : n.albin@akorimmo.com + kristin@riviera-king.com, 0 apprenant), **SMTP = Google Workspace** (`smtp.gmail.com`, `SMTP_USER=formation@start-academy.fr`, mdp d'application à générer — pas encore fourni), **Railway = second temps** (Hobby, egress bloqué → catégorie relances à laisser décochée dans 22-11 jusqu'à l'upgrade Pro), email Imagimmo saisi par Laurent lui-même. **Remédiation APPLIQUÉE** : `_reset-burned-reminders.ts` DRY→WRITE=1, snapshot collé au rapport, 2 AuditLog `invoices.reminder_reset` (`reason: phase22-burned-dryrun`), contrôle post-write `reminderCount=0/lastReminderAt=null` ×2, tableau A re-généré = **écart 0** avec la liste validée. | 2026-08-03 |
 | Flip `MAIL_DRY_RUN=false` ×2 | capture Vercel (+ redeploy) ET Railway (redeploy auto) | 🚦 **SUSPENDU (décision Laurent 2026-08-03)** — attente garde-fou UI granulaire (plan 22-11). État vérifié 03/08 : Railway `MAIL_DRY_RUN=true` + SMTP_USER/PASS absents ; Vercel `MAIL_DRY_RUN=true` + **0 var SMTP** (dry-run structurel `SMTP_HOST` vide) → aucun email réel ne peut partir. | 2026-08-03 |
 | Email test réel | `messageId` SMTP vers laurent@start-academy.fr (pas `dryRun`) | ⏳ Reporté APRÈS 22-11 + pose SMTP (credentials à fournir par Laurent — inexistants sur toutes les sources au 03/08) | |
 
