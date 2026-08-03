@@ -1,0 +1,22 @@
+{
+    "data": {
+        "me": {
+            "email": "laurentmarx@msn.com",
+            "workspaces": [
+                {
+                    "name": "lm10031984's Projects",
+                    "customer": {
+                        "id": "73c59ac5-7ae6-409d-9975-7c3d0e2f5004",
+                        "billingEmail": "laurentmarx@msn.com",
+                        "currentUsage": 10.43446718515293,
+                        "isUsageSubscriber": true,
+                        "usageLimit": {
+                            "softLimit": 35,
+                            "hardLimit": null
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

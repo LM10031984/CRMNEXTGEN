@@ -1,0 +1,44 @@
+{
+    "region": "eu-west-1",
+    "pitr_enabled": false,
+    "walg_enabled": true,
+    "backups": [
+        {
+            "id": 1269400856,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-08-02T05:37:00.238Z"
+        },
+        {
+            "id": 1254361389,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-07-31T05:40:04.233Z"
+        },
+        {
+            "id": 1246444527,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-07-30T05:36:01.946Z"
+        },
+        {
+            "id": 1237678913,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-07-29T05:37:19.797Z"
+        },
+        {
+            "id": 1228962841,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-07-28T05:39:32.966Z"
+        },
+        {
+            "id": 1220189529,
+            "is_physical_backup": true,
+            "status": "COMPLETED",
+            "inserted_at": "2026-07-27T05:34:39.763Z"
+        }
+    ],
+    "physical_backup_data": {}
+}

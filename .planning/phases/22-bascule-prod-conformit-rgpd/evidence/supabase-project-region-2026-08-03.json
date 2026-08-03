@@ -1,0 +1,16 @@
+{
+    "id": "gntlqyscahbgjrmsbzil",
+    "ref": "gntlqyscahbgjrmsbzil",
+    "organization_id": "gcikydtxkmwrxnbusbjj",
+    "organization_slug": "gcikydtxkmwrxnbusbjj",
+    "name": "Qualiof",
+    "region": "eu-west-1",
+    "status": "ACTIVE_HEALTHY",
+    "database": {
+        "host": "db.gntlqyscahbgjrmsbzil.supabase.co",
+        "version": "17.6.1.127",
+        "postgres_engine": "17",
+        "release_channel": "ga"
+    },
+    "created_at": "2026-06-03T13:33:39.727365Z"
+}
