@@ -376,7 +376,7 @@ Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
 | curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | ✅ **21/21 en HTTP 200 + `%PDF-` — 0×404** | 2026-08-03T06:51:35Z |
 | PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | ✅ ATTESTATION + ÉMARGEMENT : footer propre (SIRET/NDA/contact), 0 filigrane. ⚠ Pré-requis découvert et corrigé : **22 OF_* Railway polluées par guillemets littéraux** (re-pose 06/07) → 12 re-posées propres + 10 vides supprimées, redeploy, pack re-régénéré. **PDF SYNCHRONE Vercel** (devis témoin `GET /api/quotes/[id]/pdf`, Gotenberg) : 200, `%PDF-`, **sans filigrane** (D-08 prouvé sur le chemin qui le portait en 21-06), teardown 0 résidu | 2026-08-03T09:32:53Z |
 | Contrôle analyse des besoins (ajout Laurent 30/07) | présence par stagiaire OU explication | ✅ Hors pack **by design** (Avant/Après, types.ts:23) ; 3/3 stagiaires ont leur `PedagogicalAsset ANALYSE_BESOIN` (04/06/2026, pdf oui) — fond traité au todo dédié | 2026-08-03 |
-| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | **Proposition Claude : GO** (6 critères verts) — _décision Laurent en attente (checkpoint Task 4)_ | |
+| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | ✅ **GO — validé par Laurent le 2026-08-03** (proposition Claude GO, 6 critères verts — aucun rollback, Wave 3 ouverte) | 2026-08-03 |
 
 ### 9.4 Rapport relances + flip emails (§4) — plans 22-07/22-08
 

@@ -91,12 +91,13 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
   2. Un appel Vercel→Gotenberg/WeasyPrint réussit après un cold start (endpoint public + Bearer token), et le worker joint la base directe + Redis
   3. La décision Redis (Upstash vs Redis co-localisé sur le worker host) est tranchée sur facturation observée 24 h et le coût mensuel projeté est sous budget, le worker stable 24 h
   4. L'OCR/pdftoppm est explicitement tranché et implémenté (rasterisation relocalisée worker OU dégradation texte-seul avec message utilisateur) — aucune dégradation silencieuse du pilier #4
-**Plans**: 5 plans (Railway tranché vs Fly ; Redis viré partout D-03 ; OCR relocalisé worker D-05)
+**Plans**: 6 plans (Railway tranché vs Fly ; Redis viré partout D-03 ; OCR relocalisé worker D-05 ; +1 gap closure UAT)
 - [x] 20-01-PLAN.md — Porter veille + relances factures hors BullMQ vers cron interne `croner` (lundi 8h / quotidien 8h Europe/Paris) — WORK-02 [Wave 1]
 - [x] 20-02-PLAN.md — Relocaliser l'OCR pré-inscription du fire-and-forget Vercel vers un worker qui poll les PreEnrollment SUBMITTED (SKIP LOCKED, pdftoppm sur l'hôte) — WORK-04 [Wave 1]
 - [x] 20-03-PLAN.md — Enforcement Bearer server-side : check Flask WeasyPrint + proxy Caddy Bearer devant Gotenberg (basic-auth only) — WORK-01 [Wave 1]
 - [x] 20-04-PLAN.md — Image Docker `turbo prune` + poppler + pm2-runtime ×4 + retrait deps/fichiers BullMQ morts + recalibrage cloud env + runbook Railway 20-DEPLOY.md — WORK-01/WORK-03 [Wave 2]
 - [ ] 20-05-PLAN.md — Déploiement Railway (Pro europe-west4) + smokes réels 20-SMOKE.md : pack closure Mac éteint 0 stub + OCR PDF scanné + Bearer 401/200 + SMTP :465 + stabilité 24h/coût — WORK-01/02/03/04 [checkpoint: deploy + human-verify]
+- [ ] 20-06-PLAN.md — Gap closure UAT test 2 : retriggerExtraction délégué au worker Railway (re-flag SUBMITTED + purge), refus clair des PDF scannés côté wizard Vercel (JPEG/PNG, sans hint brew), suppression legacy submitPreEnrollmentForm — WORK-04 [Wave 1, gap_closure]
 **Research flags** (repris au plan) : Railway Pro tranché (dashboard-first D-01, egress SMTP :465 Pro-only) · Redis viré D-03 (Postgres SKIP LOCKED + croner, `maxRetriesPerRequest:null` caduc) · OCR relocalisé worker D-05 (poppler apt image) · pricing/stabilité 24h = preuve runtime plan 20-05 · DNS privé `*.railway.internal`.
 
 ### Phase 21: App Vercel + filet CI/tests
@@ -136,7 +137,7 @@ Plans:
 - [x] 22-03-PLAN.md — Audit d'écart local↔cloud (cloud=vérité D-01) + re-audit storage final 0 lien mort — CUT-01 [Wave 1]
 - [x] 22-04-PLAN.md — Sanity check env Vercel (D-18②) + rapport envois en attente/relances brûlées (D-06) — CUT-01/CUT-02 [Wave 1]
 - [x] 22-05-PLAN.md — Registre traitements art. 30 + 7 fiches DPA + export PDF + GATE D-13 [checkpoint] — RGPD-01 [Wave 1]
-- [ ] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
+- [x] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
 - [ ] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
 - [ ] 22-08-PLAN.md — Alertes coûts 4 plateformes + preuve backups Supabase daily EU [checkpoint] — CUT-02 [Wave 3]
 - [ ] 22-09-PLAN.md — Invitations équipe RBAC via flux existant + première connexion prouvée [checkpoint] — CUT-01 [Wave 4]
@@ -153,6 +154,6 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 17. Fondations cloud | v6 | 3/3 | Complete    | 2026-07-04 |
 | 18. Supabase Storage | v6 | 4/4 | Complete    | 2026-07-04 |
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
-| 20. Worker 3ᵉ hôte | v6 | 5/5 | In Progress (reste : relevé obs. 24 h le 07-07 + verify-work) |  |
+| 20. Worker 3ᵉ hôte | v6 | 5/6 | In Progress (obs. 24 j ✓, vérif 3/4 — reste : exécuter 20-06 gap OCR) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
-| 22. Bascule prod + RGPD | v6 | 5/10 | In Progress|  |
+| 22. Bascule prod + RGPD | v6 | 6/10 | In Progress|  |

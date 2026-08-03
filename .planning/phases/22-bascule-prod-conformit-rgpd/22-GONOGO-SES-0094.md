@@ -96,5 +96,9 @@ Les 6 critères du runbook §3 sont **verts** (0 stub 21/21, footer OF_* propre,
 
 **Proposition : GO** (décision finale : Laurent — checkpoint Task 4 du plan 22-06 ; en cas de NO-GO → rollback §8 immédiat).
 
+## Verdict
+
+**GO — validé par Laurent le 2026-08-03** (checkpoint Task 4 du plan 22-06). Aucun rollback déclenché — la production reste live (emails toujours en dry-run). La Wave 3 s'ouvre : 22-07 (flip emails réels, avec arbitrage de l'envoi en attente relevé au 30/07) et 22-08 (invitations équipe, alertes).
+
 ---
-*Phase 22 — Plan 22-06, Task 3 (CUT-02) — 2026-08-03*
+*Phase 22 — Plan 22-06, Tasks 3-4 (CUT-02) — verdict consigné le 2026-08-03*

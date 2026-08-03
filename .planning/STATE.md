@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 22-03-PLAN.md (D-01+D-02 PASS après report sélectif)
-last_updated: "2026-07-07T04:46:42.059Z"
-last_activity: 2026-07-07
+stopped_at: "Completed 22-06-PLAN.md (bascule GATÉE GO — Wave 3 à lancer : 22-07/22-08)"
+last_updated: "2026-08-03T10:05:59.980Z"
+last_activity: 2026-08-03
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 31
-  completed_plans: 26
+  completed_phases: 4
+  total_plans: 32
+  completed_plans: 27
 ---
 
 # STATE — QualiOF
@@ -28,11 +28,13 @@ See: `.planning/PROJECT.md` (updated 2026-07-04)
 ## Current Position
 
 Phase: 22 (bascule-prod-conformit-rgpd) — EXECUTING
-Plan: 6 of 10
+Plan: 7 of 10
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- 2026-08-03 — **Plan 22-06 livré — BASCULE PROD EXÉCUTÉE ET GATÉE GO (CUT-01 + CUT-02 COMPLETS)** (Wave 2, 2 checkpoints human-verify exécutés : « GO bascule » Laurent 30/07 après §0 6/6 — Phase 20 close 24 j de stabilité Railway, audit data re-joué PASS 30/07 docs inclus — puis **verdict GO gate SES-0094 Laurent 2026-08-03**). **① §1–§2** : PR **#8** cloud-migration→main en **MERGE COMMIT `42d69c7`** (gate test vert, diff post-merge 0) ; `.env` racine assaini (5 commentaires inline PROD-0674 → lignes dédiées) ; **3 vars `GOOGLE_OAUTH_*` posées sensitive Production via API REST** (sanity pré-pose 0 suspect) ; **flip `NEXT_PUBLIC_APP_ENV=production` + redeploy Ready** → `/login` 200, **0 STAGING**, cdg1, login e2e→/app prouvé (Playwright setup 7 s) ; `MAIL_DRY_RUN=true` prouvé Vercel ET Railway — **0 email réel**. **② Gate SES-0094 (§3)** : batch `08fd14dc` **21/21 en 93 s via worker Railway** (enqueue Prisma file Postgres, Mac hors boucle), **0 stub** (ClosureJob — `usedStub` n'existe PAS sur Document/PedagogicalAsset, key_link du plan inexacte), **21/21 signed URLs 200+%PDF-, 0×404**, positionnement varié/satisfaction non uniforme/QCM 1-session scoring 92 %/85 %, **D-08 prouvé : 0 filigrane worker ET PDF synchrone Vercel** (devis témoin jetable `/api/quotes/[id]/pdf`, teardown 0 résidu) → `22-GONOGO-SES-0094.md`, runbook §9.0–9.3 remplis. **3 DÉVIATIONS ENV (leçons)** : ⓐ pose stdin CLI Vercel sans newline = **valeurs VIDES silencieuses** (sensitive irrelisibles !) → re-pose **API REST** + vérif longueur post-pose systématique ; ⓑ **MAIL_DRY_RUN ABSENT du worker Railway** (SMTP_HOST posé → isDryRun()=false, seul filet = SMTP_USER/PASS absents) → posé true (Rule 2) ; ⓒ **22 OF_* Railway polluées par guillemets littéraux** (re-pose 06/07 — la regex sanity ne flagge pas `"`) → footers `"START ACADEMY"`/contacts `""` → 12 re-posées propres + 10 vides SUPPRIMÉES (cascade pick() restaurée), worker redéployé, **pack re-régénéré** (batch 1 `4af3d823` 21/21 97 s aussi 0 stub). **§9.0 : 3 preuves RGPD complémentaires ABANDONNÉES par le responsable de traitement**. Contrôle Laurent analyse des besoins : **hors pack by design** (Avant/Après types.ts:23), 3/3 présentes en base (04/06). 2 observations non bloquantes : adresse tenant BDD (Cagnes) ≠ env (Vence, siège Qualiopi) sur l'attestation → 1 édition Paramètres organisme ; détection guillemets à ajouter à sanity-check-env.ts. Commits `26d1df2`(chore script docs-gap)/`42d69c7`(merge #8)/`69e21f8`(evidence §9.1-9.2)/`5af1497`(gate+GO), `--no-verify`. **Wave 3 OUVERTE : 22-07 (flip emails — ⚠ 1 envoi en attente relevé 30/07, re-jouer le rapport le jour J, SMTP_USER/PASS à poser ×2) + 22-08**. Rollback §8 (~5 min) reste possible tant que les emails ne sont pas flippés.
 
 - 2026-07-07 — **Plan 22-03 livré — GATE DATA CUT-01 : D-01 + D-02 PROUVÉS, cloud déclaré UNIQUE SOURCE DE VÉRITÉ après remédiation** (Wave 1, checkpoint decision exécuté). **① Audit d'écart local↔cloud** (`audit-data-gap.ts` lecture seule stricte, 48 tables, count exact + max timestamps, gardes anti-inversion, verdict exit-code) : **verdict initial FAIL + DÉCOUVERTE MAJEURE — la base cloud était le snapshot staging du 16/06, le dump frais du 03/07 (15 118 lignes) n'a JAMAIS été restauré** (Phase 19 a baseliné la base du 16/06 ; preuves : max(Person.createdAt) cloud=16/06 10h04, SessionCalendarSync cloud=0 vs 1349 local, SES-0101 absente). Données métier 16/06→03/07 absentes du cloud : **SES-0101 (session réelle 27/07/2026, 11 inscrits)**, 11 Person, 12 Org, 23 LegalLink, 2 SensitiveData, 1 RevenueTarget, **1349 mappings d'idempotence Google Calendar** (sans eux : doublons d'events à tout re-backfill). **② Décision Laurent (option 1) : report sélectif** — `report-data-gap.ts` (DRY/WRITE=1, upserts INSERT-ONLY par id — jamais d'écrasement cloud, 0 suppression, 0 écriture locale, séquentiel FK-safe) : **1414/1414 lignes reportées, re-DRY=0 manquant (idempotence)**. Artefacts de génération des 68 sessions NON reportés (versions 16/06 assumées, regénérables). **Re-run audit : PASS exit 0** (résidu assumé borné 04/07 : artefacts SES-0093 + touch PreEnrollment Phase 18, mécanisé dans le script) → **déclaration D-01 émise** (22-DATA-GAP-AUDIT.md), local obsolète, purge 22-10 (⚠ pg_dump d'archive AVANT : l'historique générations 16/06→04/07 + AuditLog local n'existent QUE là). **③ Re-audit storage final D-02** (DRY migrate-storage.ts 0 modif + audit d'écart 21-02, script temporaire supprimé) : **903/903 clés résolvent Supabase, 0 manquante, 0 orpheline, AUCUN WRITE storage** (avant ET après report — les 1414 lignes n'apportent 0 nouvelle clé), MinIO NON purgé → STORAGE-REAUDIT-FINAL.md. ⚠ Docs cloud des 68 sessions = versions 16/06 (pré-corrections Kaïna/Tracfin), regénérables ; pack témoin SES-0094 non affecté (protocole = régénération). **Fenêtre de bascule OUVERTE côté données** (runbook §0). 1 déviation Rule 4 (découverte→décision user, branche FAIL prévue au plan) + 1 Rule 3 (tsx depuis apps/web). CUT-01 NON coché (gate complet = 22-06/22-07). Commits `0b930b6`(audit FAIL)/`46c1b22`(storage)/`7e8d291`(report+PASS), `--no-verify` (parallel executor). `commit_docs=false` → SUMMARY/STATE/ROADMAP écrits, commit metadata `--no-verify`.
 
@@ -306,12 +308,12 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-Stopped at: Completed 22-03-PLAN.md (D-01+D-02 PASS après report sélectif)
+Stopped at: Completed 22-06-PLAN.md (bascule GATÉE GO — Wave 3 à lancer : 22-07/22-08)
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
 
-Last activity: 2026-07-07
+Last activity: 2026-08-03
 
 ### Roadmap Evolution
 
