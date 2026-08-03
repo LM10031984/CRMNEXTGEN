@@ -183,6 +183,12 @@ describe('notifyLeadAssigned', () => {
     const arg = sendMailMock.mock.calls[0]![0];
     expect(arg.to).toBe('commercial@example.com');
     expect(arg.subject).toContain('Jean Dupont');
+    // Phase 22-11 : contexte requis (notif interne → commercial, pas de session).
+    expect(arg.context).toEqual({
+      tenantId: 'tenant-1',
+      category: 'internal_notification',
+      sessionId: null,
+    });
   });
 
   it('Test 6 — owner sans email → pas d\'appel sendMail même si toggle email ON', async () => {

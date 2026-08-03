@@ -792,20 +792,36 @@ export async function sendInvoiceReminder(input: {
     of,
   );
 
-  // Send mail (dry-run automatique si SMTP_HOST vide — cf mailer.ts)
-  const mailResult = await sendMail({ to: recipientEmail, subject, html, text });
-  const dryRun = mailResult.dryRun === true;
-
-  // Update tracking invoice
-  await prisma.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      lastReminderAt: new Date(),
-      reminderCount: { increment: 1 },
+  // Send mail (2 couches Phase 22-11 : env dry-run + réglages TenantEmailSettings)
+  const mailResult = await sendMail({
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+    context: {
+      tenantId,
+      category: 'invoice_reminder',
+      // Facture groupée : sessionId au niveau facture, sinon celui du participant.
+      sessionId: invoice.sessionId ?? invoice.participant?.sessionId ?? null,
     },
   });
+  const dryRun = mailResult.dryRun === true;
+  const suppressedBySettings = mailResult.suppressed === true;
 
-  // AuditLog D-13c (systématique — même sur dry-run)
+  // Phase 22 Plan 22-11 (fermeture Pitfall 1) : compteur consommé UNIQUEMENT
+  // sur départ réel d'email (ni dry-run env, ni suppression réglages, ni échec SMTP).
+  const counterConsumed = mailResult.ok && !dryRun;
+  if (counterConsumed) {
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        lastReminderAt: new Date(),
+        reminderCount: { increment: 1 },
+      },
+    });
+  }
+
+  // AuditLog D-13c (systématique — même sur dry-run/suppression)
   await logInvoiceEvent({
     tenantId,
     actorUserId: userId,
@@ -816,6 +832,8 @@ export async function sendInvoiceReminder(input: {
       channel: 'email',
       triggered_by: input.triggered_by,
       dryRun,
+      suppressedBySettings,
+      counterConsumed,
       daysOverdue,
     },
   });

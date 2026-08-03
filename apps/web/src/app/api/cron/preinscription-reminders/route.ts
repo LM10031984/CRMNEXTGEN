@@ -101,9 +101,26 @@ export async function GET(req: Request) {
       of,
     );
 
-    const r = await sendMail({ to: recipient, subject, html, text });
+    const r = await sendMail({
+      to: recipient,
+      subject,
+      html,
+      text,
+      context: {
+        tenantId: pre.tenantId,
+        category: 'preinscription_reminder',
+        sessionId: pre.intendedSessionId ?? null,
+      },
+    });
     if (!r.ok) {
       errors++;
+      continue;
+    }
+
+    // Phase 22 Plan 22-11 (fermeture Pitfall 1) : compteur consommé UNIQUEMENT
+    // sur départ réel — dry-run env ou suppression réglages = skipped.
+    if (r.dryRun) {
+      skipped++;
       continue;
     }
 

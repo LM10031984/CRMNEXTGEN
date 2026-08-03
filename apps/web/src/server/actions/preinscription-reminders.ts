@@ -103,9 +103,32 @@ export async function sendPreEnrollmentReminder(
     of,
   );
 
-  const r = await sendMail({ to: recipient, subject, html, text });
+  const r = await sendMail({
+    to: recipient,
+    subject,
+    html,
+    text,
+    context: {
+      tenantId: user.tenantId,
+      category: 'preinscription_reminder',
+      sessionId: pre.intendedSessionId ?? null,
+    },
+  });
   if (!r.ok) {
     return { ok: false, preEnrollmentId, to: recipient, error: r.error };
+  }
+
+  // Phase 22 Plan 22-11 (fermeture Pitfall 1) : compteur consommé UNIQUEMENT
+  // sur départ réel — dry-run env ou suppression réglages = skipped, 0 niveau brûlé.
+  if (r.dryRun) {
+    return {
+      ok: false,
+      preEnrollmentId,
+      to: recipient,
+      reminderNumber,
+      dryRun: true,
+      skippedReason: r.suppressed ? 'suppressed-by-settings' : 'dry-run-env',
+    };
   }
 
   await prisma.preEnrollment.update({

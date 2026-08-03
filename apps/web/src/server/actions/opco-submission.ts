@@ -236,6 +236,7 @@ export async function sendOpcoSubmission(
 
   const sub = await prisma.opcoSubmission.findFirst({
     where: { id: submissionId, tenantId: user.tenantId },
+    include: { participant: { select: { sessionId: true } } },
   });
   if (!sub) return { ok: false, error: 'Dossier introuvable' };
   if (sub.status !== 'DRAFT') return { ok: false, error: `Statut ${sub.status} — déjà envoyé ou clos` };
@@ -258,6 +259,11 @@ export async function sendOpcoSubmission(
     subject: sub.subject,
     html: sub.bodyHtml,
     attachments: mailAttachments,
+    context: {
+      tenantId: user.tenantId,
+      category: 'opco_submission',
+      sessionId: sub.participant.sessionId,
+    },
   });
 
   if (!result.ok) {

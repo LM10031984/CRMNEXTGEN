@@ -99,7 +99,19 @@ export async function notifyLeadAssigned(opts: NotifyLeadAssignedOptions): Promi
       },
       of,
     );
-    await sendMail({ to: owner.email, subject, html, text });
+    // Phase 22-11 : les toggles legacy Tenant.notifyOnLeadAssignEmail/Bell
+    // restent en place (ET logique — les deux couches doivent autoriser).
+    await sendMail({
+      to: owner.email,
+      subject,
+      html,
+      text,
+      context: {
+        tenantId: opts.tenantId,
+        category: 'internal_notification',
+        sessionId: null,
+      },
+    });
     // Pitfall 5 (option b) : on ignore volontairement `mailResult.dryRun`.
     // L'AuditLog atteste la décision d'envoi, pas la livraison physique.
   }
