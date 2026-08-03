@@ -368,14 +368,15 @@ Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
 | `/login` post-redeploy | 200, grep `STAGING` = 0, `x-vercel-id` contient `cdg1` | ✅ `HTTP 200` ; `STAGING occurrences: 0` (bandeau disparu) ; `x-vercel-id: cdg1::cdg1::…` | 2026-07-30T18:29:19Z |
 | Login → `/app` | accès OK | ✅ Login réel `e2e@start-academy.fr` via Playwright `--project=setup` contre `https://qualiof.vercel.app` : **1 passed (7.0s)**, storageState créé (session posée, `/app` atteint). | 2026-07-31 |
 
-### 9.3 Pack témoin SES-0094 (§3) — plan 22-07
+### 9.3 Pack témoin SES-0094 (§3) — plan 22-06 (rapport complet : `22-GONOGO-SES-0094.md`)
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Compteurs stub (Prisma) | `usedStub=false` sur 100 % des docs du pack | _(à remplir)_ | |
-| curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | _(à remplir)_ | |
-| PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | _(à remplir)_ | |
-| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | _(à remplir)_ | |
+| Compteurs stub (Prisma) | `usedStub=false` sur 100 % des docs du pack | ✅ Batch `08fd14dc` COMPLETED **21/21 en 93 s** (worker Railway, Mac hors boucle) — **`usedStub=true` : 0/21** (ClosureJob), pdfKey 21/21 | 2026-08-03 |
+| curl signed URLs | 200 partout, 0× 404, `%PDF-` en tête | ✅ **21/21 en HTTP 200 + `%PDF-` — 0×404** | 2026-08-03T06:51:35Z |
+| PDF échantillon | footer 22 `OF_*` complet, SANS filigrane STAGING | ✅ ATTESTATION + ÉMARGEMENT : footer propre (SIRET/NDA/contact), 0 filigrane. ⚠ Pré-requis découvert et corrigé : **22 OF_* Railway polluées par guillemets littéraux** (re-pose 06/07) → 12 re-posées propres + 10 vides supprimées, redeploy, pack re-régénéré. **PDF SYNCHRONE Vercel** (devis témoin `GET /api/quotes/[id]/pdf`, Gotenberg) : 200, `%PDF-`, **sans filigrane** (D-08 prouvé sur le chemin qui le portait en 21-06), teardown 0 résidu | 2026-08-03T09:32:53Z |
+| Contrôle analyse des besoins (ajout Laurent 30/07) | présence par stagiaire OU explication | ✅ Hors pack **by design** (Avant/Après, types.ts:23) ; 3/3 stagiaires ont leur `PedagogicalAsset ANALYSE_BESOIN` (04/06/2026, pdf oui) — fond traité au todo dédié | 2026-08-03 |
+| Décision gate | GO / NO-GO (si NO-GO → §8 + horodatage du rollback) | **Proposition Claude : GO** (6 critères verts) — _décision Laurent en attente (checkpoint Task 4)_ | |
 
 ### 9.4 Rapport relances + flip emails (§4) — plans 22-07/22-08
 
