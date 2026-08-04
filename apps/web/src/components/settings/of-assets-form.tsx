@@ -39,8 +39,8 @@ interface OfAssetsFormProps {
   /** Onsaved/onCancel ne sont pas utilisés pour les uploads (pas de mode
    *  édition global — chaque upload est autonome) mais on respecte le contrat
    *  `SettingsSection.editView`. Le bouton "Fermer" appelle onCancel. */
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 // Fallback paths pour les assets bundled (cf. CONTEXT.md D-04/D-05).

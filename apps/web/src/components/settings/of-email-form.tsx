@@ -29,8 +29,8 @@ interface OfEmailFormProps {
   initial: {
     emailFrom: string | null;
   };
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 export function OfEmailForm({ initial, onSaved, onCancel }: OfEmailFormProps) {
@@ -50,7 +50,7 @@ export function OfEmailForm({ initial, onSaved, onCancel }: OfEmailFormProps) {
       const result = await updateTenantEmail(data);
       if (result.ok) {
         toast.success('Email expéditeur enregistré');
-        onSaved();
+        onSaved?.();
       } else {
         if (result.fieldErrors) {
           for (const [field, messages] of Object.entries(result.fieldErrors)) {

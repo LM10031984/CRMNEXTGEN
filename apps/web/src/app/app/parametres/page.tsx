@@ -151,8 +151,7 @@ export default async function ParametresPage() {
               <Field label="Forme juridique" value={tenant.legalForm} />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <OfIdentityForm
+          editView={<OfIdentityForm
               initial={{
                 name: tenant.name,
                 siret: tenant.siret,
@@ -160,10 +159,7 @@ export default async function ParametresPage() {
                 rcs: tenant.rcs,
                 legalForm: tenant.legalForm,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 2. Adresse & mentions légales (SET-02 texte) ─────────────── */}
@@ -200,16 +196,12 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <OfAddressForm
+          editView={<OfAddressForm
               initial={{
                 address: address ?? null,
                 legalMentions: tenant.legalMentions,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 3. Logo & signatures (SET-02 assets) ──────────────────── */}
@@ -236,17 +228,13 @@ export default async function ParametresPage() {
               )}
             </div>
           }
-          editView={(onSaved, onCancel) => (
-            <OfAssetsForm
+          editView={<OfAssetsForm
               initial={{
                 logoPath: tenant.logoPath,
                 signaturePedagoPath: tenant.signaturePedagoPath,
                 signatureDirigeantPath: tenant.signatureDirigeantPath,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 4. Numérotation factures (SET-03 préfixe) ─────────────── */}
@@ -267,18 +255,14 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <OfInvoicingForm
+          editView={<OfInvoicingForm
               initial={{
                 invoicePrefix,
                 iban: tenant.iban,
                 bic: tenant.bic,
               }}
               invoiceCount={invoiceCount}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 4bis. Facturation — Relances et avoirs (Phase 11 Plan 11-04) ─ */}
@@ -309,8 +293,7 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <InvoiceSettingsForm
+          editView={<InvoiceSettingsForm
               initial={{
                 invoiceReminderDays:
                   tenant.invoiceReminderDays?.length
@@ -318,10 +301,7 @@ export default async function ParametresPage() {
                     : [30, 45],
                 creditNotePrefix: tenant.creditNotePrefix,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 4bis-2. Envois d'emails (Phase 22 Plan 22-11 — D-06) ────── */}
@@ -365,14 +345,10 @@ export default async function ParametresPage() {
               </dl>
             </div>
           }
-          editView={(onSaved, onCancel) => (
-            <EmailSettingsForm
+          editView={<EmailSettingsForm
               initial={emailSettingsInitial}
               sessions={selectableSessions}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 4ter. Documents légaux statiques (BUG-15) ───────────── */}
@@ -408,16 +384,12 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <LegalDocsForm
+          editView={<LegalDocsForm
               initial={{
                 cgvMarkdown: tenant.cgvMarkdown ?? null,
                 reglementInterieurMarkdown: tenant.reglementInterieurMarkdown ?? null,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 5. Coordonnées bancaires (SET-03 RIB) ─────────────────── */}
@@ -441,17 +413,13 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <OfBankingForm
+          editView={<OfBankingForm
               initial={{
                 invoicePrefix,
                 iban: tenant.iban,
                 bic: tenant.bic,
               }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── 6. Email expéditeur (SET-03 email) ────────────────────── */}
@@ -479,13 +447,9 @@ export default async function ParametresPage() {
               </p>
             </dl>
           }
-          editView={(onSaved, onCancel) => (
-            <OfEmailForm
+          editView={<OfEmailForm
               initial={{ emailFrom: tenant.emailFrom }}
-              onSaved={onSaved}
-              onCancel={onCancel}
-            />
-          )}
+            />}
         />
 
         {/* ─── Sections legacy read-only ──────────────────────────────── */}

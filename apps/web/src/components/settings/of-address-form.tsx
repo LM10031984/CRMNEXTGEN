@@ -34,8 +34,8 @@ interface OfAddressFormProps {
     } | null;
     legalMentions: string | null;
   };
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 const MAX_LEGAL_MENTIONS = 2000;
@@ -73,7 +73,7 @@ export function OfAddressForm({ initial, onSaved, onCancel }: OfAddressFormProps
       });
       if (result.ok) {
         toast.success('Adresse enregistrée');
-        onSaved();
+        onSaved?.();
       } else {
         if (result.fieldErrors) {
           for (const [field, messages] of Object.entries(result.fieldErrors)) {

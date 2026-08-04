@@ -33,8 +33,8 @@ interface OfIdentityFormProps {
     rcs: string | null;
     legalForm: string | null;
   };
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 export function OfIdentityForm({ initial, onSaved, onCancel }: OfIdentityFormProps) {
@@ -69,7 +69,7 @@ export function OfIdentityForm({ initial, onSaved, onCancel }: OfIdentityFormPro
       const result = await updateTenantIdentity(payload);
       if (result.ok) {
         toast.success('Identité enregistrée');
-        onSaved();
+        onSaved?.();
       } else {
         if (result.fieldErrors) {
           for (const [field, messages] of Object.entries(result.fieldErrors)) {
