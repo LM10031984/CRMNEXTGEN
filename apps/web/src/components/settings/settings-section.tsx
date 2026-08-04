@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -27,11 +27,17 @@ export interface SettingsSectionProps {
   description?: string;
   readView: ReactNode;
   /**
-   * Render-prop : reçoit `onSaved` et `onCancel`.
-   * Le form interne doit appeler l'un des deux pour quitter le mode édition.
-   * Si non fourni, le bouton "Modifier" est masqué (lecture seule strict).
+   * Élément de formulaire d'édition (ex : `<OfIdentityForm initial={...} />`).
+   * SettingsSection lui injecte `onSaved` / `onCancel` via cloneElement au
+   * moment du rendu client — le form appelle l'un des deux pour quitter le
+   * mode édition. Si non fourni, le bouton "Modifier" est masqué.
+   *
+   * ⚠ RSC : la page parente est un Server Component — passer une FONCTION ici
+   * casse la sérialisation React ("Functions cannot be passed directly to
+   * Client Components", vu en prod Vercel le 2026-08-04). D'où l'élément.
+   * La forme render-prop reste acceptée UNIQUEMENT depuis un parent client.
    */
-  editView?: (onSaved: () => void, onCancel: () => void) => ReactNode;
+  editView?: ReactElement<{ onSaved?: () => void; onCancel?: () => void }> | ((onSaved: () => void, onCancel: () => void) => ReactNode);
   /** false → masque le bouton "Modifier" (sections legacy lecture seule). */
   allowEdit?: boolean;
   className?: string;
@@ -49,7 +55,7 @@ export function SettingsSection({
   const [editing, setEditing] = useState(false);
 
   // Si pas de editView fourni mais allowEdit=true par défaut → forcer read-only.
-  const canEdit = allowEdit && typeof editView === 'function';
+  const canEdit = allowEdit && (typeof editView === 'function' || isValidElement(editView));
 
   return (
     <section
@@ -81,10 +87,15 @@ export function SettingsSection({
 
       <div className="text-sm">
         {editing && editView
-          ? editView(
-              () => setEditing(false),
-              () => setEditing(false),
-            )
+          ? typeof editView === 'function'
+            ? editView(
+                () => setEditing(false),
+                () => setEditing(false),
+              )
+            : cloneElement(editView, {
+                onSaved: () => setEditing(false),
+                onCancel: () => setEditing(false),
+              })
           : readView}
       </div>
     </section>

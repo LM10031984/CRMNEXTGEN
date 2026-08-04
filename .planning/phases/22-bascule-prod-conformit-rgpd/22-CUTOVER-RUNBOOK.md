@@ -436,15 +436,19 @@ Le registre + les 7 fiches DPA validés (gate D-13) restent la référence.
 | Liste des invités | nom + rôle RBAC par personne (sans PII inutile) | _(à remplir)_ | |
 | Envoi des invitations | emails d'invitation réellement partis (flux `inviteUser`) | _(à remplir)_ | |
 
-### 9.6 Alertes coûts + backups (§6) — plan 22-09
+### 9.6 Alertes coûts + backups (§6) — plan 22-08 (exécuté — détail complet : `22-COSTS-BACKUPS.md`)
+
+> Rempli le **2026-08-03** (horodatage relevés API : 2026-08-03T10:30Z). Preuves JSON datées
+> dans `evidence/` (commit `360f0b7`) ; écrans dashboard-only configurés le 2026-08-03 via le
+> navigateur de Laurent (Claude in Chrome, Laurent aux commandes — pattern 21-04).
 
 | Preuve | Attendu | Résultat | Date |
 | --- | --- | --- | --- |
-| Capture Vercel Spend Management | budget ~45 $, alertes email, auto-pause OFF | _(à remplir)_ | |
-| Capture Railway Usage Limits | soft alert ~35 €, hard limit absent/haut | _(à remplir)_ | |
-| Capture Supabase Billing | spend cap ON | _(à remplir)_ | |
-| Capture OpenRouter Credits/Keys | Auto Top-Up OFF, solde ~15 €, credit limit clé prod | _(à remplir)_ | |
-| Capture Supabase Database → Backups | snapshots daily actifs, 7 j, projet eu-west-1 | _(à remplir)_ | |
+| Capture Vercel Spend Management | budget ~45 $, alertes email, auto-pause OFF | ✅ Budget On-Demand **45 $** (affichage 0/45 $, toast « Spend Management updated », confirmation par saisie du nom d'équipe), Notifications **ON**, « Pause Production Deployments » **OFF vérifié** (Pitfall 5). Aucun endpoint API public (sondes 404) → dashboard-only. | 2026-08-03 |
+| Capture Railway Usage Limits | soft alert ~35 €, hard limit absent/haut | ✅ **Posée par API GraphQL** (`usageLimitSet`) : `softLimit: 35 $`, `hardLimit: null` vérifié post-pose (Pitfall 5 — rien ne peut couper worker + doc-engines). Usage courant au relevé : 10,43 $. `evidence/railway-usage-limit-2026-08-03.json`. ⚠ Email d'alerte = `laurentmarx@msn.com` (email compte/billing, non modifiable par API) — **accepté par Laurent** (sans rapport avec l'expéditeur applicatif `formation@start-academy.fr`). | 2026-08-03 |
+| Capture Supabase Billing | spend cap ON | ✅ « **Spend cap is enabled** » (org `LM10031984's Org`, plan **Pro** — plafond ~25 $/mois SANS couper la base). ⚠ Piège d'accès : le bon compte = celui **lié à GitHub (LM10031984)**, pas l'org Free homonyme `laurent@start-academy.fr`. Factures historiques 25-35 $/mois cohérentes. | 2026-08-03 |
+| Capture OpenRouter Credits/Keys | Auto Top-Up OFF, solde ~15 €, credit limit clé prod | ✅ Auto Top-Up **OFF** vérifié (bouton « Enable » visible) ; solde **19,20 $** (API : 230 − 210,80) ; credit limit clé prod `sk-or-v1-9c7…c8e` = **25 $ avec « Reset limit = Monthly »** (jauge Monthly 0,13 $/25 $, 1 %). ⚠ **LEÇON** : la limite par défaut est **LIFETIME** (38,93 $ déjà consommés → « 25 $ » simple aurait BLOQUÉ la clé et coupé la prod IA) — toute limite de clé OpenRouter DOIT être posée en mensuel. Compte : `julien@start-academy.fr`. `evidence/openrouter-*-2026-08-03.json`. | 2026-08-03 |
+| Capture Supabase Database → Backups | snapshots daily actifs, 7 j, projet eu-west-1 | ✅ **Preuve API management** (à la source, mieux qu'une capture) : `region: "eu-west-1"`, `walg_enabled: true` (backups physiques), **6 snapshots daily COMPLETED** 27/07→02/08 (~05h37 UTC) — `evidence/supabase-backups-2026-08-03.json`. Obs. non bloquante : trou au 01/08, snapshot du 03/08 pas encore listé au relevé (10h30Z). Non off-site assumé (Pitfall 7 — pg_dump hors vendor au backlog D-12). | 2026-08-03T10:30Z |
 
 ### 9.7 Purge locale (§7 dernier point) — plan 22-10 (destructif, gate séparé)
 

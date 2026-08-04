@@ -36,8 +36,8 @@ interface OfInvoicingFormProps {
     bic: string | null;
   };
   invoiceCount: number;
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 export function OfInvoicingForm({
@@ -84,7 +84,7 @@ export function OfInvoicingForm({
       const result = await updateTenantBilling(payload);
       if (result.ok) {
         toast.success('Numérotation enregistrée');
-        onSaved();
+        onSaved?.();
       } else {
         if (result.fieldErrors) {
           for (const [field, messages] of Object.entries(result.fieldErrors)) {

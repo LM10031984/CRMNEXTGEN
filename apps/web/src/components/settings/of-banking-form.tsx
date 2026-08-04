@@ -33,8 +33,8 @@ interface OfBankingFormProps {
     iban: string | null;
     bic: string | null;
   };
-  onSaved: () => void;
-  onCancel: () => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }
 
 export function OfBankingForm({ initial, onSaved, onCancel }: OfBankingFormProps) {
@@ -68,7 +68,7 @@ export function OfBankingForm({ initial, onSaved, onCancel }: OfBankingFormProps
       const result = await updateTenantBilling(payload);
       if (result.ok) {
         toast.success('Coordonnées bancaires enregistrées');
-        onSaved();
+        onSaved?.();
       } else {
         if (result.fieldErrors) {
           for (const [field, messages] of Object.entries(result.fieldErrors)) {
