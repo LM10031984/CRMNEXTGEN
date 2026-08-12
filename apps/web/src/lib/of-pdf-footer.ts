@@ -8,7 +8,6 @@
  */
 
 import { getOfConfig } from './of-config';
-import { DOC_VERSION } from './doc-version';
 
 const BRAND_DARK = '#00527A';
 
@@ -36,7 +35,7 @@ export function renderOfStandardFooterHtml(): string {
 <body style="font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 36pt; color: #1F2937; margin: 0; padding: 0; -webkit-print-color-adjust: exact;">
   <div style="border-top: 3px solid #94A3B8; padding: 10px 18mm 0 18mm; text-align: center; line-height: 1.35; width: 100%;">
     <strong style="color: ${BRAND_DARK};">${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
-    Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}<br><span style="font-size:24pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
+    Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}
   </div>
 </body></html>`;
 }

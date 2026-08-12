@@ -134,12 +134,25 @@ describe('sessionStage — arbre de décision étape courante', () => {
     expect(result.cta!.href).toBe('#section-formateurs');
   });
 
-  it('3. BLOCKED — programme IA non validé → étape 1', () => {
-    const result = sessionStage(baseInput({ productAiDraftPending: true }));
+  it('3. BLOCKED — programme IA non validé → CTA vers la fiche produit', () => {
+    // Volet 3 (12/08) : la validation vit sur la fiche PRODUIT — le CTA doit
+    // y mener directement (l'ancien « Valider en 1 clic » → #step-1 scrollait
+    // vers une étape repliée sans action).
+    const result = sessionStage(
+      baseInput({ productAiDraftPending: true, productId: 'prod-123' }),
+    );
     expect(result.status).toBe('blocked');
     expect(result.current).toBe(1);
     expect(result.blocker).toBe('Programme IA non validé');
-    expect(result.cta!.label).toBe('Valider en 1 clic');
+    expect(result.cta!.label).toBe('Valider le programme (fiche produit)');
+    expect(result.cta!.href).toBe('/app/produits/prod-123?tab=programme');
+  });
+
+  it('3bis. BLOCKED — programme IA non validé SANS productId → fallback ancre honnête', () => {
+    const result = sessionStage(baseInput({ productAiDraftPending: true }));
+    expect(result.status).toBe('blocked');
+    expect(result.cta!.label).toBe("Voir l'étape 1 ↓");
+    expect(result.cta!.href).toBe('#step-1');
   });
 
   /* ── Catégorie 2 : ACTIVE — préparation à lancer/compléter ────────── */

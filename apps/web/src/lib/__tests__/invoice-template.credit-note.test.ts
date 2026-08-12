@@ -51,19 +51,21 @@ const BASE_DATA: InvoiceData = {
 };
 
 describe('renderInvoiceHtml — mode AVOIR (Plan 11-05)', () => {
-  it("Test 1 — sans documentKind → header '<h1>FACTURE</h1>' (rétro-compat)", () => {
+  // Gabarit refondu 12/08 (modèle Laurent) : le titre n'est plus un <h1>
+  // mais « FACTURE N° {num} » / « AVOIR N° {num} » (div.facture-no).
+  it("Test 1 — sans documentKind → titre « FACTURE N° » (rétro-compat)", () => {
     const html = renderInvoiceHtml(BASE_DATA);
-    expect(html).toContain('<h1>FACTURE</h1>');
-    expect(html).not.toContain('<h1>AVOIR</h1>');
+    expect(html).toContain('FACTURE N° FAC-000042');
+    expect(html).not.toContain('AVOIR N°');
   });
 
-  it("Test 2 — documentKind: 'FACTURE' → header '<h1>FACTURE</h1>'", () => {
+  it("Test 2 — documentKind: 'FACTURE' → titre « FACTURE N° »", () => {
     const html = renderInvoiceHtml({ ...BASE_DATA, documentKind: 'FACTURE' });
-    expect(html).toContain('<h1>FACTURE</h1>');
-    expect(html).not.toContain('<h1>AVOIR</h1>');
+    expect(html).toContain('FACTURE N° FAC-000042');
+    expect(html).not.toContain('AVOIR N°');
   });
 
-  it("Test 3 — documentKind: 'AVOIR' → header '<h1>AVOIR</h1>'", () => {
+  it("Test 3 — documentKind: 'AVOIR' → titre « AVOIR N° »", () => {
     const html = renderInvoiceHtml({
       ...BASE_DATA,
       number: 'AVO-000001',
@@ -71,8 +73,8 @@ describe('renderInvoiceHtml — mode AVOIR (Plan 11-05)', () => {
       originalNumber: 'FAC-000042',
       originalIssueDate: new Date('2026-05-15T10:00:00Z'),
     });
-    expect(html).toContain('<h1>AVOIR</h1>');
-    expect(html).not.toContain('<h1>FACTURE</h1>');
+    expect(html).toContain('AVOIR N° AVO-000001');
+    expect(html).not.toContain('FACTURE N° AVO-000001');
   });
 
   it("Test 4 — mode AVOIR contient la mention 'Avoir sur facture FAC-000042'", () => {

@@ -92,12 +92,33 @@ export function TimelineStep({
   children,
 }: Props) {
   const [isOpen, setIsOpen] = useState(expanded);
+  const [flash, setFlash] = useState(false);
 
   // Resync si la prop change (re-rendu après mutation server).
   // L'état utilisateur est écrasé — acceptable car la page boot prime sur le clic.
   useEffect(() => {
     setIsOpen(expanded);
   }, [expanded]);
+
+  // Volet 3 (retour Laurent 12/08) — CTA honnêtes : quand un StageCtaLink
+  // cible "#step-N", l'étape S'OUVRE (elle était le plus souvent repliée →
+  // le scroll seul était perçu « ne fait rien ») et pulse en ambre ~2 s.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onGoto = (e: Event) => {
+      const hash = (e as CustomEvent<{ hash?: string }>).detail?.hash;
+      if (hash !== `#step-${number}`) return;
+      setIsOpen(true);
+      setFlash(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setFlash(false), 2200);
+    };
+    window.addEventListener('qualiof:goto-step', onGoto);
+    return () => {
+      window.removeEventListener('qualiof:goto-step', onGoto);
+      clearTimeout(timer);
+    };
+  }, [number]);
 
   const s = STATE_STYLES[state];
   const headerId = `step-${number}-title`;
@@ -109,6 +130,8 @@ export function TimelineStep({
         'rounded-2xl border transition-colors overflow-hidden',
         s.ring,
         s.bg,
+        // Pulse d'arrivée quand un CTA StageCtaLink cible cette étape (volet 3).
+        flash && 'ring-2 ring-amber-400 border-amber-300 animate-pulse',
       )}
       aria-labelledby={headerId}
     >

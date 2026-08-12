@@ -139,7 +139,7 @@ Plans:
 - [x] 22-05-PLAN.md — Registre traitements art. 30 + 7 fiches DPA + export PDF + GATE D-13 [checkpoint] — RGPD-01 [Wave 1]
 - [x] 22-06-PLAN.md — Bascule : pre-flight GO, merge main, 3 vars Google, flip production + pack témoin SES-0094 go/no-go [checkpoints] — CUT-01/CUT-02 [Wave 2]
 - [x] 22-11-PLAN.md — Garde-fou applicatif envois emails : TenantEmailSettings (tout OFF par défaut) + garde mailer + mode session test + UI Paramètres — CUT-02 [Wave 3 — débloque le flip 22-07]
-- [ ] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
+- [x] 22-07-PLAN.md — Emails réels : rapport → décision remédiation → MAIL_DRY_RUN=false ×2 + preuve [checkpoint] — CUT-01/CUT-02 [Wave 3]
 - [x] 22-08-PLAN.md — Alertes coûts 4 plateformes + preuve backups Supabase daily EU [checkpoint] — CUT-02 [Wave 3]
 - [ ] 22-09-PLAN.md — Invitations équipe RBAC via flux existant + première connexion prouvée [checkpoint] — CUT-01 [Wave 4]
 - [ ] 22-10-PLAN.md — Purge locale : archives pg_dump/MinIO → mot de validation → purge [checkpoints, destructif] — CUT-01 [Wave 5]
@@ -157,4 +157,4 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 19. Base Postgres | v6 | 3/3 | Complete    | 2026-07-05 |
 | 20. Worker 3ᵉ hôte | v6 | 5/6 | In Progress (obs. 24 j ✓, vérif 3/4 — reste : exécuter 20-06 gap OCR) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
-| 22. Bascule prod + RGPD | v6 | 8/11 | In Progress|  |
+| 22. Bascule prod + RGPD | v6 | 9/11 | In Progress|  |
