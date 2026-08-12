@@ -194,7 +194,12 @@ async function main() {
 
   const orgAddr = (sponsor.address as Record<string, string> | null) ?? null;
   const startIso = session.startDate.toISOString().slice(0, 10);
-  const conventionIso = subtractBusinessDaysISO(startIso, 15); // règle J-15 ouvrés (COR-1)
+  // Consigne Laurent 12/08 : la convention est signée MAINTENANT → date de
+  // signature FIXE 12/08/2026 (remplace la règle J-15 ouvrés pour cette
+  // génération). Cohérence : rétractation 14 j (Art. 6) s'achève le 26/08,
+  // bien avant le début de formation (07/10). Garde : signature < session.
+  const conventionIso = '2026-08-12';
+  if (!(conventionIso < startIso)) throw new Error('Date de signature ≥ début de session');
 
   // Lieu — même construction que convention-core (legalName — name, rue, cp, ville)
   const locName = session.location
@@ -259,20 +264,14 @@ async function main() {
     'modalités OPCO EP',
   );
 
-  // Patch 3 (retour Laurent 12/08 n°3) — le programme détaillé 19 jours NE
-  // figure PLUS dans la convention (déposé au portail OPCO EP comme document
-  // séparé) : l'Article 3 devient une simple mention « document joint ».
-  // La section .programme-md ne contient aucun <section> imbriqué (sortie
-  // marked) → le premier </section> rencontré clôt bien l'Article 3.
-  convHtml = mustReplace(
-    convHtml,
-    /<section class="programme-section">[\s\S]*?<\/section>/,
-    `<section>
-  <h2 class="article">Article 3 — Programme de formation</h2>
-  <p>Le programme détaillé de la formation (152 heures — 19 journées), conforme aux objectifs définis à l'article 2, est remis en <strong>document joint</strong> à la présente convention, dont il fait partie intégrante.</p>
-</section>`,
-    'programme → document joint (article 3)',
-  );
+  // (ex-Patch 3 « document joint » RETIRÉ — consigne finale Laurent 12/08 :
+  // « tu reprends le modèle d'avant et tu enlèves juste l'annexe 1 ». Le
+  // programme détaillé des 19 jours est RESTAURÉ dans le corps, Article 3,
+  // rendu par le template avec la mise en page aérée validée. Gates de
+  // sortie : « JOUR » ×19, « document joint » = 0, « Annexe » = 0.)
+  if (!/<section class="programme-section">/.test(convHtml))
+    throw new Error('Article 3 programme absent du HTML — template modifié ?');
+  if (/document joint/i.test(convHtml)) throw new Error('Mention « document joint » résiduelle');
 
   // Patch 5 (retour Laurent 12/08 n°4) — TAMPON Start Academy à côté de la
   // signature du dirigeant dans le bloc OF. Asset : tampon-start-academy.png
@@ -327,7 +326,7 @@ async function main() {
   });
   fs.writeFileSync(OUT_CONVENTION, convPdf);
   console.log(`CONVENTION (groupe, ${NB_STAGIAIRES} stagiaires) : Document ${convDoc.id}`);
-  console.log(`  signature prévue le ${conventionIso} (J-15 ouvrés), représentant : ${sponsor.representative}`);
+  console.log(`  signée le ${conventionIso} (date fixe — consigne 12/08), représentant : ${sponsor.representative}`);
   console.log(`  storage : ${convKey}`);
   console.log(`  local   : ${OUT_CONVENTION} (${(convPdf.length / 1024).toFixed(0)} Ko)\n`);
 

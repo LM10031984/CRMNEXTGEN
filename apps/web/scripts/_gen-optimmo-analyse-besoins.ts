@@ -35,7 +35,9 @@ import {
 
 const TENANT_ID = 'db191440-a144-48d1-93c1-767e6f647f2c';
 const SESSION_CODE = 'SES-0106';
-const ANALYSE_DATE = new Date('2026-09-08T00:00:00Z'); // mardi, J-6 ouvrés avant la convention du 16/09
+// Re-datée au 12/08/2026 (consigne Laurent 12/08) — chronologie : analyse
+// 12/08 < signature convention 16/09 < formation 07/10. Garde < 16/09 conservée.
+const ANALYSE_DATE = new Date('2026-08-12T00:00:00Z');
 const OUT_PDF = '/Users/laurentmarx/Documents/CRM Next gen/Analyse-besoins-OPTIMMO-SES-0106.pdf';
 
 // ---------------------------------------------------------------------------
@@ -82,8 +84,9 @@ async function main() {
   if (!sponsor) throw new Error('SponsorOrg introuvable');
   const nbParticipants = await prisma.sessionParticipant.count({ where: { sessionId: session.id } });
   if (nbParticipants !== 11) throw new Error(`Effectif ${nbParticipants} ≠ 11`);
-  // Garde de datation : l'analyse précède la convention (16/09) et le début de session.
-  if (!(ANALYSE_DATE < new Date('2026-09-16T00:00:00Z'))) throw new Error('Date analyse ≥ date convention');
+  // Garde de datation : l'analyse précède ou coïncide avec la signature de la
+  // convention (12/08/2026 — consigne Laurent : les DEUX docs datés du 12/08).
+  if (!(ANALYSE_DATE <= new Date('2026-08-12T00:00:00Z'))) throw new Error('Date analyse > date convention');
 
   const fmtD = (d: Date) =>
     d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
@@ -197,7 +200,7 @@ ${renderBrandHeader(undefined, TENANT_ID)}
 
   fs.writeFileSync(OUT_PDF, pdf);
   console.log(`ANALYSE BESOINS ENTREPRISE : PedagogicalAsset ${asset.id} (niveau session, participantId null)`);
-  console.log(`  datée du ${formatDateFr(ANALYSE_DATE)} (avant convention du 16/09/2026)`);
+  console.log(`  datée du ${formatDateFr(ANALYSE_DATE)} (= jour de signature de la convention, 12/08/2026)`);
   console.log(`  storage : ${key}`);
   console.log(`  local   : ${OUT_PDF} (${(pdf.length / 1024).toFixed(0)} Ko, nom ${path.basename(OUT_PDF).length} car.)`);
   console.log('\nAucun email envoyé. ✅');
