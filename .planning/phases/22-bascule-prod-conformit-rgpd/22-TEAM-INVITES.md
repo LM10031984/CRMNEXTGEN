@@ -26,9 +26,9 @@ Expéditeur : `QualiOF <formation@start-academy.fr>` (SMTP Google Workspace, cat
 
 | Membre | Rôle | Invitation envoyée le | messageId SMTP (preuve envoi réel) | Première connexion le |
 | --- | --- | --- | --- | --- |
-| Béatrice L. (`f***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:39Z | `<0730b14e-c415-2475-40c5-be8bf0484ecb@start-academy.fr>` | _(en attente — voir checkpoint)_ |
-| Jean-Guy O. (`j***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:42Z | `<f186efca-f8b9-04ae-85b2-3c232414acbc@start-academy.fr>` | _(en attente)_ |
-| Laurent M. (`l***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:44Z | `<6698738c-bf75-153e-3bfa-982a76cc0db1@start-academy.fr>` | _(en attente)_ |
+| Béatrice L. (`f***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:39Z, **renvoyée 2026-08-12** (voir § Renvoi) | `<0730b14e-c415-2475-40c5-be8bf0484ecb@start-academy.fr>` | _(en attente — lien frais valable jusqu'au 19/08)_ |
+| Jean-Guy O. (`j***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:42Z (expirée 11/08, non utilisée) | `<f186efca-f8b9-04ae-85b2-3c232414acbc@start-academy.fr>` | _(en attente — renvoi à la demande)_ |
+| Laurent M. (`l***@start-academy.fr`) | ADMIN | 2026-08-04T13:31:44Z | `<6698738c-bf75-153e-3bfa-982a76cc0db1@start-academy.fr>` | **2026-08-04T13:33:35Z** (invitation acceptée, 1 AuthSession — non « tierce » au sens du critère) |
 
 Note : Béatrice = boîte expéditrice `formation@` — elle reçoit un email « de sa propre
 adresse », c'est attendu.
@@ -52,9 +52,36 @@ Contrôle Users en base:
   (1 ADMIN, dernier login 2026-07-13 ; 1 LECTEUR jamais connecté) — emails distincts,
   hors périmètre ; candidats à désactivation post-onboarding (décision Laurent à venir).
 
+## Renvoi du 2026-08-12 (liens du 04/08 expirés le 11/08)
+
+Demande Laurent (12/08) : renvoi à **Béatrice uniquement**. Flux `resendInvitation`
+répliqué à l'identique (`_resend-invitation.ts` — nouvelle `UserInvitation` à token
+frais sur le User EXISTANT, aucun nouveau compte, AuditLog `users.invitation.resend`).
+Garde 22-11 re-vérifié OUVERT en base avant envoi (`emailsEnabled=true` +
+`userInvitationsEnabled=true`, inchangés depuis le 04/08 13:09Z).
+
+| Preuve | Valeur |
+| --- | --- |
+| Renvoi parti réellement | `dryRun=false`, `suppressed=false` |
+| messageId SMTP | `<b6b12660-74bb-1d23-1967-7bd1a7893d4a@start-academy.fr>` |
+| Nouvelle invitation | `f0fdf760-0620-45c2-be62-07f70026ed2a`, expire **2026-08-19T10:24:36Z** (J+7) |
+| Ancienne invitation | `0e95a271…` expirée 2026-08-11, `usedAt=null` (jamais cliquée) |
+
+Relevé de connexions au 12/08 (DRY, avant renvoi) :
+
+```
+f***@start-academy.fr role=ADMIN lastLogin=jamais authSessions=0
+j***@start-academy.fr role=ADMIN lastLogin=jamais authSessions=0
+l***@start-academy.fr role=ADMIN lastLogin=2026-08-04T13:33:35.417Z authSessions=1
+```
+
+→ **Laurent a accepté son invitation et s'est connecté le 04/08 à 13:33Z** (compte créé
+par l'invitation, AuthSession en base) — le flux invitation→connexion est prouvé de bout
+en bout, mais ce n'est pas la connexion « tierce » attendue (Béatrice ou Jean-Guy).
+
 ## Preuve de première connexion tierce (critère CUT-01 / objectif v6)
 
 _(à remplir à la clôture du plan : `User.lastLoginAt` daté + `AuthSession` en base pour
-le membre connecté — requête Prisma collée ici)_
+Béatrice ou Jean-Guy — requête Prisma collée ici)_
 
 Aucun token ni mot de passe dans ce document.
