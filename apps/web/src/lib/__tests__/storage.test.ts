@@ -131,13 +131,18 @@ describe('createSignedUploadUrl', () => {
     expect(createSignedUploadUrlMock).toHaveBeenCalledWith('p/x.pdf', { upsert: true });
   });
 
-  it('Test 2 (minio) : throw explicite « Supabase uniquement »', async () => {
+  it('Test 2 (minio) : presigned PUT S3 — URL absolue signée, token vide (audit 2026-08-12)', async () => {
+    // Avant : throw « Supabase uniquement » → le formulaire public ne pouvait
+    // pas uploader en mode local/MinIO. Désormais : presigned PUT S3-compatible.
     vi.resetModules();
     mockEnv.STORAGE_PROVIDER = 'minio';
     const fresh = await import('../storage');
-    await expect(fresh.createSignedUploadUrl('preinscriptions', 'k')).rejects.toThrow(
-      /Supabase uniquement/,
-    );
+    const res = await fresh.createSignedUploadUrl('preinscriptions', 'k');
+    expect(res.path).toBe('k');
+    expect(res.token).toBe(''); // token = mécanique Supabase, sans objet en S3
+    expect(res.signedUrl).toMatch(/^https?:\/\//); // absolue → utilisée telle quelle par le client
+    expect(res.signedUrl).toContain('X-Amz-Signature=');
+    expect(res.signedUrl).toContain('/preinscriptions/k');
   });
 });
 

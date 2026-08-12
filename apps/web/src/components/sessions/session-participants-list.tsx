@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { UserMinus, Loader2, ExternalLink, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { unenrollParticipant } from '@/server/actions/sessions';
+import { EditParticipantButton } from './edit-participant-button';
 
 export interface SessionParticipantRow {
   id: string;
@@ -14,6 +15,12 @@ export interface SessionParticipantRow {
   sponsorOrgLabel: string | null;
   docCount?: number;
   docTotal?: number;
+  // Champs inscription éditables (audit 2026-08-12) — optionnels pour ne pas
+  // casser les appels existants ; le bouton Éditer n'apparaît que s'ils sont là.
+  priceHT?: number;
+  enrollmentStatus?: string;
+  financingMode?: string | null;
+  financingRequestDate?: Date | string | null;
 }
 
 /**
@@ -99,6 +106,15 @@ export function SessionParticipantsList({
                   <span className="tabular-nums text-xs text-muted-foreground">
                     {p.docCount}/{p.docTotal} docs
                   </span>
+                )}
+                {canManage && typeof p.priceHT === 'number' && p.enrollmentStatus && (
+                  <EditParticipantButton
+                    participantId={p.id}
+                    currentPriceHT={p.priceHT}
+                    currentStatus={p.enrollmentStatus}
+                    currentFinancingRequestDate={p.financingRequestDate ?? null}
+                    currentFinancingMode={p.financingMode ?? null}
+                  />
                 )}
                 {canManage && (
                   <button

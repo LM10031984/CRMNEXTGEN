@@ -1,4 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Mock du singleton prisma : ce test unitaire ne touche pas la BDD, mais
+// l'import du script instancie le client réel par effet de bord (même
+// stratégie que import-veille.idempotence.test.ts — évite l'Unhandled
+// Rejection "engine load" quand les binaires Prisma sont absents).
+vi.mock('@qualiof/db', () => ({
+  prisma: {
+    regulatoryWatch: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    auditLog: { create: vi.fn() },
+    tenant: { findFirst: vi.fn() },
+  },
+}));
+
 import { processSheetRows, SHEET_THEME_MAP } from '../import-veille-from-xlsx';
 
 /**

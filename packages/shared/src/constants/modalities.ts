@@ -1,4 +1,4 @@
-import { Modality } from '@qualiof/db';
+import { Modality } from '@prisma/client';
 
 /** Mapping des libellés humains "Mode d'organisation" → enum Modality. */
 export function mapModality(input: string | null | undefined): Modality {

@@ -11,6 +11,7 @@ interface EditParticipantButtonProps {
   currentPriceHT: number;
   currentStatus: string;
   currentFinancingRequestDate?: Date | string | null;
+  currentFinancingMode?: string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -19,6 +20,17 @@ const STATUS_OPTIONS = [
   { value: 'IN_PROGRESS', label: 'En formation' },
   { value: 'COMPLETED', label: 'Terminé' },
   { value: 'CANCELLED', label: 'Annulé' },
+] as const;
+
+// Miroir exact du wizard session (étape 3) — même libellés, même ordre.
+const FINANCING_OPTIONS = [
+  { value: '', label: '— Mode de financement —' },
+  { value: 'OPCO', label: 'OPCO' },
+  { value: 'CPF', label: 'CPF' },
+  { value: 'ENTREPRISE', label: 'Entreprise (paie directement)' },
+  { value: 'AUTOFINANCEMENT', label: 'Autofinancement' },
+  { value: 'POLE_EMPLOI', label: 'Pôle Emploi' },
+  { value: 'AUTRE', label: 'Autre' },
 ] as const;
 
 function toIsoDate(d: Date | string | null | undefined): string {
@@ -33,11 +45,13 @@ export function EditParticipantButton({
   currentPriceHT,
   currentStatus,
   currentFinancingRequestDate,
+  currentFinancingMode,
 }: EditParticipantButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [priceHT, setPriceHT] = useState<string>(String(currentPriceHT));
   const [status, setStatus] = useState<string>(currentStatus);
+  const [financingMode, setFinancingMode] = useState<string>(currentFinancingMode ?? '');
   const [financingRequestDate, setFinancingRequestDate] = useState<string>(
     toIsoDate(currentFinancingRequestDate),
   );
@@ -62,6 +76,7 @@ export function EditParticipantButton({
         priceHT: parsedPrice,
         enrollmentStatus: status as any,
         financingRequestDate: financingRequestDate || null,
+        financingMode: (financingMode || null) as any,
       });
       if (r.ok) {
         toast.success(`Inscription mise à jour — ${parsedPrice.toFixed(2)} €`);
@@ -126,6 +141,22 @@ export function EditParticipantButton({
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>
                       {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Mode de financement
+                </label>
+                <select
+                  value={financingMode}
+                  onChange={(e) => setFinancingMode(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white"
+                >
+                  {FINANCING_OPTIONS.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
                     </option>
                   ))}
                 </select>

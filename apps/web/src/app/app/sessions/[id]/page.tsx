@@ -1026,14 +1026,22 @@ export default async function SessionDetailPage({
               <div className="mt-3">
                 <SessionParticipantsList
                   canManage={canWrite}
-                  participants={matrixParticipants.map((p) => ({
-                    id: p.id,
-                    personId: p.personId,
-                    fullName: p.fullName,
-                    sponsorOrgLabel: p.sponsorOrgLabel,
-                    docCount: docCompletionByParticipant.get(p.id) ?? 0,
-                    docTotal: PERSONAL_DOC_TOTAL,
-                  }))}
+                  participants={matrixParticipants.map((p) => {
+                    const raw = session.participants.find((sp) => sp.id === p.id);
+                    return {
+                      id: p.id,
+                      personId: p.personId,
+                      fullName: p.fullName,
+                      sponsorOrgLabel: p.sponsorOrgLabel,
+                      docCount: docCompletionByParticipant.get(p.id) ?? 0,
+                      docTotal: PERSONAL_DOC_TOTAL,
+                      // Édition inscription (audit 2026-08-12)
+                      priceHT: raw ? Number(raw.priceHT) : undefined,
+                      enrollmentStatus: raw?.enrollmentStatus,
+                      financingMode: p.financingMode,
+                      financingRequestDate: raw?.financingRequestDate ?? null,
+                    };
+                  })}
                 />
               </div>
             </SessionWorkflowTimeline>

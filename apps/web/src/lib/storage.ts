@@ -217,11 +217,23 @@ export async function createSignedDownloadUrl(
 export async function createSignedUploadUrl(
   bucket: string,
   key: string,
+  contentType?: string,
 ): Promise<{ path: string; token: string; signedUrl: string }> {
   if (PROVIDER !== 'supabase') {
-    throw new Error(
-      'createSignedUploadUrl : Supabase uniquement (MinIO local = upload serveur, pas de direct-to-storage)',
-    );
+    // MinIO / S3-compatible : presigned PUT (audit 2026-08-12). Avant, cette
+    // branche jetait « Supabase uniquement » → le formulaire public de
+    // pré-inscription ne pouvait PAS uploader en mode local/MinIO alors que
+    // storage.ts promet la parité de providers. URL absolue → le client
+    // (direct-upload-field) l'utilise telle quelle. `token` inutile côté S3.
+    await ensureBucket(bucket);
+    const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+    const cmd = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ...(contentType ? { ContentType: contentType } : {}),
+    });
+    const signedUrl = await getSignedUrl(s3(), cmd, { expiresIn: 600 });
+    return { path: key, token: '', signedUrl };
   }
   await ensureBucket(bucket);
   const { data, error } = await supabase()

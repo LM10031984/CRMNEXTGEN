@@ -17,9 +17,10 @@
  *          sur qualiof_test puis nettoyées en afterAll.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-// PrismaClient re-exporté par @qualiof/db (apps/web ne dépend pas directement de
+// Factory re-exportée par @qualiof/db (apps/web ne dépend pas directement de
 // @prisma/client). On instancie NOTRE PROPRE client (pas le singleton) → qualiof_test.
-import { PrismaClient } from '@qualiof/db';
+// createPrismaClientForUrl respecte PRISMA_USE_PG_ADAPTER (sandbox d'audit).
+import { createPrismaClientForUrl } from '@qualiof/db';
 import { mergeOrgsTx, mergePersonsTx, detectPersonsByName } from '../dedupe';
 
 // ── Garde d'environnement (première ligne de défense) ──────────────
@@ -33,7 +34,7 @@ if (!TEST_URL || !/_test$/.test(dbName(TEST_URL))) {
   );
 }
 
-const db = new PrismaClient({ datasources: { db: { url: TEST_URL } } });
+const db = createPrismaClientForUrl(TEST_URL);
 
 afterAll(async () => {
   // Filet : purge tout résidu de test sur qualiof_test (jamais qualiof).

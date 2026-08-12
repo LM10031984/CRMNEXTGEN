@@ -489,7 +489,8 @@ export async function recordInvoicePayment(input: {
             where: { id: invoice.participantId },
             data: {
               paymentReceived: true,
-              amountCollected: new Prisma.Decimal(invoice.participant!.priceHT),
+              // String() : realm-safe (audit 2026-08-12, neutre en prod)
+              amountCollected: new Prisma.Decimal(String(invoice.participant!.priceHT)),
               amountRemaining: new Prisma.Decimal(0),
             },
           }),

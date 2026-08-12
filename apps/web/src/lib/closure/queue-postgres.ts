@@ -82,7 +82,7 @@ async function claimJobs(limit: number): Promise<ClosureJobPayload[]> {
       FROM "ClosureJob" cj
       JOIN "ClosureBatch" cb ON cb.id = cj."batchId"
       WHERE cj.status = 'QUEUED'
-         OR (cj.status = 'PROCESSING' AND cj."startedAt" < NOW() - INTERVAL '${STALL_RECLAIM_AFTER_MIN} minutes')
+         OR (cj.status = 'PROCESSING' AND cj."startedAt" < NOW() - make_interval(mins => ${STALL_RECLAIM_AFTER_MIN}))
       ORDER BY cj."createdAt" ASC
       LIMIT ${limit}
       FOR UPDATE OF cj SKIP LOCKED

@@ -69,7 +69,12 @@ test('@anon /login rend le formulaire + bandeau STAGING (APP-01)', async ({ page
   await expect(page.locator('#password')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Se connecter' })).toBeVisible();
   // Preuve APP-01 runtime : la garde staging est active sur le déploiement.
-  await expect(page.getByText('STAGING')).toBeVisible();
+  // Conditionnel : le bandeau n'existe QUE si la cible est un déploiement
+  // staging (E2E_TARGET_ENV=staging). En local/dev, pas de bandeau — le test
+  // du formulaire reste couvert ci-dessus.
+  if ((process.env.E2E_TARGET_ENV ?? 'staging') === 'staging') {
+    await expect(page.getByText('STAGING')).toBeVisible();
+  }
 });
 
 for (const { route, pilier } of PROTECTED_ROUTES) {

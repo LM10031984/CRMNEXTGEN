@@ -1,4 +1,4 @@
-import { LegalForm } from '@qualiof/db';
+import { LegalForm } from '@prisma/client';
 
 /**
  * Mapping des libellés humains de "Forme juridique" rencontrés dans
