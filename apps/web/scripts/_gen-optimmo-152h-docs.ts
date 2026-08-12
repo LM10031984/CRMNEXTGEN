@@ -54,6 +54,27 @@ function mustReplace(html: string, pattern: RegExp, replacement: string, label: 
   return html.replace(pattern, replacement);
 }
 
+/**
+ * Retour Laurent 12/08 : programme AÉRÉ. Le programMd est désormais du vrai
+ * markdown (## jour / ### demi-journée / listes réelles) — ce CSS additionnel
+ * (injecté avant </head>, cascade APRÈS le style template, templates app NON
+ * touchés) espace les jours, garde les titres avec leur contenu (anti-veuve)
+ * et donne un interligne confortable. Footer in-body : intact.
+ */
+const AIRY_PROGRAMME_CSS = `<style>
+  .programme-md { line-height: 1.55; }
+  .programme-md h2 { margin: 18px 0 6px 0; page-break-after: avoid; }
+  .programme-md h3 { margin: 10px 0 4px 0; page-break-after: avoid; }
+  .programme-md p { margin: 6px 0 4px 0; }
+  .programme-md ul { margin: 2px 0 12px 20px; }
+  .programme-md li { margin-bottom: 2.5px; }
+  .programme-md p em { color: #64748B; }
+</style>`;
+
+function withAiryProgramme(html: string, label: string): string {
+  return mustReplace(html, /<\/head>/, `${AIRY_PROGRAMME_CSS}</head>`, `CSS aération ${label}`);
+}
+
 async function main() {
   console.log('=== Génération PDF OPTIMMO 152h (programme + convention groupe) ===\n');
 
@@ -111,29 +132,36 @@ async function main() {
     `</strong> HT — forfait groupe intra-entreprise (session de ${NB_STAGIAIRES} stagiaires)`,
     'tarif groupe programme',
   );
+  progHtml = withAiryProgramme(progHtml, 'programme');
 
   const progPdf = await renderHtmlToPdfWeasy(progHtml);
   const progHash = createHash('sha256').update(progPdf).digest('hex');
   const progKey = `programmes/produits/prod-0674-${progHash.slice(0, 8)}.pdf`;
   await uploadFile(DOCS_BUCKET, progKey, progPdf, 'application/pdf');
 
-  const existingProg = await prisma.document.findFirst({
-    where: { tenantId: TENANT_ID, type: 'PROGRAMME', entityType: 'product', entityId: product.id, hashSha256: progHash },
+  // REMPLACEMENT (retour Laurent 12/08) : supprime les lignes PROGRAMME
+  // précédentes de ce produit avant recréation — pas de doublon de Document.
+  // Les anciens objets storage deviennent orphelins (pas de deleteFile dans
+  // lib/storage ; purge = étape destructive séparée, consignée au rapport).
+  const oldProgs = await prisma.document.findMany({
+    where: { tenantId: TENANT_ID, type: 'PROGRAMME', entityType: 'product', entityId: product.id },
+    select: { pdfUrl: true },
+  });
+  for (const o of oldProgs) if (o.pdfUrl !== progKey) console.log(`  ⚠ orphelin storage : ${o.pdfUrl}`);
+  await prisma.document.deleteMany({
+    where: { tenantId: TENANT_ID, type: 'PROGRAMME', entityType: 'product', entityId: product.id },
+  });
+  const progDoc = await prisma.document.create({
+    data: {
+      tenantId: TENANT_ID,
+      type: 'PROGRAMME',
+      entityType: 'product',
+      entityId: product.id,
+      pdfUrl: progKey,
+      hashSha256: progHash,
+    },
     select: { id: true },
   });
-  const progDoc =
-    existingProg ??
-    (await prisma.document.create({
-      data: {
-        tenantId: TENANT_ID,
-        type: 'PROGRAMME',
-        entityType: 'product',
-        entityId: product.id,
-        pdfUrl: progKey,
-        hashSha256: progHash,
-      },
-      select: { id: true },
-    }));
   fs.writeFileSync(OUT_PROGRAMME, progPdf);
   console.log(`PROGRAMME : Document ${progDoc.id}`);
   console.log(`  storage : ${progKey}`);
@@ -204,6 +232,7 @@ async function main() {
     addressVille: 'Vence',
   };
   let convHtml = renderConventionHtml(convData, ofConv);
+  convHtml = withAiryProgramme(convHtml, 'convention');
 
   // Patch 1 — Article 7 : « (soit 409,09 € HT × 11 stagiaires) » → forfait groupe
   // (évite le faux calcul apparent 409,09 × 11 = 4 499,99).
@@ -256,7 +285,12 @@ async function main() {
 
   // 1 SEULE convention de groupe → Document au niveau SESSION (pas par
   // participant). Idempotence : remplace l'éventuelle convention session
-  // précédente de cette même session.
+  // précédente de cette même session (ancien objet storage = orphelin, loggé).
+  const oldConvs = await prisma.document.findMany({
+    where: { tenantId: TENANT_ID, type: 'CONVENTION', entityType: 'session', entityId: session.id },
+    select: { pdfUrl: true },
+  });
+  for (const o of oldConvs) if (o.pdfUrl !== convKey) console.log(`  ⚠ orphelin storage : ${o.pdfUrl}`);
   await prisma.document.deleteMany({
     where: { tenantId: TENANT_ID, type: 'CONVENTION', entityType: 'session', entityId: session.id },
   });

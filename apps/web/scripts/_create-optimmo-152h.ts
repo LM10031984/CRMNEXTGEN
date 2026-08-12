@@ -74,7 +74,7 @@ const TRAINER_PROFILE =
 const PEDAGOGICAL_SUPPORT =
   'Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.';
 
-const PROGRAM_MD = `JOUR 1 - DÉCOUVRIR L'IA ET SES USAGES EN AGENCE IMMOBILIÈRE
+const PROGRAM_SRC = `JOUR 1 - DÉCOUVRIR L'IA ET SES USAGES EN AGENCE IMMOBILIÈRE
 8h : Fondamentaux de l'IA et prise en main des assistants
 Matin 9h-13h (4h) : Comprendre l'IA générative
 • 9h-10h30 : Panorama de l'IA générative - fonctionnement, cas d'usages en agence immobilière
@@ -322,6 +322,49 @@ Après-midi 14h-18h (4h) : Synthèse et validation
 • 16h45-17h30 : Évaluation de la satisfaction et bilan collectif de la formation
 • 17h30-18h : Remise des certificats de réalisation et perspectives`;
 
+/**
+ * Retour Laurent 12/08 (mise en page) : le texte plat était aplati en pavé par
+ * marked (la convention parse SANS breaks:true → \n simple = espace). On fige
+ * en base du VRAI markdown : ## JOUR (titre), **8h : …**, ### Matin/Après-midi
+ * (sous-titres), listes « - » réelles. Retour Laurent 12/08 (contenu) : ligne
+ * « 13h-14h : Pause déjeuner » sur CHAQUE jour entre Matin et Après-midi —
+ * HORS temps de formation (8h/jour = 4h + 4h, aucun décompte modifié).
+ */
+function toProgrammeMarkdown(src: string): string {
+  const out: string[] = [];
+  for (const raw of src.split('\n')) {
+    const l = raw.trim();
+    if (l === '') {
+      out.push('');
+      continue;
+    }
+    if (/^JOUR \d+ - /.test(l)) {
+      out.push('', `## ${l.replace(' - ', ' — ')}`, '');
+      continue;
+    }
+    if (/^8h : /.test(l)) {
+      out.push(`**${l}**`, '');
+      continue;
+    }
+    if (/^Après-midi /.test(l)) {
+      out.push('', '*13h-14h : Pause déjeuner (hors temps de formation)*', '', `### ${l}`, '');
+      continue;
+    }
+    if (/^Matin /.test(l)) {
+      out.push('', `### ${l}`, '');
+      continue;
+    }
+    if (/^• /.test(l)) {
+      out.push(l.replace(/^• /, '- '));
+      continue;
+    }
+    out.push(l);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+const PROGRAM_MD = toProgrammeMarkdown(PROGRAM_SRC);
+
 // ---------------------------------------------------------------------------
 // OPTIMMO — entreprise commanditaire/payeuse
 // ---------------------------------------------------------------------------
@@ -384,6 +427,10 @@ async function main() {
   // Garde-fous préalables
   const sum = PARTICIPANTS.reduce((acc, p) => acc + Math.round(Number(p.priceHT) * 100), 0);
   if (sum !== 450000) throw new Error(`Somme priceHT = ${sum / 100} ≠ 4500.00`);
+  const nbPauses = (PROGRAM_MD.match(/Pause déjeuner/g) ?? []).length;
+  if (nbPauses !== NB_DAYS) throw new Error(`${nbPauses} pauses déjeuner ≠ ${NB_DAYS} jours`);
+  const nbJourTitles = (PROGRAM_MD.match(/^## JOUR /gm) ?? []).length;
+  if (nbJourTitles !== NB_DAYS) throw new Error(`${nbJourTitles} titres JOUR ≠ ${NB_DAYS}`);
   const days = computeBusinessDays(START_ISO, NB_DAYS);
   if (days[0] !== START_ISO) throw new Error(`Premier jour ${days[0]} ≠ ${START_ISO}`);
   if (days[days.length - 1] !== EXPECTED_END_ISO)
