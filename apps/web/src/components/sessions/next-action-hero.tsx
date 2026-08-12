@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, Check, Clock, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionStage } from '@/lib/sessions/session-stage';
+import { StageCtaLink } from './stage-cta-link';
 
 /**
  * Carte "Prochaine action" — point focal de la fiche session V2.
@@ -108,7 +109,9 @@ export function NextActionHero({ stage, canWrite, primaryActionSlot }: Props) {
             // Pas de styling forcé pour préserver l'apparence du bouton réel.
             <div className="shrink-0">{primaryActionSlot}</div>
           ) : (
-            <a
+            // StageCtaLink (volet 3, 12/08) : les ancres ouvrent + surlignent
+            // l'étape ciblée (scroll smooth) au lieu d'un hash-link muet.
+            <StageCtaLink
               href={stage.cta.href}
               className={cn(
                 'inline-flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold shadow-sm transition-all hover:shadow-md shrink-0',
@@ -117,7 +120,7 @@ export function NextActionHero({ stage, canWrite, primaryActionSlot }: Props) {
             >
               {stage.cta.label}
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </a>
+            </StageCtaLink>
           )
         )}
       </div>

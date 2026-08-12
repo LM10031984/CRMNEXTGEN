@@ -74,6 +74,13 @@ export interface SessionStageInput {
   participantsCount: number;
   primaryTrainerName: string | null;
   productAiDraftPending: boolean;
+  /**
+   * Id du TrainingProduct de la session (volet 3, retour Laurent 12/08) :
+   * la validation du brouillon IA vit sur la FICHE PRODUIT
+   * (/app/produits/{id}?tab=programme) — le CTA « Valider » doit y mener
+   * directement au lieu de scroller vers step-1 (qui n'a qu'un badge).
+   */
+  productId?: string | null;
   prep: SessionPreparationStatus;
   closure: SessionClosureStatus;
   /**
@@ -169,12 +176,25 @@ export function sessionStage(input: SessionStageInput): SessionStage {
   }
 
   if (productAiDraftPending) {
+    // Volet 3 (retour Laurent 12/08) — CTA honnête : la validation du
+    // brouillon IA se fait sur la FICHE PRODUIT, pas sur la fiche session
+    // (step-1 n'affiche qu'un badge « à valider sur la fiche produit »).
+    // L'ancien « Valider en 1 clic » href="#step-1" scrollait vers une étape
+    // repliée sans action → perçu « ne fait rien ».
+    const productId = input.productId ?? null;
     return {
       current: 1,
       status: 'blocked',
       reason: "Valide le programme IA — sans validation humaine, le pack fin est bloqué.",
       blocker: 'Programme IA non validé',
-      cta: { label: 'Valider en 1 clic', href: '#step-1', primary: true, kind: 'anchor' },
+      cta: productId
+        ? {
+            label: 'Valider le programme (fiche produit)',
+            href: `/app/produits/${productId}?tab=programme`,
+            primary: true,
+            kind: 'anchor',
+          }
+        : { label: "Voir l'étape 1 ↓", href: '#step-1', primary: true, kind: 'anchor' },
       stagesState: { 1: 'active', 2: 'todo', 3: 'todo', 4: 'todo', 5: 'todo' },
     };
   }

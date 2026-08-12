@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import type { Route } from 'next';
-import { ArrowRight, Wallet } from 'lucide-react';
+import { ArrowRight, Receipt, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { TimelineStep, type StepState } from './timeline-step';
+import { CreateInvoiceButton } from '@/components/invoices/create-invoice-button';
+import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
 
 interface InvoiceRow {
   id: string;
@@ -15,6 +17,23 @@ interface InvoiceRow {
   isCreditNote: boolean;
 }
 
+/**
+ * Volet 2 (retour Laurent 12/08) — groupe de facturation par sponsorOrg,
+ * construit par la page depuis session.participants. Permet de monter les
+ * boutons d'émission DANS l'étape 5 (aucun bouton n'existait : les factures
+ * n'étaient émettables nulle part depuis la fiche session).
+ */
+export interface BillingGroup {
+  sponsorOrgId: string;
+  sponsorName: string;
+  participants: {
+    id: string;
+    label: string;
+    priceHT: number;
+    invoiceSent: boolean;
+  }[];
+}
+
 interface Props {
   state: StepState;
   invoices: InvoiceRow[];
@@ -23,6 +42,12 @@ interface Props {
   opcoSubmissionId?: string | null;
   /** Expansion initiale (dérivée de stagesState[5] === 'active'). */
   expanded?: boolean;
+  /** Id session — requis par le bouton facture groupée. */
+  sessionId: string;
+  /** Groupes payeurs (volet 2). Vide → section émission masquée. */
+  billingGroups?: BillingGroup[];
+  /** RBAC affichage : ADMIN/MANAGER/COMPTABLE (les server actions re-vérifient). */
+  canInvoice?: boolean;
 }
 
 const STATUS_PALETTE: Record<string, { bg: string; label: string }> = {
@@ -47,7 +72,16 @@ const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 });
 
-export function StepFacturation({ state, invoices, caTotalHT, opcoSubmissionId, expanded }: Props) {
+export function StepFacturation({
+  state,
+  invoices,
+  caTotalHT,
+  opcoSubmissionId,
+  expanded,
+  sessionId,
+  billingGroups = [],
+  canInvoice = false,
+}: Props) {
   const billed = invoices
     .filter((i) => !i.isCreditNote && i.status !== 'DRAFT' && i.status !== 'CANCELLED')
     .reduce((acc, i) => acc + i.amountTTC, 0);
@@ -96,6 +130,66 @@ export function StepFacturation({ state, invoices, caTotalHT, opcoSubmissionId, 
         ) : null
       }
     >
+      {/* Volet 2 (12/08) — Émission des factures depuis l'étape 5 :
+          « Facturer » par participant payeur de lui-même (masqué si déjà
+          facturé), « Facture groupée » par entreprise sponsor (pattern
+          OPTIMMO). RBAC : rendu si canInvoice (ADMIN/MANAGER/COMPTABLE) —
+          les server actions re-vérifient côté serveur. */}
+      {canInvoice && billingGroups.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border bg-white p-3">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
+            Émettre les factures
+          </div>
+          <ul className="space-y-2">
+            {billingGroups.map((g) => {
+              const notInvoiced = g.participants.filter((p) => !p.invoiceSent);
+              const totalHT = notInvoiced.reduce((s, p) => s + p.priceHT, 0);
+              if (g.participants.length > 1) {
+                return (
+                  <li key={g.sponsorOrgId} className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-sm min-w-0">
+                      {g.sponsorName}{' '}
+                      <span className="text-xs text-muted-foreground">
+                        — {g.participants.length} apprenants
+                        {notInvoiced.length > 0 && notInvoiced.length < g.participants.length
+                          ? ` · ${notInvoiced.length} restant(s) à facturer`
+                          : ''}
+                      </span>
+                    </span>
+                    <CreateSponsorInvoiceButton
+                      sessionId={sessionId}
+                      sponsorOrgId={g.sponsorOrgId}
+                      sponsorName={g.sponsorName}
+                      participantCount={notInvoiced.length}
+                      totalHT={totalHT}
+                      allInvoiced={notInvoiced.length === 0}
+                    />
+                  </li>
+                );
+              }
+              const p = g.participants[0]!;
+              return (
+                <li key={g.sponsorOrgId} className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-sm min-w-0">
+                    {p.label}{' '}
+                    <span className="text-xs text-muted-foreground">
+                      — payeur : {g.sponsorName} · {p.priceHT.toFixed(2).replace('.', ',')} € HT
+                    </span>
+                  </span>
+                  {p.invoiceSent ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700">
+                      <Receipt className="h-3.5 w-3.5" /> Facturé
+                    </span>
+                  ) : (
+                    <CreateInvoiceButton participantId={p.id} alreadyInvoiced={false} />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Mini-KPI bars facturation/encaissement */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <KpiBar label="CA prévu HT" value={fmtEUR.format(caTotalHT)} ratio={1} color="slate" />

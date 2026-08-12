@@ -39,7 +39,7 @@ import { PrimaryTrainerToggle } from '@/components/sessions/primary-trainer-togg
 import { RemoveTrainerButton } from '@/components/sessions/remove-trainer-button';
 import { SessionSatisfactionPanel } from '@/components/sessions/session-satisfaction-panel';
 import { BatchProgressAutoRefresh } from '@/components/sessions/batch-progress-auto-refresh';
-import { CreateSponsorInvoiceButton } from '@/components/invoices/create-sponsor-invoice-button';
+import { StageCtaLink } from '@/components/sessions/stage-cta-link';
 import { AddParticipantDialog } from '@/components/sessions/add-participant-dialog';
 import { EditParticipantButton } from '@/components/sessions/edit-participant-button';
 import { DeleteSessionButton } from '@/components/sessions/delete-session-button';
@@ -588,10 +588,45 @@ export default async function SessionDetailPage({
     participantsCount: session.participants.length,
     primaryTrainerName,
     productAiDraftPending: Boolean(session.product?.aiDraftedAt),
+    // Volet 3 (12/08) : le CTA « Valider le programme » mène à la fiche
+    // produit (?tab=programme) où vit le vrai bouton de validation.
+    productId: session.product?.id ?? null,
     prep: preparationStatus,
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+  // Volet 2 (12/08) : émission de factures — miroir du RBAC des server
+  // actions createInvoiceFromParticipant / createInvoiceForSponsorGroup.
+  const canInvoice = ['ADMIN', 'MANAGER', 'COMPTABLE'].includes(user.role);
+  // Groupes payeurs pour les boutons d'émission de l'étape 5 : par sponsorOrg,
+  // entreprises multi-apprenants d'abord (pattern OPTIMMO), puis EI par nom.
+  const billingGroups = (() => {
+    const map = new Map<
+      string,
+      {
+        sponsorOrgId: string;
+        sponsorName: string;
+        participants: { id: string; label: string; priceHT: number; invoiceSent: boolean }[];
+      }
+    >();
+    for (const p of session.participants) {
+      const g =
+        map.get(p.sponsorOrgId) ??
+        { sponsorOrgId: p.sponsorOrgId, sponsorName: p.sponsorOrg.legalName, participants: [] };
+      g.participants.push({
+        id: p.id,
+        label: `${p.person.firstName} ${p.person.lastName}`,
+        priceHT: Number(p.priceHT),
+        invoiceSent: p.invoiceSent,
+      });
+      map.set(p.sponsorOrgId, g);
+    }
+    return [...map.values()].sort(
+      (a, b) =>
+        b.participants.length - a.participants.length ||
+        a.sponsorName.localeCompare(b.sponsorName, 'fr'),
+    );
+  })();
   // canEdit : seuls ADMIN/MANAGER éditent les champs structurants (titre,
   // tarif, notes, capacités, dates). COMMERCIAL peut écrire (inscrire,
   // générer docs) mais pas modifier la structure de la session.
@@ -846,7 +881,7 @@ export default async function SessionDetailPage({
                 blockers={sessionCompleteness.blockers}
               />
             ) : (
-              <a
+              <StageCtaLink
                 href={stage.cta.href}
                 className={
                   stage.cta.primary
@@ -855,7 +890,7 @@ export default async function SessionDetailPage({
                 }
               >
                 {stage.cta.label}
-              </a>
+              </StageCtaLink>
             )
           ) : null
         }
@@ -1123,6 +1158,9 @@ export default async function SessionDetailPage({
         invoices={timelineInvoiceRows}
         caTotalHT={caTotalHT}
         opcoSubmissionId={latestOpcoSubmission?.id ?? null}
+        sessionId={session.id}
+        billingGroups={billingGroups}
+        canInvoice={canInvoice}
       />
     </div>
   );
