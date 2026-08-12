@@ -291,31 +291,11 @@ async function main() {
     'tampon à côté de la signature OF',
   );
 
-  // Patch 4 — Annexe 1 : liste nominative (NOM Prénom uniquement), nouvelle page.
-  const annexeRows = sorted
-    .map(
-      (p, i) =>
-        `<tr><td style="border:1px solid #CBD5E1; padding:5px 10px; text-align:center; width:36px;">${i + 1}</td>` +
-        `<td style="border:1px solid #CBD5E1; padding:5px 10px;">${escapeHtml(`${p.person.lastName.toUpperCase()} ${p.person.firstName}`)}</td></tr>`,
-    )
-    .join('');
-  const fmtD = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
-  const annexe = `
-<div style="page-break-before: always;"></div>
-<h2 class="article">Annexe 1 — Liste nominative des stagiaires</h2>
-<p>Action de formation « ${escapeHtml(product.title)} » — du ${fmtD(session.startDate)} au ${fmtD(session.endDate)}, ${escapeHtml(lieu)}.</p>
-<p>Effectif : <strong>11 stagiaires</strong>, salariés de l'entreprise bénéficiaire ${escapeHtml(sponsor.legalName)}.</p>
-<table style="border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 10.5pt;">
-  <thead>
-    <tr>
-      <th style="border:1px solid #CBD5E1; background:#F8FAFC; padding:5px 10px; width:36px;">N°</th>
-      <th style="border:1px solid #CBD5E1; background:#F8FAFC; padding:5px 10px; text-align:left;">Nom et prénom</th>
-    </tr>
-  </thead>
-  <tbody>${annexeRows}</tbody>
-</table>
-</body>`;
-  convHtml = mustReplace(convHtml, /<\/body>/, annexe, 'annexe nominative');
+  // (ex-Patch 4 SUPPRIMÉ — ordre ferme Laurent 12/08 n°5 : AUCUNE annexe dans
+  // la convention. La liste nominative des 11 stagiaires reste UNIQUEMENT dans
+  // le corps, Article 4 — rendue par le template via `stagiaires`. Gate de
+  // sortie : le mot « Annexe » ne doit plus apparaître nulle part.)
+  if (/annexe/i.test(convHtml)) throw new Error('Le HTML convention contient encore « annexe »');
 
   const convPdf = await renderHtmlToPdfWeasy(convHtml);
   const convHash = createHash('sha256').update(convPdf).digest('hex');
