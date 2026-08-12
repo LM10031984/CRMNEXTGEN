@@ -11,8 +11,11 @@ import { createHash } from 'node:crypto';
 import { prisma } from '@qualiof/db';
 import { uploadFile, DOCS_BUCKET } from '../src/lib/storage';
 import { renderHtmlToPdf } from '../src/lib/pdf-render';
-import { renderInvoiceHtml, type InvoiceData } from '../src/lib/invoice-template';
-import { renderOfStandardFooterHtml } from '../src/lib/of-pdf-footer';
+import {
+  renderInvoiceHtml,
+  renderInvoiceFooterHtml,
+  type InvoiceData,
+} from '../src/lib/invoice-template';
 import { loadOfConfig } from '../src/lib/of-config';
 
 const TENANT_ID = 'db191440-a144-48d1-93c1-767e6f647f2c';
@@ -31,7 +34,16 @@ async function main() {
     },
     include: {
       participant: {
-        include: { person: true, session: { include: { product: true } } },
+        include: {
+          person: true,
+          session: {
+            include: {
+              product: true,
+              location: true,
+              trainers: { where: { isPrimary: true }, include: { person: true }, take: 1 },
+            },
+          },
+        },
       },
       payerOrg: true,
     },
@@ -72,16 +84,31 @@ async function main() {
       formationDateDebut: session.startDate,
       formationDateFin: session.endDate,
       formationDureeHeures: session.product.durationHours,
+      // Gabarit 12/08 — désignation riche (réplique composeLieu/composeFormateur)
+      formationLieu: (() => {
+        const addr = session.location?.address as Record<string, string> | null;
+        if (addr?.street && addr?.city) return `${addr.street} à ${addr.city}`;
+        return session.location?.name ?? null;
+      })(),
+      formateurNom: session.trainers[0]
+        ? `M. ${session.trainers[0].person.firstName} ${session.trainers[0].person.lastName}`
+        : null,
+      formationModalite: session.modality === 'PRESENTIEL' ? 'en présentiel' : null,
+      tenantId: TENANT_ID,
       amountHT: Number(inv.amountHT),
       vatRate: Number(inv.vatRate),
       amountTTC: Number(inv.amountTTC),
       notes: inv.notes,
-      paymentMethod: 'Virement bancaire',
+      paymentMethod: 'Virement',
       paymentIban: of.iban || null,
       paymentBic: of.bic || null,
     };
     const pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), {
-      footerHtml: renderOfStandardFooterHtml(),
+      footerHtml: renderInvoiceFooterHtml({
+        ofName: of.name,
+        ofSiret: of.siret,
+        ofTvaIntra: of.tvaIntra || null,
+      }),
     });
     const hash = createHash('sha256').update(pdfBuffer).digest('hex');
     const key = `factures/${inv.number}-${hash.slice(0, 8)}.pdf`;

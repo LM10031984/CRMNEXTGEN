@@ -6,8 +6,11 @@ import { prisma, Prisma } from '@qualiof/db';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
-import { renderInvoiceHtml, type InvoiceData } from '@/lib/invoice-template';
-import { renderOfStandardFooterHtml } from '@/lib/of-pdf-footer';
+import {
+  renderInvoiceHtml,
+  renderInvoiceFooterHtml,
+  type InvoiceData,
+} from '@/lib/invoice-template';
 import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
@@ -31,6 +34,37 @@ interface CreateInvoiceInput {
   notes?: string;
 }
 
+/** « 20 rue de France à Nice » (gabarit 12/08) — depuis Location.address. */
+function composeLieu(
+  location: { name: string; address: unknown } | null,
+): string | null {
+  if (!location) return null;
+  const addr = location.address as Record<string, string> | null;
+  if (addr?.street && addr?.city) return `${addr.street} à ${addr.city}`;
+  return location.name || null;
+}
+
+/** « M. Jean-Guy Ourmières » — formateur principal (gabarit 12/08). */
+function composeFormateur(
+  trainers: { person: { civility: string | null; firstName: string; lastName: string } }[],
+): string | null {
+  const t = trainers[0];
+  if (!t) return null;
+  const civ = t.person.civility?.toLowerCase().startsWith('m') && !t.person.civility?.toLowerCase().startsWith('mme')
+    ? 'M.'
+    : t.person.civility
+      ? 'Mme'
+      : 'M.';
+  return `${civ} ${t.person.firstName} ${t.person.lastName}`;
+}
+
+const MODALITE_LABEL: Record<string, string> = {
+  PRESENTIEL: 'en présentiel',
+  DISTANCIEL: 'en distanciel',
+  MIXTE: 'en présentiel et distanciel',
+  ELEARNING: 'en e-learning',
+};
+
 export async function createInvoiceFromParticipant(
   input: CreateInvoiceInput,
 ): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
@@ -49,7 +83,14 @@ export async function createInvoiceFromParticipant(
     include: {
       person: true,
       sponsorOrg: true,
-      session: { include: { product: true } },
+      session: {
+        include: {
+          product: true,
+          // Gabarit 12/08 — désignation riche : lieu + formateur principal.
+          location: true,
+          trainers: { where: { isPrimary: true }, include: { person: true }, take: 1 },
+        },
+      },
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
@@ -112,18 +153,25 @@ export async function createInvoiceFromParticipant(
     formationDateDebut: session.startDate,
     formationDateFin: session.endDate,
     formationDureeHeures: product.durationHours,
+    // Gabarit 12/08 — désignation riche
+    formationLieu: composeLieu(session.location),
+    formateurNom: composeFormateur(session.trainers),
+    formationModalite: MODALITE_LABEL[session.modality] ?? null,
+    tenantId: user.tenantId,
     amountHT,
     vatRate,
     amountTTC,
     notes: input.notes ?? null,
-    paymentMethod: 'Virement bancaire',
+    paymentMethod: 'Virement',
     paymentIban: of.iban || null,
     paymentBic: of.bic || null,
   };
 
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), { footerHtml: renderOfStandardFooterHtml() });
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), {
+      footerHtml: renderInvoiceFooterHtml({ ofName: of.name, ofSiret: of.siret, ofTvaIntra: of.tvaIntra || null }),
+    });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
   }
@@ -219,6 +267,9 @@ export async function createInvoiceForSponsorGroup(input: {
     where: { id: input.sessionId, tenantId: user.tenantId },
     include: {
       product: true,
+      // Gabarit 12/08 — désignation riche : lieu + formateur principal.
+      location: true,
+      trainers: { where: { isPrimary: true }, include: { person: true }, take: 1 },
       participants: {
         where: { sponsorOrgId: input.sponsorOrgId, invoiceSent: false },
         include: { person: true },
@@ -301,11 +352,17 @@ export async function createInvoiceForSponsorGroup(input: {
     formationDateDebut: session.startDate,
     formationDateFin: session.endDate,
     formationDureeHeures: session.product.durationHours,
+    // Gabarit 12/08 — désignation riche
+    formationLieu: composeLieu(session.location),
+    formateurNom: composeFormateur(session.trainers),
+    formationModalite: MODALITE_LABEL[session.modality] ?? null,
+    tenantId: user.tenantId,
+    stagiaires: lines.map((l) => l.label),
     amountHT: totalHT,
     vatRate,
     amountTTC: totalTTC,
     notes: input.notes ?? null,
-    paymentMethod: 'Virement bancaire',
+    paymentMethod: 'Virement',
     paymentIban: of.iban || null,
     paymentBic: of.bic || null,
     lines: lines.length > 1 ? lines : undefined,
@@ -313,7 +370,9 @@ export async function createInvoiceForSponsorGroup(input: {
 
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), { footerHtml: renderOfStandardFooterHtml() });
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), {
+      footerHtml: renderInvoiceFooterHtml({ ofName: of.name, ofSiret: of.siret, ofTvaIntra: of.tvaIntra || null }),
+    });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}`, invoiceId: invoice.id };
   }
