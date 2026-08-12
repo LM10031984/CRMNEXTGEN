@@ -46,7 +46,7 @@ const OUT_PDF = '/Users/laurentmarx/Documents/CRM Next gen/Analyse-besoins-OPTIM
 // ---------------------------------------------------------------------------
 const CONTENU = {
   contexte_entreprise:
-    "OPTIMMO SARL exploite une agence immobilière sous enseigne Century 21 à Nice (siège : 2 avenue Saint Sylvestre, 06100 Nice). L'agence couvre les métiers de la transaction (vente), de la location et de la gestion locative, avec une équipe de 11 salariées aux fonctions variées : négociation, gestion, assistanat commercial et encadrement. Le quotidien de l'agence mobilise un volume important de tâches rédactionnelles et administratives (annonces, courriers, comptes rendus, suivi des dossiers vendeurs, bailleurs et locataires, communication de l'agence) qui pèsent sur le temps disponible pour la relation client et le développement commercial.",
+    "Gilles Blanchon dirige OPTIMMO SARL, agence immobilière indépendante installée au 29 boulevard Simone Veil, à Nice. L'agence couvre les métiers de la transaction (vente), de la location et de la gestion locative, avec une équipe de 11 salariées aux fonctions variées : négociation, gestion, assistanat commercial et encadrement. Le quotidien de l'agence mobilise un volume important de tâches rédactionnelles et administratives (annonces, courriers, comptes rendus, suivi des dossiers vendeurs, bailleurs et locataires, communication de l'agence) qui pèsent sur le temps disponible pour la relation client et le développement commercial.",
   besoins_dirigeant: [
     "Dégager du temps productif sur les tâches répétitives et rédactionnelles (courriers, annonces, comptes rendus, suivi de dossiers) au profit de la relation client.",
     "Faire monter en compétence l'ensemble des équipes sur les outils numériques d'assistance récents, avec un socle commun partagé entre les fonctions (négociation, gestion, assistanat, encadrement).",
@@ -63,7 +63,7 @@ const CONTENU = {
   public_prerequis:
     "Public concerné : les 11 salariées de l'agence, tous métiers confondus (négociation, gestion, assistanat commercial, encadrement). Prérequis : aucun prérequis technique — être à l'aise avec l'utilisation courante d'un ordinateur et d'un smartphone. Un test de positionnement individuel sera réalisé avant l'entrée en formation.",
   modalites_calendrier:
-    "Formation intra-entreprise en présentiel, organisée dans les locaux de l'entreprise (29 boulevard Simone Veil, 06200 Nice) afin de travailler sur les dossiers et outils réels de l'agence. Calendrier envisagé : du 7 octobre au 2 novembre 2026, soit 19 journées ouvrées de 8 heures (9h00-13h00 / 14h00-18h00), pour un volume total de 152 heures. Ce rythme en continuité, convenu avec le dirigeant, permet une mise en application immédiate entre les journées.",
+    "Formation intra-entreprise en présentiel, organisée dans les locaux de l'entreprise (29 boulevard Simone Veil, 06200 Nice) afin de travailler sur les dossiers et outils réels de l'agence. Calendrier envisagé : du 7 octobre au 2 novembre 2026, soit 19 journées ouvrées de 8 heures (9h00-13h00 / 14h00-18h00), pour un volume total de 152 heures. Ce rythme en continuité, convenu avec le gérant, permet une mise en application immédiate entre les journées.",
   adaptation_of:
     "Le programme « Intégrer l'Intelligence Artificielle dans son entreprise pour gagner en productivité » (152 heures / 19 journées) répond aux besoins identifiés : il part des fondamentaux communs (prise en main des outils, méthode de rédaction des instructions), déroule ensuite les applications métier propres à l'agence (prospection, estimation, annonces, communication, relation client, gestion locative, back-office), puis outille l'automatisation des tâches récurrentes, le pilotage par les données et le cadre juridique et éthique des usages, avant de conclure par la construction d'assistants par poste de travail et un plan de déploiement propre à l'agence. Les ateliers s'appuieront sur les dossiers réels de l'entreprise ; la progression pédagogique est adaptée à un public non technique aux fonctions variées.",
 };
@@ -109,9 +109,8 @@ ${renderBrandHeader(undefined, TENANT_ID)}
   <hr class="doc-rule" />
 
   <div style="margin: 10px 0 14px 0; padding: 10px 14px; background: #F8FAFC; border-left: 3px solid ${SECTION_BLUE};">
-    <p style="margin: 2px 0;"><strong style="color: ${BRAND_DARK};">Entreprise bénéficiaire :</strong> ${escapeHtml(sponsor.legalName)} (enseigne ${escapeHtml(sponsor.brandName ?? 'Century 21')}) — SIRET ${escapeHtml(sponsor.siret ?? '')}</p>
-    <p style="margin: 2px 0;">Siège social : 2 avenue Saint Sylvestre, 06100 Nice</p>
-    <p style="margin: 2px 0;">Représentée par <strong>${escapeHtml(sponsor.representative ?? 'Gilles Blanchon')}</strong>, chef d'entreprise — interlocuteur du présent recueil.</p>
+    <p style="margin: 2px 0;"><strong style="color: ${BRAND_DARK};">${escapeHtml(sponsor.representative ?? 'Gilles Blanchon')}, gérant de la société ${escapeHtml(sponsor.legalName)}</strong> (SIRET ${escapeHtml(sponsor.siret ?? '')}), agence immobilière indépendante située 29 boulevard Simone Veil, 06200 Nice, a sollicité Start Academy pour un projet de formation de ses équipes.</p>
+    <p style="margin: 6px 0 2px 0;">Il est l'interlocuteur du présent recueil des besoins, mené pour le compte de son entreprise.</p>
   </div>
 
   <div style="margin: 0 0 14px 0; padding: 10px 14px; background: #F8FAFC; border-left: 3px solid ${SECTION_BLUE};">
@@ -140,7 +139,7 @@ ${renderBrandHeader(undefined, TENANT_ID)}
   <p class="paragraph">${escapeHtml(CONTENU.adaptation_of)}</p>
 
   <h2 class="section">Situation de handicap</h2>
-  <p class="paragraph">Interrogé sur d'éventuels besoins d'adaptation liés à une situation de handicap ou à une maladie invalidante au sein des équipes concernées, le représentant de l'entreprise n'a signalé <strong>aucun besoin d'adaptation</strong> à ce stade. Les salariées seront de nouveau interrogées individuellement lors du test de positionnement préalable.</p>
+  <p class="paragraph">Interrogé sur d'éventuels besoins d'adaptation liés à une situation de handicap ou à une maladie invalidante au sein des équipes concernées, ${escapeHtml(sponsor.representative ?? 'Gilles Blanchon')} n'a signalé <strong>aucun besoin d'adaptation</strong> à ce stade. Les salariées seront de nouveau interrogées individuellement lors du test de positionnement préalable.</p>
   <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap).</p>
 
   <div style="margin-top: 14mm; padding: 12px 14px; border: 1px solid #E2E8F0; border-radius: 6px; background: #F8FAFC; page-break-inside: avoid;">
@@ -149,7 +148,7 @@ ${renderBrandHeader(undefined, TENANT_ID)}
     </div>
     <div style="font-size: 12pt; font-weight: 700; color: ${BRAND_DARK};">Laurent MARX</div>
     <div style="font-size: 9.5pt; color: #475569; margin-top: 2px;">
-      Le ${escapeHtml(formatDateFr(ANALYSE_DATE))} — Dirigeant, Start Academy — recueil réalisé auprès de ${escapeHtml(sponsor.representative ?? 'Gilles Blanchon')}, chef d'entreprise ${escapeHtml(sponsor.legalName)}.
+      Le ${escapeHtml(formatDateFr(ANALYSE_DATE))} — Dirigeant, Start Academy — recueil réalisé auprès de ${escapeHtml(sponsor.representative ?? 'Gilles Blanchon')}, gérant de la société ${escapeHtml(sponsor.legalName)}.
     </div>
     <div style="margin-top: 6px; white-space: nowrap;">
       <img src="${sigUrl}" alt="Signature" style="max-height: 20mm; max-width: 36mm; vertical-align: bottom;" />
@@ -161,6 +160,10 @@ ${renderBrandHeader(undefined, TENANT_ID)}
 
   const html = wrapHtml({ title: 'Analyse des besoins — OPTIMMO SARL', bodyHtml: body });
   if (/annexe/i.test(html)) throw new Error('« annexe » détecté dans le HTML');
+  // Corrections Laurent 12/08 : agence INDÉPENDANTE (plus d'enseigne Century 21),
+  // adresse unique 29 bd Simone Veil 06200 Nice.
+  if (/century/i.test(html)) throw new Error('« Century » détecté dans le HTML');
+  if (/saint[ -]sylvestre/i.test(html)) throw new Error('« Saint Sylvestre » détecté dans le HTML');
 
   const pdf = await renderHtmlToPdfWeasy(html);
   const hash = createHash('sha256').update(pdf).digest('hex');

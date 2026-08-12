@@ -368,15 +368,19 @@ const PROGRAM_MD = toProgrammeMarkdown(PROGRAM_SRC);
 // ---------------------------------------------------------------------------
 // OPTIMMO — entreprise commanditaire/payeuse
 // ---------------------------------------------------------------------------
+// Corrections Laurent 12/08 : agence INDÉPENDANTE (plus d'enseigne Century 21),
+// siège = 29 bd Simone Veil 06200 Nice (une seule adresse, identique au lieu de
+// formation). L'email @century21.fr est l'adresse réelle de Gilles Blanchon.
+// Base déjà alignée par _fix-optimmo-org.ts (brandName/network null, adresse).
 const OPTIMMO = {
   legalName: 'OPTIMMO SARL',
   siret: '43143029700033',
   siren: '431430297',
-  street: '2 Avenue Saint Sylvestre',
-  postalCode: '06100',
+  street: '29 Boulevard Simone Veil',
+  postalCode: '06200',
   city: 'NICE',
-  brandName: 'Century 21',
-  network: 'Century 21',
+  brandName: null as string | null,
+  network: null as string | null,
   representative: 'Gilles Blanchon',
   email: 'gilles.blanchon@century21.fr',
   phone: '04 97 14 84 00',
