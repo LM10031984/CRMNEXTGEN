@@ -36,6 +36,9 @@ const SESSION_CODE = 'SES-0106';
 const NB_STAGIAIRES = 11;
 const TOTAL_GROUP_HT = 4500;
 
+/** ONLY_CONVENTION=1 → ne régénère QUE la convention (retour Laurent 12/08 n°3). */
+const ONLY_CONVENTION = process.env.ONLY_CONVENTION === '1';
+
 const OUT_DIR = '/Users/laurentmarx/Documents/CRM Next gen';
 const OUT_PROGRAMME = path.join(OUT_DIR, 'Programme-IA-152h-OPTIMMO.pdf');
 const OUT_CONVENTION = path.join(OUT_DIR, `Convention-OPTIMMO-${SESSION_CODE}.pdf`);
@@ -98,8 +101,9 @@ async function main() {
   const objectives = (product.objectives as string[] | null) ?? [];
 
   // =========================================================================
-  // 1) PROGRAMME détaillé
+  // 1) PROGRAMME détaillé (sauté si ONLY_CONVENTION=1)
   // =========================================================================
+  if (!ONLY_CONVENTION) {
   const progData: ProgrammeData = {
     produitTitre: product.title,
     produitCode: product.code,
@@ -166,6 +170,9 @@ async function main() {
   console.log(`PROGRAMME : Document ${progDoc.id}`);
   console.log(`  storage : ${progKey}`);
   console.log(`  local   : ${OUT_PROGRAMME} (${(progPdf.length / 1024).toFixed(0)} Ko)\n`);
+  } else {
+    console.log('PROGRAMME : inchangé (ONLY_CONVENTION=1)\n');
+  }
 
   // =========================================================================
   // 2) CONVENTION UNIQUE de groupe (payeur = OPTIMMO SARL, personne morale)
@@ -252,7 +259,22 @@ async function main() {
     'modalités OPCO EP',
   );
 
-  // Patch 3 — Annexe 1 : liste nominative (NOM Prénom uniquement), nouvelle page.
+  // Patch 3 (retour Laurent 12/08 n°3) — le programme détaillé 19 jours NE
+  // figure PLUS dans la convention (déposé au portail OPCO EP comme document
+  // séparé) : l'Article 3 devient une simple mention « document joint ».
+  // La section .programme-md ne contient aucun <section> imbriqué (sortie
+  // marked) → le premier </section> rencontré clôt bien l'Article 3.
+  convHtml = mustReplace(
+    convHtml,
+    /<section class="programme-section">[\s\S]*?<\/section>/,
+    `<section>
+  <h2 class="article">Article 3 — Programme de formation</h2>
+  <p>Le programme détaillé de la formation (152 heures — 19 journées), conforme aux objectifs définis à l'article 2, est remis en <strong>document joint</strong> à la présente convention, dont il fait partie intégrante.</p>
+</section>`,
+    'programme → document joint (article 3)',
+  );
+
+  // Patch 4 — Annexe 1 : liste nominative (NOM Prénom uniquement), nouvelle page.
   const annexeRows = sorted
     .map(
       (p, i) =>
