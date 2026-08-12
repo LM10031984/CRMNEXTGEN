@@ -274,6 +274,23 @@ async function main() {
     'programme → document joint (article 3)',
   );
 
+  // Patch 5 (retour Laurent 12/08 n°4) — TAMPON Start Academy à côté de la
+  // signature du dirigeant dans le bloc OF. Asset : tampon-start-academy.png
+  // (tampon rond seul). ⚠ PAS tampon-signature-fusion.png (contenait la
+  // signature de Julien — exclu des fallbacks, décision Laurent 2026-06-04).
+  // Le bloc OPTIMMO reste vierge (signature papier).
+  const tamponPath = new URL('../src/assets/tampon-start-academy.png', import.meta.url);
+  const tamponDataUrl = `data:image/png;base64,${fs.readFileSync(tamponPath).toString('base64')}`;
+  convHtml = mustReplace(
+    convHtml,
+    /<img src="(data:[^"]+)" alt="Signature" style="max-height: 22mm; max-width: 60mm; margin-top: 4px;" \/>/,
+    `<div style="margin-top: 4px; white-space: nowrap;">` +
+      `<img src="$1" alt="Signature" style="max-height: 22mm; max-width: 38mm; vertical-align: bottom;" />` +
+      `<img src="${tamponDataUrl}" alt="Tampon Start Academy" style="max-height: 30mm; max-width: 30mm; vertical-align: bottom; margin-left: 5mm;" />` +
+      `</div>`,
+    'tampon à côté de la signature OF',
+  );
+
   // Patch 4 — Annexe 1 : liste nominative (NOM Prénom uniquement), nouvelle page.
   const annexeRows = sorted
     .map(
