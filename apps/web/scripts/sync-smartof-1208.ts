@@ -63,6 +63,15 @@ import {
 const WRITE = process.env.WRITE === '1';
 const reportArg = process.argv.find((a) => a.startsWith('--report='))?.split('=')[1];
 
+// ═══ DÉCISIONS D'ARBITRAGE — validées par Laurent le 12/08/2026 (sur rapport DRY) ═══
+// ① SES-0008 « PRÉ-INSCRIPTION » : EXCLUE (fourre-tout, circuit pré-inscriptions QualiOF)
+// ② Sessions ANNULÉES SmartOF absentes de la base : EXCLUES (historique reste dans SmartOF)
+// ③ Montants + payeurs divergents : LA BASE GAGNE PARTOUT (déjà le comportement du script)
+// ④ Produits manquants des sessions bloquées : CRÉÉS (produits simples hors pipeline IA)
+const EXCLUDED_SESSION_CODES = new Set(['SES-0008']);
+const EXCLUDE_CANCELLED_NEW_SESSIONS = true;
+const CREATE_MISSING_PRODUCTS = true;
+
 const REPO_ROOT = path.resolve(__dirname, '../../..'); // …/CRM Next gen/files
 const EXPORT_DIR = path.resolve(REPO_ROOT, '..'); // …/CRM Next gen
 const REPORT_PATH =
@@ -241,8 +250,12 @@ const R = {
     productMismatch: [] as string[],
     missingProduct: [] as string[],
     inDbNotInExport: [] as string[],
+    excludedByDecision: [] as string[],
     unchanged: 0,
     archivedSkipped: [] as string[],
+  },
+  products: {
+    created: [] as string[],
   },
   participants: {
     toCreate: [] as string[],
@@ -251,6 +264,7 @@ const R = {
     sponsorDiffs: [] as string[], // arbitrage
     unresolved: [] as string[],
     onNewSessions: 0,
+    excludedByDecision: 0, // inscriptions des sessions exclues (décision ①/②)
     unchanged: 0,
   },
   trainers: {
@@ -316,6 +330,8 @@ interface Resolved {
   label: string;
   /** Création impossible (ex : produit inconnu) — rien ne sera écrit pour cette entité. */
   blocked?: boolean;
+  /** Exclue par décision d'arbitrage Laurent 12/08 — rien ne sera écrit, volontairement. */
+  excluded?: boolean;
 }
 
 function addrPart(addr: unknown, key: string): string | null {
@@ -466,6 +482,23 @@ async function main() {
     const paName = cell(row, 'PA AGEFICE');
     const paNumber = cell(row, '[PA AGEFICE] Numéro du PA');
     const paContact = cell(row, "[PA AGEFICE] Nom de l'interlocuteur PA");
+    // paFields = pré-remplissage du PDF AGEFICE (Json REQUIS par le schéma) —
+    // même structure que import-smartof.ts. Posé à la CRÉATION du profil uniquement :
+    // un profil existant a pu être enrichi par l'app (agefice-generator), on ne l'écrase pas.
+    const paFieldsObj = paName
+      ? {
+          'Nom du PTA': paName,
+          'Interlocuteur PTA': paContact ?? '',
+          'N° de PTA': paNumber ?? '',
+          "Nom / Raison Sociale de L'entreprise (Entreprise)": name,
+          'Code APE - NAF (Entreprise)': cell(row, 'Code APE (NAF)') ?? '',
+          'N° SIRET (Entreprise)': siretValid ? cleanedSiret : '',
+          'Activité Professionnelle (Entreprise)': cell(row, 'Activité principale exercée') ?? '',
+          'Adresse Entreprise': cell(row, 'Rue') ?? '',
+          'Code Postal (Entreprise)': cell(row, 'Code postal') ?? '',
+          'Ville (Entreprise)': cell(row, 'Ville') ?? '',
+        }
+      : null;
 
     // Résolution : UID → SIRET → legalName
     let orgId: string | null = null;
@@ -525,7 +558,13 @@ async function main() {
         if (paName) {
           await prisma.ageficeProfile.upsert({
             where: { organizationId: created.id },
-            create: { organizationId: created.id, paName, paNumber, paContact },
+            create: {
+              organizationId: created.id,
+              paName,
+              paNumber,
+              paContact,
+              paFields: paFieldsObj as Prisma.InputJsonValue,
+            },
             update: { paName, paNumber, paContact },
           });
         }
@@ -627,7 +666,13 @@ async function main() {
       if (paName) {
         await prisma.ageficeProfile.upsert({
           where: { organizationId: orgId },
-          create: { organizationId: orgId, paName, paNumber, paContact },
+          create: {
+            organizationId: orgId,
+            paName,
+            paNumber,
+            paContact,
+            paFields: paFieldsObj as Prisma.InputJsonValue,
+          },
           update: {
             paName,
             ...(paNumber ? { paNumber } : {}),
@@ -887,6 +932,15 @@ async function main() {
     if (su) insCountBySessionUid.set(su, (insCountBySessionUid.get(su) ?? 0) + 1);
   }
 
+  // Commanditaires (lu tôt : les colonnes « Produit - * » servent aux créations de produits ④)
+  const commRows = readSheet(wbSes, 'Commanditaires');
+  function findProductInfoRow(productUid: string): Row | null {
+    for (const r of commRows) {
+      if (cell(r, "Produit d'origine - UID") === productUid) return r;
+    }
+    return null;
+  }
+
   function mapSessionStatus(v: string | null): SessionStatus {
     const n = (v ?? '').toLowerCase();
     if (n.includes('annul')) return SessionStatus.CANCELLED;
@@ -902,6 +956,7 @@ async function main() {
   const productIdByUid = new Map(
     idents.filter((i) => i.entityType === 'TrainingProduct').map((i) => [i.externalId, i.entityId]),
   );
+  const pendingProductUids = new Set<string>(); // dédup des créations de produits en DRY
 
   for (const row of sesRows) {
     const uid = cell(row, 'UID');
@@ -936,8 +991,77 @@ async function main() {
     }
 
     if (!sessionId) {
+      // ── Décision ① : sessions explicitement exclues (SES-0008 fourre-tout)
+      if (EXCLUDED_SESSION_CODES.has(code)) {
+        R.sessions.excludedByDecision.push(
+          `${label} — EXCLUE (décision ① Laurent 12/08 : fourre-tout pré-inscriptions, circuit QualiOF dédié) — ${insCountBySessionUid.get(uid) ?? 0} inscription(s) non importées`,
+        );
+        sessionResolved.set(uid, { isNew: true, label: code, code, blocked: true, excluded: true });
+        continue;
+      }
+      // ── Décision ② : sessions annulées SmartOF jamais importées → on ne les crée pas
+      if (EXCLUDE_CANCELLED_NEW_SESSIONS && statusExport === SessionStatus.CANCELLED) {
+        R.sessions.excludedByDecision.push(
+          `${label} — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)`,
+        );
+        sessionResolved.set(uid, { isNew: true, label: code, code, blocked: true, excluded: true });
+        continue;
+      }
+
       // ── CRÉATION
-      const productId = productUid ? productIdByUid.get(productUid) ?? null : null;
+      let productId = productUid ? productIdByUid.get(productUid) ?? null : null;
+
+      // Décision ④ : produit SmartOF absent de la base → création d'un produit simple
+      // (hors pipeline de génération Qualiopi — données réelles des colonnes « Produit - * »)
+      if (!productId && CREATE_MISSING_PRODUCTS && productUid) {
+        const info = findProductInfoRow(productUid);
+        const prodTitle = productName ?? cell(info ?? {}, 'Produit - Intitulé de la formation') ?? `Produit ${productUid.slice(0, 8)}`;
+        const prodCode = `PROD-${productUid.slice(0, 8)}`;
+        const durationHours =
+          Math.round(parseFloat(cell(info ?? {}, 'Produit - Durée de formation (en heures)') ?? '0')) || 0;
+        if (!pendingProductUids.has(productUid)) {
+          pendingProductUids.add(productUid);
+          R.products.created.push(
+            `${prodCode} — « ${prodTitle} » (${durationHours} h${info ? ', fiche SmartOF via commanditaires' : ', fiche minimale — aucun commanditaire source'}) → débloque ${code}`,
+          );
+        }
+        if (WRITE) {
+          const objectivesText = cell(info ?? {}, 'Produit - Objectifs de la formation') ?? '';
+          const objectives = objectivesText
+            .split(/\n|•|- /)
+            .map((o) => o.trim())
+            .filter(Boolean);
+          const created = await prisma.trainingProduct.create({
+            data: {
+              tenantId,
+              code: prodCode,
+              title: prodTitle,
+              durationHours,
+              modality: Modality.PRESENTIEL,
+              targetAudience: cell(info ?? {}, 'Produit - Public visé'),
+              prerequisites: cell(info ?? {}, 'Produit - Prérequis'),
+              objectives: objectives as Prisma.InputJsonValue,
+              programMd: cell(info ?? {}, 'Produit - Contenu de la formation') ?? '',
+              pedagogicalMethods: cell(info ?? {}, 'Produit - Modalités pédagogiques'),
+              pedagogicalSupport: cell(info ?? {}, 'Produit - Moyens et supports pédagogiques'),
+              evaluationMethods: cell(info ?? {}, "Produit - Modalités d'évaluation"),
+              accessConditions: cell(info ?? {}, "Produit - Modalités d'accès"),
+              trainerProfile: cell(info ?? {}, 'Produit - Profil des formateurs'),
+              capacityMin: parseInt(cell(info ?? {}, 'Produit - Effectif minimum') ?? '1', 10) || 1,
+              capacityMax: parseInt(cell(info ?? {}, 'Produit - Effectif maximum') ?? '12', 10) || 12,
+              isActive: true,
+            },
+          });
+          await prisma.externalIdentity.create({
+            data: { tenantId, entityType: 'TrainingProduct', entityId: created.id, source: 'smartof', externalId: productUid },
+          });
+          productIdByUid.set(productUid, created.id);
+          productId = created.id;
+        } else {
+          productId = '__PENDING_PRODUCT__'; // DRY : la session est créable, le produit le sera avant elle
+        }
+      }
+
       if (!productId) {
         R.sessions.missingProduct.push(
           `${label} — produit SmartOF "${productName ?? productUid ?? '?'}" non tracé en base → création BLOQUÉE, arbitrage requis`,
@@ -1033,7 +1157,7 @@ async function main() {
 
   // ══════════════════ 5. COMMANDITAIRES + INSCRIPTIONS ══════════════════
 
-  const commRows = readSheet(wbSes, 'Commanditaires');
+  // (commRows déjà lu en section 4)
   interface Comm {
     uid: string;
     customId: string | null;
@@ -1081,6 +1205,10 @@ async function main() {
     const pRes = personResolved.get(aUid);
     if (!sRes) {
       R.participants.unresolved.push(`${aName} : session SmartOF ${sUid.slice(0, 8)}… hors périmètre (archivée)`);
+      continue;
+    }
+    if (sRes.excluded) {
+      R.participants.excludedByDecision++; // session exclue par décision ①/② → inscription volontairement non importée
       continue;
     }
     if (sRes.blocked) {
@@ -1269,15 +1397,20 @@ async function main() {
         entityId: 'sync-smartof-1208',
         diff: {
           mode: 'write',
+          decisions: 'Laurent 2026-08-12 : SES-0008 exclue, annulées exclues, base gagne sur montants/payeurs, produits manquants créés',
           personsCreated: R.persons.created.length,
           personsUpdated: R.persons.updated.length + R.persons.matchedByName.length,
           orgsCreated: R.orgs.created.length,
           orgsUpdated: R.orgs.updated.length + R.orgs.matchedBySiret.length + R.orgs.matchedByName.length,
+          productsCreated: R.products.created.length,
           sessionsCreated: R.sessions.created.length,
           sessionsUpdated: R.sessions.updated.length,
+          sessionsExcluded: R.sessions.excludedByDecision.length,
           participantsCreated: R.participants.toCreate.length,
           participantsOnNewSessions: R.participants.onNewSessions,
+          participantsExcluded: R.participants.excludedByDecision,
           legalLinksCreated: R.legalLinks.toCreate.length,
+          trainersCreated: R.trainers.toCreate.length,
         } as Prisma.InputJsonValue,
       },
     });
@@ -1303,13 +1436,14 @@ async function main() {
   fs.writeFileSync(REPORT_PATH, report, 'utf8');
 
   console.log(`\n📄 Rapport écrit : ${REPORT_PATH}`);
-  console.log(`\n🎯 Synthèse ${WRITE ? '(APPLIQUÉ)' : '(SIMULATION — rien n\'a été écrit)'} :
-  Apprenants   : ${R.persons.created.length} à créer, ${R.persons.updated.length} à mettre à jour, ${R.persons.matchedByName.length} rapprochés par nom, ${R.persons.ambiguous.length} ambigus, ${R.persons.unchanged} inchangés
-  Entreprises  : ${R.orgs.created.length} à créer, ${R.orgs.updated.length} à mettre à jour, ${R.orgs.matchedBySiret.length + R.orgs.matchedByName.length} rapprochées (SIRET/nom), ${R.orgs.unchanged} inchangées
-  Sessions     : ${R.sessions.created.length} à créer, ${R.sessions.updated.length} à mettre à jour, ${R.sessions.missingProduct.length} bloquées (produit), ${R.sessions.unchanged} inchangées
-  Inscriptions : ${R.participants.toCreate.length} à créer (sessions existantes), ${R.participants.onNewSessions} sur nouvelles sessions, ${R.participants.priceSet.length} prix posés (0→montant), ${R.participants.priceConflicts.length} conflits de montant
-  Liens        : ${R.legalLinks.toCreate.length} LegalLinks à créer, ${R.legalLinks.existingPair} couples déjà reliés
-  Formateurs   : ${R.trainers.toCreate.length} affectations à créer, ${R.trainers.unresolved.length} non résolus`);
+  console.log(`\n🎯 Synthèse ${WRITE ? '(APPLIQUÉ — écriture réelle)' : '(SIMULATION — rien n\'a été écrit)'} :
+  Apprenants   : ${R.persons.created.length} créés, ${R.persons.updated.length} mis à jour, ${R.persons.matchedByName.length} rapprochés par nom, ${R.persons.ambiguous.length} ambigus, ${R.persons.unchanged} inchangés
+  Entreprises  : ${R.orgs.created.length} créées, ${R.orgs.updated.length} mises à jour, ${R.orgs.matchedBySiret.length + R.orgs.matchedByName.length} rapprochées (SIRET/nom), ${R.orgs.unchanged} inchangées
+  Produits     : ${R.products.created.length} créés (décision ④)
+  Sessions     : ${R.sessions.created.length} créées, ${R.sessions.updated.length} mises à jour, ${R.sessions.excludedByDecision.length} exclues (décisions ①/②), ${R.sessions.missingProduct.length} bloquées (produit), ${R.sessions.unchanged} inchangées
+  Inscriptions : ${R.participants.toCreate.length} créées (sessions existantes), ${R.participants.onNewSessions} sur nouvelles sessions, ${R.participants.excludedByDecision} exclues (sessions ①/②), ${R.participants.priceSet.length} prix posés (0→montant), ${R.participants.priceConflicts.length} conflits de montant (base conservée)
+  Liens        : ${R.legalLinks.toCreate.length} LegalLinks créés, ${R.legalLinks.existingPair} couples déjà reliés
+  Formateurs   : ${R.trainers.toCreate.length} affectations créées, ${R.trainers.unresolved.length} non résolus`);
 }
 
 // ─────────────────────────── Génération du rapport MD ───────────────────────────
@@ -1356,11 +1490,18 @@ function buildReport(ctx: {
 
 **Clé de fusion : UID SmartOF** (jamais l'email). Rapprochements secondaires (SIRET, nom exact, code session) listés explicitement ci-dessous pour validation.
 
-**Ce qui va se passer au WRITE (après ta validation)** :
+**Décisions d'arbitrage appliquées (Laurent, 12/08/2026)** :
+1. SES-0008 « PRÉ-INSCRIPTION » exclue (fourre-tout — circuit pré-inscriptions QualiOF)
+2. Sessions annulées SmartOF jamais importées : exclues (historique conservé dans SmartOF)
+3. Montants et payeurs divergents : **la base gagne partout** (Tréso = vérité) — 0 écrasement
+4. Produits manquants créés (produits simples hors pipeline de génération Qualiopi) pour débloquer SES-0098/0099/0104
+
+**Ce qui ${R.writeApplied ? 's\'est passé au WRITE' : 'va se passer au WRITE (après validation)'}** :
 - **${R.persons.created.length} apprenants créés**, ${R.persons.updated.length} mis à jour, ${R.persons.matchedByName.length} rapprochés par nom (UID nouvellement tracé)
 - **${R.orgs.created.length} entreprises créées**, ${R.orgs.updated.length} mises à jour, ${R.orgs.matchedBySiret.length + R.orgs.matchedByName.length} rapprochées par SIRET/nom
-- **${R.sessions.created.length} sessions créées**, ${R.sessions.updated.length} mises à jour (dates/nom uniquement)${R.sessions.missingProduct.length > 0 ? `, ⚠ ${R.sessions.missingProduct.length} créations bloquées (produit inconnu)` : ''}
-- **${R.participants.toCreate.length} inscriptions créées sur des sessions existantes** + ${R.participants.onNewSessions} sur les nouvelles sessions
+- **${R.products.created.length} produits de formation créés** (décision ④)
+- **${R.sessions.created.length} sessions créées**, ${R.sessions.updated.length} mises à jour (dates/nom uniquement), ${R.sessions.excludedByDecision.length} exclues par décision${R.sessions.missingProduct.length > 0 ? `, ⚠ ${R.sessions.missingProduct.length} créations bloquées (produit inconnu)` : ''}
+- **${R.participants.toCreate.length} inscriptions créées sur des sessions existantes** + ${R.participants.onNewSessions} sur les nouvelles sessions (${R.participants.excludedByDecision} volontairement non importées — sessions exclues)
 - ${R.participants.priceSet.length} prix HT/stagiaire posés (0 € → montant SmartOF) — un montant existant n'est JAMAIS écrasé
 - ${R.legalLinks.toCreate.length} liens apprenant×entreprise créés (additifs, rôles EI_SELF/AGENT_COMMERCIAL/SALARIE)
 - ${R.trainers.toCreate.length} affectations formateur créées (uniquement nouvelles sessions ou sessions sans formateur)
@@ -1371,7 +1512,9 @@ function buildReport(ctx: {
 
 ${section('Nouveaux apprenants', R.persons.created)}
 ${section('Nouvelles entreprises', R.orgs.created)}
+${section('Nouveaux produits de formation (décision ④ — hors pipeline génération Qualiopi)', R.products.created)}
 ${section('Nouvelles sessions', R.sessions.created)}
+${section('Sessions EXCLUES par décision (①/② — volontairement non importées)', R.sessions.excludedByDecision)}
 ${section('Nouvelles inscriptions (sur sessions déjà en base)', R.participants.toCreate)}
 ${section('Nouveaux liens apprenant × entreprise', R.legalLinks.toCreate)}
 ${section('Nouvelles affectations formateur', R.trainers.toCreate)}

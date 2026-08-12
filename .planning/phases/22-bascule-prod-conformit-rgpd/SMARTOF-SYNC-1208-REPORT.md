@@ -1,7 +1,7 @@
-# Rapport de synchronisation SmartOF 12/08/2026 — SIMULATION (dry-run)
+# Rapport de synchronisation SmartOF 12/08/2026 — ÉCRITURE APPLIQUÉE
 
-> Généré le 2026-08-12 06:26 UTC par `apps/web/scripts/sync-smartof-1208.ts` — **AUCUNE écriture en base n'a été faite.**
-> Base cible : cloud production Supabase. L'écriture réelle (`WRITE=1`) est une **étape séparée**, à lancer uniquement après validation de ce rapport par Laurent.
+> Généré le 2026-08-12 07:35 UTC par `apps/web/scripts/sync-smartof-1208.ts`
+> Base cible : cloud production Supabase. **Écriture réelle exécutée le 12/08/2026 APRÈS validation du rapport DRY par Laurent** (4 décisions d'arbitrage — détail, preuves et restes à faire : §7).
 
 ## 1. Vue d'ensemble
 
@@ -14,14 +14,21 @@
 
 **Clé de fusion : UID SmartOF** (jamais l'email). Rapprochements secondaires (SIRET, nom exact, code session) listés explicitement ci-dessous pour validation.
 
-**Ce qui va se passer au WRITE (après ta validation)** :
+**Décisions d'arbitrage appliquées (Laurent, 12/08/2026)** :
+1. SES-0008 « PRÉ-INSCRIPTION » exclue (fourre-tout — circuit pré-inscriptions QualiOF)
+2. Sessions annulées SmartOF jamais importées : exclues (historique conservé dans SmartOF)
+3. Montants et payeurs divergents : **la base gagne partout** (Tréso = vérité) — 0 écrasement
+4. Produits manquants créés (produits simples hors pipeline de génération Qualiopi) pour débloquer SES-0098/0099/0104
+
+**Ce qui s'est passé au WRITE** :
 - **7 apprenants créés**, 1 mis à jour, 14 rapprochés par nom (UID nouvellement tracé)
 - **14 entreprises créées**, 18 mises à jour, 8 rapprochées par SIRET/nom
-- **16 sessions créées**, 5 mises à jour (dates/nom uniquement), ⚠ 3 créations bloquées (produit inconnu)
-- **2 inscriptions créées sur des sessions existantes** + 80 sur les nouvelles sessions
+- **3 produits de formation créés** (décision ④)
+- **10 sessions créées**, 5 mises à jour (dates/nom uniquement), 9 exclues par décision
+- **2 inscriptions créées sur des sessions existantes** + 22 sur les nouvelles sessions (68 volontairement non importées — sessions exclues)
 - 0 prix HT/stagiaire posés (0 € → montant SmartOF) — un montant existant n'est JAMAIS écrasé
 - 1 liens apprenant×entreprise créés (additifs, rôles EI_SELF/AGENT_COMMERCIAL/SALARIE)
-- 14 affectations formateur créées (uniquement nouvelles sessions ou sessions sans formateur)
+- 7 affectations formateur créées (uniquement nouvelles sessions ou sessions sans formateur)
 
 ---
 
@@ -54,24 +61,36 @@
 - Ashley&Parker (SIRET 91809967200019)
 - FERRARI (SIRET 91809967200019) — PA AGEFICE : AGEFICE 06 — ⚠ SIRET IDENTIQUE à « Ashley&Parker » dans le même export (à vérifier)
 
-### Nouvelles sessions (16)
+### Nouveaux produits de formation (décision ④ — hors pipeline génération Qualiopi) (3)
+
+- PROD-f8be726b — « Event Avec Sebastien Tedesco » (0 h, fiche SmartOF via commanditaires) → débloque SES-0104
+- PROD-7a78c8b2 — « Formation L'agence de l'olivier » (0 h, fiche minimale — aucun commanditaire source) → débloque SES-0098
+- PROD-c0c85e08 — « Coaching Indiv » (7 h, fiche SmartOF via commanditaires) → débloque SES-0099
+
+### Nouvelles sessions (10)
 
 - SES-0069 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (14/05/2026 → 14/05/2026) — statut SmartOF : Validée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
+- SES-0104 — Event Avec Sebastien Tedesco (01/03/2026 → 31/10/2026) — statut SmartOF : En projet — produit : Event Avec Sebastien Tedesco — 2 inscription(s) — ⚠ durée inhabituelle (245 j) : confirmer avant création
 - SES-0102 — L'intelligence artificielle au service des conseillers immobiliers (72h) (28/07/2026 → 07/08/2026) — statut SmartOF : En projet — produit : L'intelligence artificielle au service des conseillers immobiliers (72h) — 2 inscription(s)
 - SES-0071 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (29/05/2026 → 29/05/2026) — statut SmartOF : Validée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0008 — PRÉ-INSCRIPTION A VOTRE FUTURE FORMATION (Les dates de votre formation seront fournies ultérieurement) (01/01/2026 → 31/12/2026) — statut SmartOF : Validée — produit : L'IA au service des conseillers immobiliers (8h) — 68 inscription(s) — ⚠ durée inhabituelle (365 j) : confirmer avant création
-- SES-0061 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (20/03/2026 → 20/03/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
 - SES-0070 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (21/05/2026 → 21/05/2026) — statut SmartOF : Validée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
 - SES-0068 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (07/05/2026 → 07/05/2026) — statut SmartOF : Validée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
 - SES-0100 — L'intelligence artificielle au service des conseillers immobiliers (72h) (27/07/2026 → 06/08/2026) — statut SmartOF : En projet — produit : L'intelligence artificielle au service des conseillers immobiliers (72h) — 10 inscription(s)
-- SES-0062 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (26/03/2026 → 26/03/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
 - SES-0105 — Session de Formation IA Optimo Service transactions (14/09/2026 → 14/09/2026) — statut SmartOF : En projet — produit : L'intelligence artificielle au service des conseillers immobiliers (72h) — 0 inscription(s)
-- SES-0067 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (30/04/2026 → 30/04/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0064 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (09/04/2026 → 09/04/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0066 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (23/04/2026 → 23/04/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0065 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (16/04/2026 → 16/04/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0060 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (12/03/2026 → 12/03/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
-- SES-0063 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (02/04/2026 → 02/04/2026) — statut SmartOF : Annulée — produit : Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 — 0 inscription(s)
+- SES-0098 — Formation L'agence de l'olivier (30/06/2026 → 31/12/2026) — statut SmartOF : En projet — produit : Formation L'agence de l'olivier — 0 inscription(s) — ⚠ durée inhabituelle (185 j) : confirmer avant création
+- SES-0099 — Coaching Indiv / L'intelligence artificielle au service des conseillers immobiliers (72h) (24/08/2026 → 03/09/2026) — statut SmartOF : En projet — produit : Coaching Indiv — 8 inscription(s)
+
+### Sessions EXCLUES par décision (①/② — volontairement non importées) (9)
+
+- SES-0008 — PRÉ-INSCRIPTION A VOTRE FUTURE FORMATION (Les dates de votre formation seront fournies ultérieurement) (01/01/2026 → 31/12/2026) — EXCLUE (décision ① Laurent 12/08 : fourre-tout pré-inscriptions, circuit QualiOF dédié) — 68 inscription(s) non importées
+- SES-0061 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (20/03/2026 → 20/03/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0062 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (26/03/2026 → 26/03/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0067 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (30/04/2026 → 30/04/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0064 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (09/04/2026 → 09/04/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0066 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (23/04/2026 → 23/04/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0065 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (16/04/2026 → 16/04/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0060 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (12/03/2026 → 12/03/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
+- SES-0063 — Immobilier : gagnez 2h par jour grâce à l’IA - 8h00 (02/04/2026 → 02/04/2026) — EXCLUE (décision ② Laurent 12/08 : annulée SmartOF, historique conservé dans SmartOF)
 
 ### Nouvelles inscriptions (sur sessions déjà en base) (2)
 
@@ -82,24 +101,17 @@
 
 - FONTAINE VANESSA → FONTAINE Vanessa [EI_SELF]
 
-### Nouvelles affectations formateur (14)
+### Nouvelles affectations formateur (7)
 
 - Nicolas GOSSART → SES-0069 (nouvelle session, formateur principal)
 - Jean-Guy OURMIÈRES → SES-0102 (nouvelle session, formateur principal)
 - Nicolas GOSSART → SES-0071 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0061 (nouvelle session, formateur principal)
 - Nicolas GOSSART → SES-0070 (nouvelle session, formateur principal)
 - Nicolas GOSSART → SES-0068 (nouvelle session, formateur principal)
 - Jean-Guy OURMIÈRES → SES-0100 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0062 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0067 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0064 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0066 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0065 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0060 (nouvelle session, formateur principal)
-- Nicolas GOSSART → SES-0063 (nouvelle session, formateur principal)
+- Laurent MARX → SES-0099 (nouvelle session, formateur principal)
 
-> ℹ️ Les **80 inscriptions des nouvelles sessions** seront créées avec elles (payeur = commanditaire SmartOF, prix HT = budget commanditaire ÷ nb d'apprenants).
+> ℹ️ Les **22 inscriptions des nouvelles sessions** seront créées avec elles (payeur = commanditaire SmartOF, prix HT = budget commanditaire ÷ nb d'apprenants).
 
 ---
 
@@ -504,14 +516,18 @@ _Aucun._
 - MOLINIER HABITAT CONCEPT IMMO Dominique → SES-0040 : base 336.00 € HT ≠ SmartOF 240.00 € HT — NON appliqué, arbitrage requis
 - MOLINIER HABITAT CONCEPT IMMO Sophie → SES-0040 : base 336.00 € HT ≠ SmartOF 240.00 € HT — NON appliqué, arbitrage requis
 
-### ⚠ Payeurs divergents (sponsor en base ≠ commanditaire SmartOF) (30)
+### ⚠ Payeurs divergents (sponsor en base ≠ commanditaire SmartOF) (35)
 
 - LIMA Nelson → SES-0027 : payeur base "Nelson LIMA" ≠ SmartOF "TEAM PRIMOS (Le Castel Real estate)" — NON appliqué (corrections manuelles protégées)
 - LANIER Johan → SES-0015 : payeur base "Harald STARKE" ≠ SmartOF "Riviera Keys" — NON appliqué (corrections manuelles protégées)
+- PASTORINO Corentin → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Pastorino Immobilier" — NON appliqué (corrections manuelles protégées)
 - BRIVAL Taylor → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "TAYLOR BRIVAL" — NON appliqué (corrections manuelles protégées)
 - LECRUBIER Caroline → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Caroline LECRUBIER" — NON appliqué (corrections manuelles protégées)
+- FORLANI Gavina → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "FORLANI Gavina" — NON appliqué (corrections manuelles protégées)
 - LAUGIER JULIEN → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Julien Laugier" — NON appliqué (corrections manuelles protégées)
+- DUMLAO Don → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Don-Christopher DUMLAO" — NON appliqué (corrections manuelles protégées)
 - BENSOURI Jihane → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Jihane Bensouri" — NON appliqué (corrections manuelles protégées)
+- FERRARI stephane → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "FERRARI" — NON appliqué (corrections manuelles protégées)
 - LASSELIN Sophie → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "LASSELIN" — NON appliqué (corrections manuelles protégées)
 - BROSSARD Vincent → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Vincent Brossard" — NON appliqué (corrections manuelles protégées)
 - TOURNIAIRE Nicolas → SES-0101 : payeur base "ASHLEY PARKER" ≠ SmartOF "Nicolas Tourniaire" — NON appliqué (corrections manuelles protégées)
@@ -532,16 +548,15 @@ _Aucun._
 - DUMONTEIL Noémie → SES-0050 : payeur base "Neyrat immo" ≠ SmartOF "NEYRAT Immobilier Chalon sur Saone" — NON appliqué (corrections manuelles protégées)
 - DECHEMARDIN Bruno → SES-0050 : payeur base "Neyrat immo" ≠ SmartOF "NEYRAT Immobilier Chalon sur Saone" — NON appliqué (corrections manuelles protégées)
 - SAGNES - CELLENEUVE IMMOBILIER Mathilde → SES-0049 : payeur base "Eric PECOUL" ≠ SmartOF "CELLENEUVE IMMOBILIER - CABINET PECOUL" — NON appliqué (corrections manuelles protégées)
+- TOUATI JEREMY → SES-0097 : payeur base "Jérémy TOUATI" ≠ SmartOF "TOUATI JEREMY" — NON appliqué (corrections manuelles protégées)
 - JACQUES Laurence → SES-0044 : payeur base "Laurence GUILLEMIN" ≠ SmartOF "GUILLEMIN Laurence" — NON appliqué (corrections manuelles protégées)
 - LANIER Johan → SES-0020 : payeur base "Harald STARKE" ≠ SmartOF "Riviera Keys" — NON appliqué (corrections manuelles protégées)
 - CANDEAGO Audrey → SES-0009 : payeur base "Nestenn France" ≠ SmartOF "Nestenn Fréjus" — NON appliqué (corrections manuelles protégées)
 - ROSSI Valérie → SES-0009 : payeur base "Delphine CHAUGNE" ≠ SmartOF "Nestenn Fréjus" — NON appliqué (corrections manuelles protégées)
 
-### ⚠ Sessions à créer BLOQUÉES (produit SmartOF non tracé en base) (3)
+### ⚠ Sessions à créer BLOQUÉES (produit SmartOF non tracé en base)
 
-- SES-0104 — Event Avec Sebastien Tedesco (01/03/2026 → 31/10/2026) — produit SmartOF "Event Avec Sebastien Tedesco" non tracé en base → création BLOQUÉE, arbitrage requis
-- SES-0098 — Formation L'agence de l'olivier (30/06/2026 → 31/12/2026) — produit SmartOF "Formation L'agence de l'olivier" non tracé en base → création BLOQUÉE, arbitrage requis
-- SES-0099 — Coaching Indiv / L'intelligence artificielle au service des conseillers immobiliers (72h) (24/08/2026 → 03/09/2026) — produit SmartOF "Coaching Indiv" non tracé en base → création BLOQUÉE, arbitrage requis
+_Aucun._
 
 ### ⚠ Statuts de session divergents (info — le statut QualiOF est conservé) (6)
 
@@ -560,18 +575,10 @@ _Aucun._
 
 _Aucun._
 
-### ⚠ Inscriptions non résolues (10)
+### ⚠ Inscriptions non résolues (2)
 
-- GUERBETTE Maxime → SES-0104 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- MURRAY CHLOE → SES-0104 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- GUIGO Cameron → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- BARRIERE Marc → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- MONFORT Adrien → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- NICOLAS Jilbert → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- SEVRIN Julien → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- FLEURY Valéry → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- PETOIN BRIAN → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
-- BELINGARD Charline → SES-0099 : session à création BLOQUÉE (produit inconnu) — inscription en attente d'arbitrage
+- GUERBETTE Maxime → SES-0104 : payeur introuvable (commanditaire "null" : entreprise hors export) — inscription NON créée
+- MURRAY CHLOE → SES-0104 : payeur introuvable (commanditaire "null" : entreprise hors export) — inscription NON créée
 
 ### ⚠ Rattachements non résolus (3)
 
@@ -593,7 +600,7 @@ _Aucun._
 | Créneaux de formation | 877 | L'émargement QualiOF suit la convention figée 9h-13h / 14h-18h (règle métier non négociable) ; la base n'utilise quasiment pas SessionSlot (18 en base). Importer 876 créneaux toucherait des sessions dont les documents sont déjà générés. À arbitrer séparément si besoin. |
 | Charges des sessions | 1 | Coûts formateurs SmartOF — pas de modèle cible côté QualiOF (hors périmètre). |
 | Statut des sessions existantes | 6 divergences | QualiOF pilote le cycle de clôture (packs, docs) ; écraser le statut casserait le workflow. Diff listé §5. |
-| sponsorOrg des inscriptions existantes | 30 divergences | Des corrections manuelles existent (ex. SES-0101 EI agent commercial) — jamais d'écrasement automatique. |
+| sponsorOrg des inscriptions existantes | 35 divergences | Des corrections manuelles existent (ex. SES-0101 EI agent commercial) — jamais d'écrasement automatique. |
 | Montants : 0 € SmartOF | — | Un 0 € n'écrase JAMAIS un montant en base (règle métier Tréso). |
 | Champs vides SmartOF | — | Une cellule vide n'écrase jamais une valeur en base. |
 | Documents/packs QualiOF (Document, ClosureBatch, PedagogicalAsset…) | — | Jamais touchés par la sync. |
@@ -603,8 +610,41 @@ _Aucun._
 
 ---
 
-## 7. Étape suivante
+## 7. Exécution du 12/08 : décisions + résultats + preuves
 
-1. **Laurent valide ce rapport** (en particulier §4 rapprochements et §5 conflits).
-2. Écriture réelle (étape séparée) : `WRITE=1 pnpm exec dotenv -e ../../.env -- tsx scripts/sync-smartof-1208.ts` depuis `apps/web` — séquentiel, idempotent (re-run = 0 changement).
-3. Re-jouer le script en DRY après le WRITE pour prouver l'idempotence (tout doit ressortir « inchangé »).
+### 7.1 Décisions d'arbitrage (Laurent, 12/08/2026, sur rapport DRY commit `cb00864`)
+
+| # | Décision | Application |
+| --- | --- | --- |
+| ① | SES-0008 « PRÉ-INSCRIPTION » (fourre-tout, 68 inscriptions) : **EXCLUE** | Non créée ; 68 inscriptions volontairement non importées (circuit pré-inscriptions QualiOF) |
+| ② | 8 sessions annulées SmartOF (SES-0060..0067) : **EXCLUES** | Non créées ; historique d'annulation conservé dans SmartOF |
+| ③ | Montants + payeurs divergents : **la base gagne partout** (Tréso = vérité) | 72 montants et 30 payeurs conservés tels quels — 0 écrasement (vérifié : LOUVRIER SES-0027 toujours à 2 452 €) |
+| ④ | Produits manquants : **CRÉER** pour débloquer SES-0098/0099/0104 | **3 produits créés** (3 UID SmartOF distincts, pas 2 : `PROD-c0c85e08` Coaching Indiv 7 h, `PROD-7a78c8b2` Formation L'agence de l'olivier, `PROD-f8be726b` Event Avec Sebastien Tedesco) — produits simples hors pipeline de génération Qualiopi |
+
+### 7.2 Résultats réels (WRITE=1 exécuté le 12/08/2026 ~07h35 UTC, séquentiel)
+
+| Entité | Créés | Mis à jour | Protégés / exclus |
+| --- | --- | --- | --- |
+| Apprenants | **7** | 1 (email Barriere Marc) + 14 rapprochés par nom (UID tracé) | 250 inchangés |
+| Entreprises | **14** | 18 + 8 rapprochées SIRET/nom | 194 inchangées ; forme juridique jamais réécrite |
+| Produits | **3** (décision ④) | — | — |
+| Sessions | **10** (SES-0068/69/70/71, 0098, 0099, 0100, 0102, 0104, 0105) | 5 (dates SES-0082, noms SES-0086/0096/0097/0101) | 9 exclues (①/②) ; statuts jamais touchés |
+| Inscriptions | **22** (8 SES-0099, 10 SES-0100, 2 SES-0102, 2 sur SES-0096/0097) | 0 prix modifié | 68 exclues (SES-0008) ; 72 montants conservés (③) |
+| LegalLinks | **14** (1 explicite + 13 portés par les créations) | — | 274 couples existants intouchés |
+| Formateurs | **7** affectations (nouvelles sessions uniquement) | — | signataires existants intouchés |
+
+**Recomptes post-write (base cloud)** : 334 persons (327+7) ✓ · 289 organizations (275+14) ✓ · 86 sessions (76+10) ✓ · 325 inscriptions (303+22) ✓ · 36 produits (+3) ✓ · 627 identités smartof (+60) ✓ · **0 doublon** (paires session×personne et codes session vérifiés par requête SQL) ✓ · AuditLog `smartof.sync` / `sync-smartof-1208` posé avec le détail des décisions ✓.
+
+**Spot-checks** : SES-0100 = 10 inscrits à 3 024 € HT payeurs EI individuels ✓ · SES-0099 = produit Coaching Indiv + 8 inscrits + formateur ✓ · PETOIN Brian créé avec lien AGENT_COMMERCIAL → PETOIN - BRISTOL ✓ · SES-0082 re-datée au 10/04/2026 ✓ · aucune session exclue présente en base (0/9) ✓ · docs/packs QualiOF non touchés (aucune écriture Document/ClosureBatch dans le script) ✓.
+
+**Idempotence prouvée** : re-run DRY post-write = 0 création / 0 mise à jour réelle sur toutes les entités. Résidus attendus qui se re-signalent à chaque run (par design) : 9 exclusions ①/②, 72 montants conservés ③, 18 lignes informatives « Forme juridique (NON appliquée) », et les 2 inscriptions ci-dessous.
+
+### 7.3 Incident en cours d'exécution (résolu)
+
+Le premier lancement WRITE a échoué immédiatement sur `AgeficeProfile.paFields` (Json requis par le schéma, absent de mes `create`). **Preuve d'innocuité : diff des rapports DRY avant/après crash = strictement identiques → 0 ligne écrite par le run interrompu.** Fix : `paFields` construit depuis l'export (même structure que `import-smartof.ts`), posé à la création du profil uniquement — un profil existant, potentiellement enrichi par l'app, n'est jamais réécrit. Re-run WRITE = succès complet.
+
+### 7.4 Restes à faire (saisie manuelle)
+
+1. **2 inscriptions SES-0104 (Event Tedesco) non créées** : GUERBETTE Maxime et MURRAY CHLOE — leur commanditaire SmartOF référence une entreprise absente des exports et ils n'ont aucun rattachement → **payeur inconnu**. À saisir dans l'UI une fois le payeur connu (les 2 fiches apprenants existent).
+2. **3 rattachements non résolus** (voir §5) : CHAUGNE Delphine × LES CIGALES (entreprise archivée côté SmartOF), GUERBETTE et MURRAY sans entreprise.
+3. Optionnel : flaguer le produit « Event Avec Sebastien Tedesco » hors BPF si ce n'est pas une action de formation.
