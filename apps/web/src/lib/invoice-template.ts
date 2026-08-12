@@ -4,6 +4,8 @@
  * "TVA non applicable, art. 293 B du CGI" si applicable.
  */
 
+import { formatIban } from './iban-format';
+
 export interface InvoiceData {
   // Facture
   number: string;
@@ -236,7 +238,7 @@ ${d.paymentMethod ? `
 <div class="payment">
   <h3>Modalités de règlement</h3>
   <div><strong>Mode :</strong> ${escapeHtml(d.paymentMethod)}</div>
-  ${d.paymentIban ? `<div style="margin-top: 4px;"><strong>IBAN :</strong> <span class="iban">${escapeHtml(d.paymentIban)}</span></div>` : ''}
+  ${d.paymentIban ? `<div style="margin-top: 4px;"><strong>IBAN :</strong> <span class="iban">${escapeHtml(formatIban(d.paymentIban))}</span></div>` : ''}
   ${d.paymentBic ? `<div><strong>BIC :</strong> <span class="iban">${escapeHtml(d.paymentBic)}</span></div>` : ''}
   <div style="margin-top: 6px; font-size: 8pt; color: #555;">
     En cas de retard de paiement, indemnité forfaitaire de 40 € due au titre des frais de recouvrement
