@@ -15,13 +15,24 @@
  * Mentions légales obligatoires conservées : numéro · date · TVA · échéance ·
  * exonération art. 261-4-4° du CGI. Mode AVOIR (Phase 11) préservé.
  *
+ * Quick 260813-efh — champ `acquitted` : bascule le rendu en DUPLICATA
+ * ACQUITTÉ pour les dossiers OPCO/AGEFICE (tampon PAYÉ + cachet OF +
+ * signature dirigeant, « Fait à {lieu de formation}, le {fin de formation} »,
+ * sans IBAN ni échéance ni pénalités). MÊME numéro que la facture d'origine —
+ * ce n'est pas une seconde facture. Absent ⇒ gabarit inchangé.
+ *
  * Adresse OF : décision Laurent 12/08 — 12 avenue des Camélias, 06800
  * Cagnes-sur-Mer (adresse officielle post-déménagement, lue du Tenant/env
  * via of-config, jamais en dur ici).
  */
 
 import { formatIban } from './iban-format';
-import { loadLogoColorDataUrl } from './closure/shared-template';
+import {
+  loadLogoColorDataUrl,
+  loadPaidStampDataUrl,
+  loadSignatureDataUrl,
+  loadStampDataUrl,
+} from './closure/shared-template';
 
 /**
  * Constantes légales/bancaires Start Academy affichées sur le gabarit
@@ -88,6 +99,24 @@ export interface InvoiceData {
   documentKind?: 'FACTURE' | 'AVOIR';
   originalNumber?: string;
   originalIssueDate?: Date;
+  /**
+   * Quick 260813-efh — Édition ACQUITTÉE (duplicata pour dossier OPCO/AGEFICE).
+   *
+   * Ce n'est PAS une seconde facture : même numéro, même montant, seule la
+   * présentation change (décision Laurent 13/08 — deux factures pour une même
+   * prestation doubleraient le CA). Présent ⇒ le gabarit bascule en duplicata
+   * acquitté : tampon PAYÉ + tampon OF + signature dirigeant, « Fait à … le … »,
+   * et retrait de tout ce qui appelle un paiement (IBAN, échéance, pénalités).
+   *
+   * - `paidAt` : date de règlement réelle affichée en clair.
+   * - `lieu`   : LIEU DE LA FORMATION (pas le siège social) — choix de Laurent.
+   * - `date`   : DATE DE FIN DE FORMATION (pas la date du jour) — idem.
+   */
+  acquitted?: {
+    paidAt: Date;
+    lieu: string | null;
+    date: Date;
+  };
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -139,6 +168,29 @@ const STYLES = `
   .penalties { border: 1px solid #CBD5E1; padding: 9px 12px; font-size: 8.5pt; color: #333; margin-top: 10px; }
   .avoir-mention { background: #FEF3C7; border: 1px solid #FCD34D; padding: 12px; margin: 0 0 14px 0; border-radius: 4px; color: #78350F; }
   .notes { font-size: 9pt; color: #444; margin-top: 10px; }
+
+  /* ── Édition ACQUITTÉE (quick 260813-efh) ─────────────────────────────
+     Duplicata destiné aux dossiers OPCO/AGEFICE. Le numéro ne change pas :
+     seule la présentation bascule. */
+  .duplicata { margin-top: 6px; font-size: 9.5pt; font-weight: 700; color: #B91C1C; letter-spacing: 0.4px; }
+  .paid-line { margin-top: 3px; font-size: 9pt; color: #166534; font-weight: 600; }
+  /* Le tampon PAYÉ est un scan à fond BLANC OPAQUE : multiply fait
+     disparaître le blanc et ne laisse que l'encre rouge (vrai effet tampon).
+     print-color-adjust force Chromium/Gotenberg à conserver la couleur. */
+  .paid-stamp-wrap { position: relative; height: 0; }
+  .paid-stamp {
+    position: absolute; right: 250px; top: -6px; width: 132px;
+    transform: rotate(-8deg); mix-blend-mode: multiply; opacity: 0.92;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .acquit-block { margin-top: 18px; page-break-inside: avoid; text-align: right; }
+  .acquit-lieu { font-size: 9.5pt; color: #111; margin-bottom: 2px; }
+  .acquit-visuals { position: relative; display: inline-block; width: 230px; height: 105px; }
+  .acquit-tampon {
+    position: absolute; right: 6px; top: 4px; width: 108px; opacity: 0.9;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .acquit-signature { position: absolute; right: 74px; top: 26px; width: 132px; mix-blend-mode: multiply; }
 </style>
 `;
 
@@ -148,6 +200,15 @@ export function renderInvoiceHtml(d: InvoiceData): string {
   const isCreditNote = docKind === 'AVOIR';
   const headerTitle = isCreditNote ? 'AVOIR' : 'FACTURE';
   const logoDataUrl = loadLogoColorDataUrl(d.tenantId);
+
+  // Quick 260813-efh — édition acquittée (duplicata OPCO/AGEFICE).
+  // Les assets ne sont chargés QUE dans ce mode : l'édition apprenant reste
+  // strictement identique au gabarit officiel du 12/08 (octets près).
+  const acq = d.acquitted;
+  const isAcquitted = Boolean(acq);
+  const paidStampUrl = isAcquitted ? loadPaidStampDataUrl(d.tenantId) : '';
+  const ofStampUrl = isAcquitted ? loadStampDataUrl(d.tenantId) : '';
+  const signatureUrl = isAcquitted ? loadSignatureDataUrl(d.tenantId, 'dirigeant') : '';
 
   const avoirMention =
     isCreditNote && d.originalNumber
@@ -194,6 +255,12 @@ ${STYLES}
   <div class="right-block">
     <div class="facture-no">${headerTitle} N° ${escapeHtml(d.number)}</div>
     <div class="date">Date: ${fmtDate.format(d.issueDate)}</div>
+    ${
+      acq
+        ? `<div class="duplicata">DUPLICATA — FACTURE ACQUITTÉE</div>
+    <div class="paid-line">Payé le ${fmtDate.format(acq.paidAt)} par ${escapeHtml(d.paymentMethod)}</div>`
+        : ''
+    }
     <div class="client-box">
       <strong>${escapeHtml(d.payerName)}</strong>
       ${d.payerAddress ? `${f(d.payerAddress)}<br>` : ''}
@@ -242,9 +309,9 @@ ${avoirMention}
     ${exonerationTva ? `
     <div class="row">T.V.A. non applicable ou exonérée<br>TVA non applicable en vertu de l'article 261-4-4° du CGI</div>
     ` : ''}
-    <div class="row"><strong>Date d'échéance:</strong>&nbsp;&nbsp;${fmtDate.format(d.dueDate)}</div>
+    ${acq ? '' : `<div class="row"><strong>Date d'échéance:</strong>&nbsp;&nbsp;${fmtDate.format(d.dueDate)}</div>`}
     <div class="row"><strong>Mode de règlement:</strong> ${escapeHtml(d.paymentMethod)}</div>
-    ${d.paymentIban ? `
+    ${!acq && d.paymentIban ? `
     <div class="bank-box">
       <strong>Coordonnées bancaires:</strong><br>
       ${escapeHtml(OF_BANK_NAME)}<br>
@@ -252,11 +319,21 @@ ${avoirMention}
       ${d.paymentBic ? `<strong>BIC</strong>: ${escapeHtml(d.paymentBic)}` : ''}
     </div>` : ''}
   </div>
+  ${
+    acq && paidStampUrl
+      ? `<div class="paid-stamp-wrap"><img class="paid-stamp" src="${paidStampUrl}" alt="PAYÉ" /></div>`
+      : ''
+  }
   <div class="totals">
     <table>
       <tr><td>Total HT</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountHT)}</td></tr>
       <tr><td>Total TTC</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountTTC)}</td></tr>
-      <tr class="due"><td>Total dû</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountTTC)}</td></tr>
+      ${
+        acq
+          ? `<tr><td>Réglé</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountTTC)}</td></tr>
+      <tr class="due"><td>Reste dû</td><td class="right" style="text-align:right;">${fmtEUR.format(0)}</td></tr>`
+          : `<tr class="due"><td>Total dû</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountTTC)}</td></tr>`
+      }
     </table>
   </div>
 </div>
@@ -265,11 +342,21 @@ ${avoirMention}
 
 ${d.notes ? `<div class="notes"><strong>Notes :</strong> ${escapeHtml(d.notes)}</div>` : ''}
 
-<div class="penalties">
+${
+  acq
+    ? `<div class="acquit-block">
+  <div class="acquit-lieu">Fait à ${escapeHtml(acq.lieu ?? d.ofAddress)}, le ${fmtDate.format(acq.date)}</div>
+  <div class="acquit-visuals">
+    ${ofStampUrl ? `<img class="acquit-tampon" src="${ofStampUrl}" alt="Cachet de l'organisme" />` : ''}
+    ${signatureUrl ? `<img class="acquit-signature" src="${signatureUrl}" alt="Signature" />` : ''}
+  </div>
+</div>`
+    : `<div class="penalties">
   Pas d'escompte pour paiement anticipé. Passée la date d'échéance, tout paiement différé entraine
   l'application d'une pénalité de 3 fois le taux d'intérêt légal (loi 2008-776 du 04/08/2008) ainsi
   qu'une indemnité forfaitaire pour frais de recouvrement de 40 euros (Décret 2012-1115 du 02/10/2012).
-</div>
+</div>`
+}
 
 </body>
 </html>`;
