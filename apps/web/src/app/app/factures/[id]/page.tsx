@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { RecordPaymentForm } from '@/components/invoices/record-payment-form';
 import { CreateCreditNoteDialog } from '@/components/invoices/create-credit-note-dialog';
 import { SendReminderButton } from '@/components/invoices/send-reminder-button';
+import { DownloadAcquittedButton } from '@/components/invoices/download-acquitted-button';
 
 export const dynamic = 'force-dynamic';
 // Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
@@ -166,6 +167,13 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
             maxLevel={tenantReminderDays.length}
           />
         )}
+        {/* Quick 260813-efh — duplicata tamponné « PAYÉ » pour les dossiers
+            OPCO/AGEFICE (même numéro de facture, jamais une seconde facture). */}
+        <DownloadAcquittedButton
+          invoiceId={invoice.id}
+          status={invoice.status}
+          isFullyPaid={invoice.status === 'PAID' || remaining <= 0}
+        />
       </section>
 
       {/* Section "Avoirs liés" — D-04 + D-07 cross-nav */}

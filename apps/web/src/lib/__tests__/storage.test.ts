@@ -131,13 +131,34 @@ describe('createSignedUploadUrl', () => {
     expect(createSignedUploadUrlMock).toHaveBeenCalledWith('p/x.pdf', { upsert: true });
   });
 
-  it('Test 2 (minio) : throw explicite « Supabase uniquement »', async () => {
+  it('Test 2 (minio) : presigned PUT S3 — URL absolue signée, token vide (audit 2026-08-12)', async () => {
+    // Avant : throw « Supabase uniquement » → le formulaire public ne pouvait
+    // pas uploader en mode local/MinIO. Désormais : presigned PUT S3-compatible.
     vi.resetModules();
     mockEnv.STORAGE_PROVIDER = 'minio';
+
+    // Hermétisation (PR #12, 13/08) : cette branche passe par `ensureBucket`,
+    // qui envoie un vrai HeadBucketCommand au client S3 → le test exigeait un
+    // MinIO joignable sur :9000. Vert en local (Docker), ROUGE en CI où MinIO
+    // n'existe pas. On neutralise le seul aller-retour réseau et RIEN d'autre :
+    // `getSignedUrl` reste réel, donc la signature testée ci-dessous est bien
+    // calculée par le SDK (les credentials MinIO ont des défauts en dur dans
+    // storage.ts, aucune variable d'env requise).
+    const { S3Client } = await import('@aws-sdk/client-s3');
+    const sendSpy = vi
+      .spyOn(S3Client.prototype, 'send')
+      .mockResolvedValue(undefined as never);
+
     const fresh = await import('../storage');
-    await expect(fresh.createSignedUploadUrl('preinscriptions', 'k')).rejects.toThrow(
-      /Supabase uniquement/,
-    );
+    const res = await fresh.createSignedUploadUrl('preinscriptions', 'k');
+
+    expect(sendSpy).toHaveBeenCalled(); // preuve qu'ensureBucket a bien été traversé
+    sendSpy.mockRestore();
+    expect(res.path).toBe('k');
+    expect(res.token).toBe(''); // token = mécanique Supabase, sans objet en S3
+    expect(res.signedUrl).toMatch(/^https?:\/\//); // absolue → utilisée telle quelle par le client
+    expect(res.signedUrl).toContain('X-Amz-Signature=');
+    expect(res.signedUrl).toContain('/preinscriptions/k');
   });
 });
 

@@ -77,6 +77,13 @@ test('upload CNI 10 Mo direct-to-storage : PUT supabase.co 200, zéro 413, aucun
   page,
   baseURL,
 }) => {
+  // Audit 2026-08-12 : les assertions PUT *.supabase.co sont spécifiques au
+  // provider cloud. En local/MinIO (STORAGE_PROVIDER=minio), l'upload direct
+  // passe par un presigned PUT S3 — testé par le flux public (submit complet).
+  test.skip(
+    (process.env.STORAGE_PROVIDER ?? 'minio') !== 'supabase',
+    'Cible Supabase uniquement (STORAGE_PROVIDER != supabase)',
+  );
   test.setTimeout(180_000); // 10 Mo à uploader depuis le poste local
 
   // Volet 2 & 3 : surveiller TOUTES les réponses (413) et les bodies sortants.

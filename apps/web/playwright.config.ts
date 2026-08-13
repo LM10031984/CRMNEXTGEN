@@ -33,6 +33,10 @@ export default defineConfig({
   use: {
     baseURL: process.env.STAGING_BASE_URL ?? 'http://localhost:3010',
     trace: 'retain-on-failure',
+    // Sandbox d'audit : Chromium préinstallé hors du cache Playwright standard.
+    ...(process.env.PW_EXECUTABLE_PATH
+      ? { launchOptions: { executablePath: process.env.PW_EXECUTABLE_PATH } }
+      : {}),
     ...(bypassSecret
       ? { extraHTTPHeaders: { 'x-vercel-protection-bypass': bypassSecret } }
       : {}),

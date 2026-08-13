@@ -4,7 +4,15 @@
  * Server Actions pour les sessions et inscriptions.
  */
 
-import { Prisma, prisma, SessionStatus, Modality, EnrollmentStatus, LinkRole } from '@qualiof/db';
+import {
+  Prisma,
+  prisma,
+  SessionStatus,
+  Modality,
+  EnrollmentStatus,
+  LinkRole,
+  FinancingMode,
+} from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -245,6 +253,11 @@ export async function updateParticipant(input: {
   // l'année à laquelle s'applique le budget consommé. cf
   // feedback_budget_agefice_annee_dossier. ISO yyyy-mm-dd ou null pour effacer.
   financingRequestDate?: string | null;
+  // Mode de financement — éditable après création (audit 2026-08-12) : le
+  // wizard est le seul endroit qui le posait, or un changement de financeur
+  // (refus OPCO → autofinancement, bascule AGEFICE…) est courant côté OF.
+  // null = effacer ("— Mode de financement —").
+  financingMode?: keyof typeof FinancingMode | null;
 }): Promise<{ ok: boolean; error?: string }> {
   let user;
   try {
@@ -284,6 +297,15 @@ export async function updateParticipant(input: {
       const d = new Date(input.financingRequestDate);
       if (Number.isNaN(d.getTime())) return { ok: false, error: 'Date dossier invalide.' };
       data.financingRequestDate = d;
+    }
+  }
+  if (input.financingMode !== undefined) {
+    if (input.financingMode === null) {
+      data.financingMode = null;
+    } else if (FinancingMode[input.financingMode]) {
+      data.financingMode = FinancingMode[input.financingMode];
+    } else {
+      return { ok: false, error: 'Mode de financement invalide.' };
     }
   }
 

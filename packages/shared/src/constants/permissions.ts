@@ -17,7 +17,7 @@
  *    encadrer l'accès par `canRead(role, 'users')` etc.
  */
 
-import type { UserRole } from '@qualiof/db';
+import type { UserRole } from '@prisma/client';
 
 /** Sections fonctionnelles de l'UI alignées sur la sidebar + paramètres. */
 export type AppSection =

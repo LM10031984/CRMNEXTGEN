@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LegalForm } from '@qualiof/db';
+import { LegalForm } from '@prisma/client';
 import { addressSchema } from './address';
 import { isValidSiret } from '../helpers/siret';
 

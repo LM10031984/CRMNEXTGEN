@@ -14,6 +14,8 @@ import {
 import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
+import { acquittedInvoiceKey } from '@/lib/invoice-storage';
+import { resolveInvoiceIssueDate } from '@/lib/invoice-dates';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
@@ -119,7 +121,11 @@ export async function createInvoiceFromParticipant(
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(amountTTC),
         amountPaid: new Prisma.Decimal(0),
-        issueDate: new Date(),
+        // Datée de la fin de formation (cf. resolveInvoiceIssueDate). Le délai
+        // de paiement, lui, court à partir du jour d'émission réel — sinon une
+        // facture rattrapée des mois plus tard naîtrait déjà en retard et le
+        // cron de relances partirait tout seul.
+        issueDate: resolveInvoiceIssueDate(session.endDate),
         dueDate: new Date(Date.now() + dueDays * 86400000),
         notes: input.notes ?? null,
       },
@@ -313,7 +319,9 @@ export async function createInvoiceForSponsorGroup(input: {
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(totalTTC),
         amountPaid: new Prisma.Decimal(0),
-        issueDate: new Date(),
+        // Idem facture individuelle : datée de la fin de formation, échéance
+        // comptée depuis le jour d'émission réel.
+        issueDate: resolveInvoiceIssueDate(session.endDate),
         dueDate: new Date(Date.now() + dueDays * 86400000),
         notes: input.notes ?? null,
       },
@@ -489,7 +497,8 @@ export async function recordInvoicePayment(input: {
             where: { id: invoice.participantId },
             data: {
               paymentReceived: true,
-              amountCollected: new Prisma.Decimal(invoice.participant!.priceHT),
+              // String() : realm-safe (audit 2026-08-12, neutre en prod)
+              amountCollected: new Prisma.Decimal(String(invoice.participant!.priceHT)),
               amountRemaining: new Prisma.Decimal(0),
             },
           }),
@@ -902,4 +911,211 @@ export async function sendInvoiceReminder(input: {
   }
 
   return { ok: true, level, dryRun };
+}
+
+// ─── Quick 260813-efh — Édition ACQUITTÉE (duplicata OPCO/AGEFICE) ──────
+
+/**
+ * Génère l'édition ACQUITTÉE d'une facture : le duplicata tamponné « PAYÉ »,
+ * signé, que l'AGEFICE/l'OPCO réclame comme justificatif de règlement.
+ *
+ * Ce n'est PAS une seconde facture (décision Laurent 13/08) : même numéro,
+ * même montant, aucune écriture comptable créée. Seule la présentation change
+ * — en émettre une vraie doublerait le CA.
+ *
+ * Garde-fou (D-3) : sur une facture non soldée, l'action refuse tant que
+ * l'appelant n'a pas fourni `paidAtOverride`, la date de règlement réelle.
+ * On avertit, on ne bloque pas : Laurent encaisse parfois hors de l'app.
+ *
+ * Le « Fait à … le … » porte le LIEU DE LA FORMATION et la DATE DE FIN DE
+ * FORMATION (et non le siège social ni la date du jour) — c'est ce que
+ * Laurent écrivait à la main.
+ *
+ * Volontairement PAS de row `Document` : le duplicata apparaîtrait une 2ᵉ fois
+ * dans `resolveDocs` et dans la matrice Qualiopi.
+ */
+export async function generateAcquittedInvoicePdf(input: {
+  invoiceId: string;
+  /** ISO — obligatoire si la facture n'est pas au statut PAID. */
+  paidAtOverride?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: input.invoiceId, tenantId: user.tenantId },
+  });
+  if (!invoice) return { ok: false, error: 'Facture introuvable' };
+
+  if (invoice.status === 'CREDIT_NOTE') {
+    return { ok: false, error: "Un avoir ne peut pas être acquitté — générez la pièce depuis la facture d'origine." };
+  }
+  if (invoice.status === 'DRAFT' || invoice.status === 'CANCELLED') {
+    return { ok: false, error: 'Facture en brouillon ou annulée : pas de pièce acquittée possible.' };
+  }
+
+  // Garde-fou D-3 — pas de justificatif de paiement sans paiement constaté.
+  let paidAt: Date;
+  if (invoice.status === 'PAID') {
+    paidAt = invoice.paidAt ?? invoice.updatedAt;
+  } else if (input.paidAtOverride) {
+    const parsed = new Date(input.paidAtOverride);
+    if (Number.isNaN(parsed.getTime())) {
+      return { ok: false, error: 'Date de règlement invalide.' };
+    }
+    paidAt = parsed;
+  } else {
+    return {
+      ok: false,
+      error:
+        "Cette facture n'est pas soldée dans l'app. Indiquez la date de règlement réelle pour générer la pièce acquittée.",
+    };
+  }
+
+  // Recharge le contexte formation : lieu + date de fin viennent de la session.
+  // Deux origines possibles — facture d'un participant, ou facture groupée
+  // par sponsor (plusieurs salariés d'une même structure).
+  const sessionInclude = {
+    product: true,
+    location: true,
+    trainers: { where: { isPrimary: true }, include: { person: true }, take: 1 },
+  } as const;
+
+  const participant = invoice.participantId
+    ? await prisma.sessionParticipant.findFirst({
+        where: { id: invoice.participantId, session: { tenantId: user.tenantId } },
+        include: { person: true, sponsorOrg: true, session: { include: sessionInclude } },
+      })
+    : null;
+
+  const session =
+    participant?.session ??
+    (invoice.sessionId
+      ? await prisma.trainingSession.findFirst({
+          where: { id: invoice.sessionId, tenantId: user.tenantId },
+          include: sessionInclude,
+        })
+      : null);
+
+  if (!session) {
+    return { ok: false, error: 'Session de formation introuvable pour cette facture.' };
+  }
+
+  // Stagiaires listés : le participant seul, ou tous ceux de la facture groupée.
+  const groupedIds = Array.isArray(invoice.participantIds)
+    ? (invoice.participantIds as string[])
+    : [];
+  const groupedParticipants =
+    groupedIds.length > 0
+      ? await prisma.sessionParticipant.findMany({
+          where: { id: { in: groupedIds }, session: { tenantId: user.tenantId } },
+          include: { person: true },
+        })
+      : [];
+
+  const payer = invoice.payerOrgId
+    ? await prisma.organization.findFirst({
+        where: { id: invoice.payerOrgId, tenantId: user.tenantId },
+      })
+    : null;
+
+  const of = await loadOfConfig(user.tenantId);
+  const payerAddr = (payer?.address ?? null) as null | {
+    street?: string;
+    postalCode?: string;
+    city?: string;
+  };
+
+  const stagiaires = (
+    groupedParticipants.length > 0
+      ? groupedParticipants
+      : participant
+        ? [participant]
+        : []
+  ).map((p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`.trim());
+
+  const data: InvoiceData = {
+    number: invoice.number,
+    issueDate: invoice.issueDate ?? invoice.createdAt,
+    dueDate: invoice.dueDate ?? invoice.createdAt,
+    status: invoice.status,
+    ofName: of.name,
+    ofSiret: of.siret,
+    ofRnq: of.rnq,
+    ofAddress: of.addressFull,
+    ofPhone: of.phone,
+    ofEmail: of.email,
+    ofTvaIntra: of.tvaIntra || null,
+    payerName: payer?.legalName ?? '',
+    payerSiret: payer?.siret ?? null,
+    payerAddress: payerAddr?.street ?? null,
+    payerCp: payerAddr?.postalCode ?? null,
+    payerVille: payerAddr?.city ?? null,
+    payerEmail: payer?.email ?? payer?.emailBilling ?? null,
+    apprenantNom: participant?.person.lastName ?? '',
+    apprenantPrenom: participant?.person.firstName ?? '',
+    formationTitre: session.product.title,
+    formationCode: session.code,
+    formationDateDebut: session.startDate,
+    formationDateFin: session.endDate,
+    formationDureeHeures: session.product.durationHours,
+    formationLieu: composeLieu(session.location),
+    formateurNom: composeFormateur(session.trainers),
+    formationModalite: MODALITE_LABEL[session.modality] ?? null,
+    tenantId: user.tenantId,
+    stagiaires: stagiaires.length > 0 ? stagiaires : undefined,
+    amountHT: Number(invoice.amountHT),
+    vatRate: Number(invoice.vatRate),
+    amountTTC: Number(invoice.amountTTC),
+    notes: invoice.notes,
+    paymentMethod: 'Virement',
+    // Édition acquittée : ni IBAN ni échéance (le template les masque déjà,
+    // on ne les charge même pas).
+    paymentIban: null,
+    paymentBic: null,
+    acquitted: {
+      paidAt,
+      lieu: composeLieu(session.location),
+      date: session.endDate,
+    },
+  };
+
+  let pdfBuffer: Buffer;
+  try {
+    pdfBuffer = await renderHtmlToPdf(renderInvoiceHtml(data), {
+      footerHtml: renderInvoiceFooterHtml({
+        ofName: of.name,
+        ofSiret: of.siret,
+        ofTvaIntra: of.tvaIntra || null,
+      }),
+    });
+  } catch (e: any) {
+    return { ok: false, error: `Erreur génération PDF : ${e?.message ?? e}` };
+  }
+
+  const key = acquittedInvoiceKey(invoice.number);
+  await uploadFile(DOCS_BUCKET, key, pdfBuffer, 'application/pdf');
+
+  await logInvoiceEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    targetInvoiceId: invoice.id,
+    action: 'invoice.acquitted_pdf_generated',
+    diff: {
+      key,
+      paidAt: paidAt.toISOString(),
+      statusAtGeneration: invoice.status,
+      forcedPaidAt: invoice.status !== 'PAID',
+    },
+  });
+
+  revalidatePath(`/app/factures/${invoice.id}`);
+  return { ok: true };
 }

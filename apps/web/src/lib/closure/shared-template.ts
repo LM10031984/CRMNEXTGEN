@@ -146,6 +146,23 @@ export function loadStampDataUrl(tenantId?: string): string {
   return loadAssetDataUrl(['tampon.png', 'tampon-start-academy.png'], tenantId);
 }
 
+/**
+ * Tampon « PAYÉ » (rouge, case cochée) apposé sur l'édition ACQUITTÉE d'une
+ * facture — la pièce que l'AGEFICE/l'OPCO réclame au remboursement.
+ * Asset fourni par Laurent le 13/08 (quick 260813-efh) ; remplace le
+ * copier-coller manuel qu'il faisait sur chaque dossier.
+ *
+ * Cherche d'abord `tampon-paye.png` dans `public/of-assets/{tenantId}/`,
+ * fallback bundled `tampon-paye.png`.
+ *
+ * ⚠ L'asset vient d'un scan JPEG : son fond est BLANC OPAQUE, pas
+ * transparent. Le template DOIT le poser en `mix-blend-mode: multiply`,
+ * sinon le tampon imprime un pavé blanc qui masque le contenu dessous.
+ */
+export function loadPaidStampDataUrl(tenantId?: string): string {
+  return loadAssetDataUrl(['tampon-paye.png'], tenantId);
+}
+
 /** Logo officiel Qualiopi processus certifié (haut droite docs Qualiopi). */
 export function loadLogoQualiopiDataUrl(): string {
   return loadAssetDataUrl(['logo-qualiopi.png']);

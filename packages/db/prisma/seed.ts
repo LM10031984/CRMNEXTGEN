@@ -17,10 +17,11 @@ import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
 loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
-import { PrismaClient, UserRole, OpcoStatus, DocType } from '@prisma/client';
+import { UserRole, OpcoStatus, DocType } from '@prisma/client';
 import argon2 from 'argon2';
-
-const prisma = new PrismaClient();
+// [AUDIT-SANDBOX] client partagé (supporte PRISMA_USE_PG_ADAPTER=1 — sandbox
+// sans binaires natifs Prisma). Comportement identique en dev/prod normal.
+import { prisma } from '../src/index.js';
 
 const TENANT_NAME = process.env.TENANT_DEFAULT_NAME ?? 'Start Academy';
 const TENANT_SIRET = process.env.TENANT_DEFAULT_SIRET ?? null;

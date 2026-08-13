@@ -24,21 +24,23 @@
     "import:veille": "dotenv -e ../../.env -- tsx scripts/import-veille-from-xlsx.ts",
     "backfill:trainer-treso": "dotenv -e ../../.env -- tsx scripts/backfill-trainer-from-treso.ts",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "dotenv -e ../../.env -- vitest run"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "5.22.0",
     "@prisma/client": "^5.22.0",
     "@qualiof/shared": "workspace:*",
     "dotenv": "^16.4.7",
+    "pg": "8.13.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "prisma": "^5.22.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
     "@types/node": "^22.10.0",
     "argon2": "^0.41.1",
     "dotenv-cli": "^7.4.2",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "prisma": {

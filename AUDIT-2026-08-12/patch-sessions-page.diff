@@ -1,0 +1,33 @@
+--- /tmp/orig/apps/web/src/app/app/sessions/[id]/page.tsx	2026-07-06 08:35:49.000000000 +0000
++++ apps/web/src/app/app/sessions/[id]/page.tsx	2026-08-12 15:05:10.615804588 +0000
+@@ -991,14 +991,22 @@
+               <div className="mt-3">
+                 <SessionParticipantsList
+                   canManage={canWrite}
+-                  participants={matrixParticipants.map((p) => ({
+-                    id: p.id,
+-                    personId: p.personId,
+-                    fullName: p.fullName,
+-                    sponsorOrgLabel: p.sponsorOrgLabel,
+-                    docCount: docCompletionByParticipant.get(p.id) ?? 0,
+-                    docTotal: PERSONAL_DOC_TOTAL,
+-                  }))}
++                  participants={matrixParticipants.map((p) => {
++                    const raw = session.participants.find((sp) => sp.id === p.id);
++                    return {
++                      id: p.id,
++                      personId: p.personId,
++                      fullName: p.fullName,
++                      sponsorOrgLabel: p.sponsorOrgLabel,
++                      docCount: docCompletionByParticipant.get(p.id) ?? 0,
++                      docTotal: PERSONAL_DOC_TOTAL,
++                      // Édition inscription (audit 2026-08-12)
++                      priceHT: raw ? Number(raw.priceHT) : undefined,
++                      enrollmentStatus: raw?.enrollmentStatus,
++                      financingMode: p.financingMode,
++                      financingRequestDate: raw?.financingRequestDate ?? null,
++                    };
++                  })}
+                 />
+               </div>
+             </SessionWorkflowTimeline>

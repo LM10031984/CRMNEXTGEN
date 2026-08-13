@@ -48,7 +48,9 @@ export async function toggleDossierBoolean(
   const nextReimb = field === 'opcoReimbursed' ? next : participant.opcoReimbursed;
   const fullPaid = nextPayment || nextReimb;
 
-  const priceHT = new Prisma.Decimal(participant.priceHT);
+  // String() : construction realm-safe (un Decimal issu du client reste valide
+  // quelle que soit l'instance decimal.js — audit 2026-08-12, neutre en prod).
+  const priceHT = new Prisma.Decimal(String(participant.priceHT));
   const amountCollected = fullPaid ? priceHT : new Prisma.Decimal(0);
   const amountRemaining = fullPaid ? new Prisma.Decimal(0) : priceHT;
 
@@ -84,9 +86,65 @@ export async function toggleDossierBoolean(
     await syncOpcoSubmissionStatus(participantId, field);
   }
 
+  // Synchro Facture (audit 2026-08-12) : encaisser côté dossier (paiement
+  // client OU remboursement OPCO subrogé) doit solder la facture liée — sinon
+  // la page Factures affiche « impayé » pendant que le dossier dit « encaissé »
+  // (deux vérités trésorerie contradictoires). Le passage inverse (détoggle)
+  // ne reverse RIEN automatiquement : un mouvement d'argent ne s'annule pas
+  // silencieusement, on laisse la facture en l'état pour correction manuelle.
+  if (next && (field === 'paymentReceived' || field === 'opcoReimbursed')) {
+    await settleInvoiceForParticipant(participantId, field);
+  }
+
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${participant.sessionId}`);
   return { ok: true };
+}
+
+/**
+ * Solde la facture liée à un participant quand l'encaissement est marqué côté
+ * dossier OPCO (audit 2026-08-12). Enregistre un InvoicePayment du restant dû
+ * (virement — référence explicite) et passe la facture en PAID. No-op si pas
+ * de facture, facture déjà soldée, annulée ou avoir.
+ */
+async function settleInvoiceForParticipant(
+  participantId: string,
+  field: 'paymentReceived' | 'opcoReimbursed',
+) {
+  const invoice = await prisma.invoice.findFirst({
+    where: {
+      participantId,
+      status: { in: ['ISSUED', 'PARTIAL', 'OVERDUE'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, amountTTC: true, amountPaid: true, paidAt: true },
+  });
+  if (!invoice) return;
+  const remaining = Number(invoice.amountTTC) - Number(invoice.amountPaid);
+  if (remaining <= 0) return;
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.invoicePayment.create({
+      data: {
+        invoiceId: invoice.id,
+        amount: new Prisma.Decimal(String(remaining)),
+        method: 'virement',
+        receivedAt: now,
+        reference:
+          field === 'opcoReimbursed'
+            ? 'Remboursement financeur (synchro dossier OPCO)'
+            : 'Paiement client (synchro dossier OPCO)',
+      },
+    }),
+    prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        amountPaid: new Prisma.Decimal(String(invoice.amountTTC)),
+        status: 'PAID',
+        paidAt: invoice.paidAt ?? now,
+      },
+    }),
+  ]);
 }
 
 /**

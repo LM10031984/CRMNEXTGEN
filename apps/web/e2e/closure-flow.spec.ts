@@ -154,6 +154,14 @@ test('TEST-01 : session E2E- via UI → pack closure IA réel → 0 stub → %PD
 }) => {
   test.setTimeout(15 * 60_000); // marge cold start Gotenberg + file worker (~3 min témoin SES-0093)
 
+  // Audit 2026-08-12 : « 0 stub » exige un provider IA réel (OpenRouter ou
+  // Ollama joignable). Sur un poste sans IA, le pack passe par les stubs
+  // déterministes — comportement voulu, mais hors du périmètre de CE test.
+  test.skip(
+    process.env.E2E_SKIP_REAL_AI === '1',
+    'IA réelle indisponible (E2E_SKIP_REAL_AI=1) — pack testé via stubs par ailleurs',
+  );
+
   // ── 1. Préflight doc-engine Railway (Pitfall 9) ──────────────────────────
   const healthUrl = process.env.E2E_DOCENGINE_HEALTH_URL;
   if (!healthUrl) {

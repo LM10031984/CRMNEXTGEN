@@ -222,8 +222,12 @@ export function PublicPreEnrollmentForm({
               ))}
             </select>
           </Field>
+          {/* Audit 2026-08-12 : bindings remis à l'endroit — le SELECT de
+              niveau alimentait `diploma` et le texte libre `educationLevel`,
+              d'où un niveau d'étude en texte libre qui cassait le
+              pré-remplissage AGEFICE (liste fermée de niveaux). */}
           <Field label="Niveau d'étude">
-            <select value={diploma} onChange={(e) => setDiploma(e.target.value)} className="w-full h-10 px-3 rounded-md border border-input bg-white">
+            <select value={educationLevel} onChange={(e) => setEducationLevel(e.target.value)} className="w-full h-10 px-3 rounded-md border border-input bg-white">
               {DIPLOMA_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
@@ -232,8 +236,8 @@ export function PublicPreEnrollmentForm({
           <Field label="Dernier diplôme obtenu" className="md:col-span-2">
             <input
               type="text"
-              value={educationLevel}
-              onChange={(e) => setEducationLevel(e.target.value)}
+              value={diploma}
+              onChange={(e) => setDiploma(e.target.value)}
               className="w-full h-10 px-3 rounded-md border border-input"
               placeholder="Ex: BTS Professions immobilières, Master Marketing…"
             />
