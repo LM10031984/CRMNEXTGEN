@@ -2,7 +2,7 @@
 
 **Date :** 2026-08-13
 **Branche :** cloud-migration
-**Commits :** `e0b0bbe`, `09db015`, `43b6772`, `fe8455a`
+**Commits :** `e0b0bbe`, `09db015`, `43b6772`, `fe8455a`, `97c6301`
 
 ## Le besoin
 
@@ -27,6 +27,21 @@ deux éditions du même PDF.
 | Totaux | `Total dû` | `Réglé` + `Reste dû 0,00 €` |
 | Visuels | — | tampon PAYÉ, cachet OF, signature Laurent |
 | Bas de page | — | `Fait à {lieu de formation}, le {date de fin de formation}` |
+
+## Ajout du 13/08 (retour Laurent sur le PDF témoin)
+
+**La facture est désormais datée de la FIN DE FORMATION, plus du jour du clic.**
+Sur le témoin, « Date : 13/08 » en haut contredisait « Fait à …, le 17/06 » en bas.
+
+- `resolveInvoiceIssueDate()` (`lib/invoice-dates.ts`) appliquée aux deux créations
+  de facture — individuelle et groupée par sponsor. L'avoir garde la date du jour.
+- Garde : **jamais de facture datée dans le futur**. Session non terminée
+  (facturation à l'inscription, wizard étape 5) → date du jour.
+- L'**échéance** reste comptée depuis le jour d'émission réel : sinon une facture
+  rattrapée des mois plus tard naîtrait en retard et le cron de relances partirait seul.
+- ⚠ **Effet de bord assumé, signalé à Laurent** : facturer en août une session de
+  juin produit une facture antérieure à la précédente — la numérotation n'est alors
+  plus dans l'ordre chronologique, ce qu'un comptable peut relever.
 
 ## Décisions appliquées
 
@@ -61,8 +76,13 @@ deux éditions du même PDF.
 
 ## Vérification
 
-- **Tests** : 16/16 sur le gabarit facture (11 nouveaux + les 5 AVOIR de la
-  Phase 11) ; 306 tests verts sur `src/lib/__tests__/`.
+- **Tests** : **1224/1224 verts** sur `apps/web` (155/155 fichiers), dont 11 nouveaux
+  sur le gabarit acquitté, 4 sur la datation et les 5 AVOIR de la Phase 11.
+  ⚠ La suite doit être lancée **avec les env chargées** (`dotenv -e ../../.env --`) :
+  sans elles, 2 fichiers tombent au chargement de `sharedEnv` (fail-loud), sans rapport
+  avec ce chantier.
+- **Build monorepo** : vert (25,8 s), route `/api/documents-by-invoice/[id]/acquittee`
+  bien enregistrée.
 - **Type-check** : `tsc --noEmit` propre. **Lint** : propre.
 - **PDF témoin réel** (Gotenberg local) : les deux éditions rendues et
   relues à l'œil. L'édition apprenant est visuellement inchangée.
@@ -85,7 +105,10 @@ deux éditions du même PDF.
 
 - **Non testé de bout en bout dans l'app** (clic réel sur une vraie facture) :
   la génération a été validée au niveau du rendu PDF, pas du parcours UI.
-- `pdf-render.watermark.test.ts` échoue **avant** ce chantier (variables d'env
-  manquantes au chargement de `pdf-render.ts`) — non lié, non corrigé ici.
 - La facture groupée par sponsor est gérée dans l'action mais n'a pas été
   rendue en témoin (seul le cas mono-participant l'a été).
+- **Factures déjà émises non reprises** : la règle de datation ne vaut que pour les
+  nouvelles factures. Les anciennes gardent leur date d'émission d'origine.
+- Deux noms de vrais clients avaient été repris par erreur dans le script de
+  prévisualisation (piochés dans des PDF du dossier) → remplacés par un jeu de
+  données fictif, avec un avertissement en tête de fichier.
