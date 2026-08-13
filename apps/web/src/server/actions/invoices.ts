@@ -15,6 +15,7 @@ import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
+import { resolveInvoiceIssueDate } from '@/lib/invoice-dates';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
@@ -120,7 +121,11 @@ export async function createInvoiceFromParticipant(
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(amountTTC),
         amountPaid: new Prisma.Decimal(0),
-        issueDate: new Date(),
+        // Datée de la fin de formation (cf. resolveInvoiceIssueDate). Le délai
+        // de paiement, lui, court à partir du jour d'émission réel — sinon une
+        // facture rattrapée des mois plus tard naîtrait déjà en retard et le
+        // cron de relances partirait tout seul.
+        issueDate: resolveInvoiceIssueDate(session.endDate),
         dueDate: new Date(Date.now() + dueDays * 86400000),
         notes: input.notes ?? null,
       },
@@ -314,7 +319,9 @@ export async function createInvoiceForSponsorGroup(input: {
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(totalTTC),
         amountPaid: new Prisma.Decimal(0),
-        issueDate: new Date(),
+        // Idem facture individuelle : datée de la fin de formation, échéance
+        // comptée depuis le jour d'émission réel.
+        issueDate: resolveInvoiceIssueDate(session.endDate),
         dueDate: new Date(Date.now() + dueDays * 86400000),
         notes: input.notes ?? null,
       },

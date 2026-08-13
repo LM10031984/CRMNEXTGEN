@@ -3,6 +3,10 @@
  * de facture, pour valider à l'œil le placement du tampon PAYÉ, du cachet et
  * de la signature. Aucune écriture en base, aucun upload.
  *
+ * ⚠ Jeu de données ENTIÈREMENT FICTIF, et il doit le rester : ce fichier est
+ * versionné. Ne jamais y recopier le nom d'un vrai client ou stagiaire, même
+ * trouvé dans un PDF du dossier.
+ *
  *   pnpm --filter @qualiof/web exec tsx scripts/_preview-facture-acquittee.ts
  */
 import fs from 'node:fs';
@@ -12,7 +16,8 @@ import { renderHtmlToPdf } from '../src/lib/pdf-render';
 
 const BASE: InvoiceData = {
   number: 'F-2026-08-231',
-  issueDate: new Date('2026-08-13T09:00:00Z'),
+  // Datée de la FIN DE FORMATION (règle du 13/08), pas du jour d'émission.
+  issueDate: new Date('2026-06-17T17:30:00Z'),
   dueDate: new Date('2026-09-12T09:00:00Z'),
   status: 'PAID',
   ofName: 'Start Academy',
@@ -22,14 +27,14 @@ const BASE: InvoiceData = {
   ofPhone: '06 12 34 56 78',
   ofEmail: 'contact@start-academy.fr',
   ofTvaIntra: 'FR90901234567',
-  payerName: 'BIANCO INVEST ASSURANCES',
+  payerName: 'AGENCE DEMO IMMOBILIER',
   payerSiret: '84512345600027',
   payerAddress: '18 boulevard Victor Hugo',
   payerCp: '06000',
   payerVille: 'Nice',
-  payerEmail: 'compta@bianco-invest.fr',
-  apprenantNom: 'Bianco',
-  apprenantPrenom: 'Marc',
+  payerEmail: 'compta@exemple-demo.fr',
+  apprenantNom: 'Exemple',
+  apprenantPrenom: 'Alex',
   formationTitre: "L'IA au service des conseillers immobiliers",
   formationCode: 'SES-0104',
   formationDateDebut: new Date('2026-06-15T08:30:00Z'),
@@ -38,7 +43,7 @@ const BASE: InvoiceData = {
   formationLieu: '20 rue de France à Nice',
   formateurNom: 'M. Jean-Guy Ourmières',
   formationModalite: 'en présentiel',
-  stagiaires: ['Marc BIANCO', 'Sophie PANCRACIO'],
+  stagiaires: ['Alex EXEMPLE', 'Camille DEMO'],
   amountHT: 2100,
   vatRate: 0,
   amountTTC: 2100,
