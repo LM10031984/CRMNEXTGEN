@@ -177,10 +177,13 @@ const STYLES = `
   /* Le tampon PAYÉ est un scan à fond BLANC OPAQUE : multiply fait
      disparaître le blanc et ne laisse que l'encre rouge (vrai effet tampon).
      print-color-adjust force Chromium/Gotenberg à conserver la couleur. */
-  .paid-stamp-wrap { position: relative; height: 0; }
+  /* Posé DANS le flux, sous le mode de règlement : en absolu il chevauchait
+     la mention TVA art. 261-4-4° du CGI et la rendait illisible (constaté au
+     PDF témoin du 13/08). L'encadré bancaire étant masqué dans cette édition,
+     la place est libre. */
   .paid-stamp {
-    position: absolute; right: 250px; top: -6px; width: 132px;
-    transform: rotate(-8deg); mix-blend-mode: multiply; opacity: 0.92;
+    display: block; width: 172px; margin: 16px 0 0 4px;
+    transform: rotate(-6deg); mix-blend-mode: multiply;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .acquit-block { margin-top: 18px; page-break-inside: avoid; text-align: right; }
@@ -318,12 +321,8 @@ ${avoirMention}
       <strong>IBAN</strong>: ${escapeHtml(formatIban(d.paymentIban))}<br>
       ${d.paymentBic ? `<strong>BIC</strong>: ${escapeHtml(d.paymentBic)}` : ''}
     </div>` : ''}
+    ${acq && paidStampUrl ? `<img class="paid-stamp" src="${paidStampUrl}" alt="PAYÉ" />` : ''}
   </div>
-  ${
-    acq && paidStampUrl
-      ? `<div class="paid-stamp-wrap"><img class="paid-stamp" src="${paidStampUrl}" alt="PAYÉ" /></div>`
-      : ''
-  }
   <div class="totals">
     <table>
       <tr><td>Total HT</td><td class="right" style="text-align:right;">${fmtEUR.format(d.amountHT)}</td></tr>

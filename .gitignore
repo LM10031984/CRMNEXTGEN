@@ -70,3 +70,8 @@ data/uploads/
 backups/
 secrets/
 .e2e-tmp-admin-pwd.txt
+.vercel
+.env*
+
+# Sorties de prévisualisation PDF (scripts _preview-*.ts) — jamais commitées
+.preview-facture/
