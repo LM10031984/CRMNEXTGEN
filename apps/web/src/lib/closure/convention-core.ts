@@ -264,30 +264,21 @@ export async function generateConventionEntrepriseCore(
   const session = first.session;
   if (!session.product) return { ok: false, error: 'Produit lié à la session manquant' };
 
-  // Prix : le gabarit exprime le total comme « prix unitaire × N stagiaires »
-  // (convention-template : totalHT = produitPriceHTPerStagiaire * nbStagiaires).
-  // Il ne sait donc PAS représenter des prix hétérogènes. Plutôt que d'imprimer
-  // un montant faux sur un document contractuel, on refuse et on dit quoi
-  // corriger.
+  // Prix : pour une entreprise, c'est un PRIX GLOBAL négocié pour le groupe,
+  // pas un tarif par salarié (correction Laurent 18/08). On somme donc les
+  // priceHT des participants — exactement ce que fait déjà la facture groupée
+  // (`createInvoiceForSponsorGroup`), pour que convention et facture affichent
+  // le même montant. Les prix peuvent légitimement différer d'un salarié à
+  // l'autre : seul le total engage l'entreprise.
   const productPrice = Number(session.product.priceHT);
-  const prices = participants.map((p) => {
+  const prixGlobalHT = participants.reduce((sum, p) => {
     const pp = Number(p.priceHT);
-    return pp > 0 ? pp : productPrice;
-  });
-  const effectivePrice = prices[0]!;
-  if (effectivePrice <= 0) {
+    return sum + (pp > 0 ? pp : productPrice);
+  }, 0);
+  if (prixGlobalHT <= 0) {
     return {
       ok: false,
-      error: 'Prix HT par stagiaire introuvable (ni sur les inscriptions, ni sur le produit).',
-    };
-  }
-  if (prices.some((p) => p !== effectivePrice)) {
-    const detail = participants
-      .map((p, i) => `${p.person.firstName} ${p.person.lastName.toUpperCase()} : ${prices[i]} €`)
-      .join(' · ');
-    return {
-      ok: false,
-      error: `Les participants de « ${org.legalName} » n'ont pas le même prix HT — la convention groupe afficherait un total faux. Alignez les prix avant de générer (${detail}).`,
+      error: `Prix HT introuvable pour « ${org.legalName} » (ni sur les inscriptions, ni sur le produit) — la convention afficherait 0 €.`,
     };
   }
 
@@ -346,7 +337,10 @@ export async function generateConventionEntrepriseCore(
     produitObjectifs: (session.product.objectives as string[] | null) ?? [],
     produitProgrammeMd: typeof session.product.programMd === 'string' ? session.product.programMd : '',
     produitTrainerProfile: session.product.trainerProfile,
-    produitPriceHTPerStagiaire: effectivePrice,
+    // Renseigné pour compat du type, mais c'est `prixGlobalHT` qui fait foi
+    // côté rendu pour une convention entreprise.
+    produitPriceHTPerStagiaire: productPrice,
+    prixGlobalHT,
     tenantId,
   };
 

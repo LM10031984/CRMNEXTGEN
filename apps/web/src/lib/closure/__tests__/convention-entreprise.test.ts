@@ -203,7 +203,11 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
     expect(res.error).toMatch(/aucun participant/i);
   });
 
-  it('refuse des prix hétérogènes plutôt que d’imprimer un total faux', async () => {
+  it('somme les prix en UN prix global entreprise, même s’ils diffèrent', async () => {
+    // Correction Laurent 18/08 : pour des salariés, le prix est un forfait
+    // négocié avec l'entreprise, pas un tarif par tête. Des prix différents
+    // d'un salarié à l'autre sont légitimes — seul le total engage.
+    // Même calcul que la facture groupée (createInvoiceForSponsorGroup).
     orgFindFirstMock.mockResolvedValue({
       id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
       representative: null, address: null,
@@ -216,9 +220,26 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
     const { generateConventionEntrepriseCore } = await importCore();
     const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
 
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/même prix HT/i);
-    expect(txMock).not.toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    const data = renderMock.mock.calls[0]![0] as { prixGlobalHT: number };
+    expect(data.prixGlobalHT).toBe(1600);
+  });
+
+  it('retombe sur le prix produit pour un participant sans prix saisi', async () => {
+    orgFindFirstMock.mockResolvedValue({
+      id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
+      representative: null, address: null,
+    });
+    findManyMock.mockResolvedValue([
+      participant('sp-1', 'Alice', 'Martin', 700),
+      participant('sp-2', 'Bruno', 'Durand', 0), // priceHT non saisi → 700 (produit)
+    ]);
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const data = renderMock.mock.calls[0]![0] as { prixGlobalHT: number };
+    expect(data.prixGlobalHT).toBe(1400);
   });
 
   it('refuse une organisation introuvable dans le tenant', async () => {
