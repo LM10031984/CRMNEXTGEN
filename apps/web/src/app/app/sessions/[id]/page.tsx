@@ -60,6 +60,10 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
+import {
+  GROUP_CONVENTION_ENTITY_TYPE,
+  expandGroupConventions,
+} from '@/lib/docs/convention-coverage';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
@@ -133,7 +137,7 @@ export default async function SessionDetailPage({
               // tout le groupe d'un commanditaire, donc participantId=null.
               // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
               // afficherait « convention manquante » alors qu'elle existe.
-              { entityType: 'organization' },
+              { entityType: GROUP_CONVENTION_ENTITY_TYPE },
             ],
           },
           select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
@@ -205,19 +209,20 @@ export default async function SessionDetailPage({
     m.set(d.type, d.id);
     docsByParticipant.set(d.participantId, m);
   }
-  // Convention ENTREPRISE (quick 260817-mm0) : le document groupe est rattaché
-  // à l'organisation commanditaire, pas à un participant. On le reporte sur
-  // CHAQUE salarié du groupe, sinon la fiche annonce « convention manquante »
-  // pour les 11 salariées d'OPTIMMO alors que la convention existe.
-  // `??=` : ne jamais écraser une convention individuelle déjà en place.
-  for (const d of sessionDocs) {
-    if (d.entityType !== 'organization') continue;
-    for (const p of session.participants) {
-      if (p.sponsorOrg.id !== d.entityId) continue;
-      const m = docsByParticipant.get(p.id) ?? new Map();
-      if (!m.has(d.type)) m.set(d.type, d.id);
-      docsByParticipant.set(p.id, m);
-    }
+  // Convention ENTREPRISE : le document groupe est rattaché à l'organisation
+  // commanditaire, pas à un participant. On le reporte sur chaque salarié du
+  // groupe, sinon la fiche annonce « convention manquante » pour les 11
+  // salariées d'OPTIMMO alors que la convention existe.
+  // Résolution déléguée au helper partagé (revue Codex PR #13) : opco-submission
+  // et le statut de préparation utilisent exactement la même règle.
+  for (const [participantId, docId] of expandGroupConventions(
+    sessionDocs,
+    session.participants.map((p) => ({ id: p.id, sponsorOrgId: p.sponsorOrg.id })),
+  )) {
+    const m = docsByParticipant.get(participantId) ?? new Map();
+    // Ne jamais écraser une convention individuelle déjà en place.
+    if (!m.has('CONVENTION')) m.set('CONVENTION', docId);
+    docsByParticipant.set(participantId, m);
   }
   for (const a of sessionAssets) {
     if (!a.participantId) continue;

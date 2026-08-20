@@ -225,21 +225,45 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
     expect(data.prixGlobalHT).toBe(1600);
   });
 
-  it('retombe sur le prix produit pour un participant sans prix saisi', async () => {
+  it('refuse si un participant n’a pas de prix, en le nommant', async () => {
+    // Revue Codex PR #13 : la facture groupée somme les priceHT BRUTS. Combler
+    // un prix manquant par le prix produit ferait dire à la convention un
+    // montant SUPÉRIEUR au facturé — deux documents contractuels qui se
+    // contredisent. On refuse plutôt.
     orgFindFirstMock.mockResolvedValue({
       id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
       representative: null, address: null,
     });
     findManyMock.mockResolvedValue([
       participant('sp-1', 'Alice', 'Martin', 700),
-      participant('sp-2', 'Bruno', 'Durand', 0), // priceHT non saisi → 700 (produit)
+      participant('sp-2', 'Bruno', 'Durand', 0), // prix non saisi
+    ]);
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Bruno DURAND/);
+    expect(res.error).toMatch(/prix/i);
+    expect(txMock).not.toHaveBeenCalled();
+  });
+
+  it('somme les prix BRUTS, comme la facture groupée (aucun fallback produit)', async () => {
+    orgFindFirstMock.mockResolvedValue({
+      id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
+      representative: null, address: null,
+    });
+    findManyMock.mockResolvedValue([
+      participant('sp-1', 'Alice', 'Martin', 500),
+      participant('sp-2', 'Bruno', 'Durand', 300),
     ]);
 
     const { generateConventionEntrepriseCore } = await importCore();
     await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
 
     const data = renderMock.mock.calls[0]![0] as { prixGlobalHT: number };
-    expect(data.prixGlobalHT).toBe(1400);
+    // 800, et surtout PAS 1400 (2 × prix produit).
+    expect(data.prixGlobalHT).toBe(800);
   });
 
   it('refuse une organisation introuvable dans le tenant', async () => {
@@ -250,5 +274,59 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/introuvable/i);
+  });
+});
+
+/**
+ * Garde anti-doublon (finding F3 de la revue Codex PR #13).
+ *
+ * `generateConventionForParticipant` est appelé depuis 5 endroits (préparation
+ * ×2, matrice Qualiopi, création de session, pack de clôture). Sans garde
+ * CENTRALE, chacun pouvait recréer une convention individuelle alors qu'une
+ * convention groupe couvrait déjà le salarié — la session portait alors les
+ * DEUX, ce qui viole « jamais une convention par stagiaire ».
+ *
+ * Test de puissance : supprimer le `if (groupConvention) return ...` de
+ * `generateConventionCore` fait virer ROUGE « ne recrée pas d'individuelle ».
+ */
+describe('generateConventionCore — garde anti-doublon', () => {
+  const PARTICIPANT = {
+    id: 'sp-1',
+    priceHT: 700,
+    sponsorOrgId: 'org-optimmo',
+    person: { id: 'per-1', firstName: 'Alice', lastName: 'Martin', email: null, legalLinks: [] },
+    sponsorOrg: { id: 'org-optimmo', legalName: 'OPTIMMO', representative: 'Gilles Blanchon', address: null },
+    session: { ...SESSION, trainers: [] },
+  };
+
+  it('ne recrée PAS d’individuelle quand une convention groupe couvre le participant', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue(PARTICIPANT);
+    prisma.document.findFirst = vi.fn().mockResolvedValue({ id: 'doc-groupe' });
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    const res = await generateConventionCore('tnt-1', 'sp-1');
+
+    // Succès (le participant EST couvert) — surtout pas une erreur, sinon les
+    // flux batch tomberaient en échec.
+    expect(res.ok).toBe(true);
+    expect(res.skipped).toBe(true);
+    expect(res.documentId).toBe('doc-groupe');
+    // Aucun nouveau document individuel.
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('génère normalement quand aucune convention groupe ne couvre le participant', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue(PARTICIPANT);
+    prisma.document.findFirst = vi.fn().mockResolvedValue(null); // pas de groupe
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    const res = await generateConventionCore('tnt-1', 'sp-1');
+
+    expect(res.skipped).toBeUndefined();
+    expect(createMock).toHaveBeenCalled(); // comportement historique préservé
   });
 });

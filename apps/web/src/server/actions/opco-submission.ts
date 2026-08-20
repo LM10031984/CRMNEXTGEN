@@ -18,6 +18,7 @@ import { prisma, Prisma, type OpcoSubmissionStatus } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { sendMail } from '@/lib/mailer';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
+import { groupConventionWhere } from '@/lib/docs/convention-coverage';
 
 export interface SubmissionAttachment {
   /** clé MinIO du fichier */
@@ -112,13 +113,23 @@ export async function composeOpcoSubmission(
       OR: [
         { participantId: participant.id, type: { in: ['CONVENTION', 'AGEFICE'] } },
         { sessionId: participant.session.id, type: 'PROGRAMME' },
+        // Convention GROUPE (revue Codex PR #13) : pour un salarié couvert par
+        // la convention de son entreprise, le document n'a PAS de participantId.
+        // Sans cette branche, le dossier OPCO déclarait « CONVENTION manquante »
+        // et n'attachait pas le PDF — exactement le scénario OPTIMMO / OPCO EP
+        // que la convention groupe devait servir.
+        groupConventionWhere(user.tenantId, participant.session.id, participant.sponsorOrgId),
       ],
     },
-    select: { type: true, pdfUrl: true },
+    select: { type: true, pdfUrl: true, participantId: true },
     orderBy: { createdAt: 'desc' },
   });
 
-  const conventionDoc = docs.find((d) => d.type === 'CONVENTION');
+  const conventionDocs = docs.filter((d) => d.type === 'CONVENTION');
+  // Priorité à la convention individuelle quand les deux coexistent
+  // (transition : une individuelle émise avant la bascule en groupe).
+  const conventionDoc =
+    conventionDocs.find((d) => d.participantId === participant.id) ?? conventionDocs[0];
   const ageficeDoc = docs.find((d) => d.type === 'AGEFICE');
   const programmeDoc = docs.find((d) => d.type === 'PROGRAMME');
 

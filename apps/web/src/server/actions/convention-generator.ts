@@ -16,6 +16,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
+import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import {
   generateConventionCore,
   generateConventionEntrepriseCore,
@@ -53,8 +54,19 @@ export async function generateConventionEntreprise(input: {
   sessionId: string;
   sponsorOrgId: string;
 }): Promise<{ ok: boolean; documentId?: string; count?: number; error?: string }> {
-  const { user } = await validateRequest();
-  if (!user) return { ok: false, error: 'Non authentifié' };
+  // RBAC en écriture obligatoire (revue Codex PR #13) : une server action est
+  // appelable directement, indépendamment du `canWrite` qui masque le bouton.
+  // Or celle-ci SUPPRIME les conventions individuelles du groupe — un rôle
+  // lecteur ne doit pas pouvoir la déclencher. Même trio que `canWrite`.
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
 
   const r = await generateConventionEntrepriseCore(
     user.tenantId,

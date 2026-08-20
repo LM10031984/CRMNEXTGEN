@@ -30,6 +30,7 @@ import {
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
+import { groupConventionWhere } from '@/lib/docs/convention-coverage';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -42,7 +43,7 @@ export async function generateConventionCore(
   tenantId: string,
   participantId: string,
   options?: { force?: boolean },
-): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; personId?: string }> {
+): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; personId?: string; skipped?: boolean }> {
   void options;
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
   // même type avant de recréer (anti-doublons). Le paramètre `force` reste
@@ -71,6 +72,33 @@ export async function generateConventionCore(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.product) return { ok: false, error: 'Produit lié à la session manquant' };
+
+  // Garde anti-doublon (revue Codex PR #13). Si une convention GROUPE couvre
+  // déjà ce participant, ne pas en émettre une individuelle : la session
+  // porterait les DEUX, ce qui viole la règle « jamais une convention par
+  // stagiaire » et se verrait en audit.
+  //
+  // Posée ICI plutôt que chez les appelants : `generateConventionForParticipant`
+  // est invoqué depuis 5 endroits (préparation ×2, matrice Qualiopi, création
+  // de session, pack de clôture) — une garde centrale les couvre tous.
+  //
+  // Retourne un SUCCÈS, pas une erreur : le participant EST couvert, et les
+  // flux batch ne doivent pas tomber en échec pour autant. Le deleteMany
+  // ci-dessus a par ailleurs déjà retiré l'éventuelle individuelle obsolète.
+  const groupConvention = await prisma.document.findFirst({
+    where: groupConventionWhere(tenantId, participant.session.id, participant.sponsorOrgId),
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (groupConvention) {
+    return {
+      ok: true,
+      documentId: groupConvention.id,
+      skipped: true,
+      sessionId: participant.session.id,
+      personId: participant.person.id,
+    };
+  }
 
   const participantPrice = Number(participant.priceHT);
   const productPrice = Number(participant.session.product.priceHT);
@@ -270,17 +298,23 @@ export async function generateConventionEntrepriseCore(
   // (`createInvoiceForSponsorGroup`), pour que convention et facture affichent
   // le même montant. Les prix peuvent légitimement différer d'un salarié à
   // l'autre : seul le total engage l'entreprise.
-  const productPrice = Number(session.product.priceHT);
-  const prixGlobalHT = participants.reduce((sum, p) => {
-    const pp = Number(p.priceHT);
-    return sum + (pp > 0 ? pp : productPrice);
-  }, 0);
-  if (prixGlobalHT <= 0) {
+  // ⚠ AUCUN fallback sur le prix produit (revue Codex PR #13) : la facture
+  // groupée (`createInvoiceForSponsorGroup`) somme les priceHT BRUTS. Combler
+  // un prix manquant ici ferait dire à la convention un montant SUPÉRIEUR à
+  // celui facturé — deux documents contractuels qui se contredisent. On refuse
+  // plutôt, en nommant les personnes à compléter.
+  const sansPrix = participants.filter((p) => Number(p.priceHT) <= 0);
+  if (sansPrix.length > 0) {
+    const noms = sansPrix
+      .map((p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`)
+      .join(', ');
     return {
       ok: false,
-      error: `Prix HT introuvable pour « ${org.legalName} » (ni sur les inscriptions, ni sur le produit) — la convention afficherait 0 €.`,
+      error: `Prix HT manquant pour ${noms} — renseignez le prix de chaque inscription avant de générer la convention (sinon son total différerait de la facture).`,
     };
   }
+  const productPrice = Number(session.product.priceHT);
+  const prixGlobalHT = participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
 
   // Annexe nominative : nom + prénom UNIQUEMENT (consigne Laurent — aucune CSP
   // ni poste occupé sur les documents). `ConventionStagiaire` ne porte
