@@ -5,6 +5,10 @@ import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { generateProgrammeForProduct } from './programme-generator';
 import { generateConventionForParticipant } from './convention-generator';
+import {
+  GROUP_CONVENTION_ENTITY_TYPE,
+  expandGroupConventions,
+} from '@/lib/docs/convention-coverage';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
@@ -568,7 +572,9 @@ export async function getSessionPreparationStatus(
     select: {
       id: true,
       productId: true,
-      participants: { select: { id: true } },
+      // sponsorOrgId requis pour rattacher les conventions GROUPE aux salariés
+      // qu'elles couvrent (revue Codex PR #13).
+      participants: { select: { id: true, sponsorOrgId: true } },
     },
   });
   if (!session) return { ...empty, error: 'Session introuvable' };
@@ -594,13 +600,19 @@ export async function getSessionPreparationStatus(
           ...(participantIds.length > 0
             ? [
                 { entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } },
+                // Convention GROUPE : un seul document pour tous les salariés
+                // d'un commanditaire, donc entityType='organization' et pas de
+                // participantId. Sans cette branche, le statut annonçait les
+                // conventions manquantes et proposait l'action de masse qui
+                // régénère des individuelles (revue Codex PR #13).
+                { entityType: GROUP_CONVENTION_ENTITY_TYPE, sessionId: session.id, type: 'CONVENTION' as DocType },
                 // Demande AGEFICE — stockée avec participantId (cf agefice-generator).
                 { participantId: { in: participantIds }, type: 'AGEFICE' as DocType },
               ]
             : []),
         ],
       },
-      select: { type: true, entityId: true, participantId: true },
+      select: { type: true, entityId: true, participantId: true, entityType: true },
     }),
     participantIds.length > 0
       ? prisma.pedagogicalAsset.findMany({
@@ -664,9 +676,20 @@ export async function getSessionPreparationStatus(
   const programme = docs.some((d) => d.type === 'PROGRAMME');
   const deroule = docs.some((d) => d.type === 'DEROULE_PEDAGOGIQUE');
   const checklist = docs.some((d) => d.type === 'CHECKLIST_FORMATION');
+  // Conventions individuelles : entityId = participantId.
   const conventionsSet = new Set(
-    docs.filter((d) => d.type === 'CONVENTION').map((d) => d.entityId),
+    docs
+      .filter((d) => d.type === 'CONVENTION' && d.entityType !== GROUP_CONVENTION_ENTITY_TYPE)
+      .map((d) => d.entityId),
   );
+  // Conventions groupe : entityId = sponsorOrgId → on ajoute chaque salarié
+  // couvert, sinon il ressort « convention manquante » à tort.
+  for (const participantId of expandGroupConventions(
+    docs.map((d) => ({ id: d.entityId, type: d.type, entityType: d.entityType, entityId: d.entityId })),
+    session.participants.map((p) => ({ id: p.id, sponsorOrgId: p.sponsorOrgId })),
+  ).keys()) {
+    conventionsSet.add(participantId);
+  }
   const convocationsSet = new Set(
     docs.filter((d) => d.type === 'CONVOCATION').map((d) => d.entityId),
   );
