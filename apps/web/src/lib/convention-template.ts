@@ -56,6 +56,19 @@ export interface ConventionData {
   produitProgrammeMd: string;
   produitTrainerProfile: string | null;
   produitPriceHTPerStagiaire: number;
+  /**
+   * Prix GLOBAL HT négocié avec l'entreprise (quick 260817-mm0, correction
+   * Laurent 18/08 : « pour les salariés il y a un prix total pour l'entreprise,
+   * ce n'est pas par salarié »).
+   *
+   * Quand ce champ est fourni, il FAIT FOI : le document affiche ce montant tel
+   * quel et ne décompose plus en « X € × N stagiaires ». Absent ⇒ comportement
+   * historique (tarif unitaire × effectif), conservé pour l'auto-payeur.
+   *
+   * Aligné sur la facture groupée, qui somme déjà les `priceHT` des
+   * participants (`createInvoiceForSponsorGroup`).
+   */
+  prixGlobalHT?: number | null;
 
   // Phase 7 (Plan 07-03) — tenantId optionnel pour résoudre le logo uploadé
   // dans `public/of-assets/{tenantId}/`. Si absent, fallback bundled
@@ -211,7 +224,14 @@ export function renderConventionHtml(data: ConventionData, of: OfConfig): string
   const stagiaireListe = data.stagiaires
     .map((s) => `${escapeHtml(`${s.prenom} ${s.nom.toUpperCase()}`)}${s.email ? ` (${escapeHtml(s.email)})` : ''}`)
     .join('<br>');
-  const totalHT = data.produitPriceHTPerStagiaire * nbStagiaires;
+  // Prix global entreprise s'il est fourni (forfait négocié), sinon tarif
+  // unitaire × effectif (cas auto-payeur / historique).
+  const hasPrixGlobal = data.prixGlobalHT != null && data.prixGlobalHT > 0;
+  const totalHT = hasPrixGlobal
+    ? (data.prixGlobalHT as number)
+    : data.produitPriceHTPerStagiaire * nbStagiaires;
+  // La décomposition « X € × N » n'a de sens que sur un tarif unitaire.
+  const showUnitBreakdown = !hasPrixGlobal && nbStagiaires > 1;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -292,7 +312,7 @@ ${renderOfPagedFooter()}
 
 <section>
   <h2 class="article">Article 7 — Dispositions financières</h2>
-  <p>Le prix de l'action de formation s'élève à <strong>${fmtEUR.format(totalHT)} HT</strong>${nbStagiaires > 1 ? ` (soit ${fmtEUR.format(data.produitPriceHTPerStagiaire)} HT × ${nbStagiaires} stagiaires)` : ''} (<em>TVA non applicable en vertu de l'article 261-4-4° du CGI</em>).</p>
+  <p>Le prix de l'action de formation s'élève à <strong>${fmtEUR.format(totalHT)} HT</strong>${showUnitBreakdown ? ` (soit ${fmtEUR.format(data.produitPriceHTPerStagiaire)} HT × ${nbStagiaires} stagiaires)` : ''} (<em>TVA non applicable en vertu de l'article 261-4-4° du CGI</em>).</p>
   <p>À l'issue du délai de rétractation prévu à l'article 6, un acompte de <strong>${fmtEUR.format(totalHT * 0.3)}</strong> (30 % du prix indiqué ci-dessus) doit être versé par le commanditaire. Le solde devra être réglé au maximum la veille de la formation.</p>
   <p>En cas de subrogation de paiement par un OPCO ou financeur tiers, l'accord du financeur doit être communiqué à l'organisme avant le début de la formation.</p>
 </section>

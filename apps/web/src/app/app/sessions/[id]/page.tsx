@@ -58,6 +58,8 @@ import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
+import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
+import { requiresContratIndividuel } from '@/lib/legal-forms';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
@@ -122,8 +124,19 @@ export default async function SessionDetailPage({
   const [sessionDocs, sessionAssets, sessionInvoices, productAssets, sessionSharedDocs] = sessionParticipantIds.length
     ? await Promise.all([
         prisma.document.findMany({
-          where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds } },
-          select: { id: true, type: true, participantId: true },
+          where: {
+            tenantId: user.tenantId,
+            sessionId: session.id,
+            OR: [
+              { participantId: { in: sessionParticipantIds } },
+              // Convention ENTREPRISE (quick 260817-mm0) : UN document couvre
+              // tout le groupe d'un commanditaire, donc participantId=null.
+              // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
+              // afficherait « convention manquante » alors qu'elle existe.
+              { entityType: 'organization' },
+            ],
+          },
+          select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
         }),
         prisma.pedagogicalAsset.findMany({
           where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds }, pdfUrl: { not: null } },
@@ -191,6 +204,20 @@ export default async function SessionDetailPage({
     const m = docsByParticipant.get(d.participantId) ?? new Map();
     m.set(d.type, d.id);
     docsByParticipant.set(d.participantId, m);
+  }
+  // Convention ENTREPRISE (quick 260817-mm0) : le document groupe est rattaché
+  // à l'organisation commanditaire, pas à un participant. On le reporte sur
+  // CHAQUE salarié du groupe, sinon la fiche annonce « convention manquante »
+  // pour les 11 salariées d'OPTIMMO alors que la convention existe.
+  // `??=` : ne jamais écraser une convention individuelle déjà en place.
+  for (const d of sessionDocs) {
+    if (d.entityType !== 'organization') continue;
+    for (const p of session.participants) {
+      if (p.sponsorOrg.id !== d.entityId) continue;
+      const m = docsByParticipant.get(p.id) ?? new Map();
+      if (!m.has(d.type)) m.set(d.type, d.id);
+      docsByParticipant.set(p.id, m);
+    }
   }
   for (const a of sessionAssets) {
     if (!a.participantId) continue;
@@ -595,6 +622,39 @@ export default async function SessionDetailPage({
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+  // Quick 260817-mm0 — commanditaires PERSONNES MORALES de la session, pour la
+  // convention groupe. Les auto-payeurs sont exclus : ils relèvent du contrat
+  // de formation individuel (chantier suivant du todo du 12/08).
+  const conventionGroupes = (() => {
+    const map = new Map<
+      string,
+      { sponsorOrgId: string; sponsorName: string; participantCount: number; hasConvention: boolean }
+    >();
+    for (const p of session.participants) {
+      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      const g =
+        map.get(p.sponsorOrgId) ??
+        {
+          sponsorOrgId: p.sponsorOrgId,
+          sponsorName: p.sponsorOrg.legalName,
+          participantCount: 0,
+          hasConvention: sessionDocs.some(
+            (d) =>
+              d.type === 'CONVENTION' &&
+              d.entityType === 'organization' &&
+              d.entityId === p.sponsorOrgId,
+          ),
+        };
+      g.participantCount += 1;
+      map.set(p.sponsorOrgId, g);
+    }
+    // Entreprises multi-apprenants d'abord (pattern OPTIMMO), puis par nom.
+    return [...map.values()].sort(
+      (a, b) =>
+        b.participantCount - a.participantCount ||
+        a.sponsorName.localeCompare(b.sponsorName, 'fr'),
+    );
+  })();
   // Volet 2 (12/08) : émission de factures — miroir du RBAC des server
   // actions createInvoiceFromParticipant / createInvoiceForSponsorGroup.
   const canInvoice = ['ADMIN', 'MANAGER', 'COMPTABLE'].includes(user.role);
@@ -1069,6 +1129,16 @@ export default async function SessionDetailPage({
               deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
               checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
             />
+
+            {/* Quick 260817-mm0 — convention UNIQUE par entreprise commanditaire
+                (règle 12/08 : jamais une par salarié). Ne s'affiche que si la
+                session compte au moins un commanditaire personne morale. */}
+            {canWrite && (
+              <ConventionEntreprisePanel
+                sessionId={session.id}
+                groupes={conventionGroupes}
+              />
+            )}
 
             {/* Phase 15 Lot 2 — actions par doc/stagiaire réembarquées depuis le
                 drawer supprimé : « Tout générer » + 1 ligne par doc (Convention/

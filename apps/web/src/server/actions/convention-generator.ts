@@ -9,14 +9,17 @@
  * - Sinon (sponsor = structure employeur, apprenant salarié), bénéficiaire =
  *   structure, représentant = champ Organization.representative
  *
- * NB : pour grouper plusieurs salariés de la même structure sur une seule
- * convention, on utilisera plus tard generateConventionForSession(sessionId,
- * sponsorOrgId) qui agrège.
+ * Le groupage de plusieurs salariés d'une même structure sur une SEULE
+ * convention est livré par `generateConventionEntreprise` ci-dessous
+ * (quick 260817-mm0).
  */
 
 import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
-import { generateConventionCore } from '@/lib/closure/convention-core';
+import {
+  generateConventionCore,
+  generateConventionEntrepriseCore,
+} from '@/lib/closure/convention-core';
 
 // Le cœur SANS auth `generateConventionCore` vit désormais dans
 // `@/lib/closure/convention-core` (quick 260618-gux) : ce fichier reste un
@@ -35,4 +38,29 @@ export async function generateConventionForParticipant(
   if (r.sessionId) revalidatePath(`/app/sessions/${r.sessionId}`);
   if (r.personId) revalidatePath(`/app/apprenants/${r.personId}`);
   return { ok: r.ok, documentId: r.documentId, error: r.error };
+}
+
+/**
+ * Génère LA convention unique au nom d'une entreprise commanditaire, couvrant
+ * tous ses salariés inscrits à la session (quick 260817-mm0).
+ *
+ * Règle métier figée le 12/08 : payeur personne morale ⇒ 1 convention signée
+ * par le chef d'entreprise pour tout le groupe, jamais une par stagiaire.
+ * L'appel supprime donc les conventions individuelles des participants
+ * couverts (cf. `generateConventionEntrepriseCore`).
+ */
+export async function generateConventionEntreprise(input: {
+  sessionId: string;
+  sponsorOrgId: string;
+}): Promise<{ ok: boolean; documentId?: string; count?: number; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const r = await generateConventionEntrepriseCore(
+    user.tenantId,
+    input.sessionId,
+    input.sponsorOrgId,
+  );
+  if (r.sessionId) revalidatePath(`/app/sessions/${r.sessionId}`);
+  return { ok: r.ok, documentId: r.documentId, count: r.count, error: r.error };
 }
