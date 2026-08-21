@@ -455,3 +455,191 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
     expect(distinctCall.where.session).toEqual({ tenantId: 'tnt-1' });
   });
 });
+
+/**
+ * Quick 260821-md8 — défaut (b) du gabarit : « Représentée par , ».
+ *
+ * Constaté en production le 21/08 sur la convention EXPERTA envoyée au portail
+ * OPCO EP : `Organization.representative` était vide, et le cœur laissait la
+ * chaîne vide passer jusqu'au PDF. Une convention sans signataire n'est pas
+ * opposable — elle ne doit pas pouvoir être produite.
+ */
+describe('generateConventionEntrepriseCore — représentant légal', () => {
+  const BASE = {
+    id: 'org-1', legalName: 'EXPERTA', siret: '81234567800042', siren: null,
+    legalForm: 'SARL', address: { city: 'Nice' },
+  };
+
+  function wire(org: Record<string, unknown>) {
+    orgFindFirstMock.mockResolvedValue(org);
+    findManyMock.mockImplementation(async (args: any) =>
+      args?.distinct ? [] : [participant('sp-1', 'Alice', 'Martin')],
+    );
+  }
+
+  it('retient le représentant renseigné sur la fiche entreprise', async () => {
+    wire({ ...BASE, representative: 'Gilles Blanchon', contacts: [] });
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(true);
+    const data = renderMock.mock.calls[0]![0] as { beneficiaireRepresentantNom: string };
+    expect(data.beneficiaireRepresentantNom).toBe('Gilles Blanchon');
+  });
+
+  it('retombe sur le CONTACT PRINCIPAL quand le champ représentant est vide', async () => {
+    wire({
+      ...BASE,
+      representative: '   ',
+      contacts: [{ firstName: 'Gilles', lastName: 'Blanchon' }],
+    });
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(true);
+    const data = renderMock.mock.calls[0]![0] as { beneficiaireRepresentantNom: string };
+    expect(data.beneficiaireRepresentantNom).toBe('Gilles BLANCHON');
+  });
+
+  it('ne charge QUE le contact principal, le plus ancien, scopé tenant', async () => {
+    wire({ ...BASE, representative: null, contacts: [{ firstName: 'Gilles', lastName: 'Blanchon' }] });
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const args = orgFindFirstMock.mock.calls[0]![0] as any;
+    expect(args.where).toEqual({ id: 'org-1', tenantId: 'tnt-1' });
+    expect(args.include.contacts.where).toEqual({ isPrimary: true });
+    expect(args.include.contacts.take).toBe(1);
+    expect(args.include.contacts.orderBy).toEqual({ createdAt: 'asc' });
+  });
+
+  it('REFUSE de générer sans représentant déterminable — aucun PDF, aucun document', async () => {
+    wire({ ...BASE, representative: null, contacts: [] });
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/EXPERTA/);
+    expect(res.error).toMatch(/représentant/i);
+    expect(res.error).toMatch(/opposable/i);
+    expect(res.error).toContain('/app/organisations/org-1');
+    // Le refus tombe AVANT tout rendu et toute écriture.
+    expect(renderMock).not.toHaveBeenCalled();
+    expect(txMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('passe le SIREN dérivé du SIRET au gabarit', async () => {
+    wire({ ...BASE, representative: 'Gilles Blanchon', contacts: [] });
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const data = renderMock.mock.calls[0]![0] as { beneficiaireSiren: string | null };
+    expect(data.beneficiaireSiren).toBe('812345678');
+  });
+});
+
+/**
+ * Quick 260821-md8 — défaut (c) : le lieu répété dans la même phrase.
+ *
+ * La composition du lieu était DUPLIQUÉE entre le chemin individuel et le
+ * chemin entreprise de `convention-core.ts` : un correctif appliqué à un seul
+ * aurait laissé l'autre cassé. Les deux passent désormais par
+ * `formatLieuFormation`.
+ */
+describe('generateConventionEntrepriseCore — lieu de formation', () => {
+  it('ne répète pas la raison sociale du lieu (cas EXPERTA)', async () => {
+    orgFindFirstMock.mockResolvedValue({
+      id: 'org-1', legalName: 'EXPERTA', siret: '81234567800042', siren: null,
+      legalForm: 'SARL', representative: 'Gilles Blanchon', address: { city: 'Nice' },
+      contacts: [],
+    });
+    const sessionAvecLieu = {
+      ...SESSION,
+      location: {
+        legalName: 'EXPERTA',
+        name: 'EXPERTA',
+        address: { street: "5 place de l'Ile de Beauté", postalCode: '06300', city: 'Nice' },
+      },
+    };
+    findManyMock.mockImplementation(async (args: any) =>
+      args?.distinct
+        ? []
+        : [{ ...participant('sp-1', 'Alice', 'Martin'), session: sessionAvecLieu }],
+    );
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const data = renderMock.mock.calls[0]![0] as { sessionLieu: string };
+    expect(data.sessionLieu).toBe("EXPERTA, 5 place de l'Ile de Beauté, 06300 Nice");
+    expect(data.sessionLieu).not.toMatch(/EXPERTA — EXPERTA/);
+  });
+
+  it('retombe sur le siège de l’OF quand la session n’a pas de lieu', async () => {
+    orgFindFirstMock.mockResolvedValue({
+      id: 'org-1', legalName: 'EXPERTA', siret: '81234567800042', siren: null,
+      legalForm: 'SARL', representative: 'Gilles Blanchon', address: null, contacts: [],
+    });
+    findManyMock.mockImplementation(async (args: any) =>
+      args?.distinct ? [] : [participant('sp-1', 'Alice', 'Martin')],
+    );
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const data = renderMock.mock.calls[0]![0] as { sessionLieu: string };
+    expect(data.sessionLieu).toBe('Cagnes-sur-Mer');
+  });
+});
+
+/**
+ * Non-régression du chemin INDIVIDUEL (auto-payeur) : il partage désormais le
+ * helper de lieu, mais garde sa cascade de représentant (l'apprenant signe).
+ */
+describe('generateConventionCore — chemin individuel', () => {
+  const SESSION_LIEU = {
+    ...SESSION,
+    trainers: [],
+    location: {
+      legalName: 'EXPERTA',
+      name: 'EXPERTA',
+      address: { street: "5 place de l'Ile de Beauté", postalCode: '06300', city: 'Nice' },
+    },
+  };
+
+  it('utilise le MÊME helper de lieu (plus aucune duplication)', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      id: 'sp-1',
+      priceHT: 700,
+      sponsorOrgId: 'org-ei',
+      person: {
+        id: 'per-1', firstName: 'Alice', lastName: 'Martin', email: null,
+        legalLinks: [{ organizationId: 'org-ei', role: 'EI_SELF' }],
+      },
+      sponsorOrg: { id: 'org-ei', legalName: 'Alice Martin EI', siret: '81234567800042', siren: null, representative: null, address: null },
+      session: SESSION_LIEU,
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue(null);
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    await generateConventionCore('tnt-1', 'sp-1');
+
+    const data = renderMock.mock.calls[0]![0] as {
+      sessionLieu: string;
+      beneficiaireRepresentantNom: string;
+      beneficiaireSiren: string | null;
+    };
+    expect(data.sessionLieu).toBe("EXPERTA, 5 place de l'Ile de Beauté, 06300 Nice");
+    // Cascade individuelle INCHANGÉE : l'auto-entrepreneur signe lui-même.
+    expect(data.beneficiaireRepresentantNom).toBe('Alice MARTIN');
+    expect(data.beneficiaireSiren).toBe('812345678');
+  });
+});
