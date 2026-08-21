@@ -111,8 +111,10 @@ describe('renderConventionHtml — ligne RCS et ligne SIRET', () => {
       baseData({ beneficiaireSiren: null, beneficiaireSiret: null }),
       of,
     );
-    // Pas de « sous le numéro » orphelin, pas de ligne SIRET vide.
-    expect(html).not.toMatch(/sous le numéro/);
+    // Pas de « … sous le numéro » orphelin côté bénéficiaire, pas de ligne
+    // SIRET vide. (Le bloc « organisme de formation » a sa propre phrase
+    // « … sous le numéro {RNQ} » : on ne l'attrape pas.)
+    expect(html).not.toMatch(/Registre du Commerce et des Sociétés/);
     expect(html).not.toMatch(/N° SIRET :\s*<br>/);
     // Le bénéficiaire et son représentant restent affichés.
     expect(html).toMatch(/EXPERTA/);
@@ -125,12 +127,23 @@ describe('renderConventionHtml — ligne RCS et ligne SIRET', () => {
     expect(html).toMatch(/N° SIRET : 81234567800042/);
   });
 
-  it('affiche le SIRET seul quand le SIREN n’est pas déductible', () => {
+  it('redérive le SIREN pour les appelants historiques qui ne passent que le SIRET', () => {
+    // Les scripts `_gen-*` construisent `ConventionData` à la main et ne
+    // renseignent pas `beneficiaireSiren` : le gabarit doit rester juste.
     const html = renderConventionHtml(
-      baseData({ beneficiaireSiren: null, beneficiaireSiret: '81234567800042' }),
+      baseData({ beneficiaireSiren: undefined, beneficiaireSiret: '81234567800042' }),
       of,
     );
-    expect(html).not.toMatch(/sous le numéro/);
+    expect(html).toMatch(/sous le numéro 812345678/);
     expect(html).toMatch(/N° SIRET : 81234567800042/);
+  });
+
+  it('affiche le SIRET seul quand le numéro est trop court pour un SIREN', () => {
+    const html = renderConventionHtml(
+      baseData({ beneficiaireSiren: null, beneficiaireSiret: '8123' }),
+      of,
+    );
+    expect(html).not.toMatch(/Registre du Commerce et des Sociétés/);
+    expect(html).toMatch(/N° SIRET : 8123/);
   });
 });

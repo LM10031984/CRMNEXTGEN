@@ -53,9 +53,13 @@ vi.mock('@/lib/of-config', () => ({
   loadOfConfig: vi.fn().mockResolvedValue({ name: 'Start Academy', addressFull: 'Cagnes-sur-Mer' }),
 }));
 
-vi.mock('@/lib/convention-template', () => ({
-  renderConventionHtml: renderMock,
-}));
+// `deriveSiren` reste RÉEL : c'est lui qu'on veut vérifier à travers les
+// données passées au gabarit. Seul le rendu HTML est remplacé.
+vi.mock('@/lib/convention-template', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/convention-template')>('@/lib/convention-template');
+  return { ...actual, renderConventionHtml: renderMock };
+});
 
 const SESSION = {
   id: 'ses-1',
@@ -210,7 +214,7 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
     // Même calcul que la facture groupée (createInvoiceForSponsorGroup).
     orgFindFirstMock.mockResolvedValue({
       id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
-      representative: null, address: null,
+      representative: 'M. Chef', address: null, contacts: [],
     });
     findManyMock.mockResolvedValue([
       participant('sp-1', 'Alice', 'Martin', 700),
@@ -251,7 +255,7 @@ describe('generateConventionEntrepriseCore — gardes métier', () => {
   it('somme les prix BRUTS, comme la facture groupée (aucun fallback produit)', async () => {
     orgFindFirstMock.mockResolvedValue({
       id: 'org-1', legalName: 'OPTIMMO', siret: '123', legalForm: 'SAS',
-      representative: null, address: null,
+      representative: 'M. Chef', address: null, contacts: [],
     });
     findManyMock.mockResolvedValue([
       participant('sp-1', 'Alice', 'Martin', 500),

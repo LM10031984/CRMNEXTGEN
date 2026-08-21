@@ -24,9 +24,11 @@ import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import {
   renderConventionHtml,
+  deriveSiren,
   type ConventionData,
   type ConventionStagiaire,
 } from '@/lib/convention-template';
+import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
@@ -141,24 +143,11 @@ export async function generateConventionCore(
   // Lieu : "Raison sociale — Nom du lieu, adresse" si dispo, sinon siège OF.
   // legalName ajouté 2026-06-03 (cf demande Laurent : ex "SARL XYZ — Agence
   // Nice Centre, 12 rue X, 06000 Nice").
+  // Quick 260821-md8 : composition déléguée à `formatLieuFormation`, PARTAGÉE
+  // avec le chemin entreprise. La duplication précédente est exactement ce qui
+  // aurait laissé un des deux chemins cassé après correctif.
   const of = await loadOfConfig(tenantId);
-  const locName = participant.session.location
-    ? [
-        (participant.session.location as { legalName?: string | null }).legalName,
-        participant.session.location.name,
-      ]
-        .filter(Boolean)
-        .join(' — ')
-    : null;
-  const locAddress = participant.session.location?.address as Record<string, string> | string | null;
-  let lieu: string;
-  if (typeof locAddress === 'string') lieu = [locName, locAddress].filter(Boolean).join(', ') || locAddress;
-  else if (locAddress && typeof locAddress === 'object') {
-    const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = [locName, parts.join(', ')].filter(Boolean).join(', ') || (locName ?? of.addressFull);
-  } else {
-    lieu = locName ?? of.addressFull;
-  }
+  const lieu = formatLieuFormation(participant.session.location, of.addressFull);
 
   // RCS ville : heuristique depuis le code postal de l'org si possible
   const orgAddr = (participant.sponsorOrg.address as Record<string, string> | null) ?? null;
@@ -178,6 +167,9 @@ export async function generateConventionCore(
   const data: ConventionData = {
     beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
     beneficiaireSiret: participant.sponsorOrg.siret,
+    // Ligne RCS = SIREN (9 chiffres), pas le SIRET. La cascade de représentant
+    // ci-dessus reste INCHANGÉE : sur le chemin auto-payeur, l'apprenant signe.
+    beneficiaireSiren: deriveSiren(participant.sponsorOrg.siren, participant.sponsorOrg.siret),
     beneficiaireRcsVille: rcsVille,
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
@@ -268,6 +260,16 @@ export async function generateConventionEntrepriseCore(
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; count?: number }> {
   const org = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId },
+    include: {
+      // Repli du représentant légal (quick 260821-md8) : le contact principal
+      // le plus ancien, un seul. La requête reste scopée tenant via l'org.
+      contacts: {
+        where: { isPrimary: true },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+        select: { firstName: true, lastName: true },
+      },
+    },
   });
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
@@ -322,6 +324,30 @@ export async function generateConventionEntrepriseCore(
   const productPrice = Number(session.product.priceHT);
   const prixGlobalHT = participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
 
+  // Représentant légal — quick 260821-md8. Cascade : champ explicite de la
+  // fiche entreprise, puis contact principal. À défaut, on REFUSE.
+  //
+  // Le défaut exact constaté le 21/08 sur la convention EXPERTA envoyée au
+  // portail OPCO EP : « Représentée par , ». Une convention sans signataire
+  // n'est pas opposable — elle ne doit pas pouvoir être produite. Le refus
+  // tombe ICI, à côté de la garde des prix manquants, donc AVANT tout rendu
+  // PDF et toute écriture.
+  const contactPrincipal = org.contacts?.[0];
+  const representantNom =
+    org.representative?.trim() ||
+    (contactPrincipal
+      ? `${contactPrincipal.firstName} ${contactPrincipal.lastName.toUpperCase()}`.trim()
+      : '');
+  if (!representantNom) {
+    return {
+      ok: false,
+      error:
+        `Représentant légal inconnu pour « ${org.legalName} » : renseignez le représentant ` +
+        `sur la fiche entreprise (/app/organisations/${org.id}) ou désignez un contact ` +
+        `principal. Une convention sans signataire n'est pas opposable.`,
+    };
+  }
+
   // Annexe nominative : nom + prénom UNIQUEMENT (consigne Laurent — aucune CSP
   // ni poste occupé sur les documents). `ConventionStagiaire` ne porte
   // volontairement pas ces champs.
@@ -333,24 +359,8 @@ export async function generateConventionEntrepriseCore(
 
   const of = await loadOfConfig(tenantId);
 
-  // Lieu : même composition que le chemin individuel.
-  const locName = session.location
-    ? [
-        (session.location as { legalName?: string | null }).legalName,
-        session.location.name,
-      ]
-        .filter(Boolean)
-        .join(' — ')
-    : null;
-  const locAddress = session.location?.address as Record<string, string> | string | null;
-  let lieu: string;
-  if (typeof locAddress === 'string') lieu = [locName, locAddress].filter(Boolean).join(', ') || locAddress;
-  else if (locAddress && typeof locAddress === 'object') {
-    const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = [locName, parts.join(', ')].filter(Boolean).join(', ') || (locName ?? of.addressFull);
-  } else {
-    lieu = locName ?? of.addressFull;
-  }
+  // Lieu : MÊME helper que le chemin individuel (quick 260821-md8).
+  const lieu = formatLieuFormation(session.location, of.addressFull);
 
   const orgAddr = (org.address as Record<string, string> | null) ?? null;
 
@@ -362,11 +372,12 @@ export async function generateConventionEntrepriseCore(
   const data: ConventionData = {
     beneficiaireRaisonSociale: org.legalName,
     beneficiaireSiret: org.siret,
+    // Ligne RCS = SIREN (9 chiffres) ; le SIRET a désormais sa propre ligne.
+    beneficiaireSiren: deriveSiren(org.siren, org.siret),
     beneficiaireRcsVille: orgAddr?.city ?? null,
-    // Le chef d'entreprise signe pour le groupe. Sans représentant renseigné,
-    // on laisse un emplacement à compléter à la main plutôt que d'inscrire à
-    // tort le nom d'un salarié.
-    beneficiaireRepresentantNom: org.representative?.trim() || '',
+    // Le chef d'entreprise signe pour le groupe — résolu et GARANTI non vide
+    // par la garde ci-dessus.
+    beneficiaireRepresentantNom: representantNom,
     stagiaires,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
