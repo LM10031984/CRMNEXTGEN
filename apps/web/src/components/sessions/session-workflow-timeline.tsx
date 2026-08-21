@@ -389,7 +389,11 @@ function isPrepComplete(s: SessionPreparationStatus): boolean {
     s.checklist &&
     s.conventionsCount >= N &&
     s.convocationsCount >= N &&
-    s.analyseBesoinDone >= N &&
+    // Quick 260821-md8 : dénominateur = analyses LÉGITIMEMENT attendues, et
+    // l'analyse d'entreprise doit exister quand un payeur est une personne
+    // morale (indicateur 4).
+    s.analyseBesoinDone >= s.analyseBesoinAttendue &&
+    s.analyseBesoinEntrepriseAttendue === 0 &&
     s.ageficeCount >= s.ageficeEligibleCount
   );
 }
@@ -402,7 +406,12 @@ function countMissingPrep(s: SessionPreparationStatus): number {
     (s.checklist ? 0 : 1) +
     Math.max(0, N - s.conventionsCount) +
     Math.max(0, N - s.convocationsCount) +
-    Math.max(0, N - s.analyseBesoinDone) +
+    Math.max(0, s.analyseBesoinAttendue - s.analyseBesoinDone) +
+    // L'analyse d'ENTREPRISE n'est volontairement PAS comptée ici : ce compteur
+    // annonce ce que le bouton « Compléter » sait produire, et aucun générateur
+    // applicatif ne la produit encore. L'y mettre créerait un compteur qui ne
+    // converge jamais — le faux positif qui use la confiance dans tous les
+    // autres. Elle reste visible comme « manquante » dans le détail du bloc.
     Math.max(0, s.ageficeEligibleCount - s.ageficeCount)
   );
 }

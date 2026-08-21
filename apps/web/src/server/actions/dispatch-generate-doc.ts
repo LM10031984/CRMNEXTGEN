@@ -28,6 +28,7 @@ import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
+import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
 import type {
   DispatchableDocType,
   DispatchGenerateDocInput,
@@ -107,6 +108,35 @@ export async function dispatchGenerateDoc(
       }
       case 'ANALYSE_BESOIN': {
         if (!input.participantId) return { ok: false, error: 'participantId requis' };
+
+        // Règle payeur (quick 260821-md8) : quand le payeur est une personne
+        // morale, l'analyse des besoins se fait au nom de l'ENTREPRISE. Sans
+        // cette garde, un clic sur la matrice Qualiopi recrée exactement le
+        // doublon nominatif que la préparation vient d'arrêter de produire.
+        const participant = await prisma.sessionParticipant.findFirst({
+          where: {
+            id: input.participantId,
+            sessionId: input.sessionId,
+            session: { tenantId: user.tenantId },
+          },
+          select: {
+            id: true,
+            sponsorOrg: { select: { legalName: true, legalForm: true } },
+          },
+        });
+        if (!participant) return { ok: false, error: 'Inscription introuvable' };
+        if (isPersonneMoralePayeur(participant.sponsorOrg?.legalForm)) {
+          const nom = participant.sponsorOrg?.legalName ?? "l'entreprise commanditaire";
+          return {
+            ok: false,
+            error:
+              `Le payeur de cette formation est ${nom} (personne morale) : l'analyse des ` +
+              `besoins se fait au nom de l'ENTREPRISE, pas par stagiaire (règle du 12/08, ` +
+              `indicateur 4). Générer une analyse nominative ici créerait un doublon du ` +
+              `document d'entreprise.`,
+          };
+        }
+
         // Analyse besoin = job Ollama asynchrone (BullMQ).
         // Batch status='PENDING' (sera RUNNING quand le worker démarre).
         const batch = await prisma.closureBatch.create({

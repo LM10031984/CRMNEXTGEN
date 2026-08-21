@@ -133,6 +133,8 @@ export function PreparationPedagogiqueBlock({
   }
 
   const N = status.participantsCount;
+  const analyseBesoinEntrepriseTotal =
+    status.analyseBesoinEntreprisePresente + status.analyseBesoinEntrepriseAttendue;
 
   // Source UNIQUE — items dérivés du status local, comptés par `docCompletion`.
   // Garde-fou Laurent 2026-06-05 : "compteur step = état drawer = matrice".
@@ -260,13 +262,26 @@ export function PreparationPedagogiqueBlock({
               label="Convocation"
               indic={indicShort('CONVOCATION')}
             />
-            <StepDocRow
-              count={status.analyseBesoinDone}
-              total={N}
-              label="Analyse besoin (IA)"
-              indic={indicShort('ANALYSE_BESOIN')}
-              pending={analyseBesoinInflight > 0}
-            />
+            {status.analyseBesoinAttendue > 0 && (
+              <StepDocRow
+                count={status.analyseBesoinDone}
+                total={status.analyseBesoinAttendue}
+                label="Analyse besoin (IA)"
+                indic={indicShort('ANALYSE_BESOIN')}
+                pending={analyseBesoinInflight > 0}
+              />
+            )}
+            {/* Règle du 12/08 : payeur personne morale ⇒ l'analyse des besoins
+                est celle de l'ENTREPRISE, jamais du salarié. Ligne distincte,
+                jamais fondue dans le ratio par stagiaire. */}
+            {analyseBesoinEntrepriseTotal > 0 && (
+              <StepDocRow
+                count={status.analyseBesoinEntreprisePresente}
+                total={analyseBesoinEntrepriseTotal}
+                label="Analyse besoin entreprise"
+                indic={indicShort('ANALYSE_BESOIN')}
+              />
+            )}
             {status.ageficeEligibleCount > 0 && (
               <StepDocRow
                 count={status.ageficeCount}
@@ -276,6 +291,12 @@ export function PreparationPedagogiqueBlock({
               />
             )}
           </ul>
+          {status.analyseBesoinEntrepriseAttendue > 0 && (
+            <p className="text-[11px] text-amber-700 mt-1.5 italic">
+              Analyse besoin entreprise à produire hors application : le bouton
+              « Compléter » ne la génère pas encore.
+            </p>
+          )}
           {status.ageficeEligibleCount > 0 && status.ageficeEligibleCount < N && (
             <p className="text-[11px] text-muted-foreground mt-1.5 italic">
               AGEFICE : {status.ageficeEligibleCount} TNS éligibles sur {N}.

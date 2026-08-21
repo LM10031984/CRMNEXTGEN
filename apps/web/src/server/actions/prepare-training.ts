@@ -14,7 +14,11 @@ import {
   expandGroupConventions,
   isGroupConventionDoc,
 } from '@/lib/docs/convention-coverage';
-import { partitionByPayerRule } from '@/lib/sessions/payer-rule';
+import {
+  partitionByPayerRule,
+  selectAnalyseBesoinTargets,
+  isPersonneMoralePayeur,
+} from '@/lib/sessions/payer-rule';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
@@ -41,6 +45,16 @@ const PREPARE_PARTICIPANT_SELECT = {
   sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
   person: { select: { firstName: true, lastName: true } },
 } as const;
+
+/** Projection vers la forme attendue par les helpers purs de `payer-rule`. */
+function toPayerParticipants(participants: ReadonlyArray<PrepareParticipant>) {
+  return participants.map((p) => ({
+    id: p.id,
+    sponsorOrgId: p.sponsorOrgId,
+    sponsorLegalForm: p.sponsorOrg?.legalForm,
+    sponsorName: p.sponsorOrg?.legalName,
+  }));
+}
 
 interface ConventionRouting {
   /** Inscrits COUVERTS par une convention (groupe ou individuelle). */
@@ -72,14 +86,7 @@ async function routeConventionsByPayerRule(
   sessionId: string,
   participants: ReadonlyArray<PrepareParticipant>,
 ): Promise<ConventionRouting> {
-  const { groups, individuels } = partitionByPayerRule(
-    participants.map((p) => ({
-      id: p.id,
-      sponsorOrgId: p.sponsorOrgId,
-      sponsorLegalForm: p.sponsorOrg?.legalForm,
-      sponsorName: p.sponsorOrg?.legalName,
-    })),
-  );
+  const { groups, individuels } = partitionByPayerRule(toPayerParticipants(participants));
 
   const errors: ConventionRouting['errors'] = [];
   // Compte les inscrits COUVERTS, pas le nombre d'appels : sinon la fiche
@@ -299,6 +306,11 @@ export interface PrepareSessionResult {
   convocationsGenerated: number;
   analyseBesoinEnqueued: number;
   analyseBesoinSkipped: number;
+  // Analyse des besoins d'ENTREPRISE (quick 260821-md8). Compteurs SÉPARÉS de
+  // `analyseBesoinEnqueued/Skipped` : ce sont deux natures de document, les
+  // mélanger rendrait le ratio mensonger.
+  analyseBesoinEntrepriseAttendue: number;
+  analyseBesoinEntreprisePresente: number;
   // Demande de prise en charge AGEFICE — TNS uniquement (sponsorOrg AGEFICE
   // ou EI_SELF/AGENT_COMMERCIAL avec AgeficeProfile). Salariés OPCO ignorés.
   ageficeGenerated: number;
@@ -318,6 +330,18 @@ export interface SessionPreparationStatus {
   analyseBesoinDone: number;
   analyseBesoinInProgress: number;
   analyseBesoinPending: number;
+  /**
+   * Nombre d'analyses des besoins PAR STAGIAIRE légitimement attendues, c.-à-d.
+   * le nombre d'auto-payeurs — et non l'effectif (quick 260821-md8). Sur une
+   * session intra-entreprise il vaut 0 : le document attendu est celui de
+   * l'entreprise. Sans ce dénominateur, la fiche resterait éternellement
+   * « 1 manquant » sur un document qu'on a décidé de ne plus produire.
+   */
+  analyseBesoinAttendue: number;
+  /** Commanditaires personnes morales sans analyse d'entreprise rendue. */
+  analyseBesoinEntrepriseAttendue: number;
+  /** Analyse d'entreprise rendue (0 ou 1 — contrainte d'unicité du schéma). */
+  analyseBesoinEntreprisePresente: number;
   // Demande AGEFICE — affichée uniquement si ageficeEligibleCount > 0.
   ageficeCount: number;
   ageficeEligibleCount: number;
@@ -352,6 +376,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated: 0,
     analyseBesoinEnqueued: 0,
     analyseBesoinSkipped: 0,
+    analyseBesoinEntrepriseAttendue: 0,
+    analyseBesoinEntreprisePresente: 0,
     ageficeGenerated: 0,
     ageficeEligible: 0,
     errors: [],
@@ -528,39 +554,69 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     }),
   );
 
-  // 3. Analyse besoin (IA Ollama) — batch BullMQ.
-  //    Skip les participants qui ont déjà un PedagogicalAsset.ANALYSE_BESOIN
-  //    rendu (pdfUrl != null) → idempotent.
+  // 3. Analyse besoin (IA) — batch de jobs.
+  //
+  //    Règle du 12/08 (quick 260821-md8) : quand le payeur est une personne
+  //    morale, le besoin analysé est celui de l'ENTREPRISE. On n'enfile donc
+  //    plus rien par stagiaire pour ces inscrits — une analyse au nom d'un
+  //    salarié est une non-conformité à l'indicateur 4, et elle faisait doublon
+  //    avec le document d'entreprise (constat SES-0108).
+  //
+  //    Skip également les auto-payeurs qui ont déjà un PedagogicalAsset
+  //    ANALYSE_BESOIN rendu (pdfUrl != null) → idempotent.
   let analyseBesoinEnqueued = 0;
   let analyseBesoinSkipped = 0;
+  let analyseBesoinEntrepriseAttendue = 0;
+  let analyseBesoinEntreprisePresente = 0;
   let batchId: string | undefined;
 
   if (participantIds.length > 0) {
-    const existingAB = await prisma.pedagogicalAsset.findMany({
-      where: {
-        tenantId: user.tenantId,
-        sessionId,
-        kind: 'ANALYSE_BESOIN',
-        participantId: { in: participantIds },
-        pdfUrl: { not: null },
-      },
-      select: { participantId: true },
-    });
+    const [existingAB, abEntreprise] = await Promise.all([
+      prisma.pedagogicalAsset.findMany({
+        where: {
+          tenantId: user.tenantId,
+          sessionId,
+          kind: 'ANALYSE_BESOIN',
+          participantId: { in: participantIds },
+          pdfUrl: { not: null },
+        },
+        select: { participantId: true },
+      }),
+      // Analyse au nom de l'entreprise : asset de niveau SESSION, sans
+      // participant. Forme produite par `_gen-assalit-experta-analyses.ts`.
+      prisma.pedagogicalAsset.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          sessionId,
+          kind: 'ANALYSE_BESOIN',
+          participantId: null,
+          pdfUrl: { not: null },
+        },
+        select: { id: true },
+      }),
+    ]);
     const doneIds = new Set(existingAB.map((a) => a.participantId).filter((id): id is string => !!id));
-    const toEnqueue = session.participants.filter((p) => !doneIds.has(p.id));
-    analyseBesoinSkipped = participantIds.length - toEnqueue.length;
 
-    if (toEnqueue.length > 0) {
+    const targets = selectAnalyseBesoinTargets(toPayerParticipants(session.participants), {
+      dejaRenduParStagiaire: doneIds,
+      analyseEntrepriseExiste: abEntreprise != null,
+    });
+    analyseBesoinEntreprisePresente = abEntreprise ? 1 : 0;
+    analyseBesoinEntrepriseAttendue = targets.entreprisesEnAttente.length;
+    analyseBesoinSkipped = participantIds.length - targets.participantIds.length;
+
+    // Aucune cible ⇒ AUCUN batch : un batch vide pollue la barre de progression.
+    if (targets.participantIds.length > 0) {
       const batch = await prisma.closureBatch.create({
         data: {
           tenantId: user.tenantId,
           sessionId,
           status: 'PENDING',
-          totalDocs: toEnqueue.length,
+          totalDocs: targets.participantIds.length,
           createdByUserId: user.id,
           jobs: {
-            create: toEnqueue.map((p) => ({
-              participantId: p.id,
+            create: targets.participantIds.map((participantId) => ({
+              participantId,
               kind: 'ANALYSE_BESOIN' as ClosureDocKind,
               status: 'QUEUED' as const,
             })),
@@ -607,6 +663,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           convocationsGenerated,
           analyseBesoinEnqueued,
           analyseBesoinSkipped,
+          analyseBesoinEntrepriseAttendue,
+          analyseBesoinEntreprisePresente,
           ageficeGenerated,
           ageficeEligible,
           errors: errors.length,
@@ -629,6 +687,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated,
     analyseBesoinEnqueued,
     analyseBesoinSkipped,
+    analyseBesoinEntrepriseAttendue,
+    analyseBesoinEntreprisePresente,
     ageficeGenerated,
     ageficeEligible,
     batchId,
@@ -656,6 +716,9 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone: 0,
     analyseBesoinInProgress: 0,
     analyseBesoinPending: 0,
+    analyseBesoinAttendue: 0,
+    analyseBesoinEntrepriseAttendue: 0,
+    analyseBesoinEntreprisePresente: 0,
     ageficeCount: 0,
     ageficeEligibleCount: 0,
     participantsCount: 0,
@@ -670,8 +733,15 @@ export async function getSessionPreparationStatus(
       id: true,
       productId: true,
       // sponsorOrgId requis pour rattacher les conventions GROUPE aux salariés
-      // qu'elles couvrent (revue Codex PR #13).
-      participants: { select: { id: true, sponsorOrgId: true } },
+      // qu'elles couvrent (revue Codex PR #13) ; `sponsorOrg.legalForm` requis
+      // pour savoir quel document est légitimement attendu (règle payeur).
+      participants: {
+        select: {
+          id: true,
+          sponsorOrgId: true,
+          sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
+        },
+      },
     },
   });
   if (!session) return { ...empty, error: 'Session introuvable' };
@@ -686,7 +756,7 @@ export async function getSessionPreparationStatus(
     'AGEFICE',
   ];
 
-  const [docs, abAssets, latestBatch, ageficeEligibleParticipants] = await Promise.all([
+  const [docs, abAssets, abEntreprise, latestBatch, ageficeEligibleParticipants] = await Promise.all([
     prisma.document.findMany({
       where: {
         tenantId: user.tenantId,
@@ -730,6 +800,19 @@ export async function getSessionPreparationStatus(
           select: { participantId: true },
         })
       : Promise.resolve([] as Array<{ participantId: string | null }>),
+    // Analyse des besoins au nom de l'ENTREPRISE : asset de niveau SESSION,
+    // sans participant (quick 260821-md8). Une seule possible par session
+    // (@@unique([sessionId, participantId, kind])).
+    prisma.pedagogicalAsset.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        sessionId: session.id,
+        kind: 'ANALYSE_BESOIN',
+        participantId: null,
+        pdfUrl: { not: null },
+      },
+      select: { id: true },
+    }),
     // Dernier batch contenant des jobs ANALYSE_BESOIN pour cette session,
     // pour exposer le batchId (utile pour cross-link batch progress UI).
     prisma.closureBatch.findFirst({
@@ -813,6 +896,25 @@ export async function getSessionPreparationStatus(
   const ageficeReady = countAgeficeReady(ageficeDocParticipantIds, eligibleAgeficeIds);
 
   const analyseBesoinDone = abAssets.length;
+  // Règle payeur : ce qui est ATTENDU dépend de qui paye. Sur une session
+  // intra-entreprise, aucune analyse par stagiaire n'est due — le document
+  // attendu est celui de l'entreprise. Les deux compteurs restent distincts :
+  // les mélanger rendrait le ratio mensonger.
+  const abTargets = selectAnalyseBesoinTargets(
+    session.participants.map((p) => ({
+      id: p.id,
+      sponsorOrgId: p.sponsorOrgId,
+      sponsorLegalForm: p.sponsorOrg?.legalForm,
+      sponsorName: p.sponsorOrg?.legalName,
+    })),
+    {
+      dejaRenduParStagiaire: new Set<string>(),
+      analyseEntrepriseExiste: abEntreprise != null,
+    },
+  );
+  const analyseBesoinAttendue = abTargets.participantIds.length;
+  const analyseBesoinEntrepriseAttendue = abTargets.entreprisesEnAttente.length;
+  const analyseBesoinEntreprisePresente = abEntreprise ? 1 : 0;
   let analyseBesoinInProgress = 0;
   let analyseBesoinPending = 0;
   if (latestBatch) {
@@ -832,6 +934,9 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone,
     analyseBesoinInProgress,
     analyseBesoinPending,
+    analyseBesoinAttendue,
+    analyseBesoinEntrepriseAttendue,
+    analyseBesoinEntreprisePresente,
     ageficeCount: ageficeReady,
     ageficeEligibleCount,
     participantsCount: participantIds.length,

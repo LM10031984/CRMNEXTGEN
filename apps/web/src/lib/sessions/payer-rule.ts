@@ -102,3 +102,51 @@ export function partitionByPayerRule(
   );
   return { groups, individuels };
 }
+
+export interface AnalyseBesoinTargets {
+  /** Inscrits pour qui une analyse PAR STAGIAIRE est légitime (auto-payeurs). */
+  participantIds: string[];
+  /** Commanditaires personnes morales sans analyse entreprise rendue. */
+  entreprisesEnAttente: SponsorGroup[];
+}
+
+/**
+ * Qui doit recevoir une analyse des besoins, et sous quelle forme.
+ *
+ * Règle du 12/08 appliquée au document de l'indicateur 4 : une analyse des
+ * besoins au nom d'un SALARIÉ alors que le besoin est celui de l'entreprise
+ * est une non-conformité en audit. Le besoin exprimé, les objectifs attendus
+ * et l'adaptation proposée sont ceux de la structure qui commande et qui paye.
+ *
+ * Le document de référence attendu pour une entreprise est celui produit par
+ * `apps/web/scripts/_gen-assalit-experta-analyses.ts` : contexte, besoins
+ * exprimés, objectifs attendus, public et prérequis, modalités, adaptation
+ * proposée, situation de handicap, signature.
+ *
+ * ⚠ Aucun générateur applicatif ne produit encore cette variante entreprise.
+ * Ce helper fait la moitié qui protège : il ARRÊTE la production de la mauvaise
+ * variante (nominative) et expose le manque au lieu de le masquer.
+ *
+ * Helper PUR : il ne lit rien, n'écrit rien, et ne supprime aucun résidu déjà
+ * en base (SES-0108 en porte un). La remédiation est une étape séparée.
+ *
+ * `analyseEntrepriseExiste` est un booléen et non un compte : le schéma pose
+ * `@@unique([sessionId, participantId, kind])` sur `PedagogicalAsset`, donc il
+ * ne peut exister qu'UNE analyse de niveau session (`participantId = null`).
+ */
+export function selectAnalyseBesoinTargets(
+  participants: ReadonlyArray<PayerParticipant>,
+  opts: {
+    /** participantIds ayant déjà une analyse par stagiaire rendue. */
+    dejaRenduParStagiaire: ReadonlySet<string>;
+    /** true si un PedagogicalAsset ANALYSE_BESOIN participantId=null existe pour la session. */
+    analyseEntrepriseExiste: boolean;
+  },
+): AnalyseBesoinTargets {
+  const { groups, individuels } = partitionByPayerRule(participants);
+
+  return {
+    participantIds: individuels.filter((id) => !opts.dejaRenduParStagiaire.has(id)),
+    entreprisesEnAttente: opts.analyseEntrepriseExiste ? [] : groups,
+  };
+}
