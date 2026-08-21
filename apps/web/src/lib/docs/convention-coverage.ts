@@ -23,8 +23,30 @@
  * doivent être importables depuis un cœur sans auth comme depuis une page RSC.
  */
 
-/** `Document.entityType` d'une convention groupe (String libre côté schéma). */
+/**
+ * Forme d'ÉCRITURE d'une convention groupe (`Document.entityType` est un String
+ * libre côté schéma). Tout nouveau document de groupe s'écrit ainsi : elle
+ * porte le commanditaire (`entityId = sponsorOrgId`), indispensable dès qu'une
+ * session réunit plusieurs entreprises.
+ */
 export const GROUP_CONVENTION_ENTITY_TYPE = 'organization';
+
+/**
+ * Formes RECONNUES EN LECTURE (quick 260821-md8).
+ *
+ * `'session'` est la forme produite par les scripts `_gen-*` : `entityId =
+ * sessionId`, `participantId = null`, portée = la session entière, aucun
+ * commanditaire porté. Elle existe en production sur SES-0107 / SES-0108 et
+ * doit être vue — sinon l'appli annonce « convention manquante » sur un
+ * document qui existe, et propose l'action de masse qui régénère des
+ * conventions nominatives.
+ *
+ * Découverte du 21/08 : les deux formes cohabitaient sans se connaître, ce qui
+ * mettait DEUX conventions d'entreprise sur la même session.
+ */
+export const GROUP_CONVENTION_ENTITY_TYPES = ['organization', 'session'] as const;
+
+export type GroupConventionEntityType = (typeof GROUP_CONVENTION_ENTITY_TYPES)[number];
 
 /**
  * Clause Prisma identifiant LA convention groupe d'un commanditaire sur une
@@ -44,12 +66,50 @@ export function groupConventionWhere(
   };
 }
 
+/**
+ * Clause Prisma reconnaissant LES DEUX formes de convention groupe sur une
+ * session. À utiliser en LECTURE (gardes anti-doublon, statuts) ; l'écriture
+ * reste en `GROUP_CONVENTION_ENTITY_TYPE`.
+ *
+ * Toujours scopée `tenantId` + `sessionId` + type CONVENTION : la branche
+ * `session` ne porte pas de commanditaire, c'est la session qui la borne.
+ */
+export function groupConventionAnyShapeWhere(
+  tenantId: string,
+  sessionId: string,
+  sponsorOrgId: string,
+) {
+  return {
+    tenantId,
+    type: 'CONVENTION' as const,
+    sessionId,
+    OR: [
+      { entityType: GROUP_CONVENTION_ENTITY_TYPE, entityId: sponsorOrgId },
+      { entityType: 'session', participantId: null },
+    ],
+  };
+}
+
 /** Forme minimale d'un Document nécessaire au calcul de couverture. */
 export interface CoverageDoc {
   id: string;
   type: string;
   entityType: string;
   entityId: string;
+}
+
+/**
+ * true si ce Document est une convention de groupe, quelle que soit sa forme
+ * de stockage. À préférer à toute comparaison d'`entityType` écrite à la main :
+ * c'est elle qui distingue une convention nominative (`participant`) d'un
+ * document de groupe, et qui écarte les autres types rattachés à une
+ * organisation ou à une session (check-list, facture…).
+ */
+export function isGroupConventionDoc(d: CoverageDoc): boolean {
+  return (
+    d.type === 'CONVENTION' &&
+    (GROUP_CONVENTION_ENTITY_TYPES as readonly string[]).includes(d.entityType)
+  );
 }
 
 /** Forme minimale d'un participant nécessaire au calcul de couverture. */
@@ -66,22 +126,46 @@ export interface CoverageParticipant {
  * individuelles déjà connues, sans jamais les écraser (une convention
  * individuelle déjà émise reste la pièce du participant).
  *
- * Ne regarde que les documents de type CONVENTION en `entityType='organization'`
- * — les autres documents rattachés à une organisation sont ignorés.
+ * Ne regarde que les documents de type CONVENTION, dans l'une des deux formes
+ * de `GROUP_CONVENTION_ENTITY_TYPES` — les autres documents rattachés à une
+ * organisation ou à une session sont ignorés.
+ *
+ * Les deux formes n'ont pas la même PORTÉE :
+ *  - `organization` → apparie sur `sponsorOrgId` : couvre les salariés de CE
+ *    commanditaire, et eux seuls ;
+ *  - `session` (scripts `_gen-*`) → couvre TOUS les participants reçus. Le
+ *    document ne porte aucun commanditaire permettant de discriminer.
+ *    ⚠ PRÉCONDITION D'APPEL : ne passer que les participants de la session
+ *    concernée. Passer ceux d'une autre session les couvrirait à tort.
+ *
+ * Deux passes, `organization` d'abord : quand les deux formes cohabitent (cas
+ * SES-0107 / SES-0108), c'est la forme d'écriture — celle qui porte le
+ * commanditaire — qui fait foi, et chaque inscrit n'est compté qu'une fois.
  */
 export function expandGroupConventions(
   docs: ReadonlyArray<CoverageDoc>,
   participants: ReadonlyArray<CoverageParticipant>,
 ): Map<string, string> {
   const byParticipant = new Map<string, string>();
+
+  // Passe 1 — forme d'écriture, portée « commanditaire ».
   for (const d of docs) {
-    if (d.type !== 'CONVENTION' || d.entityType !== GROUP_CONVENTION_ENTITY_TYPE) continue;
+    if (!isGroupConventionDoc(d) || d.entityType !== GROUP_CONVENTION_ENTITY_TYPE) continue;
     for (const p of participants) {
       if (p.sponsorOrgId !== d.entityId) continue;
       // Premier document gagnant : l'appelant trie par récence s'il le souhaite.
       if (!byParticipant.has(p.id)) byParticipant.set(p.id, d.id);
     }
   }
+
+  // Passe 2 — forme script, portée « session entière ».
+  for (const d of docs) {
+    if (!isGroupConventionDoc(d) || d.entityType === GROUP_CONVENTION_ENTITY_TYPE) continue;
+    for (const p of participants) {
+      if (!byParticipant.has(p.id)) byParticipant.set(p.id, d.id);
+    }
+  }
+
   return byParticipant;
 }
 

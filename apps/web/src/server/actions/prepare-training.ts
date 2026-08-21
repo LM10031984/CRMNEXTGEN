@@ -5,16 +5,119 @@ import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { generateProgrammeForProduct } from './programme-generator';
 import { generateConventionForParticipant } from './convention-generator';
+// Cœur SANS auth : `prepareSession` tourne parfois en fire-and-forget, sans
+// contexte d'auth. Ne JAMAIS appeler ici le wrapper `generateConventionEntreprise`,
+// qui fait `requireRole`.
+import { generateConventionEntrepriseCore } from '@/lib/closure/convention-core';
 import {
-  GROUP_CONVENTION_ENTITY_TYPE,
+  GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
+  isGroupConventionDoc,
 } from '@/lib/docs/convention-coverage';
+import { partitionByPayerRule } from '@/lib/sessions/payer-rule';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
+
+/**
+ * Inscrit tel que les deux orchestrateurs le chargent — le commanditaire et sa
+ * forme juridique sont nécessaires pour appliquer la règle payeur AVANT toute
+ * génération.
+ */
+interface PrepareParticipant {
+  id: string;
+  sponsorOrgId: string;
+  sponsorOrg: { id: string; legalName: string; legalForm: string } | null;
+  person: { firstName: string; lastName: string };
+}
+
+/** `select` partagé — une seule définition, pour que les deux chemins voient la même chose. */
+const PREPARE_PARTICIPANT_SELECT = {
+  id: true,
+  sponsorOrgId: true,
+  sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
+  person: { select: { firstName: true, lastName: true } },
+} as const;
+
+interface ConventionRouting {
+  /** Inscrits COUVERTS par une convention (groupe ou individuelle). */
+  covered: number;
+  groupsCount: number;
+  individuelsCount: number;
+  errors: { participantName: string; message: string }[];
+}
+
+/**
+ * Applique la règle payeur du 12/08 aux conventions d'une session.
+ *
+ * Payeur personne morale ⇒ UNE convention de groupe par commanditaire ;
+ * auto-payeur ⇒ chemin individuel inchangé. Jamais les deux pour un même
+ * inscrit — la session porterait deux conventions contradictoires, ce qui se
+ * voit en audit (constat du 21/08 sur SES-0107 / SES-0108).
+ *
+ * Helper PARTAGÉ par `prepareTrainingForSession` et `prepareSession` : ils sont
+ * appelés depuis des chemins différents (bouton « Préparer » vs création de
+ * session en fire-and-forget), et corriger un seul laisserait l'autre produire
+ * le mauvais document.
+ *
+ * Les groupes sont traités EN SÉRIE : `generateConventionEntrepriseCore`
+ * supprime puis recrée des Documents de la même session, deux appels
+ * concurrents se marcheraient dessus.
+ */
+async function routeConventionsByPayerRule(
+  tenantId: string,
+  sessionId: string,
+  participants: ReadonlyArray<PrepareParticipant>,
+): Promise<ConventionRouting> {
+  const { groups, individuels } = partitionByPayerRule(
+    participants.map((p) => ({
+      id: p.id,
+      sponsorOrgId: p.sponsorOrgId,
+      sponsorLegalForm: p.sponsorOrg?.legalForm,
+      sponsorName: p.sponsorOrg?.legalName,
+    })),
+  );
+
+  const errors: ConventionRouting['errors'] = [];
+  // Compte les inscrits COUVERTS, pas le nombre d'appels : sinon la fiche
+  // session afficherait « 1 convention / 8 inscrits » sur ASSALIT et
+  // déclencherait à tort l'action de masse qui régénère des individuelles.
+  let covered = 0;
+
+  for (const g of groups) {
+    const r = await generateConventionEntrepriseCore(tenantId, sessionId, g.sponsorOrgId).catch(
+      (e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+    if (r.ok) covered += g.participantIds.length;
+    else
+      errors.push({
+        participantName: g.sponsorName ?? '(entreprise)',
+        message: r.error ?? 'Erreur inconnue',
+      });
+  }
+
+  const byId = new Map(participants.map((p) => [p.id, p]));
+  await Promise.all(
+    individuels.map(async (participantId) => {
+      const p = byId.get(participantId);
+      const name = p ? `${p.person.firstName} ${p.person.lastName}` : participantId;
+      const r = await generateConventionForParticipant(participantId).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      if (r.ok) covered += 1;
+      else errors.push({ participantName: name, message: r.error ?? 'Erreur inconnue' });
+    }),
+  );
+
+  return { covered, groupsCount: groups.length, individuelsCount: individuels.length, errors };
+}
 
 export interface PrepareTrainingResult {
   ok: boolean;
@@ -68,12 +171,7 @@ export async function prepareTrainingForSession(
       productId: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
-      participants: {
-        select: {
-          id: true,
-          person: { select: { firstName: true, lastName: true } },
-        },
-      },
+      participants: { select: PREPARE_PARTICIPANT_SELECT },
     },
   });
   if (!session) {
@@ -155,20 +253,24 @@ export async function prepareTrainingForSession(
   // NB : Grille d'observation formateur (C3.i11) = doc POST-formation, généré
   // uniquement par closure-pack quand les participants sont CONFIRMED/ATTENDED.
 
-  // Convention + Convocation = par participant (idempotentes sha256)
-  await Promise.all(
-    session.participants.map(async (p) => {
-      const name = `${p.person.firstName} ${p.person.lastName}`;
-      const [conv, convoc] = await Promise.all([
-        generateConventionForParticipant(p.id),
-        generateConvocationForParticipant(p.id),
-      ]);
-      if (conv.ok) conventionsGenerated++;
-      else errors.push({ participantName: name, doc: 'CONVENTION', message: conv.error ?? 'Erreur inconnue' });
-      if (convoc.ok) convocationsGenerated++;
-      else errors.push({ participantName: name, doc: 'CONVOCATION', message: convoc.error ?? 'Erreur inconnue' });
-    }),
-  );
+  // Convention : règle payeur (groupe pour les personnes morales, individuelle
+  // pour les auto-payeurs). Convocation : NOMINATIVE dans tous les cas — c'est
+  // un document personnel, chaque salarié est convoqué.
+  const [routing] = await Promise.all([
+    routeConventionsByPayerRule(user.tenantId, sessionId, session.participants),
+    Promise.all(
+      session.participants.map(async (p) => {
+        const name = `${p.person.firstName} ${p.person.lastName}`;
+        const convoc = await generateConvocationForParticipant(p.id);
+        if (convoc.ok) convocationsGenerated++;
+        else errors.push({ participantName: name, doc: 'CONVOCATION', message: convoc.error ?? 'Erreur inconnue' });
+      }),
+    ),
+  ]);
+  conventionsGenerated = routing.covered;
+  for (const e of routing.errors) {
+    errors.push({ participantName: e.participantName, doc: 'CONVENTION', message: e.message });
+  }
 
   revalidatePath(`/app/sessions/${sessionId}`);
 
@@ -267,12 +369,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
       productId: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
-      participants: {
-        select: {
-          id: true,
-          person: { select: { firstName: true, lastName: true } },
-        },
-      },
+      participants: { select: PREPARE_PARTICIPANT_SELECT },
     },
   });
   if (!session) {
@@ -352,38 +449,34 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           : (checklistRes.reason?.message ?? String(checklistRes.reason)),
     });
 
-  // 2. Par-participant : Convention + Convocation en parallèle.
-  let conventionsGenerated = 0;
+  // 2. Convention : règle payeur (groupe vs individuelle) — cf
+  //    routeConventionsByPayerRule. Convocation : NOMINATIVE dans tous les cas.
   let convocationsGenerated = 0;
-  await Promise.all(
-    session.participants.map(async (p) => {
-      const name = `${p.person.firstName} ${p.person.lastName}`;
-      const [conv, convoc] = await Promise.allSettled([
-        generateConventionForParticipant(p.id),
-        generateConvocationForParticipant(p.id),
-      ]);
-      if (conv.status === 'fulfilled' && conv.value.ok) conventionsGenerated++;
-      else
-        errors.push({
-          participantName: name,
-          doc: 'CONVENTION',
-          message:
-            conv.status === 'fulfilled'
-              ? (conv.value.error ?? 'Erreur inconnue')
-              : (conv.reason?.message ?? String(conv.reason)),
-        });
-      if (convoc.status === 'fulfilled' && convoc.value.ok) convocationsGenerated++;
-      else
-        errors.push({
-          participantName: name,
-          doc: 'CONVOCATION',
-          message:
-            convoc.status === 'fulfilled'
-              ? (convoc.value.error ?? 'Erreur inconnue')
-              : (convoc.reason?.message ?? String(convoc.reason)),
-        });
-    }),
-  );
+  const [routing] = await Promise.all([
+    routeConventionsByPayerRule(user.tenantId, sessionId, session.participants),
+    Promise.all(
+      session.participants.map(async (p) => {
+        const name = `${p.person.firstName} ${p.person.lastName}`;
+        const convoc = await Promise.resolve(generateConvocationForParticipant(p.id)).catch(
+          (e: unknown) => ({
+            ok: false as const,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        if (convoc.ok) convocationsGenerated++;
+        else
+          errors.push({
+            participantName: name,
+            doc: 'CONVOCATION',
+            message: convoc.error ?? 'Erreur inconnue',
+          });
+      }),
+    ),
+  ]);
+  const conventionsGenerated = routing.covered;
+  for (const e of routing.errors) {
+    errors.push({ participantName: e.participantName, doc: 'CONVENTION', message: e.message });
+  }
 
   // 2bis. Demande de prise en charge AGEFICE — TNS uniquement.
   //       Règle métier : auto-entrepreneur cotise à l'AGEFICE (CFP), salarié
@@ -507,6 +600,10 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           derouleGenerated,
           checklistGenerated,
           conventionsGenerated,
+          // Traçabilité de la règle payeur (quick 260821-md8) : combien de
+          // conventions d'entreprise, combien de nominatives.
+          conventionsGroupe: routing.groupsCount,
+          conventionsIndividuelles: routing.individuelsCount,
           convocationsGenerated,
           analyseBesoinEnqueued,
           analyseBesoinSkipped,
@@ -601,11 +698,18 @@ export async function getSessionPreparationStatus(
             ? [
                 { entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } },
                 // Convention GROUPE : un seul document pour tous les salariés
-                // d'un commanditaire, donc entityType='organization' et pas de
-                // participantId. Sans cette branche, le statut annonçait les
-                // conventions manquantes et proposait l'action de masse qui
-                // régénère des individuelles (revue Codex PR #13).
-                { entityType: GROUP_CONVENTION_ENTITY_TYPE, sessionId: session.id, type: 'CONVENTION' as DocType },
+                // d'un commanditaire, donc pas de participantId. Sans cette
+                // branche, le statut annonçait les conventions manquantes et
+                // proposait l'action de masse qui régénère des individuelles
+                // (revue Codex PR #13).
+                // Les DEUX formes de stockage sont interrogées (quick
+                // 260821-md8) : `organization` (appli) et `session` (scripts
+                // `_gen-*`, présente en prod sur SES-0107 / SES-0108).
+                {
+                  entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] },
+                  sessionId: session.id,
+                  type: 'CONVENTION' as DocType,
+                },
                 // Demande AGEFICE — stockée avec participantId (cf agefice-generator).
                 { participantId: { in: participantIds }, type: 'AGEFICE' as DocType },
               ]
@@ -676,10 +780,16 @@ export async function getSessionPreparationStatus(
   const programme = docs.some((d) => d.type === 'PROGRAMME');
   const deroule = docs.some((d) => d.type === 'DEROULE_PEDAGOGIQUE');
   const checklist = docs.some((d) => d.type === 'CHECKLIST_FORMATION');
-  // Conventions individuelles : entityId = participantId.
+  // Conventions individuelles : entityId = participantId. Le test négatif passe
+  // par `isGroupConventionDoc` — écrit à la main, il laisserait entrer la forme
+  // `session`, dont l'entityId est un sessionId : on compterait alors un
+  // identifiant de session comme s'il s'agissait d'un inscrit.
   const conventionsSet = new Set(
     docs
-      .filter((d) => d.type === 'CONVENTION' && d.entityType !== GROUP_CONVENTION_ENTITY_TYPE)
+      .filter((d) => d.type === 'CONVENTION')
+      .filter(
+        (d) => !isGroupConventionDoc({ id: d.entityId, type: d.type, entityType: d.entityType, entityId: d.entityId }),
+      )
       .map((d) => d.entityId),
   );
   // Conventions groupe : entityId = sponsorOrgId → on ajoute chaque salarié

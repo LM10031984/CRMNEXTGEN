@@ -30,7 +30,8 @@ import {
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { groupConventionWhere } from '@/lib/docs/convention-coverage';
+import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
+import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -85,8 +86,13 @@ export async function generateConventionCore(
   // Retourne un SUCCÈS, pas une erreur : le participant EST couvert, et les
   // flux batch ne doivent pas tomber en échec pour autant. Le deleteMany
   // ci-dessus a par ailleurs déjà retiré l'éventuelle individuelle obsolète.
+  //
+  // Quick 260821-md8 : la garde interroge les DEUX formes de stockage. Sur
+  // SES-0107 / SES-0108 la convention de groupe existante est celle des
+  // scripts `_gen-*` (`entityType='session'`) ; une garde limitée à la forme
+  // `organization` la manquait et réémettait une convention nominative.
   const groupConvention = await prisma.document.findFirst({
-    where: groupConventionWhere(tenantId, participant.session.id, participant.sponsorOrgId),
+    where: groupConventionAnyShapeWhere(tenantId, participant.session.id, participant.sponsorOrgId),
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });
@@ -402,10 +408,38 @@ export async function generateConventionEntrepriseCore(
 
   const participantIds = participants.map((p) => p.id);
 
+  // Quick 260821-md8 — convergence des DEUX formes de stockage.
+  //
+  // La forme `session` (scripts `_gen-*`) ne porte PAS de commanditaire : la
+  // supprimer serait ambigu sur une session multi-entreprises, où elle peut
+  // couvrir une AUTRE entreprise que celle qu'on régénère. On ne la remplace
+  // donc QUE si la session n'a qu'un seul commanditaire personne morale — le
+  // cas ASSALIT / EXPERTA / OPTIMMO.
+  //
+  // Les auto-payeurs présents sur la session ne comptent pas : ils relèvent du
+  // contrat individuel et n'ont aucune convention de groupe à revendiquer.
+  const autresCommanditaires = await prisma.sessionParticipant.findMany({
+    where: { sessionId, session: { tenantId }, sponsorOrgId: { not: sponsorOrgId } },
+    select: { sponsorOrgId: true, sponsorOrg: { select: { legalForm: true } } },
+    distinct: ['sponsorOrgId'],
+  });
+  const monoCommanditaire = !autresCommanditaires.some((p) =>
+    isPersonneMoralePayeur(p.sponsorOrg?.legalForm),
+  );
+  if (!monoCommanditaire) {
+    console.warn(
+      '[convention-entreprise] doc groupe forme "session" conservé (session multi-commanditaires) — à arbitrer :',
+      sessionId,
+    );
+  }
+
   // Idempotence + règle « jamais une convention par stagiaire » : on remplace
   // l'ancienne convention groupe ET on retire les conventions individuelles
   // des participants désormais couverts par celle-ci.
-  const [, , document] = await prisma.$transaction([
+  //
+  // Ce remplacement ne se déclenche que sur une régénération EXPLICITE : aucune
+  // migration de fond, aucun balayage automatique de la base.
+  const operations = [
     prisma.document.deleteMany({
       where: {
         tenantId,
@@ -418,6 +452,20 @@ export async function generateConventionEntrepriseCore(
     prisma.document.deleteMany({
       where: { tenantId, type: 'CONVENTION', participantId: { in: participantIds } },
     }),
+    ...(monoCommanditaire
+      ? [
+          prisma.document.deleteMany({
+            where: {
+              tenantId,
+              type: 'CONVENTION',
+              entityType: 'session',
+              entityId: sessionId,
+              sessionId,
+              participantId: null,
+            },
+          }),
+        ]
+      : []),
     prisma.document.create({
       data: {
         tenantId,
@@ -430,7 +478,10 @@ export async function generateConventionEntrepriseCore(
         hashSha256: hash,
       },
     }),
-  ]);
+  ];
+  // Le Document créé est TOUJOURS la dernière opération — ne pas indexer en dur.
+  const results = await prisma.$transaction(operations);
+  const document = results[results.length - 1] as { id: string };
 
   return { ok: true, documentId: document.id, sessionId, count: participants.length };
 }

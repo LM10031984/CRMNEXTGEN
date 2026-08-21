@@ -61,7 +61,7 @@ import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import {
-  GROUP_CONVENTION_ENTITY_TYPE,
+  GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
 } from '@/lib/docs/convention-coverage';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
@@ -137,7 +137,12 @@ export default async function SessionDetailPage({
               // tout le groupe d'un commanditaire, donc participantId=null.
               // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
               // afficherait « convention manquante » alors qu'elle existe.
-              { entityType: GROUP_CONVENTION_ENTITY_TYPE },
+              // Quick 260821-md8 : les DEUX formes de stockage sont chargées —
+              // `organization` (appli) et `session` (scripts `_gen-*`, présente
+              // en production sur SES-0107 / SES-0108). Bornée au type
+              // CONVENTION : les autres documents de niveau session (check-list,
+              // grille, satisfaction) sont chargés par `sessionSharedDocs`.
+              { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
             ],
           },
           select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
