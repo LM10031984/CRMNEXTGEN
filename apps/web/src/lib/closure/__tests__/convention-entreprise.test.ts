@@ -329,4 +329,129 @@ describe('generateConventionCore — garde anti-doublon', () => {
     expect(res.skipped).toBeUndefined();
     expect(createMock).toHaveBeenCalled(); // comportement historique préservé
   });
+
+  /**
+   * Quick 260821-md8 — la garde doit voir les DEUX formes de stockage.
+   *
+   * Sur SES-0107 / SES-0108 la convention de groupe existante est celle des
+   * scripts `_gen-*` (`entityType='session'`). Une garde qui ne connaît que la
+   * forme `organization` la manque et réémet une convention nominative : c'est
+   * exactement le doublon filmé le 21/08.
+   */
+  it('interroge les DEUX formes de convention groupe (organization ET session)', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    const docFindFirst = vi.fn().mockResolvedValue(null);
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue(PARTICIPANT);
+    prisma.document.findFirst = docFindFirst;
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    await generateConventionCore('tnt-1', 'sp-1');
+
+    const where = docFindFirst.mock.calls[0]![0].where as Record<string, unknown>;
+    expect(where.tenantId).toBe('tnt-1');
+    expect(where.type).toBe('CONVENTION');
+    expect(where.sessionId).toBe('ses-1');
+    expect(where.OR).toEqual([
+      { entityType: 'organization', entityId: 'org-optimmo' },
+      { entityType: 'session', participantId: null },
+    ]);
+  });
+});
+
+/**
+ * Quick 260821-md8 — convergence de la régénération.
+ *
+ * La forme `session` (scripts `_gen-*`) ne porte PAS de commanditaire : la
+ * supprimer serait ambigu sur une session multi-entreprises. On ne la remplace
+ * donc QUE si la session n'a qu'un seul commanditaire personne morale — le cas
+ * ASSALIT / EXPERTA / OPTIMMO. Sinon on conserve et on journalise.
+ *
+ * Aucune migration de fond, aucun balayage automatique de la base : le
+ * remplacement ne se déclenche que sur une régénération explicite.
+ */
+describe('generateConventionEntrepriseCore — convergence des deux formes', () => {
+  const ORG_SARL = {
+    id: 'org-1', legalName: 'EXPERTA', siret: '81234567800042', siren: null,
+    legalForm: 'SARL', representative: 'Gilles Blanchon', address: { city: 'Nice' },
+    contacts: [],
+  };
+
+  /** `sessionParticipant.findMany` sert 2 requêtes : les inscrits du groupe, puis les AUTRES commanditaires. */
+  function wireFindMany(participants: unknown[], autresCommanditaires: unknown[]) {
+    findManyMock.mockImplementation(async (args: any) =>
+      args?.distinct ? autresCommanditaires : participants,
+    );
+  }
+
+  it('remplace la convention de groupe du script sur une session mono-commanditaire', async () => {
+    orgFindFirstMock.mockResolvedValue(ORG_SARL);
+    wireFindMany([participant('sp-1', 'Alice', 'Martin')], []);
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(true);
+    const wheres = deleteManyMock.mock.calls.map((c) => (c[0] as { where: Record<string, unknown> }).where);
+    const formeSession = wheres.find((w) => w.entityType === 'session');
+    expect(formeSession).toBeDefined();
+    expect(formeSession).toMatchObject({
+      tenantId: 'tnt-1',
+      type: 'CONVENTION',
+      entityType: 'session',
+      entityId: 'ses-1',
+      sessionId: 'ses-1',
+      participantId: null,
+    });
+    // Le document créé reste le DERNIER élément de la transaction.
+    expect(res.documentId).toBe('doc-groupe-1');
+  });
+
+  it('conserve la forme `session` sur une session MULTI-commanditaires et journalise', async () => {
+    orgFindFirstMock.mockResolvedValue(ORG_SARL);
+    wireFindMany(
+      [participant('sp-1', 'Alice', 'Martin')],
+      [{ sponsorOrgId: 'org-2', sponsorOrg: { legalForm: 'SAS' } }],
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    const res = await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    expect(res.ok).toBe(true);
+    const wheres = deleteManyMock.mock.calls.map((c) => (c[0] as { where: Record<string, unknown> }).where);
+    expect(wheres.find((w) => w.entityType === 'session')).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('multi-commanditaires'), 'ses-1');
+    warn.mockRestore();
+  });
+
+  it('ignore un autre commanditaire personne PHYSIQUE (auto-payeur) pour ce calcul', async () => {
+    // Un auto-payeur inscrit à côté du groupe ne rend pas la session
+    // « multi-commanditaires » : il relève du contrat individuel, il n'a
+    // aucune convention de groupe à revendiquer.
+    orgFindFirstMock.mockResolvedValue(ORG_SARL);
+    wireFindMany(
+      [participant('sp-1', 'Alice', 'Martin')],
+      [{ sponsorOrgId: 'org-ei', sponsorOrg: { legalForm: 'AUTO_ENTREPRENEUR' } }],
+    );
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const wheres = deleteManyMock.mock.calls.map((c) => (c[0] as { where: Record<string, unknown> }).where);
+    expect(wheres.find((w) => w.entityType === 'session')).toBeDefined();
+  });
+
+  it('scope la recherche des autres commanditaires au tenant ET à la session', async () => {
+    orgFindFirstMock.mockResolvedValue(ORG_SARL);
+    wireFindMany([participant('sp-1', 'Alice', 'Martin')], []);
+
+    const { generateConventionEntrepriseCore } = await importCore();
+    await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
+
+    const distinctCall = findManyMock.mock.calls.map((c) => c[0] as any).find((a) => a?.distinct);
+    expect(distinctCall).toBeDefined();
+    expect(distinctCall.where.sessionId).toBe('ses-1');
+    expect(distinctCall.where.session).toEqual({ tenantId: 'tnt-1' });
+  });
 });
