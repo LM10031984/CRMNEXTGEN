@@ -6,6 +6,7 @@ import { requiresContratIndividuel } from '@/lib/legal-forms';
 import {
   isPersonneMoralePayeur,
   partitionByPayerRule,
+  selectAnalyseBesoinTargets,
   type PayerParticipant,
 } from '../payer-rule';
 
@@ -152,5 +153,89 @@ describe('partitionByPayerRule — groupes vs auto-payeurs', () => {
     const { groups, individuels } = partitionByPayerRule([p('sp-1', 'org-x', null)]);
     expect(groups).toEqual([]);
     expect(individuels).toEqual(['sp-1']);
+  });
+});
+
+/**
+ * Analyse des besoins — même règle, autre document.
+ *
+ * Une analyse des besoins au nom d'un SALARIÉ alors que le besoin est celui de
+ * l'entreprise est une non-conformité à l'indicateur 4. Le document de
+ * référence attendu est celui de `_gen-assalit-experta-analyses.ts` : contexte,
+ * besoins exprimés, objectifs attendus, public et prérequis, modalités,
+ * adaptation proposée, situation de handicap, signature.
+ */
+describe('selectAnalyseBesoinTargets', () => {
+  const AUCUN_RENDU = { dejaRenduParStagiaire: new Set<string>(), analyseEntrepriseExiste: false };
+
+  it('enfile tous les auto-payeurs (cas dominant du CRM, non-régression)', () => {
+    const t = selectAnalyseBesoinTargets(
+      [p('sp-1', 'org-ei-1', 'AUTO_ENTREPRENEUR'), p('sp-2', 'org-ei-2', 'EI')],
+      AUCUN_RENDU,
+    );
+    expect(t.participantIds).toEqual(['sp-1', 'sp-2']);
+    expect(t.entreprisesEnAttente).toEqual([]);
+  });
+
+  it('n’enfile RIEN par stagiaire quand le payeur est une personne morale', () => {
+    const t = selectAnalyseBesoinTargets(
+      [p('sp-1', 'org-experta', 'SARL', 'EXPERTA'), p('sp-2', 'org-experta', 'SARL', 'EXPERTA')],
+      AUCUN_RENDU,
+    );
+    expect(t.participantIds).toEqual([]);
+    expect(t.entreprisesEnAttente.map((g) => g.sponsorOrgId)).toEqual(['org-experta']);
+    expect(t.entreprisesEnAttente[0]!.sponsorName).toBe('EXPERTA');
+  });
+
+  it('sépare une session mixte', () => {
+    const t = selectAnalyseBesoinTargets(
+      [
+        p('sp-1', 'org-assalit', 'SARL', 'ASSALIT SYNDIC'),
+        p('sp-2', 'org-ei-1', 'AUTO_ENTREPRENEUR'),
+        p('sp-3', 'org-assalit', 'SARL', 'ASSALIT SYNDIC'),
+      ],
+      AUCUN_RENDU,
+    );
+    expect(t.participantIds).toEqual(['sp-2']);
+    expect(t.entreprisesEnAttente.map((g) => g.sponsorOrgId)).toEqual(['org-assalit']);
+  });
+
+  it('idempotence : une analyse entreprise déjà rendue vide la file d’attente', () => {
+    const t = selectAnalyseBesoinTargets([p('sp-1', 'org-experta', 'SARL', 'EXPERTA')], {
+      dejaRenduParStagiaire: new Set<string>(),
+      analyseEntrepriseExiste: true,
+    });
+    expect(t.entreprisesEnAttente).toEqual([]);
+    expect(t.participantIds).toEqual([]); // jamais d'empilement par stagiaire
+  });
+
+  it('idempotence : un auto-payeur déjà servi n’est pas ré-enfilé', () => {
+    const t = selectAnalyseBesoinTargets(
+      [p('sp-1', 'org-ei-1', 'EI'), p('sp-2', 'org-ei-2', 'EI')],
+      { dejaRenduParStagiaire: new Set(['sp-1']), analyseEntrepriseExiste: false },
+    );
+    expect(t.participantIds).toEqual(['sp-2']);
+  });
+
+  it('un résidu d’analyse PAR STAGIAIRE sur un salarié n’est ni ré-enfilé ni supprimé', () => {
+    // Cas SES-0108 : l'appli avait déjà produit une analyse nominative pour la
+    // salariée. Le helper est PUR : il ne supprime rien, il cesse simplement
+    // d'en produire de nouvelles.
+    const participants = [p('sp-1', 'org-experta', 'SARL', 'EXPERTA')];
+    const avant = JSON.stringify(participants);
+    const t = selectAnalyseBesoinTargets(participants, {
+      dejaRenduParStagiaire: new Set(['sp-1']),
+      analyseEntrepriseExiste: false,
+    });
+    expect(t.participantIds).toEqual([]);
+    expect(t.entreprisesEnAttente.map((g) => g.sponsorOrgId)).toEqual(['org-experta']);
+    expect(JSON.stringify(participants)).toBe(avant); // aucune mutation
+  });
+
+  it('session sans inscrit : rien à faire', () => {
+    expect(selectAnalyseBesoinTargets([], AUCUN_RENDU)).toEqual({
+      participantIds: [],
+      entreprisesEnAttente: [],
+    });
   });
 });

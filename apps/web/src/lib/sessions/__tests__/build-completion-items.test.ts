@@ -23,6 +23,10 @@ function emptyPrep(N: number): SessionPreparationStatus {
     analyseBesoinDone: 0,
     analyseBesoinInProgress: 0,
     analyseBesoinPending: 0,
+    // Cas dominant du CRM : auto-payeurs → une analyse attendue par stagiaire.
+    analyseBesoinAttendue: N,
+    analyseBesoinEntrepriseAttendue: 0,
+    analyseBesoinEntreprisePresente: 0,
     ageficeCount: 0,
     ageficeEligibleCount: 0,
     participantsCount: N,
@@ -81,6 +85,62 @@ describe('buildPrepCompletionItems', () => {
     const c = docCompletion(items);
     expect(c.ready).toBe(c.total);
     expect(c.missing).toBe(0);
+  });
+
+  /**
+   * Quick 260821-md8 — le dénominateur de l'analyse des besoins n'est plus
+   * l'effectif, mais le nombre d'inscrits pour qui une analyse PAR STAGIAIRE
+   * est légitime (les auto-payeurs). Sinon une session intra-entreprise reste
+   * éternellement « 1 manquant » sur un document qu'on a justement décidé de
+   * ne plus produire.
+   */
+  describe('règle payeur — analyse besoin', () => {
+    it('session 100 % personne morale : aucune analyse par stagiaire attendue', () => {
+      const items = buildPrepCompletionItems({
+        ...emptyPrep(1),
+        programme: true,
+        deroule: true,
+        checklist: true,
+        conventionsCount: 1,
+        convocationsCount: 1,
+        analyseBesoinAttendue: 0,
+        analyseBesoinEntrepriseAttendue: 1,
+      });
+      // 3 partagés + 1 convention + 1 convocation + 1 analyse ENTREPRISE.
+      expect(items).toHaveLength(6);
+      const c = docCompletion(items);
+      expect(c.total).toBe(6);
+      // Seule l'analyse d'entreprise manque — et elle est affichée, pas cachée.
+      expect(c.missing).toBe(1);
+      expect(c.ready).toBe(5);
+    });
+
+    it('analyse d’entreprise rendue : la session est complète', () => {
+      const c = docCompletion(
+        buildPrepCompletionItems({
+          ...emptyPrep(1),
+          programme: true,
+          deroule: true,
+          checklist: true,
+          conventionsCount: 1,
+          convocationsCount: 1,
+          analyseBesoinAttendue: 0,
+          analyseBesoinEntreprisePresente: 1,
+        }),
+      );
+      expect(c.missing).toBe(0);
+      expect(c.ready).toBe(c.total);
+    });
+
+    it('session mixte : 1 analyse par stagiaire + 1 analyse entreprise', () => {
+      const items = buildPrepCompletionItems({
+        ...emptyPrep(3), // 2 salariés + 1 auto-payeur
+        analyseBesoinAttendue: 1,
+        analyseBesoinEntrepriseAttendue: 1,
+      });
+      // 3 partagés + 3 conventions + 3 convocations + 1 AB stagiaire + 1 AB entreprise.
+      expect(items).toHaveLength(11);
+    });
   });
 });
 

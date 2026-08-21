@@ -225,6 +225,79 @@ describe.each([
   });
 });
 
+describe('prepareSession — analyse des besoins', () => {
+  beforeEach(() => {
+    // Le batch renvoie les jobs réellement demandés.
+    m.closureBatchCreate.mockImplementation(async (args: any) => ({
+      id: 'batch-1',
+      jobs: (args.data.jobs?.create ?? []).map((j: any, i: number) => ({
+        id: `job-${i}`,
+        participantId: j.participantId,
+        kind: j.kind,
+      })),
+    }));
+  });
+
+  it('n’enfile AUCUNE analyse par stagiaire quand le payeur est une personne morale', async () => {
+    seedSession(ASSALIT);
+    const { prepareSession } = await importActions();
+    const res = await prepareSession('ses-1');
+
+    expect(res.analyseBesoinEnqueued).toBe(0);
+    expect(m.enqueueClosureJob).not.toHaveBeenCalled();
+    // Un batch vide pollue la barre de progression : on n'en crée pas.
+    expect(m.closureBatchCreate).not.toHaveBeenCalled();
+  });
+
+  it('affiche honnêtement l’analyse d’ENTREPRISE manquante', async () => {
+    seedSession(EXPERTA);
+    const { prepareSession } = await importActions();
+    const res = await prepareSession('ses-1');
+
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(1);
+    expect(res.analyseBesoinEntreprisePresente).toBe(0);
+    // Surtout pas gonfler le compteur par stagiaire : deux natures de document.
+    expect(res.analyseBesoinEnqueued).toBe(0);
+  });
+
+  it('voit l’analyse d’entreprise déjà rendue (asset session, participantId=null)', async () => {
+    seedSession(EXPERTA);
+    m.pedagogicalAssetFindFirst.mockResolvedValue({ id: 'asset-ent' });
+    const { prepareSession } = await importActions();
+    const res = await prepareSession('ses-1');
+
+    expect(res.analyseBesoinEntreprisePresente).toBe(1);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(0);
+
+    const where = m.pedagogicalAssetFindFirst.mock.calls[0]![0].where as Record<string, unknown>;
+    expect(where.tenantId).toBe('tnt-1');
+    expect(where.sessionId).toBe('ses-1');
+    expect(where.kind).toBe('ANALYSE_BESOIN');
+    expect(where.participantId).toBeNull();
+  });
+
+  it('conserve le comportement historique pour les auto-payeurs', async () => {
+    seedSession(AUTO_PAYEURS);
+    const { prepareSession } = await importActions();
+    const res = await prepareSession('ses-1');
+
+    expect(res.analyseBesoinEnqueued).toBe(2);
+    expect(m.enqueueClosureJob).toHaveBeenCalledTimes(2);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(0);
+  });
+
+  it('sur une session mixte, n’enfile que les auto-payeurs', async () => {
+    seedSession([...ASSALIT.slice(0, 3), ...AUTO_PAYEURS]);
+    const { prepareSession } = await importActions();
+    const res = await prepareSession('ses-1');
+
+    expect(res.analyseBesoinEnqueued).toBe(2);
+    const enfiles = m.enqueueClosureJob.mock.calls.map((c) => c[0].participantId).sort();
+    expect(enfiles).toEqual(['sp-a1', 'sp-a2']);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(1);
+  });
+});
+
 describe('prepareSession — traçabilité', () => {
   it('journalise le nombre de conventions groupe et individuelles', async () => {
     seedSession([...ASSALIT, ...AUTO_PAYEURS]);
@@ -272,6 +345,46 @@ describe('getSessionPreparationStatus — les deux formes de convention groupe',
     const res = await getSessionPreparationStatus('ses-1');
 
     expect(res.conventionsCount).toBe(2);
+  });
+
+  it('expose les compteurs d’analyse besoin séparés (stagiaire vs entreprise)', async () => {
+    m.sessionFindFirst.mockResolvedValue({
+      id: 'ses-1',
+      productId: 'prod-1',
+      participants: [
+        {
+          id: 'sp-1',
+          sponsorOrgId: 'org-experta',
+          sponsorOrg: { id: 'org-experta', legalName: 'EXPERTA', legalForm: 'SARL' },
+        },
+      ],
+    });
+    const { getSessionPreparationStatus } = await importActions();
+    const res = await getSessionPreparationStatus('ses-1');
+
+    // Aucune analyse par stagiaire n'est attendue : le payeur est l'employeur.
+    expect(res.analyseBesoinAttendue).toBe(0);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(1);
+    expect(res.analyseBesoinEntreprisePresente).toBe(0);
+  });
+
+  it('attend une analyse par stagiaire pour chaque auto-payeur', async () => {
+    m.sessionFindFirst.mockResolvedValue({
+      id: 'ses-1',
+      productId: 'prod-1',
+      participants: [
+        {
+          id: 'sp-1',
+          sponsorOrgId: 'org-ei',
+          sponsorOrg: { id: 'org-ei', legalName: 'Alice EI', legalForm: 'AUTO_ENTREPRENEUR' },
+        },
+      ],
+    });
+    const { getSessionPreparationStatus } = await importActions();
+    const res = await getSessionPreparationStatus('ses-1');
+
+    expect(res.analyseBesoinAttendue).toBe(1);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(0);
   });
 
   it('n’enregistre JAMAIS un sessionId comme identifiant de participant', async () => {
