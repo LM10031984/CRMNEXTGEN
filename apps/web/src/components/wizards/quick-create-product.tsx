@@ -1,14 +1,23 @@
 'use client';
 
 /**
- * Modale "Nouveau produit" depuis le wizard nouvelle session.
+ * Modale "Nouveau programme" — création d'un produit de formation complet.
  *
- * Aligne tous les champs Qualiopi sur la modale d'édition (cohérence)
- * et propose un bouton "✨ Pré-remplir avec IA" qui appelle Ollama avec
- * un prompt few-shot calibré sur les modèles Start Academy réels.
+ * Tous les champs Qualiopi, le programme éditable avant enregistrement, et un
+ * bouton « Pré-remplir avec l'IA ».
+ *
+ * 28/08 — elle ne vivait QUE dans le wizard de session : pour obtenir un
+ * programme travaillé, il fallait commencer une session (« je voudrais pouvoir
+ * générer un programme sans générer de session »). La page Produits n'offrait
+ * qu'un formulaire minimal, sans champ programme ni relecture. `onCreated` est
+ * donc devenu optionnel : sans lui, on ouvre la fiche du programme créé.
+ *
+ * Le champ « Ce que j'ai proposé au client » bascule l'IA en TRANSCRIPTION :
+ * elle met en forme la proposition au lieu d'inventer un programme.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, X, Sparkles, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { createTrainingProduct } from '@/server/actions/crud-edits';
@@ -30,9 +39,17 @@ interface NewProduct {
 
 export function QuickCreateProductButton({
   onCreated,
+  label = 'Nouveau produit',
 }: {
-  onCreated: (p: NewProduct) => void;
+  /**
+   * Fourni par le wizard de session, qui enchaîne sur l'inscription. Absent
+   * depuis la page Produits : on ouvre alors la fiche du programme créé.
+   */
+  onCreated?: (p: NewProduct) => void;
+  label?: string;
 }) {
+  const router = useRouter();
+  const ids = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -60,6 +77,8 @@ export function QuickCreateProductButton({
   const [accessibility, setAccessibility] = useState('');
   const [accessConditions, setAccessConditions] = useState('');
   const [programMd, setProgramMd] = useState('');
+  // Retranscription de ce qui a déjà été proposé au client (modules négociés).
+  const [propositionClient, setPropositionClient] = useState('');
 
   const reset = () => {
     setTitle('');
@@ -80,6 +99,7 @@ export function QuickCreateProductButton({
     setAccessibility('');
     setAccessConditions('');
     setProgramMd('');
+    setPropositionClient('');
     setError(null);
     setAiApplied(false);
   };
@@ -104,6 +124,9 @@ export function QuickCreateProductButton({
         durationHours: dh,
         modality,
         priceHT: parseFloat(priceHT.replace(',', '.')) || 0,
+        // Fournie ⇒ l'IA transcrit la proposition au lieu de rédiger : elle ne
+        // peut plus ajouter un module que le client n'a pas accepté.
+        propositionClient: propositionClient.trim() || null,
       });
       if (r.ok && r.draft) {
         setObjectives(r.draft.objectives.join('\n'));
@@ -172,6 +195,14 @@ export function QuickCreateProductButton({
       if (r.ok && r.productId && r.code) {
         toast.success(`Produit ${r.code} créé`);
         const m = modality === 'ELEARNING' ? 'DISTANCIEL' : modality;
+        if (!onCreated) {
+          // Création autonome : on ouvre le programme, seul endroit où on le
+          // relit et le fige.
+          setOpen(false);
+          reset();
+          router.push(`/app/produits/${r.productId}?tab=programme`);
+          return;
+        }
         onCreated({
           id: r.productId,
           code: r.code,
@@ -202,7 +233,7 @@ export function QuickCreateProductButton({
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-input text-sm font-medium hover:bg-muted/50 transition-colors"
       >
-        <Plus className="h-4 w-4" /> Nouveau produit
+        <Plus className="h-4 w-4" /> {label}
       </button>
 
       {open && (
@@ -234,10 +265,14 @@ export function QuickCreateProductButton({
               {/* Bloc essentiel */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  <label
+                    htmlFor={`${ids}-title`}
+                    className="block text-xs font-medium text-muted-foreground mb-1"
+                  >
                     Intitulé *
                   </label>
                   <input
+                    id={`${ids}-title`}
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -249,10 +284,14 @@ export function QuickCreateProductButton({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    <label
+                      htmlFor={`${ids}-duration`}
+                      className="block text-xs font-medium text-muted-foreground mb-1"
+                    >
                       Durée (heures) *
                     </label>
                     <input
+                      id={`${ids}-duration`}
                       type="number"
                       min="1"
                       value={durationHours}
@@ -319,15 +358,49 @@ export function QuickCreateProductButton({
                 </div>
               </div>
 
+              {/* Contexte donné à l'IA (28/08) — ce qui a déjà été proposé au
+                  client. Rempli, il bascule la génération en TRANSCRIPTION :
+                  l'IA met en forme ces modules et n'a plus le droit d'en
+                  inventer d'autres pour « remplir » la durée. */}
+              <div>
+                <label
+                  htmlFor={`${ids}-proposition`}
+                  className="block text-xs font-medium text-muted-foreground mb-1"
+                >
+                  Ce que j&apos;ai déjà proposé au client (facultatif)
+                </label>
+                <textarea
+                  id={`${ids}-proposition`}
+                  value={propositionClient}
+                  onChange={(e) => setPropositionClient(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono"
+                  placeholder={
+                    'Collez ici les modules proposés (mail, devis, notes de rendez-vous)…\n\nModule 1 : audit du portefeuille de mandats\nModule 2 : relance des mandats expirés'
+                  }
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Rempli, l&apos;IA <strong>transcrit</strong> ces modules en programme conforme
+                  au lieu d&apos;en rédiger un : elle n&apos;ajoute rien que le client n&apos;ait
+                  accepté. Vide, elle rédige à partir du titre et du thème.
+                </p>
+              </div>
+
               {/* Bouton IA */}
               <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-purple-200 bg-purple-50">
                 <div className="flex items-start gap-2 text-xs">
                   <Sparkles className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
                   <div>
-                    <strong className="block text-purple-900">Pré-remplissage IA</strong>
+                    <strong className="block text-purple-900">
+                      {propositionClient.trim()
+                        ? 'Transcription de votre proposition'
+                        : 'Pré-remplissage IA'}
+                    </strong>
                     <span className="text-purple-700">
-                      Renseigne titre + durée + thème puis clique pour générer un brouillon
-                      Qualiopi conforme Start Academy (objectifs, public, programme jour-par-jour…).
+                      {propositionClient.trim()
+                        ? 'Vos modules sont mis en forme en programme Qualiopi (journées, horaires, verbes d’action évaluables), sans ajout ni retrait.'
+                        : 'Renseigne titre + durée + thème puis clique pour générer un brouillon Qualiopi conforme Start Academy (objectifs, public, programme jour-par-jour…).'}
+                      {' '}Le style s’appuie sur vos programmes déjà validés dans QualiOF.
                     </span>
                   </div>
                 </div>
@@ -345,7 +418,7 @@ export function QuickCreateProductButton({
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-3.5 w-3.5" /> Pré-remplir avec IA
+                      <Sparkles className="h-3.5 w-3.5" /> Pré-remplir avec l’IA
                     </>
                   )}
                 </button>
