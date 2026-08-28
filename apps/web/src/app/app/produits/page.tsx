@@ -6,7 +6,11 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SearchInput } from '@/components/ui/search-input';
 import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
-import { CreateProductButton } from '@/components/forms/create-product-button';
+// 28/08 — « je voudrais pouvoir générer un programme sans générer de session » :
+// la page Produits ouvre désormais le MÊME formulaire complet que le wizard de
+// session (champs Qualiopi, programme éditable, transcription d'une proposition
+// client), au lieu d'un formulaire minimal sans relecture possible.
+import { QuickCreateProductButton } from '@/components/wizards/quick-create-product';
 
 const PAGE_SIZE = 24;
 
@@ -127,7 +131,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Produits de formation"
         subtitle={`${total} formation${total > 1 ? 's' : ''} active${total > 1 ? 's' : ''}`}
-        actions={<CreateProductButton />}
+        actions={<QuickCreateProductButton label="Nouveau programme" />}
       />
 
       {/* BUG-P0-01 follow-up — bandeau stats catalogue : apprenants uniques formés,
