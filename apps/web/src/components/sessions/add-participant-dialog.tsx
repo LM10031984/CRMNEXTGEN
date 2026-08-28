@@ -10,10 +10,13 @@ import { Plus, X } from 'lucide-react';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
 import { QuickCreatePersonButton } from '@/components/wizards/quick-create-person';
 import { addParticipant } from '@/server/actions/sessions';
+import { parsePriceInput } from '@/lib/pricing/parse-price-input';
 
 interface Props {
   sessionId: string;
-  defaultPrice: number;
+  /** Tarif de la session, `null` si elle n'en porte pas : le champ reste alors
+   *  vide et la cascade tarifaire décide (jamais un 0 pré-rempli). */
+  defaultPrice: number | null;
   excludePersonIds: string[];
 }
 
@@ -24,7 +27,7 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
   // qu'il apparaisse directement dans les résultats (même mécanique que le
   // wizard session, BUG-7).
   const [pickerQuery, setPickerQuery] = useState<string | null>(null);
-  const [price, setPrice] = useState<string>(String(defaultPrice));
+  const [price, setPrice] = useState<string>(defaultPrice === null ? '' : String(defaultPrice));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +39,10 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
         sessionId,
         personId: selection.personId,
         sponsorOrgId: selection.sponsorOrgId,
-        priceHT: parseFloat(price.replace(',', '.')) || 0,
+        // Champ vide ⇒ `undefined` : la cascade tarifaire décide. Envoyer 0
+        // ici la court-circuiterait (`input.priceHT ?? défaut`) et créerait un
+        // inscrit à 0 € — E-2 rouvert par l'interface.
+        priceHT: parsePriceInput(price),
         // Le picker sait désormais rattacher une entreprise à un apprenant qui
         // n'en avait aucune : on transmet le rôle retenu, pour que l'action
         // crée le LegalLink manquant plutôt que de refuser l'inscription.
@@ -45,7 +51,7 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
       if (res.ok) {
         setOpen(false);
         setSelection(null);
-        setPrice(String(defaultPrice));
+        setPrice(defaultPrice === null ? '' : String(defaultPrice));
       } else {
         setError(res.error);
       }
