@@ -6,8 +6,7 @@ Taper `/` dans Claude Code les propose en autocomplétion.
 | Commande | À quel moment |
 |---|---|
 | `/audit-session SES-0107` | Avant un contrôle Qualiopi ou l'envoi d'un dossier — double regard auditeur + gestionnaire OPCO |
-| `/tarif SES-0107 1400` | Changer UN prix (produit ou session) et propager la cascade sans casser les pièces engagées |
-| `/tarification SES-0107` | Piloter la tarification d'une session **par payeur** : forfait groupe entreprise et tarif par stagiaire TNS coexistant. `--etat` pour un simple état des lieux |
+| `/tarification SES-0107` | Tout ce qui touche au prix : état des lieux par payeur, forfait groupe entreprise et tarif par stagiaire TNS coexistant, propagation sans casser les pièces engagées. `--etat` pour un état des lieux en lecture seule |
 | `/coherence-docs SES-0107` | Trouver les PDF qui mentent parce que la donnée a bougé après leur génération |
 | `/financeur FIFPL` | Brancher un nouveau financeur au même niveau de service que l'AGEFICE |
 | `/quick <tâche>` | Petite évolution en TDD avec les garde-fous du projet (tenantId, AuditLog, gates) |

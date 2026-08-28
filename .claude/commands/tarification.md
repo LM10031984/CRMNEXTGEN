@@ -1,6 +1,6 @@
 ---
 description: Pilote la tarification d'une session QualiOF — forfait groupe entreprise et tarif par stagiaire TNS coexistant sur la même session — et propage sans jamais réécrire une pièce déjà engagée
-argument-hint: "[SES-XXXX] [optionnel: payeur ou --etat]"
+argument-hint: "[SES-XXXX] [optionnel: payeur, nouveau prix, ou --etat]"
 allowed-tools: Bash(pnpm *) Read Grep Glob Edit Write
 ---
 
@@ -24,6 +24,14 @@ Le dépôt porte déjà les traces de ce besoin : `TrainingProduct.groupFlatPric
 (« Tarif_forfait_groupe »), le correctif `quick-260817-mm0` « prix GLOBAL
 entreprise, pas un tarif par salarié », et la règle payeur personne morale du 28/08.
 Ne les contredis pas : complète-les.
+
+## Le niveau catalogue, et pourquoi il ne redescend pas
+
+Le prix du produit est un **tarif catalogue**. Il ne redescend jamais sur les
+sessions existantes : chaque session a figé son prix négocié à sa création.
+Changer `TrainingProduct.priceHT` ou `groupFlatPrice` n'affecte que les sessions
+créées **après**. Répercuter sur une session en cours est une décision
+commerciale explicite, session par session — jamais une conséquence automatique.
 
 ## Étape 1 — État des lieux (toujours en premier, jamais d'écriture)
 
