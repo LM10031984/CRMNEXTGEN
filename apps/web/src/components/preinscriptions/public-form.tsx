@@ -296,9 +296,10 @@ export function PublicPreEnrollmentForm({
           />
           <span className="text-xs leading-relaxed">
             J'accepte que Start Academy traite ces informations dans le cadre de ma pré-inscription
-            à une formation, conformément au RGPD. Mes données seront conservées pendant la durée
-            nécessaire au traitement de mon dossier et à mes obligations légales (Qualiopi, OPCO).
-            Je peux à tout moment exercer mes droits d'accès, rectification, effacement.
+            à une formation, conformément au RGPD. Mes données sont hébergées dans l'Union
+            européenne et conservées pendant la durée nécessaire au traitement de mon dossier et
+            aux obligations légales de l'organisme (Qualiopi, OPCO). Je peux à tout moment exercer
+            mes droits d'accès, de rectification et d'effacement à l'adresse contact@start-academy.fr.
           </span>
         </label>
       </div>
@@ -311,7 +312,7 @@ export function PublicPreEnrollmentForm({
 
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <p className="text-xs text-muted-foreground italic">
-          🔒 Tes données sont stockées en France sur les serveurs de Start Academy
+          🔒 Données hébergées dans l'Union européenne
         </p>
         <button
           type="button"
