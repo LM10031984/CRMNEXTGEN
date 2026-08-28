@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { searchPersons, type PersonSearchResult } from '@/server/actions/persons';
+import { searchOrganizations, createLegalLink } from '@/server/actions/legal-links';
+import { createOrganization } from '@/server/actions/crud-edits';
 import { formatFunderCode } from '@/lib/funder-codes';
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
@@ -32,6 +34,25 @@ const ROLE_LABELS: Record<string, string> = {
   FINANCEUR_CONTACT: 'Contact financeur',
   FORMATEUR: 'Formateur',
 };
+
+/**
+ * Rôles proposés au rattachement express d'une entreprise (28/08).
+ * Aucun n'est pré-sélectionné : un SALARIE par défaut pourrissait les données
+ * (recommandation d'audit, reprise dans `addParticipant`).
+ */
+const ROLES_RATTACHEMENT = ['SALARIE', 'DIRIGEANT', 'EI_SELF', 'AGENT_COMMERCIAL'] as const;
+
+const FORMES_JURIDIQUES = [
+  'SARL',
+  'SAS',
+  'SASU',
+  'EURL',
+  'SA',
+  'SCI',
+  'ASSOCIATION',
+  'EI',
+  'AUTO_ENTREPRENEUR',
+] as const;
 
 export interface PickerSelection {
   personId: string;
@@ -71,6 +92,17 @@ export function PersonOrOrgPicker({
   const [open, setOpen] = useState(false);
   // État intermédiaire : apprenant choisi mais pas encore de casquette
   const [pickedPerson, setPickedPerson] = useState<PersonSearchResult | null>(null);
+  // Rattachement express d'une entreprise à un apprenant qui n'en a aucune.
+  const [personSansCasquette, setPersonSansCasquette] = useState<PersonSearchResult | null>(null);
+  const [orgQuery, setOrgQuery] = useState('');
+  const [orgResults, setOrgResults] = useState<
+    { id: string; legalName: string; legalForm: string }[]
+  >([]);
+  const [roleRattachement, setRoleRattachement] = useState<string>('');
+  const [attaching, setAttaching] = useState(false);
+  const [creerOrg, setCreerOrg] = useState(false);
+  const [nouvelleOrgNom, setNouvelleOrgNom] = useState('');
+  const [nouvelleOrgForme, setNouvelleOrgForme] = useState<string>('SARL');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounce search 200ms
@@ -84,6 +116,61 @@ export function PersonOrOrgPicker({
     }, 200);
     return () => clearTimeout(id);
   }, [query, open, excludePersonIds]);
+
+  // Recherche d'organisations pour le rattachement express (debounce 200ms).
+  useEffect(() => {
+    if (!personSansCasquette) return;
+    const id = setTimeout(async () => {
+      const list = await searchOrganizations(orgQuery);
+      setOrgResults(list.map((o) => ({ id: o.id, legalName: o.legalName, legalForm: o.legalForm })));
+    }, 200);
+    return () => clearTimeout(id);
+  }, [orgQuery, personSansCasquette]);
+
+  /** Crée le LegalLink manquant puis sélectionne l'apprenant avec cette casquette. */
+  async function rattacher(org: { id: string; legalName: string; legalForm: string }) {
+    if (!personSansCasquette || !roleRattachement) return;
+    setAttaching(true);
+    const r = await createLegalLink({
+      personId: personSansCasquette.id,
+      organizationId: org.id,
+      role: roleRattachement as Parameters<typeof createLegalLink>[0]['role'],
+      isPrimary: true,
+    });
+    setAttaching(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    const person = personSansCasquette;
+    setPersonSansCasquette(null);
+    finalizeSelection(person, {
+      id: r.id,
+      role: roleRattachement,
+      isPrimary: true,
+      organization: {
+        id: org.id,
+        legalName: org.legalName,
+        legalForm: org.legalForm,
+        opcoCode: null,
+      },
+    } as unknown as PersonSearchResult['legalLinks'][number]);
+  }
+
+  async function creerPuisRattacher() {
+    if (!nouvelleOrgNom.trim() || !roleRattachement) return;
+    setAttaching(true);
+    const r = await createOrganization({
+      legalName: nouvelleOrgNom.trim(),
+      legalForm: nouvelleOrgForme as Parameters<typeof createOrganization>[0]['legalForm'],
+    });
+    setAttaching(false);
+    if (!r.ok || !r.orgId) {
+      toast.error(r.error ?? 'Création impossible');
+      return;
+    }
+    await rattacher({ id: r.orgId, legalName: nouvelleOrgNom.trim(), legalForm: nouvelleOrgForme });
+  }
 
   // Click outside → close
   useEffect(() => {
@@ -99,10 +186,13 @@ export function PersonOrOrgPicker({
 
   function handlePersonClick(person: PersonSearchResult) {
     if (person.legalLinks.length === 0) {
-      // Pas de LegalLink → on demande une création (TODO palier 2.2bis)
-      toast.warning(
-        `${person.firstName} ${person.lastName} n'a aucune organisation rattachée. Crée d'abord un LegalLink depuis sa fiche.`,
-      );
+      // 28/08 — friction levée : au lieu de renvoyer l'utilisateur sur la fiche
+      // apprenant (« crée d'abord un LegalLink »), on rattache l'entreprise SUR
+      // PLACE. Sans casquette, aucune inscription n'est possible : c'est elle
+      // qui porte le payeur.
+      setPersonSansCasquette(person);
+      setOrgQuery('');
+      setRoleRattachement('');
       return;
     }
     if (person.legalLinks.length === 1) {
@@ -169,6 +259,149 @@ export function PersonOrOrgPicker({
             <X className="h-4 w-4" />
           </button>
         </button>
+      </div>
+    );
+  }
+
+  // Cas 1bis : l'apprenant n'a AUCUNE casquette → rattachement express.
+  if (personSansCasquette) {
+    const nom = `${personSansCasquette.firstName} ${personSansCasquette.lastName}`;
+    return (
+      <div className="border border-primary/30 bg-primary-50/30 rounded-md p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <div className="font-medium text-sm">Rattacher une entreprise à {nom}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Aucune organisation ne lui est rattachée. C&apos;est elle qui paye
+              l&apos;inscription — choisis-la ici, sans quitter la session.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPersonSansCasquette(null)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Annuler
+          </button>
+        </div>
+
+        <div>
+          <label
+            htmlFor="picker-role-rattachement"
+            className="text-xs font-medium text-muted-foreground block mb-1"
+          >
+            Rôle dans l&apos;entreprise
+          </label>
+          <select
+            id="picker-role-rattachement"
+            value={roleRattachement}
+            onChange={(e) => setRoleRattachement(e.target.value)}
+            className="w-full h-9 px-2 rounded-md border border-border bg-white text-sm"
+          >
+            <option value="">— À choisir —</option>
+            {ROLES_RATTACHEMENT.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r] ?? r}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {creerOrg ? (
+          <div className="space-y-2 rounded-md border border-border bg-white p-3">
+            <input
+              type="text"
+              value={nouvelleOrgNom}
+              onChange={(e) => setNouvelleOrgNom(e.target.value)}
+              placeholder="Raison sociale"
+              aria-label="Raison sociale"
+              className="w-full h-9 px-2 rounded-md border border-border text-sm"
+            />
+            <select
+              value={nouvelleOrgForme}
+              onChange={(e) => setNouvelleOrgForme(e.target.value)}
+              aria-label="Forme juridique"
+              className="w-full h-9 px-2 rounded-md border border-border bg-white text-sm"
+            >
+              {FORMES_JURIDIQUES.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={attaching || !roleRattachement || !nouvelleOrgNom.trim()}
+                onClick={creerPuisRattacher}
+                className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-50"
+              >
+                Créer et rattacher
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreerOrg(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Choisir une entreprise existante
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={orgQuery}
+                onChange={(e) => setOrgQuery(e.target.value)}
+                placeholder="Rechercher une entreprise…"
+                aria-label="Rechercher une entreprise"
+                className="w-full h-9 pl-9 pr-3 rounded-md border border-border bg-white text-sm"
+              />
+            </div>
+            <ul className="max-h-52 overflow-auto divide-y divide-border rounded-md border border-border bg-white">
+              {orgResults.map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    disabled={attaching}
+                    onClick={() => rattacher(o)}
+                    className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-primary-50/50 disabled:opacity-50"
+                  >
+                    <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium truncate">{o.legalName}</span>
+                    <Badge variant="muted" className="ml-auto">
+                      {o.legalForm}
+                    </Badge>
+                  </button>
+                </li>
+              ))}
+              {orgResults.length === 0 && (
+                <li className="p-3 text-center text-xs text-muted-foreground">
+                  Aucune entreprise trouvée.
+                </li>
+              )}
+            </ul>
+            <button
+              type="button"
+              onClick={() => {
+                setCreerOrg(true);
+                setNouvelleOrgNom(orgQuery);
+              }}
+              className="text-xs text-primary hover:underline"
+            >
+              + Créer une entreprise
+            </button>
+          </>
+        )}
+        {!roleRattachement && (
+          <p className="text-xs text-amber-700">
+            Choisis d&apos;abord le rôle : il détermine qui paye (un salarié n&apos;est
+            pas un auto-entrepreneur).
+          </p>
+        )}
       </div>
     );
   }
