@@ -237,6 +237,17 @@ export async function createTrainingProduct(input: {
   trainerProfile?: string | null;
   accessibility?: string | null;
   accessConditions?: string | null;
+  /**
+   * Marque le produit comme BROUILLON IA (BUG-P0-02) : le badge de la fiche
+   * réclame une validation humaine et la génération de conventions reste
+   * bloquée jusque-là.
+   *
+   * Posé par les chemins où PERSONNE n'a relu le contenu au moment de la
+   * création — typiquement le programme monté depuis un compte rendu de
+   * rendez-vous. Le wizard, lui, affiche le programme dans le formulaire avant
+   * enregistrement : ce qui y est créé a été relu.
+   */
+  aiDrafted?: boolean;
 }): Promise<{ ok: boolean; productId?: string; code?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -280,6 +291,7 @@ export async function createTrainingProduct(input: {
       vatRate: new Prisma.Decimal(0),
       version: 1,
       isActive: true,
+      aiDraftedAt: input.aiDrafted ? new Date() : null,
     },
   });
 
