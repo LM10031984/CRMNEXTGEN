@@ -159,10 +159,12 @@ Plans:
   6. La migration est additive et ne crée **aucune** ligne rétroactive : les 81 sessions existantes gardent ce qu'elles ont
   7. Le forfait est **ferme** : une entreprise qui annonce 4 salariés et en envoie 3 doit toujours le forfait entier (place réservée, formateur mobilisé). La convention d'entreprise **porte cette clause par écrit** — sans elle, un désistement devient un litige et une réserve d'audit sur l'information préalable
   8. Une entreprise sans montant saisi **bloque** la génération de sa convention — un blocage dur, pas un avertissement contournable, sinon la convention à zéro euro revient par le chemin public
-**Plans**: 0 plans
-
+**Plans**: 4 plans
 Plans:
-- [ ] TBD (run /gsd:plan-phase 23 to break down)
+- [ ] 23-01-PLAN.md — Modèle SessionPricing + cascade par payeur (index partiel NULL, FK RESTRICT) — PRIX-01 [Wave 1]
+- [ ] 23-02-PLAN.md — Quotes-parts exactes + verrou collectif du forfait — PRIX-02 [Wave 2]
+- [ ] 23-03-PLAN.md — Convention et facture portant le forfait + règle prix_manquants unifiée — PRIX-02 [Wave 2, APRÈS 23-02]
+- [ ] 23-04-PLAN.md — Panneau Tarifs sur la fiche session — PRIX-01/PRIX-02 [Wave 3]
 
 **Hors périmètre — explicite** : aucun backfill, aucune reconstruction, aucun arbitrage sur les sessions passées. Les 5 couples hétérogènes relevés le 28/08 (SES-0106 OPTIMMO forfait 4 500 déjà réparti, SES-0086 RIVIERA, SES-0079 et SES-0050 NEYRAT, SES-0040 Habitat Concept) servent de **jeu de test**, rien de plus. `session.pricePerLearner` est **conservé** comme repli — sa suppression est un chantier séparé.
 
@@ -184,4 +186,4 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22 →
 | 20. Worker 3ᵉ hôte | v6 | 5/6 | In Progress (obs. 24 j ✓, vérif 3/4 — reste : exécuter 20-06 gap OCR) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
 | 22. Bascule prod + RGPD | v6 | 9/11 | In Progress|  |
-| 23. Tarification par payeur | v6 | 0/0 | Not planned |  |
+| 23. Tarification par payeur | v6 | 0/4 | Planned     |  |
