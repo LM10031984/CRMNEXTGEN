@@ -2,6 +2,10 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+// Import de TYPE seulement (effacé à la compilation) : les mocks ci-dessous
+// restent maîtres du module réellement chargé.
+import type { CommanditaireGroupe } from '../convention-entreprise-panel';
+import type { BlocageDocEntreprise } from '@/lib/docs/blocages-docs-entreprise';
 
 /**
  * Garde-fous AVANT génération — « avoir des garde-fous qui me le disent avant
@@ -23,7 +27,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 afterEach(() => cleanup());
 
-const GROUPE_OK = {
+const GROUPE_OK: CommanditaireGroupe = {
   sponsorOrgId: 'org-assalit',
   sponsorName: 'ASSALIT SYNDIC',
   participantCount: 8,
@@ -34,23 +38,23 @@ const GROUPE_OK = {
   blocages: [],
 };
 
-const MANQUE_REPRESENTANT = {
-  key: 'representant_manquant' as const,
+const MANQUE_REPRESENTANT: BlocageDocEntreprise = {
+  key: 'representant_manquant',
   label: 'Aucun représentant légal pour « ASSALIT SYNDIC »',
   hint: 'Renseignez le représentant sur la fiche entreprise.',
   href: '/app/organisations/org-assalit',
-  documents: ['convention', 'analyse'] as ('convention' | 'analyse')[],
+  documents: ['convention', 'analyse'],
 };
 
-const MANQUE_PRIX = {
-  key: 'prix_manquants' as const,
+const MANQUE_PRIX: BlocageDocEntreprise = {
+  key: 'prix_manquants',
   label: 'Tarif non renseigné : Alice MARTIN',
   hint: 'Le montant de la convention est la somme des tarifs.',
   href: '#section-participants',
-  documents: ['convention'] as ('convention' | 'analyse')[],
+  documents: ['convention'],
 };
 
-async function rendre(groupe: typeof GROUPE_OK) {
+async function rendre(groupe: CommanditaireGroupe) {
   const { ConventionEntreprisePanel } = await import('../convention-entreprise-panel');
   return render(<ConventionEntreprisePanel sessionId="ses-1" groupes={[groupe]} />);
 }
