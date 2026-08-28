@@ -54,6 +54,8 @@ import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
+import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
+import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
@@ -559,6 +561,28 @@ export default async function SessionDetailPage({
   const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
   const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
   const caTotalHT = (pricePerLearnerNum ?? 0) * session.participants.length;
+
+  // ── Inscriptions publiques par session (spec 2026-08-28) ──────────────
+  // Demandes reçues via le lien public et pas encore traitées : elles
+  // occupent une place au même titre qu'un inscrit (le formulaire refuse
+  // au-delà de capacityMax).
+  const pendingEnrollmentCount = await prisma.preEnrollment.count({
+    where: {
+      intendedSessionId: session.id,
+      status: { in: ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'] },
+    },
+  });
+  const enrollmentLinkState = publicLinkState({
+    publicToken: session.publicToken,
+    publicFormClosedAt: session.publicFormClosedAt,
+    sessionStatus: session.status,
+    capacityMax: session.capacityMax,
+    participantCount: session.participants.length,
+    pendingRequestCount: pendingEnrollmentCount,
+  });
+  const enrollmentUrl = session.publicToken
+    ? buildPublicEnrollmentUrl(session.publicToken)
+    : null;
 
   const timelineInvoiceRows = timelineInvoices.map((inv) => ({
     id: inv.id,
@@ -1069,6 +1093,15 @@ export default async function SessionDetailPage({
         defaultTab={coerceTab(sp.tab)}
         session={
           <div className="space-y-6 pt-4">
+            <SessionEnrollmentBlock
+              sessionId={session.id}
+              etat={enrollmentLinkState}
+              url={enrollmentUrl}
+              participantCount={session.participants.length}
+              pendingCount={pendingEnrollmentCount}
+              capacityMax={session.capacityMax}
+              canWrite={canWrite}
+            />
             {/* Status select + dates editor — gardés sous le hero pour édition
                 rapide sans ouvrir la modale Modifier. Discrets.
                 Anchor #section-status : cible du CTA sessionStage "Marquer comme
