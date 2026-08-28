@@ -58,6 +58,14 @@ export interface LlmResult {
   /** Présent uniquement pour OpenRouter (Ollama local = pas de billing). */
   usageTokensIn?: number;
   usageTokensOut?: number;
+  /**
+   * Pourquoi le modèle s'est arrêté. `'length'` = réponse COUPÉE par
+   * `maxTokens` : le JSON est alors tronqué et impossible à parser. Sans cette
+   * information, l'appelant conclut à tort à un modèle capricieux et envoie
+   * l'utilisateur « ajuster les paramètres » là où il fallait de la place
+   * (constat du 28/08 sur la génération de programme).
+   */
+  finishReason?: string;
 }
 
 export function resolveModel(tier: LlmTier): string {
@@ -150,7 +158,7 @@ async function callOpenRouter(opts: OpenRouterCallParams): Promise<LlmResult> {
   }
 
   const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
     error?: { message?: string };
   };
@@ -170,6 +178,7 @@ async function callOpenRouter(opts: OpenRouterCallParams): Promise<LlmResult> {
     durationMs: Date.now() - opts.start,
     usageTokensIn: json.usage?.prompt_tokens,
     usageTokensOut: json.usage?.completion_tokens,
+    finishReason: json.choices?.[0]?.finish_reason,
   };
 }
 

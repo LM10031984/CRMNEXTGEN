@@ -50,6 +50,25 @@ const LONGUEUR_MINIMALE = 200;
 /** Plafond par défaut : le contexte envoyé à l'IA se paie à chaque génération. */
 const MAX_PAR_DEFAUT = 2;
 
+/**
+ * Longueur maximale d'un programme injecté en référence.
+ *
+ * Le style s'apprend sur un extrait : injecter 8 000 caractères par exemple
+ * allongeait le contexte ET poussait le modèle à produire une réponse aussi
+ * longue, coupée par `maxTokens` — le JSON revenait tronqué (constat du 28/08,
+ * « le modèle n'a pas retourné un JSON valide »).
+ */
+const EXTRAIT_MAX = 2500;
+
+function extrait(programMd: string): string {
+  const t = programMd.trim();
+  if (t.length <= EXTRAIT_MAX) return t;
+  // Coupe à la dernière fin de ligne pour ne pas laisser un titre à moitié.
+  const tronque = t.slice(0, EXTRAIT_MAX);
+  const coupe = tronque.lastIndexOf('\n');
+  return `${coupe > 500 ? tronque.slice(0, coupe) : tronque}\n\n[…] (extrait — la suite suit la même structure)`;
+}
+
 function normaliser(s: string | null | undefined): string {
   return (s ?? '')
     .normalize('NFD')
@@ -107,7 +126,7 @@ export function renderProgrammesReference(programmes: ReadonlyArray<ProgrammeCan
     (p, i) => `═══ RÉFÉRENCE ${i + 1} — « ${p.title} » (${p.durationHours} h${
       p.theme ? `, ${p.theme}` : ''
     }) ═══
-${(p.programMd ?? '').trim()}`,
+${extrait(p.programMd ?? '')}`,
   );
   return `PROGRAMMES DE RÉFÉRENCE DE L'ORGANISME (conformes, déjà audités) :
 

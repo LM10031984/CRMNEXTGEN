@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { selectionnerProgrammesReference } from '../programmes-reference';
+import {
+  selectionnerProgrammesReference,
+  renderProgrammesReference,
+} from '../programmes-reference';
 
 /**
  * Programmes de référence montrés à l'IA — demande de Laurent (28/08) :
@@ -115,5 +118,34 @@ describe('selectionnerProgrammesReference', () => {
       1,
     );
     expect(r.map((p) => p.id)).toEqual(['juste']);
+  });
+});
+
+/**
+ * 28/08 — « le modèle n'a pas retourné un JSON valide » : les références
+ * injectées entières allongeaient le contexte ET poussaient le modèle à
+ * produire une réponse aussi longue, coupée par `maxTokens`. Le style
+ * s'apprend sur un extrait.
+ *
+ * Test de puissance : retirer la troncature fait virer ROUGE « borne la taille
+ * d'un programme injecté ».
+ */
+describe('renderProgrammesReference', () => {
+  it('borne la taille d’un programme injecté', () => {
+    const long = prog({ programMd: '### Jour 1\n'.repeat(2000) });
+    const rendu = renderProgrammesReference([long]);
+    expect(rendu.length).toBeLessThan(4000);
+    expect(rendu).toContain('extrait');
+  });
+
+  it('rappelle avec l’exemple que seule la FORME se reprend', () => {
+    const rendu = renderProgrammesReference([prog()]);
+    // La consigne accompagne l'exemple, elle n'est pas reléguée en tête de
+    // prompt : c'est ce qui tient quand le modèle a l'exemple sous les yeux.
+    expect(rendu).toMatch(/INTERDIT d['’]en reprendre le CONTENU/);
+  });
+
+  it('ne rend rien quand aucun programme n’est retenu', () => {
+    expect(renderProgrammesReference([])).toBe('');
   });
 });
