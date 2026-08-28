@@ -157,12 +157,16 @@ Plans:
   4. Le mode « personne morale » est déduit de `payer-rule.ts` et d'aucune autre définition — type de convention et mode de tarif ne peuvent pas diverger
   5. Sans ligne `SessionPricing`, la cascade retombe sur `session.pricePerLearner` puis le produit, **jamais sur 0**
   6. La migration est additive et ne crée **aucune** ligne rétroactive : les 81 sessions existantes gardent ce qu'elles ont
+  7. Le forfait est **ferme** : une entreprise qui annonce 4 salariés et en envoie 3 doit toujours le forfait entier (place réservée, formateur mobilisé). La convention d'entreprise **porte cette clause par écrit** — sans elle, un désistement devient un litige et une réserve d'audit sur l'information préalable
+  8. Une entreprise sans montant saisi **bloque** la génération de sa convention — un blocage dur, pas un avertissement contournable, sinon la convention à zéro euro revient par le chemin public
 **Plans**: 0 plans
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 23 to break down)
 
 **Hors périmètre — explicite** : aucun backfill, aucune reconstruction, aucun arbitrage sur les sessions passées. Les 5 couples hétérogènes relevés le 28/08 (SES-0106 OPTIMMO forfait 4 500 déjà réparti, SES-0086 RIVIERA, SES-0079 et SES-0050 NEYRAT, SES-0040 Habitat Concept) servent de **jeu de test**, rien de plus. `session.pricePerLearner` est **conservé** comme repli — sa suppression est un chantier séparé.
+
+⚠️ **Les cas de test sont des fixtures EN DUR** (SES-0106 : 4 500 ÷ 11 = 409,09 × 10 + 409,10). Aucun test, aucun script de vérification ne lit une session réelle en base pour « valider » la répartition. C'est le premier chemin par lequel le backfill reviendrait par la fenêtre, sous couvert de vérification.
 
 **Research flags** (à reprendre au plan) : [VERIFY] `Invoice.participantIds` couvre bien la facture groupée par payeur · réutilisation obligatoire de `classifyParticipantPrice` pour les verrous · `resolveDefaultParticipantPrice` reste la source unique appelée par les trois chemins de création d'inscrit (E-2, quick 260828-k3p) · migration additive + `migrate deploy` jamais `db push` vers le cloud.
 
