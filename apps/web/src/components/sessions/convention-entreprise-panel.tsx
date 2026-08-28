@@ -2,9 +2,22 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Building2, ClipboardList, FileSignature, FileText, Loader2, Check } from 'lucide-react';
+import {
+  AlertTriangle,
+  Building2,
+  ClipboardList,
+  FileSignature,
+  FileText,
+  Loader2,
+  Check,
+} from 'lucide-react';
 import { generateConventionEntreprise } from '@/server/actions/convention-generator';
 import { generateAnalyseBesoinEntreprise } from '@/server/actions/analyse-besoin-entreprise';
+import { updateOrganization } from '@/server/actions/crud-edits';
+import {
+  blocagesPourDocument,
+  type BlocageDocEntreprise,
+} from '@/lib/docs/blocages-docs-entreprise';
 
 /**
  * Quick 260817-mm0 — « Convention entreprise » sur la fiche session.
@@ -34,6 +47,15 @@ export interface CommanditaireGroupe {
    * qui commande et qui paye, jamais celui d'un salarié pris isolément.
    */
   analyseAssetId?: string | null;
+  /** Représentant légal connu — vide, il bloque les deux documents. */
+  representant?: string | null;
+  /**
+   * Ce qui manque AVANT de générer (28/08). Calculé côté serveur par
+   * `blocagesDocsEntreprise`, qui énonce les mêmes règles que les cœurs :
+   * on l'apprenait jusqu'ici par un message d'erreur, après avoir cliqué et
+   * attendu — et, pour l'analyse, après un appel IA payé pour rien.
+   */
+  blocages?: BlocageDocEntreprise[];
   /**
    * Document de la convention groupe déjà générée, s'il existe.
    *
@@ -54,6 +76,26 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
   const [pending, startTransition] = useTransition();
   const [analysePendingId, setAnalysePendingId] = useState<string | null>(null);
   const [analysePending, startAnalyse] = useTransition();
+  // Saisie express du représentant, là où son absence bloque : pas d'aller-retour
+  // vers la fiche entreprise pour un seul champ.
+  const [saisieRepId, setSaisieRepId] = useState<string | null>(null);
+  const [repValue, setRepValue] = useState('');
+  const [repBusy, setRepBusy] = useState(false);
+
+  async function enregistrerRepresentant(g: CommanditaireGroupe) {
+    const nom = repValue.trim();
+    if (!nom) return;
+    setRepBusy(true);
+    const r = await updateOrganization({ organizationId: g.sponsorOrgId, representative: nom });
+    setRepBusy(false);
+    if (r.ok) {
+      setSaisieRepId(null);
+      setRepValue('');
+      toast.success(`Représentant de ${g.sponsorName} enregistré : ${nom}`);
+    } else {
+      toast.error(r.error ?? 'Enregistrement impossible');
+    }
+  }
 
   // Session 100 % auto-payeurs : rien à proposer ici.
   if (groupes.length === 0) return null;
@@ -111,8 +153,13 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
         {groupes.map((g) => {
           const busy = pending && pendingId === g.sponsorOrgId;
           const analyseBusy = analysePending && analysePendingId === g.sponsorOrgId;
+          const blocages = g.blocages ?? [];
+          const blocConvention = blocagesPourDocument(blocages, 'convention');
+          const blocAnalyse = blocagesPourDocument(blocages, 'analyse');
+          const manqueRepresentant = blocages.some((b) => b.key === 'representant_manquant');
           return (
-            <li key={g.sponsorOrgId} className="px-5 py-3 flex items-center justify-between gap-3">
+            <li key={g.sponsorOrgId} className="px-5 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">{g.sponsorName}</div>
                 <div className="text-xs text-muted-foreground">
@@ -148,8 +195,12 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                 <button
                   type="button"
                   onClick={() => generateAnalyse(g)}
-                  disabled={analysePending}
-                  title="Analyse des besoins au nom de l'entreprise (indicateur 4)"
+                  disabled={analysePending || blocAnalyse.length > 0}
+                  title={
+                    blocAnalyse.length > 0
+                      ? `À compléter d'abord : ${blocAnalyse.map((b) => b.label).join(' · ')}`
+                      : "Analyse des besoins au nom de l'entreprise (indicateur 4)"
+                  }
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {analyseBusy ? (
@@ -166,7 +217,12 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                 <button
                   type="button"
                   onClick={() => generate(g)}
-                  disabled={pending}
+                  disabled={pending || blocConvention.length > 0}
+                  title={
+                    blocConvention.length > 0
+                      ? `À compléter d'abord : ${blocConvention.map((b) => b.label).join(' · ')}`
+                      : undefined
+                  }
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-primary/30 bg-primary/5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {busy ? (
@@ -181,6 +237,72 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                   )}
                 </button>
               </div>
+              </div>
+
+              {blocages.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                    <AlertTriangle className="h-3.5 w-3.5" /> À compléter avant de générer
+                  </div>
+                  <ul className="space-y-1">
+                    {blocages.map((b) => (
+                      <li key={b.key} className="text-xs text-amber-900">
+                        <span className="font-medium">{b.label}</span>{' '}
+                        <span className="text-amber-800/80">{b.hint}</span>{' '}
+                        {b.href && (
+                          <a
+                            href={b.href}
+                            target={b.href.startsWith('#') ? undefined : '_blank'}
+                            rel="noreferrer"
+                            className="text-primary underline underline-offset-2 hover:no-underline"
+                          >
+                            Ouvrir
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {manqueRepresentant &&
+                    (saisieRepId === g.sponsorOrgId ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={repValue}
+                          onChange={(e) => setRepValue(e.target.value)}
+                          placeholder="Prénom NOM du représentant"
+                          aria-label="Représentant légal"
+                          className="h-8 px-2 rounded-md border border-border bg-white text-xs flex-1 min-w-0"
+                        />
+                        <button
+                          type="button"
+                          disabled={repBusy || !repValue.trim()}
+                          onClick={() => enregistrerRepresentant(g)}
+                          className="h-8 px-2.5 rounded-md bg-primary text-white text-xs font-medium disabled:opacity-50"
+                        >
+                          Enregistrer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSaisieRepId(null)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSaisieRepId(g.sponsorOrgId);
+                          setRepValue(g.representant ?? '');
+                        }}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Saisir le représentant ici
+                      </button>
+                    ))}
+                </div>
+              )}
             </li>
           );
         })}

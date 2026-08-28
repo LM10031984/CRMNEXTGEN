@@ -64,6 +64,10 @@ import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import {
+  blocagesDocsEntreprise,
+  type BlocageDocEntreprise,
+} from '@/lib/docs/blocages-docs-entreprise';
+import {
   GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
 } from '@/lib/docs/convention-coverage';
@@ -115,7 +119,20 @@ export default async function SessionDetailPage({
               },
             },
           },
-          sponsorOrg: { select: { id: true, legalName: true, brandName: true, legalForm: true, opcoCode: true } },
+          sponsorOrg: {
+            select: {
+              id: true,
+              legalName: true,
+              brandName: true,
+              legalForm: true,
+              opcoCode: true,
+              // Garde-fous AVANT génération des documents d'entreprise (28/08) :
+              // le représentant signe la convention et porte le recueil du
+              // besoin ; à défaut, le contact principal en tient lieu.
+              representative: true,
+              contacts: { where: { isPrimary: true }, take: 1, select: { id: true } },
+            },
+          },
         },
       },
       trainers: {
@@ -727,6 +744,10 @@ export default async function SessionDetailPage({
         conventionDocId: string | null;
         /** Analyse des besoins d'entreprise (asset de niveau session), si rendue. */
         analyseAssetId: string | null;
+        /** Représentant légal connu, pour la saisie express depuis le panneau. */
+        representant: string | null;
+        /** Ce qui manque AVANT de générer — mêmes règles que les cœurs. */
+        blocages: BlocageDocEntreprise[];
       }
     >();
     for (const p of session.participants) {
@@ -745,9 +766,32 @@ export default async function SessionDetailPage({
           hasConvention: groupConventionByParticipant.has(p.id),
           conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
           analyseAssetId: analyseEntrepriseAssetId,
+          representant: (p.sponsorOrg.representative ?? '').trim() || null,
+          // Rempli plus bas, une fois tous les salariés du groupe connus.
+          blocages: [] as BlocageDocEntreprise[],
         };
       g.participantCount += 1;
       map.set(p.sponsorOrgId, g);
+    }
+    // Ce qui manque AVANT de cliquer (28/08) : mêmes règles que les cœurs, dites
+    // à l'avance. Sans ce pré-contrôle, le manque n'apparaissait qu'après un
+    // aller-retour — et, pour l'analyse, après un appel IA payé pour rien.
+    for (const [orgId, g] of map) {
+      const membres = session.participants.filter((p) => p.sponsorOrgId === orgId);
+      const org = membres[0]!.sponsorOrg;
+      g.blocages = blocagesDocsEntreprise({
+        org: {
+          id: orgId,
+          legalName: org.legalName,
+          representative: org.representative,
+          aContactPrincipal: org.contacts.length > 0,
+        },
+        participants: membres.map((p) => ({
+          nom: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+          priceHT: Number(p.priceHT),
+        })),
+        produitPresent: Boolean(session.product),
+      });
     }
     // Entreprises multi-apprenants d'abord (pattern OPTIMMO), puis par nom.
     return [...map.values()].sort(
