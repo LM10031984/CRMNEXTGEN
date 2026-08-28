@@ -62,14 +62,22 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
   const trainer = ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À renseigner';
 
   // Bloc certification Qualiopi (Laurent 2026-06-16) : « Certifié exact par
-  // [formateur] », « Fait à [lieu EXACT de formation], le [date fin] » + tampon/
+  // [formateur] », « Fait à [ville de formation], le [date fin] » + tampon/
   // signature (signature-pedago = Laurent Marx). Le lieu exact est OBLIGATOIRE :
   // sans lieu, l'émargement n'est pas valide → on signale explicitement.
+  // Il figure en tête du document (bloc « Lieu de formation »), raison sociale
+  // comprise — mention exigée par l'AGEFICE (refus de prise en charge du
+  // 28/08/2026). Cf. `mentionsLieuManquantes` qui bloque la génération du pack
+  // tant que la raison sociale, le code postal ou la ville manquent.
   // Signature du formateur réel de la session (Jean-Guy pour ses sessions),
   // PAS la signature pédago Laurent. + tampon Start Academy.
   const signatureDataUrl = loadTrainerSignatureDataUrl(ctx.tenantId, trainer);
   const stampDataUrl = loadStampDataUrl(ctx.tenantId);
-  const lieuFormation = ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
+  // « Fait à … » : la VILLE seule (Laurent 2026-08-28). Le lieu complet —
+  // raison sociale + adresse, exigé par l'AGEFICE — est porté par le bloc
+  // « Lieu » de `renderInfoBox`, pas répété ici.
+  const villeCertif =
+    ctx.sessionLocationCity ?? ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
   const dateCertif = formatDateFr(ctx.sessionEndDate);
 
   const rows = days
@@ -149,7 +157,7 @@ ${renderBrandHeader()}
         Certifié exact par ${escapeHtml(trainer)}, formateur.
       </p>
       <p style="font-size: 10pt; margin: 0;">
-        Fait à <strong>${escapeHtml(lieuFormation)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
+        Fait à <strong>${escapeHtml(villeCertif)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
       </p>
       <div style="display: flex; align-items: flex-end; gap: 14mm; margin-top: 4px;">
         ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="height: 20mm;" />` : ''}

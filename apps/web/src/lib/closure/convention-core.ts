@@ -24,13 +24,16 @@ import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import {
   renderConventionHtml,
+  deriveSiren,
   type ConventionData,
   type ConventionStagiaire,
 } from '@/lib/convention-template';
+import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { groupConventionWhere } from '@/lib/docs/convention-coverage';
+import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
+import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -85,8 +88,13 @@ export async function generateConventionCore(
   // Retourne un SUCCÈS, pas une erreur : le participant EST couvert, et les
   // flux batch ne doivent pas tomber en échec pour autant. Le deleteMany
   // ci-dessus a par ailleurs déjà retiré l'éventuelle individuelle obsolète.
+  //
+  // Quick 260821-md8 : la garde interroge les DEUX formes de stockage. Sur
+  // SES-0107 / SES-0108 la convention de groupe existante est celle des
+  // scripts `_gen-*` (`entityType='session'`) ; une garde limitée à la forme
+  // `organization` la manquait et réémettait une convention nominative.
   const groupConvention = await prisma.document.findFirst({
-    where: groupConventionWhere(tenantId, participant.session.id, participant.sponsorOrgId),
+    where: groupConventionAnyShapeWhere(tenantId, participant.session.id, participant.sponsorOrgId),
     orderBy: { createdAt: 'desc' },
     select: { id: true },
   });
@@ -94,6 +102,33 @@ export async function generateConventionCore(
     return {
       ok: true,
       documentId: groupConvention.id,
+      skipped: true,
+      sessionId: participant.session.id,
+      personId: participant.person.id,
+    };
+  }
+
+  // Ceinture du 28/08 — PREMIÈRE convention d'une entreprise.
+  //
+  // La garde ci-dessus ne joue que si la convention groupe existe déjà. Or
+  // deux chemins appellent encore le cœur individuel sans router par la règle
+  // payeur : `sessions.addParticipant` (auto-génération à l'inscription) et
+  // `closure-pack` (boucle sur les participants). Sur le 1er salarié inscrit
+  // chez une entreprise, aucune convention groupe n'existe encore — et une
+  // nominative était fabriquée, exactement ce que la règle du 12/08 interdit.
+  //
+  // Payeur personne morale ⇒ le cœur individuel ne produit RIEN. Succès
+  // `skipped` (les flux batch ne doivent pas tomber en échec) ; l'émission de
+  // la convention de groupe revient à `routeConventionsByPayerRule`, seul
+  // endroit qui traite les groupes EN SÉRIE — `generateConventionEntrepriseCore`
+  // supprime puis recrée des Documents, deux appels concurrents se
+  // marcheraient dessus.
+  //
+  // Forme juridique absente ⇒ chemin individuel (cf. `isPersonneMoralePayeur`) :
+  // on ne présume pas d'une convention de groupe sur une donnée manquante.
+  if (isPersonneMoralePayeur(participant.sponsorOrg?.legalForm)) {
+    return {
+      ok: true,
       skipped: true,
       sessionId: participant.session.id,
       personId: participant.person.id,
@@ -135,24 +170,11 @@ export async function generateConventionCore(
   // Lieu : "Raison sociale — Nom du lieu, adresse" si dispo, sinon siège OF.
   // legalName ajouté 2026-06-03 (cf demande Laurent : ex "SARL XYZ — Agence
   // Nice Centre, 12 rue X, 06000 Nice").
+  // Quick 260821-md8 : composition déléguée à `formatLieuFormation`, PARTAGÉE
+  // avec le chemin entreprise. La duplication précédente est exactement ce qui
+  // aurait laissé un des deux chemins cassé après correctif.
   const of = await loadOfConfig(tenantId);
-  const locName = participant.session.location
-    ? [
-        (participant.session.location as { legalName?: string | null }).legalName,
-        participant.session.location.name,
-      ]
-        .filter(Boolean)
-        .join(' — ')
-    : null;
-  const locAddress = participant.session.location?.address as Record<string, string> | string | null;
-  let lieu: string;
-  if (typeof locAddress === 'string') lieu = [locName, locAddress].filter(Boolean).join(', ') || locAddress;
-  else if (locAddress && typeof locAddress === 'object') {
-    const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = [locName, parts.join(', ')].filter(Boolean).join(', ') || (locName ?? of.addressFull);
-  } else {
-    lieu = locName ?? of.addressFull;
-  }
+  const lieu = formatLieuFormation(participant.session.location, of.addressFull);
 
   // RCS ville : heuristique depuis le code postal de l'org si possible
   const orgAddr = (participant.sponsorOrg.address as Record<string, string> | null) ?? null;
@@ -172,6 +194,9 @@ export async function generateConventionCore(
   const data: ConventionData = {
     beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
     beneficiaireSiret: participant.sponsorOrg.siret,
+    // Ligne RCS = SIREN (9 chiffres), pas le SIRET. La cascade de représentant
+    // ci-dessus reste INCHANGÉE : sur le chemin auto-payeur, l'apprenant signe.
+    beneficiaireSiren: deriveSiren(participant.sponsorOrg.siren, participant.sponsorOrg.siret),
     beneficiaireRcsVille: rcsVille,
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
@@ -262,6 +287,16 @@ export async function generateConventionEntrepriseCore(
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; count?: number }> {
   const org = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId },
+    include: {
+      // Repli du représentant légal (quick 260821-md8) : le contact principal
+      // le plus ancien, un seul. La requête reste scopée tenant via l'org.
+      contacts: {
+        where: { isPrimary: true },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+        select: { firstName: true, lastName: true },
+      },
+    },
   });
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
@@ -316,6 +351,30 @@ export async function generateConventionEntrepriseCore(
   const productPrice = Number(session.product.priceHT);
   const prixGlobalHT = participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
 
+  // Représentant légal — quick 260821-md8. Cascade : champ explicite de la
+  // fiche entreprise, puis contact principal. À défaut, on REFUSE.
+  //
+  // Le défaut exact constaté le 21/08 sur la convention EXPERTA envoyée au
+  // portail OPCO EP : « Représentée par , ». Une convention sans signataire
+  // n'est pas opposable — elle ne doit pas pouvoir être produite. Le refus
+  // tombe ICI, à côté de la garde des prix manquants, donc AVANT tout rendu
+  // PDF et toute écriture.
+  const contactPrincipal = org.contacts?.[0];
+  const representantNom =
+    org.representative?.trim() ||
+    (contactPrincipal
+      ? `${contactPrincipal.firstName} ${contactPrincipal.lastName.toUpperCase()}`.trim()
+      : '');
+  if (!representantNom) {
+    return {
+      ok: false,
+      error:
+        `Représentant légal inconnu pour « ${org.legalName} » : renseignez le représentant ` +
+        `sur la fiche entreprise (/app/organisations/${org.id}) ou désignez un contact ` +
+        `principal. Une convention sans signataire n'est pas opposable.`,
+    };
+  }
+
   // Annexe nominative : nom + prénom UNIQUEMENT (consigne Laurent — aucune CSP
   // ni poste occupé sur les documents). `ConventionStagiaire` ne porte
   // volontairement pas ces champs.
@@ -327,24 +386,8 @@ export async function generateConventionEntrepriseCore(
 
   const of = await loadOfConfig(tenantId);
 
-  // Lieu : même composition que le chemin individuel.
-  const locName = session.location
-    ? [
-        (session.location as { legalName?: string | null }).legalName,
-        session.location.name,
-      ]
-        .filter(Boolean)
-        .join(' — ')
-    : null;
-  const locAddress = session.location?.address as Record<string, string> | string | null;
-  let lieu: string;
-  if (typeof locAddress === 'string') lieu = [locName, locAddress].filter(Boolean).join(', ') || locAddress;
-  else if (locAddress && typeof locAddress === 'object') {
-    const parts = [locAddress.street, locAddress.postalCode, locAddress.city].filter(Boolean);
-    lieu = [locName, parts.join(', ')].filter(Boolean).join(', ') || (locName ?? of.addressFull);
-  } else {
-    lieu = locName ?? of.addressFull;
-  }
+  // Lieu : MÊME helper que le chemin individuel (quick 260821-md8).
+  const lieu = formatLieuFormation(session.location, of.addressFull);
 
   const orgAddr = (org.address as Record<string, string> | null) ?? null;
 
@@ -356,11 +399,12 @@ export async function generateConventionEntrepriseCore(
   const data: ConventionData = {
     beneficiaireRaisonSociale: org.legalName,
     beneficiaireSiret: org.siret,
+    // Ligne RCS = SIREN (9 chiffres) ; le SIRET a désormais sa propre ligne.
+    beneficiaireSiren: deriveSiren(org.siren, org.siret),
     beneficiaireRcsVille: orgAddr?.city ?? null,
-    // Le chef d'entreprise signe pour le groupe. Sans représentant renseigné,
-    // on laisse un emplacement à compléter à la main plutôt que d'inscrire à
-    // tort le nom d'un salarié.
-    beneficiaireRepresentantNom: org.representative?.trim() || '',
+    // Le chef d'entreprise signe pour le groupe — résolu et GARANTI non vide
+    // par la garde ci-dessus.
+    beneficiaireRepresentantNom: representantNom,
     stagiaires,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
@@ -402,10 +446,38 @@ export async function generateConventionEntrepriseCore(
 
   const participantIds = participants.map((p) => p.id);
 
+  // Quick 260821-md8 — convergence des DEUX formes de stockage.
+  //
+  // La forme `session` (scripts `_gen-*`) ne porte PAS de commanditaire : la
+  // supprimer serait ambigu sur une session multi-entreprises, où elle peut
+  // couvrir une AUTRE entreprise que celle qu'on régénère. On ne la remplace
+  // donc QUE si la session n'a qu'un seul commanditaire personne morale — le
+  // cas ASSALIT / EXPERTA / OPTIMMO.
+  //
+  // Les auto-payeurs présents sur la session ne comptent pas : ils relèvent du
+  // contrat individuel et n'ont aucune convention de groupe à revendiquer.
+  const autresCommanditaires = await prisma.sessionParticipant.findMany({
+    where: { sessionId, session: { tenantId }, sponsorOrgId: { not: sponsorOrgId } },
+    select: { sponsorOrgId: true, sponsorOrg: { select: { legalForm: true } } },
+    distinct: ['sponsorOrgId'],
+  });
+  const monoCommanditaire = !autresCommanditaires.some((p) =>
+    isPersonneMoralePayeur(p.sponsorOrg?.legalForm),
+  );
+  if (!monoCommanditaire) {
+    console.warn(
+      '[convention-entreprise] doc groupe forme "session" conservé (session multi-commanditaires) — à arbitrer :',
+      sessionId,
+    );
+  }
+
   // Idempotence + règle « jamais une convention par stagiaire » : on remplace
   // l'ancienne convention groupe ET on retire les conventions individuelles
   // des participants désormais couverts par celle-ci.
-  const [, , document] = await prisma.$transaction([
+  //
+  // Ce remplacement ne se déclenche que sur une régénération EXPLICITE : aucune
+  // migration de fond, aucun balayage automatique de la base.
+  const operations = [
     prisma.document.deleteMany({
       where: {
         tenantId,
@@ -418,6 +490,20 @@ export async function generateConventionEntrepriseCore(
     prisma.document.deleteMany({
       where: { tenantId, type: 'CONVENTION', participantId: { in: participantIds } },
     }),
+    ...(monoCommanditaire
+      ? [
+          prisma.document.deleteMany({
+            where: {
+              tenantId,
+              type: 'CONVENTION',
+              entityType: 'session',
+              entityId: sessionId,
+              sessionId,
+              participantId: null,
+            },
+          }),
+        ]
+      : []),
     prisma.document.create({
       data: {
         tenantId,
@@ -430,7 +516,10 @@ export async function generateConventionEntrepriseCore(
         hashSha256: hash,
       },
     }),
-  ]);
+  ];
+  // Le Document créé est TOUJOURS la dernière opération — ne pas indexer en dur.
+  const results = await prisma.$transaction(operations);
+  const document = results[results.length - 1] as { id: string };
 
   return { ok: true, documentId: document.id, sessionId, count: participants.length };
 }

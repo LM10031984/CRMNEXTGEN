@@ -12,11 +12,14 @@
  *    si la session est incomplète, avec message clair listant les blockers)
  */
 
+import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
+
 export type SessionCompletenessBlockerKey =
   | 'no_primary_trainer'
   | 'no_price'
   | 'no_dates'
   | 'no_location'
+  | 'location_incomplete'
   | 'no_program'
   | 'no_participants'
   | 'product_ai_unreviewed';
@@ -51,6 +54,13 @@ export interface SessionCompletenessInput {
   endDate: Date | null;
   pricePerLearner: { toNumber(): number } | number | null;
   locationId: string | null;
+  /**
+   * Le lieu lui-même, pour vérifier qu'il porte les mentions exigées par
+   * l'AGEFICE sur la feuille d'émargement (raison sociale, CP, ville).
+   * Optionnel : les appelants qui ne le chargent pas ne déclenchent pas le
+   * blocker `location_incomplete` (le blocker `no_location` reste actif).
+   */
+  location?: { legalName?: string | null; address?: unknown } | null;
   modality: string | null;
   trainers: { isPrimary: boolean }[];
   product: { programMd: string | null; aiDraftedAt?: Date | null } | null;
@@ -128,6 +138,29 @@ export function getSessionCompleteness(
     });
   }
 
+  // AGEFICE 2026-08-28 — un lieu rattaché ne suffit pas : sans raison sociale,
+  // sans CP ou sans ville, la feuille d'émargement est refusée en prise en
+  // charge (« Le document Feuille(s) d'émargement est incomplet : raison
+  // sociale du lieu de formation »). On bloque donc AVANT de produire le pack
+  // plutôt que de le découvrir au retour du financeur.
+  //
+  // Les lieux créés avant cette date ont presque tous `legalName` vide : le
+  // blocker se déclenchera à la première génération et se corrige en une
+  // saisie sur la fiche session (décision Laurent : pas de reprise en masse du
+  // passé, on complète à la demande).
+  if (!isDistanciel && s.locationId && s.location !== undefined) {
+    const manquantes = mentionsLieuManquantes(s.location);
+    if (manquantes.length > 0) {
+      blockers.push({
+        key: 'location_incomplete',
+        label: `Lieu de formation incomplet (${manquantes.join(', ')})`,
+        hint:
+          'L’AGEFICE exige la raison sociale du lieu, son code postal et sa ville sur la feuille d’émargement',
+        fix: { href: '#section-lieu', label: 'Compléter le lieu' },
+      });
+    }
+  }
+
   if (!s.product?.programMd || s.product.programMd.trim().length < 20) {
     blockers.push({
       key: 'no_program',
@@ -163,9 +196,10 @@ export function getSessionCompleteness(
     });
   }
 
-  // 7 critères = 6 originaux + product_ai_unreviewed (BUG-P0-02).
+  // 8 critères = 6 originaux + product_ai_unreviewed (BUG-P0-02)
+  // + location_incomplete (AGEFICE 2026-08-28).
   // Le ratio reste cohérent : si tous les critères sont OK, ratio = 1.
-  const totalCriteria = 7;
+  const totalCriteria = 8;
   const okCount = totalCriteria - blockers.length;
   const ratio = okCount / totalCriteria;
 

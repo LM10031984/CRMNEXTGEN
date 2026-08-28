@@ -24,6 +24,11 @@ import { renderClosureDoc } from './renderer';
 import type { ClosureContext } from './shared-template';
 import type { ClosureJobPayload } from './types';
 import { loadOfConfig } from '@/lib/of-config';
+import {
+  fallbackLieuOf,
+  formatLieuFormation,
+  villeLieuFormation,
+} from '@/lib/locations/format-lieu';
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -107,9 +112,6 @@ export async function processClosureJobPayload(
 
     const session = participant.session;
     const product = session.product;
-    const sessionLocation = session.location
-      ? `${session.location.name}${(session.location.address as { city?: string } | null)?.city ? ` — ${(session.location.address as { city?: string }).city}` : ''}`
-      : null;
 
     // Profil pro du stagiaire à partir du LegalLink primaire (si dispo)
     const primaryLink = participant.person.legalLinks[0] ?? null;
@@ -122,6 +124,17 @@ export async function processClosureJobPayload(
     // Propagé via ctx.of à tous les templates closure pour cohérence multi-tenant.
     const of = await loadOfConfig(payload.tenantId);
 
+    // Lieu — `formatLieuFormation`, SOURCE UNIQUE partagée avec la convention :
+    // « {raison sociale} — {nom}, {rue}, {CP} {ville} ».
+    //
+    // Refus AGEFICE 2026-08-28 (« Feuille(s) d'émargement incomplet : raison
+    // sociale du lieu de formation ») : ce worker — le chemin de génération du
+    // pack en production — composait « {nom} — {ville} », sans jamais lire
+    // `Location.legalName`. D'où des émargements du type « Nice — Akorimmo —
+    // Nice », muets sur la raison sociale.
+    const sessionLocation = formatLieuFormation(session.location, fallbackLieuOf(of));
+    const sessionLocationCity = villeLieuFormation(session.location, of.addressVille);
+
     const ctx: ClosureContext = {
       apprenantPrenom: participant.person.firstName,
       apprenantNom: participant.person.lastName,
@@ -132,6 +145,7 @@ export async function processClosureJobPayload(
       sessionStartDate: session.startDate,
       sessionEndDate: session.endDate,
       sessionLocation,
+      sessionLocationCity,
       // Seul le formateur principal signe les docs Qualiopi (fallback : 1er
       // par ordre stable si aucun marqué primary).
       sessionTrainers: (() => {

@@ -54,6 +54,9 @@ import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
+import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
+import { SessionEnrollmentRequests } from '@/components/sessions/session-enrollment-requests';
+import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
@@ -61,7 +64,7 @@ import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import {
-  GROUP_CONVENTION_ENTITY_TYPE,
+  GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
 } from '@/lib/docs/convention-coverage';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
@@ -137,13 +140,30 @@ export default async function SessionDetailPage({
               // tout le groupe d'un commanditaire, donc participantId=null.
               // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
               // afficherait « convention manquante » alors qu'elle existe.
-              { entityType: GROUP_CONVENTION_ENTITY_TYPE },
+              // Quick 260821-md8 : les DEUX formes de stockage sont chargées —
+              // `organization` (appli) et `session` (scripts `_gen-*`, présente
+              // en production sur SES-0107 / SES-0108). Bornée au type
+              // CONVENTION : les autres documents de niveau session (check-list,
+              // grille, satisfaction) sont chargés par `sessionSharedDocs`.
+              { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
             ],
           },
           select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
         }),
         prisma.pedagogicalAsset.findMany({
-          where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds }, pdfUrl: { not: null } },
+          where: {
+            tenantId: user.tenantId,
+            sessionId: session.id,
+            pdfUrl: { not: null },
+            OR: [
+              { participantId: { in: sessionParticipantIds } },
+              // Analyse des besoins d'ENTREPRISE (28/08) : UN asset couvre tout
+              // le groupe, donc `participantId = null`. Sans ce OR, les 8
+              // salariés d'ASSALIT affichent « analyse manquante » alors que le
+              // document exigé — celui de la structure — existe.
+              { participantId: null },
+            ],
+          },
           select: { id: true, kind: true, participantId: true },
         }),
         prisma.invoice.findMany({
@@ -215,10 +235,11 @@ export default async function SessionDetailPage({
   // salariées d'OPTIMMO alors que la convention existe.
   // Résolution déléguée au helper partagé (revue Codex PR #13) : opco-submission
   // et le statut de préparation utilisent exactement la même règle.
-  for (const [participantId, docId] of expandGroupConventions(
+  const groupConventionByParticipant = expandGroupConventions(
     sessionDocs,
     session.participants.map((p) => ({ id: p.id, sponsorOrgId: p.sponsorOrg.id })),
-  )) {
+  );
+  for (const [participantId, docId] of groupConventionByParticipant) {
     const m = docsByParticipant.get(participantId) ?? new Map();
     // Ne jamais écraser une convention individuelle déjà en place.
     if (!m.has('CONVENTION')) m.set('CONVENTION', docId);
@@ -229,6 +250,20 @@ export default async function SessionDetailPage({
     const m = assetsByParticipant.get(a.participantId) ?? new Map();
     m.set(a.kind, a.id);
     assetsByParticipant.set(a.participantId, m);
+  }
+  // Analyse des besoins d'ENTREPRISE : asset de niveau session, reporté sur
+  // chaque salarié dont le payeur est une personne morale — même mécanique que
+  // la convention de groupe. Les auto-payeurs gardent leur analyse nominative.
+  const analyseEntrepriseAssetId =
+    sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
+  if (analyseEntrepriseAssetId) {
+    for (const p of session.participants) {
+      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      const m = assetsByParticipant.get(p.id) ?? new Map();
+      // Ne jamais écraser une analyse nominative déjà rendue.
+      if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
+      assetsByParticipant.set(p.id, m);
+    }
   }
 
   // Indexe les factures par participant. Une facture peut couvrir plusieurs
@@ -449,6 +484,7 @@ export default async function SessionDetailPage({
     endDate: session.endDate,
     pricePerLearner: session.pricePerLearner,
     locationId: session.locationId,
+    location: session.location,
     modality: session.modality,
     trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
     product: session.product
@@ -526,6 +562,55 @@ export default async function SessionDetailPage({
   const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
   const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
   const caTotalHT = (pricePerLearnerNum ?? 0) * session.participants.length;
+
+  // ── Inscriptions publiques par session (spec 2026-08-28) ──────────────
+  // Demandes reçues via le lien public et pas encore traitées : elles
+  // occupent une place au même titre qu'un inscrit (le formulaire refuse
+  // au-delà de capacityMax).
+  const enrollmentRequests = await prisma.preEnrollment.findMany({
+    where: { intendedSessionId: session.id },
+    orderBy: { submittedAt: 'desc' },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      status: true,
+      submittedAt: true,
+      companyName: true,
+      professionalStatus: true,
+      cniKey: true,
+      ribKey: true,
+      cfpKey: true,
+    },
+  });
+  const pendingEnrollmentCount = enrollmentRequests.filter((r) =>
+    ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'].includes(r.status),
+  ).length;
+  const enrollmentRequestRows = enrollmentRequests.map((r) => ({
+    id: r.id,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    email: r.email,
+    status: r.status,
+    submittedAt: r.submittedAt,
+    companyName: r.companyName,
+    professionalStatus: r.professionalStatus,
+    hasCni: Boolean(r.cniKey),
+    hasRib: Boolean(r.ribKey),
+    hasCfp: Boolean(r.cfpKey),
+  }));
+  const enrollmentLinkState = publicLinkState({
+    publicToken: session.publicToken,
+    publicFormClosedAt: session.publicFormClosedAt,
+    sessionStatus: session.status,
+    capacityMax: session.capacityMax,
+    participantCount: session.participants.length,
+    pendingRequestCount: pendingEnrollmentCount,
+  });
+  const enrollmentUrl = session.publicToken
+    ? buildPublicEnrollmentUrl(session.publicToken)
+    : null;
 
   const timelineInvoiceRows = timelineInvoices.map((inv) => ({
     id: inv.id,
@@ -633,7 +718,16 @@ export default async function SessionDetailPage({
   const conventionGroupes = (() => {
     const map = new Map<
       string,
-      { sponsorOrgId: string; sponsorName: string; participantCount: number; hasConvention: boolean }
+      {
+        sponsorOrgId: string;
+        sponsorName: string;
+        participantCount: number;
+        hasConvention: boolean;
+        /** Convention groupe déjà en base — sert à l'ouvrir depuis le panneau. */
+        conventionDocId: string | null;
+        /** Analyse des besoins d'entreprise (asset de niveau session), si rendue. */
+        analyseAssetId: string | null;
+      }
     >();
     for (const p of session.participants) {
       if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
@@ -643,12 +737,14 @@ export default async function SessionDetailPage({
           sponsorOrgId: p.sponsorOrgId,
           sponsorName: p.sponsorOrg.legalName,
           participantCount: 0,
-          hasConvention: sessionDocs.some(
-            (d) =>
-              d.type === 'CONVENTION' &&
-              d.entityType === 'organization' &&
-              d.entityId === p.sponsorOrgId,
-          ),
+          // Couverture lue via le helper partagé (28/08) : il reconnaît les
+          // DEUX formes de convention groupe (`organization` écrite par
+          // l'appli, `session` produite par les scripts `_gen-*`). Le filtre
+          // maison sur `entityType === 'organization'` manquait la seconde,
+          // présente en production sur SES-0107 / SES-0108.
+          hasConvention: groupConventionByParticipant.has(p.id),
+          conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
+          analyseAssetId: analyseEntrepriseAssetId,
         };
       g.participantCount += 1;
       map.set(p.sponsorOrgId, g);
@@ -836,7 +932,20 @@ export default async function SessionDetailPage({
                 {session.location ? (
                   <div className="space-y-3">
                     <div className="text-sm">
-                      <div className="font-medium">{session.location.name}</div>
+                      {/* Raison sociale en tête : c'est elle que l'AGEFICE
+                          contrôle sur la feuille d'émargement. */}
+                      {session.location.legalName ? (
+                        <div className="font-medium">{session.location.legalName}</div>
+                      ) : null}
+                      <div
+                        className={
+                          session.location.legalName
+                            ? 'text-muted-foreground text-xs'
+                            : 'font-medium'
+                        }
+                      >
+                        {session.location.name}
+                      </div>
                       {(() => {
                         const addr = session.location.address as
                           | { street?: string; postalCode?: string; city?: string }
@@ -853,7 +962,10 @@ export default async function SessionDetailPage({
                     </div>
                     <div className="pt-2 border-t border-border/60">
                       <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
-                      <SessionLocationPicker sessionId={session.id} />
+                      <SessionLocationPicker
+                        sessionId={session.id}
+                        currentLocation={session.location}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -1009,6 +1121,19 @@ export default async function SessionDetailPage({
         defaultTab={coerceTab(sp.tab)}
         session={
           <div className="space-y-6 pt-4">
+            <SessionEnrollmentBlock
+              sessionId={session.id}
+              etat={enrollmentLinkState}
+              url={enrollmentUrl}
+              participantCount={session.participants.length}
+              pendingCount={pendingEnrollmentCount}
+              capacityMax={session.capacityMax}
+              canWrite={canWrite}
+            />
+            <SessionEnrollmentRequests
+              requests={enrollmentRequestRows}
+              canWrite={canWrite}
+            />
             {/* Status select + dates editor — gardés sous le hero pour édition
                 rapide sans ouvrir la modale Modifier. Discrets.
                 Anchor #section-status : cible du CTA sessionStage "Marquer comme

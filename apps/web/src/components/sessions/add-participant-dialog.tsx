@@ -8,6 +8,7 @@
 import { useState, useTransition } from 'react';
 import { Plus, X } from 'lucide-react';
 import { PersonOrOrgPicker, type PickerSelection } from '@/components/pickers/person-or-org-picker';
+import { QuickCreatePersonButton } from '@/components/wizards/quick-create-person';
 import { addParticipant } from '@/server/actions/sessions';
 
 interface Props {
@@ -19,6 +20,10 @@ interface Props {
 export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds }: Props) {
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState<PickerSelection | null>(null);
+  // Nom pré-rempli dans le picker après création express d'un apprenant, pour
+  // qu'il apparaisse directement dans les résultats (même mécanique que le
+  // wizard session, BUG-7).
+  const [pickerQuery, setPickerQuery] = useState<string | null>(null);
   const [price, setPrice] = useState<string>(String(defaultPrice));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +37,10 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
         personId: selection.personId,
         sponsorOrgId: selection.sponsorOrgId,
         priceHT: parseFloat(price.replace(',', '.')) || 0,
+        // Le picker sait désormais rattacher une entreprise à un apprenant qui
+        // n'en avait aucune : on transmet le rôle retenu, pour que l'action
+        // crée le LegalLink manquant plutôt que de refuser l'inscription.
+        legalLinkRole: selection.role as Parameters<typeof addParticipant>[0]['legalLinkRole'],
       });
       if (res.ok) {
         setOpen(false);
@@ -89,11 +98,25 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
                 Apprenant
               </label>
               <PersonOrOrgPicker
+                key={pickerQuery ?? 'initial'}
                 value={selection}
                 onChange={setSelection}
                 excludePersonIds={excludePersonIds}
+                defaultQuery={pickerQuery ?? undefined}
                 autoFocus
               />
+              {/* 28/08 — l'apprenant n'existe pas encore : le créer ICI plutôt
+                  que de quitter la session pour /app/apprenants et revenir. */}
+              {!selection && (
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Il n&apos;est pas encore dans la base ?
+                  </span>
+                  <QuickCreatePersonButton
+                    onCreated={(p) => setPickerQuery(`${p.lastName} ${p.firstName}`)}
+                  />
+                </div>
+              )}
             </div>
 
             {selection && (

@@ -44,7 +44,11 @@ const ctx: ClosureContext = {
   sessionTitle: "Maîtrisez l'IA en 3 jours — formation immobilier",
   sessionStartDate: new Date('2026-04-15'),
   sessionEndDate: new Date('2026-04-17'),
-  sessionLocation: 'Vence (06140)',
+  // Lieu tel que `formatLieuFormation` le compose depuis la base : raison
+  // sociale d'abord — mention exigée par l'AGEFICE sur l'émargement (2026-08-28).
+  sessionLocation:
+    "SARL L'Agence Signature — Agence Nice Centre, 12 rue Masséna, 06000 Nice",
+  sessionLocationCity: 'Nice',
   sessionTrainers: ['Julien Lafitte'],
   durationHours: 21,
   formationMeta: {

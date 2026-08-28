@@ -18,7 +18,7 @@ import { prisma, Prisma, type OpcoSubmissionStatus } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { sendMail } from '@/lib/mailer';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
-import { groupConventionWhere } from '@/lib/docs/convention-coverage';
+import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 
 export interface SubmissionAttachment {
   /** clé MinIO du fichier */
@@ -118,7 +118,14 @@ export async function composeOpcoSubmission(
         // Sans cette branche, le dossier OPCO déclarait « CONVENTION manquante »
         // et n'attachait pas le PDF — exactement le scénario OPTIMMO / OPCO EP
         // que la convention groupe devait servir.
-        groupConventionWhere(user.tenantId, participant.session.id, participant.sponsorOrgId),
+        // Quick 260821-md8 : les DEUX formes de stockage, sinon le dossier OPCO
+        // EP d'ASSALIT / EXPERTA repart sans sa convention (elle y existe sous
+        // la forme `session`, produite par script).
+        groupConventionAnyShapeWhere(
+          user.tenantId,
+          participant.session.id,
+          participant.sponsorOrgId,
+        ),
       ],
     },
     select: { type: true, pdfUrl: true, participantId: true },

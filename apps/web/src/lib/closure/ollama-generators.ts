@@ -18,6 +18,7 @@ import { getDayStartEnd, PAUSE_DEJEUNER } from '@/lib/formation-horaires';
 import {
   PROMPT_VERSION,
   SYSTEM_PROMPT_ANALYSE_BESOIN,
+  SYSTEM_PROMPT_ANALYSE_BESOIN_ENTREPRISE,
   SYSTEM_PROMPT_DEROULE,
   SYSTEM_PROMPT_GRILLE_OBSERVATION,
   SYSTEM_PROMPT_GRILLE_OBSERVATION_SESSION,
@@ -143,6 +144,23 @@ const AnalyseBesoinSchema = z.object({
   freins_identifies: z.array(z.string()).optional().default([]),
   motivation: z.string().min(10),
 });
+
+/**
+ * Analyse des besoins ENTREPRISE (règle payeur du 12/08) : un seul document
+ * pour tout le groupe, au nom de la structure qui commande et qui paye. Les
+ * sections reprennent le document de référence validé sur SES-0107 / SES-0108.
+ */
+const AnalyseBesoinEntrepriseSchema = z.object({
+  activite: z.string().min(3),
+  contexte: z.string().min(80),
+  besoins_exprimes: z.array(z.string()).min(3),
+  objectifs_attendus: z.array(z.string()).min(2),
+  public_prerequis: z.string().min(30),
+  modalites: z.string().min(30),
+  adaptation_proposee: z.string().min(80),
+});
+
+export type AnalyseBesoinEntrepriseContent = z.infer<typeof AnalyseBesoinEntrepriseSchema>;
 
 // Grille remplie de manière positive : niveau A/B obligatoire (max 1-2 'C'
 // tolérés, jamais 'D'), observation 1-2 phrases positives obligatoires.
@@ -600,6 +618,77 @@ L'analyse doit donner l'impression que le stagiaire a réellement répondu à un
     tenantId,
     undefined,
     'fast', // docs volume/structurés → Haiku (D-01a Phase 16)
+  );
+}
+
+/**
+ * Analyse des besoins au nom de l'ENTREPRISE — UNE par commanditaire personne
+ * morale, jamais une par salarié (règle figée le 12/08, indicateur 4).
+ *
+ * Économie directe : une session de 8 salariés consommait 8 générations pour
+ * produire 8 documents non conformes ; elle en consomme UNE.
+ *
+ * `fonctions` liste les fonctions représentées SANS nommer personne : le
+ * document décrit un besoin collectif, et le prompt interdit de citer un
+ * salarié.
+ */
+export async function generateAnalyseBesoinEntrepriseContent(
+  formation: FormationCtx,
+  entreprise: {
+    raisonSociale: string;
+    activiteDeclaree?: string | null;
+    naf?: string | null;
+    adresse?: string | null;
+    representant?: string | null;
+    effectif: number;
+    fonctions: string[];
+  },
+  calendrier: { debut: string; fin: string; lieu: string; modalite: string },
+  refTable = 'PedagogicalAsset',
+  refId: string | null = null,
+  tenantId: string | null = null,
+): Promise<AnalyseBesoinEntrepriseContent | null> {
+  const fonctions = entreprise.fonctions.filter(Boolean);
+  const entrepriseBlock = [
+    `Raison sociale : ${entreprise.raisonSociale}`,
+    entreprise.activiteDeclaree ? `Activité déclarée : ${entreprise.activiteDeclaree}` : null,
+    entreprise.naf ? `Code NAF : ${entreprise.naf}` : null,
+    entreprise.adresse ? `Adresse : ${entreprise.adresse}` : null,
+    entreprise.representant ? `Représentant (interlocuteur) : ${entreprise.representant}` : null,
+    `Effectif concerné par la formation : ${entreprise.effectif}`,
+    fonctions.length > 0
+      ? `Fonctions représentées : ${[...new Set(fonctions)].join(', ')}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const prompt = `Rédige l'analyse des besoins de l'ENTREPRISE ci-dessous, qui fait former ses salariés.
+
+Entreprise :
+${entrepriseBlock}
+
+Formation envisagée :
+Titre : ${formation.titre}
+Durée : ${formation.nombreHeures} heures
+Du ${calendrier.debut} au ${calendrier.fin}
+Modalité : ${calendrier.modalite}
+Lieu : ${calendrier.lieu}
+Programme :
+${formation.programmeMd || '(programme à compléter)'}
+
+Le besoin décrit est celui de la structure, exprimé par son représentant. Ne nomme aucun salarié.`;
+
+  return runOllamaJson(
+    'generate-analyse-besoin-entreprise',
+    SYSTEM_PROMPT_ANALYSE_BESOIN_ENTREPRISE,
+    prompt,
+    AnalyseBesoinEntrepriseSchema,
+    refTable,
+    refId,
+    tenantId,
+    undefined,
+    'quality', // document unique, pilier de l'indicateur 4 → Sonnet
   );
 }
 

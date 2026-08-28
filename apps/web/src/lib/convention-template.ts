@@ -32,6 +32,17 @@ export interface ConventionData {
   // Bénéficiaire (entreprise qui signe & paye)
   beneficiaireRaisonSociale: string;
   beneficiaireSiret: string | null;
+  /**
+   * Numéro d'immatriculation au RCS = **SIREN** (9 chiffres), et non le SIRET
+   * (14 chiffres, qui identifie l'établissement).
+   *
+   * Quick 260821-md8 : la convention EXPERTA destinée au portail OPCO EP
+   * affichait le SIRET sur la ligne « … sous le numéro … ». Un numéro RCS faux
+   * sur une pièce contractuelle envoyée à un financeur n'est pas cosmétique.
+   * Absent ⇒ la ligne RCS entière disparaît (pas de « sous le numéro »
+   * orphelin).
+   */
+  beneficiaireSiren?: string | null;
   beneficiaireRcsVille: string | null; // "Grasse", "Nice", etc.
   beneficiaireRepresentantNom: string;
 
@@ -108,6 +119,28 @@ function escapeHtml(raw: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * Déduit le SIREN (9 chiffres) — le numéro d'immatriculation au RCS.
+ *
+ * Le champ explicite `Organization.siren` gagne toujours ; à défaut on prend
+ * les 9 premiers chiffres du SIRET, ce qui EST la définition du SIREN (SIRET =
+ * SIREN + NIC sur 5 chiffres). Les espaces de saisie sont ignorés.
+ *
+ * Rend `null` plutôt qu'un numéro tronqué : mieux vaut pas de ligne RCS du tout
+ * qu'une ligne RCS fausse sur une pièce contractuelle.
+ */
+export function deriveSiren(
+  siren: string | null | undefined,
+  siret: string | null | undefined,
+): string | null {
+  const digits = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '');
+  const fromSiren = digits(siren);
+  if (fromSiren.length === 9) return fromSiren;
+  const fromSiret = digits(siret);
+  if (fromSiret.length >= 9) return fromSiret.slice(0, 9);
+  return null;
 }
 
 function formatDuree(heures: number): string {
@@ -232,6 +265,10 @@ export function renderConventionHtml(data: ConventionData, of: OfConfig): string
     : data.produitPriceHTPerStagiaire * nbStagiaires;
   // La décomposition « X € × N » n'a de sens que sur un tarif unitaire.
   const showUnitBreakdown = !hasPrixGlobal && nbStagiaires > 1;
+  // Ligne RCS = SIREN. Le fournisseur passe normalement `beneficiaireSiren`
+  // déjà dérivé ; on redérive ici par sécurité pour les appelants historiques
+  // (scripts `_gen-*`) qui ne renseignent que le SIRET.
+  const beneficiaireSiren = deriveSiren(data.beneficiaireSiren, data.beneficiaireSiret);
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -260,7 +297,8 @@ ${renderOfPagedFooter()}
   </div>
   <div class="partie">
     <strong>2) ${escapeHtml(data.beneficiaireRaisonSociale)}</strong><br>
-    ${data.beneficiaireSiret ? `Immatriculée au Registre du Commerce et des Sociétés${data.beneficiaireRcsVille ? ' de ' + escapeHtml(data.beneficiaireRcsVille) : ''} sous le numéro ${escapeHtml(data.beneficiaireSiret)}<br>` : ''}
+    ${beneficiaireSiren ? `Immatriculée au Registre du Commerce et des Sociétés${data.beneficiaireRcsVille ? ' de ' + escapeHtml(data.beneficiaireRcsVille) : ''} sous le numéro ${escapeHtml(beneficiaireSiren)}<br>` : ''}
+    ${data.beneficiaireSiret ? `N° SIRET : ${escapeHtml(data.beneficiaireSiret)}<br>` : ''}
     Représentée par <strong>${escapeHtml(data.beneficiaireRepresentantNom)}</strong>, ci-après désignée « l'entreprise bénéficiaire ».
   </div>
 </div>

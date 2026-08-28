@@ -4,17 +4,38 @@ import { revalidatePath } from 'next/cache';
 import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { generateProgrammeForProduct } from './programme-generator';
-import { generateConventionForParticipant } from './convention-generator';
 import {
-  GROUP_CONVENTION_ENTITY_TYPE,
+  GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
+  isGroupConventionDoc,
 } from '@/lib/docs/convention-coverage';
+import {
+  partitionByPayerRule,
+  selectAnalyseBesoinTargets,
+  isPersonneMoralePayeur,
+} from '@/lib/sessions/payer-rule';
+import {
+  routeConventionsByPayerRule,
+  toPayerParticipants,
+  ROUTABLE_PARTICIPANT_SELECT,
+  type RoutableParticipant,
+} from '@/lib/closure/route-conventions';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
+
+/**
+ * Règle payeur des conventions : le routeur vit désormais dans
+ * `@/lib/closure/route-conventions` (28/08). Il était privé ici, si bien que
+ * `sessions.addParticipant` et `closure-pack` — qui génèrent eux aussi des
+ * conventions — ne l'utilisaient pas et fabriquaient des nominatives pour des
+ * salariés d'entreprise. Un seul routeur, trois appelants.
+ */
+type PrepareParticipant = RoutableParticipant;
+const PREPARE_PARTICIPANT_SELECT = ROUTABLE_PARTICIPANT_SELECT;
 
 export interface PrepareTrainingResult {
   ok: boolean;
@@ -68,12 +89,7 @@ export async function prepareTrainingForSession(
       productId: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
-      participants: {
-        select: {
-          id: true,
-          person: { select: { firstName: true, lastName: true } },
-        },
-      },
+      participants: { select: PREPARE_PARTICIPANT_SELECT },
     },
   });
   if (!session) {
@@ -155,20 +171,24 @@ export async function prepareTrainingForSession(
   // NB : Grille d'observation formateur (C3.i11) = doc POST-formation, généré
   // uniquement par closure-pack quand les participants sont CONFIRMED/ATTENDED.
 
-  // Convention + Convocation = par participant (idempotentes sha256)
-  await Promise.all(
-    session.participants.map(async (p) => {
-      const name = `${p.person.firstName} ${p.person.lastName}`;
-      const [conv, convoc] = await Promise.all([
-        generateConventionForParticipant(p.id),
-        generateConvocationForParticipant(p.id),
-      ]);
-      if (conv.ok) conventionsGenerated++;
-      else errors.push({ participantName: name, doc: 'CONVENTION', message: conv.error ?? 'Erreur inconnue' });
-      if (convoc.ok) convocationsGenerated++;
-      else errors.push({ participantName: name, doc: 'CONVOCATION', message: convoc.error ?? 'Erreur inconnue' });
-    }),
-  );
+  // Convention : règle payeur (groupe pour les personnes morales, individuelle
+  // pour les auto-payeurs). Convocation : NOMINATIVE dans tous les cas — c'est
+  // un document personnel, chaque salarié est convoqué.
+  const [routing] = await Promise.all([
+    routeConventionsByPayerRule(user.tenantId, sessionId, session.participants),
+    Promise.all(
+      session.participants.map(async (p) => {
+        const name = `${p.person.firstName} ${p.person.lastName}`;
+        const convoc = await generateConvocationForParticipant(p.id);
+        if (convoc.ok) convocationsGenerated++;
+        else errors.push({ participantName: name, doc: 'CONVOCATION', message: convoc.error ?? 'Erreur inconnue' });
+      }),
+    ),
+  ]);
+  conventionsGenerated = routing.covered;
+  for (const e of routing.errors) {
+    errors.push({ participantName: e.participantName, doc: 'CONVENTION', message: e.message });
+  }
 
   revalidatePath(`/app/sessions/${sessionId}`);
 
@@ -197,6 +217,11 @@ export interface PrepareSessionResult {
   convocationsGenerated: number;
   analyseBesoinEnqueued: number;
   analyseBesoinSkipped: number;
+  // Analyse des besoins d'ENTREPRISE (quick 260821-md8). Compteurs SÉPARÉS de
+  // `analyseBesoinEnqueued/Skipped` : ce sont deux natures de document, les
+  // mélanger rendrait le ratio mensonger.
+  analyseBesoinEntrepriseAttendue: number;
+  analyseBesoinEntreprisePresente: number;
   // Demande de prise en charge AGEFICE — TNS uniquement (sponsorOrg AGEFICE
   // ou EI_SELF/AGENT_COMMERCIAL avec AgeficeProfile). Salariés OPCO ignorés.
   ageficeGenerated: number;
@@ -216,6 +241,18 @@ export interface SessionPreparationStatus {
   analyseBesoinDone: number;
   analyseBesoinInProgress: number;
   analyseBesoinPending: number;
+  /**
+   * Nombre d'analyses des besoins PAR STAGIAIRE légitimement attendues, c.-à-d.
+   * le nombre d'auto-payeurs — et non l'effectif (quick 260821-md8). Sur une
+   * session intra-entreprise il vaut 0 : le document attendu est celui de
+   * l'entreprise. Sans ce dénominateur, la fiche resterait éternellement
+   * « 1 manquant » sur un document qu'on a décidé de ne plus produire.
+   */
+  analyseBesoinAttendue: number;
+  /** Commanditaires personnes morales sans analyse d'entreprise rendue. */
+  analyseBesoinEntrepriseAttendue: number;
+  /** Analyse d'entreprise rendue (0 ou 1 — contrainte d'unicité du schéma). */
+  analyseBesoinEntreprisePresente: number;
   // Demande AGEFICE — affichée uniquement si ageficeEligibleCount > 0.
   ageficeCount: number;
   ageficeEligibleCount: number;
@@ -250,6 +287,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated: 0,
     analyseBesoinEnqueued: 0,
     analyseBesoinSkipped: 0,
+    analyseBesoinEntrepriseAttendue: 0,
+    analyseBesoinEntreprisePresente: 0,
     ageficeGenerated: 0,
     ageficeEligible: 0,
     errors: [],
@@ -267,12 +306,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
       productId: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
-      participants: {
-        select: {
-          id: true,
-          person: { select: { firstName: true, lastName: true } },
-        },
-      },
+      participants: { select: PREPARE_PARTICIPANT_SELECT },
     },
   });
   if (!session) {
@@ -352,38 +386,34 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           : (checklistRes.reason?.message ?? String(checklistRes.reason)),
     });
 
-  // 2. Par-participant : Convention + Convocation en parallèle.
-  let conventionsGenerated = 0;
+  // 2. Convention : règle payeur (groupe vs individuelle) — cf
+  //    routeConventionsByPayerRule. Convocation : NOMINATIVE dans tous les cas.
   let convocationsGenerated = 0;
-  await Promise.all(
-    session.participants.map(async (p) => {
-      const name = `${p.person.firstName} ${p.person.lastName}`;
-      const [conv, convoc] = await Promise.allSettled([
-        generateConventionForParticipant(p.id),
-        generateConvocationForParticipant(p.id),
-      ]);
-      if (conv.status === 'fulfilled' && conv.value.ok) conventionsGenerated++;
-      else
-        errors.push({
-          participantName: name,
-          doc: 'CONVENTION',
-          message:
-            conv.status === 'fulfilled'
-              ? (conv.value.error ?? 'Erreur inconnue')
-              : (conv.reason?.message ?? String(conv.reason)),
-        });
-      if (convoc.status === 'fulfilled' && convoc.value.ok) convocationsGenerated++;
-      else
-        errors.push({
-          participantName: name,
-          doc: 'CONVOCATION',
-          message:
-            convoc.status === 'fulfilled'
-              ? (convoc.value.error ?? 'Erreur inconnue')
-              : (convoc.reason?.message ?? String(convoc.reason)),
-        });
-    }),
-  );
+  const [routing] = await Promise.all([
+    routeConventionsByPayerRule(user.tenantId, sessionId, session.participants),
+    Promise.all(
+      session.participants.map(async (p) => {
+        const name = `${p.person.firstName} ${p.person.lastName}`;
+        const convoc = await Promise.resolve(generateConvocationForParticipant(p.id)).catch(
+          (e: unknown) => ({
+            ok: false as const,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        if (convoc.ok) convocationsGenerated++;
+        else
+          errors.push({
+            participantName: name,
+            doc: 'CONVOCATION',
+            message: convoc.error ?? 'Erreur inconnue',
+          });
+      }),
+    ),
+  ]);
+  const conventionsGenerated = routing.covered;
+  for (const e of routing.errors) {
+    errors.push({ participantName: e.participantName, doc: 'CONVENTION', message: e.message });
+  }
 
   // 2bis. Demande de prise en charge AGEFICE — TNS uniquement.
   //       Règle métier : auto-entrepreneur cotise à l'AGEFICE (CFP), salarié
@@ -435,39 +465,112 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     }),
   );
 
-  // 3. Analyse besoin (IA Ollama) — batch BullMQ.
-  //    Skip les participants qui ont déjà un PedagogicalAsset.ANALYSE_BESOIN
-  //    rendu (pdfUrl != null) → idempotent.
+  // 3. Analyse besoin (IA) — batch de jobs.
+  //
+  //    Règle du 12/08 (quick 260821-md8) : quand le payeur est une personne
+  //    morale, le besoin analysé est celui de l'ENTREPRISE. On n'enfile donc
+  //    plus rien par stagiaire pour ces inscrits — une analyse au nom d'un
+  //    salarié est une non-conformité à l'indicateur 4, et elle faisait doublon
+  //    avec le document d'entreprise (constat SES-0108).
+  //
+  //    Skip également les auto-payeurs qui ont déjà un PedagogicalAsset
+  //    ANALYSE_BESOIN rendu (pdfUrl != null) → idempotent.
   let analyseBesoinEnqueued = 0;
   let analyseBesoinSkipped = 0;
+  let analyseBesoinEntrepriseAttendue = 0;
+  let analyseBesoinEntreprisePresente = 0;
   let batchId: string | undefined;
 
   if (participantIds.length > 0) {
-    const existingAB = await prisma.pedagogicalAsset.findMany({
-      where: {
-        tenantId: user.tenantId,
-        sessionId,
-        kind: 'ANALYSE_BESOIN',
-        participantId: { in: participantIds },
-        pdfUrl: { not: null },
-      },
-      select: { participantId: true },
-    });
+    const [existingAB, abEntreprise] = await Promise.all([
+      prisma.pedagogicalAsset.findMany({
+        where: {
+          tenantId: user.tenantId,
+          sessionId,
+          kind: 'ANALYSE_BESOIN',
+          participantId: { in: participantIds },
+          pdfUrl: { not: null },
+        },
+        select: { participantId: true },
+      }),
+      // Analyse au nom de l'entreprise : asset de niveau SESSION, sans
+      // participant. Forme produite par `_gen-assalit-experta-analyses.ts`.
+      prisma.pedagogicalAsset.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          sessionId,
+          kind: 'ANALYSE_BESOIN',
+          participantId: null,
+          pdfUrl: { not: null },
+        },
+        select: { id: true },
+      }),
+    ]);
     const doneIds = new Set(existingAB.map((a) => a.participantId).filter((id): id is string => !!id));
-    const toEnqueue = session.participants.filter((p) => !doneIds.has(p.id));
-    analyseBesoinSkipped = participantIds.length - toEnqueue.length;
 
-    if (toEnqueue.length > 0) {
+    const targets = selectAnalyseBesoinTargets(toPayerParticipants(session.participants), {
+      dejaRenduParStagiaire: doneIds,
+      analyseEntrepriseExiste: abEntreprise != null,
+    });
+    analyseBesoinEntreprisePresente = abEntreprise ? 1 : 0;
+    analyseBesoinEntrepriseAttendue = targets.entreprisesEnAttente.length;
+
+    // Analyse des besoins d'ENTREPRISE (28/08) — la moitié qui PRODUIT.
+    //
+    // La quick 260821-md8 avait arrêté la production par stagiaire sans écrire
+    // la variante entreprise : la session restait sans analyse, et le document
+    // ne pouvait venir que d'un script hors app (SES-0107 / SES-0108).
+    //
+    // UNE seule génération, même si plusieurs entreprises commanditent : le
+    // schéma ne porte qu'une analyse de niveau session
+    // (`@@unique([sessionId, participantId, kind])`), donc la seconde écraserait
+    // la première — deux appels IA payés pour un document. On produit la
+    // première et on journalise le cas.
+    const [entrepriseCible] = targets.entreprisesEnAttente;
+    if (entrepriseCible) {
+      if (targets.entreprisesEnAttente.length > 1) {
+        console.warn(
+          '[prepareSession] session MULTI-commanditaires : analyse d’entreprise produite pour le premier seulement —',
+          sessionId,
+          targets.entreprisesEnAttente.map((g) => g.sponsorOrgId),
+        );
+      }
+      const { generateAnalyseBesoinEntrepriseCore } = await import(
+        '@/lib/closure/analyse-besoin-entreprise-core'
+      );
+      const r = await generateAnalyseBesoinEntrepriseCore(
+        user.tenantId,
+        sessionId,
+        entrepriseCible.sponsorOrgId,
+      ).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      if (r.ok) {
+        analyseBesoinEntreprisePresente = 1;
+        analyseBesoinEntrepriseAttendue = 0;
+      } else {
+        errors.push({
+          participantName: entrepriseCible.sponsorName ?? '(entreprise)',
+          doc: 'ANALYSE_BESOIN',
+          message: r.error ?? 'Erreur inconnue',
+        });
+      }
+    }
+    analyseBesoinSkipped = participantIds.length - targets.participantIds.length;
+
+    // Aucune cible ⇒ AUCUN batch : un batch vide pollue la barre de progression.
+    if (targets.participantIds.length > 0) {
       const batch = await prisma.closureBatch.create({
         data: {
           tenantId: user.tenantId,
           sessionId,
           status: 'PENDING',
-          totalDocs: toEnqueue.length,
+          totalDocs: targets.participantIds.length,
           createdByUserId: user.id,
           jobs: {
-            create: toEnqueue.map((p) => ({
-              participantId: p.id,
+            create: targets.participantIds.map((participantId) => ({
+              participantId,
               kind: 'ANALYSE_BESOIN' as ClosureDocKind,
               status: 'QUEUED' as const,
             })),
@@ -507,9 +610,15 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
           derouleGenerated,
           checklistGenerated,
           conventionsGenerated,
+          // Traçabilité de la règle payeur (quick 260821-md8) : combien de
+          // conventions d'entreprise, combien de nominatives.
+          conventionsGroupe: routing.groupsCount,
+          conventionsIndividuelles: routing.individuelsCount,
           convocationsGenerated,
           analyseBesoinEnqueued,
           analyseBesoinSkipped,
+          analyseBesoinEntrepriseAttendue,
+          analyseBesoinEntreprisePresente,
           ageficeGenerated,
           ageficeEligible,
           errors: errors.length,
@@ -532,6 +641,8 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     convocationsGenerated,
     analyseBesoinEnqueued,
     analyseBesoinSkipped,
+    analyseBesoinEntrepriseAttendue,
+    analyseBesoinEntreprisePresente,
     ageficeGenerated,
     ageficeEligible,
     batchId,
@@ -559,6 +670,9 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone: 0,
     analyseBesoinInProgress: 0,
     analyseBesoinPending: 0,
+    analyseBesoinAttendue: 0,
+    analyseBesoinEntrepriseAttendue: 0,
+    analyseBesoinEntreprisePresente: 0,
     ageficeCount: 0,
     ageficeEligibleCount: 0,
     participantsCount: 0,
@@ -573,8 +687,15 @@ export async function getSessionPreparationStatus(
       id: true,
       productId: true,
       // sponsorOrgId requis pour rattacher les conventions GROUPE aux salariés
-      // qu'elles couvrent (revue Codex PR #13).
-      participants: { select: { id: true, sponsorOrgId: true } },
+      // qu'elles couvrent (revue Codex PR #13) ; `sponsorOrg.legalForm` requis
+      // pour savoir quel document est légitimement attendu (règle payeur).
+      participants: {
+        select: {
+          id: true,
+          sponsorOrgId: true,
+          sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
+        },
+      },
     },
   });
   if (!session) return { ...empty, error: 'Session introuvable' };
@@ -589,7 +710,7 @@ export async function getSessionPreparationStatus(
     'AGEFICE',
   ];
 
-  const [docs, abAssets, latestBatch, ageficeEligibleParticipants] = await Promise.all([
+  const [docs, abAssets, abEntreprise, latestBatch, ageficeEligibleParticipants] = await Promise.all([
     prisma.document.findMany({
       where: {
         tenantId: user.tenantId,
@@ -601,11 +722,18 @@ export async function getSessionPreparationStatus(
             ? [
                 { entityType: 'participant', entityId: { in: participantIds }, type: { in: ['CONVENTION', 'CONVOCATION'] as DocType[] } },
                 // Convention GROUPE : un seul document pour tous les salariés
-                // d'un commanditaire, donc entityType='organization' et pas de
-                // participantId. Sans cette branche, le statut annonçait les
-                // conventions manquantes et proposait l'action de masse qui
-                // régénère des individuelles (revue Codex PR #13).
-                { entityType: GROUP_CONVENTION_ENTITY_TYPE, sessionId: session.id, type: 'CONVENTION' as DocType },
+                // d'un commanditaire, donc pas de participantId. Sans cette
+                // branche, le statut annonçait les conventions manquantes et
+                // proposait l'action de masse qui régénère des individuelles
+                // (revue Codex PR #13).
+                // Les DEUX formes de stockage sont interrogées (quick
+                // 260821-md8) : `organization` (appli) et `session` (scripts
+                // `_gen-*`, présente en prod sur SES-0107 / SES-0108).
+                {
+                  entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] },
+                  sessionId: session.id,
+                  type: 'CONVENTION' as DocType,
+                },
                 // Demande AGEFICE — stockée avec participantId (cf agefice-generator).
                 { participantId: { in: participantIds }, type: 'AGEFICE' as DocType },
               ]
@@ -626,6 +754,19 @@ export async function getSessionPreparationStatus(
           select: { participantId: true },
         })
       : Promise.resolve([] as Array<{ participantId: string | null }>),
+    // Analyse des besoins au nom de l'ENTREPRISE : asset de niveau SESSION,
+    // sans participant (quick 260821-md8). Une seule possible par session
+    // (@@unique([sessionId, participantId, kind])).
+    prisma.pedagogicalAsset.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        sessionId: session.id,
+        kind: 'ANALYSE_BESOIN',
+        participantId: null,
+        pdfUrl: { not: null },
+      },
+      select: { id: true },
+    }),
     // Dernier batch contenant des jobs ANALYSE_BESOIN pour cette session,
     // pour exposer le batchId (utile pour cross-link batch progress UI).
     prisma.closureBatch.findFirst({
@@ -676,10 +817,16 @@ export async function getSessionPreparationStatus(
   const programme = docs.some((d) => d.type === 'PROGRAMME');
   const deroule = docs.some((d) => d.type === 'DEROULE_PEDAGOGIQUE');
   const checklist = docs.some((d) => d.type === 'CHECKLIST_FORMATION');
-  // Conventions individuelles : entityId = participantId.
+  // Conventions individuelles : entityId = participantId. Le test négatif passe
+  // par `isGroupConventionDoc` — écrit à la main, il laisserait entrer la forme
+  // `session`, dont l'entityId est un sessionId : on compterait alors un
+  // identifiant de session comme s'il s'agissait d'un inscrit.
   const conventionsSet = new Set(
     docs
-      .filter((d) => d.type === 'CONVENTION' && d.entityType !== GROUP_CONVENTION_ENTITY_TYPE)
+      .filter((d) => d.type === 'CONVENTION')
+      .filter(
+        (d) => !isGroupConventionDoc({ id: d.entityId, type: d.type, entityType: d.entityType, entityId: d.entityId }),
+      )
       .map((d) => d.entityId),
   );
   // Conventions groupe : entityId = sponsorOrgId → on ajoute chaque salarié
@@ -703,6 +850,25 @@ export async function getSessionPreparationStatus(
   const ageficeReady = countAgeficeReady(ageficeDocParticipantIds, eligibleAgeficeIds);
 
   const analyseBesoinDone = abAssets.length;
+  // Règle payeur : ce qui est ATTENDU dépend de qui paye. Sur une session
+  // intra-entreprise, aucune analyse par stagiaire n'est due — le document
+  // attendu est celui de l'entreprise. Les deux compteurs restent distincts :
+  // les mélanger rendrait le ratio mensonger.
+  const abTargets = selectAnalyseBesoinTargets(
+    session.participants.map((p) => ({
+      id: p.id,
+      sponsorOrgId: p.sponsorOrgId,
+      sponsorLegalForm: p.sponsorOrg?.legalForm,
+      sponsorName: p.sponsorOrg?.legalName,
+    })),
+    {
+      dejaRenduParStagiaire: new Set<string>(),
+      analyseEntrepriseExiste: abEntreprise != null,
+    },
+  );
+  const analyseBesoinAttendue = abTargets.participantIds.length;
+  const analyseBesoinEntrepriseAttendue = abTargets.entreprisesEnAttente.length;
+  const analyseBesoinEntreprisePresente = abEntreprise ? 1 : 0;
   let analyseBesoinInProgress = 0;
   let analyseBesoinPending = 0;
   if (latestBatch) {
@@ -722,6 +888,9 @@ export async function getSessionPreparationStatus(
     analyseBesoinDone,
     analyseBesoinInProgress,
     analyseBesoinPending,
+    analyseBesoinAttendue,
+    analyseBesoinEntrepriseAttendue,
+    analyseBesoinEntreprisePresente,
     ageficeCount: ageficeReady,
     ageficeEligibleCount,
     participantsCount: participantIds.length,

@@ -98,10 +98,24 @@ export function StepCreation(props: Props) {
           <span className="tabular-nums">{fmtDateRange(startDate, endDate)}</span>
         </Row>
         <Row icon={MapPin} label="Lieu">
+          {/* 28/08 — le lieu et le formateur vivent dans le drawer ⚙ Paramètres
+              depuis la refonte (« 1 surface = 1 endroit »). L'étape 1 n'en
+              affichait que le constat : « je ne peux plus modifier le lieu ».
+              Le drawer sait s'ouvrir sur un hash — on s'en sert. */}
           {locationLabel ? (
-            <span>{locationLabel}</span>
+            <span className="flex items-center gap-2 flex-wrap">
+              <span>{locationLabel}</span>
+              <a href="#section-lieu" className="text-xs text-primary hover:underline">
+                Changer le lieu
+              </a>
+            </span>
           ) : (
-            <span className="text-muted-foreground italic">Distanciel ou à définir</span>
+            <span className="flex items-center gap-2 flex-wrap">
+              <span className="text-muted-foreground italic">Distanciel ou à définir</span>
+              <a href="#section-lieu" className="text-xs text-primary hover:underline">
+                Définir le lieu
+              </a>
+            </span>
           )}
         </Row>
         <Row icon={Users} label="Formateur principal">
@@ -113,9 +127,17 @@ export function StepCreation(props: Props) {
                   +{coTrainerCount} co-formateur{coTrainerCount > 1 ? 's' : ''}
                 </Badge>
               )}
+              <a href="#section-formateurs" className="text-xs text-primary hover:underline">
+                Changer le formateur
+              </a>
             </span>
           ) : (
-            <span className="text-amber-700 italic">Aucun formateur principal défini</span>
+            <span className="flex items-center gap-2 flex-wrap">
+              <span className="text-amber-700 italic">Aucun formateur principal défini</span>
+              <a href="#section-formateurs" className="text-xs text-primary hover:underline">
+                Définir le formateur
+              </a>
+            </span>
           )}
         </Row>
         <Row icon={Users} label="Inscrits">
@@ -136,7 +158,14 @@ export function StepCreation(props: Props) {
               )}
             </span>
           ) : (
-            <span className="text-amber-700 italic">À définir</span>
+            <span className="flex items-center gap-2 flex-wrap">
+              <span className="text-amber-700 italic">À définir</span>
+              {/* Le tarif n'a pas de section de drawer : il s'édite en un clic
+                  dans l'en-tête (SessionPriceInline) ou via « Modifier ». */}
+              <span className="text-xs text-muted-foreground">
+                modifiable dans l&apos;en-tête ou via « Modifier »
+              </span>
+            </span>
           )}
         </Row>
       </dl>
