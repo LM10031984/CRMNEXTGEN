@@ -42,7 +42,7 @@ describe('ProductProgrammeTab', () => {
   it('propose de générer le PDF quand le programme est rédigé mais pas encore produit', () => {
     render(<ProductProgrammeTab productId="p-1" markdown={PROGRAMME} pdfId={null} />);
 
-    expect(screen.getByRole('button', { name: /Générer le programme/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Générer le programme PDF/i })).toBeDefined();
     // …et le programme reste affiché : on ne remplace pas un contenu par un CTA.
     expect(screen.getByText(/Programme détaillé/i)).toBeDefined();
   });
@@ -51,13 +51,25 @@ describe('ProductProgrammeTab', () => {
     render(<ProductProgrammeTab productId="p-1" markdown={PROGRAMME} pdfId="doc-9" />);
 
     expect(screen.getByText(/Programme PDF disponible/i)).toBeDefined();
-    expect(screen.queryByRole('button', { name: /^Générer le programme$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Régénérer/i })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Générer le programme PDF/i })).toBeNull();
+    // Et l'encart « à générer » disparaît : une seule action visible à la fois.
+    expect(screen.queryByText(/PDF du programme à générer/i)).toBeNull();
+  });
+
+  /**
+   * L'état vide ne proposait « Régénérer » à côté de « Générer » alors qu'il
+   * n'y avait rien à régénérer — deux boutons pour une seule action possible.
+   */
+  it('ne propose pas de régénérer ce qui n’existe pas encore', () => {
+    render(<ProductProgrammeTab productId="p-1" markdown={PROGRAMME} pdfId={null} />);
+    expect(screen.queryByRole('button', { name: /Régénérer/i })).toBeNull();
   });
 
   it('garde son état vide quand il n’y a ni programme ni PDF', () => {
     render(<ProductProgrammeTab productId="p-1" markdown={null} pdfId={null} />);
 
     expect(screen.getByText(/Programme de formation à créer/i)).toBeDefined();
-    expect(screen.getByRole('button', { name: /Générer le programme/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Générer le programme PDF/i })).toBeDefined();
   });
 });
