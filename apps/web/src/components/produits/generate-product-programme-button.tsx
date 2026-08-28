@@ -48,9 +48,15 @@ export function GenerateProductProgrammeButton({
           title="Génère le programme PDF prêt pour Qualiopi à partir des champs ci-dessous"
         >
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-          Voir le programme PDF
+          {/* 28/08 — « Voir le programme PDF » décrivait la CONSÉQUENCE (le PDF
+              s'ouvre) et cachait l'action : Laurent cherchait « générer » et ne
+              trouvait rien. Le bouton produit le document, il le dit. */}
+          Générer le programme PDF
         </button>
       )}
+      {/* Rien à régénérer tant qu'aucun PDF n'existe : dans l'état vide, deux
+          boutons côte à côte laissaient croire à deux actions différentes. */}
+      {(regenerateOnly || docId) && (
       <button
         type="button"
         onClick={() => run(true)}
@@ -61,6 +67,7 @@ export function GenerateProductProgrammeButton({
         <RefreshCw className={cn('h-3.5 w-3.5', pending && 'animate-spin')} />
         Régénérer
       </button>
+      )}
       {docId && (
         <a
           href={`/api/documents/${docId}`}
