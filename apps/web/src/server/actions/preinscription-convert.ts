@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { copyEnrollmentDocs } from '@/lib/enrollment/attach-documents';
 
 interface ConversionInput {
   preEnrollmentId: string;
@@ -58,6 +59,7 @@ export async function convertPreEnrollment(
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // (la copie des pièces se fait après la transaction — I/O Storage)
       // 1. Person (chercher d'abord un existant par email)
       const emailNormalized = input.email.trim().toLowerCase();
       let person = await tx.person.findFirst({
@@ -208,9 +210,47 @@ export async function convertPreEnrollment(
       return { personId: person.id, orgId };
     });
 
+    // ── Pièces justificatives → fiche apprenant ──────────────────────
+    // Les pièces déposées vivent dans le bucket `preinscriptions` ; la fiche
+    // apprenant lit dans `qualiof-docs`. Sans cette copie, l'apprenant validé
+    // se retrouve sans CNI, sans RIB et sans attestation CFP (bug 28/08/2026).
+    // Hors transaction : ce sont des I/O réseau, pas de la base.
+    const copies = await copyEnrollmentDocs(
+      { cniKey: pe.cniKey, ribKey: pe.ribKey, cfpKey: pe.cfpKey },
+      user.tenantId,
+      result.personId,
+    );
+    for (const w of copies.warnings) {
+      console.warn(`[conversion ${pe.id}] ${w}`);
+    }
+
+    if (copies.cniKey) {
+      await prisma.sensitiveData.upsert({
+        where: { personId: result.personId },
+        create: { personId: result.personId, idDocumentUrl: copies.cniKey },
+        update: { idDocumentUrl: copies.cniKey },
+      });
+    }
+    if (copies.ribKey) {
+      await prisma.person.update({
+        where: { id: result.personId },
+        data: { ribKey: copies.ribKey },
+      });
+    }
+    // L'attestation CFP se range sur le profil AGEFICE de l'organisation :
+    // sans organisation rattachée, il n'y a nulle part où la mettre.
+    if (copies.cfpKey && result.orgId) {
+      await prisma.ageficeProfile.upsert({
+        where: { organizationId: result.orgId },
+        create: { organizationId: result.orgId, cfpAttestationKey: copies.cfpKey, paFields: {} },
+        update: { cfpAttestationKey: copies.cfpKey },
+      });
+    }
+
     revalidatePath('/app/inscriptions');
     revalidatePath(`/app/inscriptions/${input.preEnrollmentId}`);
     revalidatePath('/app/apprenants');
+    revalidatePath(`/app/apprenants/${result.personId}`);
 
     return { ok: true, personId: result.personId, orgId: result.orgId ?? undefined };
   } catch (e: any) {
