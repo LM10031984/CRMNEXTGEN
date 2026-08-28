@@ -335,6 +335,55 @@ describe('generateConventionCore — garde anti-doublon', () => {
   });
 
   /**
+   * 28/08 — le trou restant : PREMIÈRE convention d'une entreprise.
+   *
+   * La garde ci-dessus ne protège que si une convention groupe existe DÉJÀ.
+   * Deux chemins appellent encore le cœur individuel sans router par la règle
+   * payeur (`sessions.addParticipant` à l'inscription, `closure-pack` au pack
+   * de clôture) : sur le 1er salarié inscrit chez ASSALIT SYNDIC, aucune
+   * convention groupe n'existe encore, et une NOMINATIVE était fabriquée.
+   *
+   * Ceinture : payeur personne morale ⇒ le cœur individuel ne produit rien.
+   * Il retourne un succès `skipped` (les flux batch ne doivent pas échouer) et
+   * laisse `routeConventionsByPayerRule` émettre la convention de groupe.
+   *
+   * Test de puissance : retirer le `isPersonneMoralePayeur(...)` du cœur fait
+   * virer ROUGE « ne fabrique aucune nominative ».
+   */
+  it('ne fabrique AUCUNE nominative pour un salarié quand la convention groupe reste à émettre', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      ...PARTICIPANT,
+      sponsorOrg: { ...PARTICIPANT.sponsorOrg, legalName: 'ASSALIT SYNDIC', legalForm: 'SARL' },
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue(null); // aucune groupe encore
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    const res = await generateConventionCore('tnt-1', 'sp-1');
+
+    expect(res.ok).toBe(true);
+    expect(res.skipped).toBe(true);
+    expect(res.documentId).toBeUndefined();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('laisse passer le chemin individuel pour un auto-payeur (EI)', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      ...PARTICIPANT,
+      sponsorOrg: { ...PARTICIPANT.sponsorOrg, legalForm: 'EI' },
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue(null);
+    prisma.document.create = createMock;
+
+    const { generateConventionCore } = await importCore();
+    await generateConventionCore('tnt-1', 'sp-1');
+
+    expect(createMock).toHaveBeenCalled();
+  });
+
+  /**
    * Quick 260821-md8 — la garde doit voir les DEUX formes de stockage.
    *
    * Sur SES-0107 / SES-0108 la convention de groupe existante est celle des
