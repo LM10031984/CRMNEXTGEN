@@ -148,7 +148,19 @@ export default async function SessionDetailPage({
           select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
         }),
         prisma.pedagogicalAsset.findMany({
-          where: { tenantId: user.tenantId, sessionId: session.id, participantId: { in: sessionParticipantIds }, pdfUrl: { not: null } },
+          where: {
+            tenantId: user.tenantId,
+            sessionId: session.id,
+            pdfUrl: { not: null },
+            OR: [
+              { participantId: { in: sessionParticipantIds } },
+              // Analyse des besoins d'ENTREPRISE (28/08) : UN asset couvre tout
+              // le groupe, donc `participantId = null`. Sans ce OR, les 8
+              // salariés d'ASSALIT affichent « analyse manquante » alors que le
+              // document exigé — celui de la structure — existe.
+              { participantId: null },
+            ],
+          },
           select: { id: true, kind: true, participantId: true },
         }),
         prisma.invoice.findMany({
@@ -235,6 +247,20 @@ export default async function SessionDetailPage({
     const m = assetsByParticipant.get(a.participantId) ?? new Map();
     m.set(a.kind, a.id);
     assetsByParticipant.set(a.participantId, m);
+  }
+  // Analyse des besoins d'ENTREPRISE : asset de niveau session, reporté sur
+  // chaque salarié dont le payeur est une personne morale — même mécanique que
+  // la convention de groupe. Les auto-payeurs gardent leur analyse nominative.
+  const analyseEntrepriseAssetId =
+    sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
+  if (analyseEntrepriseAssetId) {
+    for (const p of session.participants) {
+      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      const m = assetsByParticipant.get(p.id) ?? new Map();
+      // Ne jamais écraser une analyse nominative déjà rendue.
+      if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
+      assetsByParticipant.set(p.id, m);
+    }
   }
 
   // Indexe les factures par participant. Une facture peut couvrir plusieurs
@@ -647,6 +673,8 @@ export default async function SessionDetailPage({
         hasConvention: boolean;
         /** Convention groupe déjà en base — sert à l'ouvrir depuis le panneau. */
         conventionDocId: string | null;
+        /** Analyse des besoins d'entreprise (asset de niveau session), si rendue. */
+        analyseAssetId: string | null;
       }
     >();
     for (const p of session.participants) {
@@ -664,6 +692,7 @@ export default async function SessionDetailPage({
           // présente en production sur SES-0107 / SES-0108.
           hasConvention: groupConventionByParticipant.has(p.id),
           conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
+          analyseAssetId: analyseEntrepriseAssetId,
         };
       g.participantCount += 1;
       map.set(p.sponsorOrgId, g);
