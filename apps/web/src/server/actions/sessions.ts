@@ -26,6 +26,8 @@ import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { normalizeNullableText } from '@/lib/sessions/normalize-nullable-text';
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
 import { generateClosurePack } from './closure-pack';
+import { applyPriceCascade } from '@/lib/pricing/cascade';
+import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 // Zod schema pour unenrollParticipant — UUID strict pour participantId
 const UnenrollInputSchema = z.object({
@@ -57,9 +59,13 @@ export async function addParticipant(input: {
     throw e;
   }
 
-  // Vérifie que la session, la personne et l'org appartiennent au tenant
+  // Vérifie que la session, la personne et l'org appartiennent au tenant.
+  // Le produit est chargé pour la cascade tarifaire (forfait groupe / catalogue).
   const [session, person, sponsor] = await Promise.all([
-    prisma.trainingSession.findFirst({ where: { id: input.sessionId, tenantId: user.tenantId } }),
+    prisma.trainingSession.findFirst({
+      where: { id: input.sessionId, tenantId: user.tenantId },
+      include: { product: { select: { priceHT: true, groupFlatPrice: true } } },
+    }),
     prisma.person.findFirst({ where: { id: input.personId, tenantId: user.tenantId } }),
     prisma.organization.findFirst({ where: { id: input.sponsorOrgId, tenantId: user.tenantId } }),
   ]);
@@ -89,6 +95,8 @@ export async function addParticipant(input: {
     });
   }
 
+  const defaultPrice = resolveDefaultParticipantPrice(session, session.product, sponsor);
+
   try {
     const part = await prisma.sessionParticipant.upsert({
       where: { sessionId_personId: { sessionId: input.sessionId, personId: input.personId } },
@@ -96,7 +104,11 @@ export async function addParticipant(input: {
         sessionId: input.sessionId,
         personId: input.personId,
         sponsorOrgId: input.sponsorOrgId,
-        priceHT: new Prisma.Decimal(input.priceHT ?? 0),
+        // E-2 — le défaut était 0 : tout inscrit ajouté après la création de
+        // session arrivait à zéro euro sur sa convention et sa facture. La
+        // règle vit désormais dans resolveDefaultParticipantPrice (source
+        // unique), qui gère aussi le cas du forfait groupe.
+        priceHT: new Prisma.Decimal(input.priceHT ?? defaultPrice.priceHT),
         enrollmentStatus: EnrollmentStatus.PRE_ENROLLED,
       },
       update: {
@@ -303,43 +315,89 @@ export async function updateParticipant(input: {
   }
 
   const data: Prisma.SessionParticipantUpdateInput = {};
+  // E-4 (audit 2026-08-28) — cette action ecrivait sans laisser de trace, alors
+  // qu'elle touche precisement les champs contestables en audit ou par un
+  // financeur : tarif, statut d'inscription, mode et date de dossier. Meme
+  // patron de diff que `updateSessionDetails`, ecrit dans la meme transaction.
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+
   if (input.priceHT !== undefined) {
     if (input.priceHT < 0) return { ok: false, error: 'Le prix HT ne peut pas être négatif.' };
-    data.priceHT = new Prisma.Decimal(input.priceHT);
+    const oldPrice = Number(part.priceHT);
+    if (oldPrice !== input.priceHT) {
+      data.priceHT = new Prisma.Decimal(input.priceHT);
+      before.priceHT = oldPrice;
+      after.priceHT = input.priceHT;
+    }
   }
-  if (input.enrollmentStatus) data.enrollmentStatus = EnrollmentStatus[input.enrollmentStatus];
-  if (input.sponsorOrgId) {
+  if (input.enrollmentStatus && EnrollmentStatus[input.enrollmentStatus] !== part.enrollmentStatus) {
+    data.enrollmentStatus = EnrollmentStatus[input.enrollmentStatus];
+    before.enrollmentStatus = part.enrollmentStatus;
+    after.enrollmentStatus = input.enrollmentStatus;
+  }
+  if (input.sponsorOrgId && input.sponsorOrgId !== part.sponsorOrgId) {
     const sponsor = await prisma.organization.findFirst({
       where: { id: input.sponsorOrgId, tenantId: user.tenantId },
     });
     if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
     data.sponsorOrg = { connect: { id: input.sponsorOrgId } };
+    before.sponsorOrgId = part.sponsorOrgId;
+    after.sponsorOrgId = input.sponsorOrgId;
   }
   if (input.financingRequestDate !== undefined) {
+    let newDate: Date | null;
     if (input.financingRequestDate === null || input.financingRequestDate === '') {
-      data.financingRequestDate = null;
+      newDate = null;
     } else {
       const d = new Date(input.financingRequestDate);
       if (Number.isNaN(d.getTime())) return { ok: false, error: 'Date dossier invalide.' };
-      data.financingRequestDate = d;
+      newDate = d;
+    }
+    const oldIso = part.financingRequestDate?.toISOString() ?? null;
+    const newIso = newDate?.toISOString() ?? null;
+    if (oldIso !== newIso) {
+      data.financingRequestDate = newDate;
+      before.financingRequestDate = oldIso;
+      after.financingRequestDate = newIso;
     }
   }
   if (input.financingMode !== undefined) {
+    let newMode: FinancingMode | null;
     if (input.financingMode === null) {
-      data.financingMode = null;
+      newMode = null;
     } else if (FinancingMode[input.financingMode]) {
-      data.financingMode = FinancingMode[input.financingMode];
+      newMode = FinancingMode[input.financingMode];
     } else {
       return { ok: false, error: 'Mode de financement invalide.' };
     }
+    if (newMode !== part.financingMode) {
+      data.financingMode = newMode;
+      before.financingMode = part.financingMode;
+      after.financingMode = newMode;
+    }
   }
 
+  // No-op si rien n'a change : evite un AuditLog vide et une ecriture inutile
+  // (meme regle que `updateSessionDetails`).
   if (Object.keys(data).length === 0) return { ok: true };
 
-  await prisma.sessionParticipant.update({
-    where: { id: input.participantId },
-    data,
-  });
+  await prisma.$transaction([
+    prisma.sessionParticipant.update({
+      where: { id: input.participantId },
+      data,
+    }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'SessionParticipant',
+        entityId: input.participantId,
+        action: 'sessionParticipants.update',
+        diff: { before, after } as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
   revalidatePath(`/app/sessions/${part.session.id}`);
   revalidatePath('/app/budget-agefice');
   return { ok: true };
@@ -1315,6 +1373,30 @@ export async function updateSessionDetails(
       },
     }),
   ]);
+
+  // E-2 — un tarif de session qui ne descend pas jusqu'aux inscrits ne sert a
+  // rien : ce sont `SessionParticipant.priceHT` que lisent la convention, la
+  // demande de prise en charge et la facture. La cascade ne touche que les
+  // inscrits qui n'engagent encore personne (cf. lib/pricing/classify-participant).
+  if (updateData.pricePerLearner !== undefined) {
+    try {
+      await applyPriceCascade({
+        tenantId: user.tenantId,
+        userId: user.id,
+        sessionId: data.sessionId,
+        newPrice: (after.pricePerLearner as number | null) ?? null,
+      });
+    } catch (e) {
+      revalidatePath(`/app/sessions/${data.sessionId}`);
+      return {
+        ok: false,
+        error:
+          "Tarif de session enregistre, mais la propagation aux inscrits a echoue : "
+          + ((e as Error)?.message ?? 'erreur inconnue')
+          + ". Les conventions et factures portent encore l'ancien montant.",
+      };
+    }
+  }
 
   revalidatePath(`/app/sessions/${data.sessionId}`);
   return { ok: true };
