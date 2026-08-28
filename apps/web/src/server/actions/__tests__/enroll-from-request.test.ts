@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   organizationFindFirst: vi.fn(),
   participantFindUnique: vi.fn(),
   participantCreate: vi.fn(),
+  sessionFindFirst: vi.fn(),
   convertPreEnrollment: vi.fn(),
   prepareTrainingForSession: vi.fn(),
 }));
@@ -24,6 +25,7 @@ vi.mock('@qualiof/db', () => ({
     preEnrollment: { findFirst: m.preEnrollmentFindFirst },
     organization: { findFirst: m.organizationFindFirst },
     sessionParticipant: { findUnique: m.participantFindUnique, create: m.participantCreate },
+    trainingSession: { findFirst: m.sessionFindFirst },
   },
   Prisma: { Decimal: Number },
 }));
@@ -61,12 +63,14 @@ beforeEach(() => {
   m.organizationFindFirst.mockResolvedValue(null);
   m.participantFindUnique.mockResolvedValue(null);
   m.participantCreate.mockResolvedValue({ id: 'part-1' });
+  // Par défaut la session n'a pas de tarif propre → le participant naît à 0 €.
+  m.sessionFindFirst.mockResolvedValue({ pricePerLearner: null });
   m.convertPreEnrollment.mockResolvedValue({ ok: true, personId: 'per-1', orgId: 'org-1' });
   m.prepareTrainingForSession.mockResolvedValue({ ok: true });
 });
 
 describe('enrollFromRequest', () => {
-  it('convertit puis crée le participant avec priceHT à 0', async () => {
+  it('convertit puis crée le participant, à 0 € quand la session n’a pas de tarif', async () => {
     const r = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
     expect(r).toEqual({ ok: true, participantId: 'part-1' });
     const data = m.participantCreate.mock.calls[0]![0].data;
@@ -75,6 +79,20 @@ describe('enrollFromRequest', () => {
     expect(data.sponsorOrgId).toBe('org-1');
     expect(Number(data.priceHT)).toBe(0);
     expect(data.enrollmentStatus).toBe('PRE_ENROLLED');
+  });
+
+  it('hérite du tarif de la session quand elle en porte un', async () => {
+    m.sessionFindFirst.mockResolvedValue({ pricePerLearner: 850 });
+    await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(Number(m.participantCreate.mock.calls[0]![0].data.priceHT)).toBe(850);
+  });
+
+  it('lit le tarif de la session en restant scopé au tenant', async () => {
+    await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(m.sessionFindFirst.mock.calls[0]![0].where).toMatchObject({
+      id: 'ses-1',
+      tenantId: 'tenant-1',
+    });
   });
 
   it('régénère les documents pour ce participant', async () => {
