@@ -453,6 +453,12 @@ model TrainingSession {
   disabilityAdaptations String?
   // Suivi commercial
   preEnrollmentsFromMls Int                  @default(0) // NB_pre_inscription Airtable
+  // Lien public d'inscription (spec 2026-08-28). publicToken null = jamais
+  // ouvert ; publicFormClosedAt non null = fermé. Régénérer le jeton invalide
+  // l'ancien lien immédiatement.
+  publicToken           String?              @unique
+  publicFormOpenedAt    DateTime?
+  publicFormClosedAt    DateTime?
   // Relations
   participants          SessionParticipant[]
   trainers              SessionTrainer[]
@@ -1309,6 +1315,16 @@ model PreEnrollment {
   educationLevel         String?
   diploma                String?
   professionalExperience String?
+  // Champs du formulaire public par session (spec 2026-08-28). Le n° de
+  // sécurité sociale n'est VOLONTAIREMENT pas ici : il va directement dans
+  // SensitiveData à la validation (minimisation RGPD).
+  birthName              String?
+  address                String?
+  city                   String?
+  postalCode             String?
+  companyName            String?
+  companySiret           String?
+  managerSince           String?
   // Fichiers MinIO (clés relatives au bucket)
   cniKey                 String?
   ribKey                 String?
@@ -1342,6 +1358,7 @@ model PreEnrollment {
 
   @@index([tenantId, status])
   @@index([token])
+  @@index([intendedSessionId, status])
 }
 
 // Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
