@@ -306,13 +306,23 @@ ${proposition}`
       prompt: userPrompt,
       jsonOutput: true,
       temperature: 0.4, // un peu de créativité pour le programmeMd, sans dériver
-      maxTokens: 4096,
+      // 8192 depuis le 28/08 : le JSON porte dix champs dont un programme
+      // jour par jour. À 4096, une formation longue faisait couper la réponse
+      // en plein JSON — l'erreur remontée parlait alors de « JSON invalide »
+      // là où il manquait simplement de la place.
+      maxTokens: 8192,
     });
 
     if (!r.parsedJson || typeof r.parsedJson !== 'object') {
+      // Dire ce qui s'est VRAIMENT passé : une réponse coupée par la limite de
+      // tokens n'est pas un modèle capricieux, et « ajuste les paramètres »
+      // envoyait chercher au mauvais endroit.
+      const coupee = r.finishReason === 'length';
       return {
         ok: false,
-        error: `Le modèle n'a pas retourné un JSON valide. Réessaie ou ajuste les paramètres.`,
+        error: coupee
+          ? "La réponse a été coupée avant la fin (programme trop long pour une seule génération). Relancez : si cela se reproduit, réduisez la durée, ou créez le programme en deux fois."
+          : "Le modèle n'a pas retourné un JSON valide. Relancez la génération.",
         durationMs: r.durationMs,
       };
     }
