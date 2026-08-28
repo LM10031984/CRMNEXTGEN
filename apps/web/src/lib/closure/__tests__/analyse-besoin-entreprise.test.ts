@@ -60,6 +60,10 @@ vi.mock('../shared-template', async () => {
   return {
     ...actual,
     renderBrandHeader: () => '<header></header>',
+    // `wrapHtml` lit la config OF en synchrone (getOfConfig) : hors runtime
+    // applicatif elle n'existe pas. Le corps du document, lui, reste réel —
+    // c'est ce que les tests inspectent.
+    wrapHtml: ({ bodyHtml }: { bodyHtml: string }) => bodyHtml,
     loadSignatureDataUrl: () => '',
     loadStampDataUrl: () => '',
   };

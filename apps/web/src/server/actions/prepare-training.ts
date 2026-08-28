@@ -514,6 +514,49 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     });
     analyseBesoinEntreprisePresente = abEntreprise ? 1 : 0;
     analyseBesoinEntrepriseAttendue = targets.entreprisesEnAttente.length;
+
+    // Analyse des besoins d'ENTREPRISE (28/08) — la moitié qui PRODUIT.
+    //
+    // La quick 260821-md8 avait arrêté la production par stagiaire sans écrire
+    // la variante entreprise : la session restait sans analyse, et le document
+    // ne pouvait venir que d'un script hors app (SES-0107 / SES-0108).
+    //
+    // UNE seule génération, même si plusieurs entreprises commanditent : le
+    // schéma ne porte qu'une analyse de niveau session
+    // (`@@unique([sessionId, participantId, kind])`), donc la seconde écraserait
+    // la première — deux appels IA payés pour un document. On produit la
+    // première et on journalise le cas.
+    const [entrepriseCible] = targets.entreprisesEnAttente;
+    if (entrepriseCible) {
+      if (targets.entreprisesEnAttente.length > 1) {
+        console.warn(
+          '[prepareSession] session MULTI-commanditaires : analyse d’entreprise produite pour le premier seulement —',
+          sessionId,
+          targets.entreprisesEnAttente.map((g) => g.sponsorOrgId),
+        );
+      }
+      const { generateAnalyseBesoinEntrepriseCore } = await import(
+        '@/lib/closure/analyse-besoin-entreprise-core'
+      );
+      const r = await generateAnalyseBesoinEntrepriseCore(
+        user.tenantId,
+        sessionId,
+        entrepriseCible.sponsorOrgId,
+      ).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+      if (r.ok) {
+        analyseBesoinEntreprisePresente = 1;
+        analyseBesoinEntrepriseAttendue = 0;
+      } else {
+        errors.push({
+          participantName: entrepriseCible.sponsorName ?? '(entreprise)',
+          doc: 'ANALYSE_BESOIN',
+          message: r.error ?? 'Erreur inconnue',
+        });
+      }
+    }
     analyseBesoinSkipped = participantIds.length - targets.participantIds.length;
 
     // Aucune cible ⇒ AUCUN batch : un batch vide pollue la barre de progression.

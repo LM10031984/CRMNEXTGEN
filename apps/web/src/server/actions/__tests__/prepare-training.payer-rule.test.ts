@@ -32,6 +32,7 @@ const m = vi.hoisted(() => ({
   auditLogCreate: vi.fn(),
   productUpdate: vi.fn(),
   generateConventionCore: vi.fn(),
+  generateAnalyseBesoinEntrepriseCore: vi.fn(),
   generateConventionEntrepriseCore: vi.fn(),
   generateConvocationForParticipant: vi.fn(),
   generateProgrammeForProduct: vi.fn(),
@@ -59,6 +60,9 @@ vi.mock('@/lib/auth', () => ({ lucia: {}, validateRequest: m.validateRequest }))
 // Le routeur `routeConventionsByPayerRule` (extrait le 28/08 vers
 // `@/lib/closure/route-conventions`) n'appelle QUE les cœurs sans auth — d'où
 // le mock du cœur individuel et non plus celui du wrapper server action.
+vi.mock('@/lib/closure/analyse-besoin-entreprise-core', () => ({
+  generateAnalyseBesoinEntrepriseCore: m.generateAnalyseBesoinEntrepriseCore,
+}));
 vi.mock('@/lib/closure/convention-core', () => ({
   generateConventionCore: m.generateConventionCore,
   generateConventionEntrepriseCore: m.generateConventionEntrepriseCore,
@@ -128,6 +132,7 @@ beforeEach(() => {
   m.generateDerouleForProduct.mockResolvedValue({ ok: true });
   m.generateChecklistForSession.mockResolvedValue({ ok: true });
   m.generateConventionCore.mockResolvedValue({ ok: true, documentId: 'doc-indiv' });
+  m.generateAnalyseBesoinEntrepriseCore.mockResolvedValue({ ok: true, assetId: 'asset-1', count: 8 });
   m.generateConventionEntrepriseCore.mockResolvedValue({ ok: true, documentId: 'doc-groupe', count: 1 });
   m.generateConvocationForParticipant.mockResolvedValue({ ok: true, documentId: 'doc-convoc' });
   m.generateAgeficeForParticipant.mockResolvedValue({ ok: true });
@@ -250,15 +255,24 @@ describe('prepareSession — analyse des besoins', () => {
     expect(m.closureBatchCreate).not.toHaveBeenCalled();
   });
 
-  it('affiche honnêtement l’analyse d’ENTREPRISE manquante', async () => {
+  /**
+   * 28/08 — le compteur reste HONNÊTE quand la génération d'entreprise échoue :
+   * l'analyse est toujours attendue, et surtout on n'a pas replié sur des
+   * analyses par stagiaire (deux natures de document).
+   */
+  it('affiche honnêtement l’analyse d’ENTREPRISE manquante quand sa génération échoue', async () => {
     seedSession(EXPERTA);
+    m.generateAnalyseBesoinEntrepriseCore.mockResolvedValue({
+      ok: false,
+      error: 'IA indisponible',
+    });
     const { prepareSession } = await importActions();
     const res = await prepareSession('ses-1');
 
     expect(res.analyseBesoinEntrepriseAttendue).toBe(1);
     expect(res.analyseBesoinEntreprisePresente).toBe(0);
-    // Surtout pas gonfler le compteur par stagiaire : deux natures de document.
     expect(res.analyseBesoinEnqueued).toBe(0);
+    expect(res.errors.some((e) => e.doc === 'ANALYSE_BESOIN')).toBe(true);
   });
 
   it('voit l’analyse d’entreprise déjà rendue (asset session, participantId=null)', async () => {
@@ -295,7 +309,75 @@ describe('prepareSession — analyse des besoins', () => {
     expect(res.analyseBesoinEnqueued).toBe(2);
     const enfiles = m.enqueueClosureJob.mock.calls.map((c) => c[0].participantId).sort();
     expect(enfiles).toEqual(['sp-a1', 'sp-a2']);
-    expect(res.analyseBesoinEntrepriseAttendue).toBe(1);
+    // L'analyse d'entreprise est produite en plus (28/08) : plus rien en attente.
+    expect(res.analyseBesoinEntreprisePresente).toBe(1);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(0);
+  });
+});
+
+describe('prepareSession — analyse des besoins d\u2019ENTREPRISE', () => {
+  beforeEach(() => {
+    m.closureBatchCreate.mockImplementation(async (args: any) => ({
+      id: 'batch-1',
+      jobs: (args.data.jobs?.create ?? []).map((j: any, i: number) => ({
+        id: `job-${i}`,
+        participantId: j.participantId,
+        kind: j.kind,
+      })),
+    }));
+  });
+
+  /**
+   * 28/08 — la quick 260821-md8 avait ARRÊTÉ la production par stagiaire sans
+   * produire la variante entreprise : la session restait sans analyse, et le
+   * document ne pouvait venir que d'un script hors app. Ici on la produit.
+   */
+  it('produit UNE analyse au nom de l\u2019entreprise pour les 8 salariés d\u2019ASSALIT', async () => {
+    seedSession(ASSALIT);
+    const { prepareSession } = await import('../prepare-training');
+    const res = await prepareSession('ses-1');
+
+    expect(m.generateAnalyseBesoinEntrepriseCore).toHaveBeenCalledTimes(1);
+    expect(m.generateAnalyseBesoinEntrepriseCore).toHaveBeenCalledWith(
+      'tnt-1',
+      'ses-1',
+      'org-assalit',
+    );
+    // …et TOUJOURS zéro génération par stagiaire pour ces inscrits.
+    expect(m.enqueueClosureJob).not.toHaveBeenCalled();
+    expect(res.analyseBesoinEntreprisePresente).toBe(1);
+    expect(res.analyseBesoinEntrepriseAttendue).toBe(0);
+  });
+
+  it('ne régénère rien quand l\u2019analyse d\u2019entreprise existe déjà', async () => {
+    seedSession(ASSALIT);
+    m.pedagogicalAssetFindFirst.mockResolvedValue({ id: 'asset-existant' });
+    const { prepareSession } = await import('../prepare-training');
+    await prepareSession('ses-1');
+
+    expect(m.generateAnalyseBesoinEntrepriseCore).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Coût : le schéma ne peut porter QU'UNE analyse de niveau session
+   * (`@@unique([sessionId, participantId, kind])`). Générer les deux
+   * entreprises ferait payer deux appels IA pour un document qui en écrase un
+   * autre. On produit la première et on journalise.
+   */
+  it('sur une session multi-entreprises, ne paie QU\u2019UNE génération', async () => {
+    seedSession([...ASSALIT, ...EXPERTA]);
+    const { prepareSession } = await import('../prepare-training');
+    await prepareSession('ses-1');
+
+    expect(m.generateAnalyseBesoinEntrepriseCore).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne touche pas aux auto-payeurs : aucune analyse d\u2019entreprise', async () => {
+    seedSession(AUTO_PAYEURS);
+    const { prepareSession } = await import('../prepare-training');
+    await prepareSession('ses-1');
+
+    expect(m.generateAnalyseBesoinEntrepriseCore).not.toHaveBeenCalled();
   });
 });
 
