@@ -55,6 +55,7 @@ import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
 import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
+import { SessionEnrollmentRequests } from '@/components/sessions/session-enrollment-requests';
 import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
@@ -566,12 +567,39 @@ export default async function SessionDetailPage({
   // Demandes reçues via le lien public et pas encore traitées : elles
   // occupent une place au même titre qu'un inscrit (le formulaire refuse
   // au-delà de capacityMax).
-  const pendingEnrollmentCount = await prisma.preEnrollment.count({
-    where: {
-      intendedSessionId: session.id,
-      status: { in: ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'] },
+  const enrollmentRequests = await prisma.preEnrollment.findMany({
+    where: { intendedSessionId: session.id },
+    orderBy: { submittedAt: 'desc' },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      status: true,
+      submittedAt: true,
+      companyName: true,
+      professionalStatus: true,
+      cniKey: true,
+      ribKey: true,
+      cfpKey: true,
     },
   });
+  const pendingEnrollmentCount = enrollmentRequests.filter((r) =>
+    ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'].includes(r.status),
+  ).length;
+  const enrollmentRequestRows = enrollmentRequests.map((r) => ({
+    id: r.id,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    email: r.email,
+    status: r.status,
+    submittedAt: r.submittedAt,
+    companyName: r.companyName,
+    professionalStatus: r.professionalStatus,
+    hasCni: Boolean(r.cniKey),
+    hasRib: Boolean(r.ribKey),
+    hasCfp: Boolean(r.cfpKey),
+  }));
   const enrollmentLinkState = publicLinkState({
     publicToken: session.publicToken,
     publicFormClosedAt: session.publicFormClosedAt,
@@ -1100,6 +1128,10 @@ export default async function SessionDetailPage({
               participantCount={session.participants.length}
               pendingCount={pendingEnrollmentCount}
               capacityMax={session.capacityMax}
+              canWrite={canWrite}
+            />
+            <SessionEnrollmentRequests
+              requests={enrollmentRequestRows}
               canWrite={canWrite}
             />
             {/* Status select + dates editor — gardés sous le hero pour édition
