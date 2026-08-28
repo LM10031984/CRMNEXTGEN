@@ -32,8 +32,8 @@ import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
+import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -102,6 +102,33 @@ export async function generateConventionCore(
     return {
       ok: true,
       documentId: groupConvention.id,
+      skipped: true,
+      sessionId: participant.session.id,
+      personId: participant.person.id,
+    };
+  }
+
+  // Ceinture du 28/08 — PREMIÈRE convention d'une entreprise.
+  //
+  // La garde ci-dessus ne joue que si la convention groupe existe déjà. Or
+  // deux chemins appellent encore le cœur individuel sans router par la règle
+  // payeur : `sessions.addParticipant` (auto-génération à l'inscription) et
+  // `closure-pack` (boucle sur les participants). Sur le 1er salarié inscrit
+  // chez une entreprise, aucune convention groupe n'existe encore — et une
+  // nominative était fabriquée, exactement ce que la règle du 12/08 interdit.
+  //
+  // Payeur personne morale ⇒ le cœur individuel ne produit RIEN. Succès
+  // `skipped` (les flux batch ne doivent pas tomber en échec) ; l'émission de
+  // la convention de groupe revient à `routeConventionsByPayerRule`, seul
+  // endroit qui traite les groupes EN SÉRIE — `generateConventionEntrepriseCore`
+  // supprime puis recrée des Documents, deux appels concurrents se
+  // marcheraient dessus.
+  //
+  // Forme juridique absente ⇒ chemin individuel (cf. `isPersonneMoralePayeur`) :
+  // on ne présume pas d'une convention de groupe sur une donnée manquante.
+  if (isPersonneMoralePayeur(participant.sponsorOrg?.legalForm)) {
+    return {
+      ok: true,
       skipped: true,
       sessionId: participant.session.id,
       personId: participant.person.id,

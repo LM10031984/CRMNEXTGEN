@@ -220,10 +220,11 @@ export default async function SessionDetailPage({
   // salariées d'OPTIMMO alors que la convention existe.
   // Résolution déléguée au helper partagé (revue Codex PR #13) : opco-submission
   // et le statut de préparation utilisent exactement la même règle.
-  for (const [participantId, docId] of expandGroupConventions(
+  const groupConventionByParticipant = expandGroupConventions(
     sessionDocs,
     session.participants.map((p) => ({ id: p.id, sponsorOrgId: p.sponsorOrg.id })),
-  )) {
+  );
+  for (const [participantId, docId] of groupConventionByParticipant) {
     const m = docsByParticipant.get(participantId) ?? new Map();
     // Ne jamais écraser une convention individuelle déjà en place.
     if (!m.has('CONVENTION')) m.set('CONVENTION', docId);
@@ -638,7 +639,14 @@ export default async function SessionDetailPage({
   const conventionGroupes = (() => {
     const map = new Map<
       string,
-      { sponsorOrgId: string; sponsorName: string; participantCount: number; hasConvention: boolean }
+      {
+        sponsorOrgId: string;
+        sponsorName: string;
+        participantCount: number;
+        hasConvention: boolean;
+        /** Convention groupe déjà en base — sert à l'ouvrir depuis le panneau. */
+        conventionDocId: string | null;
+      }
     >();
     for (const p of session.participants) {
       if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
@@ -648,12 +656,13 @@ export default async function SessionDetailPage({
           sponsorOrgId: p.sponsorOrgId,
           sponsorName: p.sponsorOrg.legalName,
           participantCount: 0,
-          hasConvention: sessionDocs.some(
-            (d) =>
-              d.type === 'CONVENTION' &&
-              d.entityType === 'organization' &&
-              d.entityId === p.sponsorOrgId,
-          ),
+          // Couverture lue via le helper partagé (28/08) : il reconnaît les
+          // DEUX formes de convention groupe (`organization` écrite par
+          // l'appli, `session` produite par les scripts `_gen-*`). Le filtre
+          // maison sur `entityType === 'organization'` manquait la seconde,
+          // présente en production sur SES-0107 / SES-0108.
+          hasConvention: groupConventionByParticipant.has(p.id),
+          conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
         };
       g.participantCount += 1;
       map.set(p.sponsorOrgId, g);

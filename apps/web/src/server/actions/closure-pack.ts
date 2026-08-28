@@ -11,7 +11,10 @@ import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateGrilleObsSessionForSession } from './generate-grille-obs-session';
 import { generateProgrammeForProduct } from './programme-generator';
-import { generateConventionForParticipant } from './convention-generator';
+import {
+  routeConventionsByPayerRule,
+  ROUTABLE_PARTICIPANT_SELECT,
+} from '@/lib/closure/route-conventions';
 import { generateAgeficeForParticipant } from './agefice-generator';
 
 /**
@@ -99,7 +102,12 @@ export async function generateClosurePack(
             ? { id: { in: options.participantIds } }
             : {}),
         },
-        select: { id: true, sponsorOrg: { select: { opcoCode: true } } },
+        // `opcoCode` pour l'éligibilité AGEFICE ; le reste (28/08) pour la règle
+        // payeur, appliquée AVANT toute génération de convention.
+        select: {
+          ...ROUTABLE_PARTICIPANT_SELECT,
+          sponsorOrg: { select: { id: true, legalName: true, legalForm: true, opcoCode: true } },
+        },
       },
     },
   });
@@ -148,15 +156,23 @@ export async function generateClosurePack(
   // Convention + AGEFICE par participant — find-or-create dans le generator
   // (skip si Document de ce type existe déjà pour ce participant).
   const sessionParticipantList = session.participants;
+  // Conventions : règle payeur (28/08). La boucle appelait le cœur individuel
+  // pour TOUS les inscrits — sur une session d'entreprise sans convention de
+  // groupe encore émise, elle fabriquait une nominative par salarié, ce que la
+  // règle du 12/08 interdit. Le routeur émet UNE convention par commanditaire
+  // personne morale (en série) et garde le chemin individuel aux auto-payeurs.
+  const conventionRouting = await routeConventionsByPayerRule(
+    user.tenantId,
+    sessionId,
+    sessionParticipantList,
+  );
+  for (const e of conventionRouting.errors) {
+    console.warn(`[closure-pack] convention non générée pour ${e.participantName} :`, e.message);
+  }
   await Promise.allSettled(
     sessionParticipantList.flatMap((p) => {
       const tasks: Promise<unknown>[] = [];
       const isAgefice = p.sponsorOrg?.opcoCode === 'AGEFICE';
-      tasks.push(
-        generateConventionForParticipant(p.id).catch((e) => {
-          console.warn(`[closure-pack] convention non générée pour ${p.id} :`, e?.message ?? e);
-        }),
-      );
       if (isAgefice) {
         tasks.push(
           generateAgeficeForParticipant(p.id).catch((e) => {

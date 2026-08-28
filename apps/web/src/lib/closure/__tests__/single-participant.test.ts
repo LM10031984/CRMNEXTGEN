@@ -79,8 +79,13 @@ vi.mock('../../../server/actions/generate-grille-obs-session', () => ({
 vi.mock('../../../server/actions/programme-generator', () => ({
   generateProgrammeForProduct: vi.fn().mockResolvedValue({ ok: true }),
 }));
-vi.mock('../../../server/actions/convention-generator', () => ({
-  generateConventionForParticipant: vi.fn().mockResolvedValue({ ok: true }),
+// Conventions : closure-pack passe par le routeur règle payeur depuis le 28/08
+// (une convention d'entreprise par commanditaire, plus une par salarié).
+vi.mock('@/lib/closure/route-conventions', () => ({
+  ROUTABLE_PARTICIPANT_SELECT: { id: true },
+  routeConventionsByPayerRule: vi
+    .fn()
+    .mockResolvedValue({ covered: 0, groupsCount: 0, individuelsCount: 0, errors: [] }),
 }));
 vi.mock('../../../server/actions/agefice-generator', () => ({
   generateAgeficeForParticipant: vi.fn().mockResolvedValue({ ok: true }),

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Building2, FileSignature, Loader2, Check } from 'lucide-react';
+import { Building2, FileSignature, FileText, Loader2, Check } from 'lucide-react';
 import { generateConventionEntreprise } from '@/server/actions/convention-generator';
 
 /**
@@ -26,6 +26,14 @@ export interface CommanditaireGroupe {
   participantCount: number;
   /** true si une convention groupe existe déjà pour ce commanditaire. */
   hasConvention: boolean;
+  /**
+   * Document de la convention groupe déjà générée, s'il existe.
+   *
+   * Sans ce lien (constat Laurent du 28/08), le panneau annonçait « convention
+   * générée » sans jamais dire où la trouver : le PDF n'était accessible que
+   * par la ligne « Convention » de chaque salarié dans l'onglet « Avant ».
+   */
+  conventionDocId?: string | null;
 }
 
 interface Props {
@@ -83,6 +91,16 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                     <span className="ml-2 inline-flex items-center gap-1 text-emerald-700">
                       <Check className="h-3 w-3" /> convention générée
                     </span>
+                  )}
+                  {g.conventionDocId && (
+                    <a
+                      href={`/api/documents/${g.conventionDocId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-2 inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:no-underline"
+                    >
+                      <FileText className="h-3 w-3" /> Ouvrir le PDF
+                    </a>
                   )}
                 </div>
               </div>

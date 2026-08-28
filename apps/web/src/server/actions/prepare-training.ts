@@ -4,11 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { generateProgrammeForProduct } from './programme-generator';
-import { generateConventionForParticipant } from './convention-generator';
-// Cœur SANS auth : `prepareSession` tourne parfois en fire-and-forget, sans
-// contexte d'auth. Ne JAMAIS appeler ici le wrapper `generateConventionEntreprise`,
-// qui fait `requireRole`.
-import { generateConventionEntrepriseCore } from '@/lib/closure/convention-core';
 import {
   GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
@@ -19,6 +14,12 @@ import {
   selectAnalyseBesoinTargets,
   isPersonneMoralePayeur,
 } from '@/lib/sessions/payer-rule';
+import {
+  routeConventionsByPayerRule,
+  toPayerParticipants,
+  ROUTABLE_PARTICIPANT_SELECT,
+  type RoutableParticipant,
+} from '@/lib/closure/route-conventions';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
@@ -27,104 +28,14 @@ import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
 
 /**
- * Inscrit tel que les deux orchestrateurs le chargent — le commanditaire et sa
- * forme juridique sont nécessaires pour appliquer la règle payeur AVANT toute
- * génération.
+ * Règle payeur des conventions : le routeur vit désormais dans
+ * `@/lib/closure/route-conventions` (28/08). Il était privé ici, si bien que
+ * `sessions.addParticipant` et `closure-pack` — qui génèrent eux aussi des
+ * conventions — ne l'utilisaient pas et fabriquaient des nominatives pour des
+ * salariés d'entreprise. Un seul routeur, trois appelants.
  */
-interface PrepareParticipant {
-  id: string;
-  sponsorOrgId: string;
-  sponsorOrg: { id: string; legalName: string; legalForm: string } | null;
-  person: { firstName: string; lastName: string };
-}
-
-/** `select` partagé — une seule définition, pour que les deux chemins voient la même chose. */
-const PREPARE_PARTICIPANT_SELECT = {
-  id: true,
-  sponsorOrgId: true,
-  sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
-  person: { select: { firstName: true, lastName: true } },
-} as const;
-
-/** Projection vers la forme attendue par les helpers purs de `payer-rule`. */
-function toPayerParticipants(participants: ReadonlyArray<PrepareParticipant>) {
-  return participants.map((p) => ({
-    id: p.id,
-    sponsorOrgId: p.sponsorOrgId,
-    sponsorLegalForm: p.sponsorOrg?.legalForm,
-    sponsorName: p.sponsorOrg?.legalName,
-  }));
-}
-
-interface ConventionRouting {
-  /** Inscrits COUVERTS par une convention (groupe ou individuelle). */
-  covered: number;
-  groupsCount: number;
-  individuelsCount: number;
-  errors: { participantName: string; message: string }[];
-}
-
-/**
- * Applique la règle payeur du 12/08 aux conventions d'une session.
- *
- * Payeur personne morale ⇒ UNE convention de groupe par commanditaire ;
- * auto-payeur ⇒ chemin individuel inchangé. Jamais les deux pour un même
- * inscrit — la session porterait deux conventions contradictoires, ce qui se
- * voit en audit (constat du 21/08 sur SES-0107 / SES-0108).
- *
- * Helper PARTAGÉ par `prepareTrainingForSession` et `prepareSession` : ils sont
- * appelés depuis des chemins différents (bouton « Préparer » vs création de
- * session en fire-and-forget), et corriger un seul laisserait l'autre produire
- * le mauvais document.
- *
- * Les groupes sont traités EN SÉRIE : `generateConventionEntrepriseCore`
- * supprime puis recrée des Documents de la même session, deux appels
- * concurrents se marcheraient dessus.
- */
-async function routeConventionsByPayerRule(
-  tenantId: string,
-  sessionId: string,
-  participants: ReadonlyArray<PrepareParticipant>,
-): Promise<ConventionRouting> {
-  const { groups, individuels } = partitionByPayerRule(toPayerParticipants(participants));
-
-  const errors: ConventionRouting['errors'] = [];
-  // Compte les inscrits COUVERTS, pas le nombre d'appels : sinon la fiche
-  // session afficherait « 1 convention / 8 inscrits » sur ASSALIT et
-  // déclencherait à tort l'action de masse qui régénère des individuelles.
-  let covered = 0;
-
-  for (const g of groups) {
-    const r = await generateConventionEntrepriseCore(tenantId, sessionId, g.sponsorOrgId).catch(
-      (e: unknown) => ({
-        ok: false as const,
-        error: e instanceof Error ? e.message : String(e),
-      }),
-    );
-    if (r.ok) covered += g.participantIds.length;
-    else
-      errors.push({
-        participantName: g.sponsorName ?? '(entreprise)',
-        message: r.error ?? 'Erreur inconnue',
-      });
-  }
-
-  const byId = new Map(participants.map((p) => [p.id, p]));
-  await Promise.all(
-    individuels.map(async (participantId) => {
-      const p = byId.get(participantId);
-      const name = p ? `${p.person.firstName} ${p.person.lastName}` : participantId;
-      const r = await generateConventionForParticipant(participantId).catch((e: unknown) => ({
-        ok: false as const,
-        error: e instanceof Error ? e.message : String(e),
-      }));
-      if (r.ok) covered += 1;
-      else errors.push({ participantName: name, message: r.error ?? 'Erreur inconnue' });
-    }),
-  );
-
-  return { covered, groupsCount: groups.length, individuelsCount: individuels.length, errors };
-}
+type PrepareParticipant = RoutableParticipant;
+const PREPARE_PARTICIPANT_SELECT = ROUTABLE_PARTICIPANT_SELECT;
 
 export interface PrepareTrainingResult {
   ok: boolean;

@@ -31,7 +31,7 @@ const m = vi.hoisted(() => ({
   closureBatchFindFirst: vi.fn(),
   auditLogCreate: vi.fn(),
   productUpdate: vi.fn(),
-  generateConventionForParticipant: vi.fn(),
+  generateConventionCore: vi.fn(),
   generateConventionEntrepriseCore: vi.fn(),
   generateConvocationForParticipant: vi.fn(),
   generateProgrammeForProduct: vi.fn(),
@@ -56,10 +56,11 @@ vi.mock('@qualiof/db', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/auth', () => ({ lucia: {}, validateRequest: m.validateRequest }));
 
-vi.mock('../convention-generator', () => ({
-  generateConventionForParticipant: m.generateConventionForParticipant,
-}));
+// Le routeur `routeConventionsByPayerRule` (extrait le 28/08 vers
+// `@/lib/closure/route-conventions`) n'appelle QUE les cœurs sans auth — d'où
+// le mock du cœur individuel et non plus celui du wrapper server action.
 vi.mock('@/lib/closure/convention-core', () => ({
+  generateConventionCore: m.generateConventionCore,
   generateConventionEntrepriseCore: m.generateConventionEntrepriseCore,
 }));
 vi.mock('../convocation-generator', () => ({
@@ -126,7 +127,7 @@ beforeEach(() => {
   m.generateProgrammeForProduct.mockResolvedValue({ ok: true });
   m.generateDerouleForProduct.mockResolvedValue({ ok: true });
   m.generateChecklistForSession.mockResolvedValue({ ok: true });
-  m.generateConventionForParticipant.mockResolvedValue({ ok: true, documentId: 'doc-indiv' });
+  m.generateConventionCore.mockResolvedValue({ ok: true, documentId: 'doc-indiv' });
   m.generateConventionEntrepriseCore.mockResolvedValue({ ok: true, documentId: 'doc-groupe', count: 1 });
   m.generateConvocationForParticipant.mockResolvedValue({ ok: true, documentId: 'doc-convoc' });
   m.generateAgeficeForParticipant.mockResolvedValue({ ok: true });
@@ -157,7 +158,7 @@ describe.each([
     expect(m.generateConventionEntrepriseCore).toHaveBeenCalledTimes(1);
     expect(m.generateConventionEntrepriseCore).toHaveBeenCalledWith('tnt-1', 'ses-1', 'org-assalit');
     // Le cœur SANS auth, jamais le wrapper individuel.
-    expect(m.generateConventionForParticipant).not.toHaveBeenCalled();
+    expect(m.generateConventionCore).not.toHaveBeenCalled();
   });
 
   it('traite une salariée seule comme un groupe (SES-0108 EXPERTA)', async () => {
@@ -166,7 +167,7 @@ describe.each([
     await actions[fn]('ses-1');
 
     expect(m.generateConventionEntrepriseCore).toHaveBeenCalledWith('tnt-1', 'ses-1', 'org-experta');
-    expect(m.generateConventionForParticipant).not.toHaveBeenCalled();
+    expect(m.generateConventionCore).not.toHaveBeenCalled();
   });
 
   it('laisse les auto-payeurs sur le chemin individuel (non-régression)', async () => {
@@ -175,9 +176,9 @@ describe.each([
     await actions[fn]('ses-1');
 
     expect(m.generateConventionEntrepriseCore).not.toHaveBeenCalled();
-    expect(m.generateConventionForParticipant).toHaveBeenCalledTimes(2);
-    expect(m.generateConventionForParticipant).toHaveBeenCalledWith('sp-a1');
-    expect(m.generateConventionForParticipant).toHaveBeenCalledWith('sp-a2');
+    expect(m.generateConventionCore).toHaveBeenCalledTimes(2);
+    expect(m.generateConventionCore).toHaveBeenCalledWith('tnt-1', 'sp-a1');
+    expect(m.generateConventionCore).toHaveBeenCalledWith('tnt-1', 'sp-a2');
   });
 
   it('sépare correctement une session mixte', async () => {
@@ -187,7 +188,7 @@ describe.each([
 
     const orgs = m.generateConventionEntrepriseCore.mock.calls.map((c) => c[2]).sort();
     expect(orgs).toEqual(['org-assalit', 'org-experta']);
-    expect(m.generateConventionForParticipant).toHaveBeenCalledTimes(2);
+    expect(m.generateConventionCore).toHaveBeenCalledTimes(2);
   });
 
   it('convoque CHAQUE salarié nominativement (la convocation reste par stagiaire)', async () => {

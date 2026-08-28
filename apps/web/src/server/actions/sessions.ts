@@ -24,8 +24,8 @@ import {
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { normalizeNullableText } from '@/lib/sessions/normalize-nullable-text';
+import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
 import { generateClosurePack } from './closure-pack';
-import { generateConventionForParticipant } from './convention-generator';
 
 // Zod schema pour unenrollParticipant — UUID strict pour participantId
 const UnenrollInputSchema = z.object({
@@ -129,7 +129,32 @@ export async function addParticipant(input: {
     ]);
 
     if (!existingConvention) {
-      generateConventionForParticipant(part.id).catch((e) => {
+      // Règle payeur (28/08) : plus d'appel direct au cœur individuel. Sur le
+      // 1er salarié inscrit chez une entreprise, aucune convention de groupe
+      // n'existe encore, et c'est une NOMINATIVE qui était fabriquée — l'inverse
+      // de la règle du 12/08. Le routeur émet la convention d'entreprise.
+      //
+      // Effet recherché à chaque nouvelle inscription du groupe : la convention
+      // d'entreprise est REGÉNÉRÉE pour inclure le nouvel arrivant (elle liste
+      // nominativement les stagiaires couverts et somme leurs prix).
+      // Import DYNAMIQUE, comme la convocation juste en dessous : le routeur
+      // tire `@/lib/storage` (donc `sharedEnv`, fail-loud) — le charger au
+      // sommet du module ferait exploser toute page important `sessions.ts`
+      // hors runtime applicatif.
+      void import('@/lib/closure/route-conventions').then(({ routeConventionsByPayerRule }) =>
+        routeConventionsByPayerRule(user.tenantId, input.sessionId, [
+          {
+            id: part.id,
+            sponsorOrgId: input.sponsorOrgId,
+            sponsorOrg: {
+              id: sponsor.id,
+              legalName: sponsor.legalName,
+              legalForm: sponsor.legalForm,
+            },
+            person: { firstName: person.firstName, lastName: person.lastName },
+          },
+        ]),
+      ).catch((e) => {
         console.warn(`[addParticipant] auto-gen convention failed for ${part.id}:`, e?.message ?? e);
       });
     }
