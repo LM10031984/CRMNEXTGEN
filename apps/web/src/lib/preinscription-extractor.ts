@@ -169,19 +169,35 @@ export async function extractPreEnrollmentDocuments(preEnrollmentId: string): Pr
   const result: ExtractionResult = { cni: null, rib: null, cfp: null, warnings: [], durationMs: 0 };
 
   try {
-    // CNI
+    // CNI — recto, et verso s'il a été déposé. Les deux textes sont concaténés
+    // AVANT l'appel au modèle : le verso d'une carte récente porte la MRZ
+    // (nom, prénom, date de naissance en format machine), bien plus fiable à
+    // lire que le recto photographié de travers. Un verso illisible n'invalide
+    // jamais le recto : chaque face est extraite dans son propre try.
     if (pe.cniKey) {
-      try {
-        const raw = await downloadFile(PREENROLLMENT_BUCKET, pe.cniKey);
-        // Pitfall 3 : photo smartphone 10-50 Mo → downscale AVANT vision (sinon échec provider).
-        const buf = await downscaleForOcr(raw, guessContentType(pe.cniKey));
-        const ext = await extractTextFromFile(buf, guessContentType(pe.cniKey));
-        result.warnings.push(...ext.warnings.map((w) => `[CNI] ${w}`));
-        if (ext.text) {
-          result.cni = await extractOne<CniExtraction>(ext.text, 'CNI');
+      const morceaux: string[] = [];
+      for (const [face, key] of [
+        ['CNI', pe.cniKey],
+        ['CNI verso', pe.cniVersoKey],
+      ] as const) {
+        if (!key) continue;
+        try {
+          // Pitfall 3 : photo smartphone 10-50 Mo → downscale AVANT vision (sinon échec provider).
+          const raw = await downloadFile(PREENROLLMENT_BUCKET, key);
+          const buf = await downscaleForOcr(raw, guessContentType(key));
+          const ext = await extractTextFromFile(buf, guessContentType(key));
+          result.warnings.push(...ext.warnings.map((w) => `[${face}] ${w}`));
+          if (ext.text) morceaux.push(ext.text);
+        } catch (e: any) {
+          result.warnings.push(`[${face}] ${e?.message ?? e}`);
         }
-      } catch (e: any) {
-        result.warnings.push(`[CNI] ${e?.message ?? e}`);
+      }
+      if (morceaux.length > 0) {
+        try {
+          result.cni = await extractOne<CniExtraction>(morceaux.join('\n\n'), 'CNI');
+        } catch (e: any) {
+          result.warnings.push(`[CNI] ${e?.message ?? e}`);
+        }
       }
     }
 

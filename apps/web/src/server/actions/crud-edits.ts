@@ -79,6 +79,13 @@ export async function updateOrganization(input: {
   opcoCode?: string | null;
   network?: string | null;
   activityDescription?: string | null;
+  /**
+   * Représentant légal — signataire de la convention d'entreprise et
+   * interlocuteur du recueil des besoins. Saisissable depuis le panneau
+   * « Documents d'entreprise » de la fiche session (28/08), là où son absence
+   * bloque la génération.
+   */
+  representative?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -102,6 +109,7 @@ export async function updateOrganization(input: {
   if (input.network !== undefined) data.network = input.network?.trim() || null;
   if (input.activityDescription !== undefined)
     data.activityDescription = input.activityDescription?.trim() || null;
+  if (input.representative !== undefined) data.representative = input.representative?.trim() || null;
 
   if (Object.keys(data).length === 0) return { ok: true };
 

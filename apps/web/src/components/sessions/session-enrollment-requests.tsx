@@ -28,6 +28,7 @@ export interface EnrollmentRequestRow {
   companyName: string | null;
   professionalStatus: string | null;
   hasCni: boolean;
+  hasCniVerso: boolean;
   hasRib: boolean;
   hasCfp: boolean;
 }
@@ -140,7 +141,11 @@ function LigneDemande({
               ` · déposée le ${demande.submittedAt.toLocaleDateString('fr-FR')}`}
           </div>
           <div className="flex items-center gap-2 mt-1.5">
-            <Piece ok={demande.hasCni} label="CNI" icon={CreditCard} />
+            <Piece
+              ok={demande.hasCni}
+              label={demande.hasCniVerso ? 'CNI R/V' : 'CNI'}
+              icon={CreditCard}
+            />
             <Piece ok={demande.hasRib} label="RIB" icon={Building2} />
             <Piece ok={demande.hasCfp} label="CFP" icon={FileText} />
           </div>

@@ -28,23 +28,30 @@ const MAX_FILE_SIZE_MB = 50;
 
 export type DirectUploadKind = 'CNI' | 'RIB' | 'CFP';
 
+/**
+ * Le `kind` est seulement TRANSPORTÉ (identifiant du slot, préfixe de clé) et
+ * jamais interprété ici : le composant est donc générique sur ce type. Ça
+ * permet au formulaire d'inscription par session d'ajouter un slot
+ * 'CNI_VERSO' sans élargir le type des flux admin existants.
+ */
+
 type SignedUploadResult =
   | { ok: true; path: string; token: string; signedUrl: string }
   | { ok: false; error: string };
 
-export interface DirectUploadFieldProps {
-  kind: DirectUploadKind;
+export interface DirectUploadFieldProps<K extends string = DirectUploadKind> {
+  kind: K;
   label: string;
   description: string;
   required?: boolean;
   /** Icône lucide (comme les slots de public-form). */
   icon?: React.ComponentType<{ className?: string }>;
   /** Génère le signed URL — diffère public (peToken) vs admin (session). */
-  requestUploadUrl: (kind: DirectUploadKind, ext: string) => Promise<SignedUploadResult>;
+  requestUploadUrl: (kind: K, ext: string) => Promise<SignedUploadResult>;
   /** Remonte la clé confirmée au parent (qui appellera la confirmation serveur). */
-  onUploaded: (kind: DirectUploadKind, path: string) => void;
+  onUploaded: (kind: K, path: string) => void;
   /** Le fichier a été retiré → le parent oublie la clé. */
-  onCleared: (kind: DirectUploadKind) => void;
+  onCleared: (kind: K) => void;
 }
 
 type Status = 'idle' | 'uploading' | 'done' | 'error';
@@ -95,7 +102,7 @@ function uploadWithProgress(
   });
 }
 
-export function DirectUploadField({
+export function DirectUploadField<K extends string = DirectUploadKind>({
   kind,
   label,
   description,
@@ -104,7 +111,7 @@ export function DirectUploadField({
   requestUploadUrl,
   onUploaded,
   onCleared,
-}: DirectUploadFieldProps) {
+}: DirectUploadFieldProps<K>) {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<Status>('idle');
