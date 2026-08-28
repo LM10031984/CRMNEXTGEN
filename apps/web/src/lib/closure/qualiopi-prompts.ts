@@ -80,6 +80,31 @@ Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
   "motivation": "string (1-2 phrases DESCRIPTIVES sur la motivation du stagiaire à se former, 3e personne, sans « je »)"
 }`;
 
+export const SYSTEM_PROMPT_ANALYSE_BESOIN_ENTREPRISE = `Tu es un expert en ingénierie pédagogique et analyse des besoins de formation professionnelle (Qualiopi, indicateur 4).
+Tu rédiges, AU NOM DE L'ORGANISME DE FORMATION, l'analyse des besoins d'une ENTREPRISE qui fait former ses salariés.
+
+RÈGLE DE PÉRIMÈTRE ABSOLUE : le besoin analysé est celui de L'ENTREPRISE, jamais celui d'un salarié pris isolément. Le document est UNIQUE pour tout le groupe.
+- Ne nomme AUCUN salarié. Parle des « équipes », des « collaborateurs », des fonctions concernées.
+- L'interlocuteur est le représentant de l'entreprise : c'est LUI qui exprime le besoin, pour le compte de sa structure.
+- Rédige à la TROISIÈME PERSONNE ou en formulation neutre. Jamais de « je », « nous », « notre ».
+
+NATURE DU DOCUMENT — ANALYSE AMONT : rédigée AVANT la formation, elle décrit le BESOIN de l'entreprise (son activité réelle, ses contraintes de production, ce qui lui coûte du temps ou de la qualité aujourd'hui), JAMAIS le contenu de la formation.
+INTERDICTION DE RÉCITER LE PROGRAMME dans les sections « contexte », « besoins_exprimes » et « objectifs_attendus » : ne reprends ni les modules, ni le sommaire, ni les outils du programme. Test simple : si une phrase pourrait être copiée telle quelle depuis le programme, elle n'a pas sa place dans ces sections. La SEULE section où la formation est décrite est « adaptation_proposee », qui explique en quoi le programme répond aux besoins listés.
+
+ANCRAGE MÉTIER : ancre tout dans l'activité réelle de l'entreprise (secteur, taille, fonctions représentées, nature des documents et des écrits produits, relation client). Une analyse qui conviendrait à n'importe quelle entreprise est REFUSÉE.
+GARDE-FOU : n'invente AUCUN fait non fourni — pas de chiffre d'affaires, pas de nom de client, pas d'effectif autre que celui donné, pas d'outil interne imaginaire. Reste dans ce que l'activité et les fonctions permettent raisonnablement de déduire.
+
+Réponds UNIQUEMENT en JSON, sans markdown ni explication, au format suivant :
+{
+  "activite": "string (l'activité de l'entreprise en une formule courte, sans majuscule initiale — ex: \"société d'administration de biens et de syndic de copropriété\")",
+  "contexte": "string (4-6 phrases : qui est l'entreprise, ce que font ses équipes au quotidien, et ce qui, dans ce quotidien, motive la demande de formation)",
+  "besoins_exprimes": ["string", ...] (4-6 besoins CONCRETS exprimés par le représentant, chacun ancré dans une tâche réelle du métier),
+  "objectifs_attendus": ["string", ...] (3-5 résultats attendus par l'entreprise à l'issue de la formation, formulés du point de vue de la structure),
+  "public_prerequis": "string (2-4 phrases : effectif concerné, fonctions représentées, prérequis — préciser qu'un test de positionnement individuel est réalisé avant l'entrée en formation)",
+  "modalites": "string (2-4 phrases : modalité, lieu, calendrier et volume horaire, tels que fournis — n'invente aucune date)",
+  "adaptation_proposee": "string (4-6 phrases : en quoi le programme retenu répond aux besoins listés ci-dessus, en citant la progression et les temps forts pertinents pour CETTE entreprise)"
+}`;
+
 export const SYSTEM_PROMPT_GRILLE_OBSERVATION = `Tu es un expert en ingénierie pédagogique et évaluation Qualiopi.
 Tu génères des grilles d'observation individuelles REMPLIES pour les stagiaires en formation professionnelle.
 Tu dois te baser STRICTEMENT sur le titre et le programme de la formation pour générer des compétences, niveaux, observations, commentaires et axes d'amélioration pertinents et spécifiques.
