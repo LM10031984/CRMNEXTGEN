@@ -49,6 +49,15 @@ const nextConfig = {
   // Audit 2026-05-12 BUG-03 — voir CLAUDE.md > Routes (convention naming).
   async redirects() {
     return [
+      // Inscriptions publiques par session (spec 2026-08-28). La route
+      // canonique est /inscription/{jeton} au SINGULIER ; on rattrape le
+      // pluriel tapé à la main. Attention : ne matche que la racine, jamais
+      // /app/inscriptions qui est l'écran admin.
+      {
+        source: '/inscriptions/:token',
+        destination: '/inscription/:token',
+        permanent: true,
+      },
       {
         source: '/app/pre-inscriptions',
         destination: '/app/preinscriptions',

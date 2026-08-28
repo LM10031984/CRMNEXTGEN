@@ -85,7 +85,7 @@ describe('createSessionEnrollmentUploadUrl', () => {
   it('range le fichier sous sessions/{sessionId}/{draftId}/', async () => {
     const r = await createSessionEnrollmentUploadUrl('tok', 'draft-0001', 'CNI', 'pdf');
     expect(r.ok).toBe(true);
-    const [bucket, path] = m.createSignedUploadUrl.mock.calls[0];
+    const [bucket, path] = m.createSignedUploadUrl.mock.calls[0]!;
     expect(bucket).toBe('preinscriptions');
     expect(path).toMatch(/^sessions\/ses-1\/draft-0001\/cni-\d+\.pdf$/);
   });
@@ -122,7 +122,7 @@ describe('submitSessionEnrollmentRequest', () => {
   it('crée la demande en SUBMITTED, rattachée à la session', async () => {
     const r = await submitSessionEnrollmentRequest('tok', 'draft-0001', { CNI: 'k1' }, CHAMPS_VALIDES);
     expect(r.ok).toBe(true);
-    const data = m.preEnrollmentCreate.mock.calls[0][0].data;
+    const data = m.preEnrollmentCreate.mock.calls[0]![0].data;
     expect(data.status).toBe('SUBMITTED');
     expect(data.intendedSessionId).toBe('ses-1');
     expect(data.tenantId).toBe('tenant-1');
@@ -138,7 +138,7 @@ describe('submitSessionEnrollmentRequest', () => {
       { CNI: 'k1' },
       { ...CHAMPS_VALIDES, socialSecurityNb: '1 85 05 78 006 084 36' },
     );
-    const data = m.preEnrollmentCreate.mock.calls[0][0].data;
+    const data = m.preEnrollmentCreate.mock.calls[0]![0].data;
     expect(JSON.stringify(data)).not.toContain('006 084');
     expect(JSON.stringify(data)).not.toContain('18505780060843');
   });

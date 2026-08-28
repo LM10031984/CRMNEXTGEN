@@ -49,8 +49,24 @@ export interface SessionEnrollmentFields {
   rgpdAccepted: boolean;
 }
 
-/** Charge la session par jeton et calcule si le formulaire accepte encore des dépôts. */
-async function chargerSessionOuverte(publicToken: string) {
+type SessionOuverte = {
+  id: string;
+  tenantId: string;
+  publicToken: string | null;
+  publicFormClosedAt: Date | null;
+  status: string;
+  capacityMax: number;
+  endDate: Date;
+};
+
+/**
+ * Charge la session par jeton et calcule si le formulaire accepte encore des
+ * dépôts. Retour discriminé sur `ok` : `'erreur' in r` ne suffirait pas à
+ * restreindre le type, TypeScript gardant `string | undefined`.
+ */
+async function chargerSessionOuverte(
+  publicToken: string,
+): Promise<{ ok: false; erreur: string } | { ok: true; session: SessionOuverte }> {
   const session = await prisma.trainingSession.findUnique({
     where: { publicToken },
     select: {
@@ -63,7 +79,7 @@ async function chargerSessionOuverte(publicToken: string) {
       endDate: true,
     },
   });
-  if (!session) return { erreur: 'Lien invalide' as const };
+  if (!session) return { ok: false, erreur: 'Lien invalide' };
 
   const [participantCount, pendingRequestCount] = await Promise.all([
     prisma.sessionParticipant.count({ where: { sessionId: session.id } }),
@@ -81,9 +97,9 @@ async function chargerSessionOuverte(publicToken: string) {
     pendingRequestCount,
   });
 
-  if (etat === 'complet') return { erreur: 'Cette session est complète' as const };
-  if (etat !== 'ouvert') return { erreur: 'Les inscriptions sont closes' as const };
-  return { session };
+  if (etat === 'complet') return { ok: false, erreur: 'Cette session est complète' };
+  if (etat !== 'ouvert') return { ok: false, erreur: 'Les inscriptions sont closes' };
+  return { ok: true, session };
 }
 
 export async function createSessionEnrollmentUploadUrl(
@@ -101,7 +117,7 @@ export async function createSessionEnrollmentUploadUrl(
   }
 
   const r = await chargerSessionOuverte(publicToken);
-  if ('erreur' in r) return { ok: false, error: r.erreur };
+  if (!r.ok) return { ok: false, error: r.erreur };
 
   const path = `sessions/${r.session.id}/${draftId}/${kind.toLowerCase()}-${Date.now()}.${extension}`;
   try {
@@ -133,7 +149,7 @@ export async function submitSessionEnrollmentRequest(
   }
 
   const r = await chargerSessionOuverte(publicToken);
-  if ('erreur' in r) return { ok: false, error: r.erreur };
+  if (!r.ok) return { ok: false, error: r.erreur };
   const { session } = r;
 
   // Les données du formulaire, SANS le numéro de sécurité sociale : il n'est
