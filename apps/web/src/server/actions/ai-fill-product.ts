@@ -12,8 +12,13 @@
  * Coût : ~10-30 sec sur M5 Pro.
  */
 
+import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { callLlm } from '@/lib/llm-client';
+import {
+  selectionnerProgrammesReference,
+  renderProgrammesReference,
+} from '@/lib/produits/programmes-reference';
 
 export interface AiProductDraft {
   objectives: string[];
@@ -195,12 +200,38 @@ Retourne EXCLUSIVEMENT le JSON ci-dessous (aucun texte avant ou après, pas de c
   "programMd": "## Jour 1 : Titre\\n### Matin (9h-12h)\\n- Point 1\\n- Point 2\\n\\n### Après-midi (14h-18h)\\n- Point 3\\n- Point 4"
 }`;
 
+/**
+ * Consigne de TRANSCRIPTION — activée seulement quand une proposition client est
+ * fournie (28/08). Elle reprend la règle de fidélité déjà éprouvée sur la
+ * normalisation de programme : décliner la source, ne pas l'enrichir.
+ *
+ * Sans elle, le modèle « complète » spontanément une proposition en 4 modules
+ * pour remplir 21 heures — et le programme ne correspond plus à ce que le
+ * client a accepté.
+ */
+const TRANSCRIPTION_RULE = `⚠ MODE TRANSCRIPTION — une PROPOSITION déjà faite au client t'est fournie.
+
+Tu la TRANSCRIS en programme de formation conforme : tu reprends SES modules, SES contenus, SON périmètre, et tu les mets en forme (découpage des journées, horaires, intitulés en verbes d'action évaluables).
+
+RÈGLE ABSOLUE DE FIDÉLITÉ :
+- tu n'ajoutes AUCUN module, thème, outil ou exemple absent de la proposition — même pour « compléter » la durée ;
+- tu ne retires aucun module de la proposition ;
+- si la proposition est plus courte que la durée annoncée, tu répartis SES contenus sur les journées, tu n'inventes pas de contenu supplémentaire.
+Test simple : chaque intitulé produit doit être rattachable à une ligne de la proposition.`;
+
 export async function aiPreFillProduct(input: {
   title: string;
   theme?: string | null;
   durationHours: number;
   modality?: string;
   priceHT?: number;
+  /**
+   * Ce qui a déjà été proposé au client (modules, contenus négociés), collé tel
+   * quel. Fourni ⇒ l'IA transcrit au lieu de rédiger.
+   */
+  propositionClient?: string | null;
+  /** Produit en cours de modification : il ne se sert pas d'exemple à lui-même. */
+  excludeProductId?: string;
 }): Promise<{ ok: boolean; draft?: AiProductDraft; error?: string; durationMs?: number }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -211,11 +242,55 @@ export async function aiPreFillProduct(input: {
     return { ok: false, error: 'Durée en heures obligatoire.' };
   }
 
-  const userPrompt = USER_TEMPLATE.replace('{{TITLE}}', title)
+  const baseUserPrompt = USER_TEMPLATE.replace('{{TITLE}}', title)
     .replace('{{THEME}}', input.theme?.trim() || 'immobilier')
     .replace('{{DURATION}}', String(input.durationHours))
     .replace('{{MODALITY}}', input.modality ?? 'PRESENTIEL')
     .replace('{{PRICE}}', String(input.priceHT ?? 0));
+
+  const proposition = (input.propositionClient ?? '').trim();
+  const userPrompt = proposition
+    ? `${baseUserPrompt}
+
+PROPOSITION DÉJÀ FAITE AU CLIENT — c'est la SOURCE à transcrire (n'y ajoute rien, n'en retire rien) :
+${proposition}`
+    : baseUserPrompt;
+
+  // Références de style : les programmes conformes du catalogue plutôt que les
+  // trois DOCX figés dans ce fichier (demande du 28/08). Repli sur `FEW_SHOT`
+  // quand le catalogue n'a encore rien de relu — un tenant neuf n'est pas
+  // laissé sans modèle de style.
+  let referencesBlock = FEW_SHOT;
+  try {
+    const catalogue = await prisma.trainingProduct.findMany({
+      where: { tenantId: user.tenantId, isActive: true, aiDraftedAt: null },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        theme: true,
+        durationHours: true,
+        programMd: true,
+        aiDraftedAt: true,
+        isActive: true,
+      },
+      // Large filet : le tri fin est fait par le helper, sur des critères
+      // métier (thème, puis écart RELATIF de durée).
+      take: 60,
+      orderBy: { updatedAt: 'desc' },
+    });
+    const retenus = selectionnerProgrammesReference(catalogue, {
+      title,
+      theme: input.theme,
+      durationHours: input.durationHours,
+      excludeProductId: input.excludeProductId,
+    });
+    if (retenus.length > 0) referencesBlock = renderProgrammesReference(retenus);
+  } catch (e) {
+    // Le catalogue est un CONFORT : son indisponibilité ne doit pas empêcher de
+    // générer un programme. On retombe sur les exemples intégrés.
+    console.warn('[ai-fill-product] catalogue de référence indisponible :', (e as Error)?.message);
+  }
 
   try {
     // Tier 'quality' = Claude Sonnet 4.6 sur OpenRouter (doc audit Qualiopi),
@@ -223,7 +298,11 @@ export async function aiPreFillProduct(input: {
     // un doc critique audit → on prend le meilleur modèle disponible.
     const r = await callLlm({
       tier: 'quality',
-      systemPrompt: SYSTEM_PROMPT + '\n\n' + FEW_SHOT,
+      systemPrompt:
+        SYSTEM_PROMPT +
+        (proposition ? '\n\n' + TRANSCRIPTION_RULE : '') +
+        '\n\n' +
+        referencesBlock,
       prompt: userPrompt,
       jsonOutput: true,
       temperature: 0.4, // un peu de créativité pour le programmeMd, sans dériver
