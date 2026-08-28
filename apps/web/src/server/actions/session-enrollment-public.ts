@@ -13,9 +13,11 @@
  */
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { prisma } from '@qualiof/db';
 import { createSignedUploadUrl, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { publicLinkState, generatePublicToken } from '@/lib/enrollment/public-link';
+import { rateLimitOk } from '@/lib/enrollment/rate-limit';
 
 export type EnrollmentDocKind = 'CNI' | 'RIB' | 'CFP';
 
@@ -146,6 +148,13 @@ export async function submitSessionEnrollmentRequest(
   }
   if (Object.keys(keys).length === 0) {
     return { ok: false, error: 'Au moins une pièce justificative est requise' };
+  }
+
+  // Garde-fou anti-remplissage automatisé. Le message reste générique : il ne
+  // dit pas si le lien existe ni où en est la session.
+  const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'inconnue';
+  if (!rateLimitOk(`submit:${ip}`, 5, 3_600_000)) {
+    return { ok: false, error: 'Trop de demandes envoyées. Réessaie dans une heure.' };
   }
 
   const r = await chargerSessionOuverte(publicToken);

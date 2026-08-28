@@ -46,6 +46,7 @@ import {
   createSessionEnrollmentUploadUrl,
   submitSessionEnrollmentRequest,
 } from '../session-enrollment-public';
+import { _resetRateLimit } from '@/lib/enrollment/rate-limit';
 
 const SESSION_OUVERTE = {
   id: 'ses-1',
@@ -68,6 +69,9 @@ const CHAMPS_VALIDES = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Le compteur anti-spam vit dans le module : sans reset, l'ordre des tests
+  // finirait par en faire échouer un pour une raison invisible.
+  _resetRateLimit();
   m.sessionFindUnique.mockResolvedValue(SESSION_OUVERTE);
   m.participantCount.mockResolvedValue(2);
   m.preEnrollmentCount.mockResolvedValue(1);
@@ -173,5 +177,21 @@ describe('submitSessionEnrollmentRequest', () => {
     const r = await submitSessionEnrollmentRequest('tok', 'draft-0001', { CNI: 'k1' }, CHAMPS_VALIDES);
     expect(r.ok).toBe(false);
     expect(m.preEnrollmentCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('limitation anti-spam', () => {
+  it('bloque la 6ᵉ soumission de la même IP en une heure', async () => {
+    for (let i = 0; i < 5; i++) {
+      const ok = await submitSessionEnrollmentRequest(
+        'tok',
+        `draft-000${i}`,
+        { CNI: 'k1' },
+        CHAMPS_VALIDES,
+      );
+      expect(ok.ok).toBe(true);
+    }
+    const r = await submitSessionEnrollmentRequest('tok', 'draft-9999', { CNI: 'k1' }, CHAMPS_VALIDES);
+    expect(r).toEqual({ ok: false, error: 'Trop de demandes envoyées. Réessaie dans une heure.' });
   });
 });

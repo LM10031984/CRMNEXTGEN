@@ -18,6 +18,8 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   CreateBucketCommand,
+  ListObjectsV2Command,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
@@ -272,6 +274,92 @@ export async function objectExists(bucket: string, key: string): Promise<boolean
     if (e?.name === 'NotFound' || e?.$metadata?.httpStatusCode === 404) return false;
     throw e;
   }
+}
+
+// ─── listObjects / deleteFile (purge des brouillons abandonnés) ────
+/**
+ * Un objet du stockage, réduit à ce dont la purge a besoin.
+ * `lastModified` peut être absent selon le provider : l'appelant décide quoi
+ * faire d'un objet sans date plutôt que de se voir imposer une date inventée.
+ */
+export interface StoredObject {
+  key: string;
+  lastModified: Date | null;
+  size: number | null;
+}
+
+/**
+ * Liste RÉCURSIVEMENT les objets sous un préfixe.
+ *
+ * Supabase ne descend pas tout seul dans les sous-dossiers (`list()` renvoie
+ * les entrées d'un seul niveau, un « dossier » étant une entrée sans `id`) :
+ * on parcourt donc l'arbre à la main. S3 pagine, d'où la boucle sur le token.
+ */
+export async function listObjects(bucket: string, prefix = ''): Promise<StoredObject[]> {
+  if (PROVIDER === 'supabase') {
+    const client = supabase();
+    const out: StoredObject[] = [];
+    const aVisiter: string[] = [prefix.replace(/\/+$/, '')];
+
+    while (aVisiter.length > 0) {
+      const dossier = aVisiter.pop()!;
+      const { data, error } = await client.storage
+        .from(bucket)
+        .list(dossier, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+      if (error) throw new Error(`Supabase list failed : ${error.message}`);
+
+      for (const entree of data ?? []) {
+        const chemin = dossier ? `${dossier}/${entree.name}` : entree.name;
+        // Une entrée sans `id` est un dossier, pas un objet.
+        if (entree.id === null || entree.id === undefined) {
+          aVisiter.push(chemin);
+          continue;
+        }
+        out.push({
+          key: chemin,
+          lastModified: entree.updated_at ? new Date(entree.updated_at) : null,
+          size: (entree.metadata as { size?: number } | null)?.size ?? null,
+        });
+      }
+    }
+    return out;
+  }
+
+  const out: StoredObject[] = [];
+  let token: string | undefined;
+  do {
+    const res = await s3().send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix || undefined,
+        ContinuationToken: token,
+      }),
+    );
+    for (const o of res.Contents ?? []) {
+      if (!o.Key) continue;
+      out.push({
+        key: o.Key,
+        lastModified: o.LastModified ?? null,
+        size: o.Size ?? null,
+      });
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return out;
+}
+
+/**
+ * Supprime UN objet. Destructif et sans corbeille : les appelants doivent
+ * fonctionner à sec par défaut et n'écrire qu'après confirmation explicite
+ * (cf. scripts/purge-orphan-drafts.ts).
+ */
+export async function deleteFile(bucket: string, key: string): Promise<void> {
+  if (PROVIDER === 'supabase') {
+    const { error } = await supabase().storage.from(bucket).remove([key]);
+    if (error) throw new Error(`Supabase delete failed : ${error.message}`);
+    return;
+  }
+  await s3().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 export const _internals = { PROVIDER };

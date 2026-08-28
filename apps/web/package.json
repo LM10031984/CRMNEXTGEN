@@ -25,7 +25,8 @@
     "calendar:purge": "dotenv -e ../../.env -- tsx scripts/calendar-purge-broken.ts",
     "calendar:backfill": "dotenv -e ../../.env -- tsx scripts/calendar-backfill.ts",
     "closure:close-zombies": "dotenv -e ../../.env -- tsx scripts/close-zombie-batches.ts",
-    "storage:migrate": "tsx scripts/migrate-storage.ts"
+    "storage:migrate": "tsx scripts/migrate-storage.ts",
+    "storage:purge-drafts": "dotenv -e ../../.env -- tsx scripts/purge-orphan-drafts.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
