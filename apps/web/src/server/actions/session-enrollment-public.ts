@@ -19,7 +19,12 @@ import { createSignedUploadUrl, PREENROLLMENT_BUCKET } from '@/lib/storage';
 import { publicLinkState, generatePublicToken } from '@/lib/enrollment/public-link';
 import { rateLimitOk } from '@/lib/enrollment/rate-limit';
 
-export type EnrollmentDocKind = 'CNI' | 'RIB' | 'CFP';
+/**
+ * 'CNI_VERSO' : une carte d'identité et un titre de séjour ont deux faces, et
+ * une photo au smartphone n'en capture qu'une. Slot distinct plutôt que
+ * multi-fichiers sur un même slot — l'apprenant voit exactement quoi déposer.
+ */
+export type EnrollmentDocKind = 'CNI' | 'CNI_VERSO' | 'RIB' | 'CFP';
 
 const EXTENSIONS_AUTORISEES = new Set(['pdf', 'jpg', 'jpeg', 'png']);
 const DRAFT_ID_VALIDE = /^[0-9a-zA-Z-]{8,64}$/;
@@ -180,6 +185,7 @@ export async function submitSessionEnrollmentRequest(
     companySiret: fields.companySiret?.replace(/\D/g, '') || null,
     professionalStatus: fields.professionalStatus?.trim() || null,
     cniKey: keys.CNI ?? null,
+    cniVersoKey: keys.CNI_VERSO ?? null,
     ribKey: keys.RIB ?? null,
     cfpKey: keys.CFP ?? null,
     rgpdAcceptedAt: new Date(),

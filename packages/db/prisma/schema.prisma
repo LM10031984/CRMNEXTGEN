@@ -1327,6 +1327,10 @@ model PreEnrollment {
   managerSince           String?
   // Fichiers MinIO (clés relatives au bucket)
   cniKey                 String?
+  // Verso de la pièce d'identité : une CNI ou un titre de séjour a deux faces,
+  // et une photo au smartphone n'en capture qu'une. Optionnel (un passeport
+  // n'a qu'une page). Le verso porte la MRZ, très fiable pour l'OCR.
+  cniVersoKey            String?
   ribKey                 String?
   cfpKey                 String? // Attestation CFP AGEFICE
   rgpdAcceptedAt         DateTime?

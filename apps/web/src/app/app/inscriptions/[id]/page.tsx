@@ -89,7 +89,7 @@ export default async function PreEnrollmentDetailPage({
         <Meta label="Soumis le" value={pe.submittedAt ? fmtDateTime.format(pe.submittedAt) : '—'} />
         <Meta label="Expire le" value={fmtDateTime.format(pe.expiresAt)} />
         <Meta label="Pièces" value={[
-          pe.cniKey && 'CNI',
+          pe.cniKey && (pe.cniVersoKey ? 'CNI (recto+verso)' : 'CNI'),
           pe.ribKey && 'RIB',
           pe.cfpKey && 'CFP',
         ].filter(Boolean).join(' · ') || 'Aucune'} />

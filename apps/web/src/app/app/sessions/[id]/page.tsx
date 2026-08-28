@@ -597,6 +597,7 @@ export default async function SessionDetailPage({
       companyName: true,
       professionalStatus: true,
       cniKey: true,
+      cniVersoKey: true,
       ribKey: true,
       cfpKey: true,
     },
@@ -614,6 +615,7 @@ export default async function SessionDetailPage({
     companyName: r.companyName,
     professionalStatus: r.professionalStatus,
     hasCni: Boolean(r.cniKey),
+    hasCniVerso: Boolean(r.cniVersoKey),
     hasRib: Boolean(r.ribKey),
     hasCfp: Boolean(r.cfpKey),
   }));

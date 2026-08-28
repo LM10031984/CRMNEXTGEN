@@ -25,7 +25,7 @@ import {
 } from '@/server/actions/session-enrollment-public';
 import { DirectUploadField } from '@/components/shared/direct-upload-field';
 
-type FileKind = 'CNI' | 'RIB' | 'CFP';
+type FileKind = 'CNI' | 'CNI_VERSO' | 'RIB' | 'CFP';
 
 const STATUS_OPTIONS = [
   { value: '', label: '— Choisis ton statut —' },
@@ -81,6 +81,13 @@ export function SessionEnrollmentForm({ publicToken }: { publicToken: string }) 
       description: 'CNI, passeport ou titre de séjour — photo (JPG/PNG) ou PDF',
       icon: CreditCard,
       required: true,
+    },
+    {
+      kind: 'CNI_VERSO' as const,
+      label: "Pièce d'identité — verso",
+      description: "Le dos de la carte ou du titre de séjour. Inutile pour un passeport.",
+      icon: CreditCard,
+      required: false,
     },
     {
       kind: 'RIB' as const,
