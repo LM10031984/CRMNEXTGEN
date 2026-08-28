@@ -311,6 +311,10 @@ ${proposition}`
       // en plein JSON — l'erreur remontée parlait alors de « JSON invalide »
       // là où il manquait simplement de la place.
       maxTokens: 8192,
+      // 180 s : le défaut du client (120 s) coupait la génération alors que le
+      // segment de page en autorise 300. Un programme long met 60 à 120 s —
+      // mieux vaut le laisser finir que le tuer à deux doigts du but.
+      timeoutMs: 180_000,
     });
 
     if (!r.parsedJson || typeof r.parsedJson !== 'object') {

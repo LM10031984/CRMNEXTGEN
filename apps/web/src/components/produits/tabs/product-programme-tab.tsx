@@ -94,6 +94,30 @@ export function ProductProgrammeTab({
         </div>
       )}
 
+      {/* 28/08 — le cas qui manquait : programme RÉDIGÉ, PDF jamais produit.
+          Le bouton n'existait que dans l'état vide et à côté d'un PDF déjà là,
+          si bien que le produit s'ouvrait sur un programme lisible et une
+          impasse. C'est pourtant le cas normal depuis que la création remplit
+          le markdown sans générer le PDF. */}
+      {!pdfId && markdown && markdown.trim().length > 0 && (
+        <div className="rounded-lg border border-dashed border-primary/40 bg-primary-50/30 p-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-white text-primary">
+              <FileText className="h-4 w-4" />
+            </span>
+            <div className="text-sm">
+              <div className="font-semibold">PDF du programme à générer</div>
+              <div className="text-xs text-muted-foreground">
+                Le programme ci-dessous est enregistré. Générez le PDF Qualiopi pour
+                l&apos;envoyer à un client ou le joindre à un dossier — il vaut pour toutes
+                les sessions de ce produit.
+              </div>
+            </div>
+          </div>
+          <GenerateProductProgrammeButton productId={productId} />
+        </div>
+      )}
+
       {markdown && markdown.trim().length > 0 && (
         <section className="rounded-2xl border border-border bg-white p-6">
           <h3 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
