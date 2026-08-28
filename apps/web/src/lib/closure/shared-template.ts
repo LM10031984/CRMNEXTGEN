@@ -302,6 +302,13 @@ export interface ClosureContext {
   sessionStartDate: Date;
   sessionEndDate: Date;
   sessionLocation: string | null;
+  /**
+   * Ville seule du lieu — pour la mention « Fait à …, le … » en bas
+   * d'émargement. `sessionLocation` y serait illisible (raison sociale + nom +
+   * rue + CP + ville). Optionnel : les rendus qui ne le peuplent pas
+   * retombent sur la ville du siège de l'OF.
+   */
+  sessionLocationCity?: string | null;
   sessionTrainers: string[];
   durationHours: number;
   // Métadonnées pour les generators IA (optionnelles — templates statiques les ignorent)
@@ -624,7 +631,7 @@ export function renderInfoBox(ctx: ClosureContext): string {
         <td class="value">${escapeHtml(formatHours(ctx.durationHours))}</td>
       </tr>
       <tr>
-        <td class="label">Lieu :</td>
+        <td class="label" style="white-space: nowrap;">Lieu de formation :</td>
         <td class="value" colspan="3">${escapeHtml(ctx.sessionLocation ?? 'À confirmer')}</td>
       </tr>
     </tbody>

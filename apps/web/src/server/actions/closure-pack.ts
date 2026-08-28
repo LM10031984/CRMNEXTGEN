@@ -94,6 +94,9 @@ export async function generateClosurePack(
       // bloquer l'enqueue si la session n'a pas le minimum vital (formateur,
       // prix, dates, lieu, programme).
       product: { select: { id: true, programMd: true } },
+      // AGEFICE 2026-08-28 — le lieu est chargé (pas seulement `locationId`)
+      // pour vérifier qu'il porte raison sociale + CP + ville.
+      location: { select: { legalName: true, address: true } },
       trainers: { select: { isPrimary: true } },
       participants: {
         where: {
@@ -125,6 +128,7 @@ export async function generateClosurePack(
     endDate: session.endDate,
     pricePerLearner: session.pricePerLearner,
     locationId: session.locationId,
+    location: session.location,
     modality: session.modality,
     trainers: session.trainers,
     product: session.product ? { programMd: session.product.programMd } : null,

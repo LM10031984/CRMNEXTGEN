@@ -455,6 +455,7 @@ export default async function SessionDetailPage({
     endDate: session.endDate,
     pricePerLearner: session.pricePerLearner,
     locationId: session.locationId,
+    location: session.location,
     modality: session.modality,
     trainers: session.trainers.map((t) => ({ isPrimary: t.isPrimary })),
     product: session.product
@@ -850,7 +851,20 @@ export default async function SessionDetailPage({
                 {session.location ? (
                   <div className="space-y-3">
                     <div className="text-sm">
-                      <div className="font-medium">{session.location.name}</div>
+                      {/* Raison sociale en tête : c'est elle que l'AGEFICE
+                          contrôle sur la feuille d'émargement. */}
+                      {session.location.legalName ? (
+                        <div className="font-medium">{session.location.legalName}</div>
+                      ) : null}
+                      <div
+                        className={
+                          session.location.legalName
+                            ? 'text-muted-foreground text-xs'
+                            : 'font-medium'
+                        }
+                      >
+                        {session.location.name}
+                      </div>
                       {(() => {
                         const addr = session.location.address as
                           | { street?: string; postalCode?: string; city?: string }
@@ -867,7 +881,10 @@ export default async function SessionDetailPage({
                     </div>
                     <div className="pt-2 border-t border-border/60">
                       <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
-                      <SessionLocationPicker sessionId={session.id} />
+                      <SessionLocationPicker
+                        sessionId={session.id}
+                        currentLocation={session.location}
+                      />
                     </div>
                   </div>
                 ) : (

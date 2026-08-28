@@ -59,6 +59,9 @@ async function main() {
     },
     include: {
       product: { select: { id: true, programMd: true } },
+      // AGEFICE 2026-08-28 — mêmes critères que closure-pack.ts : le lieu doit
+      // porter raison sociale + CP + ville, pas seulement exister.
+      location: { select: { legalName: true, address: true } },
       trainers: { select: { isPrimary: true } },
       participants: {
         where: {
@@ -98,6 +101,7 @@ async function main() {
       endDate: session.endDate,
       pricePerLearner: session.pricePerLearner,
       locationId: session.locationId,
+      location: session.location,
       modality: session.modality,
       trainers: session.trainers,
       product: session.product ? { programMd: session.product.programMd } : null,

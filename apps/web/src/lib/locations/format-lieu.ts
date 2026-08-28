@@ -115,3 +115,83 @@ export function formatLieuFormation(
   const parties = [tete, ...adresseRetenue].filter(Boolean);
   return parties.length > 0 ? parties.join(', ') : fallback;
 }
+
+/**
+ * Ville seule du lieu de formation — pour la mention « Fait à …, le … ».
+ *
+ * Exigence AGEFICE 2026-08-28 : la feuille d'émargement doit porter la raison
+ * sociale du lieu ET son code postal + ville. Le libellé complet va dans le
+ * bloc « Lieu » (cf. `formatLieuFormation`) ; la mention de certification en
+ * bas de page ne reprend que la VILLE, comme sur tout acte signé
+ * (« Fait à Nice, le 12/09/2026 ») — répéter l'adresse entière y serait
+ * illisible.
+ *
+ * `address` peut être un objet `{ city }` ou une chaîne libre : dans ce
+ * second cas on prend le segment après le code postal (« 12 rue X, 06000
+ * Nice » → « Nice »), sinon le dernier segment.
+ */
+export function villeLieuFormation(
+  loc: LieuInput | null | undefined,
+  fallback: string,
+): string {
+  const addr = loc?.address;
+  if (addr && typeof addr === 'object') {
+    const city = (addr as Record<string, unknown>).city;
+    if (typeof city === 'string' && city.trim()) return city.trim();
+  }
+  if (typeof addr === 'string' && addr.trim()) {
+    // « … , 06000 Nice » → « Nice » ; à défaut de CP, dernier segment.
+    const parCp = addr.match(/\b\d{5}\s+([^,]+)/);
+    if (parCp?.[1]?.trim()) return parCp[1].trim();
+    const segments = addr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (segments.length > 0) return segments[segments.length - 1]!;
+  }
+  return fallback;
+}
+
+/**
+ * Le lieu porte-t-il les mentions exigées par l'AGEFICE sur l'émargement ?
+ *
+ * Refus de prise en charge du 28/08/2026 : « Le document Feuille(s)
+ * d'émargement est incomplet : raison sociale du lieu de formation ». Trois
+ * mentions sont donc obligatoires — raison sociale, code postal, ville.
+ *
+ * `name` (le nom d'usage du lieu, ex. « Agence Nice Centre ») ne compte PAS
+ * comme raison sociale : historiquement il a servi de fourre-tout
+ * (« Nice — Akorimmo »), et une enseigne n'est pas une raison sociale.
+ * Seul `legalName` fait foi.
+ *
+ * Renvoie la liste des mentions manquantes (vide = lieu conforme).
+ */
+export function mentionsLieuManquantes(loc: LieuInput | null | undefined): string[] {
+  if (!loc) return ['raison sociale', 'code postal', 'ville'];
+  const manquantes: string[] = [];
+  if (typeof loc.legalName !== 'string' || !loc.legalName.trim()) {
+    manquantes.push('raison sociale');
+  }
+  const addr = loc.address;
+  const champ = (cle: string): string => {
+    if (addr && typeof addr === 'object') {
+      const v = (addr as Record<string, unknown>)[cle];
+      return typeof v === 'string' ? v.trim() : '';
+    }
+    return '';
+  };
+  if (!champ('postalCode')) manquantes.push('code postal');
+  if (!champ('city')) manquantes.push('ville');
+  return manquantes;
+}
+
+/**
+ * Libellé de repli quand la session n'a AUCUN lieu rattaché : le siège de
+ * l'OF, raison sociale comprise (« Start Academy, 12 avenue des Camélias,
+ * 06800 Cagnes-sur-Mer »). `of.addressFull` seul ne porte pas la raison
+ * sociale — précisément la mention que l'AGEFICE réclame.
+ *
+ * En pratique ce repli ne s'active pas sur le pack de clôture : le blocker
+ * `no_location` interdit déjà de générer sans lieu. Il couvre les rendus hors
+ * pack (aperçus, scripts).
+ */
+export function fallbackLieuOf(of: { name: string; addressFull: string }): string {
+  return [of.name?.trim(), of.addressFull?.trim()].filter(Boolean).join(', ');
+}

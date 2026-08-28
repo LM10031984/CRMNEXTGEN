@@ -823,6 +823,26 @@ export async function createLocationAndAttachToSession(input: {
   const name = input.name.trim();
   if (!name) return { ok: false, error: 'Le nom du lieu est obligatoire.' };
 
+  // AGEFICE 2026-08-28 — raison sociale + CP + ville obligatoires : sans elles
+  // la feuille d'émargement est refusée en prise en charge. Vérifié ici (et
+  // pas seulement dans le formulaire) car cette action est aussi appelée hors
+  // UI. Cf. `mentionsLieuManquantes`, qui applique la même règle au moment de
+  // générer le pack.
+  const manquantes = mentionsLieuManquantes({
+    legalName: input.legalName ?? null,
+    name,
+    address: {
+      postalCode: input.postalCode ?? '',
+      city: input.city ?? '',
+    },
+  });
+  if (manquantes.length > 0) {
+    return {
+      ok: false,
+      error: `Lieu incomplet — l'AGEFICE exige ces mentions sur l'émargement : ${manquantes.join(', ')}.`,
+    };
+  }
+
   const session = await prisma.trainingSession.findFirst({
     where: { id: input.sessionId, tenantId: user.tenantId },
     select: { id: true },
@@ -965,8 +985,102 @@ export async function listLocations() {
   return prisma.location.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true, address: true },
+    // `legalName` remonte pour que le picker signale les lieux incomplets
+    // (raison sociale manquante = pack de clôture bloqué).
+    select: { id: true, name: true, legalName: true, address: true },
   });
+}
+
+/**
+ * Complète un lieu existant (raison sociale, rue, CP, ville).
+ *
+ * AGEFICE 2026-08-28 : les lieux créés avant cette date n'ont pour la plupart
+ * pas de raison sociale, et bloquent donc la génération du pack. Cette action
+ * est la porte de sortie — on complète à la demande, sans reprise en masse
+ * (décision Laurent). Les champs non fournis (`undefined`) sont laissés tels
+ * quels ; une chaîne vide efface.
+ */
+export async function updateLocationDetails(input: {
+  locationId: string;
+  /**
+   * Nom d'usage. Éditable ici parce que l'historique l'a chargé de la ville et
+   * de l'enseigne (« Vitrolles — Nestenn ») : sans nettoyage, le libellé du
+   * lieu se répète une fois la raison sociale ajoutée.
+   */
+  name?: string;
+  legalName?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const location = await prisma.location.findFirst({
+    where: { id: input.locationId, tenantId: user.tenantId },
+    select: { id: true, address: true },
+  });
+  if (!location) return { ok: false, error: 'Lieu introuvable ou non autorisé.' };
+
+  const actuel = (location.address ?? {}) as Record<string, unknown>;
+  const champ = (nouveau: string | undefined, cle: string): string => {
+    if (nouveau !== undefined) return nouveau.trim();
+    const v = actuel[cle];
+    return typeof v === 'string' ? v.trim() : '';
+  };
+  const address: Record<string, string> = {};
+  const street = champ(input.street, 'street');
+  const postalCode = champ(input.postalCode, 'postalCode');
+  const city = champ(input.city, 'city');
+  if (street) address.street = street;
+  if (postalCode) address.postalCode = postalCode;
+  if (city) address.city = city;
+
+  const legalName =
+    input.legalName !== undefined ? input.legalName.trim() || null : undefined;
+  const name = input.name !== undefined ? input.name.trim() : undefined;
+  if (name !== undefined && !name) {
+    return { ok: false, error: 'Le nom du lieu est obligatoire.' };
+  }
+
+  const manquantes = mentionsLieuManquantes({
+    legalName: legalName === undefined ? undefined : legalName,
+    address,
+  });
+  // `legalName` non fourni : on relit la valeur en base pour valider.
+  if (legalName === undefined && manquantes.includes('raison sociale')) {
+    const actuelLegal = await prisma.location.findUnique({
+      where: { id: input.locationId },
+      select: { legalName: true },
+    });
+    if (actuelLegal?.legalName?.trim()) {
+      manquantes.splice(manquantes.indexOf('raison sociale'), 1);
+    }
+  }
+  if (manquantes.length > 0) {
+    return {
+      ok: false,
+      error: `Lieu incomplet — l'AGEFICE exige ces mentions sur l'émargement : ${manquantes.join(', ')}.`,
+    };
+  }
+
+  await prisma.location.update({
+    where: { id: input.locationId },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(legalName !== undefined ? { legalName } : {}),
+      address: Object.keys(address).length > 0 ? address : Prisma.JsonNull,
+    },
+  });
+  revalidatePath('/app/sessions');
+  return { ok: true };
 }
 
 export async function searchTrainerCandidates(query: string) {

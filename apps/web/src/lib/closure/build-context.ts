@@ -5,6 +5,12 @@
  */
 
 import { prisma } from '@qualiof/db';
+import { loadOfConfig } from '@/lib/of-config';
+import {
+  fallbackLieuOf,
+  formatLieuFormation,
+  villeLieuFormation,
+} from '@/lib/locations/format-lieu';
 import type { ClosureContext } from './shared-template';
 
 export async function buildClosureContextForParticipant(
@@ -40,19 +46,18 @@ export async function buildClosureContextForParticipant(
 
   const session = participant.session;
   const product = session.product;
-  // Lieu = adresse POSTALE complète quand elle est en base (rue + CP + ville) —
-  // exigence Qualiopi sur l'émargement/attestation (lieu exact de la formation).
-  // Avant : seulement « nom — ville » (la rue stockée n'était pas affichée).
-  // Fallback « nom — ville » si aucune rue renseignée.
-  const _addr = (session.location?.address ?? null) as
-    | { street?: string; postalCode?: string; city?: string }
-    | null;
-  const _cityLine = [_addr?.postalCode, _addr?.city].filter(Boolean).join(' ');
-  const sessionLocation = session.location
-    ? _addr?.street
-      ? [_addr.street, _cityLine].filter(Boolean).join(', ')
-      : `${session.location.name}${_addr?.city ? ` — ${_addr.city}` : ''}`
-    : null;
+  // Lieu — composition déléguée à `formatLieuFormation`, la SOURCE UNIQUE déjà
+  // utilisée par la convention : « {raison sociale} — {nom}, {rue}, {CP} {ville} ».
+  //
+  // Refus AGEFICE 2026-08-28 (« Feuille(s) d'émargement incomplet : raison
+  // sociale du lieu de formation ») : ce module composait auparavant sa propre
+  // version « {rue}, {CP} {ville} », qui laissait tomber la raison sociale.
+  // Le worker en avait une TROISIÈME (« {nom} — {ville} »). Les deux passent
+  // désormais par le helper commun.
+  const of = await loadOfConfig(tenantId);
+  const fallbackLieu = fallbackLieuOf(of);
+  const sessionLocation = formatLieuFormation(session.location, fallbackLieu);
+  const sessionLocationCity = villeLieuFormation(session.location, of.addressVille);
 
   const primaryLink = participant.person.legalLinks[0] ?? null;
   const entreprise = primaryLink
@@ -69,6 +74,7 @@ export async function buildClosureContextForParticipant(
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
     sessionLocation,
+    sessionLocationCity,
     // Seul le formateur principal signe les docs Qualiopi. Si aucun n'est
     // marqué primary (vieille session sans backfill, edge case), on prend
     // le 1er par ordre stable (orderBy ci-dessus).
