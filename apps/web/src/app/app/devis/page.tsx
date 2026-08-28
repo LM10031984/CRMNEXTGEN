@@ -8,6 +8,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { CreateQuoteButton } from '@/components/quotes/create-quote-button';
+import { QuoteFromRdvButton } from '@/components/quotes/quote-from-rdv-button';
 
 const PAGE_SIZE = 30;
 
@@ -77,7 +78,14 @@ export default async function DevisPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title="Devis"
         subtitle={`${total} devis${total > 1 ? '' : ''}${status ? ` (filtre ${STATUS_META[status]?.label ?? status})` : ''}`}
-        actions={<CreateQuoteButton />}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 28/08 — au retour d'un rendez-vous, le chiffrage et le compte
+                rendu suffisent : le reste du devis se déduit. */}
+            <QuoteFromRdvButton />
+            <CreateQuoteButton />
+          </div>
+        }
       />
 
       {/* Bandeau statuts cliquables (filtre rapide) */}
