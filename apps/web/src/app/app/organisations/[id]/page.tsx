@@ -9,6 +9,7 @@ import { EditOrganizationButton } from '@/components/forms/edit-organization-but
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
+import { withFrom } from '@/lib/nav/from-link';
 import { formatFunderCode } from '@/lib/funder-codes';
 import { RecordRecentVisit } from '@/components/command-palette/record-recent-visit';
 
@@ -170,7 +171,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                   >
                     <Users className="h-4 w-4 text-muted-foreground shrink-0" />
                     <Link
-                      href={`/app/apprenants/${link.person.id}`}
+                      href={withFrom(`/app/apprenants/${link.person.id}`, `/app/organisations/${id}`) as any}
                       className="font-medium hover:text-primary transition-colors flex-1 min-w-0 truncate"
                     >
                       {link.person.lastName.toUpperCase()} {link.person.firstName}

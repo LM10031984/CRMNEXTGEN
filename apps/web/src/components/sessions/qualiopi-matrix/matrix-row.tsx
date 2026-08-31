@@ -19,6 +19,8 @@
  * DocCellMenu pris en charge en plus de la pastille (UI-SPEC §MatrixRow composite).
  */
 
+import { usePathname } from 'next/navigation';
+import { withFrom } from '@/lib/nav/from-link';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { DocStatusBadge } from './doc-status-badge';
@@ -57,6 +59,7 @@ export function MatrixRow({
   readOnly,
   columns,
 }: MatrixRowProps) {
+  const pathname = usePathname();
   const cellByType = new Map(cells.map((c) => [c.docType, c.state]));
 
   return (
@@ -82,7 +85,7 @@ export function MatrixRow({
         className="sticky left-[40px] bg-white z-10 px-3 py-1.5 text-left text-sm font-medium border-b min-w-[180px] align-middle"
       >
         <Link
-          href={`/app/apprenants/${participant.personId}`}
+          href={withFrom(`/app/apprenants/${participant.personId}`, pathname) as any}
           className="hover:text-primary hover:underline truncate block"
           title={participant.fullName}
         >
