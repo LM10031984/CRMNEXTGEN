@@ -6,6 +6,14 @@ import { searchProducts, listTrainers } from '@/server/actions/sessions-create';
 import { SessionWizard } from '@/components/wizards/session-wizard';
 
 export const dynamic = 'force-dynamic';
+/**
+ * Générations IA lancées depuis cette page : sans `maxDuration` explicite,
+ * Vercel coupe la fonction à 60 s et l'utilisateur reçoit une erreur opaque
+ * après une longue attente — une génération de programme dépasse régulièrement
+ * ce seuil. 300 s = plafond du plan.
+ */
+export const maxDuration = 300;
+
 
 export default async function NouvelleSessionPage() {
   const { user } = await validateRequest();
