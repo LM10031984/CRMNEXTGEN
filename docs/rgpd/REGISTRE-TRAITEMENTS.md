@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| **Version** | 1.1 |
-| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) |
+| **Version** | 1.2 |
+| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) |
 | **Responsable de traitement** | Start Academy — Organisme de formation certifié Qualiopi (siège : Vence) |
 | **Contact** | laurent@start-academy.fr |
 | **Rédaction** | Générée par assistance IA (Claude), sous contrôle du responsable de traitement |
-| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé |
+| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.** |
 
 > Ce registre couvre les traitements de données à caractère personnel opérés via l'application interne **QualiOF** (CRM/back-office de Start Academy, non commercialisé à des tiers) déployée sur infrastructure cloud (voir § Localisation des données). Il est versionné dans le dépôt de code (`docs/rgpd/`) et exportable en PDF pour présentation à un auditeur Qualiopi ou à la CNIL.
 
@@ -27,15 +27,20 @@
 
 ## Traitement 2 — Pré-inscriptions self-service + OCR IA
 
+> **Amendement du 2026-08-28 (v1.2)** — le formulaire public existe désormais en
+> deux points d'entrée : un lien individuel (`/preinscription/{jeton}`) et un lien
+> **par session** (`/inscription/{jeton}`), révocable. Même finalité, mêmes
+> destinataires ; ce qui change est signalé ci-dessous.
+
 | Rubrique | Contenu |
 |---|---|
-| **Finalité** | Collecte des informations et pièces d'inscription directement auprès du candidat (formulaire public tokenisé), extraction automatique par OCR IA (CNI/RIB/attestation CFP) pour éviter la ressaisie. |
+| **Finalité** | Collecte des informations et pièces d'inscription directement auprès du candidat (formulaire public tokenisé, par candidat ou par session de formation), extraction automatique par OCR IA (CNI recto/verso, RIB, attestation CFP) pour éviter la ressaisie. |
 | **Base légale** | Mesures précontractuelles à la demande de la personne (art. 6.1.b) ; consentement horodaté sur le formulaire (`rgpdAcceptedAt`). |
-| **Catégories de données** | Identité et coordonnées saisies + **documents sensibles par nature documentaire** : pièce d'identité (CNI), RIB, attestation CFP — uploadés en direct-to-storage vers un bucket **privé**, accessibles uniquement via **signed URLs à TTL de quelques minutes**. Données extraites structurées (`extractedData`). |
+| **Catégories de données** | Identité et coordonnées saisies (dont nom de naissance et adresse postale), entreprise et SIRET déclarés, **numéro de sécurité sociale** (v1.2 — exigé par les dossiers de financement AGEFICE) + **documents sensibles par nature documentaire** : pièce d'identité (recto et verso), RIB, attestation CFP — uploadés en direct-to-storage vers un bucket **privé**, accessibles uniquement via **signed URLs à TTL de quelques minutes**. Données extraites structurées (`extractedData`).<br>**Minimisation du n° de sécurité sociale (v1.2)** : il transite dans l'appel de soumission mais n'est **jamais écrit dans la table alimentée par le formulaire public** ; il n'est enregistré qu'à la validation de l'inscription, dans la table `SensitiveData` séparée. Une demande rejetée ne le conserve pas. |
 | **Catégories de personnes** | Candidats à l'inscription (futurs apprenants). |
 | **Destinataires / sous-traitants** | Storage des pièces : [dpa/supabase.md](dpa/supabase.md) · OCR vision : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic via OpenRouter : [dpa/anthropic.md](dpa/anthropic.md)) · Runtime formulaire public : [dpa/vercel.md](dpa/vercel.md). |
-| **Durée de conservation** | **Scans CNI/RIB : conservation alignée sur la durée du dossier de financement/formation** (identique au Traitement 1) — ils ne sont PAS supprimés après justification du financement. **Décision du responsable de traitement en date du 2026-07-07** (amendement à la proposition initiale de suppression anticipée). **Justification : les pièces doivent rester disponibles pour les contrôles a posteriori des financeurs (AGEFICE, OPCO, DREETS) et pour le cycle de certification Qualiopi.** Lien public à expiration (`expiresAt`). |
-| **Mesures techniques** | Bucket Storage privé + signed URL TTL minutes, upload direct-to-storage (les pièces ne transitent pas par le serveur applicatif), token unique à expiration, table `SensitiveData` séparée pour la pièce d'identité après conversion, rate-limiting WAF sur `/preinscription` (30 req/60 s/IP). |
+| **Durée de conservation** | **Brouillons abandonnés (v1.2)** : les pièces sont téléversées avant que la demande n'existe en base ; celles qu'aucune demande ne rattache sont purgées au-delà de **30 jours** (`pnpm storage:purge-drafts`).<br>**Scans CNI/RIB : conservation alignée sur la durée du dossier de financement/formation** (identique au Traitement 1) — ils ne sont PAS supprimés après justification du financement. **Décision du responsable de traitement en date du 2026-07-07** (amendement à la proposition initiale de suppression anticipée). **Justification : les pièces doivent rester disponibles pour les contrôles a posteriori des financeurs (AGEFICE, OPCO, DREETS) et pour le cycle de certification Qualiopi.** Lien public à expiration (`expiresAt`). |
+| **Mesures techniques** | Bucket Storage privé + signed URL TTL minutes, upload direct-to-storage (les pièces ne transitent pas par le serveur applicatif), token unique à expiration, table `SensitiveData` séparée pour la pièce d'identité après conversion, rate-limiting WAF sur `/preinscription` **et `/inscription`** (30 req/60 s/IP, règles `rate-limit-preinscription` et `rate-limit-inscription`).<br>**Ajouts v1.2** : jeton de session aléatoire (32 caractères hexadécimaux) sans lien avec le code de session et **révocable** — la régénération invalide tout lien déjà diffusé ; **aucune écriture en base avant la soumission** du formulaire, donc un lien diffusé largement ne crée pas de dossiers vides contenant des données personnelles partielles ; limitation applicative de 5 soumissions/heure/IP ; refus automatique des dépôts quand la session est complète ou close. |
 
 ## Traitement 3 — Génération des documents Qualiopi (pack closure IA)
 

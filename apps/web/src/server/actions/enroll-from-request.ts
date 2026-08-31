@@ -8,15 +8,19 @@
  * Organization + LegalLink + AgeficeProfile, mais n'inscrivait personne dans
  * la session visée.
  *
- * Le prix est posé à 0 : la tarification se saisit depuis la fiche session
- * (bouton « Modifier » du participant), comme pour toute inscription. Le
- * formulaire public ne touche JAMAIS au prix.
+ * Le formulaire public ne touche JAMAIS au prix. En revanche l'inscrit hérite
+ * du tarif de la session : poser 0 en dur fabriquait une convention à zéro
+ * euro dès la validation, puisque `prepareTrainingForSession` génère les
+ * pièces dans la foulée. Le tarif reste modifiable ensuite depuis la fiche
+ * participant, et `applyPriceCascade` le repropage si la session change de
+ * tarif (cf. lib/pricing/, audit 2026-08-28 écart E-2).
  */
 
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { resolveSponsorOrg, cleanSiret } from '@/lib/enrollment/sponsor-org';
+import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 import { convertPreEnrollment } from './preinscription-convert';
 import { prepareTrainingForSession } from './prepare-training';
 
@@ -103,12 +107,30 @@ export async function enrollFromRequest(input: {
     return { ok: false, error: 'Cette personne est déjà inscrite à cette session' };
   }
 
+  // Tarif hérité de la session (jamais du formulaire public), via la source
+  // unique de la règle. Scopé tenant comme toute lecture de ce module.
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      pricePerLearner: true,
+      product: { select: { priceHT: true, groupFlatPrice: true } },
+    },
+  });
+  const sponsorOrg = await prisma.organization.findFirst({
+    where: { id: sponsorOrgId, tenantId: user.tenantId },
+    select: { legalForm: true },
+  });
+  const defaultPrice = resolveDefaultParticipantPrice(session, session?.product ?? null, sponsorOrg);
+  if (defaultPrice.needsReview) {
+    console.warn(`[inscription ${pe.id}] tarif à arbitrer : ${defaultPrice.reason}`);
+  }
+
   const participant = await prisma.sessionParticipant.create({
     data: {
       sessionId,
       personId: conv.personId,
       sponsorOrgId,
-      priceHT: new Prisma.Decimal(0),
+      priceHT: new Prisma.Decimal(defaultPrice.priceHT),
       enrollmentStatus: 'PRE_ENROLLED',
       participantType: pe.professionalStatus ?? null,
     },

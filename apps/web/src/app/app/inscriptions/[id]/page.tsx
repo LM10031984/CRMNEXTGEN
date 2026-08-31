@@ -11,6 +11,7 @@ import { PreEnrollmentActions } from '@/components/preinscriptions/detail-action
 import { RetryExtractionButton } from '@/components/preinscriptions/retry-extraction-button';
 import { IdentityCheckPanel } from '@/components/preinscriptions/identity-check-panel';
 import { SingleReminderButton } from '@/components/preinscriptions/single-reminder-button';
+import { ageficeRights, contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,6 +135,10 @@ export default async function PreEnrollmentDetailPage({
           <ExtractCard title="Attestation CFP" icon={FileText} data={extracted.cfp} />
         </section>
       )}
+
+      {/* Droits AGEFICE déduits de la contribution CFP versée. Dérivé à
+          l'affichage : corriger le montant met les droits à jour aussitôt. */}
+      <DroitsAgeficeCard extractedData={pe.extractedData} />
 
       {extracted?.warnings && extracted.warnings.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -261,5 +266,43 @@ function ExtractCard({
         </dl>
       )}
     </div>
+  );
+}
+
+/**
+ * Droits de formation AGEFICE ouverts par la contribution CFP versée.
+ * Règle : ≥ 7 € → 3 000 € · > 0 et < 7 € → 500 € · 0 → aucun droit.
+ */
+function DroitsAgeficeCard({ extractedData }: { extractedData: unknown }) {
+  const contribution = contributionFromExtractedData(extractedData);
+  const droits = ageficeRights(contribution);
+
+  const couleurs: Record<string, string> = {
+    plein: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    partiel: 'border-amber-200 bg-amber-50 text-amber-900',
+    aucun: 'border-red-200 bg-red-50 text-red-900',
+    inconnu: 'border-border bg-muted/30 text-muted-foreground',
+  };
+
+  return (
+    <section className={`rounded-2xl border p-5 ${couleurs[droits.niveau]}`}>
+      <h2 className="font-semibold text-sm mb-1">Droits AGEFICE</h2>
+      <p className="text-2xl font-bold">
+        {droits.montantEuros === null ? '—' : `${droits.montantEuros.toLocaleString('fr-FR')} €`}
+      </p>
+      <p className="text-xs mt-1">
+        {droits.libelle}
+        {contribution !== null &&
+          ` · contribution CFP lue : ${contribution.toLocaleString('fr-FR', {
+            minimumFractionDigits: 2,
+          })} €`}
+      </p>
+      {droits.niveau === 'inconnu' && (
+        <p className="text-xs mt-2 italic">
+          Le montant n'a pas été lu sur l'attestation — vérifier la pièce avant de
+          promettre un budget.
+        </p>
+      )}
+    </section>
   );
 }

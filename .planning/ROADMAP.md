@@ -34,6 +34,7 @@ Détail complet : [milestones/v5-ROADMAP.md](milestones/v5-ROADMAP.md)
 - [ ] **Phase 20: Worker 3ᵉ hôte + doc engines** — Image Docker prunée (3 workers + Gotenberg + WeasyPrint + poppler) sur Railway/Fly EU, décision Redis tranchée, pack closure généré 100 % cloud, OCR non dégradé silencieusement
 - [x] **Phase 21: App Vercel + filet CI/tests** — App Next.js sur Vercel EU (staging dégelé, cookies Lucia OK, PDF synchrones via ingress public authentifié) + GitHub Actions + E2E closure + smoke routes verts avant bascule (completed 2026-07-06)
 - [ ] **Phase 22: Bascule prod + conformité RGPD** — Runbook + rollback, dump final restauré, DNS pointé, invitations équipe, pack témoin go/no-go, alertes coûts + backups, DPA des 6 sous-traitants soldé
+- [ ] **Phase 23: Tarification par payeur (SessionPricing)** — Forfait groupe entreprise et tarif par stagiaire coexistant sur une même session, quotes-parts exactes, redistribution interdite dès qu'un inscrit est engagé — sans reprise de l'existant
 
 ## Phase Details
 
@@ -145,10 +146,35 @@ Plans:
 - [ ] 22-10-PLAN.md — Purge locale : archives pg_dump/MinIO → mot de validation → purge [checkpoints, destructif] — CUT-01 [Wave 5]
 **Research flags** (à reprendre au plan) : [VERIFY] région des backups Supabase (EU) · scrubber logs (logger des IDs, pas CNI/RIB) · destructif = étape séparée (pg_dump + vérif invariants avant de couper le local — convention projet) · gate RGPD/DPA doit précéder le flux PII prod (D-02b hérité Phase 16).
 
+### Phase 23: Tarification par payeur (SessionPricing)
+**Goal**: Sur une session à venir, facturer une entreprise **au forfait** pour son groupe de salariés et un auto-entrepreneur **au tarif par personne**, deux entreprises de la même session pouvant porter deux forfaits différents — sans jamais reprendre l'existant.
+**Depends on**: Phase 22
+**Requirements**: PRIX-01, PRIX-02
+**Success Criteria** (what must be TRUE):
+  1. Une session mixte facture correctement : l'agence au forfait sur une facture par payeur portant le forfait, les indépendants à leur tarif unitaire — changer le forfait de l'agence ne touche aucun indépendant, et deux agences de la même session restent étanches
+  2. La somme des quotes-parts d'un forfait est **exactement** égale au forfait, y compris sur un montant non divisible (4 500 ÷ 11) et après un ajout puis un retrait ; la quote-part sert au BPF et au CA par stagiaire, jamais à facturer
+  3. Ajouter un salarié dans un groupe dont un membre est déjà engagé (facture émise, dossier OPCO instruit, convention signée) est **refusé** avec les deux issues exposées (renégocier le forfait / sortir l'arrivant sur sa propre ligne) et **aucune écriture**
+  4. Le mode « personne morale » est déduit de `payer-rule.ts` et d'aucune autre définition — type de convention et mode de tarif ne peuvent pas diverger
+  5. Sans ligne `SessionPricing`, la cascade retombe sur `session.pricePerLearner` puis le produit, **jamais sur 0**
+  6. La migration est additive et ne crée **aucune** ligne rétroactive : les 81 sessions existantes gardent ce qu'elles ont
+  7. Le forfait est **ferme** : une entreprise qui annonce 4 salariés et en envoie 3 doit toujours le forfait entier (place réservée, formateur mobilisé). La convention d'entreprise **porte cette clause par écrit** — sans elle, un désistement devient un litige et une réserve d'audit sur l'information préalable
+  8. Une entreprise sans montant saisi **bloque** la génération de sa convention — un blocage dur, pas un avertissement contournable, sinon la convention à zéro euro revient par le chemin public
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 23 to break down)
+
+**Hors périmètre — explicite** : aucun backfill, aucune reconstruction, aucun arbitrage sur les sessions passées. Les 5 couples hétérogènes relevés le 28/08 (SES-0106 OPTIMMO forfait 4 500 déjà réparti, SES-0086 RIVIERA, SES-0079 et SES-0050 NEYRAT, SES-0040 Habitat Concept) servent de **jeu de test**, rien de plus. `session.pricePerLearner` est **conservé** comme repli — sa suppression est un chantier séparé.
+
+⚠️ **Les cas de test sont des fixtures EN DUR** (SES-0106 : 4 500 ÷ 11 = 409,09 × 10 + 409,10). Aucun test, aucun script de vérification ne lit une session réelle en base pour « valider » la répartition. C'est le premier chemin par lequel le backfill reviendrait par la fenêtre, sous couvert de vérification.
+
+**Research flags** (à reprendre au plan) : [VERIFY] `Invoice.participantIds` couvre bien la facture groupée par payeur · réutilisation obligatoire de `classifyParticipantPrice` pour les verrous · `resolveDefaultParticipantPrice` reste la source unique appelée par les trois chemins de création d'inscrit (E-2, quick 260828-k3p) · migration additive + `migrate deploy` jamais `db push` vers le cloud.
+
+
 ## Progress
 
 **Execution Order:**
-Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
+Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22 → 23
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -158,3 +184,4 @@ Les phases s'exécutent dans l'ordre : 17 → 18 → 19 → 20 → 21 → 22
 | 20. Worker 3ᵉ hôte | v6 | 5/6 | In Progress (obs. 24 j ✓, vérif 3/4 — reste : exécuter 20-06 gap OCR) |  |
 | 21. App Vercel + CI | v6 | 6/6 | Complete    | 2026-07-06 |
 | 22. Bascule prod + RGPD | v6 | 9/11 | In Progress|  |
+| 23. Tarification par payeur | v6 | 0/0 | Not planned |  |

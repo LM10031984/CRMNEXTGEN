@@ -6,6 +6,7 @@ import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { prepareSession } from './prepare-training';
+import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 export interface CreateSessionInput {
   productId: string;
@@ -132,7 +133,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
 
   const product = await prisma.trainingProduct.findFirst({
     where: { id: input.productId, tenantId: user.tenantId },
-    select: { id: true, title: true, priceHT: true, capacityMax: true },
+    select: { id: true, title: true, priceHT: true, groupFlatPrice: true, capacityMax: true },
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
 
@@ -164,7 +165,19 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
 
   const code = await nextSessionCode(user.tenantId);
   const sessionName = `${product.title} - ${start.toLocaleDateString('fr-FR')}`;
-  const pricePerLearner = input.pricePerLearner ?? Number(product.priceHT);
+  // Tarif de la SESSION : saisi, sinon tarif catalogue du produit. `null` quand
+  // le produit n'en porte pas — `Number(null)` valait 0, soit un tarif nul posé
+  // en silence sur toute la session (E-2).
+  const pricePerLearner =
+    input.pricePerLearner ?? (product.priceHT === null ? null : Number(product.priceHT));
+
+  // Le prix de chaque inscrit passe par la source unique : le sponsor diffère
+  // d'un participant à l'autre (session mixte agence + EI), donc le prix aussi.
+  const sponsorOrgs = await prisma.organization.findMany({
+    where: { id: { in: input.participants.map((p) => p.sponsorOrgId) }, tenantId: user.tenantId },
+    select: { id: true, legalForm: true },
+  });
+  const legalFormParOrg = new Map(sponsorOrgs.map((o) => [o.id, o.legalForm]));
 
   // Création atomique
   const session = await prisma.$transaction(async (tx) => {
@@ -180,7 +193,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
         modality: input.modality,
         locationId,
         capacityMax: input.capacityMax ?? product.capacityMax,
-        pricePerLearner: new Prisma.Decimal(pricePerLearner),
+        pricePerLearner: pricePerLearner === null ? null : new Prisma.Decimal(pricePerLearner),
         internalNotes: input.internalNotes ?? null,
       },
     });
@@ -202,12 +215,20 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     // Participants (chacun = 1 SessionParticipant avec sponsorOrgId)
     const createdParticipantIds: string[] = [];
     for (const p of input.participants) {
+      const prix = resolveDefaultParticipantPrice(
+        { pricePerLearner },
+        product,
+        { legalForm: legalFormParOrg.get(p.sponsorOrgId) ?? null },
+      );
+      if (prix.needsReview) {
+        console.warn(`[createSessionFull ${code}] tarif à arbitrer pour ${p.personId} : ${prix.reason}`);
+      }
       const part = await tx.sessionParticipant.create({
         data: {
           sessionId: created.id,
           personId: p.personId,
           sponsorOrgId: p.sponsorOrgId,
-          priceHT: new Prisma.Decimal(pricePerLearner),
+          priceHT: new Prisma.Decimal(prix.priceHT),
           enrollmentStatus: 'PRE_ENROLLED',
           financingMode: p.financingMode ?? null,
         },

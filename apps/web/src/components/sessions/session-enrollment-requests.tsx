@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { enrollFromRequest } from '@/server/actions/enroll-from-request';
 import { searchOrganizations } from '@/server/actions/legal-links';
+import { ageficeRights } from '@/lib/enrollment/agefice-rights';
 
 export interface EnrollmentRequestRow {
   id: string;
@@ -29,6 +30,8 @@ export interface EnrollmentRequestRow {
   professionalStatus: string | null;
   hasCni: boolean;
   hasCniVerso: boolean;
+  /** Montant CFP lu sur l'attestation, pour en déduire les droits AGEFICE. */
+  contributionCfp: number | null;
   hasRib: boolean;
   hasCfp: boolean;
 }
@@ -148,6 +151,7 @@ function LigneDemande({
             />
             <Piece ok={demande.hasRib} label="RIB" icon={Building2} />
             <Piece ok={demande.hasCfp} label="CFP" icon={FileText} />
+            <DroitsBadge contribution={demande.contributionCfp} />
           </div>
         </div>
 
@@ -227,6 +231,31 @@ function Piece({
       )}
     >
       <Icon className="h-3 w-3" /> {label}
+    </span>
+  );
+}
+
+/**
+ * Droits AGEFICE ouverts par la contribution CFP : ≥ 7 € → 3 000 €,
+ * > 0 et < 7 € → 500 €, 0 → aucun droit. Rien n'est affiché tant que
+ * l'attestation n'a pas été lue — mieux vaut le silence qu'un montant faux.
+ */
+function DroitsBadge({ contribution }: { contribution: number | null }) {
+  const droits = ageficeRights(contribution);
+  if (droits.niveau === 'inconnu') return null;
+
+  const couleurs: Record<string, string> = {
+    plein: 'bg-emerald-50 text-emerald-700',
+    partiel: 'bg-amber-50 text-amber-700',
+    aucun: 'bg-red-50 text-red-700',
+  };
+
+  return (
+    <span
+      className={cn('inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded font-medium', couleurs[droits.niveau])}
+      title={`Contribution CFP lue : ${contribution?.toLocaleString('fr-FR')} €`}
+    >
+      {droits.niveau === 'aucun' ? 'Aucun droit' : `${droits.montantEuros?.toLocaleString('fr-FR')} €`}
     </span>
   );
 }

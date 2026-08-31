@@ -12,7 +12,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Link2, Copy, Check, Lock, RefreshCw, Loader2, Users } from 'lucide-react';
+import { Link2, Copy, Check, Lock, RefreshCw, Loader2, Users, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -48,6 +48,13 @@ export function SessionEnrollmentBlock({
 
   const placesRestantes = Math.max(0, capacityMax - participantCount - pendingCount);
   const ouvert = etat === 'ouvert';
+
+  // Le lien est construit depuis NEXT_PUBLIC_APP_URL. Ouvert depuis l'instance
+  // locale, il pointe sur localhost et n'est diffusable à personne — mieux vaut
+  // le dire ici que de le découvrir après l'avoir envoyé à une agence entière.
+  const lienLocal = Boolean(
+    urlCourante && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(urlCourante),
+  );
 
   async function copier(valeur: string) {
     try {
@@ -143,6 +150,13 @@ export function SessionEnrollmentBlock({
               {copie ? 'Copié' : 'Copier'}
             </button>
           </div>
+          {lienLocal && (
+            <p className="text-xs text-amber-700 inline-flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              Ce lien pointe vers ton instance locale : il ne fonctionnera pour personne
+              d'autre. Recopie-le depuis l'application en ligne avant de le diffuser.
+            </p>
+          )}
           {canWrite && (
             <div className="flex items-center gap-3 pt-1">
               <button

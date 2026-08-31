@@ -57,6 +57,7 @@ import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
 import { SessionEnrollmentRequests } from '@/components/sessions/session-enrollment-requests';
 import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
+import { contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
@@ -598,6 +599,7 @@ export default async function SessionDetailPage({
       professionalStatus: true,
       cniKey: true,
       cniVersoKey: true,
+      extractedData: true,
       ribKey: true,
       cfpKey: true,
     },
@@ -616,6 +618,7 @@ export default async function SessionDetailPage({
     professionalStatus: r.professionalStatus,
     hasCni: Boolean(r.cniKey),
     hasCniVerso: Boolean(r.cniVersoKey),
+    contributionCfp: contributionFromExtractedData(r.extractedData),
     hasRib: Boolean(r.ribKey),
     hasCfp: Boolean(r.cfpKey),
   }));
