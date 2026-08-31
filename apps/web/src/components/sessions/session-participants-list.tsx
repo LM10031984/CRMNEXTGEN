@@ -1,12 +1,13 @@
 'use client';
 
 import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { UserMinus, Loader2, ExternalLink, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { unenrollParticipant } from '@/server/actions/sessions';
 import { EditParticipantButton } from './edit-participant-button';
+import { withFrom } from '@/lib/nav/from-link';
 
 export interface SessionParticipantRow {
   id: string;
@@ -40,6 +41,7 @@ export function SessionParticipantsList({
   participants: SessionParticipantRow[];
   canManage: boolean;
 }) {
+  const pathname = usePathname();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -89,7 +91,7 @@ export function SessionParticipantsList({
             >
               <div className="min-w-0">
                 <Link
-                  href={`/app/apprenants/${p.personId}`}
+                  href={withFrom(`/app/apprenants/${p.personId}`, pathname) as any}
                   className="inline-flex items-center gap-1 text-sm font-medium hover:underline"
                 >
                   {p.fullName}

@@ -146,9 +146,17 @@ Cascade de résolution du prix d'un inscrit, dans cet ordre :
 jamais un repli.
 
 Migration Prisma **additive** + `migrate deploy` (jamais `db push` vers le cloud).
-Backfill : une ligne `SessionPricing` par couple (session, payeur) existant,
-reconstruite depuis les `participant.priceHT` actuels — en mode simulation d'abord,
-avec le rapport des sessions où la reconstruction est ambiguë (montants hétérogènes
-dans un même groupe : c'est soit une remise individuelle voulue, soit une dérive).
+**Aucun backfill.** Les sessions existantes gardent ce qu'elles ont : la cascade
+retombe sur `session.pricePerLearner` puis le produit, et c'est le comportement
+voulu. Reconstruire une grille depuis les `participant.priceHT` actuels
+inventerait des forfaits qui n'ont jamais été négociés — sur les 283 couples
+mesurés le 28/08, 278 sont homogènes mais 5 divergent, et l'un d'eux (SES-0106)
+est un forfait DÉJÀ correctement réparti qu'une reconstruction naïve classerait
+en anomalie. Décision verrouillée en Phase 23.
+
+Les 5 cas divergents servent de **fixtures de test, en dur**. Aucun test, aucun
+script de vérification ne lit une session réelle pour « valider » une répartition :
+c'est le premier chemin par lequel le backfill reviendrait par la fenêtre.
+
 TDD : tests RED d'abord, un par ligne du tableau de l'étape 3, plus l'égalité
 d'arrondi et le cas de la session mixte entreprise + EI.

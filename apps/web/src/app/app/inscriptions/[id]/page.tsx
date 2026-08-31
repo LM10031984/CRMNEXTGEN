@@ -1,3 +1,4 @@
+import { withFrom } from '@/lib/nav/from-link';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -205,7 +206,7 @@ export default async function PreEnrollmentDetailPage({
             <Check className="h-4 w-4" /> Cette pré-inscription a été convertie en apprenant.
           </div>
           <Link
-            href={`/app/apprenants/${pe.convertedToPersonId}`}
+            href={withFrom(`/app/apprenants/${pe.convertedToPersonId}`, `/app/inscriptions/${id}`) as any}
             className="mt-2 inline-block text-sm text-primary hover:underline"
           >
             Voir la fiche apprenant →

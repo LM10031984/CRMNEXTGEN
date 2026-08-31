@@ -50,6 +50,11 @@
 
 - [x] **RGPD-01** : Registre des traitements complet — DPA documenté pour les 6 sous-traitants (OpenRouter, Anthropic, Supabase, Vercel, Upstash, Railway/Fly) — solde la dette engagée par le GO vision 2026-07-04
 
+### PRIX — Tarification par payeur
+
+- [ ] **PRIX-01** : Le prix appartient au couple (session × payeur) — `SessionPricing` avec ligne par défaut « indépendants » et une ligne par entreprise ; la cascade de résolution (ligne du payeur → ligne par défaut → `session.pricePerLearner` → produit) vit dans `resolveDefaultParticipantPrice`, source unique appelée par les trois chemins de création d'inscrit, et ne retombe **jamais** sur 0
+- [ ] **PRIX-02** : Un forfait groupe se répartit sans jamais se recopier — somme des quotes-parts **exactement** égale au forfait, redistribution **interdite** dès qu'un inscrit du groupe est engagé (facture, dossier OPCO instruit, convention signée), facture unique par payeur portant le forfait, convention d'entreprise portant le forfait et la clause de fermeté
+
 ## Future Requirements (backlog, hors v6)
 
 - Staging persistant (2ᵉ projet Supabase + previews Vercel branchées)
@@ -91,3 +96,5 @@
 | CUT-01 | Phase 22 | Complete |
 | CUT-02 | Phase 22 | Complete |
 | RGPD-01 | Phase 22 | Complete |
+| PRIX-01 | Phase 23 | Not started |
+| PRIX-02 | Phase 23 | Not started |

@@ -1261,7 +1261,7 @@ export default async function SessionDetailPage({
                     {canWrite && (
                       <AddParticipantDialog
                         sessionId={session.id}
-                        defaultPrice={Number(session.pricePerLearner ?? 0)}
+                        defaultPrice={session.pricePerLearner === null ? null : Number(session.pricePerLearner)}
                         excludePersonIds={session.participants.map((p) => p.personId)}
                       />
                     )}

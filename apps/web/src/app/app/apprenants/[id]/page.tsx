@@ -49,7 +49,7 @@ export default async function ApprenantDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; ageficeYear?: string }>;
+  searchParams: Promise<{ tab?: string; ageficeYear?: string; from?: string }>;
 }) {
   const { user } = await validateRequest();
   if (!user) return null;
@@ -473,7 +473,7 @@ export default async function ApprenantDetailPage({
           { label: `${person.lastName.toUpperCase()} ${person.firstName}` },
         ]}
       />
-      <BackToListLink fallbackHref="/app/apprenants" label="Retour à la liste" />
+      <BackToListLink fallbackHref="/app/apprenants" label="Retour à la liste" from={sp.from} />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader

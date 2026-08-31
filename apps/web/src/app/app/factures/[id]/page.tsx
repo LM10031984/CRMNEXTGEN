@@ -1,3 +1,4 @@
+import { withFrom } from '@/lib/nav/from-link';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Receipt, Building2, User, Calendar, FileText, Wallet, ExternalLink } from 'lucide-react';
@@ -219,7 +220,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
         <Block icon={User} title="Apprenant">
           {invoice.participant ? (
             <>
-              <Link href={`/app/apprenants/${invoice.participant.person.id}`} className="font-medium hover:text-primary">
+              <Link href={withFrom(`/app/apprenants/${invoice.participant.person.id}`, `/app/factures/${id}`) as any} className="font-medium hover:text-primary">
                 {invoice.participant.person.firstName} {invoice.participant.person.lastName}
               </Link>
               {invoice.participant.person.email && <div className="text-xs text-muted-foreground mt-0.5">{invoice.participant.person.email}</div>}

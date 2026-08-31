@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { labelForFrom, parseFrom } from '@/lib/nav/from-link';
 
 /**
  * Lien "← Retour" qui essaie de préserver les filtres / la pagination de la
@@ -14,19 +15,29 @@ import { cn } from '@/lib/utils';
  *
  * Marche bien pour : "Retour à la liste apprenants ?q=albin&filter=ei",
  * "Retour aux sessions ?filter=this_week", etc.
+ *
+ * `from` (prop, alimentée par `?from=` dans l'URL) court-circuite tout ça :
+ * la page d'origine s'est annoncée explicitement, on y retourne avec un
+ * libellé adapté ("Retour à la session"). Nécessaire parce que le referrer
+ * n'est PAS mis à jour par les navigations client de l'App Router — d'où le
+ * retour sur la liste complète des apprenants quand on venait d'une session.
  */
 export function BackToListLink({
   fallbackHref,
   label,
   className,
+  from,
 }: {
   fallbackHref: string;
   label: string;
   className?: string;
+  from?: string | null;
 }) {
-  const [href, setHref] = useState<string>(fallbackHref);
+  const origin = parseFrom(from);
+  const [href, setHref] = useState<string>(origin ?? fallbackHref);
 
   useEffect(() => {
+    if (origin) return; // origine explicite : rien à deviner
     if (typeof document === 'undefined') return;
     const ref = document.referrer;
     if (!ref) return;
@@ -40,7 +51,7 @@ export function BackToListLink({
     } catch {
       // ignore
     }
-  }, [fallbackHref]);
+  }, [fallbackHref, origin]);
 
   return (
     <Link
@@ -51,7 +62,7 @@ export function BackToListLink({
       )}
     >
       <ArrowLeft className="h-4 w-4" />
-      {label}
+      {origin ? labelForFrom(origin, label) : label}
     </Link>
   );
 }

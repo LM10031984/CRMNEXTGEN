@@ -8,6 +8,7 @@
  * de 3000€ pour les relancer commercialement.
  */
 
+import { withFrom } from '@/lib/nav/from-link';
 import Link from 'next/link';
 import { Wallet, AlertTriangle, CheckCircle2, ChevronRight, ArrowLeft, Download } from 'lucide-react';
 import { validateRequest } from '@/lib/auth';
@@ -179,7 +180,7 @@ export default async function BudgetAgeficePage({
               return (
                 <li key={r.personId}>
                   <Link
-                    href={`/app/apprenants/${r.personId}?tab=activity`}
+                    href={withFrom(`/app/apprenants/${r.personId}?tab=activity`, '/app/budget-agefice') as any}
                     className="block p-4 hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-center gap-4 flex-wrap">
