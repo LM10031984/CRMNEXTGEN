@@ -35,6 +35,7 @@ const GROUPE_OK: CommanditaireGroupe = {
   conventionDocId: null,
   analyseAssetId: null,
   representant: 'Gilles Blanchon',
+  dateSignatureParDefaut: '2026-08-31',
   blocages: [],
 };
 
@@ -95,6 +96,16 @@ describe('Documents d’entreprise — garde-fous avant génération', () => {
       'disabled',
       false,
     );
+  });
+
+  /**
+   * 31/08 — la date proposée doit être VISIBLE et modifiable avant de générer :
+   * la règle sortait une date dans le futur sur les sessions lointaines.
+   */
+  it('affiche la date de signature proposée, modifiable', async () => {
+    await rendre(GROUPE_OK);
+    const champ = screen.getByLabelText(/Date de signature/i) as HTMLInputElement;
+    expect(champ.value).toBe('2026-08-31');
   });
 
   it('laisse générer quand rien ne manque', async () => {
