@@ -15,6 +15,15 @@
  */
 
 /**
+ * Ce qui distingue les leads du stand de tous les autres dans le CRM.
+ *
+ * Vit ici, avec le contenu, et pas dans l'action serveur : un fichier
+ * `'use server'` ne peut exporter que des fonctions async, et c'est de toute
+ * façon un libellé métier — il se corrige sans ouvrir de code serveur.
+ */
+export const SOURCE_STAND = 'Salon — 25 ans du MLS';
+
+/**
  * Les quatre problématiques vers lesquelles un diagnostic peut router.
  *
  * Elles collent au catalogue Start Academy existant — on ne promet pas une

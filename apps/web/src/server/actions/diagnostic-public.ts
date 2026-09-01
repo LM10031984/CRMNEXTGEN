@@ -18,10 +18,7 @@ import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { rateLimitOk } from '@/lib/enrollment/rate-limit';
 import { diagnostiquer, resumerPourLead } from '@/lib/diagnostic/scoring';
-import { QUESTIONS, PROBLEMATIQUES } from '@/lib/diagnostic/questions';
-
-/** Ce qui distingue les leads du stand de tous les autres, pour les stats. */
-export const SOURCE_STAND = 'Salon — 25 ans du MLS';
+import { QUESTIONS, PROBLEMATIQUES, SOURCE_STAND } from '@/lib/diagnostic/questions';
 
 /**
  * Plafond volontairement HAUT.
