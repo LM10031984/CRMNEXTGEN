@@ -17,9 +17,6 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { rateLimitOk } from '@/lib/enrollment/rate-limit';
-import { sendMail } from '@/lib/mailer';
-import { loadOfConfig } from '@/lib/of-config';
-import { renderDiagnosticProgrammeEmail } from '@/lib/mailer-templates/diagnostic-programme';
 import { diagnostiquer, resumerPourLead } from '@/lib/diagnostic/scoring';
 import { QUESTIONS, PROBLEMATIQUES, SOURCE_STAND } from '@/lib/diagnostic/questions';
 
@@ -89,49 +86,44 @@ export async function soumettreDiagnostic(input: {
   // seconde-là. C'est ce qui autorise le rappel et l'envoi du programme.
   const consentement = `Consentement au rappel et à l'envoi du programme : OUI, le ${new Date().toLocaleString('fr-FR')}`;
 
-  const lead = await prisma.lead.create({
-    data: {
-      tenantId: tenant.id,
-      source: SOURCE_STAND,
-      firstName: contact.data.firstName,
-      lastName: contact.data.lastName,
-      email: contact.data.email,
-      phone: contact.data.phone || null,
-      notes: [resumerPourLead(resultat, reponses), '', consentement].join('\n'),
-      lastAction: `Diagnostic express — ${probl.titre}`,
-      lastActionAt: new Date(),
-    },
-    select: { id: true },
-  });
-
-  // L'email n'est JAMAIS sur le chemin critique. Le lead est déjà écrit : si le
-  // SMTP est lent, indisponible, ou si la catégorie n'est pas cochée dans
-  // Paramètres, le prospect voit quand même son écran de remerciement et
-  // Laurent le retrouve dans le CRM. Un stand ne s'arrête pas parce qu'un
-  // serveur mail tousse.
-  try {
-    const of = await loadOfConfig(tenant.id);
-    const { subject, html, text } = renderDiagnosticProgrammeEmail(
-      {
+  // Lead ET soumission dans la MÊME transaction : un lead sans ses réponses
+  // structurées ne vaut rien pour le rappel commercial, et une soumission sans
+  // lead n'a personne à qui écrire.
+  const { lead } = await prisma.$transaction(async (tx) => {
+    const lead = await tx.lead.create({
+      data: {
+        tenantId: tenant.id,
+        source: SOURCE_STAND,
         firstName: contact.data.firstName,
+        lastName: contact.data.lastName,
+        email: contact.data.email,
+        phone: contact.data.phone || null,
+        notes: [resumerPourLead(resultat, reponses), '', consentement].join('\n'),
+        lastAction: `Diagnostic express — ${probl.titre}`,
+        lastActionAt: new Date(),
+      },
+      select: { id: true },
+    });
+
+    await tx.diagnosticSubmission.create({
+      data: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        reponses,
         dominante: resultat.dominante,
         secondaire: resultat.secondaire,
+        scores: resultat.scores,
+        // PENDING : le worker cron prendra le relais. L'email N'EST PAS envoyé
+        // ici. Assembler un programme sur mesure demande un appel au modèle —
+        // 5 à 15 secondes qu'on ne fait pas attendre à quelqu'un debout devant
+        // un stand. Le prospect reçoit son programme quelques minutes plus
+        // tard, pendant qu'il est encore à la soirée.
       },
-      of,
-    );
-    const envoi = await sendMail({
-      to: contact.data.email,
-      subject,
-      html,
-      text,
-      context: { tenantId: tenant.id, category: 'diagnostic_program' },
+      select: { id: true },
     });
-    if (!envoi.ok && !envoi.suppressed) {
-      console.error(`[diagnostic] envoi programme échoué lead=${lead.id}: ${envoi.error ?? '?'}`);
-    }
-  } catch (e) {
-    console.error(`[diagnostic] envoi programme en erreur lead=${lead.id}`, e);
-  }
+
+    return { lead };
+  });
 
   return { ok: true, leadId: lead.id };
 }

@@ -17,12 +17,20 @@ import { useMemo, useState, useTransition } from 'react';
 import { ArrowLeft, Check, Loader2, Sparkles } from 'lucide-react';
 import { QUESTIONS, PROBLEMATIQUES } from '@/lib/diagnostic/questions';
 import { diagnostiquer } from '@/lib/diagnostic/scoring';
+import { choisirJournee } from '@/lib/diagnostic/catalogue-map';
 import { soumettreDiagnostic } from '@/server/actions/diagnostic-public';
 import { cn } from '@/lib/utils';
 
 type Etape = 'questions' | 'resultat' | 'envoye';
 
-export function DiagnosticForm() {
+/** Journée du catalogue, chargée côté serveur et passée au navigateur. */
+export interface JourneeInfo {
+  code: string;
+  title: string;
+  dureeHeures: number;
+}
+
+export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
   const [etape, setEtape] = useState<Etape>('questions');
   const [index, setIndex] = useState(0);
   const [reponses, setReponses] = useState<Record<string, string>>({});
@@ -37,6 +45,17 @@ export function DiagnosticForm() {
   const [pending, demarrer] = useTransition();
 
   const resultat = useMemo(() => diagnostiquer(reponses), [reponses]);
+
+  // La vraie journée du catalogue, résolue DANS le navigateur à partir des
+  // produits chargés au rendu de la page. Zéro appel réseau : l'écran de
+  // résultat s'affiche même si le wifi du lieu est tombé.
+  const journee = useMemo(() => {
+    const sel = choisirJournee(resultat.dominante, reponses);
+    if (!sel) return null;
+    const dispo = new Map(journees.map((j) => [j.code, j]));
+    return dispo.get(sel.code) ?? journees[0] ?? null;
+  }, [resultat.dominante, reponses, journees]);
+
   const question = QUESTIONS[index];
 
   function repondre(valeur: string) {
@@ -71,6 +90,7 @@ export function DiagnosticForm() {
       <EcranResultat
         dominante={resultat.dominante}
         secondaire={resultat.secondaire}
+        journee={journee}
         contact={contact}
         setContact={setContact}
         erreur={erreur}
@@ -142,6 +162,7 @@ export function DiagnosticForm() {
 function EcranResultat({
   dominante,
   secondaire,
+  journee,
   contact,
   setContact,
   erreur,
@@ -150,6 +171,7 @@ function EcranResultat({
 }: {
   dominante: keyof typeof PROBLEMATIQUES;
   secondaire: keyof typeof PROBLEMATIQUES | null;
+  journee: JourneeInfo | null;
   contact: {
     firstName: string;
     lastName: string;
@@ -178,10 +200,17 @@ function EcranResultat({
         </div>
         <h2 className="text-xl md:text-2xl font-bold tracking-tight mb-2">{p.titre}</h2>
         <p className="text-sm text-slate-700">{p.accroche}</p>
-        <p className="text-sm text-slate-700 mt-3">
-          <span className="font-medium">La journée qu'on vous propose : </span>
-          {p.axePedagogique}
-        </p>
+        {journee ? (
+          <div className="mt-4 pt-4 border-t border-primary/20">
+            <div className="text-xs font-medium text-primary-800 mb-1">
+              La journée qu'on vous propose
+            </div>
+            <div className="font-semibold text-slate-900">{journee.title}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {journee.dureeHeures} h — une journée
+            </div>
+          </div>
+        ) : null}
         {s ? (
           <p className="text-xs text-muted-foreground mt-4">
             En prolongement, un second axe ressort : « {s.titre} ».
@@ -189,9 +218,10 @@ function EcranResultat({
         ) : null}
       </div>
 
-      <h3 className="font-semibold mb-1">On vous envoie votre programme</h3>
+      <h3 className="font-semibold mb-1">On vous envoie le programme</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Un programme construit sur cette priorité, à votre nom. Vous le recevez par email.
+        Le programme détaillé de cette journée, avec ce qu'elle change pour vous. Vous le
+        recevez par email dans quelques minutes.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">

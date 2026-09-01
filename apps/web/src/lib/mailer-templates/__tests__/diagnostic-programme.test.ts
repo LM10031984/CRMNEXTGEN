@@ -1,14 +1,13 @@
 /**
  * Le template part chez des PROSPECTS. Trois choses doivent tenir :
- * l'échappement (un nom avec une apostrophe ne casse pas le HTML), l'absence
- * de prix (le tarif dépend du payeur — on ne s'engage pas à l'aveugle), et la
- * couverture des 4 problématiques (aucune ne doit tomber sur une trame vide).
+ * l'échappement, l'absence de prix (le tarif dépend du payeur — on ne s'engage
+ * pas à l'aveugle), et le repli lisible quand le sur-mesure a échoué.
  */
 
 import { describe, it, expect } from 'vitest';
-import { renderDiagnosticProgrammeEmail } from '../diagnostic-programme';
-import { PROBLEMATIQUES, type ProblematiqueKey } from '@/lib/diagnostic/questions';
-import { TRAMES, formatDuree } from '@/lib/diagnostic/programmes';
+import { renderDiagnosticProgrammeEmail, formatDuree } from '../diagnostic-programme';
+import type { ProduitPropose } from '../diagnostic-programme';
+import type { ProgrammeSurMesure } from '@/lib/diagnostic/programme-sur-mesure';
 import type { OfConfig } from '@/lib/of-config';
 
 const OF = {
@@ -18,66 +17,91 @@ const OF = {
   rnq: '93061048106',
 } as unknown as OfConfig;
 
-const CLES = Object.keys(PROBLEMATIQUES) as ProblematiqueKey[];
+const PRODUIT: ProduitPropose = {
+  title: "L'IA au service des conseillers immobiliers (8h)",
+  dureeHeures: 8,
+  objectifs: ['Comprendre le fonctionnement de ChatGPT', 'Optimiser la prospection avec l’IA'],
+  programmeMd: 'Matinée (9h - 13h)\n● Présentation de ChatGPT.\n● Création de prompts.',
+};
+
+const SUR_MESURE: ProgrammeSurMesure = {
+  accroche: 'Vos matinées partent en rédaction. Cette journée attaque ce point précis.',
+  objectifs: ['Rédiger une annonce en trois minutes', 'Automatiser vos relances', 'Préparer un RDV vendeur'],
+  sequences: [
+    {
+      moment: 'MATIN',
+      titre: 'Prendre en main ChatGPT',
+      pourquoiVous: 'Vous n’en avez jamais utilisé : on part de zéro.',
+      points: [{ source: 'Présentation de ChatGPT.', texte: 'Découvrir ChatGPT et ses limites' }],
+    },
+    {
+      moment: 'APRES_MIDI',
+      titre: 'Rédiger vite et bien',
+      pourquoiVous: 'C’est là que part votre temps.',
+      points: [{ source: 'Création de prompts.', texte: 'Écrire des prompts qui marchent' }],
+    },
+  ],
+};
+
+function render(over: Partial<Parameters<typeof renderDiagnosticProgrammeEmail>[0]> = {}) {
+  return renderDiagnosticProgrammeEmail(
+    {
+      firstName: 'Camille',
+      dominante: 'IA_PRODUCTIVITE',
+      secondaire: null,
+      produit: PRODUIT,
+      surMesure: SUR_MESURE,
+      ...over,
+    },
+    OF,
+  );
+}
 
 describe('renderDiagnosticProgrammeEmail', () => {
-  it('couvre les 4 problématiques avec une trame non vide', () => {
-    for (const cle of CLES) {
-      const trame = TRAMES[cle];
-      expect(trame, `${cle} n'a pas de trame`).toBeDefined();
-      expect(trame.objectifs.length, `${cle} sans objectif`).toBeGreaterThan(0);
-      expect(trame.sequences.length, `${cle} sans déroulé`).toBeGreaterThan(0);
-    }
-  });
-
   it("n'annonce jamais de prix", () => {
-    for (const cle of CLES) {
-      const { html, text, subject } = renderDiagnosticProgrammeEmail(
-        { firstName: 'Camille', dominante: cle, secondaire: null },
-        OF,
-      );
+    for (const sm of [SUR_MESURE, null]) {
+      const { html, text, subject } = render({ surMesure: sm });
       for (const [nom, contenu] of [['html', html], ['text', text], ['subject', subject]] as const) {
-        expect(contenu, `${cle}/${nom} contient un montant`).not.toMatch(/\d\s?(€|EUR)/i);
+        expect(contenu, `${nom} contient un montant`).not.toMatch(/\d\s?(€|EUR)/i);
       }
     }
   });
 
+  it('porte le titre RÉEL du produit du catalogue', () => {
+    const { subject, html } = render();
+    expect(subject).toContain("L'IA au service des conseillers immobiliers");
+    // Dans le HTML l'apostrophe est échappée — c'est le comportement voulu.
+    expect(html).toContain('L&#39;IA au service des conseillers immobiliers');
+  });
+
+  it('rend le programme sur mesure quand il existe', () => {
+    const { html } = render();
+    expect(html).toContain('Prendre en main ChatGPT');
+    expect(html).toContain('Vous n’en avez jamais utilisé');
+    expect(html).toContain('Matinée (9h - 13h)');
+    expect(html).toContain('Après-midi (14h - 18h)');
+  });
+
+  it('retombe sur le programme du catalogue quand le sur-mesure a échoué', () => {
+    const { html, text } = render({ surMesure: null });
+    expect(html).toContain('Présentation de ChatGPT.');
+    expect(text).toContain('Présentation de ChatGPT.');
+    expect(html).not.toContain('Prendre en main ChatGPT');
+  });
+
   it('échappe les valeurs interpolées', () => {
-    const { html } = renderDiagnosticProgrammeEmail(
-      { firstName: '<script>alert(1)</script>', dominante: 'IA_PRODUCTIVITE', secondaire: null },
-      OF,
-    );
+    const { html } = render({ firstName: '<script>alert(1)</script>' });
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('mentionne la durée en heures ET en jours', () => {
-    const { html } = renderDiagnosticProgrammeEmail(
-      { firstName: 'Camille', dominante: 'MANAGEMENT_EQUIPE', secondaire: null },
-      OF,
-    );
-    expect(html).toContain('8 h / 1 jour');
-  });
-
   it('mentionne la problématique secondaire quand elle existe, et se tait sinon', () => {
-    const avec = renderDiagnosticProgrammeEmail(
-      { firstName: 'Camille', dominante: 'IA_PRODUCTIVITE', secondaire: 'PROSPECTION_MANDATS' },
-      OF,
-    );
-    expect(avec.html).toContain('En prolongement');
-
-    const sans = renderDiagnosticProgrammeEmail(
-      { firstName: 'Camille', dominante: 'IA_PRODUCTIVITE', secondaire: null },
-      OF,
-    );
-    expect(sans.html).not.toContain('En prolongement');
+    expect(render({ secondaire: 'PROSPECTION_MANDATS' }).html).toContain('En prolongement');
+    expect(render({ secondaire: null }).html).not.toContain('En prolongement');
   });
 
-  it('porte les mentions de l\'organisme (SIRET, NDA) en pied', () => {
-    const { html } = renderDiagnosticProgrammeEmail(
-      { firstName: 'Camille', dominante: 'IA_PRODUCTIVITE', secondaire: null },
-      OF,
-    );
+  it("porte les mentions de l'organisme (SIRET, NDA) en pied", () => {
+    const { html } = render();
     expect(html).toContain('95131909400011');
     expect(html).toContain('93061048106');
   });
