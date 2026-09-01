@@ -75,3 +75,7 @@ secrets/
 
 # Sorties de prévisualisation PDF (scripts _preview-*.ts) — jamais commitées
 .preview-facture/
+
+# Documents générés égarés dans l'arbre source. Une vraie facture client a été
+# balayée par un `git add -A` le 01/09/2026 : plus jamais.
+apps/web/src/app/app/**/*.pdf

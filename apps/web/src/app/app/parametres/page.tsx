@@ -73,6 +73,7 @@ export default async function ParametresPage() {
     opcoSubmissionsEnabled: emailSettings?.opcoSubmissionsEnabled ?? false,
     internalNotificationsEnabled: emailSettings?.internalNotificationsEnabled ?? false,
     userInvitationsEnabled: emailSettings?.userInvitationsEnabled ?? false,
+    diagnosticProgramsEnabled: emailSettings?.diagnosticProgramsEnabled ?? false,
     testSessionIds: emailSettings?.testSessionIds ?? [],
   };
   // Sessions sélectionnables : 30 plus récentes ∪ celles déjà en mode test

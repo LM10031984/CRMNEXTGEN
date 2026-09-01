@@ -56,6 +56,7 @@ export async function updateEmailSettings(
         opcoSubmissionsEnabled: true,
         internalNotificationsEnabled: true,
         userInvitationsEnabled: true,
+        diagnosticProgramsEnabled: true,
         testSessionIds: true,
       },
     });
@@ -72,6 +73,7 @@ export async function updateEmailSettings(
         opcoSubmissionsEnabled: true,
         internalNotificationsEnabled: true,
         userInvitationsEnabled: true,
+        diagnosticProgramsEnabled: true,
         testSessionIds: true,
       },
     });

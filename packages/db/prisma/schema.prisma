@@ -764,6 +764,7 @@ model Lead {
   wonAt               DateTime?
   // Relations
   actions             LeadAction[]
+  diagnosticSubmissions DiagnosticSubmission[]
   tasks               Task[]
   comments            InternalComment[]
   createdAt           DateTime          @default(now())
@@ -1651,7 +1652,56 @@ model TenantEmailSettings {
   opcoSubmissionsEnabled         Boolean  @default(false)
   internalNotificationsEnabled   Boolean  @default(false)
   userInvitationsEnabled         Boolean  @default(false)
+  diagnosticProgramsEnabled      Boolean  @default(false)
   testSessionIds                 String[] @default([])
   createdAt                      DateTime @default(now())
   updatedAt                      DateTime @default(now()) @updatedAt
+}
+
+/// Quick 260901-qr7 — une soumission du diagnostic express du stand.
+///
+/// Pourquoi une table et pas seulement le `notes` du Lead : le résumé texte est
+/// lisible par un humain mais illisible par un programme. La personnalisation
+/// du programme a besoin des réponses STRUCTURÉES, et l'envoi doit pouvoir être
+/// rejoué sans dépendre d'un parsing de texte libre.
+model DiagnosticSubmission {
+  id        String  @id @default(uuid())
+  tenantId  String
+  /// Le lead créé au même moment. Cascade : si le lead part, la soumission part
+  /// avec lui (RGPD — pas de PII orpheline).
+  leadId    String?
+  lead      Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  /// Réponses brutes { questionId: choixValue }, validées contre QUESTIONS.
+  reponses    Json
+  /// Problématique retenue et suivante (clés de ProblematiqueKey).
+  dominante   String
+  secondaire  String?
+  /// Score par problématique, utile au commercial qui rappelle.
+  scores      Json
+
+  /// État de l'envoi du programme personnalisé (worker cron).
+  programmeStatus  DiagnosticProgrammeStatus @default(PENDING)
+  programmeSentAt  DateTime?
+  /// Nombre de tentatives du worker. Au-delà du plafond → FAILED, plus de retry.
+  attempts         Int      @default(0)
+  lastError        String?
+  /// Trace de ce qui a été effectivement envoyé — utile si le prospect rappelle
+  /// en citant son programme.
+  personnalisation Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programmeStatus, createdAt])
+  @@index([tenantId])
+}
+
+enum DiagnosticProgrammeStatus {
+  PENDING
+  SENT
+  FAILED
+  /// Catégorie d'email décochée dans Paramètres : rien n'est parti, et ce n'est
+  /// pas une erreur. Distinguer les deux évite de chercher une panne.
+  SKIPPED
 }

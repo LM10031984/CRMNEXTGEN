@@ -22,7 +22,8 @@ export type EmailCategory =
   | 'opco_reminder'
   | 'opco_submission'
   | 'internal_notification'
-  | 'user_invitation';
+  | 'user_invitation'
+  | 'diagnostic_program';
 
 /**
  * Snapshot structurel des réglages — compatible avec le model Prisma
@@ -37,6 +38,7 @@ export interface EmailPolicySettings {
   opcoSubmissionsEnabled: boolean;
   internalNotificationsEnabled: boolean;
   userInvitationsEnabled: boolean;
+  diagnosticProgramsEnabled: boolean;
   testSessionIds: string[];
 }
 
@@ -58,6 +60,7 @@ export const EMAIL_CATEGORY_FIELD: Record<EmailCategory, keyof Omit<EmailPolicyS
   opco_submission: 'opcoSubmissionsEnabled',
   internal_notification: 'internalNotificationsEnabled',
   user_invitation: 'userInvitationsEnabled',
+  diagnostic_program: 'diagnosticProgramsEnabled',
 };
 
 /** Libellés FR pour l'UI Paramètres organisme (section « Envois d'emails »). */
@@ -68,6 +71,7 @@ export const EMAIL_CATEGORY_LABELS: Record<EmailCategory, string> = {
   opco_submission: 'Envoi dossiers OPCO',
   internal_notification: 'Notifications internes (équipe)',
   user_invitation: 'Invitations utilisateurs',
+  diagnostic_program: 'Programme du diagnostic express (stand)',
 };
 
 /**

@@ -419,3 +419,52 @@ supprimable après la validation visuelle de l'OCR par Laurent.
 - [ ] **Phase gate 20** — cochée par Laurent après validation visuelle du pack témoin
       cloud SES-0094 (P4e, 10 docs 0 stub) + OCR (P6d, champs CNI extraits) au
       checkpoint Task 3. (SMTP P5 = dette explicite, hors gate.)
+
+---
+
+## Addendum 2026-07-06 — Checkpoint Task 3 : écarts + validation finale
+
+**Écarts remontés par Laurent** sur le pack témoin du 06/07 matin, **corrigés le jour même** :
+1. Footers PDF vides (« Siège social : - SIRET : – ») → cause : 22 vars `OF_*` absentes du
+   worker Railway (`getOfConfig()` ENV-only). Fix : vars poussées (`railway variables --set`,
+   redeploy). Preuve post-fix (texte extrait du PDF régénéré) : footer complet
+   (adresse + SIRET 95131909400011 + NDA + contact + version).
+2. Positionnement partie 3 « tampon » (avant/après quasi identiques entre stagiaires) →
+   fix quick `260706-bya` (prompt v11 + garde Zod `apres > avant`). Preuve post-régé :
+   vecteurs des 3 stagiaires tous distincts, progressions {+1, +2, +3}, 0 stub 21/21.
+
+**Pack complet régénéré** via `_gen-session-pack.ts` (LLM cloud v11, 21 jobs 0 stub +
+programme/déroulé/checklist/3 conventions, Drive déposé).
+
+**⚠ Découverte** : objets pré-migration (AGEFICE/assiduité/convocations/analyses besoin
+SES-0094) dans MinIO local, ABSENTS de Supabase Storage → migration Ph.18 incomplète.
+Audit + backfill avant Phase 22 (cf. deferred-items.md).
+
+**Fenêtre observation 24 h (P7b/c) REDÉMARRÉE** le 2026-07-06 (~06:45Z, redeploy vars OF_*)
+→ relevé le 2026-07-07.
+
+- [x] **Phase gate 20 — validation visuelle Laurent** : « Ok on est bons » (2026-07-06),
+      pack témoin + OCR conformes. Fiche AGEFICE : 3 corrections cosmétiques différées.
+
+---
+
+## Addendum 2026-07-30 — Relevé observation P7b/c (CLÔTURE)
+
+Relevé prévu le 07-07, effectué le 2026-07-30 (session plan-phase 22) — la fenêtre réelle
+d'observation est donc de **24 jours**, très au-delà des 24 h requises. Preuves (CLI Railway,
+lecture seule) :
+
+| Preuve | Commande | Résultat | Date |
+| --- | --- | --- | --- |
+| Déploiement inchangé depuis le redeploy OF_* | `railway deployment list --service worker` | Déploiement `4f72cfdb` **SUCCESS créé 2026-07-06T06:31Z, toujours actif** — aucun redéploiement en 24 jours | 2026-07-30 |
+| Crons vivants au moment du relevé | `railway logs --service worker` | Ticks `[invoice-reminder-worker] triggered_by: 'cron'` + `[veille-worker] tick` en continu ; veille ingère (fetched 744, inserted 7) | 2026-07-30 |
+| 0 marqueur de crash/restart | `railway logs \| grep -ci "restart\|exited\|SIGTERM\|crash"` | **0** occurrence | 2026-07-30 |
+| Région | serviceManifest deployment | `europe-west4` (multiRegionConfig), restartPolicy ON_FAILURE max 10 | 2026-07-30 |
+
+**Limite honnête** : la fenêtre de logs exposée par le CLI est courte (~22 lignes) — le compteur
+de restarts pm2 exact n'est pas extractible en CLI. La preuve de stabilité repose sur : même
+déploiement actif 24 jours + crons opérationnels au relevé + 0 marqueur d'échec dans la fenêtre.
+Bruit non bloquant relevé : 2 flux RSS veille en échec géré (`travail-emploi.gouv.fr` entité
+invalide, `service-public.gouv.fr` 404) — le catch croner fonctionne comme conçu (le process survit).
+
+- [x] **P7b/c — stabilité observée : VALIDÉ** (2026-07-30). Phase 20 prête pour `/gsd:verify-work 20`.

@@ -4,11 +4,12 @@
 // pm2-runtime = mode PID-1 conteneur (pas de daemon) : si un worker meurt, il le
 // redémarre SANS tuer les autres (autorestart), logs unifiés vers stdout Railway.
 //
-// 4 process (source : pattern pm2-runtime standard, pm2.keymetrics.io) :
+// 5 process (source : pattern pm2-runtime standard, pm2.keymetrics.io) :
 //   - closure   : poll ClosureJob (Postgres FOR UPDATE SKIP LOCKED)
 //   - veille    : cron croner lundi 8h (RSS + résumés)
 //   - reminders : cron croner quotidien 8h (relances factures)
 //   - ocr       : poll PreEnrollment SUBMITTED (rastérisation poppler + vision)
+//   - diagnostic: cron croner */5 min (programmes du diagnostic du stand)
 //
 // Recalibrage cloud (WORK-03 / D-09) : concurrency ~3 pour rester compatible avec
 // le pooler Supabase (connection_limit=1, Pitfall 1 RESEARCH) — ne PAS monter
@@ -58,6 +59,18 @@ module.exports = {
     {
       name: 'reminders',
       script: 'scripts/invoice-reminder-worker.ts',
+      cwd: 'apps/web',
+      interpreter: 'tsx',
+      autorestart: true,
+      env: { TSX_TSCONFIG_PATH: TSCONFIG },
+    },
+    {
+      // Quick 260901-qr7 — envoie les programmes du diagnostic express du stand.
+      // Cron */5 min : le prospect reçoit son programme pendant qu'il est encore
+      // à la soirée, sans qu'un appel au modèle soit sur le chemin critique du
+      // formulaire public.
+      name: 'diagnostic',
+      script: 'scripts/diagnostic-worker.ts',
       cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,

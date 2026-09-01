@@ -129,7 +129,7 @@ export const tenantLegalDocsSchema = z.object({
 /**
  * Phase 22 Plan 22-11 (D-06) — Réglages d'envoi d'emails par tenant.
  *
- * 7 booleans (interrupteur général + 6 catégories, tous default false =
+ * 8 booleans (interrupteur général + 7 catégories, tous default false =
  * fail-closed) + sessions autorisées en mode test (UUIDs, cap 20).
  * Consommé par `updateEmailSettings` (server action) et le formulaire
  * Paramètres organisme « Envois d'emails ».
@@ -142,6 +142,7 @@ export const EmailSettingsSchema = z.object({
   opcoSubmissionsEnabled: z.boolean().default(false),
   internalNotificationsEnabled: z.boolean().default(false),
   userInvitationsEnabled: z.boolean().default(false),
+  diagnosticProgramsEnabled: z.boolean().default(false),
   testSessionIds: z
     .array(z.string().uuid('Identifiant de session invalide'))
     .max(20, 'Maximum 20 sessions de test')

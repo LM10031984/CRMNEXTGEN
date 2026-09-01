@@ -7,7 +7,7 @@
  *  1. Interrupteur général `emailsEnabled` — OFF par défaut (fail-closed).
  *     OFF : seules les sessions de test cochées peuvent recevoir des emails,
  *     dans les catégories cochées.
- *  2. 6 checkboxes par catégorie (libellés `EMAIL_CATEGORY_LABELS`), avec hint
+ *  2. 7 checkboxes par catégorie (libellés `EMAIL_CATEGORY_LABELS`), avec hint
  *     « qui reçoit » — ⚠ Relances factures peut toucher un apprenant (règle
  *     payeur : l'auto-entrepreneur est son propre payeur).
  *  3. Sessions autorisées en mode test : liste de checkboxes (sessions passées
@@ -79,6 +79,11 @@ const CATEGORY_FIELDS: Array<{
     category: 'user_invitation',
     hint: 'Destinataires : les nouveaux membres invités (lien d\'activation / reset mot de passe).',
   },
+  {
+    field: 'diagnosticProgramsEnabled',
+    category: 'diagnostic_program',
+    hint: 'Destinataire : le prospect qui vient de remplir le diagnostic au stand, et qui a coché la case pour recevoir son programme.',
+  },
 ];
 
 export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Props) {
@@ -94,6 +99,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       opcoSubmissionsEnabled: initial.opcoSubmissionsEnabled,
       internalNotificationsEnabled: initial.internalNotificationsEnabled,
       userInvitationsEnabled: initial.userInvitationsEnabled,
+      diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
     },
   });
 
