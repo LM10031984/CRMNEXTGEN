@@ -148,7 +148,7 @@ describe('cohérence du contenu', () => {
   it('chaque problématique est atteignable par au moins une réponse', () => {
     for (const cle of Object.keys(PROBLEMATIQUES)) {
       const atteignable = QUESTIONS.some((q) =>
-        q.choix.some((c) => (c.poids as Record<string, number>)[cle] > 0),
+        q.choix.some((c) => ((c.poids as Record<string, number>)[cle] ?? 0) > 0),
       );
       expect(atteignable, `${cle} n'est atteignable par aucune réponse`).toBe(true);
     }

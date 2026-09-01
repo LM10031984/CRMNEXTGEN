@@ -105,8 +105,12 @@ export function diagnostiquer(reponses: Reponses): DiagnosticResultat {
 
   const classement = classer(scores, reponses);
 
+  // `classer` trie TOUTES (4 entrées constantes) : le tableau n'est jamais
+  // vide, mais TypeScript ne peut pas le savoir depuis un `sort`.
+  const dominante = classement[0] ?? ORDRE_DEPARTAGE[0]!;
+
   return {
-    dominante: classement[0],
+    dominante,
     secondaire: classement[1] ?? null,
     scores,
     justification,
