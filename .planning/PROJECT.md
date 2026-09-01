@@ -4,13 +4,19 @@
 
 QualiOF est un CRM/back-office métier pour **Start Academy**, organisme de formation Qualiopi spécialisé dans la formation IA des agents commerciaux immobilier. Il couvre tout le cycle de vie d'une formation — du lead à la fin de prestation — en automatisant la production des documents Qualiopi, le suivi de trésorerie OPCO/AGEFICE, et la gestion des apprenants multi-casquette (EI + Enseigne). L'outil est interne, multi-utilisateurs (RBAC 6 rôles), génération IA via **Claude API (OpenRouter)** depuis v5/Phase 16 ; il tourne encore en local (Docker) avec un cap prod cloud Supabase+Vercel cadré pour v6. Il n'est pas vendu à d'autres OF.
 
-## Current State (post-v5, 2026-07-04)
+## Current State (post-v5, 2026-07-05)
 
 **Shipped v5 « Audit UX/QA + Features métier »** — 17 phases, 88 plans, 469 commits (2026-05-12 → 2026-07-04). L'app est fonctionnellement complète pour l'usage interne : responsive, RBAC, factures, veille, calendrier, centralisation documentaire, IA cloud (0 stub, pack ~3 min). Branche de travail : `cloud-migration`. Runtime : local Docker (Postgres/Redis/MinIO/Gotenberg/WeasyPrint) + `AI_PROVIDER=openrouter`.
 
 **v6 Phase 17 complete (2026-07-04)** — Fondations cloud : régions EU verrouillées par écrit (`17-REGIONS.md` : Supabase `eu-west-3` Paris irréversible, Vercel `cdg1`, worker EU, Upstash conditionnel), boot fail-loud réel sur 5 clés cloud (chokepoint `next.config.mjs` + 2 workers — `sharedEnv` n'était importé nulle part avant), `DOC_ENGINE_TOKEN` câblé en Bearer sur Gotenberg/WeasyPrint. CLOUDENV-01/02/03 validés (4/4 must-haves).
 
 **v6 Phase 18 complete (2026-07-04)** — Supabase Storage : STOR-01/02/03 validés sur infra réelle (projet `gntlqyscahbgjrmsbzil`, **West EU Irlande** — réutilisation du projet staging sur décision Laurent, dérogation actée au `eu-west-3` Paris de 17-REGIONS ; RGPD conforme). Migration MinIO→Supabase 3109/3109 objets, 0 lien mort ; `STORAGE_PROVIDER=supabase` actif en local ; direct-to-storage prouvé bout-en-bout (photo CNI réelle 11,27 Mo → PUT direct 200 → OCR EXTRACTED 0 warning, downscale sharp câblé). 3 items reportés Phase 21 (Vercel non déployé) : 413 prod, retry mobile réel, expiry TTL temps réel.
+
+**v6 Phase 19 complete (2026-07-05)** — Base Postgres Supabase : DB-01/DB-02 validés sur infra réelle (même projet `gntlqyscahbgjrmsbzil`, PostgreSQL 17.6). `.env` câblé cloud (pooler :6543 `pgbouncer=true&connection_limit=1` / direct :5432), 29 migrations `db push` collapsées en baseline `0_init` (archivées dans `archived-db-push/`), drift historique résorbé (3 objets forward, 0 DROP), `migrate deploy`/`status` verts. Smoke `db:smoke:cloud` prouvé : round-trips poolés sans « prepared statement already exists », transaction Serializable du worker OK sous pooler, pg_trgm/unaccent actifs, INSERT UUID sans collision. Evidence : `19-SMOKE.md`. ⚠ Le `.env` local pointe désormais le cloud (backup dispo pour revenir au Docker local). Dette légère : `dotenv-cli` absent → `tsx --env-file` utilisé.
+
+**v6 Phase 20 complete (2026-07-06)** — Worker 3ᵉ hôte : 4 services Railway EU up (worker closure/veille/factures via croner, proxy Caddy Gotenberg, WeasyPrint, tous Bearer `DOC_ENGINE_TOKEN` prouvé 401/200), queue Postgres `ClosureJob` SKIP LOCKED (Redis/BullMQ viré, D-03). Evidence : `20-SMOKE.md`.
+
+**v6 Phase 21 complete (2026-07-06)** — App Vercel + filet CI/tests : app déployée **Vercel Pro** projet `qualiof` (Node 24, cdg1, 50 env vars, prod publique) en staging gardé (bandeau + filigrane PDF + calendar coupé + `MAIL_DRY_RUN`), WAF rate-limit 30 req/60 s sur `/preinscription` (blocage prouvé, 403). CI GitHub Actions verte sur `main` protégée (gate `test` requis) + deploy migrations ; `main` = `cloud-migration` (PRs #1-#7, règle : merge commit jamais squash). Playwright : 22/22 smoke/auth/upload 10 Mo + **E2E closure réel** (session jetable UI → pack OpenRouter worker Railway : 16/16 en 89 s, 0 stub, `%PDF` valides, teardown 0 résidu). Backfill storage cloud 899/899 objets 0 lien mort (l'écart SES-0094 était 40× plus large qu'anticipé — migration 07-04 jouée contre la base locale). Fixes notables : tracing Prisma rhel + prebuild argon2 dans le bundle serverless (`outputFileTracingIncludes`), `buildCommand=next build` (cycle turbo db↔shared), indice compte démo masqué hors dev. ⚠ Domaine `app.start-academy.fr` PENDING DNS (webmaster OVH) — tests sur `qualiof.vercel.app`, re-pointage sans code via baseURL. Evidence : `21-SMOKE.md`, `21-VERIFICATION.md` (passed 5/5).
 
 ## Current Milestone: v6 Prod Cloud (Supabase + Vercel)
 
@@ -203,4 +209,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-04 after Phase 18 (Supabase Storage migration + direct-to-storage) — STOR-01/02/03 validés sur infra réelle.*
+*Last updated: 2026-07-06 after Phase 21 (App Vercel + filet CI/tests) — APP-01/02/03, CI-01, TEST-01/02 validés sur infra réelle ; staging gardé en ligne sur qualiof.vercel.app.*
