@@ -50,6 +50,12 @@ export interface CommanditaireGroupe {
   /** Représentant légal connu — vide, il bloque les deux documents. */
   representant?: string | null;
   /**
+   * Date de signature proposée (ISO `yyyy-mm-dd`) : J-15 jours ouvrés avant le
+   * début, plafonnée au jour même. Modifiable avant de générer — aucune règle
+   * ne connaît la date réellement négociée avec le client.
+   */
+  dateSignatureParDefaut?: string;
+  /**
    * Ce qui manque AVANT de générer (28/08). Calculé côté serveur par
    * `blocagesDocsEntreprise`, qui énonce les mêmes règles que les cœurs :
    * on l'apprenait jusqu'ici par un message d'erreur, après avoir cliqué et
@@ -78,6 +84,8 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
   const [analysePending, startAnalyse] = useTransition();
   // Saisie express du représentant, là où son absence bloque : pas d'aller-retour
   // vers la fiche entreprise pour un seul champ.
+  // Date de signature par commanditaire : pré-remplie par la règle, ajustable.
+  const [dates, setDates] = useState<Record<string, string>>({});
   const [saisieRepId, setSaisieRepId] = useState<string | null>(null);
   const [repValue, setRepValue] = useState('');
   const [repBusy, setRepBusy] = useState(false);
@@ -106,6 +114,7 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
       const res = await generateConventionEntreprise({
         sessionId,
         sponsorOrgId: g.sponsorOrgId,
+        dateSignature: dates[g.sponsorOrgId] ?? g.dateSignatureParDefaut ?? null,
       });
       setPendingId(null);
       if (res.ok) {
@@ -192,6 +201,23 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {/* 31/08 — la règle datait la convention à J-15 jours ouvrés
+                    avant le début, ce qui tombait dans le FUTUR pour une
+                    session lointaine : on ne fait pas signer un document daté
+                    de trois semaines plus tard. La date proposée est désormais
+                    plafonnée au jour même, et reste ajustable ici. */}
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="whitespace-nowrap">Signée le</span>
+                  <input
+                    type="date"
+                    value={dates[g.sponsorOrgId] ?? g.dateSignatureParDefaut ?? ''}
+                    onChange={(e) =>
+                      setDates((d) => ({ ...d, [g.sponsorOrgId]: e.target.value }))
+                    }
+                    aria-label={`Date de signature de la convention ${g.sponsorName}`}
+                    className="h-9 px-2 rounded-md border border-border bg-white text-sm"
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={() => generateAnalyse(g)}

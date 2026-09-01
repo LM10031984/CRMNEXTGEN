@@ -30,7 +30,7 @@ import {
 } from '@/lib/convention-template';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
-import { subtractBusinessDaysISO } from '@/lib/business-days';
+import { resolveConventionDate } from './convention-date';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
@@ -45,7 +45,11 @@ import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 export async function generateConventionCore(
   tenantId: string,
   participantId: string,
-  options?: { force?: boolean },
+  options?: {
+    force?: boolean;
+    /** Date de signature saisie à la main (ISO `yyyy-mm-dd`). */
+    dateSignature?: string | null;
+  },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; personId?: string; skipped?: boolean }> {
   void options;
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
@@ -183,13 +187,16 @@ export async function generateConventionCore(
   // Produit : objectifs depuis la fiche produit
   const objectives = (participant.session.product.objectives as string[] | null) ?? [];
 
-  // COR-1 — date de signature = J-15 jours OUVRÉS avant le début de session
-  // (règle Laurent « signée ≥15j avant »). Cohérence : signée J-15 ouvrés →
-  // rétractation 14j (Art.6) finit ~J-1 → solde « la veille » (Art.7) cohérent.
+  // Date de signature : règle unique dans `convention-date` — J-15 jours ouvrés
+  // avant le début, PLAFONNÉE au jour même (31/08 : une session d'octobre
+  // sortait une convention datée dans le futur). `options.dateSignature`
+  // l'emporte quand l'utilisateur a saisi la date réellement négociée.
   // NE PAS hardcoder de date (audit témoin SES-0087, 2026-06-18).
-  const startIso = participant.session.startDate.toISOString().slice(0, 10);
-  const conventionIso = subtractBusinessDaysISO(startIso, 15);
-  const conventionDate = new Date(conventionIso + 'T00:00:00Z');
+  const conventionDate = resolveConventionDate(
+    participant.session.startDate,
+    new Date(),
+    options?.dateSignature,
+  );
 
   const data: ConventionData = {
     beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
@@ -284,6 +291,8 @@ export async function generateConventionEntrepriseCore(
   tenantId: string,
   sessionId: string,
   sponsorOrgId: string,
+  /** Date de signature saisie à la main (ISO `yyyy-mm-dd`), sinon la règle. */
+  dateSignature?: string | null,
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; count?: number }> {
   const org = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId },
@@ -391,10 +400,10 @@ export async function generateConventionEntrepriseCore(
 
   const orgAddr = (org.address as Record<string, string> | null) ?? null;
 
-  // Date de signature = J-15 jours OUVRÉS avant le début de session (ind.9 +
-  // rétractation + « solde la veille »). NE JAMAIS hardcoder.
-  const startIso = session.startDate.toISOString().slice(0, 10);
-  const conventionDate = new Date(subtractBusinessDaysISO(startIso, 15) + 'T00:00:00Z');
+  // Date de signature : même règle unique que la convention individuelle
+  // (J-15 ouvrés, plafonnée au jour même), et la saisie l'emporte.
+  // NE JAMAIS hardcoder.
+  const conventionDate = resolveConventionDate(session.startDate, new Date(), dateSignature);
 
   const data: ConventionData = {
     beneficiaireRaisonSociale: org.legalName,

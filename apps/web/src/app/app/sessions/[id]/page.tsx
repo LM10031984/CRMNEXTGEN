@@ -68,6 +68,7 @@ import {
   blocagesDocsEntreprise,
   type BlocageDocEntreprise,
 } from '@/lib/docs/blocages-docs-entreprise';
+import { resolveConventionDateIso } from '@/lib/closure/convention-date';
 import {
   GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
@@ -751,6 +752,8 @@ export default async function SessionDetailPage({
         analyseAssetId: string | null;
         /** Représentant légal connu, pour la saisie express depuis le panneau. */
         representant: string | null;
+        /** Date de signature proposée (ISO), modifiable avant génération. */
+        dateSignatureParDefaut: string;
         /** Ce qui manque AVANT de générer — mêmes règles que les cœurs. */
         blocages: BlocageDocEntreprise[];
       }
@@ -772,6 +775,13 @@ export default async function SessionDetailPage({
           conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
           analyseAssetId: analyseEntrepriseAssetId,
           representant: (p.sponsorOrg.representative ?? '').trim() || null,
+          // Date proposée = la règle (J-15 ouvrés, plafonnée au jour même).
+          // Affichée dans le panneau, modifiable avant de générer : aucune
+          // règle ne connaît la date réellement négociée avec le client.
+          dateSignatureParDefaut: resolveConventionDateIso(
+            session.startDate.toISOString().slice(0, 10),
+            new Date().toISOString().slice(0, 10),
+          ),
           // Rempli plus bas, une fois tous les salariés du groupe connus.
           blocages: [] as BlocageDocEntreprise[],
         };

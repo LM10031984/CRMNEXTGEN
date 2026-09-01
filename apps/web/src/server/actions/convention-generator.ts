@@ -53,6 +53,11 @@ export async function generateConventionForParticipant(
 export async function generateConventionEntreprise(input: {
   sessionId: string;
   sponsorOrgId: string;
+  /**
+   * Date de signature saisie dans le panneau (ISO `yyyy-mm-dd`). Vide, la règle
+   * s'applique : J-15 jours ouvrés avant le début, plafonnée au jour même.
+   */
+  dateSignature?: string | null;
 }): Promise<{ ok: boolean; documentId?: string; count?: number; error?: string }> {
   // RBAC en écriture obligatoire (revue Codex PR #13) : une server action est
   // appelable directement, indépendamment du `canWrite` qui masque le bouton.
@@ -72,6 +77,7 @@ export async function generateConventionEntreprise(input: {
     user.tenantId,
     input.sessionId,
     input.sponsorOrgId,
+    input.dateSignature,
   );
   if (r.sessionId) revalidatePath(`/app/sessions/${r.sessionId}`);
   return { ok: r.ok, documentId: r.documentId, count: r.count, error: r.error };
