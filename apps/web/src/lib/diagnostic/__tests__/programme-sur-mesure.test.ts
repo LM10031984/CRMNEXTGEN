@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ancrerProgramme } from '../programme-sur-mesure';
+import { ancrerProgramme, contientTermeBanni } from '../programme-sur-mesure';
 
 const PROGRAMME_SOURCE = `Matinée (9h - 13h00) : Introduction à l'IA et Prospection Immobilière
 
@@ -118,5 +118,46 @@ describe('ancrerProgramme', () => {
       PROGRAMME_SOURCE,
     );
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('termes bannis', () => {
+  it('repère la pige, interdite depuis le 11/08/2026', () => {
+    expect(contientTermeBanni('Pige et prospection terrain')).toBe(true);
+    expect(contientTermeBanni('la pige quotidienne')).toBe(true);
+    expect(contientTermeBanni('PIGE')).toBe(true);
+  });
+
+  it('ne se déclenche pas sur des mots qui contiennent « pige »', () => {
+    expect(contientTermeBanni('pigeonnier')).toBe(false);
+    expect(contientTermeBanni('compigeage')).toBe(false);
+  });
+
+  it('écarte un point mentionnant la pige, même parfaitement ancré', () => {
+    const source = `Prospection immobilière
+● Analyse d'un secteur à l'aide des données DVF.
+● Organiser sa pige quotidienne sur les annonces.
+● Automatisation de la prospection (courriers, emails, SMS).
+● Génération de posts pour les réseaux sociaux.`;
+
+    const r = ancrerProgramme(
+      {
+        ...BASE,
+        sequences: [
+          seq('A', ["Analyse d'un secteur à l'aide des données DVF."]),
+          // ancré mot pour mot dans la source, et pourtant refusé
+          seq('B', ['Organiser sa pige quotidienne sur les annonces.']),
+          seq('C', ['Automatisation de la prospection (courriers, emails, SMS).']),
+          seq('D', ['Génération de posts pour les réseaux sociaux.']),
+        ],
+      },
+      source,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const tout = JSON.stringify(r.programme);
+      expect(tout.toLowerCase()).not.toContain('pige');
+      expect(r.programme.sequences).toHaveLength(3);
+    }
   });
 });

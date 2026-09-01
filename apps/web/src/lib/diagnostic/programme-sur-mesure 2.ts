@@ -19,21 +19,6 @@ import { z } from 'zod';
 import { callLlm } from '@/lib/llm-client';
 import { QUESTIONS, PROBLEMATIQUES, type ProblematiqueKey } from './questions';
 
-/**
- * Termes bannis des programmes envoyés aux prospects.
- *
- * La PIGE est interdite depuis le 11/08/2026 (règle métier Laurent, 01/09/2026).
- * Aucune des 7 journées du diagnostic ne la mentionne aujourd'hui, mais 4 autres
- * produits du catalogue si : le jour où l'un d'eux entre dans le périmètre, ou
- * si le modèle la reformule de lui-même, le point doit être écarté. Un garde-fou
- * qui ne sert jamais coûte moins cher qu'un email de trop.
- */
-const TERMES_BANNIS = [/\bpige\b/i, /\bpiger\b/i];
-
-export function contientTermeBanni(s: string): boolean {
-  return TERMES_BANNIS.some((re) => re.test(s));
-}
-
 /** Part minimale de points ancrés sous laquelle on refuse le sur-mesure. */
 const SEUIL_ANCRAGE = 0.7;
 /** En dessous, le programme est trop maigre pour être envoyé. */
@@ -93,8 +78,6 @@ Ce que tu personnalises :
 - le "pourquoiVous" de chaque séquence : une phrase qui relie la séquence à sa situation.
 
 Ce que tu ne touches pas : le fond pédagogique, la durée, le prix (n'en mentionne JAMAIS).
-
-INTERDIT : le mot « pige » et ses dérivés. Cette pratique est interdite depuis le 11/08/2026. Si le programme source la mentionne, saute ce point.
 
 Ton : vouvoiement, direct, concret, sans jargon ni superlatif commercial. Français.
 Réponds en JSON strict, sans texte autour.`;
@@ -197,9 +180,6 @@ export function ancrerProgramme(
     .map((seq) => {
       const points = seq.points.filter((pt) => {
         total += 1;
-        // Un terme banni disqualifie le point même s'il est parfaitement ancré :
-        // le programme source peut le contenir, l'email non.
-        if (contientTermeBanni(pt.texte) || contientTermeBanni(pt.source)) return false;
         const ok = sourceNorm.includes(normaliser(pt.source));
         if (ok) ancres += 1;
         return ok;

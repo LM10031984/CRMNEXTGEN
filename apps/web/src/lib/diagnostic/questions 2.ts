@@ -9,11 +9,6 @@
  * bruyant, sur téléphone. D'où 8 questions fermées à 4 choix, aucune saisie
  * libre, aucun scroll horizontal. Objectif : 90 secondes montre en main.
  *
- * ⚠ La PIGE ne doit apparaître NULLE PART dans ce fichier : elle est interdite
- * depuis le 11/08/2026 (règle métier confirmée par Laurent le 01/09/2026). Ne
- * pas la réintroduire, ni dans un libellé, ni dans un axe pédagogique — ce
- * formulaire est public et lu par des professionnels de l'immobilier.
- *
  * Les questions ne servent pas qu'à orienter : elles qualifient aussi le lead
  * (rôle, taille d'équipe, formation déjà suivie dans l'année ⇒ droits AGEFICE
  * restants). C'est ce qui rend l'atterrissage dans le CRM réellement utile.
@@ -66,7 +61,7 @@ export const PROBLEMATIQUES: Record<ProblematiqueKey, Problematique> = {
     accroche:
       "Votre enjeu est en amont : sans flux régulier de mandats rentrés, tout le reste s'écroule.",
     axePedagogique:
-      "Structurer la rentrée de mandats : ciblage et qualification du secteur, discours de prise de mandat, traitement des objections prix, réactivation du portefeuille dormant, génération de recommandation. L'IA intervient comme accélérateur de la méthode, jamais comme substitut.",
+      "Structurer la rentrée de mandats : pige et qualification, discours de prise de mandat, traitement des objections prix, réactivation du portefeuille dormant, génération de recommandation. L'IA intervient comme accélérateur de la méthode, jamais comme substitut.",
   },
   MANAGEMENT_EQUIPE: {
     key: 'MANAGEMENT_EQUIPE',
@@ -154,7 +149,7 @@ export const QUESTIONS: DiagnosticQuestion[] = [
     choix: [
       {
         value: 'PROSPECTION',
-        label: 'La prospection',
+        label: 'La prospection et la pige',
         poids: { PROSPECTION_MANDATS: 4 },
       },
       {
@@ -216,7 +211,7 @@ export const QUESTIONS: DiagnosticQuestion[] = [
     choix: [
       {
         value: 'TERRAIN',
-        label: 'Prospection terrain et porte-à-porte',
+        label: 'Pige et prospection terrain',
         poids: { PROSPECTION_MANDATS: 3 },
       },
       {

@@ -26,7 +26,13 @@ import { processClosureJobPayload } from './worker';
 import type { ClosureJobPayload } from './types';
 
 const MAX_ATTEMPTS = 3;
-const STALL_RECLAIM_AFTER_MIN = 15; // jobs PROCESSING > 15min → re-claim
+// Jobs PROCESSING > 15 min → re-claim.
+// Le `::int` de la requête n'est pas décoratif : Prisma passe ce nombre en
+// paramètre typé bigint, et `make_interval(mins => bigint)` N'EXISTE PAS en
+// Postgres (il attend un int). Sans le cast, la boucle du worker closure
+// meurt à chaque tour sur `42883 function make_interval(mins => bigint) does
+// not exist` — plus aucun pack de fin de formation n'est produit.
+const STALL_RECLAIM_AFTER_MIN = 15;
 
 /**
  * Nom logique de la file (conservé pour compat / logs). Il n'y a plus de
@@ -82,7 +88,7 @@ async function claimJobs(limit: number): Promise<ClosureJobPayload[]> {
       FROM "ClosureJob" cj
       JOIN "ClosureBatch" cb ON cb.id = cj."batchId"
       WHERE cj.status = 'QUEUED'
-         OR (cj.status = 'PROCESSING' AND cj."startedAt" < NOW() - make_interval(mins => ${STALL_RECLAIM_AFTER_MIN}))
+         OR (cj.status = 'PROCESSING' AND cj."startedAt" < NOW() - make_interval(mins => ${STALL_RECLAIM_AFTER_MIN}::int))
       ORDER BY cj."createdAt" ASC
       LIMIT ${limit}
       FOR UPDATE OF cj SKIP LOCKED
