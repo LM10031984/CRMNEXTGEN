@@ -17,6 +17,9 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
 import { rateLimitOk } from '@/lib/enrollment/rate-limit';
+import { sendMail } from '@/lib/mailer';
+import { loadOfConfig } from '@/lib/of-config';
+import { renderDiagnosticProgrammeEmail } from '@/lib/mailer-templates/diagnostic-programme';
 import { diagnostiquer, resumerPourLead } from '@/lib/diagnostic/scoring';
 import { QUESTIONS, PROBLEMATIQUES, SOURCE_STAND } from '@/lib/diagnostic/questions';
 
@@ -100,6 +103,35 @@ export async function soumettreDiagnostic(input: {
     },
     select: { id: true },
   });
+
+  // L'email n'est JAMAIS sur le chemin critique. Le lead est déjà écrit : si le
+  // SMTP est lent, indisponible, ou si la catégorie n'est pas cochée dans
+  // Paramètres, le prospect voit quand même son écran de remerciement et
+  // Laurent le retrouve dans le CRM. Un stand ne s'arrête pas parce qu'un
+  // serveur mail tousse.
+  try {
+    const of = await loadOfConfig(tenant.id);
+    const { subject, html, text } = renderDiagnosticProgrammeEmail(
+      {
+        firstName: contact.data.firstName,
+        dominante: resultat.dominante,
+        secondaire: resultat.secondaire,
+      },
+      of,
+    );
+    const envoi = await sendMail({
+      to: contact.data.email,
+      subject,
+      html,
+      text,
+      context: { tenantId: tenant.id, category: 'diagnostic_program' },
+    });
+    if (!envoi.ok && !envoi.suppressed) {
+      console.error(`[diagnostic] envoi programme échoué lead=${lead.id}: ${envoi.error ?? '?'}`);
+    }
+  } catch (e) {
+    console.error(`[diagnostic] envoi programme en erreur lead=${lead.id}`, e);
+  }
 
   return { ok: true, leadId: lead.id };
 }
