@@ -10,12 +10,20 @@
  *    calculé ICI, par le module pur `diagnostiquer()`. Zéro appel réseau entre
  *    la première question et l'écran de résultat ;
  *  - 90 secondes montre en main → pas d'écran d'accueil à lire, la question 1
- *    est immédiatement à l'écran, et un clic suffit pour avancer.
+ *    est immédiatement à l'écran, et un clic suffit pour avancer ;
+ *  - le diagnostic tourne AUSSI sur l'ordinateur du stand, en continu → l'écran
+ *    de remerciement se réarme tout seul pour le visiteur suivant.
  */
 
-import { useMemo, useState, useTransition } from 'react';
-import { ArrowLeft, Check, Loader2, Sparkles } from 'lucide-react';
-import { QUESTIONS, PROBLEMATIQUES } from '@/lib/diagnostic/questions';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { ArrowLeft, Check, Loader2, RotateCcw, Sparkles } from 'lucide-react';
+import {
+  QUESTIONS,
+  PROBLEMATIQUES,
+  RAPPEL_CHOIX,
+  RAPPEL_QUESTION,
+  type RappelValue,
+} from '@/lib/diagnostic/questions';
 import { diagnostiquer } from '@/lib/diagnostic/scoring';
 import { choisirJournee } from '@/lib/diagnostic/catalogue-map';
 import { soumettreDiagnostic } from '@/server/actions/diagnostic-public';
@@ -30,17 +38,31 @@ export interface JourneeInfo {
   dureeHeures: number;
 }
 
+interface Contact {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  rgpdAccepted: boolean;
+}
+
+const CONTACT_VIDE: Contact = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  rgpdAccepted: false,
+};
+
+/** Secondes avant que le stand se réarme tout seul pour le visiteur suivant. */
+const RETOUR_AUTO_S = 45;
+
 export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
   const [etape, setEtape] = useState<Etape>('questions');
   const [index, setIndex] = useState(0);
   const [reponses, setReponses] = useState<Record<string, string>>({});
-  const [contact, setContact] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    rgpdAccepted: false,
-  });
+  const [rappel, setRappel] = useState<RappelValue | null>(null);
+  const [contact, setContact] = useState<Contact>(CONTACT_VIDE);
   const [erreur, setErreur] = useState<string | null>(null);
   const [pending, demarrer] = useTransition();
 
@@ -72,17 +94,64 @@ export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
     if (index > 0) setIndex(index - 1);
   }
 
+  /** Remise à zéro COMPLÈTE — le visiteur suivant ne doit rien voir du précédent. */
+  const recommencer = useCallback(() => {
+    setEtape('questions');
+    setIndex(0);
+    setReponses({});
+    setRappel(null);
+    setContact(CONTACT_VIDE);
+    setErreur(null);
+  }, []);
+
+  // Un visiteur qui repose le téléphone (ou s'éloigne de l'ordinateur du stand)
+  // au milieu du questionnaire laisse ses réponses à l'écran : le suivant
+  // reprendrait le diagnostic de quelqu'un d'autre. Au bout de 45 s sans le
+  // moindre tap, on repart de la question 1.
+  //
+  // Volontairement PAS actif sur l'écran de résultat : c'est là qu'on saisit son
+  // email, et effacer une saisie en cours serait pire que le mal. Cet écran-là
+  // est réarmé par l'envoi, ou par le bouton « Nouveau diagnostic ».
+  const enCoursDeQuestions = etape === 'questions' && index > 0;
+  useEffect(() => {
+    if (!enCoursDeQuestions) return;
+    const t = setTimeout(recommencer, RETOUR_AUTO_S * 1000);
+    return () => clearTimeout(t);
+  }, [enCoursDeQuestions, index, recommencer]);
+
   function envoyer() {
     setErreur(null);
     demarrer(async () => {
-      const r = await soumettreDiagnostic({ reponses, contact });
-      if (r.ok) setEtape('envoye');
-      else setErreur(r.error);
+      const r = await soumettreDiagnostic({ reponses, contact, rappel });
+      if (!r.ok) {
+        setErreur(r.error);
+        return;
+      }
+      setEtape('envoye');
+
+      // Le prospect déclenche SON PROPRE email, depuis son téléphone.
+      //
+      // Pourquoi ici et pas dans l'action : assembler le programme sur mesure
+      // prend ~28 s (appel au modèle). On ne fait pas attendre ça à quelqu'un
+      // debout devant un stand. L'écran de remerciement est DÉJÀ affiché quand
+      // cette requête part — elle ne bloque rien et son échec ne casse rien :
+      // la soumission reste en file, le rattrapage la reprendra.
+      //
+      // `keepalive` : la requête survit à la fermeture de l'onglet ou au
+      // verrouillage du téléphone dans la foulée.
+      void fetch('/api/diagnostic/traiter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: r.submissionId }),
+        keepalive: true,
+      }).catch(() => {
+        /* silence volontaire : le filet de rattrapage prend le relais */
+      });
     });
   }
 
   if (etape === 'envoye') {
-    return <EcranMerci prenom={contact.firstName} />;
+    return <EcranMerci prenom={contact.firstName} onRecommencer={recommencer} />;
   }
 
   if (etape === 'resultat') {
@@ -91,6 +160,8 @@ export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
         dominante={resultat.dominante}
         secondaire={resultat.secondaire}
         journee={journee}
+        rappel={rappel}
+        setRappel={setRappel}
         contact={contact}
         setContact={setContact}
         erreur={erreur}
@@ -163,6 +234,8 @@ function EcranResultat({
   dominante,
   secondaire,
   journee,
+  rappel,
+  setRappel,
   contact,
   setContact,
   erreur,
@@ -172,25 +245,30 @@ function EcranResultat({
   dominante: keyof typeof PROBLEMATIQUES;
   secondaire: keyof typeof PROBLEMATIQUES | null;
   journee: JourneeInfo | null;
-  contact: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    rgpdAccepted: boolean;
-  };
-  setContact: (c: typeof contact) => void;
+  rappel: RappelValue | null;
+  setRappel: (r: RappelValue) => void;
+  contact: Contact;
+  setContact: (c: Contact) => void;
   erreur: string | null;
   pending: boolean;
   onEnvoyer: () => void;
 }) {
   const p = PROBLEMATIQUES[dominante];
   const s = secondaire ? PROBLEMATIQUES[secondaire] : null;
+
+  // Un lead « chaud » sans numéro est un lead mort : dès qu'il demande à être
+  // rappelé cette semaine, le téléphone n'est plus facultatif. Le même contrôle
+  // existe côté serveur (Zod) — celui-ci n'est là que pour l'expliquer.
+  const telObligatoire = rappel === 'CETTE_SEMAINE';
+  const telManquant = telObligatoire && contact.phone.trim() === '';
+
   const complet =
+    rappel !== null &&
     contact.firstName.trim() !== '' &&
     contact.lastName.trim() !== '' &&
     contact.email.trim() !== '' &&
-    contact.rgpdAccepted;
+    contact.rgpdAccepted &&
+    !telManquant;
 
   return (
     <div>
@@ -218,7 +296,34 @@ function EcranResultat({
         ) : null}
       </div>
 
-      <h3 className="font-semibold mb-1">On vous envoie le programme</h3>
+      {/* L'engagement de rappel, AVANT le formulaire : un seul tap, aucune
+          saisie. C'est ce qui transforme l'appel du lendemain en rendez-vous
+          tenu plutôt qu'en démarchage. */}
+      <h3 className="font-semibold mb-3">{RAPPEL_QUESTION}</h3>
+      <div className="grid gap-3">
+        {RAPPEL_CHOIX.map((choix) => {
+          const actif = rappel === choix.value;
+          return (
+            <button
+              key={choix.value}
+              type="button"
+              aria-pressed={actif}
+              onClick={() => setRappel(choix.value)}
+              className={cn(
+                'w-full min-h-[64px] px-5 py-4 rounded-xl border text-left text-base font-medium',
+                'transition-colors active:scale-[0.99]',
+                actif
+                  ? 'border-primary bg-primary-50 text-primary-900'
+                  : 'border-border bg-white hover:border-primary/50',
+              )}
+            >
+              {choix.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <h3 className="font-semibold mt-8 mb-1">On vous envoie le programme</h3>
       <p className="text-sm text-muted-foreground mb-4">
         Le programme détaillé de cette journée, avec ce qu'elle change pour vous. Vous le
         recevez par email dans quelques minutes.
@@ -249,12 +354,17 @@ function EcranResultat({
         </div>
         <div className="sm:col-span-2">
           <Champ
-            label="Téléphone (facultatif)"
+            label={telObligatoire ? 'Téléphone' : 'Téléphone (facultatif)'}
             type="tel"
             inputMode="tel"
             value={contact.phone}
             onChange={(v) => setContact({ ...contact, phone: v })}
             autoComplete="tel"
+            aide={
+              telObligatoire
+                ? 'On vous rappelle cette semaine — il nous faut un numéro.'
+                : undefined
+            }
           />
         </div>
       </div>
@@ -290,7 +400,21 @@ function EcranResultat({
   );
 }
 
-function EcranMerci({ prenom }: { prenom: string }) {
+function EcranMerci({ prenom, onRecommencer }: { prenom: string; onRecommencer: () => void }) {
+  // Le stand tourne en continu, y compris sur l'ordinateur posé sur la table.
+  // Sans ce retour automatique, il faut recharger la page entre deux visiteurs —
+  // et le visiteur suivant voit le prénom du précédent.
+  const [restant, setRestant] = useState(RETOUR_AUTO_S);
+
+  useEffect(() => {
+    const tic = setInterval(() => setRestant((s) => s - 1), 1000);
+    const fin = setTimeout(onRecommencer, RETOUR_AUTO_S * 1000);
+    return () => {
+      clearInterval(tic);
+      clearTimeout(fin);
+    };
+  }, [onRecommencer]);
+
   return (
     <div className="text-center py-10">
       <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 inline-flex items-center justify-center mb-4">
@@ -303,6 +427,18 @@ function EcranMerci({ prenom }: { prenom: string }) {
         Votre programme part par email. Passez nous voir sur le stand si vous voulez en parler tout
         de suite.
       </p>
+
+      <button
+        type="button"
+        onClick={onRecommencer}
+        className="mt-8 min-h-[56px] px-6 rounded-xl border border-primary text-primary font-semibold inline-flex items-center justify-center gap-2"
+      >
+        <RotateCcw className="h-4 w-4" />
+        Nouveau diagnostic
+      </button>
+      <p className="text-xs text-muted-foreground mt-3 tabular-nums">
+        Retour automatique dans {Math.max(0, restant)} s
+      </p>
     </div>
   );
 }
@@ -314,6 +450,7 @@ function Champ({
   type = 'text',
   inputMode,
   autoComplete,
+  aide,
 }: {
   label: string;
   value: string;
@@ -321,6 +458,7 @@ function Champ({
   type?: string;
   inputMode?: 'email' | 'tel' | 'text';
   autoComplete?: string;
+  aide?: string;
 }) {
   return (
     <label className="block">
@@ -333,6 +471,7 @@ function Champ({
         onChange={(e) => onChange(e.target.value)}
         className="w-full min-h-[52px] px-4 rounded-xl border border-border bg-white text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
       />
+      {aide ? <span className="block text-xs text-primary-800 mt-1.5">{aide}</span> : null}
     </label>
   );
 }

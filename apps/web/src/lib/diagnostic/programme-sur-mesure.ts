@@ -219,3 +219,33 @@ export function ancrerProgramme(
 
 /** Exporté pour les tests — la vérification d'ancrage sans appel réseau. */
 export const _internes = { normaliser, ProgrammeSchema, SEUIL_ANCRAGE, MIN_SEQUENCES };
+
+/**
+ * Lecture DÉFENSIVE de `DiagnosticSubmission.personnalisation`.
+ *
+ * Ce champ est un `Json` : il contient soit `{ ancrage, programme }` quand le
+ * sur-mesure a abouti, soit `{ ancrage: 0, repliCatalogue: true, raison }` quand
+ * on est retombé sur le programme du catalogue. Il peut aussi contenir la forme
+ * d'une version antérieure du code — d'où la validation, plutôt qu'un cast.
+ *
+ * Sert à la fiche du lead : au téléphone, Laurent doit avoir sous les yeux
+ * EXACTEMENT ce que le prospect a reçu.
+ */
+export function lirePersonnalisation(json: unknown): {
+  programme: ProgrammeSurMesure | null;
+  ancrage: number | null;
+  repliCatalogue: boolean;
+  raison: string | null;
+} {
+  const vide = { programme: null, ancrage: null, repliCatalogue: false, raison: null };
+  if (!json || typeof json !== 'object') return vide;
+
+  const o = json as Record<string, unknown>;
+  const parsed = ProgrammeSchema.safeParse(o.programme);
+  return {
+    programme: parsed.success ? parsed.data : null,
+    ancrage: typeof o.ancrage === 'number' ? o.ancrage : null,
+    repliCatalogue: o.repliCatalogue === true,
+    raison: typeof o.raison === 'string' ? o.raison : null,
+  };
+}

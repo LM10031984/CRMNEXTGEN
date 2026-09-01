@@ -5,10 +5,17 @@
  * interpolée, OfConfig pour la marque, texte de repli. Template PUR : aucun
  * side-effect réseau, testable sans SMTP.
  *
- * Destinataire : un PROSPECT, pas un collègue. D'où deux différences de fond :
+ * Destinataire : un PROSPECT, pas un collègue. D'où les règles de fond :
  *  - aucun lien vers l'application (il n'y a pas de compte à ouvrir) ;
- *  - aucun prix. Le tarif dépend du payeur et des droits AGEFICE restants ;
- *    l'annoncer dans un email automatique, c'est s'engager à l'aveugle.
+ *  - AUCUN PRIX de la journée. Le tarif dépend du payeur et des droits AGEFICE
+ *    restants ; l'annoncer dans un email automatique, c'est s'engager à
+ *    l'aveugle. Les montants qui figurent ici sont ceux de la PRISE EN CHARGE
+ *    AGEFICE — un droit du prospect, pas une facture ;
+ *  - AUCUN chiffre de satisfaction. Les notes en base sont générées (source IA,
+ *    valeurs quasi uniformes) : les publier serait une réserve d'audit ET un
+ *    argument mensonger. À rétablir seulement sur des questionnaires réels ;
+ *  - UN SEUL lien cliquable. Un email de prospect avec trois liens ne convertit
+ *    sur aucun.
  *
  * Deux rendus possibles :
  *  1. `surMesure` fourni → la journée assemblée pour ce prospect à partir du
@@ -23,6 +30,27 @@ import type { ProgrammeSurMesure } from '@/lib/diagnostic/programme-sur-mesure';
 
 const BRAND_DARK = '#00527A';
 const BRAND_LIGHT_BG = '#F0F9FF';
+
+/**
+ * Barème AGEFICE 2026 (source : communication-agefice.fr — plafonds 2026 et
+ * étapes clefs 2026). Constantes FIGÉES, pas de calcul « élégant » : ce sont des
+ * règles de financement, elles changent par décision de l'AGEFICE, pas par
+ * arithmétique. À revoir au 1er janvier.
+ *
+ * Ce bloc remplace l'ancienne promesse « c'est souvent pris en charge en
+ * totalité », qui était FAUSSE pour une journée de 8 h et se retournait au
+ * premier appel.
+ */
+const AGEFICE = {
+  /** Année du barème. Figée avec les montants : les deux se revoient ENSEMBLE. */
+  annee: 2026,
+  tauxPresentielParHeure: 42,
+  enveloppeAnnuelle: '3 000',
+  priseEnChargeJournee: 336,
+  delaiDepotJours: 15,
+} as const;
+
+const CTA_LIBELLE = 'Réserver mon point financement — 15 min';
 
 function escapeHtml(s: string | null | undefined): string {
   if (!s) return '';
@@ -41,6 +69,39 @@ export function formatDuree(heures: number): string {
   return `${heures} h / ${j} jour${jours > 1 ? 's' : ''}`;
 }
 
+/**
+ * L'unique lien cliquable de l'email — helper PUR, testable sans environnement.
+ *
+ * Ordre : `DIAGNOSTIC_CTA_URL` (lien de réservation d'un créneau), sinon repli
+ * sur le portable de l'organisme en `tel:` — au moins aussi bon depuis un
+ * téléphone. Si ni l'un ni l'autre, on n'affiche AUCUN bouton plutôt qu'un
+ * bouton mort.
+ *
+ * Seuls `https`, `http`, `tel` et `mailto` sont acceptés : une variable
+ * d'environnement mal remplie ne doit pas pouvoir injecter un `javascript:`
+ * dans un email envoyé à des prospects.
+ */
+export function resolveCtaUrl(envUrl: string | undefined, ofPhone: string): string | null {
+  const brut = (envUrl ?? '').trim();
+  if (brut) {
+    if (/^(https?|tel|mailto):/i.test(brut)) return brut;
+    return null;
+  }
+  const tel = (ofPhone ?? '').replace(/[^\d+]/g, '');
+  return tel ? `tel:${tel}` : null;
+}
+
+/** Signature NOMINATIVE : un email d'OF signé par un humain joignable convertit mieux. */
+function signataire(of: OfConfig): { nom: string; titre: string; phone: string } {
+  const nom = [of.resp.prenom, of.resp.nom].filter(Boolean).join(' ').trim();
+  const secours = [of.contact.prenom, of.contact.nom].filter(Boolean).join(' ').trim();
+  return {
+    nom: nom || secours || of.name,
+    titre: of.resp.titre || of.contact.titre || '',
+    phone: of.resp.phone || of.contact.phone || of.phone || '',
+  };
+}
+
 export interface ProduitPropose {
   title: string;
   dureeHeures: number;
@@ -55,6 +116,8 @@ export interface DiagnosticProgrammeEmailInput {
   secondaire: ProblematiqueKey | null;
   produit: ProduitPropose;
   surMesure: ProgrammeSurMesure | null;
+  /** Surcharge du lien du CTA (tests). En production : `DIAGNOSTIC_CTA_URL`. */
+  ctaUrl?: string;
 }
 
 const MOMENTS: Record<'MATIN' | 'APRES_MIDI', string> = {
@@ -74,6 +137,19 @@ export function renderDiagnosticProgrammeEmail(
   const subject = `Votre journée — ${produit.title}`;
   const accroche = surMesure?.accroche ?? probl.accroche;
   const objectifs = surMesure?.objectifs ?? produit.objectifs;
+
+  const cta = resolveCtaUrl(input.ctaUrl ?? process.env.DIAGNOSTIC_CTA_URL, of.phone);
+  const signature = signataire(of);
+
+  // Le bloc financement, en une seule formulation partagée HTML/texte : deux
+  // rédactions séparées finissent par diverger, et c'est le passage le plus
+  // sensible de l'email.
+  const financement = [
+    `Votre enveloppe formation ${AGEFICE.annee} auprès de l'AGEFICE est de ${AGEFICE.enveloppeAnnuelle} € par an.`,
+    `Une journée en présentiel est prise en charge à hauteur de ${AGEFICE.tauxPresentielParHeure} € de l'heure, soit ${AGEFICE.priseEnChargeJournee} € pour une journée de 8 h.`,
+    `Deux règles à connaître : le dossier doit être déposé au plus tard ${AGEFICE.delaiDepotJours} jours calendaires avant le début de la formation, et l'enveloppe est annuelle — ce qui n'est pas consommé au 31 décembre est perdu.`,
+    `Concrètement, pour une journée en décembre, le dossier doit partir à la mi-novembre.`,
+  ];
 
   // ── version texte ────────────────────────────────────────────────────────
   const texteSequences = surMesure
@@ -102,13 +178,14 @@ export function renderDiagnosticProgrammeEmail(
     ``,
     suite ? `En prolongement, un second axe ressort : ${suite.titre}.` : null,
     ``,
-    `Le tarif dépend de qui finance la formation (votre structure, ou vous-même`,
-    `avec vos droits AGEFICE). On regarde ça ensemble : c'est souvent pris en`,
-    `charge en totalité.`,
+    `VOS DROITS FORMATION`,
+    ...financement,
     ``,
-    `On vous rappelle dans les jours qui viennent.`,
+    cta ? `${CTA_LIBELLE} : ${cta}` : null,
     ``,
-    `${of.name}`,
+    signature.nom,
+    signature.titre ? `${signature.titre} — ${of.name}` : of.name,
+    signature.phone ? signature.phone : null,
     of.addressFull ?? '',
   ]
     .filter((l): l is string => l !== null)
@@ -134,6 +211,21 @@ export function renderDiagnosticProgrammeEmail(
         )
         .join('')
     : `<div style="font-size:10pt; white-space:pre-wrap; margin:16px 0;">${escapeHtml(produit.programmeMd)}</div>`;
+
+  const financementHtml = financement
+    .map((p) => `<p style="margin:0 0 8px 0;">${escapeHtml(p)}</p>`)
+    .join('');
+
+  // UN SEUL bouton, et rien d'autre de cliquable dans le corps.
+  const ctaHtml = cta
+    ? `
+      <div style="text-align:center; margin:28px 0 8px 0;">
+        <a href="${escapeHtml(cta)}" style="display:inline-block; background:${BRAND_DARK}; color:#ffffff; text-decoration:none; font-weight:600; font-size:11pt; padding:14px 26px; border-radius:6px;">${escapeHtml(CTA_LIBELLE)}</a>
+      </div>
+      <p style="margin:0; text-align:center; font-size:9pt; color:#94A3B8;">
+        On regarde ensemble ce qui est finançable et ce qu'il vous reste de droits. Sans engagement.
+      </p>`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -178,14 +270,15 @@ export function renderDiagnosticProgrammeEmail(
       }
 
       <div style="background:#F8FAFC; border-left:3px solid ${BRAND_DARK}; padding:14px 16px; margin:24px 0; font-size:10pt;">
-        <strong style="color:${BRAND_DARK};">Et le financement ?</strong><br>
-        Le tarif dépend de qui finance : votre structure, ou vous-même avec vos droits de
-        formation AGEFICE. On regarde ça ensemble — c'est souvent pris en charge en totalité.
+        <strong style="color:${BRAND_DARK}; display:block; margin-bottom:8px;">Vos droits formation</strong>
+        ${financementHtml}
       </div>
 
-      <p style="margin:24px 0 0 0; font-size:10pt; color:#64748B;">
-        On vous rappelle dans les jours qui viennent.<br>
-        L'équipe ${escapeHtml(of.name)}
+      ${ctaHtml}
+
+      <p style="margin:28px 0 0 0; font-size:10pt; color:#475569;">
+        <strong>${escapeHtml(signature.nom)}</strong><br>
+        ${signature.titre ? `${escapeHtml(signature.titre)} — ` : ''}${escapeHtml(of.name)}${signature.phone ? `<br>${escapeHtml(signature.phone)}` : ''}
       </p>
     </div>
 
