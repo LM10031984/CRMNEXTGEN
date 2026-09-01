@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Terminé quick 260821-md8 (règle payeur personne morale)
-last_updated: "2026-08-21T17:55:28.867Z"
-last_activity: "2026-08-21 - Completed quick task 260821-md8: règle payeur personne morale appliquée par l'appli (ad6896b)"
+stopped_at: Quick 260901-qr7 — diagnostic du stand MLS livré (J-8 avant l'événement)
+last_updated: "2026-09-01T09:10:00.000Z"
+last_activity: "2026-09-01 - Quick 260901-qr7 : diagnostic express du stand (25 ans du MLS, 09/09) — page publique, lead, email fail-closed, QR vérifié"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -318,15 +318,16 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 | 260820-j8w | **Correction des 5 findings Codex (convention entreprise)** — 4 P1 + 1 P2, tous vérifiés avant correction, sur du code DÉJÀ EN PROD. Cause racine : la convention groupe (`participantId=null`) n'avait qu'UN consommateur traité. 🔴 F4 le plus grave : le **dossier OPCO** déclarait « CONVENTION manquante » dans le scénario OPTIMMO/OPCO EP visé par le chantier. F1 RBAC manquant sur une action qui SUPPRIME des documents. F2 convention engageant plus que la facture (fallback prix produit vs somme brute) → refus si prix manquant. F3 doublon à la régénération → garde dans `generateConventionCore`, couvre ses **5 appelants** sans les modifier, retourne un SUCCÈS (flux batch). F5 statut de préparation. **Leçon** : 4 implémentations divergentes de « ce participant a-t-il une convention ? » → `lib/docs/convention-coverage.ts` devient la source unique. 1247/1247, build vert, test de puissance OK. ⚠ Parcours UI non rejoué après correctifs. | 2026-08-20 | 411f8cc | [260820-j8w-corrige-les-5-findings-codex-convention-](./quick/260820-j8w-corrige-les-5-findings-codex-convention-/) |
 | 260821-md8 | **Règle « payeur personne morale » appliquée par l'APPLI** (volets 1+4 ; volets 2/3 différés). Jusqu'ici la règle du 12/08 ne vivait que dans des scripts : un clic « préparer » sur une session intra-entreprise produisait encore conventions ET analyses des besoins **par stagiaire**, en doublon des documents d'entreprise. 🔴 **Découverte majeure : DEUX formes de stockage rivales** pour le même document — `entityType='session'` (scripts `_gen-*`) vs `'organization'` (appli, quick 260817-mm0), qui cohabitaient sans se connaître = cause du doublon SES-0108. Décision : `organization` reste la seule forme d'ÉCRITURE, `session` devient reconnue en LECTURE et remplacée à la régénération **uniquement si mono-commanditaire**. `lib/sessions/payer-rule.ts` = source unique (`isPersonneMoralePayeur` = complément EXACT de `requiresContratIndividuel`, prouvé sur tout l'enum `LegalForm` **lu dans schema.prisma**). Plus aucune analyse nominative (préparation + chemin manuel de la matrice), plus de batch vide ; compteurs « par stagiaire » / « entreprise » séparés, dénominateur = analyses LÉGITIMEMENT attendues (sinon session intra éternellement « 1 manquant »). Gabarit : RCS=**SIREN** (le SIRET s'y affichait — RCS faux sur pièce OPCO EP), ligne `N° SIRET` distincte, **refus de générer sans représentant** (« Représentée par , » impossible), lieu dédoublonné (`format-lieu.ts` partagé par les 2 chemins, fin de la duplication). 2 déviations Rule 2/1 : fiche session + dossier OPCO recâblés sur les 2 formes (demi-déploiement = les 5 findings Codex), et dénominateur d'analyse corrigé. **1345/1345** (+98), build/lint verts, test de puissance **42/7/1 rouges** puis restaurés. Diagnostic LECTURE SEULE `_audit-regle-payeur.ts` sur le cloud : **158 conventions nominatives résiduelles, 37 analyses par stagiaire, 33 analyses d'entreprise absentes, 14 représentants non renseignés, 1 doublon (SES-0108)**. ⚠ **Aucune suppression** — remédiation = étape séparée sur mot de Laurent ; ⚠ **ne pas régénérer SES-0107/0108 depuis l'appli** (le gabarit n'a ni le paragraphe OPCO EP ni le tampon du script). | 2026-08-21 | ad6896b | [260821-md8-formations-intra-entreprise-regle-payeur](./quick/260821-md8-formations-intra-entreprise-regle-payeur/) |
 | 260831-es3 | Retour contextuel depuis la fiche apprenant : `?from=` explicite (helper `lib/nav/from-link.ts` + prop `from` sur BackToListLink) — revenir sur LA session d'origine au lieu de la liste complète. Cause : `document.referrer` n'est pas mis à jour par les navigations client App Router. Liens annotés : participants + matrice Qualiopi d'une session, organisation, facture, budget AGEFICE, pré-inscription. 11 tests dont anti open-redirect. | 2026-08-31 | e23e572 | [260831-es3-retour-contextuel-fiche-apprenant-vers-l](./quick/260831-es3-retour-contextuel-fiche-apprenant-vers-l/) |
+| 260901-qr7 | **Diagnostic express du stand — 25 ans du MLS (09/09, J-8)** — reprise du chantier ouvert le 31/08 (2 modules purs jamais câblés). Livré : page publique `/diagnostic` (8 questions, une par écran, résultat calculé DANS le navigateur → insensible au wifi du lieu), action publique sans auth créant le `Lead` (source « Salon — 25 ans du MLS », consentement horodaté), 7e catégorie d'email `diagnosticProgramsEnabled` fail-closed + migration additive NON appliquée, 4 trames de programme (brouillon À VALIDER) envoyées par email hors chemin critique, QR vérifié (décode `https://qualiof.vercel.app/diagnostic`). 1581 tests verts, tsc 0. |
 
 ## Last session
 
-Stopped at: Terminé quick 260821-md8 (règle payeur personne morale)
+Stopped at: Quick 260901-qr7 — diagnostic du stand livré (lots A+B+C). Reste : validation des 4 trames par Laurent, migration à déployer, test sur téléphone réel en 4G avant le 09/09.
 Last commit: 05c0abc — feat(quick-260530-f0l): bloc 'Nos résultats {année}' sur /catalogue (Qualiopi Ind 2)
 Last completed plan: Phase 16 (migration IA Ollama → Claude API, v5 shippé)
 Next plan: /gsd:plan-phase 17 — Fondations cloud (région EU + env.ts fail-loud + DOC_ENGINE_TOKEN)
 
-Last activity: 2026-08-21 - Completed quick task 260821-md8: règle payeur personne morale appliquée par l'appli (ad6896b)
+Last activity: 2026-09-01 - Quick 260901-qr7 (diagnostic stand MLS) livré ; 41 artefacts .planning perdus remis sous git
 
 ### Roadmap Evolution
 
