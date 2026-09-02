@@ -28,7 +28,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   → Test 1 DOIT virer ROUGE. → restaurer → VERT.
  */
 
-const { mockEnv, cronCtor, processVeilleJob, processReminderJob } = vi.hoisted(
+const { mockEnv, cronCtor, processVeilleJob, processReminderJob, purgeEmailMessages } = vi.hoisted(
   () => ({
     mockEnv: {
       DATABASE_URL: 'postgres://test',
@@ -38,6 +38,8 @@ const { mockEnv, cronCtor, processVeilleJob, processReminderJob } = vi.hoisted(
     cronCtor: vi.fn(),
     processVeilleJob: vi.fn().mockResolvedValue([]),
     processReminderJob: vi.fn().mockResolvedValue({ processed: 0 }),
+    // Lot 0 · 0.2 — purge RGPD des traces d'envoi, greffée sur le même cron.
+    purgeEmailMessages: vi.fn().mockResolvedValue({ examinees: 0, supprimees: 0, dryRun: false }),
   }),
 );
 
@@ -70,10 +72,16 @@ vi.mock('../../src/lib/invoice-reminders/worker', () => ({
   processReminderJob,
 }));
 
+vi.mock('../../src/lib/rgpd/purge-email-messages', () => ({
+  purgeExpiredEmailMessages: purgeEmailMessages,
+}));
+
 beforeEach(() => {
   cronCtor.mockClear();
   processVeilleJob.mockClear();
   processReminderJob.mockClear();
+  purgeEmailMessages.mockClear();
+  purgeEmailMessages.mockResolvedValue({ examinees: 0, supprimees: 0, dryRun: false });
   vi.resetModules();
 });
 
@@ -96,6 +104,29 @@ describe('veille-worker — enregistrement croner', () => {
 
     expect(processVeilleJob).toHaveBeenCalledTimes(1);
     expect(processVeilleJob).toHaveBeenCalledWith({ triggered_by: 'cron' });
+  });
+});
+
+describe('invoice-reminder-worker — purge RGPD greffée sur le cron quotidien', () => {
+  it('Test 4 — le callback quotidien lance la purge des traces d’envoi échues', async () => {
+    await import('../invoice-reminder-worker');
+    const callback = cronCtor.mock.calls[0]![2] as () => Promise<unknown>;
+    await callback();
+
+    expect(purgeEmailMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it('Test 5 — une purge en échec ne prive pas Laurent de ses relances', async () => {
+    // L'ordre compte : les relances passent d'abord, la purge ensuite et dans
+    // son propre try. Une base indisponible côté purge ne doit ni faire tomber
+    // le callback, ni empêcher l'envoi des relances déjà effectué.
+    purgeEmailMessages.mockRejectedValueOnce(new Error('base indisponible'));
+
+    await import('../invoice-reminder-worker');
+    const callback = cronCtor.mock.calls[0]![2] as () => Promise<unknown>;
+
+    await expect(callback()).resolves.toBeUndefined();
+    expect(processReminderJob).toHaveBeenCalledTimes(1);
   });
 });
 
