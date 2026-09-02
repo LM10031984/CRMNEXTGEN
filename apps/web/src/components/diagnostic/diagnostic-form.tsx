@@ -376,9 +376,18 @@ function EcranResultat({
           onChange={(e) => setContact({ ...contact, rgpdAccepted: e.target.checked })}
           className="mt-0.5 h-5 w-5 shrink-0 rounded border-border"
         />
+        {/*
+          « Transmises à personne d'autre » était faux : envoyer cet email, c'est
+          par construction passer par des sous-traitants (base, hébergement,
+          assemblage du programme, SMTP) — ils sont listés au Traitement 9 du
+          registre. Ce qu'on peut promettre sans mentir, c'est ce que le prospect
+          craint vraiment un soir de salon : que son email finisse revendu ou sur
+          le stand d'à côté. C'est vrai, et c'est vérifiable.
+        */}
         <span className="text-slate-700">
           J'accepte que Start Academy m'envoie ce programme et me recontacte à ce sujet. Mes
-          données sont hébergées dans l'Union européenne et ne sont transmises à personne d'autre.
+          données sont hébergées dans l'Union européenne, jamais revendues ni communiquées à un
+          autre exposant, et effaçables sur simple demande.
         </span>
       </label>
 
