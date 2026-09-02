@@ -75,7 +75,14 @@ export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
     const sel = choisirJournee(resultat.dominante, reponses);
     if (!sel) return null;
     const dispo = new Map(journees.map((j) => [j.code, j]));
-    return dispo.get(sel.code) ?? journees[0] ?? null;
+    // MÊME cascade que le worker (journée Faros de l'axe, puis ses replis) :
+    // l'écran doit annoncer la journée que le prospect recevra réellement par
+    // email. Deux résolutions divergentes, et on lui promet A pour envoyer B.
+    for (const code of sel.codes) {
+      const trouvee = dispo.get(code);
+      if (trouvee) return trouvee;
+    }
+    return journees[0] ?? null;
   }, [resultat.dominante, reponses, journees]);
 
   const question = QUESTIONS[index];
