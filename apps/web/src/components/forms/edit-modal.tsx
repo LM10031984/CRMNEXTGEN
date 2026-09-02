@@ -104,13 +104,21 @@ export function EditModal({
             <h3 className="font-semibold text-lg mb-4">{title}</h3>
             <form onSubmit={handleSubmit} className="space-y-3">
               {fields.map((f) => (
+                // `htmlFor`/`id` : sans eux, le libellé n'est relié à RIEN —
+                // cliquer dessus ne met pas le focus dans le champ, et un
+                // lecteur d'écran annonce un champ anonyme. Ça valait pour TOUS
+                // les dialogues d'édition de l'app (relevé le 02/09).
                 <div key={f.name}>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  <label
+                    htmlFor={`edit-modal-${f.name}`}
+                    className="block text-xs font-medium text-muted-foreground mb-1"
+                  >
                     {f.label}
                     {f.required && <span className="text-red-600 ml-0.5">*</span>}
                   </label>
                   {f.type === 'textarea' ? (
                     <textarea
+                      id={`edit-modal-${f.name}`}
                       value={values[f.name] ?? ''}
                       onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
                       placeholder={f.placeholder}
@@ -119,6 +127,7 @@ export function EditModal({
                     />
                   ) : f.type === 'select' ? (
                     <select
+                      id={`edit-modal-${f.name}`}
                       value={values[f.name] ?? ''}
                       onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
                       className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white"
@@ -132,6 +141,7 @@ export function EditModal({
                     </select>
                   ) : (
                     <input
+                      id={`edit-modal-${f.name}`}
                       type={f.type === 'date' ? 'date' : f.type === 'number' ? 'text' : 'text'}
                       inputMode={f.type === 'number' ? 'decimal' : undefined}
                       value={values[f.name] ?? ''}

@@ -86,13 +86,29 @@ export async function updateOrganization(input: {
    * bloque la génération.
    */
   representative?: string | null;
+  /**
+   * Champs AFFICHÉS sur la fiche mais qui n'étaient éditables nulle part
+   * (constat Laurent du 02/09) : la fiche montrait « RCS — », « Type — » et une
+   * adresse, sans aucun moyen de les remplir. Le représentant, lui, n'était
+   * saisissable QUE depuis le panneau documents d'une session — donc invisible
+   * pour qui ouvrait la fiche entreprise.
+   *
+   * Ce ne sont pas des champs décoratifs : sans représentant la convention
+   * d'entreprise est refusée, et sans adresse le dossier OPCO est incomplet.
+   */
+  rcs?: string | null;
+  type?: string | null;
+  brandName?: string | null;
+  addressStreet?: string | null;
+  addressPostalCode?: string | null;
+  addressCity?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
 
   const org = await prisma.organization.findFirst({
     where: { id: input.organizationId, tenantId: user.tenantId },
-    select: { id: true },
+    select: { id: true, address: true },
   });
   if (!org) return { ok: false, error: 'Organisation introuvable.' };
 
@@ -110,6 +126,30 @@ export async function updateOrganization(input: {
   if (input.activityDescription !== undefined)
     data.activityDescription = input.activityDescription?.trim() || null;
   if (input.representative !== undefined) data.representative = input.representative?.trim() || null;
+  if (input.rcs !== undefined) data.rcs = input.rcs?.trim() || null;
+  if (input.type !== undefined) data.type = input.type?.trim() || null;
+  if (input.brandName !== undefined) data.brandName = input.brandName?.trim() || null;
+
+  // Adresse : Json { street, postalCode, city }. On FUSIONNE avec l'existant —
+  // un appelant qui ne corrige que la ville ne doit pas effacer la rue. Les
+  // trois morceaux vides ⇒ `null`, pas un objet de nulls qui ferait croire à
+  // une adresse renseignée.
+  const toucheAdresse =
+    input.addressStreet !== undefined ||
+    input.addressPostalCode !== undefined ||
+    input.addressCity !== undefined;
+  if (toucheAdresse) {
+    const actuelle = (org.address ?? null) as Record<string, unknown> | null;
+    const morceau = (fourni: string | null | undefined, cle: string): string | null => {
+      if (fourni !== undefined) return fourni?.trim() || null;
+      const v = actuelle?.[cle];
+      return typeof v === 'string' && v.trim() ? v.trim() : null;
+    };
+    const street = morceau(input.addressStreet, 'street');
+    const postalCode = morceau(input.addressPostalCode, 'postalCode');
+    const city = morceau(input.addressCity, 'city');
+    data.address = street || postalCode || city ? { street, postalCode, city } : Prisma.DbNull;
+  }
 
   if (Object.keys(data).length === 0) return { ok: true };
 
