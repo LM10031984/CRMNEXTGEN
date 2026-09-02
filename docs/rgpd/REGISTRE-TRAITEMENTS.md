@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| **Version** | 1.3 |
-| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) — amendé le 2026-09-01 (v1.3, Traitement 9 : diagnostic express du stand) |
+| **Version** | 1.4 |
+| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) — amendé le 2026-09-01 (v1.3, Traitement 9 : diagnostic express du stand) — amendé le 2026-09-02 (v1.4, sous-traitant SMTP : OVH → Google Workspace) |
 | **Responsable de traitement** | Start Academy — Organisme de formation certifié Qualiopi (siège : Vence) |
 | **Contact** | laurent@start-academy.fr |
 | **Rédaction** | Générée par assistance IA (Claude), sous contrôle du responsable de traitement |
-| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.**<br>⏳ **v1.3 (2026-09-01) : ajout du Traitement 9 (diagnostic express du stand, base légale consentement, conservation 24 mois) — à contresigner par le responsable de traitement.** |
+| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.**<br>⏳ **v1.3 (2026-09-01) : ajout du Traitement 9 (diagnostic express du stand, base légale consentement, conservation 24 mois) — à contresigner par le responsable de traitement.**<br>⏳ **v1.4 (2026-09-02) : le sous-traitant du transport d'emails est **Google Workspace**, pas OVH — à contresigner par le responsable de traitement.** |
 
 > Ce registre couvre les traitements de données à caractère personnel opérés via l'application interne **QualiOF** (CRM/back-office de Start Academy, non commercialisé à des tiers) déployée sur infrastructure cloud (voir § Localisation des données). Il est versionné dans le dépôt de code (`docs/rgpd/`) et exportable en PDF pour présentation à un auditeur Qualiopi ou à la CNIL.
 
@@ -62,7 +62,7 @@
 | **Base légale** | Exécution du contrat (art. 6.1.b) ; obligations comptables et fiscales (art. 6.1.c). |
 | **Catégories de données** | Identité et coordonnées des payeurs (règle métier : l'auto-entrepreneur est son propre payeur — une relance facture peut donc toucher directement un apprenant), montants, dates d'échéance, emails de relance. |
 | **Catégories de personnes** | Payeurs : organisations (enseignes, financeurs OPCO/AGEFICE) et personnes physiques (apprenants auto-entrepreneurs). |
-| **Destinataires / sous-traitants** | Base et PDF factures : [dpa/supabase.md](dpa/supabase.md) · Envoi des relances : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) · Cron de relance : [dpa/railway.md](dpa/railway.md). |
+| **Destinataires / sous-traitants** | Base et PDF factures : [dpa/supabase.md](dpa/supabase.md) · Envoi des relances : [dpa/google.md](dpa/google.md) (SMTP Google Workspace) · Cron de relance : [dpa/railway.md](dpa/railway.md). ⚠ Au 2026-09-02 **aucune relance n'a jamais été transmise** : l'egress SMTP est bloqué chez Railway, d'où part le cron. |
 | **Durée de conservation** | Pièces comptables 10 ans (obligation légale du Code de commerce). Données de relance : durée du dossier. Validée par le responsable de traitement le 2026-07-07. |
 | **Mesures techniques** | `MAIL_DRY_RUN` actif tant que la bascule production n'est pas validée (aucun email réel), montants stockés en centimes, RBAC (rôle COMPTABLE), scoping `tenantId`. |
 
@@ -74,9 +74,9 @@
 | **Base légale** | Exécution du contrat de formation (art. 6.1.b). |
 | **Catégories de données** | Adresses email des apprenants et payeurs, contenus des emails (noms, sessions, pièces jointes documentaires). |
 | **Catégories de personnes** | Apprenants, payeurs, formateurs. |
-| **Destinataires / sous-traitants** | Transport SMTP : [dpa/ovh-smtp.md](dpa/ovh-smtp.md). |
+| **Destinataires / sous-traitants** | Transport SMTP : [dpa/google.md](dpa/google.md) — **Google Workspace** (`smtp.gmail.com:587`, compte d'envoi `formation@start-academy.fr`). La fiche [dpa/ovh-smtp.md](dpa/ovh-smtp.md) décrivait le fournisseur envisagé jusqu'au 2026-09-02 ; **aucun email n'a jamais transité par OVH** (le circuit était en `MAIL_DRY_RUN` jusqu'à l'activation, puis a été ouvert directement sur Workspace). |
 | **Durée de conservation** | Traces d'envoi (`EmailMessage`) conservées avec le dossier de formation. Validée par le responsable de traitement le 2026-07-07. |
-| **Mesures techniques** | **Aucun envoi de masse vers les apprenants sans action explicite** (exigence du responsable de traitement : `notifyLearners` défaut `false`, boutons manuels, opt-in par case à cocher) ; crons de relance préinscriptions/OPCO volontairement débranchés ; `MAIL_DRY_RUN` en staging ; connexion SMTP chiffrée (SSL :465). |
+| **Mesures techniques** | **Aucun envoi de masse vers les apprenants sans action explicite** (exigence du responsable de traitement : `notifyLearners` défaut `false`, boutons manuels, opt-in par case à cocher) ; crons de relance préinscriptions/OPCO volontairement débranchés ; `MAIL_DRY_RUN` en staging ; connexion SMTP chiffrée (STARTTLS :587) ; **garde-fou applicatif par catégorie** (`TenantEmailSettings`, fail-closed : sans case cochée, rien ne part). |
 
 ## Traitement 6 — Synchronisation Google Calendar (rappels formations)
 
@@ -124,9 +124,10 @@
 |---|---|
 | **Finalité** | Proposer à un visiteur de salon, en 90 secondes, la journée de formation du catalogue qui correspond à sa priorité déclarée ; lui envoyer par email le programme de cette journée ; permettre un rappel commercial qu'il a lui-même sollicité. |
 | **Base légale** | **Consentement** (art. 6.1.a) — case à cocher obligatoire et horodatée sur le formulaire, portant explicitement sur l'envoi du programme **et** sur le rappel. Sans la case, aucune donnée n'est enregistrée. |
+| **Minimisation vers l'IA** | Le prompt d'assemblage du programme ne contient **que les réponses aux questions fermées** et le programme du catalogue : ni prénom, ni nom, ni email, ni téléphone ne sont transmis à OpenRouter/Anthropic. |
 | **Catégories de données** | Réponses à 8 questions fermées de qualification professionnelle (rôle, taille d'équipe, origine des affaires, évolution des mandats, usage de l'IA, priorité déclarée, formation suivie dans l'année) ; créneau de rappel souhaité ; identité et coordonnées saisies (prénom, nom, email, téléphone — le téléphone devient obligatoire si la personne demande un rappel dans la semaine). **Aucune pièce, aucun document, aucune donnée sensible au sens de l'art. 9.** |
 | **Catégories de personnes** | Visiteurs professionnels du salon (agents et conseillers immobiliers, dirigeants d'agence) — prospects. |
-| **Destinataires / sous-traitants** | Base : [dpa/supabase.md](dpa/supabase.md) · Runtime du formulaire public : [dpa/vercel.md](dpa/vercel.md) · Assemblage du programme personnalisé par IA : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic en sous-sous-traitance : [dpa/anthropic.md](dpa/anthropic.md)) · Envoi de l'email : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) · Rattrapage des envois : [dpa/railway.md](dpa/railway.md). **Aucune diffusion à un tiers, aucune revente, aucun partage avec les autres exposants du salon.** |
+| **Destinataires / sous-traitants** | Base : [dpa/supabase.md](dpa/supabase.md) · Runtime du formulaire public : [dpa/vercel.md](dpa/vercel.md) · Assemblage du programme personnalisé par IA : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic en sous-sous-traitance : [dpa/anthropic.md](dpa/anthropic.md)) · Envoi de l'email : [dpa/google.md](dpa/google.md) (SMTP Google Workspace) · Rattrapage des envois : cron Vercel, même runtime que le formulaire ([dpa/vercel.md](dpa/vercel.md)) — **Railway ne participe plus à ce traitement**. **Aucune diffusion à un tiers, aucune revente, aucun partage avec les autres exposants du salon.** |
 | **Durée de conservation** | **24 mois** à compter de la collecte pour les prospects sans suite (durée usuelle recommandée par la CNIL en prospection commerciale), puis effacement. Un prospect qui devient apprenant bascule dans le Traitement 1 et suit sa durée. Effacement immédiat sur demande (`laurent@start-academy.fr`). La soumission (`DiagnosticSubmission`) est supprimée **en cascade** avec le lead — pas de PII orpheline. |
 | **Mesures techniques** | Consentement horodaté et tracé en clair dans la fiche du prospect ; le formulaire ne LIT aucune donnée, il n'en crée que ; aucune écriture en base avant validation du formulaire complet ; plafond de 250 soumissions / 15 min / IP (garde-fou anti-remplissage automatisé, calibré pour un événement où plusieurs centaines de personnes partagent la même IP publique) ; validation serveur de toutes les réponses contre la liste fermée des questions (le navigateur ne dicte pas le contenu enregistré) ; envoi de l'email conditionné à une case dédiée dans Paramètres → Emails (fail-closed : décochée, rien ne part) ; email transactionnel unitaire déclenché par la personne elle-même — **aucun envoi de masse**. |
 | **Ce qui n'est PAS fait** | Pas de création de compte, pas de mot de passe, pas d'upload de pièce, pas de cookie de mesure d'audience sur la page publique, pas de croisement avec un fichier acheté, pas de profilage automatisé produisant un effet juridique (le routage vers une problématique est un simple barème de points, explicable et communicable à la personne). |
@@ -143,7 +144,7 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 | **Supabase** (projet `gntlqyscahbgjrmsbzil`) | Base Postgres + Storage (pièces CNI/RIB/PDF) | `eu-west-1` (définitive — région immuable, dérogation actée) | Irlande (UE) |
 | **Vercel** | Application + fonctions serverless | `cdg1` | France (Paris) |
 | **Railway** | Worker de génération + moteurs PDF | `europe-west4` | Pays-Bas (UE) |
-| **OVH** (SMTP `ssl0.ovh.net:465`) | Envoi d'emails | Infrastructure OVH | France (UE) |
+| **Google Workspace** (SMTP `smtp.gmail.com:587`) | Envoi d'emails | Infrastructure mondiale Google — transferts encadrés par le Cloud Data Processing Addendum | Google Ireland Ltd (contractant UE) |
 
 **Note Vercel :** les fonctions s'exécutent en `cdg1` (Paris) mais le réseau edge de Vercel est mondial — les réponses HTTP transitent par le point de présence le plus proche du visiteur (voir [dpa/vercel.md](dpa/vercel.md)).
 
@@ -164,15 +165,15 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 | 3 | Supabase | Base Postgres + Storage | TOUTE la base (PII apprenants, `SensitiveData`) + pièces (CNI/RIB/PDF) | [dpa/supabase.md](dpa/supabase.md) |
 | 4 | Vercel | Hébergement application | Runtime app : cookies de session, formulaire public de préinscription | [dpa/vercel.md](dpa/vercel.md) |
 | 5 | Railway | Worker + moteurs PDF | Génération de documents, logs (audités D-17, plan 22-02) | [dpa/railway.md](dpa/railway.md) |
-| 6 | Google | Calendar (events sessions) + Drive (programmes) | Noms sessions/formateurs, emails apprenants en attendees | [dpa/google.md](dpa/google.md) |
-| 7 | OVH | SMTP transactionnel | Emails apprenants/payeurs (convocations, relances factures) | [dpa/ovh-smtp.md](dpa/ovh-smtp.md) |
+| 6 | Google | Calendar (events sessions) + Drive (programmes) + **SMTP transactionnel** (`smtp.gmail.com:587`) | Noms sessions/formateurs, emails apprenants en attendees ; contenu des emails sortants (convocations, relances, programme du diagnostic) | [dpa/google.md](dpa/google.md) |
+| ~~7~~ | ~~OVH~~ | ~~SMTP transactionnel~~ | **Écarté le 2026-09-02** — jamais activé, aucun email transmis. Fiche conservée à titre d'historique : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) |
 
 ## Mesures techniques et organisationnelles (synthèse)
 
 - **Isolement des données sensibles** : table `SensitiveData` séparée (n° SS, pièce d'identité), relation 1:1 avec `Person`, suppression en cascade.
 - **Storage privé** : bucket non public, accès exclusivement par **signed URL à TTL de quelques minutes** ; upload direct-to-storage (les pièces ne transitent pas par les serveurs applicatifs).
 - **Contrôle d'accès** : RBAC 6 rôles (ADMIN/MANAGER/FORMATEUR/COMMERCIAL/COMPTABLE/LECTEUR), authentification Lucia + argon2, multi-tenant `tenantId` systématique sur les requêtes.
-- **Régions EU verrouillées** par écrit (Phase 17) avec checklist anti-défaut-US ; Supabase `eu-west-1`, Vercel `cdg1`, Railway `europe-west4`.
+- **Régions EU verrouillées** par écrit (Phase 17) avec checklist anti-défaut-US ; Supabase `eu-west-1`, Vercel `cdg1`, Railway `europe-west4`. Le seul maillon hors UE par nature est le transport d'emails (Google Workspace) — encadré par le CDPA et ses clauses contractuelles types.
 - **Sauvegardes** : backups Supabase quotidiens, rétention 7 jours, stockés dans la même région que le projet (eu-west-1, UE).
 - **Emails** : dry-run par défaut hors production, aucun envoi de masse apprenants sans action explicite (opt-in), SMTP chiffré :465.
 - **Logs** : audit des `console.*` réalisé (plan 22-02) — les logs applicatifs référencent des identifiants techniques, jamais nom/CNI/RIB en clair.

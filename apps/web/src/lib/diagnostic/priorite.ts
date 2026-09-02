@@ -99,3 +99,46 @@ export function ligneSuiviCrm(input: {
   const suffixe = input.rappel ? RAPPEL_LIBELLE_CRM[input.rappel] : 'rappel non précisé';
   return `[${input.niveau}] Diagnostic — ${titre} — ${suffixe}`;
 }
+
+/**
+ * Relit une ligne de suivi écrite par `ligneSuiviCrm`.
+ *
+ * Pourquoi relire plutôt que stocker : le niveau et le choix de rappel ne sont
+ * pas des colonnes de `DiagnosticSubmission`, ils vivent dans la ligne de
+ * `lastAction`. La vue « à rappeler aujourd'hui » a besoin de les retrouver
+ * pour ne pas afficher les 80 leads du salon indistinctement.
+ *
+ * Écriture et lecture partagent DONC le même fichier, et un test aller-retour
+ * les tient ensemble : le jour où le format de `ligneSuiviCrm` change, c'est ce
+ * test qui casse — pas la liste des rappels, silencieusement, un 10 septembre à
+ * 9 h du matin.
+ *
+ * Rend `null` sur toute ligne qui n'a pas été écrite par le diagnostic (un lead
+ * saisi à la main, une action commerciale ultérieure).
+ */
+export function lireSuiviCrm(
+  ligne: string | null | undefined,
+): { niveau: NiveauPriorite; rappel: RappelValue | null } | null {
+  if (!ligne) return null;
+  const m = /^\[([ABC])\] Diagnostic — .+ — (.+)$/.exec(ligne.trim());
+  if (!m) return null;
+
+  const niveau = m[1] as NiveauPriorite;
+  const suffixe = m[2]!;
+  const entree = (Object.entries(RAPPEL_LIBELLE_CRM) as [RappelValue, string][]).find(
+    ([, libelle]) => libelle === suffixe,
+  );
+  return { niveau, rappel: entree ? entree[0] : null };
+}
+
+/**
+ * Faut-il ce lead dans la liste « à rappeler aujourd'hui » ?
+ *
+ * Priorité A ET rappel demandé cette semaine : ce sont les seuls à qui on a
+ * promis un appel à date. Les B se rappellent à J+2/J+3, les C reçoivent
+ * l'email et rien d'autre — les noyer ensemble, c'est gaspiller les meilleurs.
+ */
+export function estARappelerMaintenant(lastAction: string | null | undefined): boolean {
+  const suivi = lireSuiviCrm(lastAction);
+  return suivi?.niveau === 'A' && suivi.rappel === 'CETTE_SEMAINE';
+}

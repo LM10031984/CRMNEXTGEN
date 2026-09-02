@@ -6,7 +6,7 @@
  *    AGEFICE, qui sont un droit du prospect, pas une facture ;
  *  - aucun chiffre de satisfaction (les notes en base sont générées par IA) ;
  *  - UN SEUL lien cliquable ;
- *  - une signature nominative ;
+ *  - une signature d’équipe, avec un humain joignable en dessous ;
  *  - le repli lisible quand le sur-mesure a échoué.
  */
 
@@ -156,12 +156,16 @@ describe('resolveCtaUrl', () => {
 });
 
 describe('renderDiagnosticProgrammeEmail — signature et contenu', () => {
-  it('signe nominativement, jamais « L’équipe »', () => {
+  it("signe « L'équipe Start Academy », avec le prénom et le portable du responsable en dessous", () => {
     const { html, text } = render();
+    // Comme pour le titre produit ci-dessous : l'apostrophe est échappée dans le
+    // HTML et brute dans le texte. Chercher la même chaîne dans les deux ferait
+    // échouer un template pourtant correct.
+    expect(text).toContain("L'équipe Start Academy");
+    expect(html).toContain('L&#39;équipe Start Academy');
     for (const contenu of [html, text]) {
       expect(contenu).toContain('Laurent MARX');
       expect(contenu).toContain('06 31 05 63 90');
-      expect(contenu).not.toMatch(/L['’]équipe/);
     }
   });
 

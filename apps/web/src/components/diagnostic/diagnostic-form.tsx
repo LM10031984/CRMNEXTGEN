@@ -75,7 +75,14 @@ export function DiagnosticForm({ journees }: { journees: JourneeInfo[] }) {
     const sel = choisirJournee(resultat.dominante, reponses);
     if (!sel) return null;
     const dispo = new Map(journees.map((j) => [j.code, j]));
-    return dispo.get(sel.code) ?? journees[0] ?? null;
+    // MÊME cascade que le worker (journée Faros de l'axe, puis ses replis) :
+    // l'écran doit annoncer la journée que le prospect recevra réellement par
+    // email. Deux résolutions divergentes, et on lui promet A pour envoyer B.
+    for (const code of sel.codes) {
+      const trouvee = dispo.get(code);
+      if (trouvee) return trouvee;
+    }
+    return journees[0] ?? null;
   }, [resultat.dominante, reponses, journees]);
 
   const question = QUESTIONS[index];
@@ -376,9 +383,18 @@ function EcranResultat({
           onChange={(e) => setContact({ ...contact, rgpdAccepted: e.target.checked })}
           className="mt-0.5 h-5 w-5 shrink-0 rounded border-border"
         />
+        {/*
+          « Transmises à personne d'autre » était faux : envoyer cet email, c'est
+          par construction passer par des sous-traitants (base, hébergement,
+          assemblage du programme, SMTP) — ils sont listés au Traitement 9 du
+          registre. Ce qu'on peut promettre sans mentir, c'est ce que le prospect
+          craint vraiment un soir de salon : que son email finisse revendu ou sur
+          le stand d'à côté. C'est vrai, et c'est vérifiable.
+        */}
         <span className="text-slate-700">
           J'accepte que Start Academy m'envoie ce programme et me recontacte à ce sujet. Mes
-          données sont hébergées dans l'Union européenne et ne sont transmises à personne d'autre.
+          données sont hébergées dans l'Union européenne, jamais revendues ni communiquées à un
+          autre exposant, et effaçables sur simple demande.
         </span>
       </label>
 

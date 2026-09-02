@@ -1,5 +1,13 @@
 # Fiche DPA — OVH (SMTP)
 
+> ⛔ **FICHE ÉCARTÉE LE 2026-09-02 — conservée à titre d'historique.**
+> Le transport d'emails de QualiOF est assuré par **Google Workspace**
+> (`smtp.gmail.com:587`) — voir [google.md](google.md). OVH avait été retenu sur
+> hypothèse au 2026-07-06, puis démenti au 2026-08-03 (la boîte de l'organisme est
+> Workspace, pas OVH). **Aucun email n'a jamais transité par OVH** : le circuit est
+> resté en `MAIL_DRY_RUN` jusqu'à son ouverture, directement sur Workspace.
+> Ne pas produire cette fiche à un auditeur comme sous-traitant actif.
+
 | Champ | Valeur |
 |---|---|
 | **Fournisseur** | OVH SAS (OVHcloud) — société française, siège à Roubaix |
