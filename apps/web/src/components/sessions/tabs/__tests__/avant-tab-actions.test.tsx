@@ -162,3 +162,60 @@ describe('TabAvant — une ligne par doc/stagiaire (dispatchGenerateDoc)', () =>
     });
   }
 });
+
+
+/**
+ * Retour Laurent du 02/09 : « j'ai pas de bouton pour regénérer le programme ».
+ *
+ * L'action existait — mais sous la forme d'une icône de 32 px sans texte, collée
+ * à un lien « Ouvrir ». Invisible en pratique, alors que c'est le SEUL moyen de
+ * refaire un document après une correction (tarif de session revu, représentant
+ * légal ajouté à la fiche entreprise…).
+ *
+ * Test de puissance : remonter le bouton en icône seule (retirer le texte
+ * « Régénérer ») fait rougir « porte un libellé VISIBLE ».
+ */
+describe('TabAvant — régénérer un document déjà produit', () => {
+  const dejaGenere: DocDockItem[] = [
+    {
+      key: 'programme',
+      docType: 'PROGRAMME',
+      label: 'Programme de formation',
+      section: 'shared',
+      state: 'generated',
+      pdfUrl: '/api/documents/doc-1',
+    },
+  ];
+
+  it('porte un libellé VISIBLE, pas seulement une icône', () => {
+    render(<TabAvant sessionId={SESSION_ID} items={dejaGenere} canGenerate />);
+    // getByText ne voit que le texte rendu : une icône seule ne le satisfait pas.
+    expect(screen.getByText(/^Régénérer$/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /régénérer programme de formation/i })).toBeDefined();
+  });
+
+  it('régénère bien le PROGRAMME de CETTE session, en forçant', async () => {
+    render(<TabAvant sessionId={SESSION_ID} items={dejaGenere} canGenerate />);
+    fireEvent.click(screen.getByRole('button', { name: /régénérer programme de formation/i }));
+
+    await waitFor(() => expect(dispatchGenerateDoc).toHaveBeenCalledTimes(1));
+    const arg = dispatchGenerateDoc.mock.calls[0]![0] as {
+      sessionId: string;
+      docType: string;
+      force?: boolean;
+    };
+    expect(arg.sessionId).toBe(SESSION_ID);
+    expect(arg.docType).toBe('PROGRAMME');
+    expect(arg.force).toBe(true);
+  });
+
+  it('laisse « Ouvrir » accessible à côté', () => {
+    render(<TabAvant sessionId={SESSION_ID} items={dejaGenere} canGenerate />);
+    expect(screen.getByText(/Ouvrir/)).toBeDefined();
+  });
+
+  it('ne propose rien à qui n’a pas le droit de générer', () => {
+    render(<TabAvant sessionId={SESSION_ID} items={dejaGenere} canGenerate={false} />);
+    expect(screen.queryByText(/^Régénérer$/)).toBeNull();
+  });
+});

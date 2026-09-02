@@ -276,10 +276,16 @@ function DocLine({
               disabled={busy}
               // Nom accessible = label du doc → ciblé par les tests par docType.
               aria-label={`Régénérer ${item.label}`}
-              title="Régénérer"
-              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
+              title="Régénérer ce document (le tarif ou le contenu a changé)"
+              // LIBELLÉ VISIBLE, pas une icône seule (retour Laurent 02/09 :
+              // « j'ai pas de bouton pour regénérer le programme »). L'action
+              // existait, mais un carré de 32 px sans texte à côté d'un lien
+              // « Ouvrir » ne se voit pas — et c'est le seul moyen de refaire
+              // un document après une correction de tarif ou de fiche.
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Régénérer
             </button>
           )}
         </div>
