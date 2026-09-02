@@ -17,7 +17,8 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
-import { resoudreTarifProgramme } from './tarif-programme';
+import { resoudrePrixProgramme } from './tarif-programme';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 
 /**
  * Cœur SANS auth du programme PRODUIT (réutilisable par scripts pipeline).
@@ -183,13 +184,36 @@ export async function generateProgrammeForSessionCore(
       product: true,
       location: true,
       trainers: { include: { person: true } },
+      participants: {
+        select: {
+          priceHT: true,
+          sponsorOrgId: true,
+          sponsorOrg: { select: { legalForm: true } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+        },
+      },
     },
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
   const product = session.product;
   if (!product) return { ok: false, error: 'Produit lié à la session manquant' };
 
-  const prixHT = resoudreTarifProgramme(session.pricePerLearner, product.priceHT);
+  // Une convention d'entreprise engage sur un montant GLOBAL : le programme doit
+  // annoncer ce total, pas un prix par tête (correction du 02/09).
+  const prix = resoudrePrixProgramme({
+    inscrits: session.participants.map((p) => ({
+      priceHT: Number(p.priceHT),
+      sponsorOrgId: p.sponsorOrgId,
+      couvertParConvention: releveDeLaConvention({
+        sponsorLegalForm: p.sponsorOrg?.legalForm,
+        roleChezSponsor:
+          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+      }),
+    })),
+    tarifSession: session.pricePerLearner,
+    prixProduit: product.priceHT,
+  });
+  const prixHT = prix.montantHT;
   if (!(prixHT > 0)) {
     return {
       ok: false,
@@ -223,6 +247,7 @@ export async function generateProgrammeForSessionCore(
     produitCode: product.code,
     produitDureeHeures: product.durationHours,
     produitPriceHT: prixHT,
+    prixMode: prix.mode,
     produitObjectifs: objectives,
     produitProgrammeMd: programmeMd,
     produitPrerequisites: product.prerequisites,
