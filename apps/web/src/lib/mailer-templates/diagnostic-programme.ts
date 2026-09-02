@@ -106,7 +106,6 @@ export function resolveCtaUrl(envUrl: string | undefined, ofPhone: string): stri
   return tel ? `tel:${tel}` : null;
 }
 
-/** Signature NOMINATIVE : un email d'OF signé par un humain joignable convertit mieux. */
 /**
  * Qui signe. Exporté parce que les relances J+4 / J+10 signent la MÊME
  * personne : deux résolutions séparées, et le prospect reçoit un programme
