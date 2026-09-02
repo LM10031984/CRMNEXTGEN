@@ -8,12 +8,20 @@ allowed-tools: Bash(pnpm *) Read Grep Glob
 
 ## Le trou que cette commande couvre
 
-`Document` stocke `hashSha256` (empreinte du **PDF produit**) mais **rien sur
-les données d'entrée**. Aucun champ ne dit « ce PDF a été fabriqué à partir de
-tel prix, telles dates, tel lieu ». Conséquence : on modifie une session après
-coup, les PDF restent, et rien dans l'application ne signale qu'ils mentent.
-C'est le mode de défaillance le plus silencieux du produit — il ne se voit qu'en
-audit ou au refus du financeur.
+`Document` stocke `hashSha256` (empreinte du **PDF produit**) : il dit que le
+fichier n'a pas bougé, pas qu'il raconte encore la vérité. On modifie une
+session après coup, les PDF restent, et rien ne signale qu'ils mentent. C'est le
+mode de défaillance le plus silencieux du produit — il ne se voit qu'en audit ou
+au refus du financeur.
+
+**Depuis le 02/09/2026, une partie du trou est fermée en base** (lot 0 · 0.2) :
+`Document.sourceFingerprint` porte l'empreinte des champs d'entrée réellement
+rendus, et `findStaleDocumentIds` rend un verdict binaire. Mais l'empreinte ne
+se pose qu'à la GÉNÉRATION : tout document produit avant cette date a
+`sourceFingerprint = null`, verdict « inconnu ». **C'est exactement le parc que
+cette commande couvre** — l'heuristique de dates ci-dessous reste la seule
+méthode pour le passé, et pour les types hors périmètre de l'empreinte
+(EMARGEMENT, FACTURE).
 
 ## 1. Détecter
 
@@ -35,7 +43,10 @@ postérieur à son `createdAt`.
 
 Ajoute trois contrôles indépendants de l'horodatage :
 
-- `ClosureJob.usedStub = true` → contenu générique, jamais personnalisé
+- `ClosureJob.usedStub = true` (ou `PedagogicalAsset.rawJson.source = 'stub'`)
+  → contenu générique, jamais personnalisé. Depuis le 02/09 la fiche session le
+  signale déjà et le pack ne se télécharge plus sans confirmation ; la commande
+  sert alors à balayer les sessions qu'on n'ouvre pas
 - clé storage qui ne résout pas (signed URL en erreur) → preuve fantôme
 - montant écrit dans la convention ≠ `participant.priceHT` actuel (relire le PDF)
 
@@ -44,6 +55,9 @@ Ajoute trois contrôles indépendants de l'horodatage :
 1. **Document engagé et faux** — convention signée ou dossier OPCO envoyé dont
    les données ont bougé depuis. Ni régénérable ni effaçable : avenant ou
    nouveau dossier. À remonter à Laurent nommément.
+   `getParticipantDocEngagement` répond déjà à la question, et distingue le
+   « peut-être envoyé » (document antérieur au suivi des envois du 02/09) du
+   « engagé » prouvé.
 2. **Document émis et faux** — envoyé mais pas encore contractuel. Régénérer
    puis renvoyer, en le disant au destinataire.
 3. **Document dormant et faux** — jamais sorti de l'outil. Régénération simple.
@@ -58,11 +72,25 @@ Ne régénère jamais la catégorie 1 sans arbitrage humain explicite.
 `regenerateBatchParticipantDocs` (batch closure). Vérifie ensuite le contenu du
 PDF produit, pas seulement le code retour. `AuditLog action: 'documents.regenerate'`.
 
-## 4. Le correctif de fond à proposer
+## 4. Ce qui est déjà outillé (ne pas le réécrire)
 
-Si Laurent veut fermer le trou pour de bon : ajouter à `Document` un
-`sourceFingerprint String?` = SHA-256 du JSON des champs d'entrée effectivement
-rendus, calculé au moment de la génération. Un helper
-`isDocumentStale(doc)` recalcule l'empreinte et compare. Le badge « à
-régénérer » devient alors dérivable partout (fiche session, matrice Qualiopi,
-pack de fin de formation) au lieu d'être deviné à la date.
+Livré le 02/09/2026, lot 0 · 0.2 et 0.3 :
+
+| Besoin | Où c'est |
+|---|---|
+| Empreinte des données d'entrée | `Document.sourceFingerprint`, posée à la génération |
+| Projection par type de document | `lib/docs/source-fingerprint.ts` (PUR, testable sans base) |
+| Verdict `unknown` / `fresh` / `stale` | `getDocumentStaleness(tenantId, docId)` |
+| Verdict pour toute une session | `findStaleDocumentIds(tenantId, sessionId)` — un seul chargement du graphe |
+| « ce document est-il déjà sorti ? » | `getDocumentEngagement` / `getParticipantDocEngagement` (`lib/docs/document-engagement.ts`) |
+| Contenu générique bloquant la remise | blocker `stub_documents` (`blocks: 'delivery'`) dans `getSessionCompleteness` |
+
+Deux règles à respecter en étendant l'empreinte :
+
+- **une seule fonction de calcul**, appelée à l'écriture ET au contrôle ;
+- **aucune valeur dérivée de `new Date()`** dans une projection, sinon le
+  document devient « périmé » le lendemain sans que rien n'ait bougé.
+
+Restent à faire si le besoin se présente : `EMARGEMENT` (porté par
+`PedagogicalAsset`, qui n'a pas la colonne) et `FACTURE` (`Invoice.sourceFingerprint`
+appartient au lot 2.1 — spec facturation électronique du 02/09).
