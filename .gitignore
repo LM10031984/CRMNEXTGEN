@@ -79,3 +79,17 @@ secrets/
 # Documents générés égarés dans l'arbre source. Une vraie facture client a été
 # balayée par un `git add -A` le 01/09/2026 : plus jamais.
 apps/web/src/app/app/**/*.pdf
+
+# Doublons de synchronisation iCloud Drive. iCloud renomme « foo.ts » en
+# « foo 2.ts » quand il croit voir deux versions d'un même fichier ; le dépôt en
+# a accumulé 250, jusque dans src/ et les tests.
+# Mesuré le 02/09/2026 : ils ne cassent NI tsc (des modules dupliqués ne sont pas
+# une erreur TypeScript, `tsc --noEmit` sort à 0 avec eux en place) NI vitest
+# (« foo.test 2.ts » ne correspond pas au motif `*.test.ts`) NI le routage Next
+# (seul `page.tsx` exact fait une route). Le vrai coût est humain : un grep qui
+# ramène deux fois chaque résultat, et le risque d'éditer la copie morte.
+# Aucun fichier volontaire de ce dépôt ne porte un nom « <espace><chiffre> » —
+# vérifié le 02/09/2026 sur les 121 fichiers suivis correspondants : zéro faux
+# positif. Si un jour un nom légitime en porte un, l'exclure avec « ! ».
+* [2-9].*
+* [2-9]
