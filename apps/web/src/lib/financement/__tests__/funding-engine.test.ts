@@ -74,6 +74,43 @@ function input(over: Partial<FundingComputeInput> = {}): FundingComputeInput {
   };
 }
 
+describe("D-11 — l'arrondi du dimensionnement ne perd aucun droit", () => {
+  it('arrondit à la demi-journée SUPÉRIEURE, pas à la plus proche', () => {
+    // 600 € de droits ÷ 42 €/h = 14,29 h ÷ 8 h = 1,79 demi-journée.
+    // À l'inférieur : 1 demi-journée, et 264 € dorment jusqu'au 31 décembre.
+    // Au plus proche : 2. Au supérieur : 2. Le cas qui sépare vraiment les
+    // deux est plus bas.
+    const r = computeFunding(
+      input({ participants: [indé('p1', 90_000, { cfpEligibleBudget: 600 })] }),
+    );
+    expect(r.halfDays).toBe(2);
+  });
+
+  it('monte à la demi-journée du dessus même quand le plus proche serait en dessous', () => {
+    // 400 € ÷ 42 = 9,52 h ÷ 8 = 1,19 demi-journée. Math.round donnerait 1,
+    // Math.ceil donne 2 : on consomme le droit plutôt que d'en laisser dormir.
+    const r = computeFunding(
+      input({ participants: [indé('p1', 90_000, { cfpEligibleBudget: 400 })] }),
+    );
+    expect(r.halfDays).toBe(2);
+  });
+
+  it("ne propose rien quand il n'y a aucun droit — l'arrondi supérieur ne crée pas de volume", () => {
+    const r = computeFunding(input({ participants: [indé('p1', 3_000)] }));
+    expect(r.halfDays).toBe(0);
+    expect(r.totalPrice).toBe(0);
+  });
+
+  it("le dépassement créé par l'arrondi tombe en reste à charge, jamais en prise en charge", () => {
+    const r = computeFunding(
+      input({ participants: [indé('p1', 90_000, { cfpEligibleBudget: 400 })] }),
+    );
+    expect(r.participants[0]!.coverage).toBeLessThanOrEqual(400);
+    expect(r.totalRemainder).toBeGreaterThan(0);
+    expect(r.totalCoverage).toBeLessThanOrEqual(r.totalPrice);
+  });
+});
+
 describe('Fixture canonique — 4 agents indépendants au-dessus du seuil', () => {
   const result = computeFunding(
     input({

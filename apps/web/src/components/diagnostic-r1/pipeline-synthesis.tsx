@@ -131,12 +131,19 @@ export function PipelineSynthesisPanel({ synthesis }: { synthesis: PipelineSynth
                 <li key={stage.key} className="text-xs leading-relaxed">
                   <strong>{stage.label}</strong> — {stage.conversionPercent} % contre{' '}
                   {stage.benchmark} % attendus.
-                  {stage.annualImpactEuros !== null && stage.annualImpactEuros > 0 && (
+                  {/* D-12 : on n'avance un montant que s'il reste tenable. */}
+                  {stage.impactPresentation === 'montant' && (
                     <>
                       {' '}
-                      Revenir au repère représenterait de l’ordre de{' '}
-                      <strong>{eur.format(stage.annualImpactEuros)}</strong> de chiffre d’affaires
-                      supplémentaire sur un an.
+                      Reprendre la moitié du chemin vaudrait de l’ordre de{' '}
+                      <strong>{eur.format(stage.headlineImpactEuros!)}</strong> de chiffre
+                      d’affaires supplémentaire sur un an.
+                    </>
+                  )}
+                  {stage.impactPresentation === 'potentiel_majeur' && (
+                    <>
+                      {' '}
+                      <strong>Potentiel majeur — à chiffrer ensemble.</strong>
                     </>
                   )}
                 </li>
@@ -146,6 +153,24 @@ export function PipelineSynthesisPanel({ synthesis }: { synthesis: PipelineSynth
               Projection à tunnel inchangé par ailleurs, sur les volumes déclarés — un ordre de
               grandeur pour situer l’enjeu, pas un engagement.
             </p>
+            {s.weakestLinks.some((st) => st.impactPresentation === 'potentiel_majeur') && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[11px] text-muted-foreground">
+                  Voir le calcul complet — usage interne
+                </summary>
+                <ul className="mt-1 space-y-1">
+                  {s.weakestLinks
+                    .filter((st) => st.impactPresentation === 'potentiel_majeur')
+                    .map((st) => (
+                      <li key={st.key} className="text-[11px] text-muted-foreground">
+                        {st.label} : combler tout l’écart représenterait{' '}
+                        {eur.format(st.annualImpactEuros!)} sur un an — soit plus du quart du CA
+                        déclaré. Trop gros pour être annoncé tel quel en rendez-vous.
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">

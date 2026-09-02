@@ -33,11 +33,29 @@ export interface PipelineStage {
   /** Écart relatif au repère, en points de % — négatif = en retard. */
   gap: number | null;
   /**
-   * Ce que vaudrait, sur un an, le retour de cette étape à son repère.
-   * null quand le CA moyen par vente est inconnu : on ne chiffre pas un enjeu
-   * sans base — un montant inventé en rendez-vous ne se rattrape pas.
+   * Le calcul COMPLET : ce que vaudrait, sur un an, le retour de cette étape à
+   * son repère, tunnel inchangé par ailleurs. Reste dans le détail — ce n'est
+   * pas ce qu'on met en avant (D-12). null quand le CA moyen par vente est
+   * inconnu : on ne chiffre pas un enjeu sans base.
    */
   annualImpactEuros: number | null;
+  /**
+   * Le montant MIS EN AVANT (D-12, tranchée le 02/09/2026) : la moitié du
+   * chemin vers le repère, et seulement tant qu'elle reste sous 25 % du CA N-1.
+   * null au-delà — voir `impactPresentation`.
+   */
+  headlineImpactEuros: number | null;
+  /**
+   * Comment présenter l'enjeu :
+   *   'montant'          → afficher `headlineImpactEuros` ;
+   *   'potentiel_majeur' → le chiffre dépasse le plafond de crédibilité : on
+   *                        affiche le ratio et « potentiel majeur — à chiffrer
+   *                        ensemble », sans montant. Un chiffre qu'on ne peut
+   *                        pas tenir en rendez-vous détruit la crédibilité de
+   *                        tout le reste de l'audit ;
+   *   'aucun'            → rien à chiffrer (étape saine, ou données absentes).
+   */
+  impactPresentation: 'montant' | 'potentiel_majeur' | 'aucun';
   questionId: string;
 }
 
@@ -69,7 +87,26 @@ export const DEFAULT_BENCHMARKS = {
   compromisToActePercent: 85,
 } as const;
 
-export type BenchmarksOverride = Partial<typeof DEFAULT_BENCHMARKS>;
+/** Surcharges : `number`, pas les littéraux figés par `as const`. */
+export type BenchmarksOverride = Partial<Record<keyof typeof DEFAULT_BENCHMARKS, number>>;
+
+/**
+ * Règles de présentation de l'enjeu chiffré (D-12, tranchée le 02/09/2026).
+ *
+ * Le calcul complet — « si cette étape atteignait son repère, tout le reste
+ * inchangé » — donne des montants qui écrasent la conversation : 480 000 € sur
+ * une agence qui en fait 720 000. Mathématiquement juste, commercialement
+ * intenable. On met donc en avant la moitié du chemin, et on renonce au chiffre
+ * dès qu'il dépasse le quart du CA déclaré.
+ */
+export const IMPACT_PRESENTATION = {
+  /** Part du chemin vers le repère qu'on met en avant. */
+  headlineShare: 0.5,
+  /** Au-delà de ce % du CA N-1, plus aucun montant n'est affiché. */
+  capRevenuePercent: 25,
+} as const;
+
+export type ImpactPresentationOverride = Partial<Record<keyof typeof IMPACT_PRESENTATION, number>>;
 
 export interface PipelineInput {
   /** Réponses du diagnostic, indexées par `questionId`. */
@@ -77,6 +114,7 @@ export interface PipelineInput {
   benchmarks?: BenchmarksOverride;
   /** Sous ce retard relatif (en %), on ne parle pas de maillon faible. */
   weaknessTolerancePercent?: number;
+  impactPresentation?: ImpactPresentationOverride;
 }
 
 interface StageSpec {
@@ -161,6 +199,7 @@ function round1(n: number): number {
 
 export function computePipeline(input: PipelineInput): PipelineSynthesis {
   const benchmarks = { ...DEFAULT_BENCHMARKS, ...(input.benchmarks ?? {}) };
+  const presentation = { ...IMPACT_PRESENTATION, ...(input.impactPresentation ?? {}) };
   const tolerance = input.weaknessTolerancePercent ?? 0;
 
   const values = new Map<StageKey, number | null>();
@@ -170,6 +209,10 @@ export function computePipeline(input: PipelineInput): PipelineSynthesis {
   const revenue = num(input.answers['identity-revenue-n1']);
   const averageRevenuePerSale =
     sales !== null && revenue !== null && sales > 0 ? Math.round(revenue / sales) : null;
+
+  // Plafond de crédibilité : au-delà, on n'avance plus de montant (D-12).
+  const headlineCap =
+    revenue !== null && revenue > 0 ? (revenue * presentation.capRevenuePercent) / 100 : null;
 
   const actesPerMonth = values.get('actes') ?? null;
 
@@ -214,6 +257,21 @@ export function computePipeline(input: PipelineInput): PipelineSynthesis {
       annualImpactEuros = Math.max(0, Math.round(extraSalesPerYear * averageRevenuePerSale));
     }
 
+    // D-12 : on met en avant la moitié du chemin, et seulement si elle reste
+    // sous le plafond. Sans CA N-1 connu, aucun plafond n'est calculable — donc
+    // aucun montant n'est mis en avant : on ne peut pas juger de sa crédibilité.
+    let headlineImpactEuros: number | null = null;
+    let impactPresentation: PipelineStage['impactPresentation'] = 'aucun';
+    if (annualImpactEuros !== null && annualImpactEuros > 0) {
+      const headline = Math.round(annualImpactEuros * presentation.headlineShare);
+      if (headlineCap !== null && headline <= headlineCap) {
+        headlineImpactEuros = headline;
+        impactPresentation = 'montant';
+      } else {
+        impactPresentation = 'potentiel_majeur';
+      }
+    }
+
     return {
       key: spec.key,
       label: spec.label,
@@ -223,6 +281,8 @@ export function computePipeline(input: PipelineInput): PipelineSynthesis {
       status,
       gap,
       annualImpactEuros,
+      headlineImpactEuros,
+      impactPresentation,
       questionId: spec.questionId,
     };
   });

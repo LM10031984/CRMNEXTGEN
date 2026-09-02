@@ -126,14 +126,16 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
   //
   // Pour chaque participant, on convertit ses droits en heures finançables, on
   // en prend la moyenne (le groupe avance ensemble, tout le monde fait les
-  // mêmes demi-journées), et on arrondit à la demi-journée LA PLUS PROCHE.
+  // mêmes demi-journées), et on arrondit à la demi-journée SUPÉRIEURE.
   //
-  // L'arrondi au plus proche, et non à l'inférieur, est un choix assumé : c'est
-  // lui qui produit les 9 demi-journées de la fixture canonique (71,4 h de
-  // droits ÷ 8 h = 8,93). Arrondir à l'inférieur donnerait 8 demi-journées et
-  // laisserait 312 € de droits par agent inutilisés ; arrondir au plus proche
-  // consomme les droits et fait apparaître 24 €/agent de dépassement, visible
-  // en reste à charge. On préfère un écart montré à des droits perdus.
+  // D-11, tranchée par Laurent le 02/09/2026 : aucun droit ne se perd. 71,4 h
+  // de droits ÷ 8 h = 8,93 → 9 demi-journées. Arrondir à l'inférieur donnerait
+  // 8 demi-journées et laisserait 312 € par agent dormir jusqu'au 31 décembre,
+  // date à laquelle ils sont perdus. Le dépassement que crée l'arrondi apparaît
+  // en reste à charge, et l'éditeur de proposition (lot E) proposera de l'offrir
+  // en un clic sous le motif « arrondi de parcours ».
+  //
+  // Un écart montré vaut mieux qu'une enveloppe entamée pour rien.
   let halfDays: number;
   if (input.halfDaysOverride !== undefined && input.halfDaysOverride !== null) {
     halfDays = Math.max(0, Math.round(input.halfDaysOverride));
@@ -146,7 +148,7 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
       r.regime === 'OPCO_EP' ? opcoShareHours : r.hourlyRate > 0 ? r.budget / r.hourlyRate : 0,
     );
     const average = fundableHours.reduce((s, h) => s + h, 0) / fundableHours.length;
-    halfDays = Math.max(0, Math.round(average / conventionedHoursPerHalfDay));
+    halfDays = Math.max(0, Math.ceil(average / conventionedHoursPerHalfDay));
   }
 
   const onsiteHours = halfDays * onsiteHoursPerHalfDay;

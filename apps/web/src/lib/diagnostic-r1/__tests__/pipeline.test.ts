@@ -92,6 +92,70 @@ describe('Les deux maillons faibles', () => {
     expect(offres).toBeDefined();
     expect(offres!.annualImpactEuros).toBeGreaterThan(0);
   });
+});
+
+describe('D-12 — le montant mis en avant reste tenable en rendez-vous', () => {
+  it('met en avant la MOITIÉ du chemin vers le repère, pas la totalité', () => {
+    // Écart modeste : 20 offres pour 60 visites = 33,3 %, au-dessus du repère.
+    // On force un petit retard pour rester sous le plafond de crédibilité.
+    const r = computePipeline({
+      answers: { ...AGENCE, 'visits-per-month': 60, 'offers-per-month': 14 },
+    });
+    const offres = r.stages.find((s) => s.key === 'offres')!;
+    expect(offres.status).toBe('faible');
+    expect(offres.impactPresentation).toBe('montant');
+    expect(offres.headlineImpactEuros).toBe(Math.round(offres.annualImpactEuros! * 0.5));
+  });
+
+  it('renonce au montant au-delà de 25 % du CA N-1, et le dit autrement', () => {
+    // Le cas qui a motivé la décision : 9 offres pour 60 visites sur une agence
+    // à 720 000 €. Le calcul complet donne 480 000 €, la moitié 240 000 € —
+    // au-dessus des 180 000 € du plafond. Aucun montant ne sort.
+    const r = computePipeline({
+      answers: { ...AGENCE, 'visits-per-month': 60, 'offers-per-month': 9 },
+    });
+    const offres = r.stages.find((s) => s.key === 'offres')!;
+    expect(offres.annualImpactEuros).toBeGreaterThan(0);
+    expect(offres.impactPresentation).toBe('potentiel_majeur');
+    expect(offres.headlineImpactEuros).toBeNull();
+  });
+
+  it('le calcul complet reste disponible pour le détail, même quand on ne l’affiche pas', () => {
+    const r = computePipeline({
+      answers: { ...AGENCE, 'visits-per-month': 60, 'offers-per-month': 9 },
+    });
+    const offres = r.stages.find((s) => s.key === 'offres')!;
+    expect(offres.annualImpactEuros).toBe(480_000);
+  });
+
+  it("n'avance aucun montant sans CA N-1 : le plafond de crédibilité serait incalculable", () => {
+    const { 'identity-revenue-n1': _drop, ...sansCa } = AGENCE;
+    const r = computePipeline({
+      answers: { ...sansCa, 'offers-per-month': 6 },
+    });
+    for (const stage of r.stages) {
+      expect(stage.headlineImpactEuros).toBeNull();
+      expect(stage.impactPresentation).not.toBe('montant');
+    }
+  });
+
+  it('ne chiffre rien sur une étape saine', () => {
+    const r = computePipeline({ answers: AGENCE });
+    const mandats = r.stages.find((s) => s.key === 'mandats')!;
+    expect(mandats.status).toBe('conforme');
+    expect(mandats.impactPresentation).toBe('aucun');
+    expect(mandats.headlineImpactEuros).toBeNull();
+  });
+
+  it('les seuils sont paramétrables — le barème se recalibre sans redéploiement', () => {
+    const r = computePipeline({
+      answers: { ...AGENCE, 'visits-per-month': 60, 'offers-per-month': 9 },
+      impactPresentation: { headlineShare: 0.25, capRevenuePercent: 40 },
+    });
+    const offres = r.stages.find((s) => s.key === 'offres')!;
+    expect(offres.impactPresentation).toBe('montant');
+    expect(offres.headlineImpactEuros).toBe(120_000);
+  });
 
   it('ne chiffre aucun enjeu sans CA moyen par vente — pas de montant sorti du chapeau', () => {
     const r = computePipeline({
