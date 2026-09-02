@@ -103,6 +103,7 @@ export function MatrixRow({
         const pdfRef = 'pdfRef' in cell ? cell.pdfRef : undefined;
         const warning = 'warning' in cell ? cell.warning : undefined;
         const stale = 'stale' in cell ? cell.stale === true : false;
+        const stub = 'stub' in cell ? cell.stub === true : false;
         return (
           <td
             key={docType}
@@ -121,7 +122,7 @@ export function MatrixRow({
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
                   className="inline-flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
-                  <DocStatusBadge state="GENERATED" label={label} stale={stale} />
+                  <DocStatusBadge state="GENERATED" label={label} stale={stale} stub={stub} />
                 </a>
               ) : cell.state === 'MANUAL_OK' && pdfRef ? (
                 <a
@@ -150,6 +151,7 @@ export function MatrixRow({
                 state={cell.state}
                 pdfRef={pdfRef}
                 stale={stale}
+                stub={stub}
                 readOnly={readOnly}
                 participantName={participant.fullName}
                 docLabel={label}

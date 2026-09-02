@@ -445,6 +445,20 @@ export default async function SessionDetailPage({
   // simplement aucun avertissement (cf. findStaleDocumentIds).
   const staleDocIds = await findStaleDocumentIds(user.tenantId, session.id);
 
+  // Lot 0 · 0.3 (audit 28/08, E-3) — les documents au contenu GÉNÉRIQUE : l'IA
+  // a échoué et un texte de remplacement a été servi, identique d'un stagiaire
+  // à l'autre. Filtré côté Postgres (`rawJson.source`) pour ne pas charger les
+  // JSON de tous les assets de la session.
+  const stubAssets = await prisma.pedagogicalAsset.findMany({
+    where: {
+      tenantId: user.tenantId,
+      sessionId: session.id,
+      rawJson: { path: ['source'], equals: 'stub' },
+    },
+    select: { id: true },
+  });
+  const stubAssetIds = new Set(stubAssets.map((a) => a.id));
+
   // Bug I — proxy de présence aligné sur deriveCellState (derive-cell-state.ts L70-71).
   // La matrice considère la grille obs comme générée dès qu'un PedagogicalAsset existe
   // par participant ; on reflète ça côté sidebar pour cohérence visuelle.
@@ -548,6 +562,7 @@ export default async function SessionDetailPage({
       : null,
     participantsCount: session.participants.length,
     productId: session.product?.id ?? null,
+    stubDocsCount: stubAssetIds.size,
   });
 
   // Quick task 260525-kl5 — état agrégé des 6 catégories de docs de préparation
@@ -1129,7 +1144,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             )}
             {session.status === 'IN_PROGRESS' && (
@@ -1151,7 +1166,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             ) : (
               <StageCtaLink
@@ -1195,7 +1210,7 @@ export default async function SessionDetailPage({
             <GenerateClosurePackButton
               sessionId={session.id}
               participantCount={session.participants.length}
-              blockers={sessionCompleteness.blockers}
+              blockers={sessionCompleteness.generationBlockers}
             />
           ) : null
         }
@@ -1393,7 +1408,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             }
             pendantBlock={
@@ -1436,6 +1451,8 @@ export default async function SessionDetailPage({
             productDocs={productDocsMap}
             sessionDocs={sessionDocsMap}
             staleDocIds={staleDocIds}
+            stubAssetIds={stubAssetIds}
+            stubCount={stubAssetIds.size}
             zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
           />
         }

@@ -18,7 +18,7 @@
  * A11y : aria-label + title (couleur dupliquée par icône + texte FR).
  */
 
-import { Check, AlertTriangle, X, Minus, Loader2, History } from 'lucide-react';
+import { Check, AlertTriangle, X, Minus, Loader2, History, FileWarning } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DocStatusState as DocStatusStateType } from '@qualiof/shared';
 
@@ -37,11 +37,30 @@ export interface DocStatusBadgeProps {
    * donc le pas sur le vert « généré ».
    */
   stale?: boolean;
+  /**
+   * Lot 0 · 0.3 — contenu GÉNÉRIQUE (l'IA a échoué). Pire qu'un document
+   * absent : il ressemble à une preuve, et deux stagiaires ont le même texte.
+   * Passe donc devant « périmé » comme devant « généré ».
+   */
+  stub?: boolean;
 }
 
 const BASE_CLS = 'inline-flex items-center justify-center h-6 w-6 rounded-full';
 
-export function DocStatusBadge({ state, warning, label, hasUploadedPdf, stale }: DocStatusBadgeProps) {
+export function DocStatusBadge({ state, warning, label, hasUploadedPdf, stale, stub }: DocStatusBadgeProps) {
+  if (stub) {
+    const ariaLabel = `${label} : contenu générique, à régénérer`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Contenu générique — l'IA a échoué, ce document est identique d'un stagiaire à l'autre. À régénérer avant toute remise."
+        className={cn(BASE_CLS, 'bg-red-100 text-red-700 border border-red-400')}
+      >
+        <FileWarning className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
   if (stale && (state === 'GENERATED' || state === 'MANUAL_OK')) {
     const ariaLabel = `${label} : données modifiées depuis la génération`;
     return (

@@ -27,7 +27,12 @@ export type CellState =
    * recalculée). Absence de `stale` ne veut pas dire « à jour » : les documents
    * sans empreinte (parc antérieur) sont simplement inconnus.
    */
-  | { state: 'GENERATED'; pdfRef: CellPdfRef; stale?: boolean }
+  /**
+   * Lot 0 · 0.3 — `stub: true` = contenu GÉNÉRIQUE (l'IA a échoué, un texte de
+   * remplacement a été servi). Pire qu'un document absent : il a l'air d'une
+   * preuve et deux stagiaires ont mot pour mot le même.
+   */
+  | { state: 'GENERATED'; pdfRef: CellPdfRef; stale?: boolean; stub?: boolean }
   | { state: 'MANUAL_OK'; pdfRef?: CellPdfRef; warning?: 'no_proof' }
   | { state: 'MISSING' }
   | { state: 'NA' };
@@ -54,6 +59,8 @@ export type CellState =
  * @param staleDocIds Ids des documents dont les données d'entrée ont bougé
  *   depuis la génération (Lot 0 · 0.2). Paramètre optionnel : un appelant qui
  *   ne le passe pas obtient le comportement d'avant, sans faux « à jour ».
+ * @param stubAssetIds Ids des PedagogicalAsset au contenu générique
+ *   (`rawJson.source === 'stub'`, Lot 0 · 0.3). Optionnel de même.
  */
 export function deriveCellState(
   docType: string,
@@ -63,6 +70,7 @@ export function deriveCellState(
   sessionDocs: Map<string, { id: string }>,
   pedagogicalAssets: Map<string, { id: string }>,
   staleDocIds?: ReadonlySet<string>,
+  stubAssetIds?: ReadonlySet<string>,
 ): CellState {
   const manual = participant.docStatus?.[docType];
 
@@ -81,9 +89,16 @@ export function deriveCellState(
     return { state: 'GENERATED', pdfRef: { kind: 'document', id: partDoc.id }, ...isStale(partDoc.id) };
 
   // Les PedagogicalAsset n'ont pas de colonne `sourceFingerprint` : jamais
-  // marqués périmés, jamais marqués à jour non plus.
+  // marqués périmés, jamais marqués à jour non plus. En revanche ce sont les
+  // SEULS à pouvoir être génériques (les Document sont des gabarits
+  // déterministes — cf. resolve-docs.ts).
   const asset = pedagogicalAssets.get(docType);
-  if (asset) return { state: 'GENERATED', pdfRef: { kind: 'asset', id: asset.id } };
+  if (asset)
+    return {
+      state: 'GENERATED',
+      pdfRef: { kind: 'asset', id: asset.id },
+      ...(stubAssetIds?.has(asset.id) ? { stub: true } : {}),
+    };
 
   const sessDoc = sessionDocs.get(docType);
   if (sessDoc)
@@ -120,6 +135,7 @@ export function buildMatrixData(
   productDocs: Map<string, { id: string }>,
   sessionDocs: Map<string, { id: string }>,
   staleDocIds?: ReadonlySet<string>,
+  stubAssetIds?: ReadonlySet<string>,
 ): Array<{ participantId: string; cells: Record<string, CellState> }> {
   return participants.map((p) => {
     const cells: Record<string, CellState> = {};
@@ -132,6 +148,7 @@ export function buildMatrixData(
         sessionDocs,
         p.pedagogicalAssets,
         staleDocIds,
+        stubAssetIds,
       );
     }
     return { participantId: p.id, cells };

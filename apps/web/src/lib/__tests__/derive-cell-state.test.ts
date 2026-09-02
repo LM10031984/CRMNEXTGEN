@@ -227,3 +227,125 @@ describe('deriveCellState', () => {
     }
   });
 });
+
+/**
+ * Lot 0 (audit produit du 28/08) — deux états qui manquaient à la matrice :
+ *  · 0.2 « périmé »  : le document existe, mais une donnée qu'il porte a bougé ;
+ *  · 0.3 « générique » : le document existe, mais son contenu ne dit rien de ce
+ *    stagiaire — c'est le premier écart que cherche un auditeur.
+ *
+ * Les deux sont ADDITIFS : un appelant qui ne passe pas les ensembles retrouve
+ * exactement le comportement d'avant, sans « à jour » de complaisance.
+ */
+describe('lot 0 — périmé (0.2) et générique (0.3)', () => {
+  it('sans les ensembles, une cellule générée reste ce qu’elle était', () => {
+    const maps = emptyMaps();
+    maps.participantDocs.set('CONVENTION', { id: 'doc-1' });
+
+    const r = deriveCellState(
+      'CONVENTION',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+    );
+
+    expect(r.state).toBe('GENERATED');
+    expect('stale' in r && r.stale).toBeFalsy();
+    expect('stub' in r && r.stub).toBeFalsy();
+  });
+
+  it('un document dont la donnée a bougé est marqué périmé', () => {
+    const maps = emptyMaps();
+    maps.participantDocs.set('CONVENTION', { id: 'doc-1' });
+
+    const r = deriveCellState(
+      'CONVENTION',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      new Set(['doc-1']),
+    );
+
+    expect(r.state).toBe('GENERATED');
+    expect('stale' in r && r.stale).toBe(true);
+  });
+
+  it('le programme partagé (productDoc) est marqué périmé lui aussi', () => {
+    const maps = emptyMaps();
+    maps.productDocs.set('PROGRAMME', { id: 'prod-1' });
+
+    const r = deriveCellState(
+      'PROGRAMME',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      new Set(['prod-1']),
+    );
+
+    expect('stale' in r && r.stale).toBe(true);
+  });
+
+  it('un asset au contenu générique est marqué comme tel', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-1' });
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      new Set(['asset-1']),
+    );
+
+    expect(r.state).toBe('GENERATED');
+    expect('stub' in r && r.stub).toBe(true);
+  });
+
+  it('un asset qui n’est pas dans l’ensemble n’est pas marqué générique', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-2' });
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      new Set(['asset-1']),
+    );
+
+    expect('stub' in r && r.stub).toBeFalsy();
+  });
+
+  it('une preuve signée manuelle continue de primer sur tout', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-1' });
+    const docStatus: DocStatusMap = {
+      GRILLE_OBS: { state: 'MANUAL_OK', updatedAt: isoNow },
+    };
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      new Set(['asset-1']),
+    );
+
+    expect(r.state).toBe('MANUAL_OK');
+  });
+});

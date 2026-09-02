@@ -63,6 +63,11 @@ export interface DocCellMenuProps {
    * l'endroit où l'utilisateur peut le corriger.
    */
   stale?: boolean;
+  /**
+   * Lot 0 · 0.3 — contenu générique (IA en échec). Le remède est la
+   * régénération : on la met en avant plutôt que de la cacher.
+   */
+  stub?: boolean;
   /** Si true, lecture seule (FORMATEUR / COMMERCIAL / COMPTABLE) — pas de menu. */
   readOnly?: boolean;
   /** Pour tooltips & confirms. */
@@ -80,6 +85,7 @@ export function DocCellMenu({
   state,
   pdfRef,
   stale,
+  stub,
   readOnly,
   participantName,
   docLabel,
@@ -234,13 +240,21 @@ export function DocCellMenu({
             {showRegenerate && (
               <DropdownMenu.Item
                 onSelect={handleRegen}
-                className={cn(ITEM_CLS, stale && 'text-amber-800 font-medium')}
+                className={cn(
+                  ITEM_CLS,
+                  stub && 'text-red-700 font-medium',
+                  !stub && stale && 'text-amber-800 font-medium',
+                )}
               >
                 <RefreshCw
-                  className={cn('h-4 w-4', stale && 'text-amber-600')}
+                  className={cn('h-4 w-4', stub && 'text-red-600', !stub && stale && 'text-amber-600')}
                   aria-hidden="true"
                 />
-                {stale ? 'Re-générer — données modifiées depuis' : 'Re-générer'}
+                {stub
+                  ? 'Re-générer — contenu générique'
+                  : stale
+                    ? 'Re-générer — données modifiées depuis'
+                    : 'Re-générer'}
               </DropdownMenu.Item>
             )}
             {showDownload && (

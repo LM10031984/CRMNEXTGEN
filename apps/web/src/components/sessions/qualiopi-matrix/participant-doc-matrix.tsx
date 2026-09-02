@@ -59,6 +59,8 @@ export interface ParticipantDocMatrixProps {
    * affiche ce qu'elle affichait avant.
    */
   staleDocIds?: ReadonlySet<string>;
+  /** Lot 0 · 0.3 — PedagogicalAsset au contenu générique (`usedStub`). */
+  stubAssetIds?: ReadonlySet<string>;
 }
 
 export function ParticipantDocMatrix({
@@ -69,6 +71,7 @@ export function ParticipantDocMatrix({
   productDocs,
   sessionDocs,
   staleDocIds,
+  stubAssetIds,
 }: ParticipantDocMatrixProps) {
   // D-11 — RBAC matrice : ADMIN/MANAGER write, autres lecture seule.
   const readOnly = !['ADMIN', 'MANAGER'].includes(userRole);
@@ -104,6 +107,7 @@ export function ParticipantDocMatrix({
         sessionDocs,
         p.pedagogicalAssets,
         staleDocIds,
+        stubAssetIds,
       );
       return { docType, state };
     });

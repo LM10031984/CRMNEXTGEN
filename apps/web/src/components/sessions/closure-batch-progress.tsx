@@ -209,9 +209,25 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
             {canDownload && (
               <a
                 href={`/api/closure/${batchId}/zip`}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600"
+                // Lot 0 · 0.3 (audit 28/08, E-3) — le pack générique partait
+                // chez l'apprenant sans que rien ne le signale. On ne bloque
+                // pas le téléchargement (il faut parfois vérifier le contenu),
+                // on refuse juste qu'il parte sans avoir été lu.
+                onClick={(e) => {
+                  if (stubCount === 0) return;
+                  const ok = confirm(
+                    `Ce pack contient ${stubCount} document${stubCount > 1 ? 's' : ''} au contenu générique : l'IA a échoué et le texte de remplacement est le même d'un stagiaire à l'autre. C'est le premier écart que cherche un auditeur.\n\nTélécharger quand même ?`,
+                  );
+                  if (!ok) e.preventDefault();
+                }}
+                className={
+                  stubCount > 0
+                    ? 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-red-300 bg-red-50 text-red-800 text-sm font-medium hover:bg-red-100'
+                    : 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600'
+                }
               >
-                <Download className="h-4 w-4" /> Télécharger le zip
+                <Download className="h-4 w-4" />
+                {stubCount > 0 ? 'Télécharger le zip quand même' : 'Télécharger le zip'}
               </a>
             )}
           </div>

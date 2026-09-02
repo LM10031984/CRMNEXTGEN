@@ -134,8 +134,11 @@ export async function generateClosurePack(
     product: session.product ? { programMd: session.product.programMd } : null,
     participantsCount: session.participants.length,
   });
+  // Lot 0 · 0.3 — `ready` ne retient que les blockers de GÉNÉRATION. Un
+  // document générique (`stub_documents`, blocks:'delivery') ne doit surtout
+  // pas fermer cette porte : régénérer est le seul moyen de le corriger.
   if (!completeness.ready) {
-    const blockersLabel = completeness.blockers.map((b) => b.label).join(' · ');
+    const blockersLabel = completeness.generationBlockers.map((b) => b.label).join(' · ');
     return {
       ok: false,
       error: `Session incomplète. À compléter avant de générer le pack : ${blockersLabel}`,
@@ -398,7 +401,14 @@ export async function getClosureBatchStatus(
  */
 export async function buildClosureZipBuffer(
   batchId: string,
-): Promise<{ ok: boolean; buffer?: Buffer; filename?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  buffer?: Buffer;
+  filename?: string;
+  error?: string;
+  /** Lot 0 · 0.3 — nombre de documents au contenu générique dans ce ZIP. */
+  stubCount?: number;
+}> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
@@ -415,6 +425,10 @@ export async function buildClosureZipBuffer(
   });
   if (!batch) return { ok: false, error: 'Batch introuvable' };
   if (batch.jobs.length === 0) return { ok: false, error: 'Aucun document généré' };
+
+  // Lot 0 · 0.3 — ce que le pack emporte de générique. Remonté à l'appelant
+  // pour qu'aucun téléchargement ne parte sans que quelqu'un l'ait lu.
+  const stubJobs = batch.jobs.filter((j) => j.usedStub);
 
   const session = await prisma.trainingSession.findUnique({
     where: { id: batch.sessionId },
@@ -483,6 +497,7 @@ export async function buildClosureZipBuffer(
     ok: true,
     buffer: Buffer.concat(chunks),
     filename: `pack-fin-formation_${sessionCode}_${today}.zip`,
+    stubCount: stubJobs.length,
   };
 }
 
