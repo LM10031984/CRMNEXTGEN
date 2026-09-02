@@ -1055,7 +1055,15 @@ model EmailMessage {
   status        String // "queued" | "sent" | "bounced"
   sentAt        DateTime?
   relatedEntity String?
+  /// Lot 0 · 0.2 — ids des `Document` réellement partis en pièce jointe.
+  /// C'est la seule preuve que l'application possède qu'un document a QUITTÉ
+  /// la maison : un document cité ici compte comme ENGAGÉ, on ne le régénère
+  /// pas en silence. Les envois antérieurs au 02/09/2026 n'ont pas de ligne du
+  /// tout — d'où l'avertissement « ce document a pu être envoyé ».
+  documentIds   Json?
   createdAt     DateTime  @default(now())
+
+  @@index([tenantId, sentAt])
 }
 
 // =====================================================

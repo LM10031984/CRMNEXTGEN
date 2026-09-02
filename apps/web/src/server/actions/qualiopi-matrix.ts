@@ -28,6 +28,10 @@ import { prisma } from '@qualiof/db';
 import { DocStatusState } from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { logDocumentEvent } from '@/lib/document-audit';
+import {
+  getParticipantDocEngagement,
+  engagementWarning,
+} from '@/lib/docs/document-engagement';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { DOC_TYPE_TO_CLOSURE_KIND } from '@/lib/doc-scope';
 import { generateClosurePack } from './closure-pack';
@@ -241,6 +245,12 @@ export async function uploadSignedDoc(
 const RegenerateParticipantDocInputSchema = z.object({
   participantId: z.string().uuid(),
   docKind: z.string().min(1).max(64),
+  /**
+   * Lot 0 · 0.2 — l'appelant a lu l'avertissement d'engagement et confirme.
+   * Sans ce drapeau, un document déjà parti (email, dossier financeur) ou
+   * signé n'est PAS remplacé en silence.
+   */
+  confirmEngaged: z.boolean().optional(),
 });
 
 /**
@@ -255,7 +265,15 @@ const RegenerateParticipantDocInputSchema = z.object({
  */
 export async function regenerateParticipantDoc(
   input: z.infer<typeof RegenerateParticipantDocInputSchema>,
-): Promise<{ ok: boolean; error?: string; batchId?: string; documentId?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  batchId?: string;
+  documentId?: string;
+  /** L'UI doit demander confirmation puis rappeler avec `confirmEngaged: true`. */
+  requiresConfirmation?: boolean;
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER']);
@@ -280,13 +298,35 @@ export async function regenerateParticipantDoc(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
+  // Lot 0 · 0.2 — un document déjà sorti de la maison ne se remplace pas en
+  // silence. Le destinataire garde ce qu'il a reçu ; régénérer sans le dire
+  // fabrique deux versions d'un même acte, dont une seule est chez le
+  // financeur. On n'INTERDIT pas — on oblige à le regarder en face.
+  const engagementCheck = parsed.data.confirmEngaged
+    ? null
+    : await getParticipantDocEngagement(
+        user.tenantId,
+        parsed.data.participantId,
+        parsed.data.docKind,
+      );
+  if (engagementCheck) {
+    const warning = engagementWarning(engagementCheck.engagement, 'regenerate');
+    if (warning) {
+      return { ok: false, requiresConfirmation: true, warning };
+    }
+  }
+
   // AuditLog en amont (l'action est lancée même si la génération est async)
   await logDocumentEvent({
     tenantId: user.tenantId,
     actorUserId: user.id,
     targetEntityId: parsed.data.participantId,
     action: 'documents.regenerate',
-    diff: { docKind: parsed.data.docKind },
+    diff: {
+      docKind: parsed.data.docKind,
+      // Trace explicite : le document était engagé et un humain a confirmé.
+      ...(parsed.data.confirmEngaged ? { confirmedOverEngagement: true } : {}),
+    },
   });
 
   // Routing : synchrone (Convention / AGEFICE / Programme) vs BullMQ (ClosureDocKind).
@@ -426,6 +466,8 @@ export async function regenerateBatchParticipantDocs(
 const DeleteDocumentInputSchema = z.object({
   participantId: z.string().uuid(),
   docType: z.string().min(1).max(64),
+  /** Lot 0 · 0.2 — voir `regenerateParticipantDoc`. */
+  confirmEngaged: z.boolean().optional(),
 });
 
 /**
@@ -439,7 +481,12 @@ const DeleteDocumentInputSchema = z.object({
  */
 export async function deleteDocument(
   input: z.infer<typeof DeleteDocumentInputSchema>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  requiresConfirmation?: boolean;
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER']);
@@ -463,6 +510,22 @@ export async function deleteDocument(
     select: { id: true, sessionId: true, personId: true, docStatus: true },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+
+  // Lot 0 · 0.2 — supprimer un document engagé est pire que le régénérer : il
+  // ne reste plus rien en face de ce que le destinataire détient.
+  const engagementCheck = parsed.data.confirmEngaged
+    ? null
+    : await getParticipantDocEngagement(
+        user.tenantId,
+        parsed.data.participantId,
+        parsed.data.docType,
+      );
+  if (engagementCheck) {
+    const warning = engagementWarning(engagementCheck.engagement, 'delete');
+    if (warning) {
+      return { ok: false, requiresConfirmation: true, warning };
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     // Supprime le Document participant-scoped si présent.
@@ -492,7 +555,10 @@ export async function deleteDocument(
     actorUserId: user.id,
     targetEntityId: parsed.data.participantId,
     action: 'documents.delete',
-    diff: { docType: parsed.data.docType },
+    diff: {
+      docType: parsed.data.docType,
+      ...(parsed.data.confirmEngaged ? { confirmedOverEngagement: true } : {}),
+    },
   });
 
   revalidatePath(`/app/sessions/${participant.sessionId}`);

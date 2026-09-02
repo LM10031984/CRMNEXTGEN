@@ -272,6 +272,15 @@ export async function sendOpcoSubmission(
     })),
   );
 
+  // Lot 0 · 0.2 — quels `Document` partent réellement dans ce mail. Le dossier
+  // ne référence que des clés de stockage : on remonte aux ids pour que la
+  // trace d'envoi soit exploitable (règle « document engagé »). Les pièces sans
+  // ligne Document (CNI / RIB / CFP) ne résolvent rien, et c'est normal.
+  const joinedDocuments = await prisma.document.findMany({
+    where: { tenantId: user.tenantId, pdfUrl: { in: attachments.map((a) => a.key) } },
+    select: { id: true },
+  });
+
   const result = await sendMail({
     to: sub.recipientEmail,
     subject: sub.subject,
@@ -281,6 +290,8 @@ export async function sendOpcoSubmission(
       tenantId: user.tenantId,
       category: 'opco_submission',
       sessionId: sub.participant.sessionId,
+      documentIds: joinedDocuments.map((d) => d.id),
+      relatedEntity: `opcoSubmission:${sub.id}`,
     },
   });
 

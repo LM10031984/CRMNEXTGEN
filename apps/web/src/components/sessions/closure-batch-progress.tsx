@@ -142,10 +142,20 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       return;
     }
     startRetry(async () => {
-      const r = await regenerateParticipantDoc({
+      let r = await regenerateParticipantDoc({
         participantId: j.participantId,
         docKind,
       });
+      // Lot 0 · 0.2 — même garde que dans la matrice : un document déjà envoyé
+      // ou signé ne se remplace pas sans que quelqu'un l'ait vu.
+      if (!r.ok && r.requiresConfirmation && r.warning) {
+        if (!confirm(r.warning)) return;
+        r = await regenerateParticipantDoc({
+          participantId: j.participantId,
+          docKind,
+          confirmEngaged: true,
+        });
+      }
       if (r.ok) {
         toast.success(`Régénération lancée : ${j.kindLabel} pour ${j.participantName}`);
       } else {

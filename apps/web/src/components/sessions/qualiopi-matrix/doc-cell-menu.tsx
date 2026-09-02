@@ -108,7 +108,20 @@ export function DocCellMenu({
 
   function handleRegen() {
     startTransition(async () => {
-      const res = await regenerateParticipantDoc({ participantId, docKind: docType });
+      let res = await regenerateParticipantDoc({ participantId, docKind: docType });
+
+      // Lot 0 · 0.2 — le serveur a détecté un document déjà parti (email,
+      // dossier financeur) ou signé. Il ne refuse pas : il demande qu'on le
+      // regarde. La formulation vient du serveur, seul à connaître le motif.
+      if (!res.ok && res.requiresConfirmation && res.warning) {
+        if (!confirm(res.warning)) return;
+        res = await regenerateParticipantDoc({
+          participantId,
+          docKind: docType,
+          confirmEngaged: true,
+        });
+      }
+
       if (res.ok) {
         if (res.documentId) {
           toast.success(`Document généré pour ${participantName}`);
@@ -132,7 +145,11 @@ export function DocCellMenu({
     )
       return;
     startTransition(async () => {
-      const res = await deleteDocument({ participantId, docType });
+      let res = await deleteDocument({ participantId, docType });
+      if (!res.ok && res.requiresConfirmation && res.warning) {
+        if (!confirm(res.warning)) return;
+        res = await deleteDocument({ participantId, docType, confirmEngaged: true });
+      }
       if (res.ok) {
         toast.success('Document supprimé');
         router.refresh();

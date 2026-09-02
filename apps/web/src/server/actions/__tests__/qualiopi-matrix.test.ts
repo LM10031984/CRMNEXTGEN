@@ -38,6 +38,14 @@ vi.mock('@qualiof/db', () => ({
     },
     document: {
       deleteMany: vi.fn(),
+      // Lot 0 · 0.2 — lu par la garde « document engagé ».
+      findFirst: vi.fn(),
+    },
+    emailMessage: {
+      findMany: vi.fn(),
+    },
+    opcoSubmission: {
+      findMany: vi.fn(),
     },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -145,6 +153,9 @@ import {
 const participantFindFirst = prisma.sessionParticipant.findFirst as unknown as ReturnType<typeof vi.fn>;
 const sessionFindUnique = prisma.trainingSession.findUnique as unknown as ReturnType<typeof vi.fn>;
 const documentDeleteMany = prisma.document.deleteMany as unknown as ReturnType<typeof vi.fn>;
+const documentFindFirst = prisma.document.findFirst as unknown as ReturnType<typeof vi.fn>;
+const emailMessageFindMany = prisma.emailMessage.findMany as unknown as ReturnType<typeof vi.fn>;
+const opcoSubmissionFindMany = prisma.opcoSubmission.findMany as unknown as ReturnType<typeof vi.fn>;
 const executeRaw = prisma.$executeRaw as unknown as ReturnType<typeof vi.fn>;
 const transaction = prisma.$transaction as unknown as ReturnType<typeof vi.fn>;
 const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
@@ -171,6 +182,13 @@ beforeEach(() => {
   participantFindFirst.mockReset();
   sessionFindUnique.mockReset();
   documentDeleteMany.mockReset();
+  // Par défaut : aucun document existant → aucune garde d'engagement à lever.
+  documentFindFirst.mockReset();
+  documentFindFirst.mockResolvedValue(null);
+  emailMessageFindMany.mockReset();
+  emailMessageFindMany.mockResolvedValue([]);
+  opcoSubmissionFindMany.mockReset();
+  opcoSubmissionFindMany.mockResolvedValue([]);
   executeRaw.mockReset();
   executeRaw.mockResolvedValue(1);
   transaction.mockReset();
@@ -354,6 +372,68 @@ describe('regenerateParticipantDoc', () => {
     expect(opts.participantIds).toEqual([VALID_PARTICIPANT_ID]);
     expect(opts.kinds).toEqual(['CERTIFICAT']);
     expect(opts.force).toBe(true);
+  });
+});
+
+// ─── Lot 0 · 0.2 — garde « document engagé » ─────────────────────────────
+
+describe('regenerateParticipantDoc — document déjà sorti de la maison', () => {
+  /** Une convention nominative déjà envoyée par mail. */
+  function conventionEnvoyee() {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+    });
+    documentFindFirst.mockResolvedValueOnce({ id: 'doc-1' });
+    documentFindFirst.mockResolvedValueOnce({
+      id: 'doc-1',
+      type: 'CONVENTION',
+      createdAt: new Date('2026-09-20T10:00:00.000Z'),
+      pdfUrl: 'conventions/SES-0042/x.pdf',
+      participantId: VALID_PARTICIPANT_ID,
+    });
+    emailMessageFindMany.mockResolvedValueOnce([{ sentAt: new Date('2026-09-21T09:00:00.000Z') }]);
+    participantFindFirst.mockResolvedValueOnce({ conventionSigned: false, docStatus: {} });
+    opcoSubmissionFindMany.mockResolvedValueOnce([]);
+  }
+
+  it('Test 10 — refuse de remplacer sans confirmation et ne génère RIEN', async () => {
+    conventionEnvoyee();
+
+    const r = await regenerateParticipantDoc({
+      participantId: VALID_PARTICIPANT_ID,
+      docKind: 'CONVENTION',
+    });
+
+    expect(r.ok).toBe(false);
+    expect(r.requiresConfirmation).toBe(true);
+    expect(r.warning).toContain('envoyé par email');
+    // Le point qui compte : aucune génération n'est partie, et aucune trace
+    // d'audit n'a été écrite pour une action qui n'a pas eu lieu.
+    expect(generateConventionMock).not.toHaveBeenCalled();
+    expect(logDocumentEventMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 11 — confirmé par un humain : la génération part, l’audit le dit', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+    });
+    generateConventionMock.mockResolvedValueOnce({ ok: true, documentId: 'doc-2' });
+
+    const r = await regenerateParticipantDoc({
+      participantId: VALID_PARTICIPANT_ID,
+      docKind: 'CONVENTION',
+      confirmEngaged: true,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(generateConventionMock).toHaveBeenCalledWith(VALID_PARTICIPANT_ID);
+    // La garde n'est même pas interrogée quand l'humain a déjà tranché.
+    expect(emailMessageFindMany).not.toHaveBeenCalled();
+    expect(logDocumentEventMock.mock.calls[0]![0].diff).toMatchObject({
+      confirmedOverEngagement: true,
+    });
   });
 });
 
