@@ -119,12 +119,24 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
       return await echec('aucune journée candidate');
     }
 
-    const produit = await prisma.trainingProduct.findFirst({
-      where: { tenantId: sub.tenantId, code: selection.code, isActive: true },
-      select: { title: true, durationHours: true, objectives: true, programMd: true },
+    // `codes` est ordonné : la journée Faros de l'axe, puis ses replis. On prend
+    // la première qui EXISTE et qui est active. Un produit désactivé un soir de
+    // salon ne doit pas priver le prospect de son programme — c'est justement le
+    // moment où personne ne surveille les logs.
+    const produits = await prisma.trainingProduct.findMany({
+      where: { tenantId: sub.tenantId, code: { in: selection.codes }, isActive: true },
+      select: { code: true, title: true, durationHours: true, objectives: true, programMd: true },
     });
+    const produit = selection.codes
+      .map((code) => produits.find((p) => p.code === code))
+      .find((p) => p !== undefined);
     if (!produit) {
-      return await echec(`produit ${selection.code} introuvable ou inactif`);
+      return await echec(`aucun produit actif parmi ${selection.codes.join(', ')}`);
+    }
+    if (produit.code !== selection.codes[0]) {
+      console.warn(
+        `[diagnostic-worker] ${sub.id} : ${selection.codes[0]} indisponible, repli sur ${produit.code}`,
+      );
     }
 
     const objectifs = Array.isArray(produit.objectives)
@@ -136,6 +148,9 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
     const sm = await genererProgrammeSurMesure({
       reponses,
       dominante: sub.dominante,
+      // Ne départage plus les produits : sert au modèle à ORDONNER la journée
+      // (le socle en tête pour un débutant, les agents pour un habitué).
+      niveau: selection.niveau,
       produitTitre: produit.title,
       produitObjectifs: objectifs,
       produitProgrammeMd: produit.programMd,

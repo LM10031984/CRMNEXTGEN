@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { callLlm } from '@/lib/llm-client';
 import { QUESTIONS, PROBLEMATIQUES, type ProblematiqueKey } from './questions';
+import type { NiveauIa } from './catalogue-map';
 
 /**
  * Termes bannis des programmes envoyés aux prospects.
@@ -92,6 +93,13 @@ Ce que tu personnalises :
 - la SÉLECTION et l'ORDRE des points, selon ce qui lui coûte du temps et son niveau ;
 - le "pourquoiVous" de chaque séquence : une phrase qui relie la séquence à sa situation.
 
+RÈGLE IA × MÉTIER : chaque séquence doit relier explicitement un geste d'IA à un résultat métier — un mandat rentré, un vendeur trouvé ou rassuré, une heure gagnée, de la visibilité sur son secteur. C'est ce qui distingue cette journée d'un cours d'informatique. Tu tiens cette règle SANS jamais sortir du programme source : si un point ne porte pas de résultat métier, c'est le "pourquoiVous" de la séquence qui le porte.
+
+NIVEAU D'USAGE DE L'IA — il ne change pas le contenu, il change l'ORDRE et l'angle :
+- DEBUTANT : mets le socle en tête de journée (parler à l'IA, paramétrer son assistant, premiers réflexes). Ne suppose aucun outil déjà installé.
+- INITIE : passe vite sur le socle, insiste sur les routines et les ateliers.
+- AVANCE : commence par les usages avancés du programme source quand ils existent (commandes, projets, agents, automatisations). Ne lui réexplique pas ce qu'est un prompt.
+
 Ce que tu ne touches pas : le fond pédagogique, la durée, le prix (n'en mentionne JAMAIS).
 
 INTERDIT : le mot « pige » et ses dérivés. Cette pratique est interdite depuis le 11/08/2026. Si le programme source la mentionne, saute ce point.
@@ -102,6 +110,8 @@ Réponds en JSON strict, sans texte autour.`;
 export interface EntreeSurMesure {
   reponses: Record<string, string>;
   dominante: ProblematiqueKey;
+  /** Usage de l'IA déclaré (question 5) — pilote l'ordre, jamais le contenu. */
+  niveau: NiveauIa;
   produitTitre: string;
   produitObjectifs: string[];
   produitProgrammeMd: string;
@@ -122,6 +132,8 @@ ${probl.accroche}
 
 RÉPONSES DU PROSPECT
 ${decrireReponses(entree.reponses)}
+
+NIVEAU D'USAGE DE L'IA : ${entree.niveau}
 
 FORMATION RETENUE (catalogue Start Academy)
 ${entree.produitTitre}
