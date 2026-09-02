@@ -9,6 +9,9 @@
  * rapport d'audit arrivent au lot D — ici on ne fait que le tunnel.
  */
 
+import { DEFAULT_BENCHMARKS } from './benchmarks';
+import type { BenchmarksOverride } from './benchmarks';
+
 export type StageKey =
   | 'contacts'
   | 'rdv'
@@ -73,22 +76,9 @@ export interface PipelineSynthesis {
   isComplete: boolean;
 }
 
-/**
- * Repères métier v1.0, portés du référentiel du repo diag (D-2 de la spec :
- * « valeurs du référentiel v1.0 » retenues par défaut, à recalibrer sur les
- * premiers audits réels).
- */
-export const DEFAULT_BENCHMARKS = {
-  contactsToRdvPercent: 20,
-  rdvToMandatPercent: 40,
-  exclusivityPercent: 30,
-  visitesToOffresPercent: 25,
-  offresToCompromisPercent: 60,
-  compromisToActePercent: 85,
-} as const;
-
-/** Surcharges : `number`, pas les littéraux figés par `as const`. */
-export type BenchmarksOverride = Partial<Record<keyof typeof DEFAULT_BENCHMARKS, number>>;
+// Les repères vivent dans leur propre module : le moteur ratios de l'audit
+// s'en sert aussi.
+export { DEFAULT_BENCHMARKS, type BenchmarksOverride } from './benchmarks';
 
 /**
  * Règles de présentation de l'enjeu chiffré (D-12, tranchée le 02/09/2026).

@@ -308,3 +308,29 @@ describe('Contrat structurel — cohérence interne de chaque question', () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("Contrat — libellés écrits pour le rapport d'audit", () => {
+  it('chaque question a un intitulé écrit, distinct de la question orale', async () => {
+    const { AUDIT_LABELS } = await import('../audit-labels');
+    const missing = DIAGNOSTIC_QUESTIONS.filter((q) => !AUDIT_LABELS[q.id]).map((q) => q.id);
+    expect(
+      missing,
+      `Sans libellé écrit, ces questions apparaîtraient dans l'audit sous leur formulation orale : ${missing.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it("n'expose aucun libellé orphelin", async () => {
+    const { AUDIT_LABELS } = await import('../audit-labels');
+    const ids = new Set(DIAGNOSTIC_QUESTIONS.map((q) => q.id));
+    const orphans = Object.keys(AUDIT_LABELS).filter((id) => !ids.has(id));
+    expect(orphans).toEqual([]);
+  });
+
+  it('les intitulés écrits restent courts — ils tiennent dans une colonne de tableau', async () => {
+    const { AUDIT_LABELS } = await import('../audit-labels');
+    const tooLong = Object.entries(AUDIT_LABELS)
+      .filter(([, label]) => label.length > 60)
+      .map(([id]) => id);
+    expect(tooLong).toEqual([]);
+  });
+});

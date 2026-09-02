@@ -8,6 +8,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { computeProgress } from '@/lib/diagnostic-r1/progress';
 import { DiagnosticActions } from '@/components/diagnostic-r1/diagnostic-actions';
+import { AuditPanel } from '@/components/diagnostic-r1/audit-panel';
+import { getAuditFreshness } from '@/server/actions/diagnostic-audit';
 
 /**
  * Fiche d'un diagnostic — le point d'entrée et de reprise.
@@ -65,6 +67,11 @@ export default async function DiagnosticPage({
   if (vue !== 'recap' && diagnostic.status === 'EN_COURS') {
     redirect(`/app/diagnostics/${id}/chapitre/${resume}`);
   }
+
+  const freshness = await getAuditFreshness(id);
+  const audit = freshness.ok
+    ? (freshness.data ?? { hasDocument: false, isStale: false, documentId: null })
+    : { hasDocument: false, isStale: false, documentId: null };
 
   const agence =
     diagnostic.organization?.legalName ??
@@ -155,6 +162,14 @@ export default async function DiagnosticPage({
           ))}
         </ul>
       </section>
+
+      <AuditPanel
+        diagnosticId={id}
+        hasDocument={audit.hasDocument}
+        isStale={audit.isStale}
+        documentId={audit.documentId}
+        answersCount={diagnostic.answers.length}
+      />
 
       <DiagnosticActions
         diagnosticId={id}

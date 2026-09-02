@@ -1845,8 +1845,13 @@ model Diagnostic {
 
   /// Snapshot des moteurs purs (ratios, alertes, financement) recalculé à
   /// chaque complétion de chapitre : { ratios, alerts, funding, computedAt, rulesVersion }.
-  computedSnapshot Json?
-  completedAt      DateTime?
+  computedSnapshot  Json?
+  /// SHA-256 des données rendues dans le dernier rapport d'audit (leçon E-1).
+  /// Comparé aux données courantes, il dit si le PDF déjà remis raconte encore
+  /// la même histoire que l'écran — réponses, fiches équipe, règles de
+  /// financement, barème et version du référentiel entrent tous dans le calcul.
+  sourceFingerprint String?
+  completedAt       DateTime?
 
   answers         DiagnosticAnswer[]
   participants    DiagnosticParticipant[]

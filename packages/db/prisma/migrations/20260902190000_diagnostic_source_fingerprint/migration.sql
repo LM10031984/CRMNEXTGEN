@@ -1,0 +1,11 @@
+-- Anti-péremption du rapport d'audit (spec §9.3, leçon E-1).
+--
+-- Empreinte SHA-256 des DONNÉES rendues dans le dernier audit généré — pas du
+-- PDF. Un même contenu regénéré deux fois produit deux PDF différents
+-- (horodatage) mais la même empreinte : c'est ce qui permet de dire « ce
+-- document est encore à jour » plutôt que « ce document a été regénéré ».
+--
+-- Additive et nullable : les diagnostics existants n'ont pas d'audit, et un
+-- null est traité comme périmé — mieux vaut proposer une régénération inutile
+-- qu'un document dont on ne peut rien affirmer.
+ALTER TABLE "Diagnostic" ADD COLUMN "sourceFingerprint" TEXT;
