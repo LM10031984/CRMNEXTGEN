@@ -25,68 +25,7 @@
  * rester importable depuis un cœur sans auth comme depuis une page RSC.
  */
 
-import { requiresContratIndividuel, isSoloForm } from '@/lib/legal-forms';
-
-/**
- * Rôles par lesquels le commanditaire est l'EMPLOYEUR de l'apprenant.
- *
- * `EI_SELF`, `DIRIGEANT` et `AGENT_COMMERCIAL` en sont volontairement absents :
- * ces trois-là décrivent quelqu'un qui se forme À SES FRAIS, donc le contrat
- * individuel. C'est exactement la distinction que porte l'enum `LinkRole`.
- */
-export const ROLES_EMPLOYEUR = ['SALARIE', 'ALTERNANT', 'STAGIAIRE'] as const;
-
-/** true si le commanditaire est l'employeur de cet apprenant. */
-export function estEmployeurDeLApprenant(role: string | null | undefined): boolean {
-  return !!role && (ROLES_EMPLOYEUR as readonly string[]).includes(role);
-}
-
-/**
- * LE prédicat : ce couple (commanditaire, apprenant) relève-t-il de la
- * CONVENTION de formation professionnelle ?
- *
- * Correction du 02/09/2026 — cas AGENCE DE L'OLIVIER (SES-0109). La règle ne
- * regardait QUE la forme juridique : toute EI partait en contrat individuel.
- * Or une entreprise individuelle PEUT avoir des salariés (registre INSEE :
- * SIREN 337700504, entrepreneur individuel, tranche d'effectif 1 à 2 salariés),
- * et quand elle paye pour eux, elle n'est pas « à ses frais ».
- *
- * Le Code du travail ne tranche pas sur la forme juridique mais sur QUI PAYE
- * POUR QUI :
- *  - L6353-3 — contrat de formation professionnelle : conclu par une personne
- *    physique « à titre individuel et **à ses frais** ». C'est l'auto-payeur.
- *  - L6353-2 — convention de formation professionnelle : conclue avec
- *    l'EMPLOYEUR qui envoie ses salariés. Sa forme juridique est indifférente.
- *
- * D'où deux questions, dans cet ordre :
- *  1. le commanditaire est-il une société ? → convention (inchangé) ;
- *  2. sinon, est-il l'employeur de cet apprenant ? → convention aussi.
- *
- * Forme absente ⇒ `false` : on ne présume pas d'une convention sur une donnée
- * manquante. Le chemin individuel reste toujours défendable.
- *
- * Portée mesurée avant bascule (02/09, base de production) : sur 237 inscrits
- * dont le commanditaire est en forme solo, **4** changent de régime — les 2 de
- * SES-0109 et 2 de SES-0012 (même cas réel, EIRL avec salariés). Les 226
- * `EI_SELF` et 6 `AGENT_COMMERCIAL` restent en contrat individuel.
- */
-export function releveDeLaConvention(input: {
-  sponsorLegalForm: string | null | undefined;
-  /** Rôle de l'apprenant DANS l'organisation commanditaire (`LegalLink.role`). */
-  roleChezSponsor?: string | null;
-}): boolean {
-  if (!input.sponsorLegalForm) return false;
-  // Société ⇒ convention, quel que soit le lien.
-  if (!requiresContratIndividuel(input.sponsorLegalForm)) return true;
-  // PARTICULIER n'est pas une entreprise : il ne peut employer personne, et
-  // reste donc toujours au contrat individuel. C'est précisément pourquoi
-  // `SOLO_FORMS` (EI / EIRL / micro — qui, elles, peuvent embaucher) et
-  // `CONTRAT_INDIVIDUEL_FORMS` (= SOLO_FORMS + PARTICULIER) sont deux listes
-  // distinctes dans `legal-forms.ts`.
-  if (!isSoloForm(input.sponsorLegalForm)) return false;
-  // Forme solo ⇒ c'est le LIEN qui tranche, pas la forme.
-  return estEmployeurDeLApprenant(input.roleChezSponsor);
-}
+import { requiresContratIndividuel } from '@/lib/legal-forms';
 
 /** Inscrit vu sous l'angle « qui paye ? ». */
 export interface PayerParticipant {
@@ -94,12 +33,6 @@ export interface PayerParticipant {
   sponsorOrgId: string;
   sponsorLegalForm: string | null | undefined;
   sponsorName?: string | null;
-  /**
-   * Rôle de l'apprenant dans l'organisation commanditaire. Sans lui, une EI
-   * employeuse retombe en contrat individuel — c'est le comportement d'avant
-   * le 02/09, conservé comme repli sûr quand l'appelant ne charge pas le lien.
-   */
-  roleChezSponsor?: string | null;
 }
 
 /** Un commanditaire personne morale et les inscrits qu'il finance. */
@@ -117,19 +50,14 @@ export interface PayerPartition {
 }
 
 /**
- * true si la FORME JURIDIQUE seule fait du commanditaire une personne morale.
- *
- * ⚠ Ne répond PLUS à « faut-il une convention ? » depuis le 02/09 : une EI
- * employeuse relève de la convention sans être une personne morale. Pour cette
- * question-là, utiliser `releveDeLaConvention`, qui regarde aussi le lien.
- *
- * Reste utile là où c'est bien la forme juridique qui compte — la tarification
- * (`resolve-default-price` : un forfait entreprise s'applique à une structure,
- * pas à un auto-payeur).
+ * true si ce commanditaire relève de la convention de groupe.
  *
  * Défini comme le complément EXACT de `requiresContratIndividuel`, la source
  * unique gelée le 12/08 — surtout pas comme une seconde liste de formes
  * juridiques, qui divergerait au premier ajout à l'enum `LegalForm`.
+ *
+ * Forme absente ⇒ `false` : on ne présume pas d'une convention de groupe sur
+ * une donnée manquante. Le chemin individuel, lui, reste toujours défendable.
  */
 export function isPersonneMoralePayeur(legalForm: string | null | undefined): boolean {
   return !!legalForm && !requiresContratIndividuel(legalForm);
@@ -141,9 +69,7 @@ export function isPersonneMoralePayeur(legalForm: string | null | undefined): bo
  *
  * Le format « groupe » ne dépend PAS de l'effectif : une salariée seule dont
  * l'employeur paye relève de la convention, pas du contrat individuel
- * (cas EXPERTA / SES-0108). Il ne dépend pas non plus de la FORME de
- * l'employeur : une entreprise individuelle qui paye pour ses salariés relève
- * de la convention (cas AGENCE DE L'OLIVIER / SES-0109).
+ * (cas EXPERTA / SES-0108).
  *
  * Groupes triés par `sponsorOrgId` et `participantIds` dans l'ordre d'entrée :
  * ordre stable et reproductible pour les tests, les logs et le journal d'audit.
@@ -155,7 +81,7 @@ export function partitionByPayerRule(
   const individuels: string[] = [];
 
   for (const p of participants) {
-    if (!releveDeLaConvention({ sponsorLegalForm: p.sponsorLegalForm, roleChezSponsor: p.roleChezSponsor })) {
+    if (!isPersonneMoralePayeur(p.sponsorLegalForm)) {
       individuels.push(p.id);
       continue;
     }

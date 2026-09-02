@@ -34,7 +34,6 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { generateAnalyseBesoinEntrepriseContent } from './ollama-generators';
 import {
@@ -105,6 +104,13 @@ export async function generateAnalyseBesoinEntrepriseCore(
   });
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
+  if (requiresContratIndividuel(org.legalForm)) {
+    return {
+      ok: false,
+      error: `« ${org.legalName} » est une personne physique (${org.legalForm}) : son analyse des besoins est INDIVIDUELLE, au nom de l'apprenant.`,
+    };
+  }
+
   const participants = await prisma.sessionParticipant.findMany({
     where: { sessionId, sponsorOrgId, session: { tenantId } },
     include: {
@@ -113,22 +119,6 @@ export async function generateAnalyseBesoinEntrepriseCore(
     },
     orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
   });
-
-  // Même critère que la convention (02/09) : une entreprise individuelle qui
-  // paye pour ses SALARIÉS exprime un besoin d'ENTREPRISE — c'est le sien, pas
-  // celui de chaque stagiaire. On ne refuse donc que si aucun inscrit de ce
-  // commanditaire n'y est salarié, c'est-à-dire le vrai auto-payeur.
-  const aUnSalarie = participants.some((p) =>
-    estEmployeurDeLApprenant(
-      p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.role ?? null,
-    ),
-  );
-  if (requiresContratIndividuel(org.legalForm) && !aUnSalarie) {
-    return {
-      ok: false,
-      error: `« ${org.legalName} » est une personne physique (${org.legalForm}) et aucun inscrit n'y est salarié : son analyse des besoins est INDIVIDUELLE, au nom de l'apprenant.`,
-    };
-  }
   if (participants.length === 0) {
     return {
       ok: false,
@@ -160,7 +150,7 @@ export async function generateAnalyseBesoinEntrepriseCore(
   const fonctions = participants
     .map(
       (p) =>
-        p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.function ?? null,
+        p.person.legalLinks.find((l) => l.organizationId === sponsorOrgId)?.function ?? null,
     )
     .filter((f): f is string => !!f && f.trim().length > 0);
 
@@ -288,20 +278,12 @@ ${renderBrandHeader(undefined, tenantId)}
 
   // Une session ne porte qu'UNE analyse de niveau session : sur une session
   // multi-commanditaires, la dernière génération remplace la précédente.
-  const autresInscrits = await prisma.sessionParticipant.findMany({
+  const autresCommanditaires = await prisma.sessionParticipant.findMany({
     where: { sessionId, session: { tenantId }, sponsorOrgId: { not: sponsorOrgId } },
-    select: {
-      sponsorOrgId: true,
-      sponsorOrg: { select: { legalForm: true } },
-      person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
-    },
+    select: { sponsorOrg: { select: { legalForm: true } } },
   });
-  const multi = autresInscrits.some((p) =>
-    releveDeLaConvention({
-      sponsorLegalForm: p.sponsorOrg?.legalForm,
-      roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
-    }),
+  const multi = autresCommanditaires.some(
+    (p) => p.sponsorOrg && !requiresContratIndividuel(p.sponsorOrg.legalForm),
   );
   if (multi) {
     console.warn(

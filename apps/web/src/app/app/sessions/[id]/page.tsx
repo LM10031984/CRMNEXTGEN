@@ -63,7 +63,7 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
-import { requiresContratIndividuel } from '@/lib/legal-forms';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import {
   blocagesDocsEntreprise,
   type BlocageDocEntreprise,
@@ -81,6 +81,28 @@ import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 export const maxDuration = 300;
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
+
+/**
+ * Cet inscrit relève-t-il de la convention d'entreprise ?
+ *
+ * L'affichage doit dire EXACTEMENT ce que les cœurs feront : une garde d'écran
+ * plus permissive que le générateur promet un bouton qui échouera, une plus
+ * stricte cache un document légitime. On délègue donc au même prédicat, en lui
+ * donnant le rôle de l'apprenant CHEZ SON COMMANDITAIRE — et pas une casquette
+ * au hasard : dans l'immobilier un apprenant en porte souvent deux (son EI et
+ * son enseigne).
+ */
+function releveDeLaConventionPour(p: {
+  sponsorOrgId: string;
+  sponsorOrg: { legalForm: string };
+  person: { legalLinks: { role: string; organizationId: string }[] };
+}): boolean {
+  return releveDeLaConvention({
+    sponsorLegalForm: p.sponsorOrg.legalForm,
+    roleChezSponsor:
+      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+  });
+}
 
 export default async function SessionDetailPage({
   params,
@@ -116,6 +138,10 @@ export default async function SessionDetailPage({
               legalLinks: {
                 select: {
                   role: true,
+                  // Ajouté le 02/09 : sans l'id de l'organisation, impossible
+                  // de savoir QUELLE casquette relie l'apprenant à son
+                  // commanditaire — et donc si celui-ci est son employeur.
+                  organizationId: true,
                   organization: { select: { opcoCode: true } },
                 },
               },
@@ -281,7 +307,7 @@ export default async function SessionDetailPage({
     sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
   if (analyseEntrepriseAssetId) {
     for (const p of session.participants) {
-      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      if (!releveDeLaConventionPour(p)) continue;
       const m = assetsByParticipant.get(p.id) ?? new Map();
       // Ne jamais écraser une analyse nominative déjà rendue.
       if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
@@ -763,7 +789,7 @@ export default async function SessionDetailPage({
       }
     >();
     for (const p of session.participants) {
-      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      if (!releveDeLaConventionPour(p)) continue;
       const g =
         map.get(p.sponsorOrgId) ??
         {

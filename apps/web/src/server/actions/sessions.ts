@@ -163,7 +163,20 @@ export async function addParticipant(input: {
               legalName: sponsor.legalName,
               legalForm: sponsor.legalForm,
             },
-            person: { firstName: person.firstName, lastName: person.lastName },
+            person: {
+              firstName: person.firstName,
+              lastName: person.lastName,
+              // Le rôle vient d'être résolu juste au-dessus (lien existant, ou
+              // créé à l'instant avec `input.legalLinkRole`). C'est lui qui
+              // décide convention vs contrat individuel quand le commanditaire
+              // est une entreprise individuelle employeuse.
+              legalLinks: [
+                {
+                  organizationId: input.sponsorOrgId,
+                  role: link?.role ?? input.legalLinkRole ?? '',
+                },
+              ],
+            },
           },
         ]),
       ).catch((e) => {

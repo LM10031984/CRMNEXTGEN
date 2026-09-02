@@ -430,18 +430,10 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
     contacts: [],
   };
 
-  /**
-   * `sessionParticipant.findMany` sert 2 requêtes : les inscrits du groupe,
-   * puis les AUTRES inscrits de la session.
-   *
-   * On les distingue par le `where` (`sponsorOrgId: { not }`) et non plus par
-   * `distinct` : depuis le 02/09 la seconde requête n'est plus dédupliquée par
-   * organisation — une même EI peut porter un salarié (convention) et un agent
-   * commercial (contrat individuel), il faut donc les voir un par un.
-   */
-  function wireFindMany(participants: unknown[], autresInscrits: unknown[]) {
+  /** `sessionParticipant.findMany` sert 2 requêtes : les inscrits du groupe, puis les AUTRES commanditaires. */
+  function wireFindMany(participants: unknown[], autresCommanditaires: unknown[]) {
     findManyMock.mockImplementation(async (args: any) =>
-      args?.where?.sponsorOrgId?.not ? autresInscrits : participants,
+      args?.distinct ? autresCommanditaires : participants,
     );
   }
 
@@ -472,7 +464,7 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
     orgFindFirstMock.mockResolvedValue(ORG_SARL);
     wireFindMany(
       [participant('sp-1', 'Alice', 'Martin')],
-      [{ sponsorOrgId: 'org-2', sponsorOrg: { legalForm: 'SAS' }, person: { legalLinks: [] } }],
+      [{ sponsorOrgId: 'org-2', sponsorOrg: { legalForm: 'SAS' } }],
     );
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -493,7 +485,7 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
     orgFindFirstMock.mockResolvedValue(ORG_SARL);
     wireFindMany(
       [participant('sp-1', 'Alice', 'Martin')],
-      [{ sponsorOrgId: 'org-ei', sponsorOrg: { legalForm: 'AUTO_ENTREPRENEUR' }, person: { legalLinks: [{ organizationId: 'org-ei', role: 'EI_SELF' }] } }],
+      [{ sponsorOrgId: 'org-ei', sponsorOrg: { legalForm: 'AUTO_ENTREPRENEUR' } }],
     );
 
     const { generateConventionEntrepriseCore } = await importCore();
@@ -510,14 +502,10 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
     const { generateConventionEntrepriseCore } = await importCore();
     await generateConventionEntrepriseCore('tnt-1', 'ses-1', 'org-1');
 
-    // La requête « autres inscrits » se reconnaît à son `sponsorOrgId: { not }`
-    // (elle n'est plus `distinct` — cf. wireFindMany).
-    const autresCall = findManyMock.mock.calls
-      .map((c) => c[0] as any)
-      .find((a) => a?.where?.sponsorOrgId?.not);
-    expect(autresCall).toBeDefined();
-    expect(autresCall.where.sessionId).toBe('ses-1');
-    expect(autresCall.where.session).toEqual({ tenantId: 'tnt-1' });
+    const distinctCall = findManyMock.mock.calls.map((c) => c[0] as any).find((a) => a?.distinct);
+    expect(distinctCall).toBeDefined();
+    expect(distinctCall.where.sessionId).toBe('ses-1');
+    expect(distinctCall.where.session).toEqual({ tenantId: 'tnt-1' });
   });
 });
 
