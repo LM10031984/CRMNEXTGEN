@@ -214,7 +214,7 @@ export default async function SessionDetailPage({
             tenantId: user.tenantId,
             entityType: 'session',
             entityId: session.id,
-            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION'] },
+            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION', 'PROGRAMME'] },
           },
           orderBy: { createdAt: 'desc' },
           select: { id: true, type: true },
@@ -235,6 +235,10 @@ export default async function SessionDetailPage({
   for (const d of sessionSharedDocs) {
     if (!sessionSharedDocByType.has(d.type)) sessionSharedDocByType.set(d.type, d.id);
   }
+  // Le programme DE SESSION prime sur celui du catalogue : quand un tarif a été
+  // négocié, c'est lui qui porte le bon montant et qui part au dossier OPCO.
+  const programmeDocId =
+    sessionSharedDocByType.get('PROGRAMME') ?? programmeProductDocId;
   const grilleSessionDocId = sessionSharedDocByType.get('GRILLE_OBS_SESSION');
   const checklistDocId = sessionSharedDocByType.get('CHECKLIST_FORMATION');
   const satisfactionSessionDocId = sessionSharedDocByType.get('SATISFACTION_SESSION');
@@ -657,7 +661,7 @@ export default async function SessionDetailPage({
   // Items pré-formation Qualiopi (source unique) — alimentent l'onglet « Avant »
   // (TabAvant) qui réembarque les actions dispatchGenerate* de l'ancien drawer.
   const docDockItems = buildDocDockItems({
-    programmeProductDocId,
+    programmeProductDocId: programmeDocId,
     derouleProductDocId,
     checklistDocId,
     participants: matrixParticipants.map((p) => ({
@@ -683,7 +687,7 @@ export default async function SessionDetailPage({
   const closureItems = buildClosureCompletionItems({
     participantsCount: closureStatus.participantsCount,
     ageficeEligibleCount: closureStatus.ageficeEligibleCount,
-    programmeProductDocId,
+    programmeProductDocId: programmeDocId,
     grilleObsSession: closureStatus.grilleObsSession,
     bilanSatisfaction: closureStatus.bilanSatisfaction,
     attestations: closureStatus.attestations,
@@ -1230,7 +1234,7 @@ export default async function SessionDetailPage({
                 productLabel={productLabel}
                 productCode={productCode}
                 productAiDraftedAt={session.product?.aiDraftedAt ?? null}
-                productProgrammePdfId={programmeProductDocId ?? null}
+                productProgrammePdfId={programmeDocId ?? null}
                 durationHours={productDuration}
                 startDate={session.startDate}
                 endDate={session.endDate}
@@ -1314,7 +1318,7 @@ export default async function SessionDetailPage({
               canWrite={canWrite}
               isActive={stage.stagesState[2] === 'active'}
               expanded={stage.stagesState[2] === 'active'}
-              programmePdfHref={programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined}
+              programmePdfHref={programmeDocId ? `/api/documents/${programmeDocId}` : undefined}
               deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
               checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
             />
@@ -1382,7 +1386,7 @@ export default async function SessionDetailPage({
                   status={closureStatus}
                   isActive={stage.stagesState[4] === 'active'}
                   expanded={stage.stagesState[4] === 'active'}
-                  programmeProductDocId={programmeProductDocId ?? null}
+                  programmeProductDocId={programmeDocId ?? null}
                   grilleObsSessionDocId={grilleSessionDocId ?? null}
                   bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
                 />

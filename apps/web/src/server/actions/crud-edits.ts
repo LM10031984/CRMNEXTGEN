@@ -549,11 +549,30 @@ export async function createPerson(input: {
 const VALID_LEGAL_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR', 'SAS', 'SARL', 'SASU', 'EURL', 'SA', 'ASSOCIATION', 'PARTICULIER', 'AUTRE'] as const;
 type LegalForm = (typeof VALID_LEGAL_FORMS)[number];
 
+/**
+ * Création d'une entreprise.
+ *
+ * `representative` et `address` ont été ajoutés le 02/09 (retour Laurent) :
+ * quand on crée une entreprise DEPUIS une session, on ne repassait jamais par
+ * sa fiche, et ces champs restaient vides. Ils ne sont pas décoratifs — sans
+ * représentant, `generateConventionEntrepriseCore` REFUSE de produire la
+ * convention (« Représentée par , » n'est pas opposable), et sans SIRET ni
+ * adresse le dossier OPCO est incomplet. Les demander à la création coûte
+ * trente secondes ; les retrouver trois semaines plus tard en coûte bien plus.
+ *
+ * Ils restent FACULTATIFS : on n'empêche pas d'inscrire quelqu'un vite fait un
+ * jour de salon. Le manque est rattrapé par les garde-fous avant génération
+ * (`blocagesDocsEntreprise`), qui les nomment un par un.
+ */
 export async function createOrganization(input: {
   legalName: string;
   legalForm: LegalForm;
   siret?: string | null;
   opcoCode?: string | null;
+  representative?: string | null;
+  addressStreet?: string | null;
+  addressPostalCode?: string | null;
+  addressCity?: string | null;
 }): Promise<{ ok: boolean; orgId?: string; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -562,6 +581,15 @@ export async function createOrganization(input: {
   const siret = input.siret?.replace(/\s+/g, '') || null;
   if (siret && !/^\d{14}$/.test(siret)) return { ok: false, error: 'SIRET invalide (14 chiffres).' };
 
+  // Adresse : même forme Json que partout ailleurs (`of-config`, fiche
+  // entreprise). On n'écrit l'objet que si au moins un morceau est saisi —
+  // un `{street:null, postalCode:null, city:null}` serait pire que `null`,
+  // il ferait croire à une adresse renseignée.
+  const rue = input.addressStreet?.trim() || null;
+  const cp = input.addressPostalCode?.trim() || null;
+  const ville = input.addressCity?.trim() || null;
+  const address = rue || cp || ville ? { street: rue, postalCode: cp, city: ville } : undefined;
+
   const org = await prisma.organization.create({
     data: {
       tenantId: user.tenantId,
@@ -569,6 +597,8 @@ export async function createOrganization(input: {
       legalForm: input.legalForm,
       siret,
       opcoCode: input.opcoCode?.trim() || null,
+      representative: input.representative?.trim() || null,
+      ...(address ? { address } : {}),
     },
   });
   revalidatePath('/app/organisations');

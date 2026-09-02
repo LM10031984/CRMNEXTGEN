@@ -104,3 +104,79 @@ describe('PersonOrOrgPicker — apprenant sans casquette', () => {
     expect(createLegalLinkMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Retour Laurent du 02/09 (cas AGENCE DE L'OLIVIER / SES-0109) : « quand je crée
+ * l'entreprise par la session je devrais pouvoir rentrer les champs de
+ * l'entreprise et là on me le propose même pas ».
+ *
+ * Le formulaire ne demandait que raison sociale + forme juridique. L'entreprise
+ * naissait donc SANS représentant, SANS SIRET et SANS adresse — et trois
+ * semaines plus tard la convention d'entreprise était refusée faute de
+ * signataire, sans que rien n'ait signalé le manque au bon moment.
+ *
+ * Test de puissance : retirer le champ « Représentant légal » du formulaire, ou
+ * cesser de le transmettre à `createOrganization`, fait virer ce test au rouge.
+ */
+describe('PersonOrOrgPicker — création d’entreprise depuis la session', () => {
+  async function ouvrirFormulaireCreation() {
+    await ouvrirSurPersonneSansCasquette();
+    await screen.findByText(/Rattacher une entreprise/i);
+    fireEvent.click(screen.getByText(/Créer une entreprise/i));
+  }
+
+  it('demande le représentant, le SIRET et l’adresse — pas seulement la raison sociale', async () => {
+    await ouvrirFormulaireCreation();
+    expect(screen.getByLabelText(/Raison sociale/i)).toBeDefined();
+    expect(screen.getByLabelText(/Forme juridique/i)).toBeDefined();
+    expect(screen.getByLabelText(/Représentant légal/i)).toBeDefined();
+    expect(screen.getByLabelText(/SIRET/i)).toBeDefined();
+    expect(screen.getByLabelText(/^Adresse$/i)).toBeDefined();
+    expect(screen.getByLabelText(/Code postal/i)).toBeDefined();
+    expect(screen.getByLabelText(/Ville/i)).toBeDefined();
+  });
+
+  it('transmet ces champs à la création — sinon ils sont perdus pour toujours', async () => {
+    await ouvrirFormulaireCreation();
+
+    fireEvent.change(screen.getByLabelText(/Rôle/i), { target: { value: 'SALARIE' } });
+    fireEvent.change(screen.getByLabelText(/Raison sociale/i), {
+      target: { value: "AGENCE DE L'OLIVIER" },
+    });
+    fireEvent.change(screen.getByLabelText(/Forme juridique/i), { target: { value: 'SAS' } });
+    fireEvent.change(screen.getByLabelText(/Représentant légal/i), {
+      target: { value: 'Olivier Martin' },
+    });
+    fireEvent.change(screen.getByLabelText(/SIRET/i), { target: { value: '83879522700019' } });
+    fireEvent.change(screen.getByLabelText(/^Adresse$/i), { target: { value: '3 rue Gambetta' } });
+    fireEvent.change(screen.getByLabelText(/Code postal/i), { target: { value: '06800' } });
+    fireEvent.change(screen.getByLabelText(/Ville/i), { target: { value: 'Cagnes-sur-Mer' } });
+
+    fireEvent.click(screen.getByText(/Créer et rattacher/i));
+
+    await waitFor(() => expect(createOrganizationMock).toHaveBeenCalled());
+    expect(createOrganizationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        legalName: "AGENCE DE L'OLIVIER",
+        legalForm: 'SAS',
+        representative: 'Olivier Martin',
+        siret: '83879522700019',
+        addressStreet: '3 rue Gambetta',
+        addressPostalCode: '06800',
+        addressCity: 'Cagnes-sur-Mer',
+      }),
+    );
+  });
+
+  it('laisse créer avec la seule raison sociale — on n’empêche pas d’aller vite', async () => {
+    await ouvrirFormulaireCreation();
+    fireEvent.change(screen.getByLabelText(/Rôle/i), { target: { value: 'SALARIE' } });
+    fireEvent.change(screen.getByLabelText(/Raison sociale/i), { target: { value: 'RAPIDE SARL' } });
+    fireEvent.click(screen.getByText(/Créer et rattacher/i));
+
+    await waitFor(() => expect(createOrganizationMock).toHaveBeenCalled());
+    expect(createOrganizationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ legalName: 'RAPIDE SARL', representative: null, siret: null }),
+    );
+  });
+});

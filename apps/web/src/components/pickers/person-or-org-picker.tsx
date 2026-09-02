@@ -103,6 +103,15 @@ export function PersonOrOrgPicker({
   const [creerOrg, setCreerOrg] = useState(false);
   const [nouvelleOrgNom, setNouvelleOrgNom] = useState('');
   const [nouvelleOrgForme, setNouvelleOrgForme] = useState<string>('SARL');
+  // Champs de la fiche entreprise saisissables ICI (retour Laurent 02/09) :
+  // créée depuis une session, on ne repassait jamais par sa fiche, et la
+  // convention se retrouvait bloquée trois semaines plus tard faute de
+  // représentant. Facultatifs — mais demandés au bon moment.
+  const [nouvelleOrgSiret, setNouvelleOrgSiret] = useState('');
+  const [nouvelleOrgRepresentant, setNouvelleOrgRepresentant] = useState('');
+  const [nouvelleOrgRue, setNouvelleOrgRue] = useState('');
+  const [nouvelleOrgCp, setNouvelleOrgCp] = useState('');
+  const [nouvelleOrgVille, setNouvelleOrgVille] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounce search 200ms
@@ -163,6 +172,11 @@ export function PersonOrOrgPicker({
     const r = await createOrganization({
       legalName: nouvelleOrgNom.trim(),
       legalForm: nouvelleOrgForme as Parameters<typeof createOrganization>[0]['legalForm'],
+      siret: nouvelleOrgSiret.trim() || null,
+      representative: nouvelleOrgRepresentant.trim() || null,
+      addressStreet: nouvelleOrgRue.trim() || null,
+      addressPostalCode: nouvelleOrgCp.trim() || null,
+      addressCity: nouvelleOrgVille.trim() || null,
     });
     setAttaching(false);
     if (!r.ok || !r.orgId) {
@@ -330,6 +344,57 @@ export function PersonOrOrgPicker({
                 </option>
               ))}
             </select>
+
+            <input
+              type="text"
+              value={nouvelleOrgRepresentant}
+              onChange={(e) => setNouvelleOrgRepresentant(e.target.value)}
+              placeholder="Représentant légal (signe la convention)"
+              aria-label="Représentant légal"
+              className="w-full h-9 px-2 rounded-md border border-border text-sm"
+            />
+            <input
+              type="text"
+              inputMode="numeric"
+              value={nouvelleOrgSiret}
+              onChange={(e) => setNouvelleOrgSiret(e.target.value)}
+              placeholder="SIRET (14 chiffres)"
+              aria-label="SIRET"
+              className="w-full h-9 px-2 rounded-md border border-border text-sm"
+            />
+            <input
+              type="text"
+              value={nouvelleOrgRue}
+              onChange={(e) => setNouvelleOrgRue(e.target.value)}
+              placeholder="Adresse"
+              aria-label="Adresse"
+              className="w-full h-9 px-2 rounded-md border border-border text-sm"
+            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={nouvelleOrgCp}
+                onChange={(e) => setNouvelleOrgCp(e.target.value)}
+                placeholder="Code postal"
+                aria-label="Code postal"
+                className="w-28 h-9 px-2 rounded-md border border-border text-sm"
+              />
+              <input
+                type="text"
+                value={nouvelleOrgVille}
+                onChange={(e) => setNouvelleOrgVille(e.target.value)}
+                placeholder="Ville"
+                aria-label="Ville"
+                className="flex-1 h-9 px-2 rounded-md border border-border text-sm"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Seule la raison sociale est obligatoire. Le <strong>représentant</strong> et le{' '}
+              <strong>SIRET</strong> sont ceux qui bloquent la convention d&apos;entreprise et le
+              dossier OPCO — autant les saisir maintenant.
+            </p>
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
