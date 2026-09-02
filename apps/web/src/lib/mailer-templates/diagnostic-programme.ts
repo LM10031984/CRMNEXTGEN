@@ -107,7 +107,12 @@ export function resolveCtaUrl(envUrl: string | undefined, ofPhone: string): stri
 }
 
 /** Signature NOMINATIVE : un email d'OF signé par un humain joignable convertit mieux. */
-function signataire(of: OfConfig): { nom: string; titre: string; phone: string } {
+/**
+ * Qui signe. Exporté parce que les relances J+4 / J+10 signent la MÊME
+ * personne : deux résolutions séparées, et le prospect reçoit un programme
+ * signé Laurent puis une relance signée autrement.
+ */
+export function signataire(of: OfConfig): { nom: string; titre: string; phone: string } {
   const nom = [of.resp.prenom, of.resp.nom].filter(Boolean).join(' ').trim();
   const secours = [of.contact.prenom, of.contact.nom].filter(Boolean).join(' ').trim();
   return {
