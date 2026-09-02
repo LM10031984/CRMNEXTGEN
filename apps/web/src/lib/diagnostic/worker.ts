@@ -180,6 +180,17 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
       });
       return 'SUPPRIMEE';
     }
+    if (envoi.dryRun) {
+      // Couche env du mailer (MAIL_DRY_RUN=true ou SMTP_HOST vide) : rien n'a
+      // quitté le serveur. Constaté le 02/09/2026 : ce cas passait pour un
+      // succès et la soumission était marquée SENT alors que le prospect
+      // n'avait rien reçu. Un dry-run n'est JAMAIS un envoi.
+      await prisma.diagnosticSubmission.update({
+        where: { id: sub.id },
+        data: { programmeStatus: 'SKIPPED', lastError: 'dry-run : MAIL_DRY_RUN=true ou SMTP_HOST vide' },
+      });
+      return 'SUPPRIMEE';
+    }
     if (!envoi.ok) {
       return await echec(`envoi échoué : ${envoi.error ?? '?'}`);
     }
@@ -190,9 +201,14 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
         programmeStatus: 'SENT',
         programmeSentAt: new Date(),
         lastError: null,
-        personnalisation: sm.ok
-          ? { ancrage: sm.ancrage, programme: sm.programme }
-          : { ancrage: 0, repliCatalogue: true, raison: sm.raison },
+        personnalisation: {
+          ...(sm.ok
+            ? { ancrage: sm.ancrage, programme: sm.programme }
+            : { ancrage: 0, repliCatalogue: true, raison: sm.raison }),
+          // Preuve d'envoi : l'identifiant retourné par le serveur SMTP. Sans
+          // lui, SENT ne prouve qu'un retour ok du mailer.
+          envoi: { messageId: envoi.messageId ?? null },
+        },
       },
     });
     return 'ENVOYEE';
