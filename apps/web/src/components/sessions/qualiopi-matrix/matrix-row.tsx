@@ -104,6 +104,8 @@ export function MatrixRow({
         const warning = 'warning' in cell ? cell.warning : undefined;
         const stale = 'stale' in cell ? cell.stale === true : false;
         const stub = 'stub' in cell ? cell.stub === true : false;
+        const unverifiable = 'unverifiable' in cell ? cell.unverifiable === true : false;
+        const engaged = 'engaged' in cell ? cell.engaged === true : false;
         return (
           <td
             key={docType}
@@ -122,7 +124,13 @@ export function MatrixRow({
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
                   className="inline-flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
-                  <DocStatusBadge state="GENERATED" label={label} stale={stale} stub={stub} />
+                  <DocStatusBadge
+                    state="GENERATED"
+                    label={label}
+                    stale={stale}
+                    stub={stub}
+                    unverifiable={unverifiable}
+                  />
                 </a>
               ) : cell.state === 'MANUAL_OK' && pdfRef ? (
                 <a
@@ -152,6 +160,8 @@ export function MatrixRow({
                 pdfRef={pdfRef}
                 stale={stale}
                 stub={stub}
+                unverifiable={unverifiable}
+                engaged={engaged}
                 readOnly={readOnly}
                 participantName={participant.fullName}
                 docLabel={label}

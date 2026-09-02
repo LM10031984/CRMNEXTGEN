@@ -15,6 +15,7 @@ import {
   ParticipantDocMatrix,
   type MatrixParticipant,
 } from '../qualiopi-matrix/participant-doc-matrix';
+import type { CellFlagSets } from '@/lib/derive-cell-state';
 
 interface Props {
   sessionId: string;
@@ -25,10 +26,8 @@ interface Props {
   sessionDocs: Map<string, { id: string }>;
   /** Dernier batch closure téléchargeable (ZIP) — absent si aucun doc généré. */
   zipBatchId?: string | null;
-  /** Lot 0 · 0.2 — documents dont une donnée rendue a bougé depuis la génération. */
-  staleDocIds?: ReadonlySet<string>;
-  /** Lot 0 · 0.3 — PedagogicalAsset au contenu générique (`usedStub`). */
-  stubAssetIds?: ReadonlySet<string>;
+  /** Lot 0 — périmé / non vérifiable / engagé / générique. */
+  flags?: CellFlagSets;
   /** Lot 0 · 0.3 — combien, pour l'avertissement au téléchargement du pack. */
   stubCount?: number;
 }
@@ -41,8 +40,7 @@ export function TabTousDocuments({
   productDocs,
   sessionDocs,
   zipBatchId,
-  staleDocIds,
-  stubAssetIds,
+  flags,
   stubCount = 0,
 }: Props) {
   return (
@@ -96,8 +94,7 @@ export function TabTousDocuments({
         participants={participants}
         productDocs={productDocs}
         sessionDocs={sessionDocs}
-        staleDocIds={staleDocIds}
-        stubAssetIds={stubAssetIds}
+        flags={flags}
       />
     </div>
   );

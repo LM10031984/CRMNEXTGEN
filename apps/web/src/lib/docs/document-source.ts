@@ -332,51 +332,71 @@ export async function getDocumentStaleness(
   };
 }
 
+/** Forme minimale d'un document pour le verdict (chargée une fois par l'appelant). */
+export interface DocumentForVerdict {
+  id: string;
+  type: string;
+  entityType: string;
+  entityId: string;
+  participantId: string | null;
+  sourceFingerprint: string | null;
+}
+
+/** Sélection Prisma correspondante — à réutiliser pour ne pas diverger. */
+export const DOCUMENT_VERDICT_SELECT = {
+  id: true,
+  type: true,
+  entityType: true,
+  entityId: true,
+  participantId: true,
+  sourceFingerprint: true,
+} as const;
+
+export interface SessionDocumentVerdicts {
+  /** Au moins un champ RENDU a changé depuis la génération. */
+  stale: Set<string>;
+  /**
+   * Type couvert par l'empreinte, mais document produit sans empreinte (parc
+   * antérieur au 02/09/2026). On ne peut RIEN affirmer : ni périmé, ni à jour.
+   * C'est un troisième état, et il doit se voir — un vert de complaisance sur
+   * une convention de 2025 serait exactement le mensonge qu'on corrige.
+   */
+  unverifiable: Set<string>;
+}
+
 /**
- * Verdict pour TOUS les documents d'une session, en un seul chargement du
- * graphe (la fiche session est une page chaude : pas de N+1).
+ * Verdicts pour les documents d'une session, en un seul chargement du graphe
+ * (la fiche session est une page chaude : pas de N+1).
  *
- * Retourne les ids des documents dont au moins un champ rendu a bougé. Les
- * documents sans empreinte (parc antérieur au 02/09/2026, types non couverts)
- * ne remontent PAS : ils sont « inconnus », pas « à jour ».
+ * Les types hors périmètre de l'empreinte (EMARGEMENT, FACTURE, docs légaux…)
+ * ne remontent dans aucun des deux ensembles : leur absence d'empreinte est
+ * normale, l'afficher serait du bruit.
  */
-export async function findStaleDocumentIds(
+export async function findSessionDocumentVerdicts(
   tenantId: string,
   sessionId: string,
-): Promise<Set<string>> {
+  documents: DocumentForVerdict[],
+): Promise<SessionDocumentVerdicts> {
   const stale = new Set<string>();
+  const unverifiable = new Set<string>();
   try {
-    const graph = await loadSessionGraph(tenantId, sessionId);
-    if (!graph) return stale;
+    const fingerprintables = documents.filter((d) => isFingerprintable(d.type));
+    if (fingerprintables.length === 0) return { stale, unverifiable };
 
-    const documents = await prisma.document.findMany({
-      where: {
-        tenantId,
-        sourceFingerprint: { not: null },
-        OR: [
-          { sessionId },
-          ...(graph.session.productId
-            ? [{ entityType: 'product', entityId: graph.session.productId }]
-            : []),
-        ],
-      },
-      select: {
-        id: true,
-        type: true,
-        entityType: true,
-        entityId: true,
-        participantId: true,
-        sourceFingerprint: true,
-      },
-    });
-    if (documents.length === 0) return stale;
+    for (const doc of fingerprintables) {
+      if (!doc.sourceFingerprint) unverifiable.add(doc.id);
+    }
+
+    const aVerifier = fingerprintables.filter((d) => d.sourceFingerprint);
+    if (aVerifier.length === 0) return { stale, unverifiable };
+
+    const graph = await loadSessionGraph(tenantId, sessionId);
+    if (!graph) return { stale, unverifiable };
 
     // Contexte produit chargé une seule fois, et seulement s'il sert.
     let productCtx: DocumentSourceContext | null | undefined;
 
-    for (const doc of documents) {
-      if (!isFingerprintable(doc.type)) continue;
-
+    for (const doc of aVerifier) {
       let ctx: DocumentSourceContext | null;
       if (doc.entityType === 'product') {
         if (productCtx === undefined) {
@@ -407,5 +427,5 @@ export async function findStaleDocumentIds(
       e instanceof Error ? e.message : e,
     );
   }
-  return stale;
+  return { stale, unverifiable };
 }

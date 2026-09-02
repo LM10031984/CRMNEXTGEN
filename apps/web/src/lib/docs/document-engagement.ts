@@ -162,6 +162,95 @@ export async function getDocumentEngagement(
   });
 }
 
+/** Forme minimale d'un document pour l'engagement (chargée par l'appelant). */
+export interface DocumentForEngagement {
+  id: string;
+  type: string;
+  createdAt: Date;
+  pdfUrl: string;
+  participantId: string | null;
+}
+
+/**
+ * Engagement PROUVÉ, pour tous les documents d'une session, en 3 requêtes.
+ *
+ * Ne retient que le niveau `ENGAGED` — la sortie est établie, pas supposée.
+ * `MAYBE_SENT` est volontairement EXCLU : tout document sans empreinte est
+ * antérieur au suivi des envois, donc « peut-être envoyé » ; s'en servir pour
+ * masquer une action reviendrait à ne jamais rien proposer sur le parc ancien.
+ * Le doute reste traité là où il a un sens — la confirmation au clic.
+ */
+export async function findEngagedDocumentIds(
+  tenantId: string,
+  documents: DocumentForEngagement[],
+): Promise<Set<string>> {
+  const engaged = new Set<string>();
+  if (documents.length === 0) return engaged;
+
+  try {
+    const participantIds = Array.from(
+      new Set(documents.map((d) => d.participantId).filter((p): p is string => Boolean(p))),
+    );
+
+    const [emails, participants, submissions] = await Promise.all([
+      prisma.emailMessage.findMany({
+        where: {
+          tenantId,
+          OR: documents.map((d) => ({ documentIds: { array_contains: [d.id] } })),
+        },
+        select: { sentAt: true, documentIds: true },
+      }),
+      participantIds.length > 0
+        ? prisma.sessionParticipant.findMany({
+            where: { id: { in: participantIds }, session: { tenantId } },
+            select: { id: true, conventionSigned: true, docStatus: true },
+          })
+        : Promise.resolve([]),
+      participantIds.length > 0
+        ? prisma.opcoSubmission.findMany({
+            where: { tenantId, participantId: { in: participantIds }, status: { not: 'DRAFT' } },
+            select: { participantId: true, status: true, sentAt: true, attachments: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const participantById = new Map(participants.map((p) => [p.id, p]));
+
+    for (const doc of documents) {
+      const participant = doc.participantId ? participantById.get(doc.participantId) : undefined;
+      const docStatus = (participant?.docStatus ?? null) as Record<string, unknown> | null;
+      const entry = docStatus?.[doc.type] as { state?: unknown } | undefined;
+
+      const verdict = classifyDocumentEngagement({
+        docType: doc.type,
+        createdAt: doc.createdAt,
+        emailSends: emails
+          .filter((e) => Array.isArray(e.documentIds) && (e.documentIds as unknown[]).includes(doc.id))
+          .map((e) => ({ sentAt: e.sentAt })),
+        submissionsWithDoc: submissions
+          .filter(
+            (sub) =>
+              sub.participantId === doc.participantId &&
+              attachmentKeys(sub.attachments).includes(doc.pdfUrl),
+          )
+          .map((sub) => ({ status: sub.status as string, sentAt: sub.sentAt })),
+        conventionSigned: participant?.conventionSigned === true,
+        manuallyValidated: entry?.state === 'MANUAL_OK',
+      });
+
+      if (verdict.level === 'ENGAGED') engaged.add(doc.id);
+    }
+  } catch (e) {
+    // Comme pour la péremption : pas d'information vaut mieux qu'une page qui
+    // tombe. On perd la mise en garde, pas la garde serveur au moment d'agir.
+    console.warn(
+      '[document-engagement] détection d’engagement indisponible :',
+      e instanceof Error ? e.message : e,
+    );
+  }
+  return engaged;
+}
+
 /** Extrait défensivement les clés de stockage d'un `OpcoSubmission.attachments`. */
 function attachmentKeys(attachments: unknown): string[] {
   if (!Array.isArray(attachments)) return [];

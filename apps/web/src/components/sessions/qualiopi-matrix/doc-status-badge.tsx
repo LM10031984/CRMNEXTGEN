@@ -18,7 +18,16 @@
  * A11y : aria-label + title (couleur dupliquée par icône + texte FR).
  */
 
-import { Check, AlertTriangle, X, Minus, Loader2, History, FileWarning } from 'lucide-react';
+import {
+  Check,
+  AlertTriangle,
+  X,
+  Minus,
+  Loader2,
+  History,
+  FileWarning,
+  FileQuestion,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DocStatusState as DocStatusStateType } from '@qualiof/shared';
 
@@ -43,11 +52,25 @@ export interface DocStatusBadgeProps {
    * Passe donc devant « périmé » comme devant « généré ».
    */
   stub?: boolean;
+  /**
+   * Lot 0 · 0.2 — document d'un type couvert par l'empreinte, mais produit
+   * sans empreinte (avant le 02/09/2026). Ni périmé ni à jour : on ne sait
+   * pas, et un vert de complaisance serait le mensonge qu'on corrige.
+   */
+  unverifiable?: boolean;
 }
 
 const BASE_CLS = 'inline-flex items-center justify-center h-6 w-6 rounded-full';
 
-export function DocStatusBadge({ state, warning, label, hasUploadedPdf, stale, stub }: DocStatusBadgeProps) {
+export function DocStatusBadge({
+  state,
+  warning,
+  label,
+  hasUploadedPdf,
+  stale,
+  stub,
+  unverifiable,
+}: DocStatusBadgeProps) {
   if (stub) {
     const ariaLabel = `${label} : contenu générique, à régénérer`;
     return (
@@ -57,6 +80,19 @@ export function DocStatusBadge({ state, warning, label, hasUploadedPdf, stale, s
         className={cn(BASE_CLS, 'bg-red-100 text-red-700 border border-red-400')}
       >
         <FileWarning className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (unverifiable && !stale && state === 'GENERATED') {
+    const ariaLabel = `${label} : non vérifiable, produit avant le suivi des empreintes`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Non vérifiable — produit avant le suivi des empreintes (02/09/2026). L'application ne peut pas dire si les données ont bougé depuis. Régénérer le rend vérifiable."
+        className={cn(BASE_CLS, 'bg-slate-100 text-slate-600 border border-slate-400 border-dashed')}
+      >
+        <FileQuestion className="h-3 w-3" aria-hidden="true" />
       </span>
     );
   }

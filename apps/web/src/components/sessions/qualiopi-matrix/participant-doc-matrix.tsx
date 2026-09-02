@@ -26,7 +26,7 @@
  */
 
 import { Users } from 'lucide-react';
-import { deriveCellState, type CellState } from '@/lib/derive-cell-state';
+import { deriveCellState, type CellState, type CellFlagSets } from '@/lib/derive-cell-state';
 import { MATRIX_DOC_TYPES, DOC_TYPE_LABELS } from '@/lib/doc-scope';
 import { MatrixClientShell } from './matrix-client-shell';
 
@@ -54,13 +54,11 @@ export interface ParticipantDocMatrixProps {
   productDocs: Map<string, { id: string }>;
   sessionDocs: Map<string, { id: string }>;
   /**
-   * Lot 0 · 0.2 — ids des documents dont une donnée rendue a bougé depuis la
-   * génération (`findStaleDocumentIds`). Optionnel : sans lui, la matrice
-   * affiche ce qu'elle affichait avant.
+   * Lot 0 — périmé / non vérifiable / engagé / générique, calculés par
+   * `analyzeSessionDocuments`. Optionnel : sans eux, la matrice affiche ce
+   * qu'elle affichait avant.
    */
-  staleDocIds?: ReadonlySet<string>;
-  /** Lot 0 · 0.3 — PedagogicalAsset au contenu générique (`usedStub`). */
-  stubAssetIds?: ReadonlySet<string>;
+  flags?: CellFlagSets;
 }
 
 export function ParticipantDocMatrix({
@@ -70,8 +68,7 @@ export function ParticipantDocMatrix({
   participants,
   productDocs,
   sessionDocs,
-  staleDocIds,
-  stubAssetIds,
+  flags,
 }: ParticipantDocMatrixProps) {
   // D-11 — RBAC matrice : ADMIN/MANAGER write, autres lecture seule.
   const readOnly = !['ADMIN', 'MANAGER'].includes(userRole);
@@ -106,8 +103,7 @@ export function ParticipantDocMatrix({
         productDocs,
         sessionDocs,
         p.pedagogicalAssets,
-        staleDocIds,
-        stubAssetIds,
+        flags,
       );
       return { docType, state };
     });

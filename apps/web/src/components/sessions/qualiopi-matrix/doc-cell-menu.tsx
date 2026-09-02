@@ -68,6 +68,16 @@ export interface DocCellMenuProps {
    * régénération : on la met en avant plutôt que de la cacher.
    */
   stub?: boolean;
+  /** Lot 0 · 0.2 — document sans empreinte : régénérer le rend vérifiable. */
+  unverifiable?: boolean;
+  /**
+   * Lot 0 · 0.2 — sortie PROUVÉE (email tracé, dossier parti, signature).
+   * On n'INVITE pas à régénérer un tel document : le destinataire garde ce
+   * qu'il a reçu, et rendre une empreinte vérifiable ne vaut pas un avenant.
+   * L'action reste accessible — le serveur demandera la confirmation — mais
+   * elle cesse d'être présentée comme la chose à faire.
+   */
+  engaged?: boolean;
   /** Si true, lecture seule (FORMATEUR / COMMERCIAL / COMPTABLE) — pas de menu. */
   readOnly?: boolean;
   /** Pour tooltips & confirms. */
@@ -86,6 +96,8 @@ export function DocCellMenu({
   pdfRef,
   stale,
   stub,
+  unverifiable,
+  engaged,
   readOnly,
   participantName,
   docLabel,
@@ -190,6 +202,17 @@ export function DocCellMenu({
     });
   }
 
+  // Lot 0 — l'intitulé dit ce qui cloche, dans l'ordre de gravité. Le cas
+  // « rendre vérifiable » est une INVITATION : on ne la formule pas pour un
+  // document dont la sortie est prouvée (cf. `engaged`).
+  const regenerateLabel = stub
+    ? 'Re-générer — contenu générique'
+    : stale
+      ? 'Re-générer — données modifiées depuis'
+      : unverifiable && !engaged
+        ? 'Re-générer — rendre vérifiable'
+        : 'Re-générer';
+
   const showGenerate = state === 'MISSING';
   const showRegenerate = state === 'GENERATED';
   const showDownload = pdfRef && (state === 'GENERATED' || state === 'MANUAL_OK');
@@ -240,6 +263,11 @@ export function DocCellMenu({
             {showRegenerate && (
               <DropdownMenu.Item
                 onSelect={handleRegen}
+                title={
+                  engaged
+                    ? 'Ce document est déjà sorti (envoi tracé, dossier parti ou signature) — un avenant est requis, la régénération demandera confirmation.'
+                    : undefined
+                }
                 className={cn(
                   ITEM_CLS,
                   stub && 'text-red-700 font-medium',
@@ -250,11 +278,7 @@ export function DocCellMenu({
                   className={cn('h-4 w-4', stub && 'text-red-600', !stub && stale && 'text-amber-600')}
                   aria-hidden="true"
                 />
-                {stub
-                  ? 'Re-générer — contenu générique'
-                  : stale
-                    ? 'Re-générer — données modifiées depuis'
-                    : 'Re-générer'}
+                {regenerateLabel}
               </DropdownMenu.Item>
             )}
             {showDownload && (

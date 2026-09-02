@@ -16,12 +16,33 @@ au refus du financeur.
 
 **Depuis le 02/09/2026, une partie du trou est fermée en base** (lot 0 · 0.2) :
 `Document.sourceFingerprint` porte l'empreinte des champs d'entrée réellement
-rendus, et `findStaleDocumentIds` rend un verdict binaire. Mais l'empreinte ne
-se pose qu'à la GÉNÉRATION : tout document produit avant cette date a
-`sourceFingerprint = null`, verdict « inconnu ». **C'est exactement le parc que
-cette commande couvre** — l'heuristique de dates ci-dessous reste la seule
-méthode pour le passé, et pour les types hors périmètre de l'empreinte
-(EMARGEMENT, FACTURE).
+rendus, et le verdict est binaire. Mais l'empreinte ne se pose qu'à la
+GÉNÉRATION : tout document produit avant cette date a `sourceFingerprint = null`
+et s'affiche « non vérifiable » (pastille grise pointillée dans la matrice) —
+ni périmé, ni à jour. **C'est exactement le parc que cette commande couvre** :
+l'heuristique de dates ci-dessous reste la seule méthode pour le passé, et pour
+les types hors périmètre de l'empreinte (EMARGEMENT, FACTURE).
+
+## 0. Mesurer la décrue avant de plonger
+
+```
+pnpm --filter @qualiof/web docs:empreintes
+```
+
+Lecture seule. Donne le stock de documents **non vérifiables** (types couverts
+par l'empreinte, mais produits avant le 02/09/2026) et le pourcentage déjà
+vérifiable, par type. Ce stock ne peut que décroître, au rythme des
+régénérations légitimes.
+
+Deux usages :
+
+- **avant** une campagne, pour savoir ce qu'il reste à traiter ;
+- **après**, pour vérifier que le nombre a bougé. S'il ne bouge pas alors qu'on
+  a régénéré, c'est que le chemin emprunté ne pose pas l'empreinte — le
+  vérifier avant de conclure quoi que ce soit sur la donnée.
+
+Ne jamais régénérer en masse **pour faire baisser ce compteur** : un document
+engagé (catégorie 1 ci-dessous) reste intouchable, compteur ou pas.
 
 ## 1. Détecter
 
@@ -81,9 +102,10 @@ Livré le 02/09/2026, lot 0 · 0.2 et 0.3 :
 | Empreinte des données d'entrée | `Document.sourceFingerprint`, posée à la génération |
 | Projection par type de document | `lib/docs/source-fingerprint.ts` (PUR, testable sans base) |
 | Verdict `unknown` / `fresh` / `stale` | `getDocumentStaleness(tenantId, docId)` |
-| Verdict pour toute une session | `findStaleDocumentIds(tenantId, sessionId)` — un seul chargement du graphe |
+| État documentaire d'une session | `analyzeSessionDocuments(tenantId, sessionId, productId)` — une seule lecture, rend `stale` / `unverifiable` / `engaged` |
 | « ce document est-il déjà sorti ? » | `getDocumentEngagement` / `getParticipantDocEngagement` (`lib/docs/document-engagement.ts`) |
 | Contenu générique bloquant la remise | blocker `stub_documents` (`blocks: 'delivery'`) dans `getSessionCompleteness` |
+| Compteur de décrue du parc non vérifiable | `pnpm --filter @qualiof/web docs:empreintes` |
 
 Deux règles à respecter en étendant l'empreinte :
 
