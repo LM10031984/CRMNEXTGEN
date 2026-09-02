@@ -20,6 +20,7 @@ import {
   Newspaper,
   FilePlus,
   BarChart3,
+  Stethoscope,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
 
@@ -138,6 +139,15 @@ export const NAV: NavSection[] = [
         label: 'Leads',
         href: '/app/leads',
         icon: Megaphone,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
+      },
+      // Diagnostics d'agence (chaîne diagnostic, lot B) : le R1 commercial.
+      // Mêmes rôles que Leads — c'est le prolongement du même métier. À ne pas
+      // confondre avec /diagnostic (public, express du stand MLS).
+      {
+        label: 'Diagnostics',
+        href: '/app/diagnostics',
+        icon: Stethoscope,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
       // Vue de charge (Phase 9 Plan 09-04) : ADMIN+MANAGER uniquement

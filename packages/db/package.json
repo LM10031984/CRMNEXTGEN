@@ -25,7 +25,12 @@
     "backfill:trainer-treso": "dotenv -e ../../.env -- tsx scripts/backfill-trainer-from-treso.ts",
     "lint": "tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
-    "import:diag-catalog": "dotenv -e ../../.env -- tsx scripts/import-diag-catalog.ts"
+    "import:diag-catalog": "dotenv -e ../../.env -- tsx scripts/import-diag-catalog.ts",
+    "db:migrate:local": "dotenv -e ../../.env.local -e ../../.env -- prisma migrate dev",
+    "db:deploy:local": "dotenv -e ../../.env.local -e ../../.env -- prisma migrate deploy",
+    "db:seed:local": "dotenv -e ../../.env.local -e ../../.env -- tsx prisma/seed.ts",
+    "db:studio:local": "dotenv -e ../../.env.local -e ../../.env -- prisma studio",
+    "import:diag-catalog:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/import-diag-catalog.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "5.22.0",

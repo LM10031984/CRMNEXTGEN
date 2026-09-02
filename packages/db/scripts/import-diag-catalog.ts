@@ -344,9 +344,14 @@ async function main() {
     say(`- ${created.reglementaires} produit(s) repassé(s) en fundingType REGLEMENTAIRE`);
   }
 
+  // Le rapport de simulation et celui d'écriture ne portent PAS le même nom :
+  // un `--apply` écrasait le dry-run commité, c'est-à-dire précisément le
+  // document que Laurent est censé relire avant de décider.
   const reportPath = path.resolve(
     REPO_ROOT,
-    `.planning/${stamp.replace(/-/g, '').slice(2)}-import-catalogue-diagnostic.md`,
+    `.planning/${stamp.replace(/-/g, '').slice(2)}-import-catalogue-diagnostic${
+      APPLY ? '-applique' : ''
+    }.md`,
   );
   writeFileSync(reportPath, `${lines.join('\n')}\n`, 'utf8');
   console.log(`\n📄 Rapport écrit : ${reportPath}`);
