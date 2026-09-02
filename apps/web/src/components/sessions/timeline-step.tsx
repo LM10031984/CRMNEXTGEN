@@ -225,6 +225,7 @@ export function StepDocRow({
   indic,
   funder,
   pdfHref,
+  action,
 }: {
   done?: boolean;
   pending?: boolean;
@@ -250,6 +251,17 @@ export function StepDocRow({
    * reste le hub per-stagiaire.
    */
   pdfHref?: string;
+  /**
+   * Action de bout de ligne (ex : « Régénérer »), rendue À CÔTÉ du lien et non
+   * dedans — un `<button>` imbriqué dans un `<a>` est du HTML invalide, et le
+   * clic partirait sur l'ouverture du PDF.
+   *
+   * Ajouté le 02/09 : le bloc « Préparation pédagogique » montrait le programme
+   * en lecture seule, et son CTA « Compléter » ne traite que ce qui MANQUE. Un
+   * document déjà produit mais devenu faux (tarif revu) n'avait donc aucun
+   * moyen d'être refait depuis cet écran.
+   */
+  action?: React.ReactNode;
 }) {
   const showCounter = typeof count === 'number' && typeof total === 'number';
   // HOTFIX 2 (2026-06-10) — borne d'affichage : un compteur « X/Y » ne peut
@@ -301,13 +313,13 @@ export function StepDocRow({
 
   if (allDone && pdfHref) {
     return (
-      <li>
+      <li className="flex items-center gap-1">
         <a
           href={pdfHref}
           target="_blank"
           rel="noopener noreferrer"
           title={`Ouvrir ${label}`}
-          className="group flex items-center gap-2 text-sm rounded-md -mx-1.5 px-1.5 py-1 hover:bg-emerald-50/50 transition-colors"
+          className="group flex flex-1 min-w-0 items-center gap-2 text-sm rounded-md -mx-1.5 px-1.5 py-1 hover:bg-emerald-50/50 transition-colors"
         >
           {inner}
           <ExternalLink
@@ -315,6 +327,7 @@ export function StepDocRow({
             aria-hidden="true"
           />
         </a>
+        {action}
       </li>
     );
   }
