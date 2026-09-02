@@ -37,6 +37,18 @@ export interface ProgrammeData {
   produitCode: string;
   produitDureeHeures: number;
   produitPriceHT: number;
+  /**
+   * Comment lire `produitPriceHT` (corrigé le 02/09, retour Laurent).
+   *
+   *  - `PAR_STAGIAIRE` (défaut) : programme de catalogue ou session inter —
+   *    chaque stagiaire paye ce montant.
+   *  - `TOTAL_ENTREPRISE` : la session est portée par UNE convention
+   *    d'entreprise. Le montant qui engage est le TOTAL du groupe, pas un prix
+   *    par tête : « 1 100 € par stagiaire » face à une convention de 2 200 €
+   *    pour deux salariées, c'est le même chiffre dit de deux façons — et
+   *    l'OPCO lit deux montants différents dans la même enveloppe.
+   */
+  prixMode?: 'PAR_STAGIAIRE' | 'TOTAL_ENTREPRISE';
   produitObjectifs: string[];
   produitProgrammeMd: string;
   produitPrerequisites: string | null;
@@ -521,7 +533,11 @@ ${renderOfPagedFooter()}
 <section>
   <h2 class="section">Tarif</h2>
   <div class="tarif">
-    <strong>${fmtEUR.format(data.produitPriceHT)}</strong> HT par stagiaire
+    <strong>${fmtEUR.format(data.produitPriceHT)}</strong> HT ${
+      data.prixMode === 'TOTAL_ENTREPRISE'
+        ? 'pour l’ensemble des stagiaires inscrits'
+        : 'par stagiaire'
+    }
     <span style="color:#64748B; font-size: 9.5pt;">— TVA non applicable en vertu de l'article 261-4-4° du CGI.</span>
   </div>
 </section>
