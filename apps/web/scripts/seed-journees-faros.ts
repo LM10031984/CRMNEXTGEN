@@ -50,9 +50,23 @@ const TENANT_ID = 'db191440-a144-48d1-93c1-767e6f647f2c';
  * journée. C'est le tarif des 9 autres journées de 8 h du catalogue (vérifié le
  * 02/09/2026) et c'est ce qui rend vraie la phrase du script d'appel : pour un
  * ressortissant AGEFICE à jour de sa contribution, il ne reste rien à payer.
- * Décision Laurent, 02/09/2026.
+ *
+ * VALIDÉ ET FIGÉ par Laurent le 02/09/2026, POUR CES QUATRE PRODUITS SEULEMENT.
+ * Ce script n'a aucune vocation à harmoniser le catalogue : la tarification des
+ * autres produits relève d'autres règles (forfait de groupe par entreprise,
+ * intra sur mesure) et une erreur de tarif ne se voit pas — elle se lit six
+ * semaines plus tard dans le chiffre d'affaires.
  */
 const PRIX_JOURNEE_HT = '336.00';
+
+/**
+ * Les SEULS codes que ce script a le droit de toucher.
+ *
+ * Garde-fou volontairement redondant avec la liste `JOURNEES` : le jour où
+ * quelqu'un ajoutera une entrée pour « juste mettre à jour un autre produit »,
+ * le script refusera au lieu de lui appliquer silencieusement 336 € HT.
+ */
+const CODES_AUTORISES = new Set(['FRM-0004', 'FRM-0005', 'FRM-0006', 'FRM-0007']);
 
 /** Une ligne du déroulé, et la capsule Faros dont elle vient. */
 type Ligne = readonly [texte: string, capsule: string];
@@ -344,6 +358,20 @@ const JOURNEES: readonly Journee[] = [
 async function main() {
   const ecrire = process.env.WRITE === '1';
   console.log(ecrire ? '=== ÉCRITURE ===' : '=== SIMULATION (WRITE=1 pour écrire) ===\n');
+
+  // Vérifié AVANT toute écriture, et sur les deux sens : aucun code étranger ne
+  // passe, et aucune des quatre journées n'a été retirée par mégarde.
+  const codes = JOURNEES.map((j) => j.code);
+  const intrus = codes.filter((c) => !CODES_AUTORISES.has(c));
+  if (intrus.length > 0) {
+    throw new Error(
+      `Ce script ne tarifie QUE les journées Faros (décision Laurent du 02/09/2026). ` +
+        `Codes non autorisés : ${intrus.join(', ')}.`,
+    );
+  }
+  if (codes.length !== CODES_AUTORISES.size) {
+    throw new Error(`Attendu ${CODES_AUTORISES.size} journées, trouvé ${codes.length}.`);
+  }
 
   for (const j of JOURNEES) {
     const programMd = composerProgramme(j.blocs);
