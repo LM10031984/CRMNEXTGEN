@@ -10,7 +10,8 @@
     "./helpers": "./src/helpers/index.ts",
     "./constants": "./src/constants/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./diagnostic": "./src/diagnostic/index.ts"
   },
   "scripts": {
     "lint": "tsc --noEmit",

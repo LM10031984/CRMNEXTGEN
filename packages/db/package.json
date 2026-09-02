@@ -24,7 +24,8 @@
     "import:veille": "dotenv -e ../../.env -- tsx scripts/import-veille-from-xlsx.ts",
     "backfill:trainer-treso": "dotenv -e ../../.env -- tsx scripts/backfill-trainer-from-treso.ts",
     "lint": "tsc --noEmit",
-    "test": "dotenv -e ../../.env -- vitest run"
+    "test": "dotenv -e ../../.env -- vitest run",
+    "import:diag-catalog": "dotenv -e ../../.env -- tsx scripts/import-diag-catalog.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "5.22.0",
