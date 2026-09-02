@@ -24,7 +24,11 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { buildAuditData } from '@/lib/diagnostic-r1/audit-builder';
 import { renderAuditHtml } from '@/lib/diagnostic-r1/templates/audit-template';
-import { computeSourceFingerprint } from '@/lib/diagnostic-r1/fingerprint';
+import {
+  compareSourceFingerprint,
+  computeSourceFingerprint,
+  type FingerprintComparison,
+} from '@/lib/diagnostic-r1/fingerprint';
 import { SCORING_VERSION } from '@/lib/diagnostic-r1/scoring';
 
 export type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; error: string };
@@ -123,9 +127,13 @@ async function assemble(diagnosticId: string, tenantId: string) {
  * L'audit en base correspond-il encore aux données saisies ?
  * Lecture seule — appelée par la fiche diagnostic pour afficher le bandeau.
  */
-export async function getAuditFreshness(
-  diagnosticId: string,
-): Promise<ActionResult<{ hasDocument: boolean; isStale: boolean; documentId: string | null }>> {
+export async function getAuditFreshness(diagnosticId: string): Promise<
+  ActionResult<{
+    hasDocument: boolean;
+    freshness: FingerprintComparison;
+    documentId: string | null;
+  }>
+> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL', 'LECTEUR']);
@@ -154,7 +162,10 @@ export async function getAuditFreshness(
     ok: true,
     data: {
       hasDocument: Boolean(doc),
-      isStale: Boolean(doc) && assembled.diagnostic.sourceFingerprint !== assembled.fingerprint,
+      freshness: compareSourceFingerprint(
+        assembled.diagnostic.sourceFingerprint,
+        assembled.fingerprint,
+      ),
       documentId: doc?.id ?? null,
     },
   };

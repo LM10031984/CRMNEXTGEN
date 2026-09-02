@@ -7,7 +7,7 @@
  * silencieusement changer les chiffres déjà annoncés au dirigeant.
  *
  * Le snapshot porte donc `rulesVersion` : c'est ce qui permettra à
- * `isDocumentStale()` (lot D/E) de détecter une proposition périmée.
+ * `compareSourceFingerprint()` (lot D/E) de détecter une proposition périmée.
  */
 
 import { computeFunding } from '@/lib/financement/funding-engine';

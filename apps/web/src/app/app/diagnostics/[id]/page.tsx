@@ -70,8 +70,8 @@ export default async function DiagnosticPage({
 
   const freshness = await getAuditFreshness(id);
   const audit = freshness.ok
-    ? (freshness.data ?? { hasDocument: false, isStale: false, documentId: null })
-    : { hasDocument: false, isStale: false, documentId: null };
+    ? (freshness.data ?? { hasDocument: false, freshness: 'unknown' as const, documentId: null })
+    : { hasDocument: false, freshness: 'unknown' as const, documentId: null };
 
   const agence =
     diagnostic.organization?.legalName ??
@@ -166,7 +166,7 @@ export default async function DiagnosticPage({
       <AuditPanel
         diagnosticId={id}
         hasDocument={audit.hasDocument}
-        isStale={audit.isStale}
+        freshness={audit.freshness}
         documentId={audit.documentId}
         answersCount={diagnostic.answers.length}
       />

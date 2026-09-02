@@ -3,9 +3,10 @@
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { AlertTriangle, Download, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Download, FileText, HelpCircle, Loader2, RefreshCw } from 'lucide-react';
 
 import { generateDiagnosticAudit } from '@/server/actions/diagnostic-audit';
+import type { FingerprintComparison } from '@/lib/diagnostic-r1/fingerprint';
 
 /**
  * Le rapport d'audit sur la fiche diagnostic.
@@ -17,13 +18,13 @@ import { generateDiagnosticAudit } from '@/server/actions/diagnostic-audit';
 export function AuditPanel({
   diagnosticId,
   hasDocument,
-  isStale,
+  freshness,
   documentId,
   answersCount,
 }: {
   diagnosticId: string;
   hasDocument: boolean;
-  isStale: boolean;
+  freshness: FingerprintComparison;
   documentId: string | null;
   answersCount: number;
 }) {
@@ -53,12 +54,24 @@ export function AuditPanel({
       </header>
 
       <div className="p-4 space-y-3">
-        {hasDocument && isStale && (
+        {hasDocument && freshness === 'stale' && (
           <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed dark:border-amber-800 dark:bg-amber-950/40">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
             <span>
               Le diagnostic a changé depuis la génération de ce rapport : le PDF ne correspond plus
               à ce qui est saisi. Régénérez-le avant de le remettre.
+            </span>
+          </div>
+        )}
+
+        {/* « Pas d'empreinte » n'est pas « périmé » : on dit qu'on ne sait pas,
+            plutôt que d'accuser un document qui va peut-être très bien. */}
+        {hasDocument && freshness === 'unknown' && (
+          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed">
+            <HelpCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
+            <span>
+              Ce rapport a été produit sans empreinte de contrôle : impossible de vérifier s’il
+              correspond encore aux données saisies. Le régénérer lèvera le doute.
             </span>
           </div>
         )}
@@ -93,11 +106,17 @@ export function AuditPanel({
               target="_blank"
               rel="noreferrer"
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md border text-sm hover:bg-muted ${
-                isStale ? 'border-amber-300 text-amber-800 dark:text-amber-300' : 'border-border'
+                freshness === 'stale'
+                  ? 'border-amber-300 text-amber-800 dark:text-amber-300'
+                  : 'border-border'
               }`}
             >
               <Download className="h-4 w-4" />
-              {isStale ? 'Ouvrir la version périmée' : 'Ouvrir le PDF'}
+              {freshness === 'stale'
+                ? 'Ouvrir la version périmée'
+                : freshness === 'unknown'
+                  ? 'Ouvrir le PDF (non vérifiable)'
+                  : 'Ouvrir le PDF'}
             </a>
           )}
         </div>

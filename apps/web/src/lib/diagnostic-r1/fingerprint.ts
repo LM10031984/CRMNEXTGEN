@@ -71,16 +71,34 @@ export function computeSourceFingerprint(input: FingerprintInput): string {
 }
 
 /**
- * Le document est-il périmé ?
+ * Les trois états d'un document face aux données courantes.
  *
- * `null` sur l'empreinte stockée = document généré avant l'introduction du
- * mécanisme. On le considère périmé : mieux vaut proposer une régénération
- * inutile qu'un document dont on ne peut rien dire.
+ * Un booléen ne suffit pas, et c'est tout l'objet de l'arbitrage du 02/09/2026 :
+ * « absence d'empreinte » n'est pas « périmé ». Ce sont deux affirmations
+ * différentes, et confondre l'ignorance avec le défaut fait crier au loup sur
+ * des documents qui vont peut-être très bien.
+ *
+ *   'fresh'   — le document correspond aux données actuelles ;
+ *   'stale'   — les données ont changé depuis, il ne correspond plus ;
+ *   'unknown' — aucune empreinte stockée : on ne peut RIEN affirmer.
+ *               Cas d'un document produit avant l'introduction du mécanisme.
  */
-export function isDocumentStale(
+export type FingerprintComparison = 'unknown' | 'fresh' | 'stale';
+
+/**
+ * Compare l'empreinte stockée aux données courantes.
+ *
+ * Convention partagée avec le chantier audit (`compareSourceFingerprint`) :
+ * l'absence d'empreinte rend 'unknown', JAMAIS 'stale'. Une version antérieure
+ * de cette fonction rendait `true` (périmé) dans ce cas, avec pour argument
+ * qu'une régénération inutile coûte moins qu'un document douteux. Laurent a
+ * tranché l'inverse, et uniformément sur tous les types de documents : on ne
+ * qualifie pas de périmé ce qu'on n'a pas les moyens de vérifier.
+ */
+export function compareSourceFingerprint(
   storedFingerprint: string | null | undefined,
   currentFingerprint: string,
-): boolean {
-  if (!storedFingerprint) return true;
-  return storedFingerprint !== currentFingerprint;
+): FingerprintComparison {
+  if (!storedFingerprint) return 'unknown';
+  return storedFingerprint === currentFingerprint ? 'fresh' : 'stale';
 }
