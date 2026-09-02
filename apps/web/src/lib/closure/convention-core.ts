@@ -32,7 +32,7 @@ import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
 import { resolveConventionDate } from './convention-date';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
+import { isPersonneMoralePayeur, releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 
 /**
@@ -128,9 +128,23 @@ export async function generateConventionCore(
   // supprime puis recrée des Documents, deux appels concurrents se
   // marcheraient dessus.
   //
-  // Forme juridique absente ⇒ chemin individuel (cf. `isPersonneMoralePayeur`) :
-  // on ne présume pas d'une convention de groupe sur une donnée manquante.
-  if (isPersonneMoralePayeur(participant.sponsorOrg?.legalForm)) {
+  // Forme juridique absente ⇒ chemin individuel : on ne présume pas d'une
+  // convention de groupe sur une donnée manquante.
+  //
+  // Depuis le 02/09 la garde regarde AUSSI le lien : une entreprise
+  // individuelle qui paye pour ses salariés relève de la convention. Sans ça,
+  // le cœur individuel fabriquait un contrat nominatif au salarié d'une EI
+  // pendant que le routeur produisait la convention de groupe — les deux
+  // documents contradictoires que la règle du 12/08 sert justement à éviter.
+  if (
+    releveDeLaConvention({
+      sponsorLegalForm: participant.sponsorOrg?.legalForm,
+      roleChezSponsor:
+        participant.person?.legalLinks?.find(
+          (l) => l.organizationId === participant.sponsorOrgId,
+        )?.role ?? null,
+    })
+  ) {
     return {
       ok: true,
       skipped: true,
@@ -309,18 +323,10 @@ export async function generateConventionEntrepriseCore(
   });
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
-  // Garde métier : un auto-payeur relève du contrat individuel.
-  if (requiresContratIndividuel(org.legalForm)) {
-    return {
-      ok: false,
-      error: `« ${org.legalName} » est une personne physique (${org.legalForm}) : ce commanditaire relève du contrat de formation professionnelle individuel, pas de la convention.`,
-    };
-  }
-
   const participants = await prisma.sessionParticipant.findMany({
     where: { sessionId, sponsorOrgId, session: { tenantId } },
     include: {
-      person: true,
+      person: { include: { legalLinks: { select: { organizationId: true, role: true } } } },
       session: { include: { product: true, location: true } },
     },
     orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
@@ -329,6 +335,25 @@ export async function generateConventionEntrepriseCore(
     return {
       ok: false,
       error: `Aucun participant rattaché à « ${org.legalName} » sur cette session.`,
+    };
+  }
+
+  // Garde métier : un AUTO-PAYEUR relève du contrat individuel.
+  //
+  // Le critère n'est pas la forme juridique seule (correction du 02/09) : une
+  // entreprise individuelle PEUT employer, et quand elle paye pour ses
+  // salariés elle n'est pas « à ses frais » (L6353-3). On refuse donc
+  // seulement si AUCUN inscrit de ce commanditaire n'est son salarié —
+  // c'est-à-dire le vrai cas de l'auto-entrepreneur qui se forme lui-même.
+  const salaries = participants.filter((p) =>
+    estEmployeurDeLApprenant(
+      p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.role ?? null,
+    ),
+  );
+  if (requiresContratIndividuel(org.legalForm) && salaries.length === 0) {
+    return {
+      ok: false,
+      error: `« ${org.legalName} » est une personne physique (${org.legalForm}) et aucun inscrit n'y est salarié : ce commanditaire relève du contrat de formation professionnelle individuel, pas de la convention.`,
     };
   }
 
@@ -465,13 +490,24 @@ export async function generateConventionEntrepriseCore(
   //
   // Les auto-payeurs présents sur la session ne comptent pas : ils relèvent du
   // contrat individuel et n'ont aucune convention de groupe à revendiquer.
-  const autresCommanditaires = await prisma.sessionParticipant.findMany({
+  // Pas de `distinct` sur l'organisation : depuis le 02/09 le régime dépend du
+  // LIEN de chaque inscrit, pas seulement de la forme de son commanditaire.
+  // Une même EI peut porter un salarié (convention) et un agent commercial
+  // (contrat individuel) — il faut donc regarder inscrit par inscrit.
+  const autresInscrits = await prisma.sessionParticipant.findMany({
     where: { sessionId, session: { tenantId }, sponsorOrgId: { not: sponsorOrgId } },
-    select: { sponsorOrgId: true, sponsorOrg: { select: { legalForm: true } } },
-    distinct: ['sponsorOrgId'],
+    select: {
+      sponsorOrgId: true,
+      sponsorOrg: { select: { legalForm: true } },
+      person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+    },
   });
-  const monoCommanditaire = !autresCommanditaires.some((p) =>
-    isPersonneMoralePayeur(p.sponsorOrg?.legalForm),
+  const monoCommanditaire = !autresInscrits.some((p) =>
+    releveDeLaConvention({
+      sponsorLegalForm: p.sponsorOrg?.legalForm,
+      roleChezSponsor:
+        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+    }),
   );
   if (!monoCommanditaire) {
     console.warn(

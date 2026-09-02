@@ -277,3 +277,38 @@ export const QUESTIONS: DiagnosticQuestion[] = [
 export const QUESTIONS_SCORANTES = QUESTIONS.filter((q) =>
   q.choix.some((c) => Object.keys(c.poids).length > 0),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// L'engagement de rappel — posé SUR LE STAND, avant le formulaire de contact.
+//
+// C'est le levier le plus rentable du dispositif : l'appel du lendemain ne
+// s'ouvre plus par « bonjour, je me permets de vous appeler » mais par « vous
+// m'avez dit cette semaine ». Ce n'est plus du démarchage, c'est un rendez-vous
+// tenu — et le tri des leads est fait par le prospect lui-même.
+//
+// Un seul tap, aucune saisie : mêmes contraintes de terrain que les 8 questions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RappelValue = 'CETTE_SEMAINE' | 'SEMAINE_PROCHAINE' | 'PLUS_TARD';
+
+export const RAPPEL_QUESTION = 'Quand peut-on vous appeler pour caler votre journée ?';
+
+export const RAPPEL_CHOIX: { value: RappelValue; label: string }[] = [
+  { value: 'CETTE_SEMAINE', label: 'Cette semaine' },
+  { value: 'SEMAINE_PROCHAINE', label: 'La semaine prochaine' },
+  { value: 'PLUS_TARD', label: 'Plus tard — juste le programme' },
+];
+
+/**
+ * Ce qui s'écrit dans `lastAction` et en tête de `notes`. Formulé du point de
+ * vue de celui qui rappelle, pas de celui qui a répondu.
+ */
+export const RAPPEL_LIBELLE_CRM: Record<RappelValue, string> = {
+  CETTE_SEMAINE: 'rappel cette semaine',
+  SEMAINE_PROCHAINE: 'rappel la semaine prochaine',
+  PLUS_TARD: 'pas de rappel demandé',
+};
+
+export function estRappelValide(v: unknown): v is RappelValue {
+  return RAPPEL_CHOIX.some((c) => c.value === v);
+}

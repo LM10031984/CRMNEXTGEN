@@ -6,6 +6,7 @@ import { prisma } from '@qualiof/db';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { ReassignLeadButton } from '@/components/leads/reassign-lead-button';
 import { LeadStatusSelect } from '@/components/leads/lead-status-select';
+import { LeadDiagnosticSection } from '@/components/diagnostic/lead-diagnostic-section';
 
 /**
  * Fiche détail Lead (Phase 9 Plan 09-03 — LEAD-01).
@@ -36,6 +37,23 @@ export default async function LeadDetailPage({
       organization: { select: { id: true, legalName: true, brandName: true } },
       interestedProduct: { select: { id: true, title: true } },
       owner: { select: { id: true, firstName: true, lastName: true } },
+      // Diagnostic du stand : ce que le prospect a réellement reçu, et si
+      // l'envoi est parti. C'est ce qui manque quand on décroche pour rappeler.
+      diagnosticSubmissions: {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          createdAt: true,
+          dominante: true,
+          secondaire: true,
+          scores: true,
+          programmeStatus: true,
+          programmeSentAt: true,
+          lastError: true,
+          attempts: true,
+          personnalisation: true,
+        },
+      },
     },
   });
   if (!lead) notFound();
@@ -132,7 +150,12 @@ export default async function LeadDetailPage({
             lead.phone ? (
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                {lead.phone}
+                <a
+                  href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}
+                  className="text-primary hover:underline"
+                >
+                  {lead.phone}
+                </a>
               </span>
             ) : (
               '—'
@@ -162,6 +185,8 @@ export default async function LeadDetailPage({
           />
         )}
       </section>
+
+      <LeadDiagnosticSection soumissions={lead.diagnosticSubmissions} />
 
       {lead.notes && (
         <section className="border-t border-border pt-6">

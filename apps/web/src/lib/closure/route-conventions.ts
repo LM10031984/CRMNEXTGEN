@@ -35,7 +35,17 @@ export interface RoutableParticipant {
   id: string;
   sponsorOrgId: string;
   sponsorOrg: { id: string; legalName: string; legalForm: string } | null;
-  person: { firstName: string; lastName: string };
+  person: {
+    firstName: string;
+    lastName: string;
+    /**
+     * Casquettes de l'apprenant. On y cherche celle qui le relie AU
+     * commanditaire : c'est elle qui dit si celui-ci est son employeur — donc
+     * convention — ou s'il se forme à ses frais — donc contrat individuel.
+     * Indispensable depuis le 02/09 pour les EI employeuses.
+     */
+    legalLinks: { organizationId: string; role: string }[];
+  };
 }
 
 /** `select` partagé — une seule définition, pour que tous les chemins voient la même chose. */
@@ -43,7 +53,13 @@ export const ROUTABLE_PARTICIPANT_SELECT = {
   id: true,
   sponsorOrgId: true,
   sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
-  person: { select: { firstName: true, lastName: true } },
+  person: {
+    select: {
+      firstName: true,
+      lastName: true,
+      legalLinks: { select: { organizationId: true, role: true } },
+    },
+  },
 } as const;
 
 /** Projection vers la forme attendue par les helpers purs de `payer-rule`. */
@@ -53,7 +69,19 @@ export function toPayerParticipants(participants: ReadonlyArray<RoutableParticip
     sponsorOrgId: p.sponsorOrgId,
     sponsorLegalForm: p.sponsorOrg?.legalForm,
     sponsorName: p.sponsorOrg?.legalName,
+    roleChezSponsor: roleChezSponsor(p),
   }));
+}
+
+/**
+ * Le rôle de l'apprenant CHEZ SON COMMANDITAIRE, et nulle part ailleurs.
+ *
+ * Un apprenant porte souvent plusieurs casquettes (pattern immobilier : son
+ * EI + son enseigne). Prendre « la première » donnerait un régime au hasard :
+ * on ne retient que le lien vers l'organisation qui paye.
+ */
+export function roleChezSponsor(p: RoutableParticipant): string | null {
+  return p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null;
 }
 
 export interface ConventionRouting {

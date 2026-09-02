@@ -27,6 +27,14 @@ const OPCO_OPTIONS = [
   { value: 'OPCOMMERCE', label: 'OPCOMMERCE' },
 ];
 
+/** Valeurs documentées dans le schéma : « Client », « Partenaire », « Sous-traitant ». */
+const TYPE_OPTIONS = [
+  { value: '', label: '— Non précisé —' },
+  { value: 'Client', label: 'Client' },
+  { value: 'Partenaire', label: 'Partenaire' },
+  { value: 'Sous-traitant', label: 'Sous-traitant' },
+];
+
 export function EditOrganizationButton({
   organizationId,
   current,
@@ -44,6 +52,14 @@ export function EditOrganizationButton({
     opcoCode?: string | null;
     network?: string | null;
     activityDescription?: string | null;
+    // Affichés sur la fiche, mais éditables nulle part avant le 02/09.
+    representative?: string | null;
+    rcs?: string | null;
+    type?: string | null;
+    brandName?: string | null;
+    addressStreet?: string | null;
+    addressPostalCode?: string | null;
+    addressCity?: string | null;
   };
 }) {
   return (
@@ -59,10 +75,28 @@ export function EditOrganizationButton({
           options: LEGAL_FORM_OPTIONS,
           defaultValue: current.legalForm,
         },
+        {
+          // Placé juste après la forme juridique, et pas en bas de liste : c'est
+          // LE champ dont l'absence fait refuser la convention d'entreprise
+          // (« Représentée par , » n'est pas opposable).
+          name: 'representative',
+          label: 'Représentant légal',
+          defaultValue: current.representative,
+          placeholder: 'Signe la convention — ex : Olivier MARTIN, gérant',
+        },
         { name: 'siret', label: 'SIRET', defaultValue: current.siret, placeholder: '14 chiffres' },
         { name: 'siren', label: 'SIREN', defaultValue: current.siren, placeholder: '9 chiffres' },
         { name: 'naf', label: 'Code NAF / APE', defaultValue: current.naf, placeholder: 'ex: 4619 B' },
         { name: 'vatNumber', label: 'N° TVA intracom', defaultValue: current.vatNumber },
+        { name: 'rcs', label: 'RCS', defaultValue: current.rcs, placeholder: 'ex : Nice B 337 700 504' },
+        {
+          name: 'addressStreet',
+          label: 'Adresse',
+          defaultValue: current.addressStreet,
+          placeholder: 'Numéro et rue — figure sur la convention',
+        },
+        { name: 'addressPostalCode', label: 'Code postal', defaultValue: current.addressPostalCode },
+        { name: 'addressCity', label: 'Ville', defaultValue: current.addressCity },
         { name: 'email', label: 'Email', defaultValue: current.email },
         { name: 'phone', label: 'Téléphone', defaultValue: current.phone },
         {
@@ -73,6 +107,14 @@ export function EditOrganizationButton({
           defaultValue: current.opcoCode,
         },
         { name: 'network', label: 'Enseigne / réseau', defaultValue: current.network, placeholder: 'Century 21, Orpi, Magrey…' },
+        { name: 'brandName', label: 'Nom commercial', defaultValue: current.brandName, placeholder: 'Si différent de la raison sociale' },
+        {
+          name: 'type',
+          label: 'Type',
+          type: 'select',
+          options: TYPE_OPTIONS,
+          defaultValue: current.type,
+        },
         {
           name: 'activityDescription',
           label: 'Activité',
@@ -95,6 +137,13 @@ export function EditOrganizationButton({
           opcoCode: values.opcoCode as string | null,
           network: values.network as string | null,
           activityDescription: values.activityDescription as string | null,
+          representative: values.representative as string | null,
+          rcs: values.rcs as string | null,
+          type: values.type as string | null,
+          brandName: values.brandName as string | null,
+          addressStreet: values.addressStreet as string | null,
+          addressPostalCode: values.addressPostalCode as string | null,
+          addressCity: values.addressCity as string | null,
         });
       }}
     />

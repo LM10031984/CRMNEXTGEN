@@ -110,6 +110,15 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
             opcoCode: org.opcoCode,
             network: org.network,
             activityDescription: org.activityDescription,
+            // Champs affichés plus bas dans la fiche : ils doivent être
+            // éditables ici, sinon on montre « RCS — » sans moyen de le remplir.
+            representative: org.representative,
+            rcs: org.rcs,
+            type: org.type,
+            brandName: org.brandName,
+            addressStreet: address?.street ?? null,
+            addressPostalCode: address?.postalCode ?? null,
+            addressCity: address?.city ?? null,
           }}
         />
       </div>

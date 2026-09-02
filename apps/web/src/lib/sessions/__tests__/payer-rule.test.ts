@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import {
+  releveDeLaConvention,
+  estEmployeurDeLApprenant,
   isPersonneMoralePayeur,
   partitionByPayerRule,
   selectAnalyseBesoinTargets,
@@ -237,5 +239,92 @@ describe('selectAnalyseBesoinTargets', () => {
       participantIds: [],
       entreprisesEnAttente: [],
     });
+  });
+});
+
+
+/**
+ * Correction du 02/09/2026 — cas AGENCE DE L'OLIVIER (SES-0109).
+ *
+ * La règle ne regardait que la forme juridique : toute EI partait en contrat
+ * individuel. Or une entreprise individuelle PEUT employer — registre INSEE,
+ * SIREN 337700504 : entrepreneur individuel, tranche d'effectif 1 à 2 salariés.
+ * Quand elle paye pour ses salariés, elle n'est pas « à ses frais » (L6353-3) :
+ * c'est un employeur, donc une convention (L6353-2).
+ *
+ * Le piège que ces tests protègent, signalé par Laurent : une agence héberge
+ * aussi des AUTO-ENTREPRENEURS rattachés (agents commerciaux). Eux se forment
+ * à leurs frais — leur donner une convention avec l'agence serait faux. Le
+ * régime se décide donc PAR INSCRIT, jamais par entreprise.
+ *
+ * Test de puissance : ajouter 'AGENT_COMMERCIAL' à `ROLES_EMPLOYEUR` fait
+ * rougir « un agent commercial rattaché reste en contrat individuel ».
+ */
+describe('releveDeLaConvention — le lien tranche, pas seulement la forme', () => {
+  it('une société relève de la convention, quel que soit le lien', () => {
+    for (const role of ['SALARIE', 'DIRIGEANT', 'AGENT_COMMERCIAL', null]) {
+      expect(releveDeLaConvention({ sponsorLegalForm: 'SARL', roleChezSponsor: role })).toBe(true);
+    }
+  });
+
+  it('une EI qui paye pour SON SALARIÉ relève de la convention', () => {
+    expect(releveDeLaConvention({ sponsorLegalForm: 'EI', roleChezSponsor: 'SALARIE' })).toBe(true);
+    expect(
+      releveDeLaConvention({ sponsorLegalForm: 'AUTO_ENTREPRENEUR', roleChezSponsor: 'SALARIE' }),
+    ).toBe(true);
+    expect(releveDeLaConvention({ sponsorLegalForm: 'EIRL', roleChezSponsor: 'ALTERNANT' })).toBe(true);
+  });
+
+  it('un auto-entrepreneur qui se forme lui-même reste en contrat individuel', () => {
+    expect(releveDeLaConvention({ sponsorLegalForm: 'EI', roleChezSponsor: 'EI_SELF' })).toBe(false);
+    expect(
+      releveDeLaConvention({ sponsorLegalForm: 'AUTO_ENTREPRENEUR', roleChezSponsor: 'EI_SELF' }),
+    ).toBe(false);
+  });
+
+  it('un agent commercial rattaché reste en contrat individuel — il paye à ses frais', () => {
+    expect(
+      releveDeLaConvention({ sponsorLegalForm: 'EI', roleChezSponsor: 'AGENT_COMMERCIAL' }),
+    ).toBe(false);
+    expect(estEmployeurDeLApprenant('AGENT_COMMERCIAL')).toBe(false);
+    expect(estEmployeurDeLApprenant('DIRIGEANT')).toBe(false);
+    expect(estEmployeurDeLApprenant('EI_SELF')).toBe(false);
+  });
+
+  it('rôle inconnu ou absent sur une forme solo ⇒ contrat individuel (repli sûr)', () => {
+    expect(releveDeLaConvention({ sponsorLegalForm: 'EI', roleChezSponsor: null })).toBe(false);
+    expect(releveDeLaConvention({ sponsorLegalForm: 'EI' })).toBe(false);
+  });
+
+  it('forme juridique absente ⇒ jamais de convention présumée', () => {
+    expect(releveDeLaConvention({ sponsorLegalForm: null, roleChezSponsor: 'SALARIE' })).toBe(false);
+  });
+
+  it('PARTICULIER reste toujours en contrat individuel', () => {
+    expect(releveDeLaConvention({ sponsorLegalForm: 'PARTICULIER', roleChezSponsor: 'SALARIE' })).toBe(
+      false,
+    );
+  });
+});
+
+describe('partitionByPayerRule — une même EI, deux régimes', () => {
+  it('sépare les salariés (convention) des agents commerciaux (contrat) chez le MÊME commanditaire', () => {
+    const { groups, individuels } = partitionByPayerRule([
+      { id: 'p-salarie-1', sponsorOrgId: 'org-olivier', sponsorLegalForm: 'EI', sponsorName: "AGENCE DE L'OLIVIER", roleChezSponsor: 'SALARIE' },
+      { id: 'p-salarie-2', sponsorOrgId: 'org-olivier', sponsorLegalForm: 'EI', sponsorName: "AGENCE DE L'OLIVIER", roleChezSponsor: 'SALARIE' },
+      { id: 'p-agent-co', sponsorOrgId: 'org-olivier', sponsorLegalForm: 'EI', sponsorName: "AGENCE DE L'OLIVIER", roleChezSponsor: 'AGENT_COMMERCIAL' },
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.participantIds).toEqual(['p-salarie-1', 'p-salarie-2']);
+    expect(individuels).toEqual(['p-agent-co']);
+  });
+
+  it('sans rôle chargé, l’EI retombe en contrat individuel (comportement d’avant, conservé)', () => {
+    const { groups, individuels } = partitionByPayerRule([
+      { id: 'p-1', sponsorOrgId: 'org-ei', sponsorLegalForm: 'EI', sponsorName: 'EI X' },
+    ]);
+    expect(groups).toEqual([]);
+    expect(individuels).toEqual(['p-1']);
   });
 });

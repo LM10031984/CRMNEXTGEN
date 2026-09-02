@@ -63,7 +63,7 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
-import { requiresContratIndividuel } from '@/lib/legal-forms';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import {
   blocagesDocsEntreprise,
   type BlocageDocEntreprise,
@@ -81,6 +81,28 @@ import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 export const maxDuration = 300;
 
 const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
+
+/**
+ * Cet inscrit relève-t-il de la convention d'entreprise ?
+ *
+ * L'affichage doit dire EXACTEMENT ce que les cœurs feront : une garde d'écran
+ * plus permissive que le générateur promet un bouton qui échouera, une plus
+ * stricte cache un document légitime. On délègue donc au même prédicat, en lui
+ * donnant le rôle de l'apprenant CHEZ SON COMMANDITAIRE — et pas une casquette
+ * au hasard : dans l'immobilier un apprenant en porte souvent deux (son EI et
+ * son enseigne).
+ */
+function releveDeLaConventionPour(p: {
+  sponsorOrgId: string;
+  sponsorOrg: { legalForm: string };
+  person: { legalLinks: { role: string; organizationId: string }[] };
+}): boolean {
+  return releveDeLaConvention({
+    sponsorLegalForm: p.sponsorOrg.legalForm,
+    roleChezSponsor:
+      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+  });
+}
 
 export default async function SessionDetailPage({
   params,
@@ -116,6 +138,10 @@ export default async function SessionDetailPage({
               legalLinks: {
                 select: {
                   role: true,
+                  // Ajouté le 02/09 : sans l'id de l'organisation, impossible
+                  // de savoir QUELLE casquette relie l'apprenant à son
+                  // commanditaire — et donc si celui-ci est son employeur.
+                  organizationId: true,
                   organization: { select: { opcoCode: true } },
                 },
               },
@@ -214,7 +240,7 @@ export default async function SessionDetailPage({
             tenantId: user.tenantId,
             entityType: 'session',
             entityId: session.id,
-            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION'] },
+            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION', 'PROGRAMME'] },
           },
           orderBy: { createdAt: 'desc' },
           select: { id: true, type: true },
@@ -235,6 +261,10 @@ export default async function SessionDetailPage({
   for (const d of sessionSharedDocs) {
     if (!sessionSharedDocByType.has(d.type)) sessionSharedDocByType.set(d.type, d.id);
   }
+  // Le programme DE SESSION prime sur celui du catalogue : quand un tarif a été
+  // négocié, c'est lui qui porte le bon montant et qui part au dossier OPCO.
+  const programmeDocId =
+    sessionSharedDocByType.get('PROGRAMME') ?? programmeProductDocId;
   const grilleSessionDocId = sessionSharedDocByType.get('GRILLE_OBS_SESSION');
   const checklistDocId = sessionSharedDocByType.get('CHECKLIST_FORMATION');
   const satisfactionSessionDocId = sessionSharedDocByType.get('SATISFACTION_SESSION');
@@ -277,7 +307,7 @@ export default async function SessionDetailPage({
     sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
   if (analyseEntrepriseAssetId) {
     for (const p of session.participants) {
-      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      if (!releveDeLaConventionPour(p)) continue;
       const m = assetsByParticipant.get(p.id) ?? new Map();
       // Ne jamais écraser une analyse nominative déjà rendue.
       if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
@@ -657,7 +687,7 @@ export default async function SessionDetailPage({
   // Items pré-formation Qualiopi (source unique) — alimentent l'onglet « Avant »
   // (TabAvant) qui réembarque les actions dispatchGenerate* de l'ancien drawer.
   const docDockItems = buildDocDockItems({
-    programmeProductDocId,
+    programmeProductDocId: programmeDocId,
     derouleProductDocId,
     checklistDocId,
     participants: matrixParticipants.map((p) => ({
@@ -683,7 +713,7 @@ export default async function SessionDetailPage({
   const closureItems = buildClosureCompletionItems({
     participantsCount: closureStatus.participantsCount,
     ageficeEligibleCount: closureStatus.ageficeEligibleCount,
-    programmeProductDocId,
+    programmeProductDocId: programmeDocId,
     grilleObsSession: closureStatus.grilleObsSession,
     bilanSatisfaction: closureStatus.bilanSatisfaction,
     attestations: closureStatus.attestations,
@@ -759,7 +789,7 @@ export default async function SessionDetailPage({
       }
     >();
     for (const p of session.participants) {
-      if (requiresContratIndividuel(p.sponsorOrg.legalForm)) continue;
+      if (!releveDeLaConventionPour(p)) continue;
       const g =
         map.get(p.sponsorOrgId) ??
         {
@@ -1230,7 +1260,7 @@ export default async function SessionDetailPage({
                 productLabel={productLabel}
                 productCode={productCode}
                 productAiDraftedAt={session.product?.aiDraftedAt ?? null}
-                productProgrammePdfId={programmeProductDocId ?? null}
+                productProgrammePdfId={programmeDocId ?? null}
                 durationHours={productDuration}
                 startDate={session.startDate}
                 endDate={session.endDate}
@@ -1314,7 +1344,7 @@ export default async function SessionDetailPage({
               canWrite={canWrite}
               isActive={stage.stagesState[2] === 'active'}
               expanded={stage.stagesState[2] === 'active'}
-              programmePdfHref={programmeProductDocId ? `/api/documents/${programmeProductDocId}` : undefined}
+              programmePdfHref={programmeDocId ? `/api/documents/${programmeDocId}` : undefined}
               deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
               checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
             />
@@ -1382,7 +1412,7 @@ export default async function SessionDetailPage({
                   status={closureStatus}
                   isActive={stage.stagesState[4] === 'active'}
                   expanded={stage.stagesState[4] === 'active'}
-                  programmeProductDocId={programmeProductDocId ?? null}
+                  programmeProductDocId={programmeDocId ?? null}
                   grilleObsSessionDocId={grilleSessionDocId ?? null}
                   bilanSatisfactionDocId={satisfactionSessionDocId ?? null}
                 />

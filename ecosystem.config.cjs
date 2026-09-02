@@ -4,12 +4,32 @@
 // pm2-runtime = mode PID-1 conteneur (pas de daemon) : si un worker meurt, il le
 // redémarre SANS tuer les autres (autorestart), logs unifiés vers stdout Railway.
 //
-// 5 process (source : pattern pm2-runtime standard, pm2.keymetrics.io) :
+// 4 process (source : pattern pm2-runtime standard, pm2.keymetrics.io) :
 //   - closure   : poll ClosureJob (Postgres FOR UPDATE SKIP LOCKED)
 //   - veille    : cron croner lundi 8h (RSS + résumés)
 //   - reminders : cron croner quotidien 8h (relances factures)
 //   - ocr       : poll PreEnrollment SUBMITTED (rastérisation poppler + vision)
-//   - diagnostic: cron croner */5 min (programmes du diagnostic du stand)
+//
+// ⛔ CONTRAINTE RAILWAY — AUCUN EMAIL NE PEUT PARTIR D'ICI (mesuré le 01/09/2026)
+//
+// Depuis le conteneur (`railway ssh --service worker`), toute connexion sortante
+// vers un port SMTP est silencieusement avalée : 25, 465, 587 ET 2525, vers
+// n'importe quel hôte (smtp.gmail.com, ssl0.ovh.net, smtp-relay.brevo.com,
+// in-v3.mailjet.com) — timeout systématique, ou `ENETUNREACH` sur l'adresse
+// IPv6. Le même conteneur atteint `openrouter.ai:443` en 9 ms et
+// `api.brevo.com:443` en 12 ms : l'egress fonctionne, ce sont les ports SMTP qui
+// sont filtrés. Il n'existe donc aucun réglage applicatif qui répare ça.
+//
+// Conséquences, à connaître avant d'ajouter un worker ici :
+//   - le process `diagnostic` a été RETIRÉ (incident du 01/09 : il générait les
+//     programmes puis mourait sur le SMTP, en brûlant les 3 tentatives et en
+//     enterrant les soumissions en FAILED). L'envoi du diagnostic se fait
+//     désormais sur Vercel : navigateur du prospect (`POST /api/diagnostic/traiter`)
+//     en principal, cron Vercel en rattrapage ;
+//   - `reminders` (relances factures) envoie du mail depuis ce conteneur : il ne
+//     peut donc rien envoyer non plus. Même remarque pour les envois de
+//     `closure`. Dette ouverte — à basculer sur Vercel, ou à faire passer le
+//     mailer par une API HTTP (port 443, qui, lui, sort).
 //
 // Recalibrage cloud (WORK-03 / D-09) : concurrency ~3 pour rester compatible avec
 // le pooler Supabase (connection_limit=1, Pitfall 1 RESEARCH) — ne PAS monter
@@ -59,18 +79,6 @@ module.exports = {
     {
       name: 'reminders',
       script: 'scripts/invoice-reminder-worker.ts',
-      cwd: 'apps/web',
-      interpreter: 'tsx',
-      autorestart: true,
-      env: { TSX_TSCONFIG_PATH: TSCONFIG },
-    },
-    {
-      // Quick 260901-qr7 — envoie les programmes du diagnostic express du stand.
-      // Cron */5 min : le prospect reçoit son programme pendant qu'il est encore
-      // à la soirée, sans qu'un appel au modèle soit sur le chemin critique du
-      // formulaire public.
-      name: 'diagnostic',
-      script: 'scripts/diagnostic-worker.ts',
       cwd: 'apps/web',
       interpreter: 'tsx',
       autorestart: true,

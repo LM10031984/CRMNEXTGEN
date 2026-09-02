@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| **Version** | 1.2 |
-| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) |
+| **Version** | 1.3 |
+| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) — amendé le 2026-09-01 (v1.3, Traitement 9 : diagnostic express du stand) |
 | **Responsable de traitement** | Start Academy — Organisme de formation certifié Qualiopi (siège : Vence) |
 | **Contact** | laurent@start-academy.fr |
 | **Rédaction** | Générée par assistance IA (Claude), sous contrôle du responsable de traitement |
-| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.** |
+| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.**<br>⏳ **v1.3 (2026-09-01) : ajout du Traitement 9 (diagnostic express du stand, base légale consentement, conservation 24 mois) — à contresigner par le responsable de traitement.** |
 
 > Ce registre couvre les traitements de données à caractère personnel opérés via l'application interne **QualiOF** (CRM/back-office de Start Academy, non commercialisé à des tiers) déployée sur infrastructure cloud (voir § Localisation des données). Il est versionné dans le dépôt de code (`docs/rgpd/`) et exportable en PDF pour présentation à un auditeur Qualiopi ou à la CNIL.
 
@@ -114,6 +114,24 @@
 | **Durée de conservation** | Articles et résumés conservés à des fins de preuve Qualiopi (indicateur veille). |
 | **Mesures techniques** | Flux isolé, aucun croisement avec les données apprenants. |
 
+## Traitement 9 — Diagnostic express du stand (salon, QR code)
+
+> **Ajouté le 2026-09-01 (v1.3)** — dispositif de prospection déployé pour les
+> 25 ans du MLS (9 septembre 2026). Formulaire public sans compte, atteint par un
+> QR code imprimé sur le stand.
+
+| Rubrique | Contenu |
+|---|---|
+| **Finalité** | Proposer à un visiteur de salon, en 90 secondes, la journée de formation du catalogue qui correspond à sa priorité déclarée ; lui envoyer par email le programme de cette journée ; permettre un rappel commercial qu'il a lui-même sollicité. |
+| **Base légale** | **Consentement** (art. 6.1.a) — case à cocher obligatoire et horodatée sur le formulaire, portant explicitement sur l'envoi du programme **et** sur le rappel. Sans la case, aucune donnée n'est enregistrée. |
+| **Catégories de données** | Réponses à 8 questions fermées de qualification professionnelle (rôle, taille d'équipe, origine des affaires, évolution des mandats, usage de l'IA, priorité déclarée, formation suivie dans l'année) ; créneau de rappel souhaité ; identité et coordonnées saisies (prénom, nom, email, téléphone — le téléphone devient obligatoire si la personne demande un rappel dans la semaine). **Aucune pièce, aucun document, aucune donnée sensible au sens de l'art. 9.** |
+| **Catégories de personnes** | Visiteurs professionnels du salon (agents et conseillers immobiliers, dirigeants d'agence) — prospects. |
+| **Destinataires / sous-traitants** | Base : [dpa/supabase.md](dpa/supabase.md) · Runtime du formulaire public : [dpa/vercel.md](dpa/vercel.md) · Assemblage du programme personnalisé par IA : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic en sous-sous-traitance : [dpa/anthropic.md](dpa/anthropic.md)) · Envoi de l'email : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) · Rattrapage des envois : [dpa/railway.md](dpa/railway.md). **Aucune diffusion à un tiers, aucune revente, aucun partage avec les autres exposants du salon.** |
+| **Durée de conservation** | **24 mois** à compter de la collecte pour les prospects sans suite (durée usuelle recommandée par la CNIL en prospection commerciale), puis effacement. Un prospect qui devient apprenant bascule dans le Traitement 1 et suit sa durée. Effacement immédiat sur demande (`laurent@start-academy.fr`). La soumission (`DiagnosticSubmission`) est supprimée **en cascade** avec le lead — pas de PII orpheline. |
+| **Mesures techniques** | Consentement horodaté et tracé en clair dans la fiche du prospect ; le formulaire ne LIT aucune donnée, il n'en crée que ; aucune écriture en base avant validation du formulaire complet ; plafond de 250 soumissions / 15 min / IP (garde-fou anti-remplissage automatisé, calibré pour un événement où plusieurs centaines de personnes partagent la même IP publique) ; validation serveur de toutes les réponses contre la liste fermée des questions (le navigateur ne dicte pas le contenu enregistré) ; envoi de l'email conditionné à une case dédiée dans Paramètres → Emails (fail-closed : décochée, rien ne part) ; email transactionnel unitaire déclenché par la personne elle-même — **aucun envoi de masse**. |
+| **Ce qui n'est PAS fait** | Pas de création de compte, pas de mot de passe, pas d'upload de pièce, pas de cookie de mesure d'audience sur la page publique, pas de croisement avec un fichier acheté, pas de profilage automatisé produisant un effet juridique (le routage vers une problématique est un simple barème de points, explicable et communicable à la personne). |
+
+
 ---
 
 ## Localisation des données
@@ -170,7 +188,8 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 
 ## Validation du responsable de traitement (gate D-13)
 
-- [x] Les 8 traitements ci-dessus sont exacts et complets.
+- [x] Les 8 traitements validés le 2026-07-07 sont exacts et complets.
+- [ ] **v1.3** — Traitement 9 (diagnostic express du stand) : finalité, base légale consentement et durée de conservation de 24 mois à contresigner.
 - [x] Les durées de conservation sont confirmées — **avec un amendement** : la durée de conservation des scans CNI/RIB est **étendue** (alignée sur la durée du dossier de financement/formation, PAS de suppression après justification du financement) pour rester disponibles lors des contrôles a posteriori des financeurs (AGEFICE, OPCO, DREETS) et du cycle Qualiopi — décision du responsable de traitement du 2026-07-07 (voir Traitement 2). Les autres durées proposées sont validées telles quelles.
 - [x] La question du type de compte Google est tranchée : **Google Workspace** (DPA processeur inclus).
 - [x] Les 2 limites assumées (backups non off-site, OpenRouter self-serve) sont acceptées.
@@ -179,4 +198,4 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 Cette validation lève le gate D-13 : la bascule production (plan 22-06, Wave 2) est autorisée côté RGPD.
 
 ---
-*Start Academy — Registre des traitements (art. 30 RGPD) — v1.1 — validé le 2026-07-07*
+*Start Academy — Registre des traitements (art. 30 RGPD) — v1.3 — socle validé le 2026-07-07, amendements v1.2 et v1.3 en attente de contreseing*

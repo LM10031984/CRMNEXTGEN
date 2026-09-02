@@ -9,27 +9,24 @@
  * donc le lead directement, exactement comme `session-enrollment-public.ts`
  * écrit sa `preEnrollment` sans session authentifiée.
  *
- * Le scoring est re-calculé ICI même si le client l'a déjà fait pour afficher
- * le résultat : on n'écrit jamais en base une conclusion venue du navigateur.
+ * Le scoring ET la priorisation sont re-calculés ICI même si le client les a
+ * déjà faits pour afficher le résultat : on n'écrit jamais en base une
+ * conclusion venue du navigateur.
  */
 
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@qualiof/db';
-import { rateLimitOk } from '@/lib/enrollment/rate-limit';
+import { quotaDiagnosticOk, ipDepuisHeaders } from '@/lib/diagnostic/quota';
 import { diagnostiquer, resumerPourLead } from '@/lib/diagnostic/scoring';
-import { QUESTIONS, PROBLEMATIQUES, SOURCE_STAND } from '@/lib/diagnostic/questions';
-
-/**
- * Plafond volontairement HAUT.
- *
- * Piège de terrain : sur le wifi du lieu (ou en 4G derrière le NAT d'un
- * opérateur), tous les prospects sortent avec LA MÊME IP publique. Le plafond
- * de 5/heure de `session-enrollment-public.ts` bloquerait le stand au 6ᵉ
- * visiteur. On garde un garde-fou anti-robot, pas un garde-fou anti-succès.
- */
-const MAX_PAR_IP = 80;
-const FENETRE_MS = 15 * 60_000;
+import { prioriser, ligneSuiviCrm } from '@/lib/diagnostic/priorite';
+import {
+  QUESTIONS,
+  PROBLEMATIQUES,
+  RAPPEL_CHOIX,
+  SOURCE_STAND,
+  type RappelValue,
+} from '@/lib/diagnostic/questions';
 
 const ContactSchema = z.object({
   firstName: z.string().trim().min(1, 'Prénom obligatoire').max(80),
@@ -41,20 +38,46 @@ const ContactSchema = z.object({
   }),
 });
 
+const RAPPEL_VALUES = RAPPEL_CHOIX.map((c) => c.value) as [RappelValue, ...RappelValue[]];
+
+/**
+ * Validation CROISÉE contact × rappel : un lead « chaud » sans numéro est un
+ * lead mort. Le formulaire l'impose déjà côté navigateur — on le revalide ici
+ * parce qu'on ne fait jamais confiance au client.
+ */
+const SoumissionSchema = z
+  .object({
+    contact: ContactSchema,
+    rappel: z.enum(RAPPEL_VALUES, {
+      errorMap: () => ({ message: 'Merci d’indiquer quand on peut vous appeler' }),
+    }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.rappel === 'CETTE_SEMAINE' && v.contact.phone.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['contact', 'phone'],
+        message: 'Un numéro est indispensable pour un rappel cette semaine',
+      });
+    }
+  });
+
 const ReponsesSchema = z.record(z.string(), z.string());
 
 export type SoumettreDiagnosticResult =
-  | { ok: true; leadId: string }
+  | { ok: true; leadId: string; submissionId: string }
   | { ok: false; error: string };
 
 export async function soumettreDiagnostic(input: {
   reponses: unknown;
   contact: unknown;
+  rappel: unknown;
 }): Promise<SoumettreDiagnosticResult> {
-  const contact = ContactSchema.safeParse(input.contact);
-  if (!contact.success) {
-    return { ok: false, error: contact.error.issues[0]?.message ?? 'Formulaire incomplet' };
+  const soumission = SoumissionSchema.safeParse({ contact: input.contact, rappel: input.rappel });
+  if (!soumission.success) {
+    return { ok: false, error: soumission.error.issues[0]?.message ?? 'Formulaire incomplet' };
   }
+  const { contact, rappel } = soumission.data;
 
   const reponsesParsed = ReponsesSchema.safeParse(input.reponses);
   if (!reponsesParsed.success) {
@@ -71,8 +94,8 @@ export async function soumettreDiagnostic(input: {
     }
   }
 
-  const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'inconnue';
-  if (!rateLimitOk(`diagnostic:${ip}`, MAX_PAR_IP, FENETRE_MS)) {
+  const ip = ipDepuisHeaders(await headers());
+  if (!quotaDiagnosticOk('soumission', ip)) {
     return { ok: false, error: 'Trop de demandes depuis ce réseau. Réessaie dans quelques minutes.' };
   }
 
@@ -81,31 +104,44 @@ export async function soumettreDiagnostic(input: {
 
   const resultat = diagnostiquer(reponses);
   const probl = PROBLEMATIQUES[resultat.dominante];
+  const priorite = prioriser({ reponses, rappel, telephone: contact.phone });
+  const suivi = ligneSuiviCrm({ niveau: priorite.niveau, dominante: resultat.dominante, rappel });
 
   // Traçabilité du consentement : le prospect a coché la case à cette
   // seconde-là. C'est ce qui autorise le rappel et l'envoi du programme.
   const consentement = `Consentement au rappel et à l'envoi du programme : OUI, le ${new Date().toLocaleString('fr-FR')}`;
 
+  // La priorité est EN TÊTE des notes : c'est la première chose lue quand on
+  // ouvre la fiche à 9 h du matin avec 80 leads à trancher.
+  const notes = [
+    suivi,
+    `Motifs : ${priorite.motifs.join(' · ')}`,
+    '',
+    resumerPourLead(resultat, reponses),
+    '',
+    consentement,
+  ].join('\n');
+
   // Lead ET soumission dans la MÊME transaction : un lead sans ses réponses
   // structurées ne vaut rien pour le rappel commercial, et une soumission sans
   // lead n'a personne à qui écrire.
-  const { lead } = await prisma.$transaction(async (tx) => {
+  const { lead, submission } = await prisma.$transaction(async (tx) => {
     const lead = await tx.lead.create({
       data: {
         tenantId: tenant.id,
         source: SOURCE_STAND,
-        firstName: contact.data.firstName,
-        lastName: contact.data.lastName,
-        email: contact.data.email,
-        phone: contact.data.phone || null,
-        notes: [resumerPourLead(resultat, reponses), '', consentement].join('\n'),
-        lastAction: `Diagnostic express — ${probl.titre}`,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone || null,
+        notes,
+        lastAction: suivi,
         lastActionAt: new Date(),
       },
       select: { id: true },
     });
 
-    await tx.diagnosticSubmission.create({
+    const submission = await tx.diagnosticSubmission.create({
       data: {
         tenantId: tenant.id,
         leadId: lead.id,
@@ -113,17 +149,17 @@ export async function soumettreDiagnostic(input: {
         dominante: resultat.dominante,
         secondaire: resultat.secondaire,
         scores: resultat.scores,
-        // PENDING : le worker cron prendra le relais. L'email N'EST PAS envoyé
-        // ici. Assembler un programme sur mesure demande un appel au modèle —
-        // 5 à 15 secondes qu'on ne fait pas attendre à quelqu'un debout devant
-        // un stand. Le prospect reçoit son programme quelques minutes plus
-        // tard, pendant qu'il est encore à la soirée.
+        // PENDING : l'email N'EST PAS envoyé ici. Assembler un programme sur
+        // mesure demande un appel au modèle — 28 secondes mesurées, qu'on ne
+        // fait pas attendre à quelqu'un debout devant un stand. C'est le
+        // NAVIGATEUR du prospect qui déclenche le traitement juste après, depuis
+        // l'écran de remerciement (`POST /api/diagnostic/traiter`).
       },
       select: { id: true },
     });
 
-    return { lead };
+    return { lead, submission };
   });
 
-  return { ok: true, leadId: lead.id };
+  return { ok: true, leadId: lead.id, submissionId: submission.id };
 }

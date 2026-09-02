@@ -21,6 +21,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { generateProgrammeForProduct } from './programme-generator';
+import { generateProgrammeForSessionCore } from '@/lib/closure/programme-core';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateConventionForParticipant } from './convention-generator';
@@ -28,7 +29,7 @@ import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
-import { isPersonneMoralePayeur } from '@/lib/sessions/payer-rule';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import type {
   DispatchableDocType,
   DispatchGenerateDocInput,
@@ -51,7 +52,7 @@ export async function dispatchGenerateDoc(
   // Tenant scope : la session doit appartenir au tenant courant
   const session = await prisma.trainingSession.findFirst({
     where: { id: input.sessionId, tenantId: user.tenantId },
-    select: { id: true, productId: true },
+    select: { id: true, productId: true, pricePerLearner: true },
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
 
@@ -60,7 +61,14 @@ export async function dispatchGenerateDoc(
       // ─── Docs partagés produit/session ──────────────────────────
       case 'PROGRAMME': {
         if (!session.productId) return { ok: false, error: 'Produit manquant' };
-        const r = await generateProgrammeForProduct(session.productId, { force: input.force });
+        // Tarif négocié pour cette session ⇒ programme DE SESSION, sinon le
+        // programme de catalogue. Sans ça, le programme annonce le prix produit
+        // pendant que la convention du même dossier annonce le prix consenti
+        // (constat SES-0109 : 2 500 € au programme, 2 200 € à la convention).
+        const tarifSession = Number(session.pricePerLearner ?? 0);
+        const r = tarifSession > 0
+          ? await generateProgrammeForSessionCore(user.tenantId, session.id, { force: input.force })
+          : await generateProgrammeForProduct(session.productId, { force: input.force });
         revalidatePath(`/app/sessions/${input.sessionId}`);
         return { ok: r.ok, error: r.error, docId: r.documentId, resourceKind: 'document' };
       }
@@ -121,19 +129,28 @@ export async function dispatchGenerateDoc(
           },
           select: {
             id: true,
+            sponsorOrgId: true,
             sponsorOrg: { select: { legalName: true, legalForm: true } },
+            person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
           },
         });
         if (!participant) return { ok: false, error: 'Inscription introuvable' };
-        if (isPersonneMoralePayeur(participant.sponsorOrg?.legalForm)) {
+        const relèveEntreprise = releveDeLaConvention({
+          sponsorLegalForm: participant.sponsorOrg?.legalForm,
+          roleChezSponsor:
+            participant.person?.legalLinks?.find(
+              (l) => l.organizationId === participant.sponsorOrgId,
+            )?.role ?? null,
+        });
+        if (relèveEntreprise) {
           const nom = participant.sponsorOrg?.legalName ?? "l'entreprise commanditaire";
           return {
             ok: false,
             error:
-              `Le payeur de cette formation est ${nom} (personne morale) : l'analyse des ` +
-              `besoins se fait au nom de l'ENTREPRISE, pas par stagiaire (règle du 12/08, ` +
-              `indicateur 4). Générer une analyse nominative ici créerait un doublon du ` +
-              `document d'entreprise.`,
+              `Le payeur de cette formation est ${nom}, qui est l'employeur du stagiaire : ` +
+              `l'analyse des besoins se fait au nom de l'ENTREPRISE, pas par stagiaire ` +
+              `(règle du 12/08, indicateur 4). Générer une analyse nominative ici créerait ` +
+              `un doublon du document d'entreprise.`,
           };
         }
 

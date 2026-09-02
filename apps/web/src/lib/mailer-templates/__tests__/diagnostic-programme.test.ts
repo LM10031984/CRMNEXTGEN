@@ -1,11 +1,17 @@
 /**
- * Le template part chez des PROSPECTS. Trois choses doivent tenir :
- * l'échappement, l'absence de prix (le tarif dépend du payeur — on ne s'engage
- * pas à l'aveugle), et le repli lisible quand le sur-mesure a échoué.
+ * Le template part chez des PROSPECTS. Ce qui doit tenir :
+ *  - l'échappement ;
+ *  - aucun PRIX de la journée (le tarif dépend du payeur — on ne s'engage pas à
+ *    l'aveugle) ; les seuls montants tolérés sont ceux de la prise en charge
+ *    AGEFICE, qui sont un droit du prospect, pas une facture ;
+ *  - aucun chiffre de satisfaction (les notes en base sont générées par IA) ;
+ *  - UN SEUL lien cliquable ;
+ *  - une signature nominative ;
+ *  - le repli lisible quand le sur-mesure a échoué.
  */
 
 import { describe, it, expect } from 'vitest';
-import { renderDiagnosticProgrammeEmail, formatDuree } from '../diagnostic-programme';
+import { renderDiagnosticProgrammeEmail, formatDuree, resolveCtaUrl } from '../diagnostic-programme';
 import type { ProduitPropose } from '../diagnostic-programme';
 import type { ProgrammeSurMesure } from '@/lib/diagnostic/programme-sur-mesure';
 import type { OfConfig } from '@/lib/of-config';
@@ -15,6 +21,9 @@ const OF = {
   addressFull: '12 avenue des Camélias, 06800 Cagnes-sur-Mer',
   siret: '95131909400011',
   rnq: '93061048106',
+  phone: '06 31 05 63 90',
+  resp: { prenom: 'Laurent', nom: 'MARX', titre: 'Gérant', phone: '06 31 05 63 90' },
+  contact: { prenom: 'Laurent', nom: 'MARX', titre: 'Gérant', phone: '06 31 05 63 90' },
 } as unknown as OfConfig;
 
 const PRODUIT: ProduitPropose = {
@@ -51,19 +60,108 @@ function render(over: Partial<Parameters<typeof renderDiagnosticProgrammeEmail>[
       secondaire: null,
       produit: PRODUIT,
       surMesure: SUR_MESURE,
+      ctaUrl: 'https://cal.start-academy.fr/point-financement',
       ...over,
     },
     OF,
   );
 }
 
-describe('renderDiagnosticProgrammeEmail', () => {
-  it("n'annonce jamais de prix", () => {
+describe('renderDiagnosticProgrammeEmail — ce qu’on ne dit JAMAIS', () => {
+  it("n'annonce jamais le tarif de la journée", () => {
     for (const sm of [SUR_MESURE, null]) {
       const { html, text, subject } = render({ surMesure: sm });
       for (const [nom, contenu] of [['html', html], ['text', text], ['subject', subject]] as const) {
-        expect(contenu, `${nom} contient un montant`).not.toMatch(/\d\s?(€|EUR)/i);
+        expect(contenu, `${nom} parle de tarif`).not.toMatch(/tarif|\bprix\b|\bcoût\b|\bHT\b|\bTTC\b/i);
       }
+    }
+  });
+
+  it('a supprimé la promesse fausse « pris en charge en totalité »', () => {
+    const { html, text } = render();
+    for (const contenu of [html, text]) {
+      expect(contenu).not.toMatch(/en totalité/i);
+    }
+  });
+
+  it("n'affiche aucun chiffre de satisfaction (les notes en base sont générées)", () => {
+    const { html, text } = render();
+    for (const contenu of [html, text]) {
+      expect(contenu).not.toMatch(/satisfaction|\d[.,]\d\s?\/\s?5/i);
+    }
+  });
+});
+
+describe('renderDiagnosticProgrammeEmail — le bloc financement (AGEFICE 2026)', () => {
+  it('porte les chiffres réels : 42 €/h, 3 000 €/an, 15 jours, 31 décembre', () => {
+    const { html, text } = render();
+    for (const contenu of [html, text]) {
+      expect(contenu).toContain('42 €');
+      expect(contenu).toContain('3 000 €');
+      expect(contenu).toContain('336 €');
+      expect(contenu).toMatch(/15 jours calendaires/);
+      expect(contenu).toMatch(/31 décembre/);
+    }
+  });
+
+  it('dit explicitement que l’enveloppe non consommée est perdue', () => {
+    expect(render().text).toMatch(/est perdu/);
+  });
+});
+
+describe('renderDiagnosticProgrammeEmail — le CTA unique', () => {
+  it('rend UN SEUL lien cliquable dans le corps', () => {
+    const { html } = render();
+    const liens = html.match(/<a\s/g) ?? [];
+    expect(liens).toHaveLength(1);
+    expect(html).toContain('Réserver mon point financement');
+    expect(html).toContain('https://cal.start-academy.fr/point-financement');
+  });
+
+  it('replie sur le portable de l’organisme quand la variable est vide', () => {
+    const { html, text } = render({ ctaUrl: '' });
+    expect(html).toContain('href="tel:0631056390"');
+    expect(text).toContain('tel:0631056390');
+    expect((html.match(/<a\s/g) ?? [])).toHaveLength(1);
+  });
+
+  it('n’affiche aucun bouton plutôt qu’un bouton mort', () => {
+    const sansTel = { ...OF, phone: '', resp: { ...OF.resp, phone: '' }, contact: { ...OF.contact, phone: '' } } as OfConfig;
+    const { html } = renderDiagnosticProgrammeEmail(
+      { firstName: 'Camille', dominante: 'IA_PRODUCTIVITE', secondaire: null, produit: PRODUIT, surMesure: null, ctaUrl: '' },
+      sansTel,
+    );
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('Réserver mon point financement');
+  });
+});
+
+describe('resolveCtaUrl', () => {
+  it('préfère la variable d’environnement', () => {
+    expect(resolveCtaUrl('https://cal.com/laurent', '06 31 05 63 90')).toBe('https://cal.com/laurent');
+  });
+
+  it('replie sur un tel: normalisé (espaces et points retirés)', () => {
+    expect(resolveCtaUrl('', '06.31.05 63 90')).toBe('tel:0631056390');
+    expect(resolveCtaUrl(undefined, '+33 6 31 05 63 90')).toBe('tel:+33631056390');
+  });
+
+  it('refuse un schéma non autorisé — une variable mal remplie ne doit rien injecter', () => {
+    expect(resolveCtaUrl('javascript:alert(1)', '')).toBeNull();
+  });
+
+  it('retourne null quand il n’y a ni lien ni téléphone', () => {
+    expect(resolveCtaUrl('', '')).toBeNull();
+  });
+});
+
+describe('renderDiagnosticProgrammeEmail — signature et contenu', () => {
+  it('signe nominativement, jamais « L’équipe »', () => {
+    const { html, text } = render();
+    for (const contenu of [html, text]) {
+      expect(contenu).toContain('Laurent MARX');
+      expect(contenu).toContain('06 31 05 63 90');
+      expect(contenu).not.toMatch(/L['’]équipe/);
     }
   });
 

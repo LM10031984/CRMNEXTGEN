@@ -1,12 +1,19 @@
 import Link from 'next/link';
-import { Megaphone, User, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import { Megaphone, User, AlertCircle, CheckCircle2, Plus, Phone } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { AutoAssignLeadsButton } from '@/components/leads/auto-assign-button';
+import { ProgrammesEnAttenteButton } from '@/components/diagnostic/programmes-en-attente-button';
+import { compterDiagnosticsEnAttente } from '@/lib/diagnostic/file-attente';
 
 export const dynamic = 'force-dynamic';
+/**
+ * Vercel Pro — le bouton « Envoyer les programmes en attente » est une server
+ * action de cette page, et chaque programme demande ~30 s de génération.
+ */
+export const maxDuration = 300;
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',
@@ -45,7 +52,7 @@ export default async function LeadsPage() {
   const { user } = await validateRequest();
   if (!user) return null;
 
-  const [leads, commercials, statusCounts] = await Promise.all([
+  const [leads, commercials, statusCounts, diagnosticsEnAttente] = await Promise.all([
     prisma.lead.findMany({
       where: { tenantId: user.tenantId },
       include: {
@@ -65,6 +72,7 @@ export default async function LeadsPage() {
       where: { tenantId: user.tenantId },
       _count: { _all: true },
     }),
+    compterDiagnosticsEnAttente(user.tenantId),
   ]);
 
   const counter = (status: string) =>
@@ -88,6 +96,7 @@ export default async function LeadsPage() {
               <Plus className="h-4 w-4" />
               Nouveau lead
             </Link>
+            <ProgrammesEnAttenteButton enAttente={diagnosticsEnAttente} />
             <AutoAssignLeadsButton unassignedCount={unassignedCount} />
           </div>
         }
@@ -137,6 +146,7 @@ export default async function LeadsPage() {
                 <tr className="border-b border-border bg-muted/40 text-left">
                   <Th>Statut</Th>
                   <Th>Contact</Th>
+                  <Th>Dernière action</Th>
                   <Th>Source</Th>
                   <Th>Intérêt</Th>
                   <Th>Commercial</Th>
@@ -159,10 +169,29 @@ export default async function LeadsPage() {
                         </Badge>
                       </Td>
                       <Td>
-                        <div className="font-medium">{contactName}</div>
+                        <Link
+                          href={`/app/leads/${l.id}` as any}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {contactName}
+                        </Link>
                         {l.email && (
                           <div className="text-xs text-muted-foreground">{l.email}</div>
                         )}
+                        {/* Le jeudi matin, cette liste est ouverte DEPUIS un
+                            téléphone : l'appel doit partir en un tap. */}
+                        {l.phone && (
+                          <a
+                            href={`tel:${l.phone.replace(/[^\d+]/g, '')}`}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+                          >
+                            <Phone className="h-3 w-3" />
+                            {l.phone}
+                          </a>
+                        )}
+                      </Td>
+                      <Td>
+                        <DerniereAction texte={l.lastAction} />
                       </Td>
                       <Td>{l.source ?? <span className="text-muted-foreground">—</span>}</Td>
                       <Td>
@@ -194,6 +223,46 @@ export default async function LeadsPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/**
+ * Colonne « Dernière action ».
+ *
+ * Les leads du diagnostic du stand y arrivent préfixés du niveau de priorité —
+ * `[A] Diagnostic — … — rappel cette semaine` (cf. `lib/diagnostic/priorite.ts`).
+ * On sort le niveau en pastille pour que le tri des rappels se fasse en balayant
+ * la colonne, sans lire une ligne entière.
+ */
+function DerniereAction({ texte }: { texte: string | null }) {
+  if (!texte) return <span className="text-muted-foreground">—</span>;
+
+  const m = /^\[([ABC])\]\s*(.*)$/.exec(texte);
+  if (!m) return <span className="text-xs">{texte}</span>;
+
+  const niveau = m[1] as 'A' | 'B' | 'C';
+  const couleur = {
+    A: 'bg-red-100 text-red-800 border-red-200',
+    B: 'bg-amber-100 text-amber-800 border-amber-200',
+    C: 'bg-slate-100 text-slate-600 border-slate-200',
+  }[niveau];
+
+  return (
+    <div className="flex items-start gap-1.5">
+      <span
+        title={
+          niveau === 'A'
+            ? 'À rappeler dès J+1'
+            : niveau === 'B'
+              ? 'À rappeler sous 2 à 3 jours'
+              : 'Email seulement'
+        }
+        className={`shrink-0 h-5 w-5 rounded border inline-flex items-center justify-center text-[11px] font-bold ${couleur}`}
+      >
+        {niveau}
+      </span>
+      <span className="text-xs text-muted-foreground">{m[2]}</span>
     </div>
   );
 }
