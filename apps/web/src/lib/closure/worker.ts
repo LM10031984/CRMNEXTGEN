@@ -29,6 +29,7 @@ import {
   formatLieuFormation,
   villeLieuFormation,
 } from '@/lib/locations/format-lieu';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -189,6 +190,14 @@ export async function processClosureJobPayload(
 
     const docType = DOC_TYPE_BY_KIND[payload.kind];
     if (docType) {
+      // Lot 0 · 0.2 — empreinte des champs rendus (identite, dates, duree,
+      // intitule, formateur signataire, lieu).
+      const sourceFingerprint = await computeDocumentFingerprint({
+        tenantId: payload.tenantId,
+        docType,
+        participantId: payload.participantId,
+        sessionId: payload.sessionId,
+      });
       // Idempotence : 1 seul Document par (session, participant, type).
       // deleteMany + create dans la MÊME transaction → pas de fenêtre où
       // 0 doc existe si le process casse entre les deux (atomicité).
@@ -209,6 +218,7 @@ export async function processClosureJobPayload(
             entityId: payload.participantId,
             pdfUrl: key,
             hashSha256: hash,
+            sourceFingerprint,
             sessionId: payload.sessionId,
             participantId: payload.participantId,
           },

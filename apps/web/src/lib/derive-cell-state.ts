@@ -21,7 +21,13 @@ export type CellPdfRef = {
 };
 
 export type CellState =
-  | { state: 'GENERATED'; pdfRef: CellPdfRef }
+  /**
+   * Lot 0 · 0.2 — `stale: true` = le document existe, mais au moins un champ
+   * qu'il PORTE a changé depuis sa génération (empreinte `sourceFingerprint`
+   * recalculée). Absence de `stale` ne veut pas dire « à jour » : les documents
+   * sans empreinte (parc antérieur) sont simplement inconnus.
+   */
+  | { state: 'GENERATED'; pdfRef: CellPdfRef; stale?: boolean }
   | { state: 'MANUAL_OK'; pdfRef?: CellPdfRef; warning?: 'no_proof' }
   | { state: 'MISSING' }
   | { state: 'NA' };
@@ -45,6 +51,9 @@ export type CellState =
  * @param productDocs Index DocType → Document pour le produit de cette session (Programme, etc.).
  * @param sessionDocs Index DocType → Document pour cette session (déroulé, grille, checklist).
  * @param pedagogicalAssets Index DocType → PedagogicalAsset pour ce participant.
+ * @param staleDocIds Ids des documents dont les données d'entrée ont bougé
+ *   depuis la génération (Lot 0 · 0.2). Paramètre optionnel : un appelant qui
+ *   ne le passe pas obtient le comportement d'avant, sans faux « à jour ».
  */
 export function deriveCellState(
   docType: string,
@@ -53,6 +62,7 @@ export function deriveCellState(
   productDocs: Map<string, { id: string }>,
   sessionDocs: Map<string, { id: string }>,
   pedagogicalAssets: Map<string, { id: string }>,
+  staleDocIds?: ReadonlySet<string>,
 ): CellState {
   const manual = participant.docStatus?.[docType];
 
@@ -64,19 +74,26 @@ export function deriveCellState(
     return { state: 'MANUAL_OK' };
   }
 
-  const partDoc = participantDocs.get(docType);
-  if (partDoc) return { state: 'GENERATED', pdfRef: { kind: 'document', id: partDoc.id } };
+  const isStale = (id: string) => (staleDocIds?.has(id) ? { stale: true } : {});
 
+  const partDoc = participantDocs.get(docType);
+  if (partDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'document', id: partDoc.id }, ...isStale(partDoc.id) };
+
+  // Les PedagogicalAsset n'ont pas de colonne `sourceFingerprint` : jamais
+  // marqués périmés, jamais marqués à jour non plus.
   const asset = pedagogicalAssets.get(docType);
   if (asset) return { state: 'GENERATED', pdfRef: { kind: 'asset', id: asset.id } };
 
   const sessDoc = sessionDocs.get(docType);
-  if (sessDoc) return { state: 'GENERATED', pdfRef: { kind: 'sessionDoc', id: sessDoc.id } };
+  if (sessDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'sessionDoc', id: sessDoc.id }, ...isStale(sessDoc.id) };
 
   // Bug P0 anti-régression : PROGRAMME a Document.entityType='product'
   // partagé entre tous les participants. La cellule lit ce ref partagé.
   const prodDoc = productDocs.get(docType);
-  if (prodDoc) return { state: 'GENERATED', pdfRef: { kind: 'productDoc', id: prodDoc.id } };
+  if (prodDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'productDoc', id: prodDoc.id }, ...isStale(prodDoc.id) };
 
   return { state: 'MISSING' };
 }
@@ -102,6 +119,7 @@ export function buildMatrixData(
   }>,
   productDocs: Map<string, { id: string }>,
   sessionDocs: Map<string, { id: string }>,
+  staleDocIds?: ReadonlySet<string>,
 ): Array<{ participantId: string; cells: Record<string, CellState> }> {
   return participants.map((p) => {
     const cells: Record<string, CellState> = {};
@@ -113,6 +131,7 @@ export function buildMatrixData(
         productDocs,
         sessionDocs,
         p.pedagogicalAssets,
+        staleDocIds,
       );
     }
     return { participantId: p.id, cells };

@@ -19,6 +19,7 @@ import { loadOfConfig } from '@/lib/of-config';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { resoudrePrixProgramme } from './tarif-programme';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 /**
  * Cœur SANS auth du programme PRODUIT (réutilisable par scripts pipeline).
@@ -117,6 +118,14 @@ export async function generateProgrammeForProductCore(
 
   const hash = createHash('sha256').update(pdfBuffer).digest('hex');
 
+  // Lot 0 · 0.2 — empreinte des champs rendus (contenu pedagogique + tarif
+  // catalogue du produit).
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'PROGRAMME',
+    productId,
+  });
+
   // Reutilise un Document existant pour ce produit avec le meme hash
   const existing = await prisma.document.findFirst({
     where: {
@@ -128,6 +137,12 @@ export async function generateProgrammeForProductCore(
     },
   });
   if (existing) {
+    if (sourceFingerprint && existing.sourceFingerprint !== sourceFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
   }
 
@@ -147,6 +162,7 @@ export async function generateProgrammeForProductCore(
       entityId: productId,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint,
     },
   });
 
@@ -279,11 +295,25 @@ export async function generateProgrammeForSessionCore(
 
   // Idempotence par le CONTENU : changer le tarif change le hash, donc produit
   // un nouveau document ; recliquer sans rien changer n'en crée aucun.
+  // Lot 0 · 0.2 — meme contenu pedagogique, mais le TARIF de la session : c'est
+  // exactement le champ qui bouge apres coup et rend le PDF faux.
+  const sessionFingerprint = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'PROGRAMME',
+    sessionId,
+  });
+
   const existing = await prisma.document.findFirst({
     where: { tenantId, type: 'PROGRAMME', entityType: 'session', entityId: sessionId, hashSha256: hash },
-    select: { id: true, pdfUrl: true },
+    select: { id: true, pdfUrl: true, sourceFingerprint: true },
   });
   if (existing && !opts.force) {
+    if (sessionFingerprint && existing.sourceFingerprint !== sessionFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint: sessionFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
   }
 
@@ -311,6 +341,7 @@ export async function generateProgrammeForSessionCore(
       sessionId,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint: sessionFingerprint,
     },
   });
 

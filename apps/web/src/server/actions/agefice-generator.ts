@@ -18,6 +18,7 @@ import {
   type AttestationType,
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -394,10 +395,26 @@ export async function generateAgeficeForParticipant(
     return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}`, warnings };
   }
 
+  // Lot 0 · 0.2 — empreinte des champs rendus (identité, structure, montant,
+  // dates, lieu, champs Cerfa du produit).
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId: user.tenantId,
+    docType: 'AGEFICE',
+    participantId,
+    sessionId: session.id,
+  });
+
   const existing = await prisma.document.findFirst({
     where: { tenantId: user.tenantId, hashSha256: hash, type: 'AGEFICE' },
+    select: { id: true, sourceFingerprint: true },
   });
   if (existing) {
+    if (sourceFingerprint && existing.sourceFingerprint !== sourceFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id, warnings };
   }
 
@@ -409,6 +426,7 @@ export async function generateAgeficeForParticipant(
       entityId: participantId,
       pdfUrl: key,
       hashSha256: hash,
+      sourceFingerprint,
       sessionId: session.id,
       participantId,
     },

@@ -1014,6 +1014,12 @@ model Document {
   entityId      String
   pdfUrl        String
   hashSha256    String
+  /// Lot 0 · 0.2 (audit 28/08, E-1) — SHA-256 du JSON des champs d'ENTRÉE
+  /// effectivement rendus, posé à la génération. `hashSha256` prouve que le PDF
+  /// n'a pas bougé ; celui-ci dit s'il raconte encore la vérité. null = document
+  /// antérieur au 02/09/2026 ou type non couvert → verdict « inconnu », jamais
+  /// « à jour ». Cf. `apps/web/src/lib/docs/source-fingerprint.ts`.
+  sourceFingerprint String?
   status        String              @default("generated")
   sessionId     String?
   session       TrainingSession?    @relation(fields: [sessionId], references: [id])

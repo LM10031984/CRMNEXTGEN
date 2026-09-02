@@ -18,7 +18,7 @@
  * A11y : aria-label + title (couleur dupliquée par icône + texte FR).
  */
 
-import { Check, AlertTriangle, X, Minus, Loader2 } from 'lucide-react';
+import { Check, AlertTriangle, X, Minus, Loader2, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DocStatusState as DocStatusStateType } from '@qualiof/shared';
 
@@ -31,11 +31,30 @@ export interface DocStatusBadgeProps {
   label: string;
   /** Si state==='MANUAL_OK' + uploadedSignedPdfKey présent → variant solid. */
   hasUploadedPdf?: boolean;
+  /**
+   * Lot 0 · 0.2 — le PDF existe mais une donnée qu'il PORTE a changé depuis sa
+   * génération. Ce n'est pas un manque : c'est un document qui ment. Il prend
+   * donc le pas sur le vert « généré ».
+   */
+  stale?: boolean;
 }
 
 const BASE_CLS = 'inline-flex items-center justify-center h-6 w-6 rounded-full';
 
-export function DocStatusBadge({ state, warning, label, hasUploadedPdf }: DocStatusBadgeProps) {
+export function DocStatusBadge({ state, warning, label, hasUploadedPdf, stale }: DocStatusBadgeProps) {
+  if (stale && (state === 'GENERATED' || state === 'MANUAL_OK')) {
+    const ariaLabel = `${label} : données modifiées depuis la génération`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Données modifiées depuis la génération — ce PDF n'est plus à jour"
+        className={cn(BASE_CLS, 'bg-amber-100 text-amber-800 border border-amber-400')}
+      >
+        <History className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
   if (state === 'RUNNING') {
     const ariaLabel = `${label} : génération en cours`;
     return (

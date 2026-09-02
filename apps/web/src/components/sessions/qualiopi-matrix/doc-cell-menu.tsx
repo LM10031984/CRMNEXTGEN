@@ -57,6 +57,12 @@ export interface DocCellMenuProps {
   docType: string;
   state: 'GENERATED' | 'MANUAL_OK' | 'MISSING' | 'NA';
   pdfRef?: CellPdfRef;
+  /**
+   * Lot 0 · 0.2 — une donnée que ce document PORTE a changé depuis sa
+   * génération. On ne masque rien et on ne bloque rien : on nomme l'écart à
+   * l'endroit où l'utilisateur peut le corriger.
+   */
+  stale?: boolean;
   /** Si true, lecture seule (FORMATEUR / COMMERCIAL / COMPTABLE) — pas de menu. */
   readOnly?: boolean;
   /** Pour tooltips & confirms. */
@@ -73,6 +79,7 @@ export function DocCellMenu({
   docType,
   state,
   pdfRef,
+  stale,
   readOnly,
   participantName,
   docLabel,
@@ -208,9 +215,15 @@ export function DocCellMenu({
               </DropdownMenu.Item>
             )}
             {showRegenerate && (
-              <DropdownMenu.Item onSelect={handleRegen} className={ITEM_CLS}>
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Re-générer
+              <DropdownMenu.Item
+                onSelect={handleRegen}
+                className={cn(ITEM_CLS, stale && 'text-amber-800 font-medium')}
+              >
+                <RefreshCw
+                  className={cn('h-4 w-4', stale && 'text-amber-600')}
+                  aria-hidden="true"
+                />
+                {stale ? 'Re-générer — données modifiées depuis' : 'Re-générer'}
               </DropdownMenu.Item>
             )}
             {showDownload && (

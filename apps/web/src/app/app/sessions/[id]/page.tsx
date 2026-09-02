@@ -76,6 +76,7 @@ import {
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
+import { findStaleDocumentIds } from '@/lib/docs/document-source';
 
 // Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
 export const maxDuration = 300;
@@ -437,6 +438,12 @@ export default async function SessionDetailPage({
   }));
 
   const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
+
+  // Lot 0 · 0.2 (audit 28/08, E-1) — quels documents de cette session portent
+  // une donnée qui a bougé depuis leur génération. Un seul chargement du graphe
+  // session, jamais de N+1, et jamais bloquant : en cas d'échec on n'affiche
+  // simplement aucun avertissement (cf. findStaleDocumentIds).
+  const staleDocIds = await findStaleDocumentIds(user.tenantId, session.id);
 
   // Bug I — proxy de présence aligné sur deriveCellState (derive-cell-state.ts L70-71).
   // La matrice considère la grille obs comme générée dès qu'un PedagogicalAsset existe
@@ -1428,6 +1435,7 @@ export default async function SessionDetailPage({
             participants={matrixParticipants}
             productDocs={productDocsMap}
             sessionDocs={sessionDocsMap}
+            staleDocIds={staleDocIds}
             zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
           />
         }

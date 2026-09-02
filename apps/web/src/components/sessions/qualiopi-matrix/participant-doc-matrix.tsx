@@ -53,6 +53,12 @@ export interface ParticipantDocMatrixProps {
   participants: MatrixParticipant[];
   productDocs: Map<string, { id: string }>;
   sessionDocs: Map<string, { id: string }>;
+  /**
+   * Lot 0 · 0.2 — ids des documents dont une donnée rendue a bougé depuis la
+   * génération (`findStaleDocumentIds`). Optionnel : sans lui, la matrice
+   * affiche ce qu'elle affichait avant.
+   */
+  staleDocIds?: ReadonlySet<string>;
 }
 
 export function ParticipantDocMatrix({
@@ -62,6 +68,7 @@ export function ParticipantDocMatrix({
   participants,
   productDocs,
   sessionDocs,
+  staleDocIds,
 }: ParticipantDocMatrixProps) {
   // D-11 — RBAC matrice : ADMIN/MANAGER write, autres lecture seule.
   const readOnly = !['ADMIN', 'MANAGER'].includes(userRole);
@@ -96,6 +103,7 @@ export function ParticipantDocMatrix({
         productDocs,
         sessionDocs,
         p.pedagogicalAssets,
+        staleDocIds,
       );
       return { docType, state };
     });

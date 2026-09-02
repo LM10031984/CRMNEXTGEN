@@ -25,6 +25,8 @@ interface Props {
   sessionDocs: Map<string, { id: string }>;
   /** Dernier batch closure téléchargeable (ZIP) — absent si aucun doc généré. */
   zipBatchId?: string | null;
+  /** Lot 0 · 0.2 — documents dont une donnée rendue a bougé depuis la génération. */
+  staleDocIds?: ReadonlySet<string>;
 }
 
 export function TabTousDocuments({
@@ -35,6 +37,7 @@ export function TabTousDocuments({
   productDocs,
   sessionDocs,
   zipBatchId,
+  staleDocIds,
 }: Props) {
   return (
     <div className="pt-4 space-y-4">
@@ -62,6 +65,7 @@ export function TabTousDocuments({
         participants={participants}
         productDocs={productDocs}
         sessionDocs={sessionDocs}
+        staleDocIds={staleDocIds}
       />
     </div>
   );
