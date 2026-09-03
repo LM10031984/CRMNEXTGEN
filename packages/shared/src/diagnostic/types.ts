@@ -52,6 +52,8 @@ export type DiagnosticQuestionType =
   | 'text'
   | 'int'
   | 'percent'
+  /** Note sur 5 (avis en ligne). Distinct de `percent` : « 3 » se lit « 3 / 5 », pas « 3 % ». */
+  | 'rating5'
   | 'money'
   | 'date'
   | 'url'

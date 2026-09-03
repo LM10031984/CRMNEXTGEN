@@ -13,6 +13,10 @@
  *
  * Ne pas retoucher à la main : la maquette est la référence de rendu, et un
  * test de contrat vérifie l'intégrité de cette feuille.
+ *
+ * Le bloc de compatibilité en fin de fichier, lui, s'écrit à la main : il
+ * transpose ce que le moteur d'impression ne sait pas faire. Sa règle
+ * cardinale — WeasyPrint n'implémente ni CSS Grid ni `gap` — y est détaillée.
  */
 export const AUDIT_STYLES = String.raw`
 :root{
@@ -145,58 +149,196 @@ export const AUDIT_STYLES = String.raw`
      ─────────────────────────────────────────────────────────────────────
      Ajouté APRÈS la maquette, jamais à sa place : la maquette reste la
      référence de rendu à l'écran, ce bloc ne corrige que ce que le moteur
-     d'impression ne sait pas faire. Trois manques, tous silencieux :
+     d'impression ne sait pas faire.
 
-       1. CSS Grid n'est pas implémenté — sans ces règles, chaque grille
-          s'empile en une colonne et le rapport double de longueur ;
-       2. « gap » n'est pas appliqué en flex — les blocs se touchent, et sur
-          la couverture le montant venait littéralement chevaucher le texte.
-          D'où les marges explicites sur les enfants ;
-       3. « system-ui » n'est pas résolu et retombe sur une chasse fixe. On
-          nomme des familles que le conteneur possède réellement.
+     La règle unique dont découle presque tout ce bloc : **WeasyPrint
+     n'implémente NI CSS Grid NI « gap »** — ni en grid, ni en flex. Les deux
+     échouent en silence : une grille s'empile en une colonne, un « gap »
+     disparaît et les blocs se touchent ou se chevauchent. Toute mise en page
+     de la maquette exprimée en grid/gap est donc transposée ici en
+     flex + marges explicites, ou en table/table-cell quand il faut des
+     colonnes qui ne se chevauchent JAMAIS (blocs héros à gros chiffre).
+
+     Trois autres manques, tous silencieux eux aussi :
+       • « min-height » n'établit pas le bloc conteneur d'un enfant en
+         « position:absolute » : un footer en « bottom:0 » retombait dans le flux,
+         collé au contenu, avec une demi-page blanche dessous. D'où le passage
+         du pied de page en boîte de marge « @page » (voir ci-dessous) ;
+       • le conteneur ne possède QUE les fontes Liberation. « DejaVu Sans »,
+         « Montserrat », « system-ui » et même le générique « sans-serif » tombent
+         tous sur Liberation **Mono** (chasse fixe). Seuls « Liberation Sans »,
+         « Helvetica » et « Arial » (alias fontconfig) donnent une proportionnelle ;
+       • un espace en tête d'un élément inline (« <small> / 100</small> ») est
+         mangé : « 81/ 100 ». D'où l'insécable côté template + la marge ici.
      ══════════════════════════════════════════════════════════════════════ */
-  /* !important assumé : la maquette pose la police sur des sélecteurs plus
+
+  /* ── Le modèle de page ────────────────────────────────────────────────
+     Le pied de page est une boîte de marge « @page », pas un bloc absolu dans
+     la page. Trois raisons, dans cet ordre :
+       1. c'est le seul mécanisme qui l'ancre vraiment en bas (cf. min-height) ;
+       2. il donne « counter(page) / counter(pages) » — la numérotation devient
+          juste sans que personne ait à la connaître d'avance, ce qu'exige le
+          format condensé où le nombre de pages dépend du contenu ;
+       3. il rend « .page » inutile en tant que boîte de hauteur fixe : plus de
+          « overflow:hidden », donc plus de contenu tronqué en silence. Un
+          débordement produit une page de plus — un défaut qui se VOIT.
+     Le texte du pied, lui, est injecté par « renderAuditPageRule() » : il
+     dépend du dossier. */
+  @page{ size:A4; margin:15mm 16mm 20mm }
+
+  /* « .page » n'est plus une feuille de papier simulée : c'est « @page » qui porte
+     le format et les marges. On neutralise donc la boîte de la maquette —
+     sinon ses 15mm/16mm de padding s'ajouteraient aux marges de « @page » et
+     tout le document se retrouverait deux fois trop en dedans. */
+  .page{ width:auto; height:auto; min-height:0; margin:0; padding:0;
+         overflow:visible; box-shadow:none; background:transparent;
+         break-after:page; page-break-after:always }
+  body > :last-child{ break-after:auto; page-break-after:auto }
+
+  /* La couverture déborde jusqu'au bord du papier : les marges négatives
+     annulent exactement les marges de « @page ». */
+  @media print{ html,body{ background:#fff; padding:0 } .page{ box-shadow:none; margin:0 } }
+
+  /* ── Fontes réellement présentes dans le conteneur ────────────────────
+     « !important » assumé : la maquette pose la police sur des sélecteurs plus
      spécifiques (« .tile .display », « .chap-meta .score »). Sans forcer, les
-     chiffres mis en avant retombaient sur une chasse fixe. C'est une couche de
+     chiffres mis en avant retombent en chasse fixe. C'est une couche de
      compatibilité générée, pas du style écrit à la main. */
   body, h1, h2, h3, h4, .kicker, th, .foot-brand,
   .display, .agency, .chap-title, .score, .big, .v, .cover-meta b{
-    font-family: 'DejaVu Sans', Helvetica, Arial, sans-serif !important;
+    font-family: 'Liberation Sans', Helvetica, Arial !important;
   }
 
-  /* Les pastilles s'étiraient en barres pleine largeur : inline-flex est traité
-     comme un bloc par le moteur. En inline, elles reprennent leur taille. */
-  .chip{display:inline; padding:.4mm 2.2mm}
+  /* ── Titres : le numéro ne colle plus au titre (grid/gap → marge) ─────
+     La maquette met « display:flex; gap:3mm » sur le titre et son numéro. Sans
+     « gap », on lisait « 02Pourquoi », « 17Votre potentiel ». En bloc + numéro
+     inline-block, le titre reprend son propre fil : il peut passer à la ligne
+     sans décrocher du numéro (le cas « Outils & IA »). */
+  .sec>h2, .chap-title{ display:block }
+  .sec>h2 .no, .chap-title .no{ display:inline-block; margin-right:3mm }
 
-  .grid2, .grid3{display:flex; flex-wrap:wrap; align-items:stretch}
-  .grid2 > *{flex:1 1 46%; max-width:48%; margin:0 2% 4mm 0}
-  .grid3 > *{flex:1 1 30%; max-width:31%; margin:0 2% 4mm 0}
+  /* ── En-tête de chapitre : titre à gauche, note à droite, sans contact ── */
+  .chap-head{ display:table; width:100%; table-layout:auto }
+  .chap-head .chap-title{ display:table-cell; vertical-align:top }
+  .chap-head .chap-meta{ display:table-cell; vertical-align:top; width:1%;
+                         white-space:nowrap; text-align:right; padding-left:5mm }
+  .chap-meta .score small{ margin-left:1.2mm }
+  /* La couleur de la note dit la même chose que la pastille du chapitre. */
+  .chap-meta .score.is-alert{ color:#b42318 }
+  .chap-meta .score.is-warn{ color:#9a5b00 }
+  .chap-meta .score.is-ok{ color:#00527A }
+  /* Un chapitre non noté affiche « non noté » : un tiret cadratin à 20pt
+     ressemble à une barre pleine, pas à une absence de note. */
+  .chap-meta .score.is-none{ font-size:10.5pt; font-weight:600; color:#7b8894 }
 
-  .idgrid{display:flex; flex-wrap:wrap}
-  .idgrid > div{flex:1 1 46%; max-width:48%; margin-right:2%}
+  /* ── Blocs héros (gros chiffre + phrase) ──────────────────────────────
+     En flex sans « gap », le chiffre en « white-space:nowrap » débordait sur la
+     phrase : « 63 / 100 » recouvrait « comparé », « 900 000 € » mangeait le
+     début du texte. En table à largeur automatique, la colonne du chiffre
+     prend sa largeur réelle et la phrase occupe le reste — quel que soit le
+     nombre affiché. */
+  .scorehero, .valuecard, .euro{ display:table; width:100%; table-layout:auto }
+  .scorehero .big, .valuecard .v, .euro .amount{
+    display:table-cell; vertical-align:middle; white-space:nowrap; padding-right:6mm; width:1% }
+  .scorehero p, .valuecard p, .euro p{ display:table-cell; vertical-align:middle }
 
-  .toc{columns:auto; display:block}
-  .toc div{display:flex; justify-content:space-between}
+  /* ── Grilles de tuiles : flex + marges (grid non implémenté) ──────────── */
+  .grid2, .grid3{ display:flex; flex-wrap:wrap; align-items:stretch }
+  .grid2 > *{ flex:1 1 46%; max-width:48%; margin:0 2% 4mm 0 }
+  .grid3 > *{ flex:1 1 30%; max-width:31%; margin:0 2% 4mm 0 }
 
-  .srow{display:flex; align-items:center}
-  .srow .slabel{flex:0 0 52mm; padding-right:3mm}
-  .srow .sbarwrap{flex:1 1 auto; margin-right:3mm}
-  .srow .schip{flex:0 0 22mm}
+  .idgrid{ display:flex; flex-wrap:wrap }
+  .idgrid > div{ flex:1 1 46%; max-width:48%; margin-right:2% }
 
-  .scorehero{display:flex; align-items:center}
-  .scorehero .big{margin-right:6mm}
+  .toc{ columns:auto; display:flex; flex-wrap:wrap }
+  .toc > div{ flex:0 0 47%; max-width:47%; margin-right:3%;
+              display:flex; justify-content:space-between }
 
-  .chap-head{display:flex; justify-content:space-between; align-items:flex-start}
+  /* ── Barres de score et entonnoir ─────────────────────────────────────
+     « gap » perdu → marges explicites entre les lignes. Et le libellé n'est
+     plus un enfant flex de la barre (il ne s'affichait pas du tout) : il est
+     positionné dans la piste, à l'intérieur de la barre quand elle est assez
+     large, à l'extérieur sinon — le mécanisme « .outlbl » de la maquette. */
+  .scorebars{ display:block }
+  .scorebars > .srow{ margin-bottom:1mm }
+  .srow{ display:flex; align-items:center }
+  /* 58mm et non 52mm : à la largeur de la maquette, la moitié des titres de
+     chapitre passaient sur deux lignes et la section débordait d'une page. */
+  .srow .slabel{ flex:0 0 58mm; padding-right:3mm }
+  .srow .sbarwrap{ flex:1 1 auto; margin-right:3mm }
+  .srow .schip{ flex:0 0 22mm }
 
-  .cover-meta{display:flex; flex-wrap:wrap}
-  .cover-meta > div{margin-right:9mm; margin-bottom:3mm}
+  .funnel{ display:block }
+  .funnel > .frow{ margin-bottom:2px }
+  .frow{ display:flex; align-items:center }
+  .frow .stage{ flex:0 0 42mm; padding-right:3mm }
+  .frow .barwrap{ flex:1 1 auto; margin-right:3mm }
+  .frow .conv{ flex:0 0 26mm }
 
-  .cover-badges{display:flex; flex-wrap:wrap}
-  .cover-badges .cbadge{margin:0 4mm 3mm 0}
+  .sbar, .bar{ display:block }
+  .sbarwrap, .barwrap{ position:relative }
+  .outlbl, .inlbl{ position:absolute; white-space:nowrap; line-height:1;
+                   font-variant-numeric:tabular-nums; font-weight:600 }
+  /* « top » posé à la main : le décalage vaut (hauteur de piste − hauteur de
+     ligne) / 2. Ni « transform » ni « align-items » ne sont fiables ici. */
+  .sbarwrap .outlbl, .sbarwrap .inlbl{ top:1.6mm; font-size:8pt }
+  .barwrap .outlbl, .barwrap .inlbl{ top:1.8mm; font-size:8.3pt }
+  .outlbl{ color:#1c2733 }
+  .inlbl{ color:#fff }
 
-  .valuecard{display:flex; align-items:center}
-  .valuecard .v{margin-right:6mm; flex:0 0 auto}
-  .valuecard p{flex:1 1 auto}
+  /* ── Priorités ────────────────────────────────────────────────────────── */
+  .prio{ display:block }
+  .prio > .pcard{ margin-bottom:3mm }
+  .pcard{ display:flex; align-items:flex-start }
+  .pcard .n{ flex:0 0 11mm; margin-right:4mm }
 
-  .footer{display:flex; justify-content:space-between}
+  /* ── Couverture ───────────────────────────────────────────────────────── */
+  .cover-meta{ display:flex; flex-wrap:wrap }
+  .cover-meta > div{ margin-right:9mm; margin-bottom:3mm }
+  .cover-badges{ display:flex; flex-wrap:wrap }
+  .cover-badges .cbadge{ margin:0 4mm 3mm 0 }
+
+  /* Les pastilles s'étiraient en barres pleine largeur : inline-flex est
+     traité comme un bloc par le moteur. En inline, elles reprennent leur
+     taille. */
+  .chip{ display:inline; padding:.4mm 2.2mm }
+
+  /* ── Format condensé (diagnostic léger) ───────────────────────────────
+     Les chapitres s'enchaînent au fil de l'eau au lieu d'occuper une page
+     chacun. « break-inside:avoid » porte l'interdiction de couper un chapitre
+     en deux ; c'est le moteur qui décide combien tiennent par page, ce qui
+     évite d'estimer des hauteurs (et de tronquer quand l'estimation rate). */
+  .flow{ display:block; break-after:page; page-break-after:always }
+  .flow > .chap{ break-inside:avoid; page-break-inside:avoid; margin-bottom:7mm }
+  .flow > .chap:last-child{ margin-bottom:0 }
 `;
+
+/**
+ * Le pied de page — en boîtes de marge `@page`, donc en CSS et non en HTML.
+ *
+ * C'est ce qui l'ancre réellement en bas de chaque page (un bloc absolu dans
+ * une `.page` en `min-height` retombe dans le flux, cf. bloc de compatibilité)
+ * et ce qui rend la numérotation juste toute seule : `counter(pages)` connaît
+ * le total, que le rapport fasse 10 pages en format condensé ou 17 en complet.
+ *
+ * Le texte dépend du dossier — d'où cette fonction plutôt qu'une constante.
+ */
+export function renderAuditPageRule(args: {
+  brand: string;
+  documentLine: string;
+}): string {
+  // Chaîne CSS : seuls le backslash et le guillemet doivent être neutralisés.
+  const css = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const box = `border-top:1px solid #dde4ea; padding-top:2mm; vertical-align:top;
+               font-family:'Liberation Sans', Helvetica, Arial; font-size:7.5pt`;
+  return `@page{
+    @bottom-left{
+      content:"${css(args.brand)}"; ${box};
+      color:#00527A; font-weight:600; letter-spacing:.14em; text-align:left }
+    @bottom-center{
+      content:"${css(args.documentLine)}"; ${box}; color:#7b8894; text-align:center }
+    @bottom-right{
+      content:counter(page) " / " counter(pages); ${box};
+      color:#7b8894; text-align:right }
+  }`;
+}

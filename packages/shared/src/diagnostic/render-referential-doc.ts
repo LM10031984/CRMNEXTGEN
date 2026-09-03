@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<DiagnosticQuestion['type'], string> = {
   text: 'texte',
   int: 'entier',
   percent: '%',
+  rating5: '/5',
   money: '€',
   date: 'date',
   url: 'url',

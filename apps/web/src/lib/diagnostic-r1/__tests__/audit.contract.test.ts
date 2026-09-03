@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DIAGNOSTIC_QUESTIONS } from '@qualiof/shared/diagnostic';
 
 import { buildAuditData } from '../audit-builder';
+import { AUDIT_STYLES } from '../templates/audit-styles';
 import { renderAuditHtml } from '../templates/audit-template';
 
 /**
@@ -147,21 +148,53 @@ function build(overrides: Partial<Parameters<typeof buildAuditData>[0]> = {}) {
   });
 }
 
+/** Les sections qui occupent leur propre page. */
+const pageSections = (html: string) => html.match(/<section class="page" id="s-\d\d">/g) ?? [];
+/** Les chapitres rendus au fil de l'eau (format condensé). */
+const flowChapters = (html: string) => html.match(/<div class="chap" id="s-\d\d">/g) ?? [];
+
 describe('Structure du rapport — conformité à la maquette', () => {
   const html = renderAuditHtml(build());
 
-  it('compte exactement 17 pages', () => {
-    expect(html.match(/<section class="page">/g)).toHaveLength(17);
+  it('porte les 17 sections du rapport, quel que soit le format', () => {
+    // Le NUMÉRO DE SECTION est l'invariant : c'est lui qui est imprimé en tête
+    // de chaque partie et repris au sommaire. Le nombre de PAGES, lui, dépend
+    // du format (17 en complet, ~10 en condensé).
+    const ids = [...html.matchAll(/ id="s-(\d\d)"/g)].map((m) => m[1]);
+    expect(ids).toEqual(
+      Array.from({ length: 17 }, (_, i) => String(i + 1).padStart(2, '0')),
+    );
   });
 
-  it('en compte au moins 15 — le plancher que la spec impose', () => {
-    expect(html.match(/<section class="page">/g)!.length).toBeGreaterThanOrEqual(15);
+  it('sort un diagnostic léger au format condensé — les chapitres s’enchaînent', () => {
+    // Décision Laurent du 03/09/2026 : neuf pages à moitié vides ne valent pas
+    // d'être remises. Les huit sections hors chapitres gardent leur page.
+    expect(pageSections(html)).toHaveLength(8);
+    expect(flowChapters(html)).toHaveLength(9);
+    expect(html).toContain('<div class="flow">');
   });
 
-  it('numérote chaque page « n / 17 »', () => {
-    for (let i = 1; i <= 17; i += 1) {
-      expect(html, `pied de page ${i}`).toContain(`<span>${i} / 17</span>`);
+  it('n’autorise jamais la coupure d’un chapitre entre deux pages', () => {
+    expect(AUDIT_STYLES).toMatch(/\.flow > \.chap\{[^}]*break-inside:avoid/);
+    expect(AUDIT_STYLES).toMatch(/\.flow > \.chap\{[^}]*page-break-inside:avoid/);
+  });
+
+  it('numérote les pages depuis le moteur, pas depuis un total écrit en dur', () => {
+    // En condensé le nombre de pages n'est pas connu à la génération : il
+    // sortait « n / 17 » sur un document qui en fait dix. Les compteurs CSS le
+    // résolvent à l'impression, pour les deux formats.
+    expect(html).toContain('counter(page)');
+    expect(html).toContain('counter(pages)');
+    expect(html).not.toMatch(/<span>\d+ \/ 17<\/span>/);
+  });
+
+  it('renvoie le sommaire vers de vraies ancres, et vers la vraie page', () => {
+    const cibles = [...html.matchAll(/class="pno" href="#(s-\d\d)"/g)].map((m) => m[1]);
+    expect(cibles.length).toBeGreaterThanOrEqual(15);
+    for (const cible of cibles) {
+      expect(html, `ancre ${cible} manquante`).toContain(`id="${cible}"`);
     }
+    expect(html).toContain('target-counter(attr(href), page)');
   });
 
   it('affiche la valeur de la prestation en couverture', () => {
@@ -177,7 +210,7 @@ describe('Structure du rapport — conformité à la maquette', () => {
     expect(financement).toBeGreaterThan(equipe);
     expect(financement).toBeGreaterThan(priorites);
     // Et aucune page ne s'ouvre après lui.
-    const derniereOuverture = html.lastIndexOf('<section class="page">');
+    const derniereOuverture = html.lastIndexOf('<section class="page" id=');
     expect(derniereOuverture).toBeLessThan(financement);
   });
 
@@ -305,7 +338,7 @@ describe('Robustesse', () => {
         participants: [],
       }),
     );
-    expect(html.match(/<section class="page">/g)).toHaveLength(17);
+    expect([...html.matchAll(/ id="s-\d\d"/g)]).toHaveLength(17);
     expect(html).toContain('Aucune réponse enregistrée sur ce chapitre');
     expect(html).not.toContain('undefined');
     expect(html).not.toContain('NaN');
@@ -360,5 +393,169 @@ describe('Intégrité de la feuille de style', () => {
     const { AUDIT_STYLES } = await import('../templates/audit-styles');
     expect(AUDIT_STYLES).not.toContain('@import');
     expect(AUDIT_STYLES).not.toContain('http');
+  });
+});
+
+describe('Format complet — une page par chapitre (la maquette d’origine)', () => {
+  const html = renderAuditHtml(build({ variant: 'COMPLET' }));
+
+  it('rend 17 pages, une par section', () => {
+    expect(pageSections(html)).toHaveLength(17);
+  });
+
+  it('ne bascule jamais en flux condensé', () => {
+    expect(html).not.toContain('<div class="flow">');
+    expect(flowChapters(html)).toHaveLength(0);
+  });
+
+  it('respecte le plancher de 15 pages que la spec impose au format complet', () => {
+    expect(pageSections(html).length).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe('Ce qui se voyait à l’œil nu sur le premier audit réel (DIAG-0001)', () => {
+  const html = renderAuditHtml(build());
+
+  it('sépare le numéro de section de son titre', () => {
+    // « 02Pourquoi », « 17Votre potentiel » : le gap flex de la maquette n'est
+    // pas appliqué par le moteur, la marge du numéro le remplace.
+    expect(AUDIT_STYLES).toMatch(/\.sec>h2 \.no, \.chap-title \.no\{[^}]*margin-right/);
+    // Le numéro est un bloc à part entière : plus de flex, donc plus de gap
+    // perdu — et le titre garde son propre fil quand il passe à la ligne.
+    expect(AUDIT_STYLES).toContain('.sec>h2, .chap-title{ display:block }');
+    expect(AUDIT_STYLES).toMatch(/\.no\{ display:inline-block/);
+  });
+
+  it('ne colle pas « / 100 » au score', () => {
+    expect(html).not.toMatch(/\d<small>\s*\//);
+    expect(html).toContain('<small>&#160;/ 100</small>');
+  });
+
+  it('donne au score la couleur du statut du chapitre', () => {
+    const faible = build().chapters.find((c) => c.score !== null && c.score < 45);
+    expect(faible, 'le jeu de test doit porter un chapitre en alerte').toBeDefined();
+    expect(html).toContain(`<div class="score is-alert">${faible!.score}`);
+    expect(AUDIT_STYLES).toContain('.chap-meta .score.is-alert{ color:#b42318 }');
+  });
+
+  it('écrit « non noté » plutôt qu’un tiret qui ressemble à une barre', () => {
+    const nonNote = build().chapters.find((c) => c.score === null);
+    expect(nonNote, 'le jeu de test doit porter un chapitre non noté').toBeDefined();
+    expect(html).toContain('<div class="score is-none">non noté</div>');
+    expect(html).not.toContain('—<small>&#160;/ 100</small>');
+  });
+
+  it('dessine l’entonnoir en barres proportionnelles, pas en simple tableau', () => {
+    expect(html).toContain('<div class="funnel">');
+    expect(html).toMatch(/<div class="bar" style="width:/);
+  });
+
+  it('affiche le libellé de chaque barre — il manquait purement et simplement', () => {
+    // Le libellé était un enfant flex de la barre : absent du PDF.
+    expect(html).toMatch(/class="(in|out)lbl"/);
+    expect(html).not.toMatch(/<div class="sbar"[^>]*><span>/);
+  });
+
+  it('ne déclare pas « conforme » une étape qu’il n’a pas comparée', () => {
+    expect(html).toContain('non comparé');
+  });
+});
+
+describe('Contenu — ce que la page équipe et la page financement doivent dire', () => {
+  it('propose un objectif et une préconisation quand la production N-1 est connue', () => {
+    const data = build();
+    const html = renderAuditHtml(data);
+    expect(data.teamObjectives.hasContent).toBe(true);
+    expect(html).toContain('Objectif proposé');
+    // Marie D. produit 120 k€ ; l'agence vise +25 % → 150 000 €.
+    expect(data.teamObjectives.lines[0]?.objectiveCa).toBe(150_000);
+    for (const l of data.teamObjectives.lines) {
+      if (l.caN1 !== null) expect(l.recommendation).not.toBeNull();
+    }
+  });
+
+  it('masque les deux colonnes plutôt que d’aligner des tirets quand rien n’est calculable', () => {
+    const html = renderAuditHtml(
+      build({
+        participants: [
+          {
+            id: 'p1',
+            displayName: 'Sans production',
+            statut: 'SALARIE',
+            caN1: null,
+            objectiveCa: null,
+            strengths: null,
+            priorityNeed: null,
+            opcoEligible: null,
+            trainings24mFunded: null,
+            includedInProposal: true,
+          },
+        ],
+      }),
+    );
+    expect(html).not.toContain('Objectif proposé');
+    expect(html).not.toContain('Constats &amp; préconisation');
+  });
+
+  it('ne laisse jamais la saisie du commercial être écrasée par la règle', () => {
+    const data = build();
+    // Marie D. porte un objectif saisi (150 000) et des forces notées.
+    expect(data.teamObjectives.lines[0]?.recommendation).toContain('Excellente en découverte');
+  });
+
+  it("n'annonce aucun droit mobilisable sans bénéficiaire", () => {
+    // 1 salarié déclaré au chapitre 2, aucune fiche salarié cartographiée :
+    // la page affichait « 0 salarié(s) » et « 2 500 € » sur la même ligne.
+    const html = renderAuditHtml(
+      build({
+        answers: [...ANSWERS.filter((a) => a.questionId !== 'team-employees-count'),
+          { questionId: 'team-employees-count', value: 1, isSkipped: false }],
+        participants: PARTICIPANTS.filter((p) => p.statut !== 'SALARIE'),
+      }),
+    );
+    expect(html).toContain('0 salarié(s)');
+    expect(html).not.toMatch(/0 salarié\(s\)<\/td>\s*<td class="num">\d/);
+    expect(html).toContain('aucune fiche individuelle saisie');
+  });
+
+  it('rend une note d’avis sur 5, jamais en pourcentage', () => {
+    const html = renderAuditHtml(
+      build({
+        answers: [...ANSWERS.filter((a) => a.questionId !== 'google-reviews-score'),
+          { questionId: 'google-reviews-score', value: 3, isSkipped: false }],
+      }),
+    );
+    expect(html).toContain('Note moyenne en ligne</td><td>3 / 5</td>');
+    expect(html).not.toContain('Note moyenne en ligne</td><td>3 %</td>');
+  });
+});
+
+describe('Fontes — ce que le conteneur de rendu sait réellement dessiner', () => {
+  /**
+   * Le conteneur WeasyPrint ne porte que les fontes Liberation. Un caractère
+   * absent ne produit ni erreur ni carré : il sort BLANC. Les ✓ et ✗ de la
+   * maquette avaient disparu de l'entonnoir sans que rien ne le signale.
+   *
+   * Le jeu autorisé est Latin-1 plus la ponctuation française et le signe €,
+   * tous vérifiés présents dans LiberationSans-Regular.
+   */
+  const AUTORISES = new Set([
+    0x0152, 0x0153, 0x2014, 0x2013, 0x2018, 0x2019, 0x201c, 0x201d, 0x202f, 0x20ac,
+  ]);
+
+  it('n’écrit aucun caractère que la fonte ne sait pas dessiner', () => {
+    const html = renderAuditHtml(build());
+    const texte = html
+      .replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace(/<[^>]+>/g, '');
+    const interdits = [
+      ...new Set(
+        [...texte].filter((c) => {
+          const code = c.codePointAt(0)!;
+          return code > 0x7f && code <= 0x00ff ? false : code > 0x7f && !AUTORISES.has(code);
+        }),
+      ),
+    ];
+    expect(interdits, `caractères hors fonte : ${interdits.join(' ')}`).toEqual([]);
   });
 });

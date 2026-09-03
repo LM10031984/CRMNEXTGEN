@@ -25,7 +25,8 @@ import { getVisibleChapterQuestions, hasValue, type AnswerLike } from './progres
 import { computeRatios, type DiagnosticAlert } from './ratios';
 import { computeScoring } from './scoring';
 import { resolveEmployeeCount } from './snapshot';
-import type { AuditData, AuditPriority, AuditTeamMember } from './templates/audit-data';
+import { buildTeamObjectives } from './team-objectives';
+import type { AuditData, AuditPriority } from './templates/audit-data';
 
 const QUESTIONS_BY_ID = new Map(DIAGNOSTIC_QUESTIONS.map((q) => [q.id, q]));
 
@@ -84,6 +85,8 @@ export function renderAnswerValue(question: DiagnosticQuestion, answer: AnswerLi
     }
     case 'percent':
       return `${toNumber(v) ?? v} %`;
+    case 'rating5':
+      return `${toNumber(v) ?? v} / 5`;
     case 'money': {
       const n = toNumber(v);
       return n === null
@@ -228,14 +231,24 @@ export function buildAuditData(input: AuditBuildInput): AuditData {
     };
   });
 
-  const team: AuditTeamMember[] = input.participants.map((p) => ({
-    displayName: p.displayName,
-    statut: p.statut,
-    caN1: p.caN1,
-    objectiveCa: p.objectiveCa,
-    strengths: p.strengths,
-    priorityNeed: p.priorityNeed,
-  }));
+  const revenueN1 = toNumber(answerMap['identity-revenue-n1']);
+  const revenueGoal = toNumber(answerMap['identity-revenue-goal']);
+
+  // Objectifs proposés et préconisations : une règle pure, pas un appel IA
+  // (L-5). Sans elle, les deux dernières colonnes de la page équipe sortaient
+  // entièrement vides alors que les productions N-1 étaient là.
+  const teamObjectives = buildTeamObjectives({
+    participants: input.participants.map((p) => ({
+      displayName: p.displayName,
+      statut: p.statut,
+      caN1: p.caN1,
+      objectiveCa: p.objectiveCa,
+      strengths: p.strengths,
+      priorityNeed: p.priorityNeed,
+    })),
+    revenueN1,
+    revenueGoal,
+  });
 
   // Les verbatims du dirigeant : ses mots, tels qu'ils ont été notés.
   const directorQuotes = ['mgmt-top3-difficulties', 'mgmt-top3-priorities', 'identity-ambition-3y']
@@ -261,6 +274,7 @@ export function buildAuditData(input: AuditBuildInput): AuditData {
 
   return {
     reference: input.reference,
+    variant: input.variant,
     agencyName: input.agencyName,
     agencyContext: context,
     generatedAt: input.generatedAt,
@@ -272,10 +286,11 @@ export function buildAuditData(input: AuditBuildInput): AuditData {
     chapterScores: scoring.chapters,
     pipeline,
     funding,
-    team,
+    teamObjectives,
+    declaredEmployeeCount: resolveEmployeeCount(answerMap, participantsForEngine),
     directorQuotes,
-    revenueGoal: toNumber(answerMap['identity-revenue-goal']),
-    revenueN1: toNumber(answerMap['identity-revenue-n1']),
+    revenueGoal,
+    revenueN1,
     priorities: buildPriorities(scoring.chapters, alertsByChapter),
     // E-3 : la source de rédaction est toujours dite, jamais devinée.
     generationSource: 'heuristique',

@@ -3,7 +3,7 @@
 /**
  * Génération du rapport d'audit de performance (lot D).
  *
- * Chaîne : lecture du diagnostic → moteurs purs → HTML 17 pages → WeasyPrint →
+ * Chaîne : lecture du diagnostic → moteurs purs → HTML 17 sections → WeasyPrint →
  * MinIO → `Document` de type `DIAGNOSTIC_AUDIT`.
  *
  * Deux choses qui ne se négocient pas :
@@ -23,7 +23,10 @@ import { loadFundingRules } from '@/lib/financement/load-rules';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { buildAuditData } from '@/lib/diagnostic-r1/audit-builder';
-import { renderAuditHtml } from '@/lib/diagnostic-r1/templates/audit-template';
+import {
+  AUDIT_SECTION_COUNT,
+  renderAuditHtml,
+} from '@/lib/diagnostic-r1/templates/audit-template';
 import {
   compareSourceFingerprint,
   computeSourceFingerprint,
@@ -173,7 +176,7 @@ export async function getAuditFreshness(diagnosticId: string): Promise<
 
 export async function generateDiagnosticAudit(
   diagnosticId: string,
-): Promise<ActionResult<{ documentId: string; pages: number }>> {
+): Promise<ActionResult<{ documentId: string; sections: number }>> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
@@ -280,7 +283,9 @@ export async function generateDiagnosticAudit(
 
     revalidatePath('/app/diagnostics');
     revalidatePath(`/app/diagnostics/${diagnostic.id}`);
-    return { ok: true, data: { documentId: document.id, pages: 17 } };
+    // Des SECTIONS, pas des pages : en format condensé le nombre de pages
+    // dépend du contenu et n'est connu qu'après le rendu.
+    return { ok: true, data: { documentId: document.id, sections: AUDIT_SECTION_COUNT } };
   } catch (e) {
     console.error('[diagnostic-audit] persistance', e);
     return { ok: false, error: "L'enregistrement du rapport a échoué." };

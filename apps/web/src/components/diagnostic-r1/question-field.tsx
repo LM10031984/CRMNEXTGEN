@@ -78,6 +78,7 @@ export function QuestionField({
       case 'int':
       case 'money':
       case 'percent':
+      case 'rating5':
         return (
           <div className="relative">
             <input
@@ -92,14 +93,16 @@ export function QuestionField({
               placeholder={
                 question.type === 'percent'
                   ? 'ex. 45'
-                  : question.type === 'money'
-                    ? 'ex. 120 000'
-                    : 'ex. 12'
+                  : question.type === 'rating5'
+                    ? 'ex. 4,6'
+                    : question.type === 'money'
+                      ? 'ex. 120 000'
+                      : 'ex. 12'
               }
             />
             {question.type !== 'int' && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                {question.type === 'money' ? '€' : '%'}
+                {question.type === 'money' ? '€' : question.type === 'rating5' ? '/ 5' : '%'}
               </span>
             )}
           </div>

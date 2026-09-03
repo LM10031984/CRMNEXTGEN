@@ -97,7 +97,7 @@ const BASELINE_PORTED: ReadonlyArray<readonly [string, number, string]> = [
   ['perf-crm-usage', 9, 'percent'],
   ['db-exploitation', 9, 'multichoice'],
   ['google-reviews-count', 9, 'int'],
-  ['google-reviews-score', 9, 'percent'],
+  ['google-reviews-score', 9, 'rating5'],
   ['reviews-collection-process', 9, 'yesno'],
   // Ch.10 — Outils & IA (16)
   ['tools-metier', 10, 'text'],

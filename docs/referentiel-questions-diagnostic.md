@@ -343,7 +343,7 @@ Les fiches nominatives de l'équipe (Ch.2.2 / 2.3) ne sont pas des questions : e
 | `perf-crm-usage` | Dans l'équipe, qui joue le jeu du CRM — tout le monde saisit, ou c'est deux personnes sur cinq ? | % | F |  |  |  |
 | `db-exploitation` | Et cette base, elle vit ? Qu'est-ce que vous en faites — des relances, des campagnes, du matching avec les biens... ou elle dort ? | multi-choix | O |  |  |  |
 | `google-reviews-count` | Côté image maintenant : si je tape le nom de l'agence sur Google, je trouve combien d'avis ? | entier | O | ✅ |  | Ratio avis/vente |
-| `google-reviews-score` | Et la note, elle dit quoi ? | % | O | ✅ |  |  |
+| `google-reviews-score` | Et la note, elle dit quoi ? | /5 | O | ✅ |  |  |
 | `reviews-collection-process` | Ces avis, ils tombent tout seuls, ou il y a un moment précis où on les demande — à la remise des clés par exemple ? | O/N | O |  |  |  |
 
 <details><summary>Valeurs de réponse</summary>

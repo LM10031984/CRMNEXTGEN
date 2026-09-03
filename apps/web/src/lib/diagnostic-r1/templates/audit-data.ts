@@ -6,12 +6,13 @@
  * moteurs purs, déjà arrêtés et snapshotés.
  */
 
-import type { DiagnosticChapter } from '@qualiof/shared/diagnostic';
+import type { DiagnosticChapter, DiagnosticVariantKey } from '@qualiof/shared/diagnostic';
 
 import type { FundingSynthesis } from '@/lib/financement/types';
 import type { PipelineSynthesis } from '../pipeline';
 import type { DiagnosticAlert } from '../ratios';
 import type { ChapterScore } from '../scoring';
+import type { TeamObjectives } from '../team-objectives';
 
 export interface AuditAnswerLine {
   questionId: string;
@@ -34,15 +35,6 @@ export interface AuditChapter {
   alerts: DiagnosticAlert[];
 }
 
-export interface AuditTeamMember {
-  displayName: string;
-  statut: 'INDEPENDANT' | 'SALARIE' | 'DIRIGEANT';
-  caN1: number | null;
-  objectiveCa: number | null;
-  strengths: string | null;
-  priorityNeed: string | null;
-}
-
 export interface AuditPriority {
   title: string;
   why: string;
@@ -52,6 +44,11 @@ export interface AuditPriority {
 export interface AuditData {
   /** DIAG-NNNN */
   reference: string;
+  /**
+   * Pilote la mise en page : un diagnostic LÉGER sort au format condensé
+   * (chapitres au fil de l'eau), un COMPLET garde une page par chapitre.
+   */
+  variant: DiagnosticVariantKey;
   agencyName: string;
   agencyContext: { label: string; value: string }[];
   generatedAt: Date;
@@ -71,7 +68,17 @@ export interface AuditData {
   chapterScores: ChapterScore[];
   pipeline: PipelineSynthesis;
   funding: FundingSynthesis;
-  team: AuditTeamMember[];
+  /**
+   * Les fiches équipe, objectifs proposés et préconisations déjà arrêtés par
+   * `buildTeamObjectives()`. Le template ne fait que mettre en forme.
+   */
+  teamObjectives: TeamObjectives;
+  /**
+   * L'effectif salarié DÉCLARÉ au chapitre 2 — distinct du nombre de fiches
+   * cartographiées. Les deux se contredisaient dans le rapport (« Salariés : 1 »
+   * page 3, « 0 salarié(s) » page 17) ; la page financement les réconcilie.
+   */
+  declaredEmployeeCount: number | null;
   /** Verbatims du dirigeant — ses mots, dans son ordre. */
   directorQuotes: string[];
   revenueGoal: number | null;

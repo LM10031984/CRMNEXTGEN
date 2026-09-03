@@ -253,6 +253,7 @@ export default async function DiagnosticPage({
         freshness={audit.freshness}
         documentId={audit.documentId}
         answersCount={diagnostic.answers.length}
+        variant={diagnostic.variant}
       />
 
       <DiagnosticActions

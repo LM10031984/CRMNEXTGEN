@@ -900,7 +900,9 @@ export const DIAGNOSTIC_QUESTIONS: DiagnosticQuestion[] = [
     profile: 'all',
     question: 'Et la note, elle dit quoi ?',
     hint: 'Saisir la note sur 5 (ex. 4,6). Noter aussi la réaction — fierté ou évitement.',
-    type: 'percent',
+    // Une note d'avis, pas un pourcentage : typée `percent`, elle sortait au
+    // rapport en « Note moyenne en ligne : 3 % ».
+    type: 'rating5',
     required: true,
   },
   {

@@ -485,7 +485,16 @@ Rendus : **PDF** (WeasyPrint, chaîne existante) + **lien web lecture seule** `/
 
 ### 9.2 Le rapport d'audit complet — un livrable de 15 pages minimum, valorisé 3 000 €
 
-**Exigence de Laurent (01/09)** : l'audit complet est une prestation à part entière, **valorisée 3 000 € HT** (paramètre `AUDIT_DISPLAY_VALUE`, affiché en couverture « offerte dans le cadre de votre accompagnement »), donc un document **d'au moins 15 pages qui restitue ce qui s'est dit** — pas une synthèse. Il parle au dirigeant : ses mots, ses chiffres, ses enjeux en euros, son équipe. Généré pour un diagnostic COMPLET (un LÉGER produit une « Synthèse diagnostic » de 2-3 pages sur la même mécanique). Structure de référence = la maquette 17 pages :
+**Exigence de Laurent (01/09)** : l'audit complet est une prestation à part entière, **valorisée 3 000 € HT** (paramètre `AUDIT_DISPLAY_VALUE`, affiché en couverture « offerte dans le cadre de votre accompagnement »), donc un document **d'au moins 15 pages qui restitue ce qui s'est dit** — pas une synthèse. Il parle au dirigeant : ses mots, ses chiffres, ses enjeux en euros, son équipe. Structure de référence = la maquette 17 pages.
+
+**Deux formats pour une seule structure (D-13, tranchée le 03/09/2026)** — les **17 sections** ci-dessous existent dans les deux cas et gardent leur numéro ; c'est le nombre de PAGES qui change :
+
+- **COMPLET → 17 pages**, un chapitre par page, exactement la maquette.
+- **LÉGER → format CONDENSÉ**. Les chapitres s'enchaînent au fil de l'eau, 2 à 3 par page selon leur contenu réel, **sans qu'un chapitre soit jamais coupé en deux**. Les huit sections hors chapitres gardent leur page. Sur DIAG-0001 (37 réponses) : **13 pages pleines** au lieu de 17 à moitié vides.
+- Conséquence : en condensé, **n° de section ≠ n° de page**. Le sommaire affiche les deux (numéro de section à gauche, page réelle à droite) et les pages sont résolues par le moteur d'impression (`target-counter`), jamais écrites en dur.
+- Le plancher « 15 pages minimum » de la présente section vaut **pour le format COMPLET**. Le condensé est plus court par construction — c'est son objet.
+
+Structure de référence = la maquette 17 pages :
 
 1. **Couverture** — valeur de la prestation, badges (66 questions · 11 chapitres · N personnes cartographiées), dates réalisé/restitué.
 2. **Pourquoi cet audit & comment le lire** — méthode, promesse des 3 étages (restitution → lecture → enjeu/levier), sommaire, origine des repères.
@@ -596,6 +605,9 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
+| **D-13** | Un diagnostic LÉGER produisait un audit de 17 pages à moitié vides (un chapitre de 2 réponses occupait une page entière). Fallait-il une « synthèse 2-3 pages » distincte ? | **Non — un seul document, deux formats.** Le LÉGER sort au **format condensé** : mêmes 17 sections, mêmes contenus, mais les chapitres s'enchaînent en flux (2-3 par page, jamais coupés). Le COMPLET garde une page par chapitre. Motif : deux documents distincts, c'est deux gabarits à maintenir et deux occasions de diverger — alors que la seule différence utile est la densité. Cf. §9.2. | 03/09/2026 |
+| **D-14** | Le pied de page portait « n / 17 » écrit en dur, et un chapitre non noté affichait « — / 100 ». Quelle source pour la numérotation ? | **Les compteurs du moteur d'impression** (`counter(page)` / `counter(pages)` en boîte de marge `@page`). En condensé, le total n'est pas connu à la génération : tout total écrit en dur ment. Effet de bord bienvenu : le pied de page est enfin réellement ancré en bas — un bloc `position:absolute` dans une page en `min-height` retombe dans le flux sous WeasyPrint. | 03/09/2026 |
+
 ### Décisions restantes pour Laurent (à trancher au fil des lots, pas bloquantes pour A)
 
 | # | Question | Défaut proposé |
@@ -609,7 +621,7 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | D-7 | Montants OPCO EP : 4 500 € (dit le 01/09) vs ≈ 4 000 € (proposition OPTIMO du 11/08) pour > 10 salariés | 4 500 en seed, modifiable dans Paramètres |
 | D-8 | Volume 72 h × 42 € = 3 024 € vs plafond AGEFICE 3 000 € : que faire des 24 €/agent d'écart ? | ✅ **Tranchée avec D-11** : plafonner à 3 000, afficher l'écart en reste à charge, geste commercial en un clic dans la proposition |
 | D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D, calibré sur 3 audits réels puis figé/versionné |
-| D-10 | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclus individuels) en plus du CA N-1 ? | v1 : CA N-1 + objectif + forces saisies par le commercial ; ratios individuels = extension du référentiel v2 |
+| D-10 | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclus individuels) en plus du CA N-1 ? | v1 : CA N-1 + objectif + forces saisies par le commercial ; ratios individuels = extension du référentiel v2. **Complété le 03/09** : quand le commercial n'a rien saisi, l'objectif et la préconisation sont **proposés par une règle pure** (objectif = production N-1 × croissance visée par l'agence ; préconisation = position vs moyenne d'équipe). Ce que l'humain a saisi gagne toujours. Si rien n'est calculable, les deux colonnes sont **masquées** — pas remplies de tirets. |
 
 ---
 

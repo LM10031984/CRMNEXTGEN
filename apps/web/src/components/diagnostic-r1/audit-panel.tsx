@@ -21,12 +21,14 @@ export function AuditPanel({
   freshness,
   documentId,
   answersCount,
+  variant,
 }: {
   diagnosticId: string;
   hasDocument: boolean;
   freshness: FingerprintComparison;
   documentId: string | null;
   answersCount: number;
+  variant: 'LEGER' | 'COMPLET';
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -50,7 +52,12 @@ export function AuditPanel({
           <FileText className="h-4 w-4" aria-hidden />
           Rapport d’audit
         </h2>
-        <span className="text-xs text-muted-foreground">17 pages · valorisé 3 000 €</span>
+        {/* Le nombre de pages dépend du format : un diagnostic léger sort en
+            condensé, et son total dépend du contenu. On annonce donc les
+            SECTIONS — invariantes — plutôt qu'un total de pages qui mentirait. */}
+        <span className="text-xs text-muted-foreground">
+          17 sections · {variant === 'LEGER' ? 'format condensé' : '17 pages'} · valorisé 3 000 €
+        </span>
       </header>
 
       <div className="p-4 space-y-3">
