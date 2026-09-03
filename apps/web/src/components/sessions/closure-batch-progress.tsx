@@ -127,6 +127,15 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       const r = await retryClosureBatchErrors(batchId, { includeStubs });
       if (r.ok) {
         toast.success(`${r.relaunched ?? 0} job(s) relancé(s)`);
+        // Lot 0 · 0.2 — relancer « les documents génériques » ne doit pas
+        // emporter une attestation déjà envoyée : on dit ce qui a été gardé.
+        if (r.skippedEngaged && r.skippedEngaged.length > 0) {
+          const n = r.skippedEngaged.length;
+          toast.warning(`${n} document${n > 1 ? 's' : ''} engagé${n > 1 ? 's' : ''} conservé${n > 1 ? 's' : ''}`, {
+            description: 'Déjà envoyé, déposé ou signé — non relancé.',
+            duration: 10000,
+          });
+        }
       } else {
         toast.error(r.error ?? 'Erreur');
       }
@@ -142,10 +151,20 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       return;
     }
     startRetry(async () => {
-      const r = await regenerateParticipantDoc({
+      let r = await regenerateParticipantDoc({
         participantId: j.participantId,
         docKind,
       });
+      // Lot 0 · 0.2 — même garde que dans la matrice : un document déjà envoyé
+      // ou signé ne se remplace pas sans que quelqu'un l'ait vu.
+      if (!r.ok && r.requiresConfirmation && r.warning) {
+        if (!confirm(r.warning)) return;
+        r = await regenerateParticipantDoc({
+          participantId: j.participantId,
+          docKind,
+          confirmEngaged: true,
+        });
+      }
       if (r.ok) {
         toast.success(`Régénération lancée : ${j.kindLabel} pour ${j.participantName}`);
       } else {
@@ -199,9 +218,25 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
             {canDownload && (
               <a
                 href={`/api/closure/${batchId}/zip`}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600"
+                // Lot 0 · 0.3 (audit 28/08, E-3) — le pack générique partait
+                // chez l'apprenant sans que rien ne le signale. On ne bloque
+                // pas le téléchargement (il faut parfois vérifier le contenu),
+                // on refuse juste qu'il parte sans avoir été lu.
+                onClick={(e) => {
+                  if (stubCount === 0) return;
+                  const ok = confirm(
+                    `Ce pack contient ${stubCount} document${stubCount > 1 ? 's' : ''} au contenu générique : l'IA a échoué et le texte de remplacement est le même d'un stagiaire à l'autre. C'est le premier écart que cherche un auditeur.\n\nTélécharger quand même ?`,
+                  );
+                  if (!ok) e.preventDefault();
+                }}
+                className={
+                  stubCount > 0
+                    ? 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-red-300 bg-red-50 text-red-800 text-sm font-medium hover:bg-red-100'
+                    : 'inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600'
+                }
               >
-                <Download className="h-4 w-4" /> Télécharger le zip
+                <Download className="h-4 w-4" />
+                {stubCount > 0 ? 'Télécharger le zip quand même' : 'Télécharger le zip'}
               </a>
             )}
           </div>

@@ -102,6 +102,10 @@ export function MatrixRow({
         const label = DOC_TYPE_LABELS[docType]?.long ?? docType;
         const pdfRef = 'pdfRef' in cell ? cell.pdfRef : undefined;
         const warning = 'warning' in cell ? cell.warning : undefined;
+        const stale = 'stale' in cell ? cell.stale === true : false;
+        const stub = 'stub' in cell ? cell.stub === true : false;
+        const unverifiable = 'unverifiable' in cell ? cell.unverifiable === true : false;
+        const engaged = 'engaged' in cell ? cell.engaged === true : false;
         return (
           <td
             key={docType}
@@ -120,7 +124,13 @@ export function MatrixRow({
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
                   className="inline-flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
-                  <DocStatusBadge state="GENERATED" label={label} />
+                  <DocStatusBadge
+                    state="GENERATED"
+                    label={label}
+                    stale={stale}
+                    stub={stub}
+                    unverifiable={unverifiable}
+                  />
                 </a>
               ) : cell.state === 'MANUAL_OK' && pdfRef ? (
                 <a
@@ -134,7 +144,7 @@ export function MatrixRow({
                   aria-label={`Ouvrir ${label} de ${participant.fullName}`}
                   className="inline-flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
                 >
-                  <DocStatusBadge state="MANUAL_OK" warning={warning} label={label} hasUploadedPdf />
+                  <DocStatusBadge state="MANUAL_OK" warning={warning} label={label} hasUploadedPdf stale={stale} />
                 </a>
               ) : (
                 <DocStatusBadge
@@ -148,6 +158,10 @@ export function MatrixRow({
                 docType={docType}
                 state={cell.state}
                 pdfRef={pdfRef}
+                stale={stale}
+                stub={stub}
+                unverifiable={unverifiable}
+                engaged={engaged}
                 readOnly={readOnly}
                 participantName={participant.fullName}
                 docLabel={label}

@@ -28,6 +28,7 @@
     "closure:close-zombies": "dotenv -e ../../.env -- tsx scripts/close-zombie-batches.ts",
     "storage:migrate": "tsx scripts/migrate-storage.ts",
     "storage:purge-drafts": "dotenv -e ../../.env -- tsx scripts/purge-orphan-drafts.ts",
+    "docs:empreintes": "dotenv -e ../../.env -- tsx scripts/coherence-empreintes.ts",
     "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",

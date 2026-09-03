@@ -28,6 +28,10 @@ import { prisma } from '@qualiof/db';
 import { DocStatusState } from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { logDocumentEvent } from '@/lib/document-audit';
+import {
+  checkDocumentReplacement,
+  auditTrailFor,
+} from '@/lib/docs/replacement-guard';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { DOC_TYPE_TO_CLOSURE_KIND } from '@/lib/doc-scope';
 import { generateClosurePack } from './closure-pack';
@@ -241,6 +245,14 @@ export async function uploadSignedDoc(
 const RegenerateParticipantDocInputSchema = z.object({
   participantId: z.string().uuid(),
   docKind: z.string().min(1).max(64),
+  /**
+   * Lot 0 · 0.2 — l'appelant a lu l'avertissement d'engagement et confirme.
+   * Sans ce drapeau, un document déjà parti (email, dossier financeur) ou
+   * signé n'est PAS remplacé en silence.
+   */
+  confirmEngaged: z.boolean().optional(),
+  /** Engagement PROUVÉ : pourquoi on remplace quand même. Va dans l'AuditLog. */
+  motif: z.string().max(500).optional(),
 });
 
 /**
@@ -255,7 +267,17 @@ const RegenerateParticipantDocInputSchema = z.object({
  */
 export async function regenerateParticipantDoc(
   input: z.infer<typeof RegenerateParticipantDocInputSchema>,
-): Promise<{ ok: boolean; error?: string; batchId?: string; documentId?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  batchId?: string;
+  documentId?: string;
+  /** L'UI doit demander confirmation puis rappeler avec `confirmEngaged: true`. */
+  requiresConfirmation?: boolean;
+  /** Engagement prouvé : il faut EN PLUS un motif écrit. */
+  requiresMotif?: boolean;
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER']);
@@ -280,13 +302,40 @@ export async function regenerateParticipantDoc(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
+  // Lot 0 · 0.2 — chemin UNITAIRE : un humain est devant l'écran, donc
+  // échappatoire tracée plutôt qu'interdiction. Le serveur refuse d'abord et
+  // nomme le motif ; sur un engagement prouvé il exige en plus un motif écrit.
+  const verdict = await checkDocumentReplacement({
+    tenantId: user.tenantId,
+    participantId: parsed.data.participantId,
+    docType: parsed.data.docKind,
+    mode: 'unitaire',
+    action: 'regenerate',
+    confirmEngaged: parsed.data.confirmEngaged,
+    motif: parsed.data.motif,
+  });
+  if (!verdict.allowed) {
+    return {
+      ok: false,
+      warning: verdict.warning,
+      ...(verdict.refusal === 'motif_requis'
+        ? { requiresMotif: true }
+        : { requiresConfirmation: true }),
+    };
+  }
+
   // AuditLog en amont (l'action est lancée même si la génération est async)
   await logDocumentEvent({
     tenantId: user.tenantId,
     actorUserId: user.id,
     targetEntityId: parsed.data.participantId,
     action: 'documents.regenerate',
-    diff: { docKind: parsed.data.docKind },
+    diff: {
+      docKind: parsed.data.docKind,
+      // Trace explicite : le document était engagé, un humain a confirmé, et
+      // le motif reste lisible six mois plus tard.
+      ...auditTrailFor(verdict),
+    },
   });
 
   // Routing : synchrone (Convention / AGEFICE / Programme) vs BullMQ (ClosureDocKind).
@@ -364,7 +413,18 @@ const RegenerateBatchInputSchema = z.object({
  */
 export async function regenerateBatchParticipantDocs(
   input: z.infer<typeof RegenerateBatchInputSchema>,
-): Promise<{ ok: boolean; error?: string; batchId?: string; total?: number }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  batchId?: string;
+  total?: number;
+  /**
+   * Lot 0 · 0.2 — documents engagés sautés par le régime groupé. Remontés
+   * jusqu'ici pour que l'utilisateur sache ce qui n'a PAS été refait : un
+   * traitement de masse muet sur ce qu'il ignore est pire qu'un refus.
+   */
+  skippedEngaged?: { participantId: string; kind: string; warning: string }[];
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER']);
@@ -400,6 +460,7 @@ export async function regenerateBatchParticipantDocs(
   }
 
   let firstBatchId: string | undefined;
+  const skippedEngaged: { participantId: string; kind: string; warning: string }[] = [];
   for (const [kind, pids] of byKind) {
     const res = await generateClosurePack(parsed.data.sessionId, {
       participantIds: pids,
@@ -407,6 +468,9 @@ export async function regenerateBatchParticipantDocs(
       force: true,
     });
     if (!firstBatchId && res.batchId) firstBatchId = res.batchId;
+    // Le régime groupé est appliqué par `generateClosurePack` (chokepoint
+    // unique) ; on ne refait pas la décision ici, on remonte son verdict.
+    if (res.skippedEngaged) skippedEngaged.push(...res.skippedEngaged);
   }
 
   await logDocumentEvent({
@@ -418,7 +482,12 @@ export async function regenerateBatchParticipantDocs(
   });
 
   revalidatePath(`/app/sessions/${parsed.data.sessionId}`);
-  return { ok: true, ...(firstBatchId ? { batchId: firstBatchId } : {}), total: closureItems.length };
+  return {
+    ok: true,
+    ...(firstBatchId ? { batchId: firstBatchId } : {}),
+    total: closureItems.length,
+    ...(skippedEngaged.length > 0 ? { skippedEngaged } : {}),
+  };
 }
 
 // ─── 5. deleteDocument ───────────────────────────────────────────────────
@@ -426,6 +495,9 @@ export async function regenerateBatchParticipantDocs(
 const DeleteDocumentInputSchema = z.object({
   participantId: z.string().uuid(),
   docType: z.string().min(1).max(64),
+  /** Lot 0 · 0.2 — voir `regenerateParticipantDoc`. */
+  confirmEngaged: z.boolean().optional(),
+  motif: z.string().max(500).optional(),
 });
 
 /**
@@ -439,7 +511,13 @@ const DeleteDocumentInputSchema = z.object({
  */
 export async function deleteDocument(
   input: z.infer<typeof DeleteDocumentInputSchema>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  requiresConfirmation?: boolean;
+  requiresMotif?: boolean;
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER']);
@@ -463,6 +541,28 @@ export async function deleteDocument(
     select: { id: true, sessionId: true, personId: true, docStatus: true },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+
+  // Lot 0 · 0.2 — supprimer un document engagé est pire que le régénérer : il
+  // ne reste plus rien en face de ce que le destinataire détient. Même
+  // chokepoint, même régime unitaire.
+  const verdict = await checkDocumentReplacement({
+    tenantId: user.tenantId,
+    participantId: parsed.data.participantId,
+    docType: parsed.data.docType,
+    mode: 'unitaire',
+    action: 'delete',
+    confirmEngaged: parsed.data.confirmEngaged,
+    motif: parsed.data.motif,
+  });
+  if (!verdict.allowed) {
+    return {
+      ok: false,
+      warning: verdict.warning,
+      ...(verdict.refusal === 'motif_requis'
+        ? { requiresMotif: true }
+        : { requiresConfirmation: true }),
+    };
+  }
 
   await prisma.$transaction(async (tx) => {
     // Supprime le Document participant-scoped si présent.
@@ -492,7 +592,10 @@ export async function deleteDocument(
     actorUserId: user.id,
     targetEntityId: parsed.data.participantId,
     action: 'documents.delete',
-    diff: { docType: parsed.data.docType },
+    diff: {
+      docType: parsed.data.docType,
+      ...auditTrailFor(verdict),
+    },
   });
 
   revalidatePath(`/app/sessions/${participant.sessionId}`);

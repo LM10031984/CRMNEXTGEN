@@ -26,7 +26,7 @@
  */
 
 import { Users } from 'lucide-react';
-import { deriveCellState, type CellState } from '@/lib/derive-cell-state';
+import { deriveCellState, type CellState, type CellFlagSets } from '@/lib/derive-cell-state';
 import { MATRIX_DOC_TYPES, DOC_TYPE_LABELS } from '@/lib/doc-scope';
 import { MatrixClientShell } from './matrix-client-shell';
 
@@ -53,6 +53,12 @@ export interface ParticipantDocMatrixProps {
   participants: MatrixParticipant[];
   productDocs: Map<string, { id: string }>;
   sessionDocs: Map<string, { id: string }>;
+  /**
+   * Lot 0 — périmé / non vérifiable / engagé / générique, calculés par
+   * `analyzeSessionDocuments`. Optionnel : sans eux, la matrice affiche ce
+   * qu'elle affichait avant.
+   */
+  flags?: CellFlagSets;
 }
 
 export function ParticipantDocMatrix({
@@ -62,6 +68,7 @@ export function ParticipantDocMatrix({
   participants,
   productDocs,
   sessionDocs,
+  flags,
 }: ParticipantDocMatrixProps) {
   // D-11 — RBAC matrice : ADMIN/MANAGER write, autres lecture seule.
   const readOnly = !['ADMIN', 'MANAGER'].includes(userRole);
@@ -96,6 +103,7 @@ export function ParticipantDocMatrix({
         productDocs,
         sessionDocs,
         p.pedagogicalAssets,
+        flags,
       );
       return { docType, state };
     });

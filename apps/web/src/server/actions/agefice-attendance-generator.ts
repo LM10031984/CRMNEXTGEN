@@ -26,6 +26,7 @@ import {
   type AgeficeAttendanceTemplateData,
 } from '@/lib/closure/agefice-attendance-template';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 // Map TrainingSession.modality → 4 cases AGEFICE (heures).
 // Clone du helper agefice-generator.ts (déduplication possible plus tard).
@@ -248,6 +249,14 @@ export async function generateAgeficeAttendanceForParticipant(
     return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}` };
   }
 
+  // Lot 0 · 0.2 — empreinte des champs rendus (créneaux, identité, durée).
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId: user.tenantId,
+    docType: 'ASSIDUITE',
+    participantId: participant.id,
+    sessionId: participant.session.id,
+  });
+
   const doc = await prisma.document.create({
     data: {
       tenantId: user.tenantId,
@@ -258,6 +267,7 @@ export async function generateAgeficeAttendanceForParticipant(
       participantId: participant.id,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint,
     },
   });
 

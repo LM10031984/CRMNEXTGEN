@@ -16,6 +16,7 @@ import {
   ROUTABLE_PARTICIPANT_SELECT,
 } from '@/lib/closure/route-conventions';
 import { generateAgeficeForParticipant } from './agefice-generator';
+import { checkDocumentReplacement } from '@/lib/docs/replacement-guard';
 
 /**
  * Lance la génération du pack fin de formation pour TOUS les participants
@@ -75,6 +76,13 @@ export async function generateClosurePack(
   total?: number;
   alreadyComplete?: boolean;
   skippedExisting?: number;
+  /**
+   * Lot 0 · 0.2 — documents engagés SAUTÉS (régime groupé strict). Ils ne sont
+   * jamais remplacés, et ils remontent ici plutôt que de disparaître : un
+   * traitement de masse qui ignore silencieusement une partie de son périmètre
+   * est pire que celui qui refuse.
+   */
+  skippedEngaged?: { participantId: string; kind: string; warning: string }[];
   error?: string;
 }> {
   let user;
@@ -134,8 +142,11 @@ export async function generateClosurePack(
     product: session.product ? { programMd: session.product.programMd } : null,
     participantsCount: session.participants.length,
   });
+  // Lot 0 · 0.3 — `ready` ne retient que les blockers de GÉNÉRATION. Un
+  // document générique (`stub_documents`, blocks:'delivery') ne doit surtout
+  // pas fermer cette porte : régénérer est le seul moyen de le corriger.
   if (!completeness.ready) {
-    const blockersLabel = completeness.blockers.map((b) => b.label).join(' · ');
+    const blockersLabel = completeness.generationBlockers.map((b) => b.label).join(' · ');
     return {
       ok: false,
       error: `Session incomplète. À compléter avant de générer le pack : ${blockersLabel}`,
@@ -251,7 +262,7 @@ export async function generateClosurePack(
   }
 
   // Construit la liste des jobs à créer en filtrant les kinds déjà faits.
-  const jobsToCreate = session.participants.flatMap((p) => {
+  const candidateJobs = session.participants.flatMap((p) => {
     const done = alreadyDoneByParticipant.get(p.id) ?? new Set<ClosureDocKind>();
     return kindsToProcess
       .filter((kind) => !done.has(kind))
@@ -262,8 +273,30 @@ export async function generateClosurePack(
       }));
   });
 
+  // Lot 0 · 0.2 — régime GROUPÉ strict. Seuls ATTESTATION et CERTIFICAT
+  // écrasent un `Document` ; les autres kinds produisent des PedagogicalAsset,
+  // qui ne portent pas d'engagement. On ne consulte donc la garde que pour
+  // ces deux-là, et un document engagé est sauté, pas remplacé.
+  const skippedEngaged: { participantId: string; kind: string; warning: string }[] = [];
+  const jobsToCreate: typeof candidateJobs = [];
+  for (const job of candidateJobs) {
+    const docType = DOC_TYPE_BY_CLOSURE_KIND[job.kind];
+    if (!docType) {
+      jobsToCreate.push(job);
+      continue;
+    }
+    const verdict = await checkDocumentReplacement({
+      tenantId: user.tenantId,
+      participantId: job.participantId,
+      docType,
+      mode: 'groupe',
+    });
+    if (verdict.allowed) jobsToCreate.push(job);
+    else skippedEngaged.push({ participantId: job.participantId, kind: job.kind, warning: verdict.warning });
+  }
+
   const expectedTotal = session.participants.length * kindsToProcess.length;
-  const skippedExisting = expectedTotal - jobsToCreate.length;
+  const skippedExisting = expectedTotal - candidateJobs.length;
 
   if (jobsToCreate.length === 0) {
     return {
@@ -271,6 +304,7 @@ export async function generateClosurePack(
       alreadyComplete: true,
       total: 0,
       skippedExisting,
+      ...(skippedEngaged.length > 0 ? { skippedEngaged } : {}),
     };
   }
 
@@ -307,6 +341,7 @@ export async function generateClosurePack(
     batchId: batch.id,
     total: jobsToCreate.length,
     skippedExisting,
+    ...(skippedEngaged.length > 0 ? { skippedEngaged } : {}),
   };
 }
 
@@ -398,7 +433,14 @@ export async function getClosureBatchStatus(
  */
 export async function buildClosureZipBuffer(
   batchId: string,
-): Promise<{ ok: boolean; buffer?: Buffer; filename?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  buffer?: Buffer;
+  filename?: string;
+  error?: string;
+  /** Lot 0 · 0.3 — nombre de documents au contenu générique dans ce ZIP. */
+  stubCount?: number;
+}> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
 
@@ -415,6 +457,10 @@ export async function buildClosureZipBuffer(
   });
   if (!batch) return { ok: false, error: 'Batch introuvable' };
   if (batch.jobs.length === 0) return { ok: false, error: 'Aucun document généré' };
+
+  // Lot 0 · 0.3 — ce que le pack emporte de générique. Remonté à l'appelant
+  // pour qu'aucun téléchargement ne parte sans que quelqu'un l'ait lu.
+  const stubJobs = batch.jobs.filter((j) => j.usedStub);
 
   const session = await prisma.trainingSession.findUnique({
     where: { id: batch.sessionId },
@@ -483,6 +529,7 @@ export async function buildClosureZipBuffer(
     ok: true,
     buffer: Buffer.concat(chunks),
     filename: `pack-fin-formation_${sessionCode}_${today}.zip`,
+    stubCount: stubJobs.length,
   };
 }
 
@@ -538,7 +585,13 @@ function slugify(s: string): string {
 export async function retryClosureBatchErrors(
   batchId: string,
   options: { includeStubs?: boolean } = {},
-): Promise<{ ok: boolean; relaunched?: number; error?: string }> {
+): Promise<{
+  ok: boolean;
+  relaunched?: number;
+  /** Lot 0 · 0.2 — jobs non relancés parce que leur document est engagé. */
+  skippedEngaged?: { participantId: string; kind: string; warning: string }[];
+  error?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'FORMATEUR']);
@@ -553,12 +606,37 @@ export async function retryClosureBatchErrors(
     ? [{ status: 'ERROR' as const }, { status: 'DONE' as const, usedStub: true }]
     : [{ status: 'ERROR' as const }];
 
-  const batch = await prisma.closureBatch.findFirst({
+  const batchFound = await prisma.closureBatch.findFirst({
     where: { id: batchId, tenantId: user.tenantId },
     include: { jobs: { where: { OR: orFilter } } },
   });
-  if (!batch) return { ok: false, error: 'Batch introuvable' };
-  if (batch.jobs.length === 0) return { ok: true, relaunched: 0 };
+  if (!batchFound) return { ok: false, error: 'Batch introuvable' };
+  if (batchFound.jobs.length === 0) return { ok: true, relaunched: 0 };
+
+  // Lot 0 · 0.2 — régime GROUPÉ strict : relancer « les documents génériques »
+  // ne doit pas emporter une attestation déjà envoyée. On écarte les jobs dont
+  // le document est engagé, et on les remonte.
+  const skippedEngaged: { participantId: string; kind: string; warning: string }[] = [];
+  const retryableJobs: typeof batchFound.jobs = [];
+  for (const job of batchFound.jobs) {
+    const docType = DOC_TYPE_BY_CLOSURE_KIND[job.kind];
+    if (!docType) {
+      retryableJobs.push(job);
+      continue;
+    }
+    const verdict = await checkDocumentReplacement({
+      tenantId: user.tenantId,
+      participantId: job.participantId,
+      docType,
+      mode: 'groupe',
+    });
+    if (verdict.allowed) retryableJobs.push(job);
+    else skippedEngaged.push({ participantId: job.participantId, kind: job.kind, warning: verdict.warning });
+  }
+  if (retryableJobs.length === 0) {
+    return { ok: true, relaunched: 0, ...(skippedEngaged.length > 0 ? { skippedEngaged } : {}) };
+  }
+  const batch = { ...batchFound, jobs: retryableJobs };
 
   // Compteur ERROR à décrémenter (les stubs étaient comptés en doneDocs, on les
   // décrémente symétriquement et ils repasseront en doneDocs après re-génération)
@@ -607,5 +685,9 @@ export async function retryClosureBatchErrors(
   );
 
   revalidatePath(`/app/sessions/${batch.sessionId}/closure/${batchId}`);
-  return { ok: true, relaunched: batch.jobs.length };
+  return {
+    ok: true,
+    relaunched: batch.jobs.length,
+    ...(skippedEngaged.length > 0 ? { skippedEngaged } : {}),
+  };
 }

@@ -89,6 +89,20 @@ export function BatchRegenBar({
           `Re-génération lancée pour ${res.total ?? filteredItems.length} document${(res.total ?? filteredItems.length) > 1 ? 's' : ''}`,
           { description: 'Résultat dans ~2 min — actualisez la page pour voir l’avancement.' },
         );
+        // Lot 0 · 0.2 — un traitement de masse muet sur ce qu'il a ignoré est
+        // pire qu'un refus : on nomme les documents engagés qui n'ont PAS été
+        // remplacés, et pourquoi.
+        if (res.skippedEngaged && res.skippedEngaged.length > 0) {
+          const n = res.skippedEngaged.length;
+          toast.warning(
+            `${n} document${n > 1 ? 's' : ''} engagé${n > 1 ? 's' : ''} conservé${n > 1 ? 's' : ''}`,
+            {
+              description:
+                'Déjà envoyé, déposé ou signé — non remplacé. Un avenant ou un nouveau dossier est nécessaire.',
+              duration: 10000,
+            },
+          );
+        }
         setSelectedKinds(new Set());
         onClear();
         router.refresh();

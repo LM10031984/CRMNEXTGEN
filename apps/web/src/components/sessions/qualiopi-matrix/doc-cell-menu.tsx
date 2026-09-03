@@ -57,6 +57,27 @@ export interface DocCellMenuProps {
   docType: string;
   state: 'GENERATED' | 'MANUAL_OK' | 'MISSING' | 'NA';
   pdfRef?: CellPdfRef;
+  /**
+   * Lot 0 · 0.2 — une donnée que ce document PORTE a changé depuis sa
+   * génération. On ne masque rien et on ne bloque rien : on nomme l'écart à
+   * l'endroit où l'utilisateur peut le corriger.
+   */
+  stale?: boolean;
+  /**
+   * Lot 0 · 0.3 — contenu générique (IA en échec). Le remède est la
+   * régénération : on la met en avant plutôt que de la cacher.
+   */
+  stub?: boolean;
+  /** Lot 0 · 0.2 — document sans empreinte : régénérer le rend vérifiable. */
+  unverifiable?: boolean;
+  /**
+   * Lot 0 · 0.2 — sortie PROUVÉE (email tracé, dossier parti, signature).
+   * On n'INVITE pas à régénérer un tel document : le destinataire garde ce
+   * qu'il a reçu, et rendre une empreinte vérifiable ne vaut pas un avenant.
+   * L'action reste accessible — le serveur demandera la confirmation — mais
+   * elle cesse d'être présentée comme la chose à faire.
+   */
+  engaged?: boolean;
   /** Si true, lecture seule (FORMATEUR / COMMERCIAL / COMPTABLE) — pas de menu. */
   readOnly?: boolean;
   /** Pour tooltips & confirms. */
@@ -73,6 +94,10 @@ export function DocCellMenu({
   docType,
   state,
   pdfRef,
+  stale,
+  stub,
+  unverifiable,
+  engaged,
   readOnly,
   participantName,
   docLabel,
@@ -101,7 +126,32 @@ export function DocCellMenu({
 
   function handleRegen() {
     startTransition(async () => {
-      const res = await regenerateParticipantDoc({ participantId, docKind: docType });
+      let res = await regenerateParticipantDoc({ participantId, docKind: docType });
+
+      // Lot 0 · 0.2 — chemin UNITAIRE : le serveur refuse d'abord et nomme le
+      // motif d'engagement. La formulation vient de lui, seul à la connaître.
+      if (!res.ok && res.requiresConfirmation && res.warning) {
+        if (!confirm(res.warning)) return;
+        res = await regenerateParticipantDoc({
+          participantId,
+          docKind: docType,
+          confirmEngaged: true,
+        });
+      }
+
+      // Engagement PROUVÉ : la confirmation ne suffit pas, il faut écrire
+      // pourquoi. Le motif part dans l'AuditLog et se relit six mois plus tard.
+      if (!res.ok && res.requiresMotif && res.warning) {
+        const motif = window.prompt(res.warning) ?? '';
+        if (!motif.trim()) return;
+        res = await regenerateParticipantDoc({
+          participantId,
+          docKind: docType,
+          confirmEngaged: true,
+          motif,
+        });
+      }
+
       if (res.ok) {
         if (res.documentId) {
           toast.success(`Document généré pour ${participantName}`);
@@ -110,7 +160,9 @@ export function DocCellMenu({
         }
         router.refresh();
       } else {
-        toast.error(res.error ?? "Erreur lors de l'opération. Réessayez ou contactez un administrateur.");
+        toast.error(
+          res.warning ?? res.error ?? "Erreur lors de l'opération. Réessayez ou contactez un administrateur.",
+        );
       }
     });
   }
@@ -125,7 +177,16 @@ export function DocCellMenu({
     )
       return;
     startTransition(async () => {
-      const res = await deleteDocument({ participantId, docType });
+      let res = await deleteDocument({ participantId, docType });
+      if (!res.ok && res.requiresConfirmation && res.warning) {
+        if (!confirm(res.warning)) return;
+        res = await deleteDocument({ participantId, docType, confirmEngaged: true });
+      }
+      if (!res.ok && res.requiresMotif && res.warning) {
+        const motif = window.prompt(res.warning) ?? '';
+        if (!motif.trim()) return;
+        res = await deleteDocument({ participantId, docType, confirmEngaged: true, motif });
+      }
       if (res.ok) {
         toast.success('Document supprimé');
         router.refresh();
@@ -159,6 +220,17 @@ export function DocCellMenu({
       }
     });
   }
+
+  // Lot 0 — l'intitulé dit ce qui cloche, dans l'ordre de gravité. Le cas
+  // « rendre vérifiable » est une INVITATION : on ne la formule pas pour un
+  // document dont la sortie est prouvée (cf. `engaged`).
+  const regenerateLabel = stub
+    ? 'Re-générer — contenu générique'
+    : stale
+      ? 'Re-générer — données modifiées depuis'
+      : unverifiable && !engaged
+        ? 'Re-générer — rendre vérifiable'
+        : 'Re-générer';
 
   const showGenerate = state === 'MISSING';
   const showRegenerate = state === 'GENERATED';
@@ -208,9 +280,24 @@ export function DocCellMenu({
               </DropdownMenu.Item>
             )}
             {showRegenerate && (
-              <DropdownMenu.Item onSelect={handleRegen} className={ITEM_CLS}>
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Re-générer
+              <DropdownMenu.Item
+                onSelect={handleRegen}
+                title={
+                  engaged
+                    ? 'Ce document est déjà sorti (envoi tracé, dossier parti ou signature) — un avenant est requis, la régénération demandera confirmation.'
+                    : undefined
+                }
+                className={cn(
+                  ITEM_CLS,
+                  stub && 'text-red-700 font-medium',
+                  !stub && stale && 'text-amber-800 font-medium',
+                )}
+              >
+                <RefreshCw
+                  className={cn('h-4 w-4', stub && 'text-red-600', !stub && stale && 'text-amber-600')}
+                  aria-hidden="true"
+                />
+                {regenerateLabel}
               </DropdownMenu.Item>
             )}
             {showDownload && (
