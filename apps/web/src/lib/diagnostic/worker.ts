@@ -31,7 +31,7 @@ import { choisirJournee } from './catalogue-map';
 import { MAX_TENTATIVES } from './file-attente';
 import { genererProgrammeSurMesure } from './programme-sur-mesure';
 import type { ProblematiqueKey } from './questions';
-import { PROBLEMATIQUES } from './questions';
+import { PROBLEMATIQUES, lireRole, lireEquipe } from './questions';
 
 /** Traitées par tick. Un stand génère des rafales, pas un flux continu. */
 const LOT = 20;
@@ -167,6 +167,12 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
         firstName: sub.lead.firstName,
         dominante: sub.dominante,
         secondaire: sub.secondaire && estProblematique(sub.secondaire) ? sub.secondaire : null,
+        // Le bloc financement dépend du STATUT, pas de la formation : annoncer
+        // des droits AGEFICE à un conseiller salarié est faux, et ça se retourne
+        // au premier appel. Les gardes rendent `null` sur une valeur inconnue,
+        // et le gabarit retombe alors sur le bloc individuel.
+        role: lireRole(reponses.role),
+        equipe: lireEquipe(reponses.equipe),
         produit: {
           title: produit.title,
           dureeHeures: produit.durationHours,
