@@ -30,6 +30,7 @@ import {
   villeLieuFormation,
 } from '@/lib/locations/format-lieu';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
+import { checkDocumentReplacement } from '@/lib/docs/replacement-guard';
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -190,6 +191,36 @@ export async function processClosureJobPayload(
 
     const docType = DOC_TYPE_BY_KIND[payload.kind];
     if (docType) {
+      // Lot 0 · 0.2 — LA ceinture, au point d'écriture. Le worker est le
+      // dernier maillon : même si un chemin d'appel oubliait la garde, une
+      // attestation déjà envoyée ne peut pas être écrasée ici. Régime groupé
+      // strict — on conserve le document existant et le job pointe dessus,
+      // pour que le pack reste complet avec la pièce réellement remise.
+      const garde = await checkDocumentReplacement({
+        tenantId: payload.tenantId,
+        participantId: payload.participantId,
+        docType,
+        mode: 'groupe',
+      });
+      if (!garde.allowed) {
+        console.warn(
+          `[closure-worker] ${docType} conservé pour ${payload.participantId} — ${garde.warning}`,
+        );
+        await prisma.closureJob.update({
+          where: { id: payload.jobId },
+          data: {
+            status: 'DONE',
+            completedAt: new Date(),
+            documentId: garde.documentId,
+            usedStub: false,
+            errorMessage: 'Document engagé — conservé, non remplacé',
+          },
+        });
+        const finalizedSkip = await bumpAndFinalize(payload.batchId, 'done');
+        if (finalizedSkip) await notifyBatchCompletion(payload.batchId, finalizedSkip);
+        return;
+      }
+
       // Lot 0 · 0.2 — empreinte des champs rendus (identite, dates, duree,
       // intitule, formateur signataire, lieu).
       const sourceFingerprint = await computeDocumentFingerprint({

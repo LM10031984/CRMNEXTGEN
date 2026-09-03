@@ -414,12 +414,8 @@ describe('regenerateParticipantDoc — document déjà sorti de la maison', () =
     expect(logDocumentEventMock).not.toHaveBeenCalled();
   });
 
-  it('Test 11 — confirmé par un humain : la génération part, l’audit le dit', async () => {
-    participantFindFirst.mockResolvedValueOnce({
-      id: VALID_PARTICIPANT_ID,
-      sessionId: VALID_SESSION_ID,
-    });
-    generateConventionMock.mockResolvedValueOnce({ ok: true, documentId: 'doc-2' });
+  it('Test 11 — confirmé sans motif sur un engagement prouvé : toujours refusé', async () => {
+    conventionEnvoyee();
 
     const r = await regenerateParticipantDoc({
       participantId: VALID_PARTICIPANT_ID,
@@ -427,12 +423,31 @@ describe('regenerateParticipantDoc — document déjà sorti de la maison', () =
       confirmEngaged: true,
     });
 
+    expect(r.ok).toBe(false);
+    expect(r.requiresMotif).toBe(true);
+    expect(generateConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('Test 12 — confirmé AVEC motif : la génération part et le motif est journalisé', async () => {
+    conventionEnvoyee();
+    generateConventionMock.mockResolvedValueOnce({ ok: true, documentId: 'doc-2' });
+
+    const r = await regenerateParticipantDoc({
+      participantId: VALID_PARTICIPANT_ID,
+      docKind: 'CONVENTION',
+      confirmEngaged: true,
+      motif: 'avenant signé le 03/09, montant corrigé',
+    });
+
     expect(r.ok).toBe(true);
     expect(generateConventionMock).toHaveBeenCalledWith(VALID_PARTICIPANT_ID);
-    // La garde n'est même pas interrogée quand l'humain a déjà tranché.
-    expect(emailMessageFindMany).not.toHaveBeenCalled();
+    // L'audit porte l'engagement RÉEL, pas le drapeau envoyé par l'appelant :
+    // un client qui poserait `confirmEngaged` sur un document libre
+    // n'inscrirait rien de faux dans le journal.
     expect(logDocumentEventMock.mock.calls[0]![0].diff).toMatchObject({
       confirmedOverEngagement: true,
+      engagementLevel: 'ENGAGED',
+      motif: 'avenant signé le 03/09, montant corrigé',
     });
   });
 });

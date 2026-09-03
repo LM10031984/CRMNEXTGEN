@@ -25,7 +25,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@qualiof/db', () => ({
   prisma: {
     trainingSession: { findFirst: vi.fn() },
-    document: { findMany: vi.fn() },
+    // Lot 0 · 0.2 — lu par le point de contrôle du remplacement
+    // (`checkDocumentReplacement`) : null = aucun document à protéger.
+    document: { findMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
     pedagogicalAsset: { findMany: vi.fn() },
     closureBatch: { create: vi.fn(), findFirst: vi.fn() },
     sessionParticipant: { findMany: vi.fn() },

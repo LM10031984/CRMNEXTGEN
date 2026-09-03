@@ -127,6 +127,15 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       const r = await retryClosureBatchErrors(batchId, { includeStubs });
       if (r.ok) {
         toast.success(`${r.relaunched ?? 0} job(s) relancé(s)`);
+        // Lot 0 · 0.2 — relancer « les documents génériques » ne doit pas
+        // emporter une attestation déjà envoyée : on dit ce qui a été gardé.
+        if (r.skippedEngaged && r.skippedEngaged.length > 0) {
+          const n = r.skippedEngaged.length;
+          toast.warning(`${n} document${n > 1 ? 's' : ''} engagé${n > 1 ? 's' : ''} conservé${n > 1 ? 's' : ''}`, {
+            description: 'Déjà envoyé, déposé ou signé — non relancé.',
+            duration: 10000,
+          });
+        }
       } else {
         toast.error(r.error ?? 'Erreur');
       }

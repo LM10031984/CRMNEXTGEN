@@ -128,15 +128,27 @@ export function DocCellMenu({
     startTransition(async () => {
       let res = await regenerateParticipantDoc({ participantId, docKind: docType });
 
-      // Lot 0 · 0.2 — le serveur a détecté un document déjà parti (email,
-      // dossier financeur) ou signé. Il ne refuse pas : il demande qu'on le
-      // regarde. La formulation vient du serveur, seul à connaître le motif.
+      // Lot 0 · 0.2 — chemin UNITAIRE : le serveur refuse d'abord et nomme le
+      // motif d'engagement. La formulation vient de lui, seul à la connaître.
       if (!res.ok && res.requiresConfirmation && res.warning) {
         if (!confirm(res.warning)) return;
         res = await regenerateParticipantDoc({
           participantId,
           docKind: docType,
           confirmEngaged: true,
+        });
+      }
+
+      // Engagement PROUVÉ : la confirmation ne suffit pas, il faut écrire
+      // pourquoi. Le motif part dans l'AuditLog et se relit six mois plus tard.
+      if (!res.ok && res.requiresMotif && res.warning) {
+        const motif = window.prompt(res.warning) ?? '';
+        if (!motif.trim()) return;
+        res = await regenerateParticipantDoc({
+          participantId,
+          docKind: docType,
+          confirmEngaged: true,
+          motif,
         });
       }
 
@@ -148,7 +160,9 @@ export function DocCellMenu({
         }
         router.refresh();
       } else {
-        toast.error(res.error ?? "Erreur lors de l'opération. Réessayez ou contactez un administrateur.");
+        toast.error(
+          res.warning ?? res.error ?? "Erreur lors de l'opération. Réessayez ou contactez un administrateur.",
+        );
       }
     });
   }
@@ -167,6 +181,11 @@ export function DocCellMenu({
       if (!res.ok && res.requiresConfirmation && res.warning) {
         if (!confirm(res.warning)) return;
         res = await deleteDocument({ participantId, docType, confirmEngaged: true });
+      }
+      if (!res.ok && res.requiresMotif && res.warning) {
+        const motif = window.prompt(res.warning) ?? '';
+        if (!motif.trim()) return;
+        res = await deleteDocument({ participantId, docType, confirmEngaged: true, motif });
       }
       if (res.ok) {
         toast.success('Document supprimé');

@@ -53,6 +53,14 @@ export function GenerateClosurePackButton({
       const r = await generateClosurePack(sessionId);
       if (r.ok && r.batchId) {
         toast.success(`Pack lancé : ${r.total ?? 0} documents en file`);
+        // Lot 0 · 0.2 — les documents engagés sont conservés, pas régénérés.
+        if (r.skippedEngaged && r.skippedEngaged.length > 0) {
+          const n = r.skippedEngaged.length;
+          toast.warning(`${n} document${n > 1 ? 's' : ''} engagé${n > 1 ? 's' : ''} conservé${n > 1 ? 's' : ''}`, {
+            description: 'Déjà envoyé, déposé ou signé — le pack reprend la pièce remise, sans la remplacer.',
+            duration: 10000,
+          });
+        }
         router.push(`/app/sessions/${sessionId}/closure/${r.batchId}`);
       } else {
         setError(r.error ?? 'Erreur lors du lancement');
