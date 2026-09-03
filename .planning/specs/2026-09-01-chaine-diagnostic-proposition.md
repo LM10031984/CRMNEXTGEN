@@ -518,6 +518,37 @@ Le rapport est un `Document` (nouveau `DocType.DIAGNOSTIC_AUDIT`) rattachable au
 
 Port de la doctrine du repo diag : token 256 bits, stockage du hash seul, affichage une seule fois, `timingSafeEqual`, expiration + `maxUses` + révocation UI, `force-dynamic`/no-store, aucune donnée nominative des participants dans les pages publiques, AuditLog des consultations (date de 1ʳᵉ ouverture = signal commercial « proposition vue » → futur déclencheur de relance lot H).
 
+### 9.5 Le socle de rendu WeasyPrint — UN bloc de compatibilité pour tous les documents
+
+Acquis de la QA du 03/09/2026 sur le premier audit réel. Le moteur d'impression
+échoue **en silence** sur plusieurs propriétés courantes : rien dans les logs,
+rien dans les tests unitaires, un défaut visible seulement en ouvrant le PDF.
+Ces règles ne se redécouvrent pas document par document.
+
+**Le bloc de compatibilité de `audit-styles.ts` est le socle commun** : toute
+nouvelle sortie documentaire de la chaîne (proposition, devis, pack) le
+**réutilise** au lieu d'en retranscrire une variante à la main. Ce qu'il porte :
+
+| Ce que le moteur ne sait pas faire | Ce qu'on écrit à la place |
+|---|---|
+| **CSS Grid** et **`gap`** (ni en grid, ni en flex) — échec muet | flex + marges explicites ; **table/table-cell** dès qu'il faut des colonnes qui ne se chevauchent jamais (blocs héros à gros chiffre) |
+| `min-height` n'établit pas le bloc conteneur d'un enfant `position:absolute` | pied de page en **boîte de marge `@page`**, avec `counter(page)` / `counter(pages)` (D-14) — jamais de total écrit en dur |
+| `overflow:hidden` masque le débordement… et **tronque en silence** | **interdit** sur les blocs de page : un débordement doit produire une page de plus, un défaut qui se VOIT |
+| `columns:2` | flex `flex-wrap` (cf. sommaire) |
+| `var(--x)` dans une propriété raccourcie (`background:var(--x)` ignoré, `color:` OK) | palette **résolue en littéraux** |
+| Fontes : le conteneur ne porte **que Liberation**. `DejaVu Sans`, `Montserrat`, `system-ui` et même le générique `sans-serif` tombent tous sur Liberation **Mono** | `'Liberation Sans', Helvetica, Arial` (Helvetica/Arial = alias fontconfig) |
+| Glyphes hors fonte (✓ U+2713, ✗ U+2717) — sortent **blancs** | couleur + mots ; **test de contrat** qui refuse tout caractère hors fonte |
+| Pagination d'un flux | `break-inside:avoid` sur le bloc à ne pas couper, et on laisse le moteur décider combien tiennent par page — **jamais d'estimation de hauteur** (une estimation ratée tronque) |
+
+**Dette technique OPTIONNELLE (non bloquante, après le 10/09)** — le PDF sort
+aujourd'hui en **Liberation Sans**, pas dans les fontes de la maquette. Pour un
+rendu identique à `2026-09-01-maquette-audit.html`, il faut **installer
+Montserrat et Rajdhani dans l'image du conteneur de rendu**
+(`docker/weasyprint/`) puis retirer le `!important` de la pile de compatibilité.
+À faire seulement si Laurent veut le rendu maquette exact : la lisibilité et la
+mise en page sont correctes en Liberation Sans, ce n'est pas un défaut de
+conformité.
+
 ---
 
 ## 10. IA : où elle intervient, et sous quels garde-fous
@@ -577,7 +608,7 @@ En lot H : la couche `CoachBrainContext` du repo diag est posée telle quelle (c
 | **B — Saisie R1** | Écrans diagnostic (léger/complet, page-par-chapitre, autosave, grille équipe, reprise) + synthèses financement & pipeline en direct (fonctions pures §8) | A | L |
 | **C — Transcript** | Collage/upload + job d'extraction + revue par exception | A, B | M |
 | **D — Audit** | Moteur ratios/alertes + rapport d'audit (PDF + écran) + DocType + fingerprint | A, B | M |
-| **E — Proposition** | Éditeur (modules, lignes par payeur, remise/OFFERT avec validation > 15 %), génération IA relue, PDF + lien public, envoi email, génération devis, fingerprint | A, B, D (utilisable sans C) | XL |
+| **E — Proposition** | Éditeur (modules, lignes par payeur, remise/OFFERT avec validation > 15 %), génération IA relue, PDF + lien public, envoi email, génération devis, fingerprint. **Rendu : réutilise le socle de compatibilité WeasyPrint de §9.5** — pas une seconde transposition à la main. Maquette `2026-09-01-maquette-proposition.html` = référence exacte. **Fini quand** : une proposition réelle générée depuis DIAG-0001, PDF **relu page par page**, Σ devis = Σ proposition **au centime**, heures conventionnées identiques partout, trois gates vertes. | A, B, D (utilisable sans C) | XL |
 | **F — Campagne RDV** | EnrollmentBatch + dates + page publique `/rdv/[token]` + écran d'avancement (réemploi PreEnrollment) + alertes A-1/A-2/A-3 (§11.1 — A-1/A-2 anticipables en `/quick`) | A (parallèle à D/E) | M |
 | **G — Acceptation → session** | Acceptation de proposition → sessions sur la date retenue + **SessionPricing** (forfait entreprise ferme / lignes indés) + conversion pré-inscrits + conventions | E, F, **phase 23 SessionPricing livrée** | L |
 | **H — Suite** | Relances auto (J+1 lead sans proposition · proposition envoyée non vue J+3 · vue sans réponse J+7 · date limite J-5 — pattern stand MLS, cron + fail-closed) · import Plaud · Coach Brain branché · pack communication dirigeant · lien formateur · signature électronique | G + arbitrages Laurent | L |
@@ -605,7 +636,7 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
-| **D-13** | Un diagnostic LÉGER produisait un audit de 17 pages à moitié vides (un chapitre de 2 réponses occupait une page entière). Fallait-il une « synthèse 2-3 pages » distincte ? | **Non — un seul document, deux formats.** Le LÉGER sort au **format condensé** : mêmes 17 sections, mêmes contenus, mais les chapitres s'enchaînent en flux (2-3 par page, jamais coupés). Le COMPLET garde une page par chapitre. Motif : deux documents distincts, c'est deux gabarits à maintenir et deux occasions de diverger — alors que la seule différence utile est la densité. Cf. §9.2. | 03/09/2026 |
+| **D-13** | Un diagnostic LÉGER produisait un audit de 17 pages à moitié vides (un chapitre de 2 réponses occupait une page entière). Fallait-il une « synthèse 2-3 pages » distincte ? | **Non — un seul document, deux formats.** Le LÉGER sort au **format condensé** : mêmes 17 sections, mêmes contenus, mais les chapitres s'enchaînent en flux (2-3 par page, jamais coupés). Le COMPLET garde une page par chapitre. Motif : deux documents distincts, c'est deux gabarits à maintenir et deux occasions de diverger — alors que la seule différence utile est la densité. Cf. §9.2. **Densité tranchée le 03/09 après relecture du PDF : DEUX chapitres par page, on garde** — pas de rabotage des encadrés « Repères » / « Premier levier » pour en faire tenir un troisième. C'est le moteur qui décide, sur le contenu réel. | 03/09/2026 |
 | **D-14** | Le pied de page portait « n / 17 » écrit en dur, et un chapitre non noté affichait « — / 100 ». Quelle source pour la numérotation ? | **Les compteurs du moteur d'impression** (`counter(page)` / `counter(pages)` en boîte de marge `@page`). En condensé, le total n'est pas connu à la génération : tout total écrit en dur ment. Effet de bord bienvenu : le pied de page est enfin réellement ancré en bas — un bloc `position:absolute` dans une page en `min-height` retombe dans le flux sous WeasyPrint. | 03/09/2026 |
 
 ### Décisions restantes pour Laurent (à trancher au fil des lots, pas bloquantes pour A)
@@ -621,7 +652,7 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | D-7 | Montants OPCO EP : 4 500 € (dit le 01/09) vs ≈ 4 000 € (proposition OPTIMO du 11/08) pour > 10 salariés | 4 500 en seed, modifiable dans Paramètres |
 | D-8 | Volume 72 h × 42 € = 3 024 € vs plafond AGEFICE 3 000 € : que faire des 24 €/agent d'écart ? | ✅ **Tranchée avec D-11** : plafonner à 3 000, afficher l'écart en reste à charge, geste commercial en un clic dans la proposition |
 | D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D, calibré sur 3 audits réels puis figé/versionné |
-| D-10 | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclus individuels) en plus du CA N-1 ? | v1 : CA N-1 + objectif + forces saisies par le commercial ; ratios individuels = extension du référentiel v2. **Complété le 03/09** : quand le commercial n'a rien saisi, l'objectif et la préconisation sont **proposés par une règle pure** (objectif = production N-1 × croissance visée par l'agence ; préconisation = position vs moyenne d'équipe). Ce que l'humain a saisi gagne toujours. Si rien n'est calculable, les deux colonnes sont **masquées** — pas remplies de tirets. |
+| D-10 | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclus individuels) en plus du CA N-1 ? | v1 : CA N-1 + objectif + forces saisies par le commercial ; ratios individuels = extension du référentiel v2. **Complété le 03/09** : quand le commercial n'a rien saisi, l'objectif et la préconisation sont **proposés par une règle pure** (objectif = production N-1 × croissance visée par l'agence ; préconisation = position vs moyenne d'équipe). Ce que l'humain a saisi gagne toujours. Si rien n'est calculable, les deux colonnes sont **masquées** — pas remplies de tirets. **✅ Règle VALIDÉE par Laurent le 03/09/2026, telle quelle**, après relecture de la page équipe de DIAG-0001 (objectifs 150/119/100/53 k€ pour une croissance visée de +25 %). |
 
 ---
 
