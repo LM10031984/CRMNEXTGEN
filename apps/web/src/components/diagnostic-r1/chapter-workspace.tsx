@@ -26,7 +26,12 @@ import { computePipeline } from '@/lib/diagnostic-r1/pipeline';
 import { computeProgress, getVisibleChapterQuestions } from '@/lib/diagnostic-r1/progress';
 import { computeFunding } from '@/lib/financement/funding-engine';
 import type { FundingRuleValues } from '@/lib/financement/types';
-import { recomputeDiagnosticSnapshot, saveDiagnosticAnswer } from '@/server/actions/diagnostics';
+import {
+  completeDiagnostic,
+  recomputeDiagnosticSnapshot,
+  saveDiagnosticAnswer,
+} from '@/server/actions/diagnostics';
+import { recapHref, resolveFinishAction } from '@/lib/diagnostic-r1/finish';
 
 import { FundingSynthesisPanel } from './funding-synthesis';
 import { PipelineSynthesisPanel } from './pipeline-synthesis';
@@ -163,6 +168,33 @@ export function ChapterWorkspace({
       await recomputeDiagnosticSnapshot(diagnosticId);
     });
   }, [diagnosticId, readOnly, router]);
+
+  /**
+   * « Terminer » — le bouton du dernier chapitre.
+   *
+   * Il TERMINE. C'était le défaut du 03/09 : ce n'était qu'un lien vers la
+   * fiche, laquelle redirigeait vers le premier chapitre incomplet, et le
+   * commercial repartait saisir sans comprendre pourquoi.
+   *
+   * S'il manque des obligatoires, on ne clôt pas tout de suite mais on emmène
+   * au récapitulatif qui les liste avec des liens directs. Ce n'est pas un
+   * barrage : le récapitulatif porte un bouton « Terminer quand même ».
+   */
+  const finish = useCallback(() => {
+    startSync(async () => {
+      await flushNow();
+      const action = resolveFinishAction(diagnosticId, progress);
+      if (action.kind === 'complete') {
+        const r = await completeDiagnostic(diagnosticId);
+        if (!r.ok) {
+          toast.error(r.error);
+          return;
+        }
+        toast.success('Diagnostic terminé');
+      }
+      router.push(action.href as Route);
+    });
+  }, [diagnosticId, flushNow, progress, router]);
 
   const goTo = useCallback(
     async (target: DiagnosticChapter) => {
@@ -316,7 +348,7 @@ export function ChapterWorkspace({
             </button>
           ) : (
             <Link
-              href={`/app/diagnostics/${diagnosticId}` as Route}
+              href={recapHref(diagnosticId) as Route}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -333,13 +365,16 @@ export function ChapterWorkspace({
               <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
-            <Link
-              href={`/app/diagnostics/${diagnosticId}` as Route}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
+            <button
+              type="button"
+              onClick={finish}
+              disabled={readOnly || syncing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
             >
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Terminer
               <Check className="h-4 w-4" />
-            </Link>
+            </button>
           )}
         </nav>
 

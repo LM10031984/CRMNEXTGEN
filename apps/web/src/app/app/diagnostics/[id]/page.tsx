@@ -7,6 +7,13 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { computeProgress } from '@/lib/diagnostic-r1/progress';
+import { describeMissingRequired } from '@/lib/diagnostic-r1/finish';
+import { computePipeline } from '@/lib/diagnostic-r1/pipeline';
+import { computeFunding } from '@/lib/financement/funding-engine';
+import { loadFundingRules } from '@/lib/financement/load-rules';
+import { resolveEmployeeCount } from '@/lib/diagnostic-r1/snapshot';
+import { FundingSynthesisPanel } from '@/components/diagnostic-r1/funding-synthesis';
+import { PipelineSynthesisPanel } from '@/components/diagnostic-r1/pipeline-synthesis';
 import { DiagnosticActions } from '@/components/diagnostic-r1/diagnostic-actions';
 import { AuditPanel } from '@/components/diagnostic-r1/audit-panel';
 import { getAuditFreshness } from '@/server/actions/diagnostic-audit';
@@ -46,6 +53,17 @@ export default async function DiagnosticPage({
       organization: { select: { legalName: true } },
       owner: { select: { firstName: true, lastName: true } },
       answers: { select: { questionId: true, value: true, isSkipped: true } },
+      participants: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          statut: true,
+          caN1: true,
+          opcoEligible: true,
+          trainings24mFunded: true,
+          includedInProposal: true,
+        },
+      },
       _count: { select: { participants: true } },
     },
   });
@@ -67,6 +85,36 @@ export default async function DiagnosticPage({
   if (vue !== 'recap' && diagnostic.status === 'EN_COURS') {
     redirect(`/app/diagnostics/${id}/chapitre/${resume}`);
   }
+
+  // Les synthèses du récapitulatif : mêmes moteurs purs qu'en saisie, mêmes
+  // chiffres. C'est ce que le commercial vient de voir à l'écran, il ne doit
+  // pas découvrir autre chose en arrivant ici.
+  const { values: rules } = await loadFundingRules(user.tenantId);
+  const answerMap = Object.fromEntries(
+    diagnostic.answers.filter((a) => !a.isSkipped).map((a) => [a.questionId, a.value]),
+  );
+  const engineParticipants = diagnostic.participants.map((p) => ({
+    id: p.id,
+    statut: p.statut,
+    caN1: p.caN1 === null ? null : Number(p.caN1),
+    cfpEligibleBudget: null,
+    opcoEligible: p.opcoEligible,
+    consumedThisYear: null,
+    trainings24mFunded: p.trainings24mFunded === null ? null : Number(p.trainings24mFunded),
+    includedInProposal: p.includedInProposal,
+  }));
+  const funding = computeFunding({
+    rules,
+    participants: engineParticipants,
+    employeeCount: resolveEmployeeCount(answerMap, engineParticipants),
+    companyOpcoConsumed: null,
+    modality: 'PRESENTIEL',
+    fundingType: 'COEUR_METIER',
+  });
+  const pipeline = computePipeline({ answers: answerMap });
+
+  const missingByChapter = progress.chapters.filter((c) => c.missingRequired.length > 0);
+  const missingCount = missingByChapter.reduce((s, c) => s + c.missingRequired.length, 0);
 
   const freshness = await getAuditFreshness(id);
   const audit = freshness.ok
@@ -127,6 +175,42 @@ export default async function DiagnosticPage({
         />
       </div>
 
+      {missingCount > 0 && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
+          <h2 className="text-sm font-semibold mb-1">
+            {describeMissingRequired(
+              missingCount,
+              missingByChapter.map((c) => c.chapter),
+            )}
+          </h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Rien ne vous empêche de terminer : ces réponses seront simplement signalées comme
+            données manquantes dans le rapport. Vous pouvez aussi les compléter maintenant.
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {missingByChapter.map((c) => (
+              <li key={c.chapter}>
+                <Link
+                  href={`/app/diagnostics/${id}/chapitre/${c.chapter}` as Route}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-amber-300 bg-background text-xs hover:bg-muted"
+                >
+                  {c.chapter}. {c.title}
+                  <span className="text-muted-foreground">({c.missingRequired.length})</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FundingSynthesisPanel
+          synthesis={funding}
+          participantCount={diagnostic._count.participants}
+        />
+        <PipelineSynthesisPanel synthesis={pipeline} />
+      </div>
+
       <section className="rounded-lg border border-border">
         <header className="px-4 py-3 border-b border-border bg-muted/50">
           <h2 className="text-sm font-semibold flex items-center gap-2">
@@ -176,6 +260,7 @@ export default async function DiagnosticPage({
         variant={diagnostic.variant}
         status={diagnostic.status}
         isComplete={progress.isComplete}
+        missingCount={missingCount}
       />
     </div>
   );

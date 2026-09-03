@@ -23,11 +23,13 @@ export function DiagnosticActions({
   variant,
   status,
   isComplete,
+  missingCount = 0,
 }: {
   diagnosticId: string;
   variant: 'LEGER' | 'COMPLET';
   status: 'EN_COURS' | 'TERMINE' | 'ARCHIVE';
   isComplete: boolean;
+  missingCount?: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -79,7 +81,7 @@ export function DiagnosticActions({
           ) : (
             <CheckCircle2 className="h-4 w-4" />
           )}
-          Terminer le diagnostic
+          {missingCount > 0 ? 'Terminer quand même' : 'Terminer le diagnostic'}
         </button>
       ) : (
         <button
@@ -97,7 +99,7 @@ export function DiagnosticActions({
         </button>
       )}
 
-      {status === 'EN_COURS' && !isComplete && (
+      {status === 'EN_COURS' && !isComplete && missingCount === 0 && (
         <span className="text-xs text-muted-foreground">
           Terminer reste possible même avec des données manquantes — elles seront signalées dans le
           rapport.
