@@ -289,6 +289,30 @@ export const QUESTIONS_SCORANTES = QUESTIONS.filter((q) =>
 // Un seul tap, aucune saisie : mêmes contraintes de terrain que les 8 questions.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Valeurs des questions 1 et 2, en types.
+ *
+ * Elles ne servaient qu'au barème de points, où une valeur inconnue vaut
+ * simplement zéro. Depuis le 03/09/2026 elles pilotent le bloc financement de
+ * l'email : se tromper de valeur, ce n'est plus proposer la mauvaise journée,
+ * c'est annoncer à un salarié des droits AGEFICE qu'il n'a pas. D'où des types
+ * fermés, des gardes, et un test qui vérifie qu'ils n'ont pas divergé des
+ * choix réellement proposés dans le formulaire.
+ */
+export type RoleValue = 'DIRIGEANT' | 'CONSEILLER' | 'AGENT_CO' | 'AUTRE';
+export type EquipeValue = 'SEUL' | 'DE_2_A_5' | 'DE_6_A_15' | 'PLUS_DE_15';
+
+const ROLES: readonly string[] = ['DIRIGEANT', 'CONSEILLER', 'AGENT_CO', 'AUTRE'];
+const EQUIPES: readonly string[] = ['SEUL', 'DE_2_A_5', 'DE_6_A_15', 'PLUS_DE_15'];
+
+export function lireRole(v: unknown): RoleValue | null {
+  return typeof v === 'string' && ROLES.includes(v) ? (v as RoleValue) : null;
+}
+
+export function lireEquipe(v: unknown): EquipeValue | null {
+  return typeof v === 'string' && EQUIPES.includes(v) ? (v as EquipeValue) : null;
+}
+
 export type RappelValue = 'CETTE_SEMAINE' | 'SEMAINE_PROCHAINE' | 'PLUS_TARD';
 
 export const RAPPEL_QUESTION = 'Quand peut-on vous appeler pour caler votre journée ?';

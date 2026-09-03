@@ -25,7 +25,12 @@
  */
 
 import type { OfConfig } from '@/lib/of-config';
-import { PROBLEMATIQUES, type ProblematiqueKey } from '@/lib/diagnostic/questions';
+import {
+  PROBLEMATIQUES,
+  type ProblematiqueKey,
+  type RoleValue,
+  type EquipeValue,
+} from '@/lib/diagnostic/questions';
 import type { ProgrammeSurMesure } from '@/lib/diagnostic/programme-sur-mesure';
 
 const BRAND_DARK = '#00527A';
@@ -62,6 +67,106 @@ const AGEFICE = {
   priseEnChargeJournee: 336,
   delaiDepotJours: 15,
 } as const;
+
+/**
+ * Fourchettes de droits mobilisables sur une ÉQUIPE, par tranche.
+ *
+ * Volontairement des fourchettes, jamais un total. Un dirigeant a devant lui un
+ * mélange d'indépendants (droits AGEFICE propres) et de salariés (OPCO EP via
+ * l'entreprise) : le total exact dépend du statut de chacun et de ce que chacun
+ * a déjà consommé cette année — deux informations qu'on n'a pas au moment
+ * d'écrire l'email. Annoncer « 2 016 € » à quelqu'un dont quatre collaborateurs
+ * sont salariés, c'est se faire reprendre au premier appel. Le chiffrage précis
+ * EST l'objet du rendez-vous de 15 minutes ; l'email l'amène, il ne le remplace
+ * pas.
+ *
+ * Décision Laurent du 03/09/2026.
+ */
+const FOURCHETTES_EQUIPE: Record<Exclude<EquipeValue, 'SEUL'>, string> = {
+  DE_2_A_5: '700 à 1 700 €',
+  DE_6_A_15: '2 000 à 5 000 €',
+  PLUS_DE_15: 'plus de 5 000 €',
+};
+
+/** Ce qu'affiche le bloc « Vos droits formation ». */
+export interface BlocFinancement {
+  /** Chiffre mis en avant, ou `null` quand aucun montant ne peut être annoncé. */
+  chiffre: string | null;
+  /** Légende du chiffre. `null` avec `chiffre` à `null`. */
+  legende: string | null;
+  paragraphes: string[];
+}
+
+/**
+ * Le financement dépend du STATUT, pas de la formation.
+ *
+ * Jusqu'au 03/09/2026 l'email annonçait des droits AGEFICE à tout le monde.
+ * C'est faux pour un conseiller salarié — il ne cotise pas à l'AGEFICE, sa
+ * formation passe par l'OPCO EP via son employeur. Lui promettre une enveloppe
+ * de 3 000 € qui n'existe pas, c'est perdre le prospect au moment précis où il
+ * vérifie.
+ *
+ * Trois cas, à partir de réponses DÉJÀ collectées (questions 1 et 2) :
+ *
+ *  - indépendant  → ses droits AGEFICE personnels, chiffrés (comportement d'avant) ;
+ *  - salarié      → OPCO EP par l'employeur, AUCUN montant : on ne connaît ni sa
+ *                   branche ni ce que son agence a déjà engagé ;
+ *  - dirigeant    → raisonnement collectif, en FOURCHETTE.
+ *
+ * DEUX CAS QUE LA DÉCISION NE TRANCHAIT PAS, et le choix retenu :
+ *
+ *  - un dirigeant qui travaille SEUL n'a pas d'équipe sur laquelle raisonner :
+ *    il retombe sur ses droits personnels ;
+ *  - un indépendant entouré (agent commercial avec des collègues) garde le bloc
+ *    individuel : ses droits AGEFICE sont PERSONNELS, et on ignore le statut de
+ *    ceux qui travaillent avec lui. Lui parler d'une enveloppe d'équipe serait
+ *    exactement l'erreur qu'on est en train de corriger.
+ *
+ * Rôle absent ou inconnu : impossible en pratique, les 8 questions sont
+ * obligatoires avant l'envoi du formulaire. On garde alors le bloc individuel —
+ * le comportement d'avant — plutôt que d'inventer un quatrième texte que
+ * personne n'aura relu.
+ */
+export function composerFinancement(
+  role: RoleValue | null,
+  equipe: EquipeValue | null,
+): BlocFinancement {
+  if (role === 'CONSEILLER') {
+    return {
+      chiffre: null,
+      legende: null,
+      paragraphes: [
+        `En tant que conseiller salarié, votre formation ne relève pas de l'AGEFICE mais de l'OPCO EP, l'opérateur de compétences de votre branche — c'est votre employeur qui en fait la demande.`,
+        `Nous montons le dossier avec vous et fournissons toutes les pièces attendues : programme détaillé, convention de formation, devis. Votre agence n'a qu'à le déposer.`,
+        `Le dossier doit partir avant le début de la formation : plus il est déposé tôt, plus la prise en charge est sûre.`,
+      ],
+    };
+  }
+
+  if (role === 'DIRIGEANT' && equipe !== null && equipe !== 'SEUL') {
+    return {
+      chiffre: FOURCHETTES_EQUIPE[equipe],
+      legende: 'de droits formation mobilisables sur votre équipe, selon les statuts',
+      paragraphes: [
+        `Chaque indépendant de votre équipe dispose de ses propres droits AGEFICE — ${AGEFICE.priseEnChargeJournee} € pour cette journée de 8 h.`,
+        `Les collaborateurs salariés, eux, relèvent de l'OPCO EP, via l'entreprise.`,
+        `L'enveloppe AGEFICE est annuelle : ce qui n'est pas consommé au 31 décembre est perdu. Et le dossier doit être déposé au plus tard ${AGEFICE.delaiDepotJours} jours calendaires avant le début de la formation.`,
+        `Le total exact dépend du statut de chacun et de ce qui a déjà été consommé cette année : c'est précisément ce qu'on chiffre ensemble pendant les 15 minutes.`,
+      ],
+    };
+  }
+
+  return {
+    chiffre: `${AGEFICE.priseEnChargeJournee} €`,
+    legende: `pris en charge par l'AGEFICE pour cette journée`,
+    paragraphes: [
+      `Votre enveloppe formation ${AGEFICE.annee} auprès de l'AGEFICE est de ${AGEFICE.enveloppeAnnuelle} € par an.`,
+      `Une journée en présentiel est prise en charge à hauteur de ${AGEFICE.tauxPresentielParHeure} € de l'heure, soit ${AGEFICE.priseEnChargeJournee} € pour une journée de 8 h.`,
+      `Deux règles à connaître : le dossier doit être déposé au plus tard ${AGEFICE.delaiDepotJours} jours calendaires avant le début de la formation, et l'enveloppe est annuelle — ce qui n'est pas consommé au 31 décembre est perdu.`,
+      `Concrètement, pour une journée en décembre, le dossier doit partir à la mi-novembre.`,
+    ],
+  };
+}
 
 const CTA_LIBELLE = 'Réserver mon point financement — 15 min';
 const CTA_SOUS_TEXTE =
@@ -135,6 +240,13 @@ export interface DiagnosticProgrammeEmailInput {
   secondaire: ProblematiqueKey | null;
   produit: ProduitPropose;
   surMesure: ProgrammeSurMesure | null;
+  /**
+   * Réponses aux questions 1 et 2, qui pilotent le bloc financement.
+   * `null` quand la réponse est absente ou non reconnue — le bloc retombe alors
+   * sur les droits individuels, comme avant le 03/09/2026.
+   */
+  role: RoleValue | null;
+  equipe: EquipeValue | null;
   /** Surcharge du lien du CTA (tests). En production : `DIAGNOSTIC_CTA_URL`. */
   ctaUrl?: string;
 }
@@ -163,12 +275,8 @@ export function renderDiagnosticProgrammeEmail(
   // Le bloc financement, en une seule formulation partagée HTML/texte : deux
   // rédactions séparées finissent par diverger, et c'est le passage le plus
   // sensible de l'email.
-  const financement = [
-    `Votre enveloppe formation ${AGEFICE.annee} auprès de l'AGEFICE est de ${AGEFICE.enveloppeAnnuelle} € par an.`,
-    `Une journée en présentiel est prise en charge à hauteur de ${AGEFICE.tauxPresentielParHeure} € de l'heure, soit ${AGEFICE.priseEnChargeJournee} € pour une journée de 8 h.`,
-    `Deux règles à connaître : le dossier doit être déposé au plus tard ${AGEFICE.delaiDepotJours} jours calendaires avant le début de la formation, et l'enveloppe est annuelle — ce qui n'est pas consommé au 31 décembre est perdu.`,
-    `Concrètement, pour une journée en décembre, le dossier doit partir à la mi-novembre.`,
-  ];
+  const bloc = composerFinancement(input.role, input.equipe);
+  const financement = bloc.paragraphes;
 
   // ── version texte ────────────────────────────────────────────────────────
   const texteSequences = surMesure
@@ -198,6 +306,7 @@ export function renderDiagnosticProgrammeEmail(
     suite ? `En prolongement, un second axe ressort : ${suite.titre}.` : null,
     ``,
     `VOS DROITS FORMATION`,
+    ...(bloc.chiffre ? [`${bloc.chiffre} ${bloc.legende}`] : []),
     ...financement,
     ``,
     cta ? `${CTA_LIBELLE} : ${cta}` : null,
@@ -343,10 +452,14 @@ export function renderDiagnosticProgrammeEmail(
                 <tr>
                   <td style="padding:20px 22px;">
                     <div style="font-size:11px; letter-spacing:0.8px; text-transform:uppercase; color:${BRAND_DARK}; font-weight:700;">Vos droits formation</div>
-                    <div style="margin:6px 0 12px 0; line-height:1.1;">
-                      <span style="font-size:30px; font-weight:800; color:${BRAND_DARK};">${AGEFICE.priseEnChargeJournee} €</span>
-                      <span style="font-size:13px; color:${MUTED};"> pris en charge par l'AGEFICE pour cette journée</span>
-                    </div>
+                    ${
+                      bloc.chiffre
+                        ? `<div style="margin:6px 0 12px 0; line-height:1.25;">
+                      <span style="font-size:26px; font-weight:800; color:${BRAND_DARK};">${escapeHtml(bloc.chiffre)}</span>
+                      <span style="font-size:13px; color:${MUTED};"> ${escapeHtml(bloc.legende ?? '')}</span>
+                    </div>`
+                        : '<div style="height:10px; line-height:10px;">&nbsp;</div>'
+                    }
                     ${financementHtml}
                   </td>
                 </tr>
