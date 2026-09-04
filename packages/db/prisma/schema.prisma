@@ -797,6 +797,11 @@ model Lead {
   // Phase 9 — Date de transition vers WON (LEAD-02 KPI 2/4).
   // Set automatiquement par `updateLeadStatus` quand status passe à WON ; null sinon.
   wonAt                 DateTime?
+  /// Chaîne diagnostic §11.1 (A-2) — horodatage de l'alerte « lead non traité ».
+  /// Sa seule raison d'être est l'idempotence : UNE alerte par lead, jamais un
+  /// rappel toutes les heures parce qu'un cron repasse. Remis à null dès qu'une
+  /// action est enregistrée : un lead re-délaissé doit pouvoir ré-alerter.
+  staleAlertedAt        DateTime?
   // Relations
   actions               LeadAction[]
   diagnosticSubmissions DiagnosticSubmission[]
@@ -1706,6 +1711,11 @@ model TenantEmailSettings {
   internalNotificationsEnabled   Boolean  @default(false)
   userInvitationsEnabled         Boolean  @default(false)
   diagnosticProgramsEnabled      Boolean  @default(false)
+  /// Chaîne diagnostic §11.1 — A-1 « nouveau lead » et A-3 « nouvelle
+  /// pré-inscription ». Défaut false comme toutes les autres : fail-closed,
+  /// une catégorie qu'on n'a pas cochée n'envoie rien.
+  newLeadAlertsEnabled           Boolean  @default(false)
+  preEnrollmentAlertsEnabled     Boolean  @default(false)
   testSessionIds                 String[] @default([])
   createdAt                      DateTime @default(now())
   updatedAt                      DateTime @default(now()) @updatedAt
