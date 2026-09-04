@@ -4,6 +4,7 @@ import {
   buildInvoiceSource,
   buildBuyerParty,
   buildDeliveryParty,
+  deliveryAddressJson,
   buildSellerParty,
   buildTrainingLines,
   checkLinesMatchTotal,
@@ -126,6 +127,22 @@ describe('parties figées', () => {
   it('pas de lieu ⇒ pas de partie DELIVERY : on préfère l’absence à une adresse inventée', () => {
     expect(buildDeliveryParty(null)).toBeNull();
     expect(buildDeliveryParty({ name: null, legalName: null, address: null })).toBeNull();
+  });
+
+  it('la colonne deliveryAddressJson est DÉRIVÉE de la partie, pas construite à côté', () => {
+    const d = buildDeliveryParty({
+      name: 'Salle Camélias',
+      legalName: null,
+      address: { street: '20 rue de France', postalCode: '06000', city: 'Nice' },
+    });
+    expect(deliveryAddressJson(d)).toEqual({
+      legalName: 'Salle Camélias',
+      addressLine1: '20 rue de France',
+      postalCode: '06000',
+      city: 'Nice',
+      countryCode: 'FR',
+    });
+    expect(deliveryAddressJson(null)).toBeNull();
   });
 });
 
