@@ -250,14 +250,26 @@ export async function generateAgeficeForParticipant(
         ]
           .filter(Boolean)
           .join(' — ');
-        const street = (session.location.address as any)?.street as string | null | undefined;
+        const addr = (session.location.address as any) ?? {};
+        const street = addr?.street as string | null | undefined;
+        const cpVille = [addr?.postalCode, addr?.city]
+          .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+          .join(' ');
         // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
         // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
         // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
-        // 2026-07). CP + Ville ont leurs propres champs Cerfa.
+        // 2026-07). Même règle pour « CP Ville ».
         const appendStreet =
           !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
-        return [nameLine, appendStreet ? street : null].filter(Boolean).join('\n');
+        const appendCpVille =
+          !!cpVille && !normalizeAddr(nameLine).includes(normalizeAddr(cpVille));
+        // Séparateur « , » et NON « \n » : le champ Cerfa « Nom et Adresse
+        // exacte du lieu de formation » est mono-ligne (Ff=2, police auto), et
+        // `sanitizeWinAnsi` strippe le 0x0A → la rue se collait au nom du lieu
+        // (« Agence Y12 rue Z », bug Laurent 2026-09-04).
+        return [nameLine, appendStreet ? street : null, appendCpVille ? cpVille : null]
+          .filter(Boolean)
+          .join(', ');
       })()
     : of.addressFull;
 

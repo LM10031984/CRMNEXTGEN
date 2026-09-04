@@ -109,6 +109,9 @@ export function SessionWizard({
   const [endDate, setEndDate] = useState(plusDays(todayISO(), 1));
   const [modality, setModality] = useState<Modality>('PRESENTIEL');
   const [locationName, setLocationName] = useState('');
+  const [locationLegalName, setLocationLegalName] = useState('');
+  const [locationStreet, setLocationStreet] = useState('');
+  const [locationPostalCode, setLocationPostalCode] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [trainerIds, setTrainerIds] = useState<string[]>([]);
   const [pricePerLearner, setPricePerLearner] = useState<string>('');
@@ -270,6 +273,9 @@ export function SessionWizard({
       endDate,
       modality,
       locationName: locationName.trim() || null,
+      locationLegalName: locationLegalName.trim() || null,
+      locationStreet: locationStreet.trim() || null,
+      locationPostalCode: locationPostalCode.trim() || null,
       locationCity: locationCity.trim() || null,
       trainerPersonIds: trainerIds,
       capacityMax: capacityMax ? parseInt(capacityMax, 10) : undefined,
@@ -512,12 +518,46 @@ export function SessionWizard({
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
               />
             </Field>
+            {/* Lieu de formation — adresse structurée dès la création : la
+                convention, l'émargement et la demande AGEFICE lisent
+                `Location.address.{street,postalCode,city}` + `legalName`
+                (mentions exigées par l'AGEFICE, refus du 28/08/2026). Avant,
+                seuls nom + ville étaient saisis ici et il fallait repasser par
+                Paramètres → Lieu pour compléter. */}
             <Field label="Lieu (nom du site)">
               <input
                 type="text"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
                 placeholder="Ex: Salle Start Academy Nice"
+                className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
+              />
+            </Field>
+            <Field label="Raison sociale du lieu">
+              <input
+                type="text"
+                value={locationLegalName}
+                onChange={(e) => setLocationLegalName(e.target.value)}
+                placeholder="Ex: SARL Agence Nice Centre (exigée par l'AGEFICE)"
+                className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
+              />
+            </Field>
+            <Field label="Adresse (rue)" className="md:col-span-2">
+              <input
+                type="text"
+                value={locationStreet}
+                onChange={(e) => setLocationStreet(e.target.value)}
+                placeholder="Ex: 12 avenue Jean Médecin"
+                className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
+              />
+            </Field>
+            <Field label="Code postal">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={locationPostalCode}
+                onChange={(e) => setLocationPostalCode(e.target.value)}
+                placeholder="Ex: 06000"
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
               />
             </Field>
@@ -844,7 +884,15 @@ export function SessionWizard({
             <RecapRow
               icon={MapPin}
               label="Lieu"
-              value={locationName || locationCity ? `${locationName}${locationName && locationCity ? ' · ' : ''}${locationCity}` : 'Non précisé'}
+              value={
+                [
+                  [locationLegalName, locationName].filter(Boolean).join(' — '),
+                  locationStreet,
+                  [locationPostalCode, locationCity].filter(Boolean).join(' '),
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'Non précisé'
+              }
             />
             <RecapRow icon={Users} label="Capacité max" value={capacityMax || String(selectedProduct.capacityMax)} />
             <RecapRow
