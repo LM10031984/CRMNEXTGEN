@@ -20,7 +20,8 @@
  * la container UX.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Settings, X } from 'lucide-react';
 
@@ -40,6 +41,12 @@ export function SettingsDrawer({
 }: Props) {
   const drawerRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  // Portal vers <body> : le drawer est déclenché depuis le SessionHeaderBar
+  // (sticky). Rendu en place, il hérite de tout containing block créé par un
+  // ancêtre (transform/filter/backdrop-filter) et son `fixed` devient relatif
+  // au header. `mounted` évite le mismatch SSR (document absent côté serveur).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -83,9 +90,9 @@ export function SettingsDrawer({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <>
       <div
         className="fixed inset-0 z-[55] bg-black/30 backdrop-blur-[1px] animate-in fade-in duration-150"
@@ -121,7 +128,8 @@ export function SettingsDrawer({
           ESC pour fermer
         </footer>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 

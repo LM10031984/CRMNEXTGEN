@@ -86,8 +86,13 @@ export function SessionHeaderBar({
   const dateLabel = fmtDateRange(startDate, endDate);
 
   return (
+    // PAS de `backdrop-blur` sur ce header : `backdrop-filter` crée un
+    // containing block pour les descendants `position: fixed` (spec Filter
+    // Effects 2). Le drawer Paramètres et les dialogs (Modifier, Dupliquer,
+    // Statut…) déclenchés depuis cette barre se retrouvaient confinés dans le
+    // header au lieu de couvrir l'écran (bug Laurent 2026-09-04).
     <header
-      className="sticky top-14 z-[9] -mx-4 sm:-mx-8 px-4 sm:px-8 py-4 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-border"
+      className="sticky top-14 z-[9] -mx-4 sm:-mx-8 px-4 sm:px-8 py-4 bg-white border-b border-border"
       aria-label="En-tête fiche session"
     >
       {backLink && <div className="mb-2">{backLink}</div>}
