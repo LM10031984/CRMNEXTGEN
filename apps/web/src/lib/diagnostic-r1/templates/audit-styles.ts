@@ -18,6 +18,14 @@
  * transpose ce que le moteur d'impression ne sait pas faire. Sa règle
  * cardinale — WeasyPrint n'implémente ni CSS Grid ni `gap` — y est détaillée.
  */
+import {
+  renderDocumentPageRule,
+  weasyprintFontRule,
+  weasyprintHeroBlocks,
+  weasyprintPageModel,
+  WEASYPRINT_COMMON_CSS,
+} from '@/lib/docs/weasyprint-base';
+
 export const AUDIT_STYLES = String.raw`
 :root{
     --brand-deep:#00527A; --brand-vif:#3EA9FF; --brand-deep-08:rgba(0,82,122,.08);
@@ -147,6 +155,11 @@ export const AUDIT_STYLES = String.raw`
   /* ══════════════════════════════════════════════════════════════════════
      Compatibilité moteur PDF (WeasyPrint 60)
      ─────────────────────────────────────────────────────────────────────
+     Ce qui vaut pour TOUT document vit dans lib/docs/weasyprint-base.ts —
+     le socle commun de la spec §9.5, interpolé ici. Ne reste ci-dessous que
+     ce qui est propre au gabarit de l'audit (chapitres, scores, entonnoir,
+     couverture, format condensé).
+     ─────────────────────────────────────────────────────────────────────
      Ajouté APRÈS la maquette, jamais à sa place : la maquette reste la
      référence de rendu à l'écran, ce bloc ne corrige que ce que le moteur
      d'impression ne sait pas faire.
@@ -184,30 +197,17 @@ export const AUDIT_STYLES = String.raw`
           débordement produit une page de plus — un défaut qui se VOIT.
      Le texte du pied, lui, est injecté par « renderAuditPageRule() » : il
      dépend du dossier. */
-  @page{ size:A4; margin:15mm 16mm 20mm }
-
-  /* « .page » n'est plus une feuille de papier simulée : c'est « @page » qui porte
-     le format et les marges. On neutralise donc la boîte de la maquette —
-     sinon ses 15mm/16mm de padding s'ajouteraient aux marges de « @page » et
-     tout le document se retrouverait deux fois trop en dedans. */
-  .page{ width:auto; height:auto; min-height:0; margin:0; padding:0;
-         overflow:visible; box-shadow:none; background:transparent;
-         break-after:page; page-break-after:always }
-  body > :last-child{ break-after:auto; page-break-after:auto }
-
-  /* La couverture déborde jusqu'au bord du papier : les marges négatives
-     annulent exactement les marges de « @page ». */
-  @media print{ html,body{ background:#fff; padding:0 } .page{ box-shadow:none; margin:0 } }
+  ${weasyprintPageModel('15mm 16mm 20mm')}
 
   /* ── Fontes réellement présentes dans le conteneur ────────────────────
      « !important » assumé : la maquette pose la police sur des sélecteurs plus
      spécifiques (« .tile .display », « .chap-meta .score »). Sans forcer, les
      chiffres mis en avant retombent en chasse fixe. C'est une couche de
      compatibilité générée, pas du style écrit à la main. */
-  body, h1, h2, h3, h4, .kicker, th, .foot-brand,
-  .display, .agency, .chap-title, .score, .big, .v, .cover-meta b{
-    font-family: 'Liberation Sans', Helvetica, Arial !important;
-  }
+  ${weasyprintFontRule(
+    `body, h1, h2, h3, h4, .kicker, th, .foot-brand,
+  .display, .agency, .chap-title, .score, .big, .v, .cover-meta b`,
+  )}
 
   /* ── Titres : le numéro ne colle plus au titre (grid/gap → marge) ─────
      La maquette met « display:flex; gap:3mm » sur le titre et son numéro. Sans
@@ -237,10 +237,11 @@ export const AUDIT_STYLES = String.raw`
      début du texte. En table à largeur automatique, la colonne du chiffre
      prend sa largeur réelle et la phrase occupe le reste — quel que soit le
      nombre affiché. */
-  .scorehero, .valuecard, .euro{ display:table; width:100%; table-layout:auto }
-  .scorehero .big, .valuecard .v, .euro .amount{
-    display:table-cell; vertical-align:middle; white-space:nowrap; padding-right:6mm; width:1% }
-  .scorehero p, .valuecard p, .euro p{ display:table-cell; vertical-align:middle }
+  ${weasyprintHeroBlocks([
+    { container: '.scorehero', big: '.big', text: 'p' },
+    { container: '.valuecard', big: '.v', text: 'p' },
+    { container: '.euro', big: '.amount', text: 'p' },
+  ])}
 
   /* ── Grilles de tuiles : flex + marges (grid non implémenté) ──────────── */
   .grid2, .grid3{ display:flex; flex-wrap:wrap; align-items:stretch }
@@ -298,10 +299,7 @@ export const AUDIT_STYLES = String.raw`
   .cover-badges{ display:flex; flex-wrap:wrap }
   .cover-badges .cbadge{ margin:0 4mm 3mm 0 }
 
-  /* Les pastilles s'étiraient en barres pleine largeur : inline-flex est
-     traité comme un bloc par le moteur. En inline, elles reprennent leur
-     taille. */
-  .chip{ display:inline; padding:.4mm 2.2mm }
+  ${WEASYPRINT_COMMON_CSS}
 
   /* ── Format condensé (diagnostic léger) ───────────────────────────────
      Les chapitres s'enchaînent au fil de l'eau au lieu d'occuper une page
@@ -323,22 +321,6 @@ export const AUDIT_STYLES = String.raw`
  *
  * Le texte dépend du dossier — d'où cette fonction plutôt qu'une constante.
  */
-export function renderAuditPageRule(args: {
-  brand: string;
-  documentLine: string;
-}): string {
-  // Chaîne CSS : seuls le backslash et le guillemet doivent être neutralisés.
-  const css = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const box = `border-top:1px solid #dde4ea; padding-top:2mm; vertical-align:top;
-               font-family:'Liberation Sans', Helvetica, Arial; font-size:7.5pt`;
-  return `@page{
-    @bottom-left{
-      content:"${css(args.brand)}"; ${box};
-      color:#00527A; font-weight:600; letter-spacing:.14em; text-align:left }
-    @bottom-center{
-      content:"${css(args.documentLine)}"; ${box}; color:#7b8894; text-align:center }
-    @bottom-right{
-      content:counter(page) " / " counter(pages); ${box};
-      color:#7b8894; text-align:right }
-  }`;
+export function renderAuditPageRule(args: { brand: string; documentLine: string }): string {
+  return renderDocumentPageRule(args);
 }

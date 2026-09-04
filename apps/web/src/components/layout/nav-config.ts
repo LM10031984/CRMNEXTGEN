@@ -20,6 +20,7 @@ import {
   Newspaper,
   FilePlus,
   BarChart3,
+  FileSignature,
   Stethoscope,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
@@ -148,6 +149,15 @@ export const NAV: NavSection[] = [
         label: 'Diagnostics',
         href: '/app/diagnostics',
         icon: Stethoscope,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
+      },
+      // Propositions (chaîne diagnostic, lot E) : la suite du diagnostic, remise
+      // en R2. Mêmes rôles que Diagnostics — c'est le même commercial qui mène
+      // le R1 puis chiffre le R2.
+      {
+        label: 'Propositions',
+        href: '/app/propositions',
+        icon: FileSignature,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
       // Vue de charge (Phase 9 Plan 09-04) : ADMIN+MANAGER uniquement

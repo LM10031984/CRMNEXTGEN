@@ -17,6 +17,9 @@ import { PipelineSynthesisPanel } from '@/components/diagnostic-r1/pipeline-synt
 import { DiagnosticActions } from '@/components/diagnostic-r1/diagnostic-actions';
 import { AuditPanel } from '@/components/diagnostic-r1/audit-panel';
 import { getAuditFreshness } from '@/server/actions/diagnostic-audit';
+import { ProposalPanel } from '@/components/proposition/proposal-panel';
+import { ProposalPricingSchema } from '@qualiof/shared';
+import { computePricing } from '@/lib/proposition/pricing';
 
 /**
  * Fiche d'un diagnostic — le point d'entrée et de reprise.
@@ -115,6 +118,12 @@ export default async function DiagnosticPage({
 
   const missingByChapter = progress.chapters.filter((c) => c.missingRequired.length > 0);
   const missingCount = missingByChapter.reduce((s, c) => s + c.missingRequired.length, 0);
+
+  const proposals = await prisma.proposal.findMany({
+    where: { tenantId: user.tenantId, diagnosticId: id },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, reference: true, status: true, pricingJson: true },
+  });
 
   const freshness = await getAuditFreshness(id);
   const audit = freshness.ok
@@ -246,6 +255,22 @@ export default async function DiagnosticPage({
           ))}
         </ul>
       </section>
+
+      <ProposalPanel
+        diagnosticId={id}
+        canCreate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+        proposals={proposals.map((p) => {
+          const parsed = ProposalPricingSchema.safeParse(p.pricingJson);
+          return {
+            id: p.id,
+            reference: p.reference,
+            status: p.status,
+            totalHt: parsed.success
+              ? computePricing({ pricing: parsed.data, rules }).totalHt
+              : null,
+          };
+        })}
+      />
 
       <AuditPanel
         diagnosticId={id}

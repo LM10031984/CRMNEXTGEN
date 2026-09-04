@@ -67,6 +67,18 @@ const nextConfig = {
       // canonique est /inscription/{jeton} au SINGULIER ; on rattrape le
       // pluriel tapé à la main. Attention : ne matche que la racine, jamais
       // /app/inscriptions qui est l'écran admin.
+      // Chaîne diagnostic (lot E) — la route canonique est /app/propositions au
+      // PLURIEL. On rattrape le singulier, comme pour /app/diagnostics.
+      {
+        source: '/app/proposition',
+        destination: '/app/propositions',
+        permanent: true,
+      },
+      {
+        source: '/app/proposition/:path*',
+        destination: '/app/propositions/:path*',
+        permanent: true,
+      },
       {
         source: '/inscriptions/:token',
         destination: '/inscription/:token',

@@ -483,6 +483,8 @@ Rendus : **PDF** (WeasyPrint, chaîne existante) + **lien web lecture seule** `/
 
 **Génération du devis** : bouton « Générer le(s) devis » → un `Quote` par payeur depuis les lignes §6 (recipient depuis `payer-rule.ts`, personne morale → entreprise, indés autofinancés/subrogés selon montage). Test de contrat : Σ `QuoteLine` = montants proposition, heures devis = heures conventionnées proposition.
 
+> **D-15 (tranchée à la livraison du lot E, 04/09/2026) — ce que le devis porte, et ce qu'il ne retranche pas.** Le devis reproduit le **coût pédagogique** — l'assiette des droits — et **pas** le reste à charge après geste commercial. Une remise portée en ligne négative sur le devis diminuerait le coût déclaré, donc la prise en charge : le client paierait lui-même le cadeau qu'on prétend lui faire. La prise en charge attendue, le reste à charge et le geste commercial sont donc écrits **en clair dans les notes du devis**, jamais retranchés de ses lignes. C'est ce qui rend le test de contrat exact : **Σ lignes de devis = coût pédagogique de la proposition, au centime**. Un devis par PAYEUR, jamais par bandeau d'affichage : la subrogation AGEFICE se monte par personne (4 indés = 4 devis sous un seul bandeau). À confirmer par Laurent au premier dossier réel envoyé.
+
 ### 9.2 Le rapport d'audit complet — un livrable de 15 pages minimum, valorisé 3 000 €
 
 **Exigence de Laurent (01/09)** : l'audit complet est une prestation à part entière, **valorisée 3 000 € HT** (paramètre `AUDIT_DISPLAY_VALUE`, affiché en couverture « offerte dans le cadre de votre accompagnement »), donc un document **d'au moins 15 pages qui restitue ce qui s'est dit** — pas une synthèse. Il parle au dirigeant : ses mots, ses chiffres, ses enjeux en euros, son équipe. Structure de référence = la maquette 17 pages.
@@ -525,9 +527,15 @@ Acquis de la QA du 03/09/2026 sur le premier audit réel. Le moteur d'impression
 rien dans les tests unitaires, un défaut visible seulement en ouvrant le PDF.
 Ces règles ne se redécouvrent pas document par document.
 
-**Le bloc de compatibilité de `audit-styles.ts` est le socle commun** : toute
-nouvelle sortie documentaire de la chaîne (proposition, devis, pack) le
-**réutilise** au lieu d'en retranscrire une variante à la main. Ce qu'il porte :
+**Le socle vit dans `apps/web/src/lib/docs/weasyprint-base.ts`** (extrait de
+`audit-styles.ts` à la livraison du lot E, 04/09/2026, sans changer d'un
+caractère le rendu de l'audit — ses 46 tests de contrat le vérifient) : modèle
+de page `@page`, pile de fontes forcée, pied de page en boîtes de marge avec
+`counter(page)/counter(pages)`, blocs héros en table-cell, pastilles en inline.
+Toute nouvelle sortie documentaire de la chaîne (proposition, devis, pack)
+l'**importe** au lieu d'en retranscrire une variante à la main ; ne restent
+dans chaque feuille que les transpositions propres à son gabarit. Ce que le
+socle porte :
 
 | Ce que le moteur ne sait pas faire | Ce qu'on écrit à la place |
 |---|---|
@@ -635,6 +643,9 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 |---|---|---|---|
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
+
+| **D-15** | Le devis doit-il porter le reste à charge après remise, ou le coût pédagogique ? | **Le coût pédagogique**, et lui seul. Une remise en ligne négative sur le devis réduirait le coût déclaré, donc l'assiette des droits — le client financerait le geste qu'on lui fait. La prise en charge, le reste à charge et le geste commercial vivent dans les **notes** du devis. Σ lignes de devis = coût pédagogique de la proposition, au centime (test de contrat). Cf. §9.1. | 04/09/2026 |
+| **D-16** | Trois pages fixes comme la maquette, ou un document qui coule ? | **Il coule.** Forcer les trois pages produisait une page à moitié vide dès qu'un axe débordait (constaté sur PROP-0001 : la page 2 ne portait qu'un axe et 20 cm de blanc). Les sections s'enchaînent, les blocs ne se coupent jamais (`break-inside:avoid`), et c'est le moteur qui décide où couper — jamais une estimation de hauteur. Même doctrine que le format condensé de l'audit (D-13). | 04/09/2026 |
 
 | **D-13** | Un diagnostic LÉGER produisait un audit de 17 pages à moitié vides (un chapitre de 2 réponses occupait une page entière). Fallait-il une « synthèse 2-3 pages » distincte ? | **Non — un seul document, deux formats.** Le LÉGER sort au **format condensé** : mêmes 17 sections, mêmes contenus, mais les chapitres s'enchaînent en flux (2-3 par page, jamais coupés). Le COMPLET garde une page par chapitre. Motif : deux documents distincts, c'est deux gabarits à maintenir et deux occasions de diverger — alors que la seule différence utile est la densité. Cf. §9.2. **Densité tranchée le 03/09 après relecture du PDF : DEUX chapitres par page, on garde** — pas de rabotage des encadrés « Repères » / « Premier levier » pour en faire tenir un troisième. C'est le moteur qui décide, sur le contenu réel. | 03/09/2026 |
 | **D-14** | Le pied de page portait « n / 17 » écrit en dur, et un chapitre non noté affichait « — / 100 ». Quelle source pour la numérotation ? | **Les compteurs du moteur d'impression** (`counter(page)` / `counter(pages)` en boîte de marge `@page`). En condensé, le total n'est pas connu à la génération : tout total écrit en dur ment. Effet de bord bienvenu : le pied de page est enfin réellement ancré en bas — un bloc `position:absolute` dans une page en `min-height` retombe dans le flux sous WeasyPrint. | 03/09/2026 |
