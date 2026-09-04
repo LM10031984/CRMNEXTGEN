@@ -16,6 +16,7 @@
 import { marked } from 'marked';
 import type { OfConfig } from './of-config';
 import { loadLogoColorDataUrl, loadSignatureDataUrl } from './closure/shared-template';
+import { SIGNATURE_ROLES, renderSignatureAnchor } from './signature/text-tags';
 import {
   OF_PAGED_FOOTER_STYLES,
   OF_PAGED_PAGE_RULE,
@@ -85,6 +86,18 @@ export interface ConventionData {
   // dans `public/of-assets/{tenantId}/`. Si absent, fallback bundled
   // `src/assets/logo-start-academy.png`.
   tenantId?: string;
+
+  /**
+   * Spec signature 2026-09-04 §5 lot B (D-7) — pose les ancres invisibles que
+   * DocuSeal transforme en champs de signature.
+   *
+   * Optionnel, faux par défaut : les conventions destinées à une signature
+   * manuscrite (impression, scan déposé via le lot A) restent strictement
+   * inchangées. En mode ancres, le tampon de signature du dirigeant OF est
+   * retiré : il signe électroniquement (§3, D-8), un tampon ferait doublon —
+   * deux signatures de la même personne, dont une hors du certificat.
+   */
+  signatureTags?: boolean;
 }
 
 const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
@@ -389,6 +402,17 @@ ${renderOfPagedFooter()}
     <div class="name">${escapeHtml(data.beneficiaireRepresentantNom)}</div>
     <div style="font-size: 9.5pt; color: #475569;">${escapeHtml(data.beneficiaireRaisonSociale)}</div>
     <div style="margin-top: 10px; font-size: 9pt; color: #64748B;">Date et signature :</div>
+    ${
+      data.signatureTags
+        ? renderSignatureAnchor({
+            name: 'Signature client',
+            role: SIGNATURE_ROLES.CLIENT,
+            type: 'signature',
+            width: 200,
+            height: 60,
+          })
+        : ''
+    }
   </div>
   <div class="box">
     <div class="label">Pour l'organisme de formation</div>
@@ -396,6 +420,17 @@ ${renderOfPagedFooter()}
     <div style="font-size: 9.5pt; color: #475569;">${escapeHtml(of.name)}</div>
     <div style="margin-top: 10px; font-size: 9pt; color: #64748B;">Date et signature :</div>
     ${(() => {
+      // Mode e-signature : l'OF signe dans DocuSeal (§3, D-8) — pas de tampon,
+      // sinon deux signatures de Laurent dont une hors certificat.
+      if (data.signatureTags) {
+        return renderSignatureAnchor({
+          name: "Signature organisme de formation",
+          role: SIGNATURE_ROLES.OF,
+          type: 'signature',
+          width: 200,
+          height: 60,
+        });
+      }
       // Laurent 2026-06-04 : "ajoute ma signature sur la convention tu l'as déjà".
       // Pose la signature dirigeant auto. Fallback sur signature-laurent.png
       // si pas de signature-dirigeant.png uploadée pour ce tenant.

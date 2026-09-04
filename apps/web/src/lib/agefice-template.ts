@@ -6,6 +6,8 @@
  * form-fill via pdf-lib (les noms de champs PDF sont déjà mappés ci-dessous).
  */
 
+import { SIGNATURE_ROLES, renderSignatureAnchor } from './signature/text-tags';
+
 export interface AgeficePdfData {
   // Stagiaire (Person + SensitiveData)
   stagiaireNom: string;
@@ -61,6 +63,14 @@ export interface AgeficePdfData {
   ofEmail: string;
   // Date de la demande
   demandeDate: Date;
+
+  /**
+   * Spec signature 2026-09-04 §5 lot B (D-7) — ancres invisibles DocuSeal.
+   * Faux par défaut : le dossier imprimé pour signature manuscrite est
+   * strictement inchangé. Le signataire du dossier AGEFICE est le
+   * stagiaire-dirigeant TNS lui-même (§3).
+   */
+  signatureTags?: boolean;
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -279,11 +289,33 @@ ${STYLES}
     <div class="label">Le Stagiaire — Lu et approuvé</div>
     <strong>${escapeHtml(`${d.stagiairePrenom} ${d.stagiaireNom}`)}</strong>
     <div style="margin-top: 8px; font-size: 8pt;">Date et signature :</div>
+    ${
+      d.signatureTags
+        ? renderSignatureAnchor({
+            name: 'Signature stagiaire',
+            role: SIGNATURE_ROLES.STAGIAIRE,
+            type: 'signature',
+            width: 180,
+            height: 55,
+          })
+        : ''
+    }
   </div>
   <div>
     <div class="label">L'Organisme de formation — Lu et approuvé</div>
     <strong>${escapeHtml(d.ofName)}</strong>
     <div style="margin-top: 8px; font-size: 8pt;">Cachet, date et signature :</div>
+    ${
+      d.signatureTags
+        ? renderSignatureAnchor({
+            name: "Signature organisme de formation",
+            role: SIGNATURE_ROLES.OF,
+            type: 'signature',
+            width: 180,
+            height: 55,
+          })
+        : ''
+    }
   </div>
 </div>
 

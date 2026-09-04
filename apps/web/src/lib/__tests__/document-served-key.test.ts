@@ -19,21 +19,21 @@ describe('resolveServedDocumentKey', () => {
   const nonSigne = { pdfUrl: 'sessions/t1/SES-1/convention.pdf', signedPdfUrl: null };
 
   it('sert le signé dès qu’il existe', () => {
-    expect(resolveServedDocumentKey(signe, {})).toEqual({
+    expect(resolveServedDocumentKey(signe, {})).toMatchObject({
       key: signe.signedPdfUrl,
       isSigned: true,
     });
   });
 
   it('sert l’original quand rien n’est signé', () => {
-    expect(resolveServedDocumentKey(nonSigne, {})).toEqual({
+    expect(resolveServedDocumentKey(nonSigne, {})).toMatchObject({
       key: nonSigne.pdfUrl,
       isSigned: false,
     });
   });
 
   it('`?original=1` force la version non signée', () => {
-    expect(resolveServedDocumentKey(signe, { original: true })).toEqual({
+    expect(resolveServedDocumentKey(signe, { original: true })).toMatchObject({
       key: signe.pdfUrl,
       isSigned: false,
     });

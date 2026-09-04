@@ -28,6 +28,7 @@ le mode d'emploi.**
 - `.planning/specs/2026-09-02-facturation-electronique-pa.md` — le pattern
   port/adaptateur à reproduire pour `SignatureProvider`.
 - **Skill `docuseal-code`** (installée via `npx skills add docusealco/docuseal-agent-skills --skill docuseal-code`) : à charger AVANT d'écrire l'adaptateur — c'est la référence officielle de l'API (submissions, templates, text tags `{{Signature;role=…}}`, `send_email`, webhooks, audit log). La doc en ligne https://www.docuseal.com/docs/api ne sert qu'en complément.
+- **MCP `docuseal`** (`claude mcp add --transport http docuseal https://mcp.docuseal.com/`) : pour OBSERVER et TESTER le compte (créer un template/submission de test, lire un statut, récupérer le certificat) — jamais pour remplacer le code : l'app appelle l'API elle-même avec `DOCUSEAL_API_KEY`, le MCP n'existe pas sur Vercel.
 
 `--etat` : mode lecture seule — tableau A→D (migrations présentes ? drop zone ?
 adaptateur ? webhook ? certificat joint au dossier AGEFICE ?), D-x encore

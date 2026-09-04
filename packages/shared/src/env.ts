@@ -99,6 +99,19 @@ export const sharedEnv = createEnv({
     SMTP_PASS: z.string().optional(),
     SMTP_FROM: z.string().default('QualiOF <noreply@startacademy.fr>'),
 
+    // Signature électronique (spec 2026-09-04 §5 lot B) — DocuSeal.
+    // `dry-run` (défaut) = aucune signature ne part : bac à sable local, comme
+    // MAIL_DRY_RUN pour le mailer. `provider.ts` est fail-closed : en prod,
+    // une config incomplète désactive la fonction plutôt que de retomber en
+    // dry-run silencieux.
+    SIGNATURE_PROVIDER: z.enum(['docuseal', 'dry-run']).default('dry-run'),
+    DOCUSEAL_API_KEY: z.string().optional(),
+    // api.docuseal.com (global) ou api.docuseal.eu (serveur UE — la clé API est
+    // liée à la région du compte, ce n'est pas un simple changement d'URL).
+    DOCUSEAL_BASE_URL: z.string().url().default('https://api.docuseal.com'),
+    // Secret HMAC des webhooks (`whsec_…`). Absent ⇒ tout webhook est rejeté.
+    DOCUSEAL_WEBHOOK_SECRET: z.string().optional(),
+
     // Tenant default
     TENANT_DEFAULT_NAME: z.string().default('Start Academy'),
     TENANT_DEFAULT_NUM_DA: z.string().optional(),
@@ -164,6 +177,10 @@ export const sharedEnv = createEnv({
     SMTP_USER: process.env.SMTP_USER,
     SMTP_PASS: process.env.SMTP_PASS,
     SMTP_FROM: process.env.SMTP_FROM,
+    SIGNATURE_PROVIDER: process.env.SIGNATURE_PROVIDER,
+    DOCUSEAL_API_KEY: process.env.DOCUSEAL_API_KEY,
+    DOCUSEAL_BASE_URL: process.env.DOCUSEAL_BASE_URL,
+    DOCUSEAL_WEBHOOK_SECRET: process.env.DOCUSEAL_WEBHOOK_SECRET,
     TENANT_DEFAULT_NAME: process.env.TENANT_DEFAULT_NAME,
     TENANT_DEFAULT_NUM_DA: process.env.TENANT_DEFAULT_NUM_DA,
     TENANT_DEFAULT_SIRET: process.env.TENANT_DEFAULT_SIRET,
