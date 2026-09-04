@@ -109,7 +109,7 @@ L'ancien préfixe `signed/{tenantId}/…` de `uploadSignedDoc` reste lisible (pa
 
 ## 5. Lots
 
-### Lot A — Zone de dépôt des scans (émargement & tout doc signé à la main) — **à livrer en premier, indépendant de la signature électronique**
+### Lot A — Zone de dépôt des scans (émargement & tout doc signé à la main) — ✅ **LIVRÉ le 04/09/2026** (branche `feat/signature-docs-signes`)
 
 Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 PDF par participant, généré par le closure worker, `entityType = participant`). Le scan revient donc participant par participant.
 
@@ -158,7 +158,7 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 | # | Question | Proposition par défaut |
 |---|---|---|
 | D-1 | Où vit le signataire OF (nom/email/ordre) ? | Champs sur `Tenant` (ou `TenantEmailSettings`), édités dans Paramètres. |
-| D-2 | Que teste réellement le filtre `signed` de la liste des sessions ? | Lire le code, rebrancher sur `Document.status`. |
+| D-2 | ~~Que teste réellement le filtre `signed` de la liste des sessions ?~~ **RÉPONDU 04/09** | Lu : `sessions/page.tsx` filtre sur `TrainingSession.status IN (VALIDATED, IN_PROGRESS, COMPLETED)` — **aucun rapport avec une signature**, le libellé ment. À rebrancher sur `Document.status = 'signed'` en lot D. |
 | D-3 | Ordre de signature : client puis OF, ou parallèle ? | Séquentiel client → OF (l'OF signe après avoir vu que le client a signé). |
 | D-4 | Convention entreprise multi-participants : 1 envoi avec convention + N AGEFICE, ou envois séparés ? | 1 envoi par organisation (moins de mails pour le dirigeant) ; les stagiaires ne signent que leur AGEFICE. |
 | D-5 | Rappels aux signataires | Cron QualiOF J+3 / J+7, catégorie email décochable (DocuSeal a aussi ses relances, mais on garde la main sur les emails). |
@@ -170,3 +170,14 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 ## 7. Ordre de livraison et taille
 
 A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour). Le lot A supprime dès demain le besoin de Drive pour l'émargement ; C supprime Adobe Sign pour ≈ 20 $/mois au lieu de 104 €.
+
+### Statut des lots
+
+| Lot | Statut | Détail |
+|---|---|---|
+| **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
+| **B** | ⬜ à faire | Rien en place : pas de `SignatureRequest`, pas de `lib/signature/`, pas de clé DocuSeal. `.env.example` porte encore les clés `YOUSIGN_*` de la décision écartée — à remplacer ici. |
+| **C** | ⬜ à faire | Pas de `/api/webhooks/`, pas de `sendForSignature`. |
+| **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
+
+**Trouvé en montant la preuve du lot A** (corrigé dans la foulée, commit `fix(qualiopi-matrix)`) : le SQL brut de `markDocStatus`, `uploadSignedDoc` et `deleteDocument` castait des identifiants **TEXT** en `::uuid` → `operator does not exist: text = uuid`. Les trois actions échouaient à chaque appel depuis leur écriture ; les tests unitaires mockaient `$executeRaw` et ne pouvaient pas le voir.
