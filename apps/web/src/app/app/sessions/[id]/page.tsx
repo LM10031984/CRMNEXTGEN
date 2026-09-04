@@ -12,6 +12,7 @@ import { SessionParticipantsList } from '@/components/sessions/session-participa
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
 import { getSessionCompleteness } from '@/lib/sessions/completeness';
+import { horairesAffichage } from '@/lib/sessions/horaires';
 import { PreparationPedagogiqueBlock } from '@/components/sessions/preparation-pedagogique-block';
 import { ClosureFormationBlock } from '@/components/sessions/closure-formation-block';
 import { SessionWorkflowTimeline } from '@/components/sessions/session-workflow-timeline';
@@ -593,6 +594,10 @@ export default async function SessionDetailPage({
 
   const totalSlots = sessionSlotsAgg.length;
   const signedSlots = sessionSlotsAgg.filter((s) => s.attendances.length > 0).length;
+  // Horaires réels de la session — source unique `lib/sessions/horaires.ts`,
+  // la même que celle des feuilles d'émargement et de la convocation. L'écran
+  // doit annoncer ce que les documents produiront, pas la norme maison.
+  const horairesSessionAffichage = horairesAffichage(sessionSlotsAgg);
 
   // Phase 15 Lot 3 — créneaux sérialisés (date ISO) pour l'onglet Agenda (lecture).
   const agendaSlots = sessionSlotsAgg.map((s) => ({
@@ -1399,6 +1404,7 @@ export default async function SessionDetailPage({
                   emargementsGenerated={closureStatus.emargements}
                   totalSlots={totalSlots}
                   signedSlots={signedSlots}
+                  horaires={horairesSessionAffichage}
                   startDateISO={session.startDate.toISOString()}
                   endDateISO={session.endDate.toISOString()}
                 />

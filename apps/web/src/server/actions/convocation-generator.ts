@@ -23,6 +23,7 @@ import {
   type ConvocationData,
 } from '@/lib/convocation-template';
 import { loadOfConfig } from '@/lib/of-config';
+import { resumeHorairesSession } from '@/lib/sessions/horaires';
 
 const MODALITY_LABELS: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -57,6 +58,8 @@ export async function generateConvocationForParticipant(
             include: { person: { select: { firstName: true, lastName: true } } },
             orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
           },
+          // Horaires réels — source unique `lib/sessions/horaires.ts`.
+          slots: { orderBy: [{ date: 'asc' }, { startTime: 'asc' }] },
         },
       },
     },
@@ -96,11 +99,14 @@ export async function generateConvocationForParticipant(
     ? `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName}`.trim()
     : null;
 
-  // Horaires : pas de champ dédié sur Session → valeur générique "9h-17h"
-  // (correspond au pattern programmes Start Academy 8h/jour avec pauses).
-  // TODO : extraire horaires du programme si pattern détectable, sinon
-  // ajouter un champ Session.timingHint éditable.
-  const horaires = '9h00 – 17h00 (pauses café + déjeuner incluses)';
+  // Horaires : les créneaux planifiés de la session font foi (source unique
+  // `lib/sessions/horaires.ts`). Une session hors norme — SES-0111, J1
+  // 11h00-13h00 / 14h30-17h30 — recevait sinon une convocation annonçant
+  // « 9h00 – 17h00 », soit une convocation fausse au sens Qualiopi ind. 9.
+  // Sans créneau (majorité de l'historique) : mention générique d'avant.
+  const horaires =
+    resumeHorairesSession(participant.session.slots) ??
+    '9h00 – 17h00 (pauses café + déjeuner incluses)';
 
   const data: ConvocationData = {
     stagiairePrenom: participant.person.firstName,

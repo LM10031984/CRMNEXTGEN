@@ -104,6 +104,11 @@ export async function processClosureJobPayload(
               include: { person: true },
               orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
             },
+            // Horaires réels par demi-journée — source unique de l'émargement
+            // (cf. `lib/sessions/horaires.ts`). Ce worker est le chemin de
+            // génération du pack en production : sans ce include, la feuille
+            // signée repart sur la norme maison 9h-13h / 14h-18h.
+            slots: { orderBy: [{ date: 'asc' }, { startTime: 'asc' }] },
           },
         },
       },
@@ -152,6 +157,7 @@ export async function processClosureJobPayload(
         const primary = session.trainers.find((t) => t.isPrimary) ?? session.trainers[0];
         return primary ? [`${primary.person.firstName} ${primary.person.lastName}`.trim()] : [];
       })(),
+      sessionSlots: session.slots,
       durationHours: product.durationHours,
       tenantId: payload.tenantId,
       of,

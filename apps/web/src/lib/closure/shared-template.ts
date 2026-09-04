@@ -14,6 +14,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { getOfConfig, type OfConfig } from '@/lib/of-config';
 import { DOC_VERSION } from '@/lib/doc-version';
+import type { SessionSlotLike } from '@/lib/sessions/horaires';
 
 export const BRAND_BLUE = '#00B4E6';
 export const BRAND_DARK = '#00527A';
@@ -310,6 +311,14 @@ export interface ClosureContext {
    */
   sessionLocationCity?: string | null;
   sessionTrainers: string[];
+  /**
+   * Créneaux réellement planifiés (`SessionSlot`), demi-journée par
+   * demi-journée. Source unique des horaires : sans eux, les documents
+   * retombent sur la norme maison 9h-13h / 14h-18h, ce qui est FAUX pour une
+   * session hors moule (cf. `lib/sessions/horaires.ts`). Optionnel : les rendus
+   * anciens et les mocks qui ne le peuplent pas gardent le comportement d'avant.
+   */
+  sessionSlots?: SessionSlotLike[];
   durationHours: number;
   // Métadonnées pour les generators IA (optionnelles — templates statiques les ignorent)
   formationMeta?: ClosureFormationMeta;

@@ -13,6 +13,7 @@
 import {
   type ClosureContext,
   BRAND_DARK,
+  MUTED,
   escapeHtml,
   formatDateFr,
   loadStampDataUrl,
@@ -23,13 +24,22 @@ import {
   wrapHtml,
 } from './shared-template';
 import { isBusinessDayISO } from '@/lib/business-days';
+import {
+  formatJourFr,
+  horairesSession,
+  HORAIRE_APREM_DEFAUT,
+  HORAIRE_MATIN_DEFAUT,
+  type JourneeHoraires,
+} from '@/lib/sessions/horaires';
 
 // Horaires Start Academy figés (Laurent 2026-06-03) : journée standard 8h
-// = 9h00–13h00 (matin) + 14h00–18h00 (après-midi). Convention métier
-// non-négociable. Si une session particulière a des horaires différents,
-// utiliser SessionSlot — non géré V1.
-const HORAIRE_MATIN = '9h00–13h00' as const;
-const HORAIRE_APREM = '14h00–18h00' as const;
+// = 9h00–13h00 (matin) + 14h00–18h00 (après-midi). Convention métier, et
+// FALLBACK uniquement : dès que la session porte des `SessionSlot`, ce sont eux
+// qui font foi (cf. `lib/sessions/horaires.ts`). Une session hors moule —
+// SES-0111, 11 h sur 1,5 jour — sortait sinon une feuille signée avec de faux
+// horaires.
+const HORAIRE_MATIN = HORAIRE_MATIN_DEFAUT;
+const HORAIRE_APREM = HORAIRE_APREM_DEFAUT;
 
 /**
  * Calcule la liste des jours de formation entre startDate et endDate.
@@ -56,9 +66,29 @@ function computeFormationDays(start: Date, end: Date): Date[] {
   return days.length > 0 ? days : [startDay];
 }
 
+/** Cellule de signature vide, hauteur fixe. `horaire` non nul = horaires par jour. */
+function renderCaseSignature(horaire: string | null, horairesParJour: boolean): string {
+  if (!horairesParJour) return '<td style="height: 18mm;"></td>';
+  // Demi-journée non planifiée : surtout PAS de case à signer — un stagiaire ne
+  // doit pas pouvoir émarger une demi-journée qui n'a pas eu lieu.
+  if (!horaire) {
+    return `<td style="height: 18mm; text-align: center; vertical-align: middle; color: ${MUTED}; background: #F8FAFC; font-size: 9pt;">—</td>`;
+  }
+  return `<td style="height: 18mm; vertical-align: top; padding-top: 3px;"><span style="font-size: 8.5pt; color: ${MUTED};">${escapeHtml(horaire.replace('–', ' – '))}</span></td>`;
+}
+
 export function renderEmargementHtml(ctx: ClosureContext): string {
   const stagiaireFull = `${ctx.apprenantPrenom} ${ctx.apprenantNom}`.trim();
-  const days = computeFormationDays(ctx.sessionStartDate, ctx.sessionEndDate);
+  // Les créneaux réels priment sur les dates de session : ils portent les jours
+  // ET les horaires effectivement planifiés. Sans eux → comportement historique
+  // (jours ouvrés déduits des dates, horaires figés en en-tête de colonne).
+  const horaires = horairesSession(ctx.sessionSlots);
+  const days = horaires ? [] : computeFormationDays(ctx.sessionStartDate, ctx.sessionEndDate);
+  // On ne répète l'horaire sur chaque ligne que s'il varie d'un jour à l'autre.
+  // Cas courant (journées identiques) : il reste en en-tête, rendu inchangé.
+  const horairesParJour = horaires !== null && !horaires.uniformes;
+  const enteteMatin = horaires?.matinCommun ?? HORAIRE_MATIN;
+  const enteteAprem = horaires?.apresMidiCommun ?? HORAIRE_APREM;
   const trainer = ctx.sessionTrainers.length > 0 ? ctx.sessionTrainers.join(', ') : 'À renseigner';
 
   // Bloc certification Qualiopi (Laurent 2026-06-16) : « Certifié exact par
@@ -80,17 +110,23 @@ export function renderEmargementHtml(ctx: ClosureContext): string {
     ctx.sessionLocationCity ?? ctx.sessionLocation ?? '⚠ LIEU À RENSEIGNER';
   const dateCertif = formatDateFr(ctx.sessionEndDate);
 
-  const rows = days
-    .map((d) => {
-      const dateLabel = formatDateFr(d);
-      return `
+  const renderRow = (dateLabel: string, jour: JourneeHoraires | null): string => {
+    // Journée d'un seul tenant (`halfDay='full'`) : une case unique sur les deux
+    // colonnes, sinon on ferait signer deux fois une journée qui n'a pas de coupure.
+    const cases = jour?.journeeComplete
+      ? `<td colspan="2" style="height: 18mm; vertical-align: top; padding-top: 3px;"><span style="font-size: 8.5pt; color: ${MUTED};">${escapeHtml(jour.journeeComplete.replace('–', ' – '))}</span></td>`
+      : `${renderCaseSignature(jour?.matin ?? null, horairesParJour)}
+  ${renderCaseSignature(jour?.apresMidi ?? null, horairesParJour)}`;
+    return `
 <tr>
   <td style="text-align: center; font-weight: 600; color: ${BRAND_DARK}; width: 38mm; vertical-align: middle; font-size: 9.5pt;">${escapeHtml(dateLabel)}</td>
-  <td style="height: 18mm;"></td>
-  <td style="height: 18mm;"></td>
+  ${cases}
 </tr>`;
-    })
-    .join('');
+  };
+
+  const rows = horaires
+    ? horaires.jours.map((j) => renderRow(formatJourFr(j.iso), j)).join('')
+    : days.map((d) => renderRow(formatDateFr(d), null)).join('');
 
   const body = `
 ${renderBrandHeader()}
@@ -110,8 +146,8 @@ ${renderBrandHeader()}
     <thead>
       <tr>
         <th style="text-align: center; vertical-align: middle;">Date</th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Matin · ${HORAIRE_MATIN}</span></th>
-        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Après-midi · ${HORAIRE_APREM}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Matin${horairesParJour ? '' : ` · ${enteteMatin}`}</span></th>
+        <th style="text-align: center;">Signature stagiaire<br/><span style="font-weight: 500; font-size: 9pt; color: #FFFFFF;">Après-midi${horairesParJour ? '' : ` · ${enteteAprem}`}</span></th>
       </tr>
     </thead>
     <tbody>

@@ -38,6 +38,10 @@ export async function buildClosureContextForParticipant(
             // Primary d'abord pour qu'il apparaisse en tête, puis ordre stable
             orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
           },
+          // Horaires réels par demi-journée — source unique de l'émargement
+          // (cf. `lib/sessions/horaires.ts`). Sans créneau, les templates
+          // retombent sur la norme maison 9h-13h / 14h-18h.
+          slots: { orderBy: [{ date: 'asc' }, { startTime: 'asc' }] },
         },
       },
     },
@@ -82,6 +86,7 @@ export async function buildClosureContextForParticipant(
       const primary = session.trainers.find((t) => t.isPrimary) ?? session.trainers[0];
       return primary ? [`${primary.person.firstName} ${primary.person.lastName}`.trim()] : [];
     })(),
+    sessionSlots: session.slots,
     durationHours: product.durationHours,
     tenantId,
     formationMeta: {
