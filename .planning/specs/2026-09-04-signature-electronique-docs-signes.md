@@ -123,6 +123,27 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 
 ### Lot B — Modèle + adaptateur DocuSeal (port/adaptateur, comme la facturation électronique)
 
+> **Écarts constatés à l'implémentation (04/09/2026)** — la spec est corrigée ici :
+> 1. **§4.1 `signatureRequestId @unique` est retiré.** `@unique` sur la clé étrangère
+>    force du 1-1 et rend `documents Document[]` (§4.2) impossible à compiler. C'est
+>    « plusieurs documents par envoi » qui porte le besoin (D-4 : convention + N AGEFICE).
+> 2. **§4.2 `provider @default("yousign")` devient `"docuseal"`** (décision O-2).
+> 3. **`POST /submissions/pdf` répond un OBJET**, pas un tableau de submitters : `{ id,
+>    submitters, fields, status }`. L'exemple de la spec OpenAPI publiée décrit la forme
+>    de `POST /submissions` (depuis un Template). Vérifié contre l'API réelle.
+> 4. **`GET /submissions/{id}` ne renvoie pas `embed_src`**, seulement `slug` : le lien de
+>    signature est reconstruit (`https://docuseal.com/s/{slug}`), sinon la relance du lot C
+>    n'a aucun lien à envoyer (D-9).
+> 5. **Ancres optionnelles** (`signatureTags`, faux par défaut) et non systématiques : la
+>    convention et l'attestation d'assiduité **tamponnent la signature de l'OF**. En mode
+>    e-signature le tampon est retiré, sinon Laurent signerait deux fois la même pièce dont
+>    une fois hors certificat. Le lot C génère donc le PDF à signer avec `signatureTags: true`.
+> 6. **Ajout `signatureFieldCount`** sur le retour de `createRequest` : si DocuSeal ne
+>    reconnaît aucune ancre, l'envoi part quand même et personne n'a rien à signer —
+>    échec silencieux. Le lot C doit refuser un envoi à zéro champ.
+> 7. **`/api/documents/[id]` sert `signedPdfUrl ?? pdfUrl`** (règle métier n°2) : c'était
+>    une boucle ouverte du lot A, qui écrivait `signedPdfUrl` sans que la route ne le serve.
+
 - Migration §4.1 / §4.2 (`SignatureRequest.provider = "docuseal"`, `providerId` = id de submission DocuSeal).
 - Dépendance : aucune lib DocuSeal obligatoire (REST simple, `fetch`). `packages/shared` : `TenantSignatory` (nom, email, ordre) dans les paramètres tenant — **D-1**.
 - `apps/web/src/lib/signature/port.ts` : interface `SignatureProvider { createRequest, cancel, remind, downloadSignedDocument, downloadAuditTrail, verifyWebhook, parseEvent }`.
@@ -176,7 +197,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 | Lot | Statut | Détail |
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
-| **B** | ⬜ à faire | Rien en place : pas de `SignatureRequest`, pas de `lib/signature/`, pas de clé DocuSeal. `.env.example` porte encore les clés `YOUSIGN_*` de la décision écartée — à remplacer ici. |
+| **B** | ✅ **livré 04/09/2026** (reste la signature humaine du test d'acceptation) | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 gabarits · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Prouvé en sandbox** : submission 10869675, 2 champs signature créés depuis les ancres, `send_email=false` et `sent_at=jamais`. |
 | **C** | ⬜ à faire | Pas de `/api/webhooks/`, pas de `sendForSignature`. |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 

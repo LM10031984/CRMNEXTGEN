@@ -72,6 +72,15 @@ export interface CreateSignatureRequestResult {
   status: SignatureStatus;
   signers: ProviderSigner[];
   expiresAt: Date | null;
+  /**
+   * Nombre de champs de signature que le prestataire a réellement créés à
+   * partir des ancres du PDF (D-7).
+   *
+   * Zéro = l'envoi est parti mais personne n'a rien à signer : l'échec des
+   * ancres est SILENCIEUX côté prestataire. L'appelant (lot C) doit refuser un
+   * envoi à zéro champ plutôt que d'attendre une signature qui ne viendra pas.
+   */
+  signatureFieldCount: number;
 }
 
 export interface SignatureRequestState {

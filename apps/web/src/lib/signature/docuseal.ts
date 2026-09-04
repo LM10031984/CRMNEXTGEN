@@ -73,8 +73,19 @@ function date(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function mapSigner(raw: unknown): ProviderSigner {
+/**
+ * Host des liens de signature, déduit du host d'API : `api.docuseal.com` →
+ * `docuseal.com`, `api.docuseal.eu` → `docuseal.eu`. Nécessaire parce que
+ * `GET /submissions/{id}` ne renvoie PAS `embed_src` (relevé le 04/09/2026),
+ * seulement `slug` — et sans lien, le lot C n'a rien à envoyer (D-9).
+ */
+function signHost(baseUrl: string): string {
+  return baseUrl.replace(/\/\/api\./, '//');
+}
+
+function mapSigner(raw: unknown, baseUrl: string): ProviderSigner {
   const s = asRecord(raw);
+  const slug = str(s.slug);
   return {
     role: str(s.role) ?? '',
     name: str(s.name) ?? '',
@@ -82,7 +93,7 @@ function mapSigner(raw: unknown): ProviderSigner {
     providerSignerId: str(s.id) ?? '',
     status: str(s.status) ?? 'sent',
     signedAt: date(s.completed_at),
-    signUrl: str(s.embed_src),
+    signUrl: str(s.embed_src) ?? (slug ? `${signHost(baseUrl)}/s/${slug}` : null),
   };
 }
 
@@ -132,7 +143,9 @@ export function createDocusealProvider(config: DocusealConfig): SignatureProvide
   }
 
   function toState(sub: Json): SignatureRequestState {
-    const signers = (Array.isArray(sub.submitters) ? sub.submitters : []).map(mapSigner);
+    const signers = (Array.isArray(sub.submitters) ? sub.submitters : []).map((x) =>
+      mapSigner(x, baseUrl),
+    );
     const base = STATUS_MAP[str(sub.status) ?? ''] ?? 'SENT';
     const documents = Array.isArray(sub.documents) ? sub.documents : [];
 
@@ -181,20 +194,37 @@ export function createDocusealProvider(config: DocusealConfig): SignatureProvide
 
       const res = await call('/submissions/pdf', { method: 'POST', body: JSON.stringify(body) });
 
-      // `POST /submissions/pdf` répond par la LISTE des submitters créés ;
-      // l'id de l'envoi se lit sur n'importe lequel (`submission_id`).
-      const rows = Array.isArray(res) ? res : [];
-      const signers = rows.map(mapSigner);
-      const providerId = str(asRecord(rows[0]).submission_id);
+      // Forme RÉELLE (relevée le 04/09/2026) : `POST /submissions/pdf` répond
+      // un OBJET `{ id, submitters, fields, status }`. L'exemple de la spec
+      // OpenAPI publiée laisse croire à un tableau — c'est la forme de
+      // `POST /submissions` (depuis un Template). On accepte les deux.
+      const obj = asRecord(res);
+      const rows = Array.isArray(res)
+        ? res
+        : Array.isArray(obj.submitters)
+          ? obj.submitters
+          : [];
+      const signers = rows.map((x) => mapSigner(x, baseUrl));
+
+      const providerId = str(obj.id) ?? str(asRecord(rows[0]).submission_id);
       if (!providerId) {
-        throw new Error('DocuSeal : réponse sans submission_id — envoi non confirmé');
+        throw new Error('DocuSeal : réponse sans identifiant de submission — envoi non confirmé');
       }
+
+      // Les ancres ont-elles produit des champs ? Un envoi à zéro champ
+      // signature part sans que personne n'ait rien à signer : l'appelant doit
+      // pouvoir le refuser (cf. `signatureFieldCount` sur le port).
+      const fields = Array.isArray(obj.fields) ? obj.fields : [];
+      const signatureFieldCount = fields.filter(
+        (f) => str(asRecord(f).type) === 'signature',
+      ).length;
 
       return {
         providerId,
-        status: refineStatus('SENT', signers),
+        status: refineStatus(STATUS_MAP[str(obj.status) ?? ''] ?? 'SENT', signers),
         signers,
         expiresAt: input.expiresAt ?? null,
+        signatureFieldCount,
       };
     },
 

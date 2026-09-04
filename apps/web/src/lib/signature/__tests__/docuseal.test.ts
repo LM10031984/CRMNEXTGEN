@@ -52,34 +52,68 @@ function jsonOk(body: unknown) {
   };
 }
 
-const CREATE_RESPONSE = [
-  {
-    id: 501,
-    submission_id: 42,
-    uuid: 'uuid-client',
-    email: 'dirigeant@agence.fr',
-    name: 'Marie Dupont',
-    role: 'Client',
-    slug: 'pAMimKcyrLjqVt',
-    status: 'sent',
-    external_id: 'signer-client',
-    completed_at: null,
-    embed_src: 'https://docuseal.test/s/pAMimKcyrLjqVt',
-  },
-  {
-    id: 502,
-    submission_id: 42,
-    uuid: 'uuid-of',
-    email: 'laurent@start-academy.fr',
-    name: 'Laurent MARX',
-    role: 'Organisme de formation',
-    slug: 'zZz9',
-    status: 'awaiting',
-    external_id: 'signer-of',
-    completed_at: null,
-    embed_src: 'https://docuseal.test/s/zZz9',
-  },
-];
+/**
+ * Réponse RÉELLE de `POST /submissions/pdf`, relevée le 04/09/2026 contre
+ * api.docuseal.com. À ne pas « simplifier » : l'exemple de la spec OpenAPI
+ * publiée laisse croire à un tableau de submitters, alors que l'API répond un
+ * OBJET (`id` + `submitters` + `fields`). Un mock inventé ici avait laissé
+ * passer un adaptateur qui échouait dès le premier appel réel.
+ */
+const CREATE_RESPONSE = {
+  id: 42,
+  name: 'SES-0042 — Convention Agence Dupont',
+  status: 'pending',
+  submitters_order: 'preserved',
+  submitters: [
+    {
+      id: 501,
+      submission_id: 42,
+      uuid: 'uuid-client',
+      email: 'dirigeant@agence.fr',
+      name: 'Marie Dupont',
+      role: 'Client',
+      slug: 'pAMimKcyrLjqVt',
+      status: 'awaiting',
+      external_id: 'sr-uuid-1:Client',
+      completed_at: null,
+      preferences: { send_email: false, send_sms: false },
+      embed_src: 'https://docuseal.test/s/pAMimKcyrLjqVt',
+    },
+    {
+      id: 502,
+      submission_id: 42,
+      uuid: 'uuid-of',
+      email: 'laurent@start-academy.fr',
+      name: 'Laurent MARX',
+      role: 'Organisme de formation',
+      slug: 'zZz9',
+      status: 'awaiting',
+      external_id: 'sr-uuid-1:Organisme de formation',
+      completed_at: null,
+      preferences: { send_email: false, send_sms: false },
+      embed_src: 'https://docuseal.test/s/zZz9',
+    },
+  ],
+  // Les champs créés à partir des ancres `{{…}}` du PDF (D-7).
+  fields: [
+    {
+      name: 'Signature client',
+      type: 'signature',
+      required: true,
+      uuid: 'f-client',
+      submitter_uuid: 'uuid-client',
+      areas: [{ page: 4, x: 0.1, y: 0.22, w: 0.33, h: 0.07 }],
+    },
+    {
+      name: 'Signature organisme de formation',
+      type: 'signature',
+      required: true,
+      uuid: 'f-of',
+      submitter_uuid: 'uuid-of',
+      areas: [{ page: 4, x: 0.55, y: 0.22, w: 0.33, h: 0.07 }],
+    },
+  ],
+};
 
 const CREATE_INPUT = {
   name: 'SES-0042 — Convention Agence Dupont',
@@ -162,6 +196,17 @@ describe('DocuSeal — createRequest', () => {
     ]);
   });
 
+  it('compte les champs signature créés par les ancres (D-7)', async () => {
+    const res = await provider().createRequest(CREATE_INPUT);
+    expect(res.signatureFieldCount).toBe(2);
+  });
+
+  it('un PDF sans ancre reconnue rend 0 champ — l’appelant doit pouvoir refuser', async () => {
+    fetchMock.mockResolvedValue(jsonOk({ ...CREATE_RESPONSE, fields: [] }));
+    const res = await provider().createRequest(CREATE_INPUT);
+    expect(res.signatureFieldCount).toBe(0);
+  });
+
   it('échoue bruyamment sur une réponse d’erreur, sans recracher la clé API', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -207,6 +252,9 @@ describe('DocuSeal — getRequest / téléchargements', () => {
     audit_log_url: 'https://docuseal.test/blobs/audit.pdf',
     combined_document_url: 'https://docuseal.test/blobs/combined.pdf',
     documents: [{ name: 'convention', url: 'https://docuseal.test/blobs/convention.pdf' }],
+    // Relevé réel : GET /submissions/{id} ne renvoie PAS `embed_src`, seulement
+    // `slug`. Le lien de signature doit donc être reconstruit — sinon le lot C
+    // n'a rien à mettre dans son email de relance.
     submitters: [
       {
         id: 501,
@@ -214,8 +262,8 @@ describe('DocuSeal — getRequest / téléchargements', () => {
         name: 'Marie Dupont',
         email: 'dirigeant@agence.fr',
         status: 'completed',
+        slug: 'pAMimKcyrLjqVt',
         completed_at: '2026-09-10T09:10:00.000Z',
-        embed_src: 'https://docuseal.test/s/pAMimKcyrLjqVt',
       },
     ],
   };
@@ -231,6 +279,12 @@ describe('DocuSeal — getRequest / téléchargements', () => {
     expect(state.completedAt?.toISOString()).toBe('2026-09-10T09:12:00.000Z');
     expect(state.auditTrailUrl).toBe('https://docuseal.test/blobs/audit.pdf');
     expect(state.documentUrls).toEqual(['https://docuseal.test/blobs/convention.pdf']);
+  });
+
+  it('reconstruit le lien de signature depuis le slug quand embed_src manque', async () => {
+    fetchMock.mockResolvedValue(jsonOk(SUBMISSION));
+    const state = await provider().getRequest('42');
+    expect(state.signers[0]!.signUrl).toBe('https://docuseal.test/s/pAMimKcyrLjqVt');
   });
 
   it.each([

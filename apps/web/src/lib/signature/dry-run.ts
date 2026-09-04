@@ -110,7 +110,16 @@ export function createDryRunProvider(): DryRunSignatureProvider {
         expiresAt: input.expiresAt ?? null,
       });
 
-      return { providerId, status: 'SENT', signers, expiresAt: input.expiresAt ?? null };
+      return {
+        providerId,
+        status: 'SENT',
+        signers,
+        expiresAt: input.expiresAt ?? null,
+        // En dry-run on ne lit pas le PDF : on annonce un champ par signataire,
+        // ce qui laisse passer les gardes de l'appelant sans rien prétendre
+        // sur les ancres (c'est le smoke sandbox qui les prouve).
+        signatureFieldCount: signers.length,
+      };
     },
 
     async getRequest(providerId: string): Promise<SignatureRequestState> {
