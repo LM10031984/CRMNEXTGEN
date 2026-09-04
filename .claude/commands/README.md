@@ -10,7 +10,9 @@ Taper `/` dans Claude Code les propose en autocomplétion.
 | `/coherence-docs SES-0107` | Trouver les PDF qui mentent parce que la donnée a bougé après leur génération |
 | `/financeur FIFPL` | Brancher un nouveau financeur au même niveau de service que l'AGEFICE |
 | `/quick <tâche>` | Petite évolution en TDD avec les garde-fous du projet (tenantId, AuditLog, gates) |
+| `/chaine-diagnostic lot A` | Construire la chaîne diagnostic → proposition → devis (spec du 01/09/2026, maquettes 17 p + 3 p) lot par lot ; `suite` pour le prochain lot, `--etat` pour l’avancement |
 | `/livraison` | Avant de commiter — règle anti-collision de snapshot + les trois gates |
+| `/facture-electronique lot 1` | Raccorder la facturation à une Plateforme Agréée (Factur-X + API, spec du 02/09/2026) lot par lot ; `--etat` pour un état des lieux en lecture seule |
 | `/prod` | Point de situation Vercel / Supabase / Railway / coûts avant toute intervention |
 
 Les commandes encodent des règles métier réelles (règle payeur personne morale,

@@ -92,6 +92,18 @@ export const sharedEnv = createEnv({
     SESSION_LIFETIME: z.coerce.number().default(2_592_000),
 
     // SMTP
+    // ── Facturation électronique (spec 02/09/2026, doc PA lue le 03/09) ──
+    // Fail-closed comme le mailer : sans identifiants, ou avec
+    // EINVOICE_DRY_RUN=1, l'adaptateur mock prend la main et RIEN ne part vers
+    // une plateforme d'État. Sortir de cet état demande une décision explicite.
+    EINVOICE_PROVIDER: z.enum(['SUPERPDP', 'IOPOLE', 'MOCK']).default('MOCK'),
+    EINVOICE_DRY_RUN: z.string().optional(),
+    // OAuth 2.1 client_credentials — PAS une clé d'API : le jeton expire en
+    // 30 minutes et se renouvelle dans l'adaptateur. Un jeu d'identifiants par
+    // environnement (bac à sable / production = deux applications distinctes).
+    SUPERPDP_CLIENT_ID: z.string().optional(),
+    SUPERPDP_CLIENT_SECRET: z.string().optional(),
+    SUPERPDP_BASE_URL: z.string().url().default('https://api.superpdp.tech'),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().optional(),
     SMTP_SECURE: z.coerce.boolean().optional(),
@@ -158,6 +170,11 @@ export const sharedEnv = createEnv({
     QUALIOPI_GEN_TOKEN: process.env.QUALIOPI_GEN_TOKEN,
     AUTH_SECRET: process.env.AUTH_SECRET,
     SESSION_LIFETIME: process.env.SESSION_LIFETIME,
+    EINVOICE_PROVIDER: process.env.EINVOICE_PROVIDER,
+    EINVOICE_DRY_RUN: process.env.EINVOICE_DRY_RUN,
+    SUPERPDP_CLIENT_ID: process.env.SUPERPDP_CLIENT_ID,
+    SUPERPDP_CLIENT_SECRET: process.env.SUPERPDP_CLIENT_SECRET,
+    SUPERPDP_BASE_URL: process.env.SUPERPDP_BASE_URL,
     SMTP_HOST: process.env.SMTP_HOST,
     SMTP_PORT: process.env.SMTP_PORT,
     SMTP_SECURE: process.env.SMTP_SECURE,

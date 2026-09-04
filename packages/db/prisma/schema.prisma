@@ -61,6 +61,25 @@ model Tenant {
   autoAssignLeads            Boolean           @default(true)
   notifyOnLeadAssignEmail    Boolean           @default(true)
   notifyOnLeadAssignBell     Boolean           @default(true)
+  // ── Facturation électronique (spec 02/09/2026) ───────────────────────
+  /// "SUPERPDP" | "IOPOLE" | "MOCK". Null = aucune plateforme raccordée.
+  einvoiceProvider           String?
+  /// Feature flag : tant qu'il est faux, RIEN n'est visible dans l'UI et
+  /// rien ne part vers une plateforme. On n'expose pas une promesse non tenue.
+  einvoiceEnabled            Boolean           @default(false)
+  /// SIREN émetteur (dérivable du SIRET, mais figé explicitement : c'est
+  /// l'identifiant d'annuaire, il ne se déduit pas au moment de l'envoi).
+  siren                      String?
+  /// Mention d'exonération portée par chaque ligne de facture.
+  /// Défaut applicatif : MENTION_TVA de `lib/catalogue-constants.ts`.
+  vatExemptionText           String?           @db.Text
+  /// Curseur de synchronisation : plus grand `invoice_event.id` déjà lu chez
+  /// la plateforme. Super PDP n'expose AUCUN webhook (doc lue le 03/09) — le
+  /// suivi se fait par polling `starting_after_id`, et la séquence est
+  /// garantie strictement croissante : repartir de ce maximum ne peut pas
+  /// laisser de trou. Stocké en texte parce que les ids sont des int64, que
+  /// `Number` ne représente pas fidèlement au-delà de 2^53.
+  einvoiceLastEventId        String?
   users                      User[]
   notifications              Notification[]
   regulatoryWatches          RegulatoryWatch[]
@@ -328,39 +347,39 @@ enum Modality {
 }
 
 model TrainingProduct {
-  id                 String            @id @default(uuid())
-  tenantId           String
-  code               String
-  title              String
-  durationHours      Int
-  modality           Modality
-  prerequisites      String?
-  targetAudience     String?
-  objectives         Json // string[]
-  programMd          String
+  id                   String            @id @default(uuid())
+  tenantId             String
+  code                 String
+  title                String
+  durationHours        Int
+  modality             Modality
+  prerequisites        String?
+  targetAudience       String?
+  objectives           Json // string[]
+  programMd            String
   // quick 260618-rkj — Corps figé du déroulé pédagogique (jours[]) — identique sur
   // toutes les sessions du produit. Seul le bilan/rapport formateur reste par session.
   // NB prod : poussé via `prisma db push` en local/sandbox ; un `prisma migrate deploy`
   // formel sera requis avant déploiement cloud (cf. mémoire feedback_prisma_migrate_deploy).
-  derouleJson        Json?
-  pedagogicalMethods String?
-  evaluationMethods  String?
-  accessibility      String?
-  trainerProfile     String?
-  pedagogicalSupport String?
-  accessConditions   String?
-  priceHT            Decimal           @default(0) @db.Decimal(10, 2)
-  vatRate            Decimal           @default(0) @db.Decimal(5, 2)
-  groupFlatPrice     Decimal?          @db.Decimal(10, 2) // Tarif_forfait_groupe
-  theme              String? // "Acquisition", "Stratégie", "Management", "IA", etc.
-  version            Int               @default(1)
-  isActive           Boolean           @default(true)
-  excludedFromBpf    Boolean           @default(false)
-  bpfSpecialty       String?
-  bpfCategory        String?
-  bpfLevel           String?
-  capacityMin        Int               @default(1)
-  capacityMax        Int               @default(12)
+  derouleJson          Json?
+  pedagogicalMethods   String?
+  evaluationMethods    String?
+  accessibility        String?
+  trainerProfile       String?
+  pedagogicalSupport   String?
+  accessConditions     String?
+  priceHT              Decimal           @default(0) @db.Decimal(10, 2)
+  vatRate              Decimal           @default(0) @db.Decimal(5, 2)
+  groupFlatPrice       Decimal?          @db.Decimal(10, 2) // Tarif_forfait_groupe
+  theme                String? // "Acquisition", "Stratégie", "Management", "IA", etc.
+  version              Int               @default(1)
+  isActive             Boolean           @default(true)
+  excludedFromBpf      Boolean           @default(false)
+  bpfSpecialty         String?
+  bpfCategory          String?
+  bpfLevel             String?
+  capacityMin          Int               @default(1)
+  capacityMax          Int               @default(12)
   // ── Conformité Cerfa AGEFICE (Section C/D) ─────────────────────────────
   // Valeurs unions définies dans `lib/agefice-form-fill.ts` (FormationType,
   // FormationNiveau, FormationCertif, AttestationType, EvaluationType).
@@ -383,12 +402,12 @@ model TrainingProduct {
   // contenu est considéré "Brouillon IA" → bannière dans le tab Programme,
   // blocker `product_ai_unreviewed` dans getSessionCompleteness, action
   // "Valider" (set null) ou "Réviser" (édition manuelle = set null aussi).
-  aiDraftedAt        DateTime?
-  modules            TrainingModule[]
-  trainingSessions   TrainingSession[]
-  leads              Lead[]
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  aiDraftedAt          DateTime?
+  modules              TrainingModule[]
+  trainingSessions     TrainingSession[]
+  leads                Lead[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive])
@@ -425,38 +444,38 @@ enum SessionStatus {
 }
 
 model TrainingSession {
-  id                    String               @id @default(uuid())
+  id                    String                @id @default(uuid())
   tenantId              String
   productId             String
-  product               TrainingProduct      @relation(fields: [productId], references: [id])
-  code                  String               @unique
+  product               TrainingProduct       @relation(fields: [productId], references: [id])
+  code                  String                @unique
   name                  String? // Nom session = "Cycle complet de prospection (87h) - 21/10/2024 -"
-  status                SessionStatus        @default(DRAFT)
+  status                SessionStatus         @default(DRAFT)
   startDate             DateTime
   endDate               DateTime
   locationId            String?
-  location              Location?            @relation(fields: [locationId], references: [id])
+  location              Location?             @relation(fields: [locationId], references: [id])
   modality              Modality
-  capacityMin           Int                  @default(1)
-  capacityMax           Int                  @default(12)
-  language              String               @default("fr")
+  capacityMin           Int                   @default(1)
+  capacityMax           Int                   @default(12)
+  language              String                @default("fr")
   internalNotes         String?
   // Tarification spécifique session (sinon hérite produit)
-  pricePerLearner       Decimal?             @db.Decimal(10, 2)
+  pricePerLearner       Decimal?              @db.Decimal(10, 2)
   // Hébergement formateur (utilisé dans la check-list C4.i17 Qualiopi).
   // Saisi à la création de session ou lors du "Préparer la formation".
-  needsTrainerLodging   Boolean              @default(false)
+  needsTrainerLodging   Boolean               @default(false)
   trainerLodgingPlace   String?
   trainerLodgingDates   String? // Format libre "Du JJ/MM au JJ/MM" — saisi à la main
   // Accessibilité (PSH) pour la check-list — détail + adaptations à prévoir
-  hasDisabledLearner    Boolean              @default(false)
+  hasDisabledLearner    Boolean               @default(false)
   disabilityAdaptations String?
   // Suivi commercial
-  preEnrollmentsFromMls Int                  @default(0) // NB_pre_inscription Airtable
+  preEnrollmentsFromMls Int                   @default(0) // NB_pre_inscription Airtable
   // Lien public d'inscription (spec 2026-08-28). publicToken null = jamais
   // ouvert ; publicFormClosedAt non null = fermé. Régénérer le jeton invalide
   // l'ancien lien immédiatement.
-  publicToken           String?              @unique
+  publicToken           String?               @unique
   publicFormOpenedAt    DateTime?
   publicFormClosedAt    DateTime?
   // Relations
@@ -470,8 +489,8 @@ model TrainingSession {
   tasks                 Task[]
   comments              InternalComment[]
   calendarSyncs         SessionCalendarSync[]
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, startDate])
@@ -730,45 +749,45 @@ enum LeadPriority {
 }
 
 model Lead {
-  id                  String            @id @default(uuid())
-  tenantId            String
-  source              String? // "Formulaire", "Linkedin", "Salon", "Recommandation", etc.
-  status              LeadStatus        @default(NEW)
-  priority            LeadPriority      @default(MEDIUM)
+  id                    String                 @id @default(uuid())
+  tenantId              String
+  source                String? // "Formulaire", "Linkedin", "Salon", "Recommandation", etc.
+  status                LeadStatus             @default(NEW)
+  priority              LeadPriority           @default(MEDIUM)
   // Identité du prospect (peut être Person existant OU saisie libre)
-  personId            String?
-  person              Person?           @relation("LeadPerson", fields: [personId], references: [id])
-  organizationId      String?
-  organization        Organization?     @relation("LeadOrg", fields: [organizationId], references: [id])
-  firstName           String?
-  lastName            String?
-  email               String?
-  phone               String?
+  personId              String?
+  person                Person?                @relation("LeadPerson", fields: [personId], references: [id])
+  organizationId        String?
+  organization          Organization?          @relation("LeadOrg", fields: [organizationId], references: [id])
+  firstName             String?
+  lastName              String?
+  email                 String?
+  phone                 String?
   // Intérêt
-  interestedProductId String?
-  interestedProduct   TrainingProduct?  @relation(fields: [interestedProductId], references: [id])
-  desiredSessionId    String?
-  desiredSession      TrainingSession?  @relation(fields: [desiredSessionId], references: [id])
+  interestedProductId   String?
+  interestedProduct     TrainingProduct?       @relation(fields: [interestedProductId], references: [id])
+  desiredSessionId      String?
+  desiredSession        TrainingSession?       @relation(fields: [desiredSessionId], references: [id])
   // Suivi commercial
-  ownerUserId         String?
-  owner               User?             @relation(fields: [ownerUserId], references: [id])
-  lastActionAt        DateTime?
-  lastAction          String?
-  nextActionAt        DateTime?
-  nextAction          String?
-  reminderTemplate    String? // "Formule_relance" Airtable
-  validatedAt         DateTime?
-  notes               String?
+  ownerUserId           String?
+  owner                 User?                  @relation(fields: [ownerUserId], references: [id])
+  lastActionAt          DateTime?
+  lastAction            String?
+  nextActionAt          DateTime?
+  nextAction            String?
+  reminderTemplate      String? // "Formule_relance" Airtable
+  validatedAt           DateTime?
+  notes                 String?
   // Phase 9 — Date de transition vers WON (LEAD-02 KPI 2/4).
   // Set automatiquement par `updateLeadStatus` quand status passe à WON ; null sinon.
-  wonAt               DateTime?
+  wonAt                 DateTime?
   // Relations
-  actions             LeadAction[]
+  actions               LeadAction[]
   diagnosticSubmissions DiagnosticSubmission[]
-  tasks               Task[]
-  comments            InternalComment[]
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  tasks                 Task[]
+  comments              InternalComment[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, ownerUserId])
@@ -803,45 +822,63 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id                String              @id @default(uuid())
-  tenantId          String
-  number            String              @unique // numérotation continue (FAC-NNNNNN)
-  status            InvoiceStatus       @default(DRAFT)
+  id                  String                 @id @default(uuid())
+  tenantId            String
+  number              String                 @unique // numérotation continue (FAC-NNNNNN)
+  status              InvoiceStatus          @default(DRAFT)
   // Phase 11 — Avoirs (D-01). Self-FK : un avoir pointe vers la facture annulée.
-  originalInvoiceId String?
-  originalInvoice   Invoice?            @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
-  creditNotes       Invoice[]           @relation("InvoiceToCreditNote")
+  originalInvoiceId   String?
+  originalInvoice     Invoice?               @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  creditNotes         Invoice[]              @relation("InvoiceToCreditNote")
   // Phase 11 — Tracking relances (D-13b). Idempotence + auto-stop.
-  lastReminderAt    DateTime?
-  reminderCount     Int                 @default(0)
+  lastReminderAt      DateTime?
+  reminderCount       Int                    @default(0)
   // Liens métier
-  participantId     String?
-  participant       SessionParticipant? @relation(fields: [participantId], references: [id])
-  participantIds    Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
-  sessionId         String? // session dont sont issus les participants (pour facture groupée)
-  payerOrgId        String?
-  payerOrg          Organization?       @relation(fields: [payerOrgId], references: [id])
-  payerContactId    String? // optionnel : un Contact spécifique
-  billingProfileId  String?
-  billingProfile    BillingProfile?     @relation(fields: [billingProfileId], references: [id])
+  participantId       String?
+  participant         SessionParticipant?    @relation(fields: [participantId], references: [id])
+  participantIds      Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
+  sessionId           String? // session dont sont issus les participants (pour facture groupée)
+  payerOrgId          String?
+  payerOrg            Organization?          @relation(fields: [payerOrgId], references: [id])
+  payerContactId      String? // optionnel : un Contact spécifique
+  billingProfileId    String?
+  billingProfile      BillingProfile?        @relation(fields: [billingProfileId], references: [id])
   // Montants
-  amountHT          Decimal             @default(0) @db.Decimal(10, 2)
-  vatRate           Decimal             @default(0) @db.Decimal(5, 2)
-  amountTTC         Decimal             @default(0) @db.Decimal(10, 2)
-  amountPaid        Decimal             @default(0) @db.Decimal(10, 2)
+  amountHT            Decimal                @default(0) @db.Decimal(10, 2)
+  vatRate             Decimal                @default(0) @db.Decimal(5, 2)
+  amountTTC           Decimal                @default(0) @db.Decimal(10, 2)
+  amountPaid          Decimal                @default(0) @db.Decimal(10, 2)
   // Dates
-  issueDate         DateTime?
-  dueDate           DateTime?
-  paidAt            DateTime?
+  issueDate           DateTime?
+  dueDate             DateTime?
+  paidAt              DateTime?
   // PDF
-  pdfUrl            String?
-  hashSha256        String?
+  pdfUrl              String?
+  hashSha256          String?
   // Notes
-  notes             String?
+  notes               String?
+  // ── Facturation électronique (spec 02/09/2026, lot 1) ──────────────────
+  /// Adresse de livraison quand elle diffère de l'adresse de facturation —
+  /// mention devenue obligatoire par la réforme. Pour un OF : le lieu de
+  /// formation, qui n'est presque jamais le siège du payeur.
+  deliveryAddressJson Json?
+  /// Nature de l'opération : SERVICES | GOODS | MIXED (mention obligatoire).
+  supplyNature        String                 @default("SERVICES")
+  /// Option TVA sur les débits (mention obligatoire). Faux pour une
+  /// prestation exonérée, mais le champ doit exister et être figé.
+  vatOnDebits         Boolean                @default(false)
+  /// Lot 0 · E-1 appliqué à la facture : empreinte des données rendues,
+  /// figée à l'émission. Cf. `apps/web/src/lib/docs/source-fingerprint.ts`
+  /// pour la primitive — même normalisation, mêmes trois verdicts.
+  sourceFingerprint   String?
   // Paiements
-  payments          InvoicePayment[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  payments            InvoicePayment[]
+  // Facturation électronique
+  lines               InvoiceLine[]
+  parties             InvoiceParty[]
+  transmissions       EInvoiceTransmission[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, issueDate])
@@ -875,40 +912,40 @@ model InvoicePayment {
 /// Numérotation DEV-NNNN (cohérente avec PROD-NNNN, INV-NNNN, SES-NNNN).
 /// Statuts : DRAFT → SENT → ACCEPTED | REJECTED | EXPIRED.
 model Quote {
-  id                String      @id @default(uuid())
-  tenantId          String
-  number            String      @unique // DEV-NNNN
-  status            QuoteStatus @default(DRAFT)
+  id               String      @id @default(uuid())
+  tenantId         String
+  number           String      @unique // DEV-NNNN
+  status           QuoteStatus @default(DRAFT)
   // Destinataire — champs libres (peuvent être pré-remplis depuis un Person/Org existant)
-  recipientName     String // "Dupont SARL" ou "Marie Dupont" si particulier
-  recipientContact  String? // "À l'attention de Marie Dupont" — optionnel si recipientName est déjà un nom propre
-  recipientAddress  String? // adresse multilignes
-  recipientEmail    String?
-  recipientSiret    String?
+  recipientName    String // "Dupont SARL" ou "Marie Dupont" si particulier
+  recipientContact String? // "À l'attention de Marie Dupont" — optionnel si recipientName est déjà un nom propre
+  recipientAddress String? // adresse multilignes
+  recipientEmail   String?
+  recipientSiret   String?
   // Traçabilité du pré-remplissage (informatif, pas FK strict pour rester souple)
-  sourceProductId   String?
-  sourcePersonId    String?
-  sourceOrgId       String?
+  sourceProductId  String?
+  sourcePersonId   String?
+  sourceOrgId      String?
   // Personnalisation entête
-  headerCustomMd    String? // si null → header tenant par défaut (logo + raison sociale + SIRET)
+  headerCustomMd   String? // si null → header tenant par défaut (logo + raison sociale + SIRET)
   // Métadonnées commerciales
-  title             String      @default("Devis de formation") // titre affiché sur le PDF
-  notes             String? // notes internes ou bas de devis (conditions, mentions)
-  validUntil        DateTime? // date de validité du devis
+  title            String      @default("Devis de formation") // titre affiché sur le PDF
+  notes            String? // notes internes ou bas de devis (conditions, mentions)
+  validUntil       DateTime? // date de validité du devis
   // Montants — calculés depuis les QuoteLine, persistés pour rapidité liste
-  amountHT          Decimal     @default(0) @db.Decimal(10, 2)
-  amountVAT         Decimal     @default(0) @db.Decimal(10, 2)
-  amountTTC         Decimal     @default(0) @db.Decimal(10, 2)
+  amountHT         Decimal     @default(0) @db.Decimal(10, 2)
+  amountVAT        Decimal     @default(0) @db.Decimal(10, 2)
+  amountTTC        Decimal     @default(0) @db.Decimal(10, 2)
   // Dates statut
-  issuedAt          DateTime? // passage DRAFT → SENT
-  acceptedAt        DateTime? // passage SENT → ACCEPTED
-  rejectedAt        DateTime? // passage SENT → REJECTED
+  issuedAt         DateTime? // passage DRAFT → SENT
+  acceptedAt       DateTime? // passage SENT → ACCEPTED
+  rejectedAt       DateTime? // passage SENT → REJECTED
   // PDF
-  pdfUrl            String? // MinIO key, null tant que non généré
+  pdfUrl           String? // MinIO key, null tant que non généré
   // Relations
-  lines             QuoteLine[]
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  lines            QuoteLine[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -1005,27 +1042,27 @@ model DocumentTemplate {
 }
 
 model Document {
-  id            String              @id @default(uuid())
-  tenantId      String
-  templateId    String?
-  template      DocumentTemplate?   @relation(fields: [templateId], references: [id])
-  type          DocType
-  entityType    String // "session" | "participant" | "invoice"
-  entityId      String
-  pdfUrl        String
-  hashSha256    String
+  id                String              @id @default(uuid())
+  tenantId          String
+  templateId        String?
+  template          DocumentTemplate?   @relation(fields: [templateId], references: [id])
+  type              DocType
+  entityType        String // "session" | "participant" | "invoice"
+  entityId          String
+  pdfUrl            String
+  hashSha256        String
   /// Lot 0 · 0.2 (audit 28/08, E-1) — SHA-256 du JSON des champs d'ENTRÉE
   /// effectivement rendus, posé à la génération. `hashSha256` prouve que le PDF
   /// n'a pas bougé ; celui-ci dit s'il raconte encore la vérité. null = document
   /// antérieur au 02/09/2026 ou type non couvert → verdict « inconnu », jamais
   /// « à jour ». Cf. `apps/web/src/lib/docs/source-fingerprint.ts`.
   sourceFingerprint String?
-  status        String              @default("generated")
-  sessionId     String?
-  session       TrainingSession?    @relation(fields: [sessionId], references: [id])
-  participantId String?
-  participant   SessionParticipant? @relation(fields: [participantId], references: [id])
-  createdAt     DateTime            @default(now())
+  status            String              @default("generated")
+  sessionId         String?
+  session           TrainingSession?    @relation(fields: [sessionId], references: [id])
+  participantId     String?
+  participant       SessionParticipant? @relation(fields: [participantId], references: [id])
+  createdAt         DateTime            @default(now())
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, type])
@@ -1679,26 +1716,26 @@ model TenantEmailSettings {
 /// du programme a besoin des réponses STRUCTURÉES, et l'envoi doit pouvoir être
 /// rejoué sans dépendre d'un parsing de texte libre.
 model DiagnosticSubmission {
-  id        String  @id @default(uuid())
-  tenantId  String
+  id       String  @id @default(uuid())
+  tenantId String
   /// Le lead créé au même moment. Cascade : si le lead part, la soumission part
   /// avec lui (RGPD — pas de PII orpheline).
-  leadId    String?
-  lead      Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId   String?
+  lead     Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   /// Réponses brutes { questionId: choixValue }, validées contre QUESTIONS.
-  reponses    Json
+  reponses   Json
   /// Problématique retenue et suivante (clés de ProblematiqueKey).
-  dominante   String
-  secondaire  String?
+  dominante  String
+  secondaire String?
   /// Score par problématique, utile au commercial qui rappelle.
-  scores      Json
+  scores     Json
 
   /// État de l'envoi du programme personnalisé (worker cron).
   programmeStatus  DiagnosticProgrammeStatus @default(PENDING)
   programmeSentAt  DateTime?
   /// Nombre de tentatives du worker. Au-delà du plafond → FAILED, plus de retry.
-  attempts         Int      @default(0)
+  attempts         Int                       @default(0)
   lastError        String?
   /// Trace de ce qui a été effectivement envoyé — utile si le prospect rappelle
   /// en citant son programme.
@@ -1718,4 +1755,138 @@ enum DiagnosticProgrammeStatus {
   /// Catégorie d'email décochée dans Paramètres : rien n'est parti, et ce n'est
   /// pas une erreur. Distinguer les deux évite de chercher une panne.
   SKIPPED
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Facturation électronique — spec du 02/09/2026, lot 1 (socle de données)
+//
+// Le profil EN 16931 exige des LIGNES (quantité, prix unitaire, catégorie
+// de TVA par ligne) : `Invoice` portait ses montants à plat, ce qui rendait
+// tout Factur-X impossible. Et il exige un vendeur et un acheteur FIGÉS —
+// un PDF rendu depuis des données vivantes est l'écart E-1 appliqué à une
+// pièce comptable, cette fois transmise à une plateforme d'État.
+// ═══════════════════════════════════════════════════════════════════════
+
+model InvoiceLine {
+  id                     String  @id @default(uuid())
+  invoiceId              String
+  invoice                Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  position               Int
+  label                  String
+  quantity               Decimal @db.Decimal(10, 2)
+  /// UN/ECE rec. 20 : C62 unité, HUR heure, DAY jour.
+  unit                   String  @default("C62")
+  unitPriceHT            Decimal @db.Decimal(10, 2)
+  vatRate                Decimal @db.Decimal(5, 2)
+  /// EN 16931 : S standard, E exonéré, K intracom, AE autoliquidation…
+  /// Start Academy est en E (formation professionnelle continue).
+  vatCategory            String  @default("E")
+  /// Code VATEX — décision D-2 NON tranchée : laissé null tant que le code
+  /// exact de l'art. 261-4-4°a n'est pas confirmé. Ne pas inventer.
+  vatExemptionReasonCode String?
+  vatExemptionReasonText String?
+  /// Traçabilité sur une facture groupée : quelle ligne pour quel stagiaire.
+  participantId          String?
+  totalHT                Decimal @db.Decimal(10, 2)
+
+  @@index([invoiceId, position])
+}
+
+/// Snapshot des parties, figé à l'émission. Pas de FK vivante : une facture
+/// émise ne doit plus jamais changer parce qu'une organisation a été éditée.
+model InvoiceParty {
+  id                      String           @id @default(uuid())
+  invoiceId               String
+  invoice                 Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  role                    InvoicePartyRole
+  legalName               String
+  siren                   String?
+  siret                   String?
+  vatNumber               String?
+  addressLine1            String?
+  addressLine2            String?
+  postalCode              String?
+  city                    String?
+  countryCode             String           @default("FR")
+  email                   String?
+  /// Identifiant d'annuaire : "0225" = SIREN France, "0002" = SIRET.
+  electronicAddressScheme String?
+  electronicAddress       String?
+
+  @@unique([invoiceId, role])
+}
+
+enum InvoicePartyRole {
+  SELLER
+  BUYER
+  DELIVERY
+}
+
+/// Une transmission = une tentative vers une plateforme. Plusieurs par
+/// facture : un rejet puis un renvoi sont deux tentatives, pas un écrasement.
+model EInvoiceTransmission {
+  id            String          @id @default(uuid())
+  tenantId      String
+  invoiceId     String
+  invoice       Invoice         @relation(fields: [invoiceId], references: [id])
+  provider      String
+  format        EInvoiceFormat
+  profile       String          @default("EN16931")
+  /// Clé de stockage de l'XML EXACT envoyé — pas une régénération.
+  xmlStorageKey String
+  pdfStorageKey String?
+  xmlSha256     String
+  /// Id côté plateforme. Texte : les ids Super PDP sont des int64.
+  externalId    String?
+  status        EInvoiceStatus  @default(PENDING)
+  statusDetail  String?
+  submittedAt   DateTime?
+  lastPolledAt  DateTime?
+  events        EInvoiceEvent[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  /// Idempotence : le même XML renvoyé ne crée pas un doublon côté plateforme.
+  @@unique([invoiceId, xmlSha256])
+  @@index([tenantId, status])
+  @@index([invoiceId])
+}
+
+enum EInvoiceFormat {
+  FACTURX
+  UBL
+  CII
+}
+
+/// Cycle de vie normalisé (sous-ensemble DGFiP). Ne REMPLACE PAS
+/// `InvoiceStatus` : l'un est le cycle interne, l'autre celui de la
+/// plateforme. Les deux coexistent et ne disent pas la même chose.
+enum EInvoiceStatus {
+  PENDING
+  SUBMITTED
+  DEPOSITED
+  REJECTED_PLATFORM
+  RECEIVED
+  REFUSED_BUYER
+  APPROVED
+  PAID_REPORTED
+  ERROR
+}
+
+model EInvoiceEvent {
+  id             String               @id @default(uuid())
+  transmissionId String
+  transmission   EInvoiceTransmission @relation(fields: [transmissionId], references: [id], onDelete: Cascade)
+  status         EInvoiceStatus
+  /// Réponse brute de la plateforme, conservée telle quelle : le jour où un
+  /// statut est contesté, c'est elle qui fait foi, pas notre interprétation.
+  payload        Json?
+  /// Code natif de la plateforme (`api:validated`, `fr:205`, `ppf:refused`…)
+  /// gardé À CÔTÉ du statut normalisé : le mapping vers `EInvoiceStatus` est
+  /// une interprétation, et le code d'origine doit rester relisible.
+  providerCode   String?
+  occurredAt     DateTime
+  createdAt      DateTime             @default(now())
+
+  @@index([transmissionId, occurredAt])
 }

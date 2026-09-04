@@ -54,6 +54,11 @@ vi.mock('@qualiof/db', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      // Lot 1 e-invoicing — le vendeur figé de l'avoir se lit sur le Tenant
+      // (SIREN + mention d'exonération).
+      tenant: {
+        findUnique: vi.fn(),
+      },
       $transaction: vi.fn(),
     },
     Prisma: { Decimal },
@@ -121,6 +126,9 @@ vi.mock('@/lib/of-config', () => ({
     siret: '12345678900012',
     rnq: '11756789012',
     addressFull: '12 rue Test',
+    addressStreet: '12 rue Test',
+    addressCp: '06000',
+    addressVille: 'Nice',
     phone: '01 23 45 67 89',
     email: 'contact@test.fr',
     tvaIntra: null,
@@ -141,6 +149,7 @@ import { revalidatePath } from 'next/cache';
 import { createCreditNote } from '../invoices';
 
 const invoiceFindFirst = prisma.invoice.findFirst as unknown as ReturnType<typeof vi.fn>;
+const tenantFindUnique = prisma.tenant.findUnique as unknown as ReturnType<typeof vi.fn>;
 const invoiceFindMany = prisma.invoice.findMany as unknown as ReturnType<typeof vi.fn>;
 const invoiceCreate = prisma.invoice.create as unknown as ReturnType<typeof vi.fn>;
 const invoiceUpdate = prisma.invoice.update as unknown as ReturnType<typeof vi.fn>;
@@ -170,6 +179,55 @@ const ORIGINAL_INVOICE_BASE = {
   payerOrgId: 'org-1',
   sessionId: 'sess-1',
   issueDate: new Date('2026-05-01T00:00:00Z'),
+  // Lot 1 — le parc ANTÉRIEUR au lot n'a pas de parties figées : c'est le cas
+  // par défaut de ces fixtures, et il ne doit pas empêcher un avoir.
+  parties: [],
+  payerOrg: {
+    legalName: 'BIANCO INVEST',
+    siren: null,
+    siret: '12345678900019',
+    vatNumber: null,
+    address: { street: '4 rue des Oliviers', postalCode: '06000', city: 'Nice' },
+    email: 'compta@bianco.fr',
+    emailBilling: null,
+  },
+};
+
+/** Une facture émise DEPUIS le lot 1 : elle porte ses parties figées. */
+const ORIGINAL_INVOICE_AVEC_PARTIES = {
+  ...ORIGINAL_INVOICE_BASE,
+  parties: [
+    {
+      role: 'SELLER',
+      legalName: 'START ACADEMY (raison sociale de l’époque)',
+      siren: '123456789',
+      siret: '12345678900012',
+      vatNumber: null,
+      addressLine1: '12 rue Test',
+      addressLine2: null,
+      postalCode: '06000',
+      city: 'Nice',
+      countryCode: 'FR',
+      email: 'contact@test.fr',
+      electronicAddressScheme: '0225',
+      electronicAddress: '123456789',
+    },
+    {
+      role: 'BUYER',
+      legalName: 'BIANCO INVEST (raison sociale de l’époque)',
+      siren: '987654321',
+      siret: '98765432100019',
+      vatNumber: null,
+      addressLine1: '4 rue des Oliviers',
+      addressLine2: null,
+      postalCode: '06000',
+      city: 'Nice',
+      countryCode: 'FR',
+      email: 'compta@bianco.fr',
+      electronicAddressScheme: '0225',
+      electronicAddress: '987654321',
+    },
+  ],
 };
 
 function setupTxPassthrough() {
@@ -188,6 +246,7 @@ function setupTxPassthrough() {
 
 beforeEach(() => {
   invoiceFindFirst.mockReset();
+  tenantFindUnique.mockReset();
   invoiceFindMany.mockReset();
   invoiceCreate.mockReset();
   invoiceUpdate.mockReset();
@@ -201,6 +260,7 @@ beforeEach(() => {
   // Defaults : ADMIN authentifié + tx passthrough + numéro AVO + findMany vide
   requireRoleMock.mockResolvedValue(FAKE_ADMIN);
   invoiceFindMany.mockResolvedValue([]);
+  tenantFindUnique.mockResolvedValue({ siren: '123456789', vatExemptionText: null });
   getNextCreditNoteNumberMock.mockResolvedValue('AVO-000001');
   setupTxPassthrough();
 });
@@ -438,6 +498,100 @@ describe('createCreditNote', () => {
     const calls = revalidatePathMock.mock.calls.map((c) => c[0]);
     expect(calls).toContain('/app/factures');
     expect(calls).toContain(`/app/factures/${VALID_ORIGINAL_ID}`);
+  });
+
+  // ── Lot 1 — facturation électronique ────────────────────────────────
+
+  it('Test 16 — l’avoir porte UNE ligne négative qui redonne son montant', async () => {
+    invoiceFindFirst.mockResolvedValueOnce(ORIGINAL_INVOICE_BASE);
+    invoiceCreate.mockResolvedValueOnce({ id: 'avo-16', number: 'AVO-000016' });
+
+    await createCreditNote({
+      originalInvoiceId: VALID_ORIGINAL_ID,
+      amountHtToCredit: 400,
+      motif: 'annulation stagiaire',
+    });
+
+    const data = invoiceCreate.mock.calls[0]![0].data;
+    expect(data.lines.create).toHaveLength(1);
+    const ligne = data.lines.create[0];
+    // Convention de STOCKAGE du dépôt (l'EN 16931 fera l'inverse au lot 2 :
+    // montants positifs + TypeCode 381).
+    expect(Number(ligne.totalHT)).toBe(-400);
+    expect(Number(ligne.totalHT)).toBe(Number(data.amountHT));
+    expect(ligne.label).toContain('FAC-000042');
+    expect(ligne.label).toContain('annulation stagiaire');
+    expect(ligne.participantId).toBe('part-1');
+  });
+
+  it('Test 17 — quand l’original a ses parties figées, l’avoir les RECOPIE', async () => {
+    // Un avoir corrige UNE facture : ses parties sont celles de cette
+    // facture-là. Recopier protège du cas réel — la raison sociale du client a
+    // changé entre la facture et l'avoir.
+    invoiceFindFirst.mockResolvedValueOnce(ORIGINAL_INVOICE_AVEC_PARTIES);
+    invoiceCreate.mockResolvedValueOnce({ id: 'avo-17', number: 'AVO-000017' });
+
+    await createCreditNote({
+      originalInvoiceId: VALID_ORIGINAL_ID,
+      amountHtToCredit: 100,
+      motif: 'reprise des parties',
+    });
+
+    const parties = invoiceCreate.mock.calls[0]![0].data.parties.create;
+    expect(parties).toHaveLength(2);
+    const buyer = parties.find((p: { role: string }) => p.role === 'BUYER');
+    expect(buyer.legalName).toContain('de l’époque');
+    expect(buyer.siren).toBe('987654321');
+    // Surtout PAS le SIREN vivant du Tenant ni celui de l'Organization courante.
+    expect(buyer.siren).not.toBe('123456789');
+  });
+
+  it('Test 18 — sur le parc ancien (sans parties, sans SIREN), l’avoir passe quand même', async () => {
+    // Écart assumé à la consigne « SIREN client bloquant » : le code de commerce
+    // impose d'annuler une facture émise PAR un avoir. Bloquer ici fermerait la
+    // seule correction légale d'une facture déjà partie.
+    invoiceFindFirst.mockResolvedValueOnce({
+      ...ORIGINAL_INVOICE_BASE,
+      payerOrg: { ...ORIGINAL_INVOICE_BASE.payerOrg, siren: null, siret: null },
+    });
+    invoiceCreate.mockResolvedValueOnce({ id: 'avo-18', number: 'AVO-000018' });
+
+    const res = await createCreditNote({
+      originalInvoiceId: VALID_ORIGINAL_ID,
+      amountHtToCredit: 100,
+      motif: 'client sans siren',
+    });
+
+    expect(res.ok).toBe(true);
+    const buyer = invoiceCreate.mock.calls[0]![0].data.parties.create.find(
+      (p: { role: string }) => p.role === 'BUYER',
+    );
+    expect(buyer.siren).toBeNull();
+    // Pas de SIREN ⇒ pas d'adresse d'annuaire inventée.
+    expect(buyer.electronicAddress).toBeNull();
+  });
+
+  it('Test 19 — l’avoir pose son empreinte, et elle dépend du motif', async () => {
+    invoiceFindFirst.mockResolvedValue(ORIGINAL_INVOICE_BASE);
+    invoiceCreate.mockResolvedValue({ id: 'avo-19', number: 'AVO-000019' });
+
+    await createCreditNote({
+      originalInvoiceId: VALID_ORIGINAL_ID,
+      amountHtToCredit: 100,
+      motif: 'motif A',
+    });
+    const empreinteA = invoiceCreate.mock.calls[0]![0].data.sourceFingerprint;
+
+    invoiceCreate.mockClear();
+    await createCreditNote({
+      originalInvoiceId: VALID_ORIGINAL_ID,
+      amountHtToCredit: 100,
+      motif: 'motif B',
+    });
+    const empreinteB = invoiceCreate.mock.calls[0]![0].data.sourceFingerprint;
+
+    expect(empreinteA).toHaveLength(64);
+    expect(empreinteA).not.toBe(empreinteB);
   });
 
   it('Test 16 — facture introuvable (mauvais tenant) → erreur', async () => {

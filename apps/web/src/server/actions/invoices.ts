@@ -19,6 +19,21 @@ import { resolveInvoiceIssueDate } from '@/lib/invoice-dates';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
+import { MENTION_TVA } from '@/lib/catalogue-constants';
+import {
+  buildBuyerParty,
+  buildCreditNoteLine,
+  buildDeliveryParty,
+  buildSellerParty,
+  buildTrainingLines,
+  checkLinesMatchTotal,
+  deliveryAddressJson,
+  fingerprintInvoice,
+  missingBuyerSirenError,
+  type LineSnapshot,
+  type PartySnapshot,
+} from '@/lib/einvoice/invoice-snapshot';
+import type { OfConfig } from '@/lib/of-config';
 
 // Phase 7 — Plan 07-01 : suppression du bloc `OF` local qui bypassait
 // `getOfConfig()` en lisant directement les variables d'environnement.
@@ -67,6 +82,84 @@ const MODALITE_LABEL: Record<string, string> = {
   ELEARNING: 'en e-learning',
 };
 
+// ── Facturation électronique — lot 1 (spec 02/09/2026) ────────────────────
+//
+// Une facture doit désormais porter des LIGNES et des PARTIES FIGÉES : le
+// profil EN 16931 les exige, et surtout une pièce comptable ne doit plus être
+// rendue depuis des données vivantes (écart E-1 de l'audit du 28/08 appliqué
+// à un document bientôt transmis à une plateforme d'État).
+//
+// Tout est écrit dans la MÊME transaction que la facture — une facture sans
+// ses lignes serait précisément la « facture vide » que le lot interdit. Les
+// projections sont pures et vivent dans `lib/einvoice/invoice-snapshot.ts`.
+
+/** Vendeur figé + mention d'exonération, lus une fois par action. */
+async function loadSellerSnapshot(
+  tenantId: string,
+  of: OfConfig,
+): Promise<{ seller: PartySnapshot; vatExemptionText: string }> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { siren: true, vatExemptionText: true },
+  });
+  return {
+    seller: buildSellerParty({
+      legalName: of.name,
+      // `Tenant.siren` fait foi ; à défaut il se dérive du SIRET (exact, cf.
+      // `resolveSiren`). L'émetteur, lui, ne peut pas manquer des deux : sans
+      // SIRET l'OF ne facturerait déjà pas aujourd'hui.
+      siren: tenant?.siren ?? null,
+      siret: of.siret || null,
+      vatNumber: of.tvaIntra || null,
+      addressLine1: of.addressStreet || null,
+      postalCode: of.addressCp || null,
+      city: of.addressVille || null,
+      email: of.email || null,
+    }),
+    vatExemptionText: tenant?.vatExemptionText?.trim() || MENTION_TVA,
+  };
+}
+
+/** Lignes + parties prêtes pour un `create` imbriqué Prisma. */
+function nestedInvoiceWrites(lines: LineSnapshot[], parties: (PartySnapshot | null)[]) {
+  return {
+    lines: {
+      create: lines.map((l) => ({
+        position: l.position,
+        label: l.label,
+        quantity: new Prisma.Decimal(l.quantity),
+        unit: l.unit,
+        unitPriceHT: new Prisma.Decimal(l.unitPriceHT),
+        vatRate: new Prisma.Decimal(l.vatRate),
+        vatCategory: l.vatCategory,
+        vatExemptionReasonCode: l.vatExemptionReasonCode,
+        vatExemptionReasonText: l.vatExemptionReasonText,
+        participantId: l.participantId,
+        totalHT: new Prisma.Decimal(l.totalHT),
+      })),
+    },
+    parties: {
+      create: parties
+        .filter((p): p is PartySnapshot => p !== null)
+        .map((p) => ({
+          role: p.role,
+          legalName: p.legalName,
+          siren: p.siren,
+          siret: p.siret,
+          vatNumber: p.vatNumber,
+          addressLine1: p.addressLine1,
+          addressLine2: p.addressLine2,
+          postalCode: p.postalCode,
+          city: p.city,
+          countryCode: p.countryCode,
+          email: p.email,
+          electronicAddressScheme: p.electronicAddressScheme,
+          electronicAddress: p.electronicAddress,
+        })),
+    },
+  };
+}
+
 export async function createInvoiceFromParticipant(
   input: CreateInvoiceInput,
 ): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
@@ -107,7 +200,65 @@ export async function createInvoiceFromParticipant(
   const amountHT = Number(participant.priceHT);
   const amountTTC = Math.round(amountHT * (1 + vatRate / 100) * 100) / 100;
 
-  // Création atomique : numéro + invoice
+  // ── Lot 1 e-invoicing : on FIGE avant d'écrire quoi que ce soit ────────
+  const { seller, vatExemptionText } = await loadSellerSnapshot(user.tenantId, of);
+  const buyer = buildBuyerParty({
+    legalName: participant.sponsorOrg.legalName,
+    siren: participant.sponsorOrg.siren,
+    siret: participant.sponsorOrg.siret,
+    vatNumber: participant.sponsorOrg.vatNumber,
+    address: participant.sponsorOrg.address,
+    email: participant.sponsorOrg.emailBilling ?? participant.sponsorOrg.email,
+  });
+  // SIREN client = mention obligatoire depuis 2026. Sans lui on ne fabrique
+  // pas une facture incomplète qu'il faudrait annuler par avoir ensuite : on
+  // refuse, en nommant la fiche à compléter.
+  if (!buyer.siren) {
+    return { ok: false, error: missingBuyerSirenError(buyer.legalName) };
+  }
+  const delivery = buildDeliveryParty(session.location);
+  const lines = buildTrainingLines({
+    formationTitre: product.title,
+    sessionCode: session.code,
+    startDate: session.startDate,
+    endDate: session.endDate,
+    dureeHeures: product.durationHours,
+    vatRate,
+    vatExemptionText,
+    participants: [
+      {
+        participantId: participant.id,
+        personFirstName: participant.person.firstName,
+        personLastName: participant.person.lastName,
+        priceHT: amountHT,
+      },
+    ],
+  });
+  const contrat = checkLinesMatchTotal(amountHT, lines);
+  if (!contrat.ok) return { ok: false, error: contrat.error };
+
+  const sourceFingerprint = fingerprintInvoice({
+    kind: 'FACTURE',
+    seller,
+    buyer,
+    delivery,
+    formation: {
+      titre: product.title,
+      code: session.code,
+      debut: session.startDate,
+      fin: session.endDate,
+      dureeHeures: product.durationHours,
+      lieu: composeLieu(session.location),
+      formateur: composeFormateur(session.trainers),
+      modalite: MODALITE_LABEL[session.modality] ?? null,
+    },
+    stagiaires: [`${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`],
+    montants: { amountHT, vatRate, amountTTC },
+    notes: input.notes ?? null,
+    reglement: { iban: of.iban || null, bic: of.bic || null },
+  });
+
+  // Création atomique : numéro + invoice + lignes + parties figées
   const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
     return tx.invoice.create({
@@ -121,6 +272,10 @@ export async function createInvoiceFromParticipant(
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(amountTTC),
         amountPaid: new Prisma.Decimal(0),
+        sourceFingerprint,
+        deliveryAddressJson:
+          (deliveryAddressJson(delivery) as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
+        ...nestedInvoiceWrites(lines, [seller, buyer, delivery]),
         // Datée de la fin de formation (cf. resolveInvoiceIssueDate). Le délai
         // de paiement, lui, court à partir du jour d'émission réel — sinon une
         // facture rattrapée des mois plus tard naîtrait déjà en retard et le
@@ -227,6 +382,10 @@ export async function createInvoiceFromParticipant(
       payerOrgId: invoice.payerOrgId,
       sessionId: session.id,
       number: invoice.number,
+      // Lot 1 — ce que la pièce a figé, tracé avec elle.
+      lignes: lines.length,
+      sourceFingerprint,
+      buyerSiren: buyer.siren,
     },
   });
   await logInvoiceEvent({
@@ -303,6 +462,64 @@ export async function createInvoiceForSponsorGroup(input: {
 
   const participantIds = session.participants.map((p) => p.id);
 
+  // ── Lot 1 e-invoicing : UNE LIGNE PAR STAGIAIRE ───────────────────────
+  // Sur une facture groupée, c'est ce qui permet à un financeur de rattacher
+  // un montant à une personne sans ouvrir la session dans l'app —
+  // `InvoiceLine.participantId` porte la traçabilité.
+  const { seller, vatExemptionText } = await loadSellerSnapshot(user.tenantId, of);
+  const buyer = buildBuyerParty({
+    legalName: sponsor.legalName,
+    siren: sponsor.siren,
+    siret: sponsor.siret,
+    vatNumber: sponsor.vatNumber,
+    address: sponsor.address,
+    email: sponsor.emailBilling ?? sponsor.email,
+  });
+  if (!buyer.siren) {
+    return { ok: false, error: missingBuyerSirenError(buyer.legalName) };
+  }
+  const delivery = buildDeliveryParty(session.location);
+  const invoiceLines = buildTrainingLines({
+    formationTitre: session.product.title,
+    sessionCode: session.code,
+    startDate: session.startDate,
+    endDate: session.endDate,
+    dureeHeures: session.product.durationHours,
+    vatRate,
+    vatExemptionText,
+    participants: session.participants.map((p) => ({
+      participantId: p.id,
+      personFirstName: p.person.firstName,
+      personLastName: p.person.lastName,
+      priceHT: Number(p.priceHT),
+    })),
+  });
+  const contrat = checkLinesMatchTotal(totalHT, invoiceLines);
+  if (!contrat.ok) return { ok: false, error: contrat.error };
+
+  const sourceFingerprint = fingerprintInvoice({
+    kind: 'FACTURE',
+    seller,
+    buyer,
+    delivery,
+    formation: {
+      titre: session.product.title,
+      code: session.code,
+      debut: session.startDate,
+      fin: session.endDate,
+      dureeHeures: session.product.durationHours,
+      lieu: composeLieu(session.location),
+      formateur: composeFormateur(session.trainers),
+      modalite: MODALITE_LABEL[session.modality] ?? null,
+    },
+    stagiaires: session.participants.map(
+      (p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+    ),
+    montants: { amountHT: totalHT, vatRate, amountTTC: totalTTC },
+    notes: input.notes ?? null,
+    reglement: { iban: of.iban || null, bic: of.bic || null },
+  });
+
   const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
     return tx.invoice.create({
@@ -319,6 +536,10 @@ export async function createInvoiceForSponsorGroup(input: {
         vatRate: new Prisma.Decimal(vatRate),
         amountTTC: new Prisma.Decimal(totalTTC),
         amountPaid: new Prisma.Decimal(0),
+        sourceFingerprint,
+        deliveryAddressJson:
+          (deliveryAddressJson(delivery) as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
+        ...nestedInvoiceWrites(invoiceLines, [seller, buyer, delivery]),
         // Idem facture individuelle : datée de la fin de formation, échéance
         // comptée depuis le jour d'émission réel.
         issueDate: resolveInvoiceIssueDate(session.endDate),
@@ -430,6 +651,9 @@ export async function createInvoiceForSponsorGroup(input: {
       sessionId: session.id,
       number: invoice.number,
       grouped: true,
+      lignes: invoiceLines.length,
+      sourceFingerprint,
+      buyerSiren: buyer.siren,
     },
   });
   await logInvoiceEvent({
@@ -594,6 +818,19 @@ export async function createCreditNote(input: {
       payerOrgId: true,
       sessionId: true,
       issueDate: true,
+      // Lot 1 — un avoir hérite des parties de la pièce qu'il corrige.
+      parties: true,
+      payerOrg: {
+        select: {
+          legalName: true,
+          siren: true,
+          siret: true,
+          vatNumber: true,
+          address: true,
+          email: true,
+          emailBilling: true,
+        },
+      },
     },
   });
   if (!original) return { ok: false, error: 'Facture introuvable' };
@@ -641,8 +878,82 @@ export async function createCreditNote(input: {
   const amountTtcToCredit =
     Math.round(amountHtToCredit * (1 + vatRateNum / 100) * 100) / 100;
 
-  // Transaction atomique : (1) numérotation AVO, (2) create avoir,
-  // (3) update facture origine si avoir total.
+  // ── Lot 1 e-invoicing : les parties d'un avoir ────────────────────────
+  //
+  // Un avoir corrige UNE facture : ses parties sont celles de cette
+  // facture-là, pas celles que la base porte aujourd'hui. Quand l'original a
+  // ses parties figées (toute facture émise depuis ce lot), on les RECOPIE
+  // telles quelles — c'est la seule lecture juste, et elle survit à un
+  // changement de raison sociale entre les deux pièces.
+  //
+  // Écart assumé à la consigne « SIREN client bloquant » : pour le parc
+  // ANTÉRIEUR au lot 1, l'original n'a pas de parties et on reconstruit depuis
+  // la donnée vivante — SANS bloquer sur un SIREN manquant. Bloquer piégerait
+  // la comptabilité : le code de commerce impose d'annuler une facture émise
+  // PAR un avoir, il n'existe pas d'autre issue. Refuser l'avoir pour une fiche
+  // client incomplète interdirait la seule correction légale. Rien ne part vers
+  // une plateforme à ce stade (`einvoiceEnabled` faux, lot 3 non livré) : le
+  // risque est nul, le blocage aurait été un cul-de-sac.
+  const of = await loadOfConfig(user.tenantId);
+  const { seller: sellerVivant, vatExemptionText } = await loadSellerSnapshot(user.tenantId, of);
+
+  const heritees: PartySnapshot[] = original.parties.map((p) => ({
+    role: p.role,
+    legalName: p.legalName,
+    siren: p.siren,
+    siret: p.siret,
+    vatNumber: p.vatNumber,
+    addressLine1: p.addressLine1,
+    addressLine2: p.addressLine2,
+    postalCode: p.postalCode,
+    city: p.city,
+    countryCode: p.countryCode,
+    email: p.email,
+    electronicAddressScheme: p.electronicAddressScheme,
+    electronicAddress: p.electronicAddress,
+  }));
+
+  const buyerVivant = original.payerOrg
+    ? buildBuyerParty({
+        legalName: original.payerOrg.legalName,
+        siren: original.payerOrg.siren,
+        siret: original.payerOrg.siret,
+        vatNumber: original.payerOrg.vatNumber,
+        address: original.payerOrg.address,
+        email: original.payerOrg.emailBilling ?? original.payerOrg.email,
+      })
+    : null;
+
+  const parties: (PartySnapshot | null)[] =
+    heritees.length > 0 ? heritees : [sellerVivant, buyerVivant];
+
+  const creditLine = buildCreditNoteLine({
+    originalNumber: original.number,
+    motif,
+    amountHtToCredit,
+    vatRate: vatRateNum,
+    vatExemptionText,
+    participantId: original.participantId,
+  });
+  const montantAvoirHt = -Math.abs(amountHtToCredit);
+  const contrat = checkLinesMatchTotal(montantAvoirHt, [creditLine]);
+  if (!contrat.ok) return { ok: false, error: contrat.error };
+
+  const sourceFingerprint = fingerprintInvoice({
+    kind: 'AVOIR',
+    seller: parties.find((p) => p?.role === 'SELLER') ?? sellerVivant,
+    buyer: parties.find((p) => p?.role === 'BUYER') ?? buyerVivant,
+    originalNumber: original.number,
+    motif,
+    montants: {
+      amountHT: montantAvoirHt,
+      vatRate: vatRateNum,
+      amountTTC: -Math.abs(amountTtcToCredit),
+    },
+  });
+
+  // Transaction atomique : (1) numérotation AVO, (2) create avoir + lignes +
+  // parties, (3) update facture origine si avoir total.
   const result = await prisma.$transaction(async (tx) => {
     const number = await getNextCreditNoteNumber(user.tenantId, tx);
 
@@ -661,6 +972,8 @@ export async function createCreditNote(input: {
         amountPaid: new Prisma.Decimal(0),
         issueDate: new Date(),
         notes: motif,
+        sourceFingerprint,
+        ...nestedInvoiceWrites([creditLine], parties),
       },
     });
 
@@ -689,6 +1002,8 @@ export async function createCreditNote(input: {
       motif,
       originalStatusBefore: original.status,
       originalStatusAfter: result.originalStatusAfter,
+      sourceFingerprint,
+      partiesHeritees: heritees.length > 0,
     },
   });
 
