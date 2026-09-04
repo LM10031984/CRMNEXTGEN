@@ -59,6 +59,13 @@ const MarkDocStatusInputSchema = z.object({
 /**
  * Patche `SessionParticipant.docStatus[docType]` atomiquement via `jsonb_set` raw.
  *
+ * Pas de `::uuid` sur les paramètres liés : `SessionParticipant.id`,
+ * `TrainingSession.id` et `tenantId` sont des colonnes **TEXT** (cf. `0_init`).
+ * Caster le paramètre produisait « operator does not exist: text = uuid » et
+ * la requête échouait à chaque appel (bug relevé le 04/09/2026 en montant la
+ * preuve du lot A signature — les tests unitaires mockent `$executeRaw` et ne
+ * pouvaient pas le voir).
+ *
  * Pourquoi raw SQL au lieu de `prisma.sessionParticipant.update` ?
  *  → Pitfall 2 RESEARCH : 2 admins concurrents qui patchent 2 docTypes différents
  *    en lecture-modif-écriture risquent d'écraser l'un l'autre. `jsonb_set` est
@@ -119,9 +126,9 @@ export async function markDocStatus(
           true
         ),
         "updatedAt" = NOW()
-    WHERE id = ${parsed.data.participantId}::uuid
+    WHERE id = ${parsed.data.participantId}
       AND "sessionId" IN (
-        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${user.tenantId}::uuid
+        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${user.tenantId}
       )
   `);
 
@@ -214,9 +221,9 @@ async function persistSignedScan(opts: {
           true
         ),
         "updatedAt" = NOW()
-    WHERE id = ${participant.id}::uuid
+    WHERE id = ${participant.id}
       AND "sessionId" IN (
-        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${tenantId}::uuid
+        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${tenantId}
       )
   `);
 
@@ -694,9 +701,9 @@ export async function deleteDocument(
       UPDATE "SessionParticipant"
       SET "docStatus" = "docStatus" - ${parsed.data.docType}::text,
           "updatedAt" = NOW()
-      WHERE id = ${parsed.data.participantId}::uuid
+      WHERE id = ${parsed.data.participantId}
         AND "sessionId" IN (
-          SELECT id FROM "TrainingSession" WHERE "tenantId" = ${user.tenantId}::uuid
+          SELECT id FROM "TrainingSession" WHERE "tenantId" = ${user.tenantId}
         )
     `);
   });

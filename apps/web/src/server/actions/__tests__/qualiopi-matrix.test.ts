@@ -321,6 +321,74 @@ describe('uploadSignedDoc', () => {
   });
 });
 
+// ─── SQL brut : pas de cast ::uuid sur des colonnes TEXT ─────────────────
+
+/**
+ * Régression 04/09/2026 (relevée en montant la preuve du lot A signature).
+ *
+ * `SessionParticipant.id`, `TrainingSession.id` et `tenantId` sont des colonnes
+ * **TEXT** (cf. `0_init/migration.sql`). Les requêtes `jsonb_set` castaient le
+ * paramètre lié en `::uuid` → Postgres répondait
+ * « operator does not exist: text = uuid » et AUCUNE des trois actions
+ * (markDocStatus, uploadSignedDoc, deleteDocument) n'écrivait quoi que ce soit.
+ * Les mocks de `$executeRaw` rendaient le bug invisible : on vérifie donc ici
+ * le SQL lui-même.
+ */
+function rawSqlText(call: unknown): string {
+  const sql = call as { strings?: readonly string[] };
+  return (sql.strings ?? []).join(' ? ');
+}
+
+describe('SQL brut — identifiants TEXT, jamais castés en ::uuid', () => {
+  it('markDocStatus', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+
+    await markDocStatus({
+      participantId: VALID_PARTICIPANT_ID,
+      docType: 'CONVENTION',
+      state: 'MANUAL_OK',
+      markedOkWithoutUpload: true,
+    });
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
+  });
+
+  it('uploadSignedDoc', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+    const fd = makePdfFormData({ mime: 'application/pdf', size: 2048 });
+
+    await uploadSignedDoc(fd);
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
+  });
+
+  it('deleteDocument', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+
+    await deleteDocument({ participantId: VALID_PARTICIPANT_ID, docType: 'CONVENTION' });
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
+  });
+});
+
 // ─── regenerateParticipantDoc ────────────────────────────────────────────
 
 describe('regenerateParticipantDoc', () => {
