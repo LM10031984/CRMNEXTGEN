@@ -211,7 +211,7 @@ describe('Un programme = un axe (défaut vu sur DIAG-0001)', () => {
   }
   function reco(need: string, candidate: ProgrammeCandidate, trigger: string): ProgrammeRecommendation {
     return {
-      need: { code: need, label: need, family: 'METIER', chapters: [], alertCodes: [], keywords: [] },
+      need: { code: need, label: need, families: ['METIER'], chapters: [], alertCodes: [], keywords: [] },
       trigger,
       candidates: [candidate],
       unmet: false,
@@ -244,7 +244,7 @@ describe('Un programme = un axe (défaut vu sur DIAG-0001)', () => {
 
   it('ignore un besoin sans candidat plutôt que d’inventer un axe', () => {
     const vide: ProgrammeRecommendation = {
-      need: { code: 'x', label: 'x', family: 'METIER', chapters: [], alertCodes: [], keywords: [] },
+      need: { code: 'x', label: 'x', families: ['METIER'], chapters: [], alertCodes: [], keywords: [] },
       trigger: 'rien',
       candidates: [],
       unmet: true,

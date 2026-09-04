@@ -52,7 +52,18 @@ export interface CatalogueEntry {
 export interface ProgrammeNeed {
   code: string;
   label: string;
-  family: ProgrammeFamily;
+  /**
+   * Les familles qui peuvent répondre à ce besoin, **par ordre de préférence**.
+   *
+   * C'est ici que vit la règle produit : les sept besoins de la chaîne
+   * commerciale n'acceptent que `METIER`, point — une fuite de mandat ne se
+   * répare pas avec un outil. Deux besoins font exception, et pour une raison
+   * métier, pas par commodité : l'e-réputation (demander et suivre les avis)
+   * et l'équipement de l'équipe sont des sujets d'outillage autant que de
+   * méthode. Même là, le métier passe DEVANT : l'IA n'est servie que si aucun
+   * programme métier ne couvre le besoin, et le rapport le dit.
+   */
+  families: readonly ProgrammeFamily[];
   /** Chapitres dont la faiblesse déclenche ce besoin. */
   chapters: number[];
   /** Alertes de ratio qui le déclenchent, quel que soit le score. */
@@ -73,7 +84,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'prospection',
     label: 'Générer des contacts vendeurs',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [3],
     alertCodes: ['no_one_prospects', 'contacts_to_rdv_below_benchmark'],
     keywords: ['prospection', 'prospecter', 'secteur', 'incontournable', 'trouver', 'vendeur'],
@@ -81,7 +92,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'decouverte_vendeur',
     label: 'Formaliser la découverte et l’estimation vendeur',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [4],
     alertCodes: ['seller_discovery_not_formalized', 'rdv_to_mandat_below_benchmark'],
     keywords: ['vendeur', 'decouverte', 'estimation', 'rendez-vous', 'vente'],
@@ -89,7 +100,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'mandat_exclusivite',
     label: 'Rentrer des mandats en exclusivité, au bon prix',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [5],
     alertCodes: ['exclusivity_below_benchmark'],
     keywords: ['mandat', 'exclusivite', 'vente', 'negociation', 'booster'],
@@ -97,7 +108,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'suivi_vendeur',
     label: 'Piloter le stock et le suivi vendeur',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [6],
     alertCodes: ['seller_followup_weak'],
     keywords: ['suivi', 'commercialisation', 'vendeur', 'relation client', 'negociation'],
@@ -105,7 +116,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'acquereurs',
     label: 'Qualifier et sécuriser les acquéreurs',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [7],
     alertCodes: ['buyer_financing_not_verified'],
     keywords: ['acquereur', 'acheteur', 'financement', 'face a face'],
@@ -113,7 +124,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'transformation',
     label: 'Transformer visites et offres en actes',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [8],
     alertCodes: [
       'visits_per_vente_high',
@@ -125,15 +136,19 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'ereputation',
     label: 'Faire travailler la base et la réputation',
-    family: 'METIER',
+    families: ['METIER', 'IA'],
     chapters: [9],
     alertCodes: ['reviews_per_vente_below_benchmark'],
-    keywords: ['avis', 'reputation', 'visible', 'marketing', 'communication', 'digital'],
+    // Volontairement étroits. « marketing », « communication » et « digital »
+    // sont du vocabulaire d'entreprise : ils faisaient remonter un programme
+    // « pour activité événementielle » à une agence immobilière (constaté sur
+    // DIAG-0001). Un mot qui matche tout ne qualifie rien.
+    keywords: ['avis', 'reputation', 'visible', 'recommandation', 'presence locale'],
   },
   {
     code: 'outils_ia',
     label: 'Équiper l’équipe et gagner du temps',
-    family: 'IA',
+    families: ['IA'],
     chapters: [10],
     alertCodes: [],
     keywords: ['intelligence artificielle', 'ia', 'productivite', 'gagner', 'outils'],
@@ -141,7 +156,7 @@ export const PROGRAMME_NEEDS: readonly ProgrammeNeed[] = [
   {
     code: 'pilotage',
     label: 'Piloter par les chiffres et animer l’équipe',
-    family: 'METIER',
+    families: ['METIER'],
     chapters: [11],
     alertCodes: ['no_indicators_followed'],
     keywords: ['management', 'pilotage', 'manager', 'performance', 'equipe', 'entretien'],
@@ -313,10 +328,16 @@ export function recommendProgrammes(input: ProgrammeMatchInput): ProgrammeMatchO
       })
       .filter((c): c is ProgrammeCandidate => c !== null);
 
-    // Un besoin métier ne se sert QUE dans la famille métier. Un programme IA
-    // peut compléter un parcours, il ne répond pas à une fuite de mandat.
-    const inFamily = scored.filter((c) => c.family === need.family);
-    const metierGap = need.family === 'METIER' && inFamily.length === 0 && scored.length > 0;
+    // On sert dans la PREMIÈRE famille acceptée qui a des candidats. Un besoin
+    // métier ne se sert donc jamais avec de l'IA tant qu'il n'a pas déclaré
+    // l'accepter — et quand il l'accepte, le métier passe quand même devant.
+    const servedFamily = need.families.find((f) => scored.some((c) => c.family === f)) ?? null;
+    const inFamily = servedFamily ? scored.filter((c) => c.family === servedFamily) : [];
+
+    // Le manque : un besoin métier auquel SEULS répondent des programmes que le
+    // besoin n'accepte pas. On refuse de les servir, et on dit pourquoi.
+    const metierGap =
+      need.families[0] === 'METIER' && inFamily.length === 0 && scored.length > 0;
 
     const candidates = inFamily
       .sort((a, b) => b.score - a.score || a.code.localeCompare(b.code))
@@ -324,7 +345,20 @@ export function recommendProgrammes(input: ProgrammeMatchInput): ProgrammeMatchO
 
     if (metierGap) {
       notices.push(
-        `« ${need.label} » est un besoin métier, et le catalogue actif n’offre que des programmes IA pour y répondre. Aucun axe n’est proposé : c’est un manque de catalogue, pas une raison de vendre de l’IA.`,
+        `« ${need.label} » est un besoin métier, et le catalogue actif n’offre que des programmes hors métier pour y répondre (${[
+          ...new Set(scored.map((c) => c.code)),
+        ]
+          .slice(0, 3)
+          .join(', ')}). Aucun axe n’est proposé : c’est un manque de catalogue, pas une raison de vendre autre chose.`,
+      );
+    } else if (
+      servedFamily !== null &&
+      servedFamily !== need.families[0] &&
+      candidates.length > 0
+    ) {
+      // Servi, mais pas dans la famille préférée : ça se dit, ça ne se subit pas.
+      notices.push(
+        `« ${need.label} » : aucun programme métier ne le couvre, c’est un programme ${servedFamily === 'IA' ? 'IA' : servedFamily.toLowerCase()} qui est proposé (${candidates[0]!.code}). À confirmer.`,
       );
     } else if (candidates.length === 0) {
       notices.push(

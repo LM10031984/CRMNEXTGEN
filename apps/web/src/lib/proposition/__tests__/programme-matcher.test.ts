@@ -138,7 +138,10 @@ describe('Un point de douleur métier reçoit un programme MÉTIER', () => {
     const mandat = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite')!;
     expect(mandat.candidates).toHaveLength(0);
     expect(mandat.unmet).toBe(true);
-    expect(out.notices.join(' ')).toMatch(/pas une raison de vendre de l’IA/);
+    expect(out.notices.join(' ')).toMatch(/pas une raison de vendre autre chose/);
+    // Le manque nomme les programmes refusés : Laurent voit ce que le moteur
+    // aurait pu servir, et pourquoi il ne l'a pas fait.
+    expect(out.notices.join(' ')).toContain('FRM-0004');
   });
 
   it('sert bien un programme IA à un besoin d’équipement', () => {
@@ -226,5 +229,78 @@ describe('D’où sort une recommandation', () => {
       catalogue: CATALOGUE,
     };
     expect(recommendProgrammes(input)).toEqual(recommendProgrammes(input));
+  });
+});
+
+
+describe('Les familles qu’un besoin accepte — et l’ordre', () => {
+  it('sert l’IA sur l’e-réputation faute de programme métier, et le DIT', () => {
+    const visibilite: CatalogueEntry = {
+      productId: 'id-frm6',
+      code: 'FRM-0006',
+      title:
+        "Devenir le professionnel le plus visible de son secteur grâce à l'IA : avis, présence locale, commercialisation",
+      theme: 'IA',
+      isActive: true,
+      fundingType: 'COEUR_METIER',
+      durationHours: 8,
+      signals: [],
+      hasExcludedModule: false,
+    };
+    const out = recommendProgrammes({
+      chapterScores: [{ chapter: 9, score: 10 }],
+      alerts: [alerte('reviews_per_vente_below_benchmark', 9)],
+      catalogue: [...CATALOGUE, visibilite],
+    });
+    const ereput = out.recommendations.find((r) => r.need.code === 'ereputation')!;
+    expect(ereput.candidates.map((c) => c.code)).toEqual(['FRM-0006']);
+    expect(ereput.unmet).toBe(false);
+    expect(ereput.metierGap).toBe(false);
+    expect(out.notices.join(' ')).toMatch(/aucun programme métier ne le couvre/);
+  });
+
+  it('préfère le métier à l’IA quand les deux répondent', () => {
+    const metierAvis: CatalogueEntry = {
+      productId: 'id-avis',
+      code: 'PROD-9100',
+      title: 'Collecter les avis clients et soigner sa réputation locale',
+      theme: 'Acquisition',
+      isActive: true,
+      fundingType: 'COEUR_METIER',
+      durationHours: 7,
+      signals: [],
+      hasExcludedModule: false,
+    };
+    const iaAvis: CatalogueEntry = { ...metierAvis, productId: 'id-ia-avis', code: 'FRM-0006', title: "Avis et visibilité grâce à l'IA", theme: 'IA' };
+    const out = recommendProgrammes({
+      chapterScores: [{ chapter: 9, score: 10 }],
+      alerts: [],
+      catalogue: [...CATALOGUE, iaAvis, metierAvis],
+    });
+    const ereput = out.recommendations.find((r) => r.need.code === 'ereputation')!;
+    expect(ereput.candidates.map((c) => c.code)).toEqual(['PROD-9100']);
+  });
+
+  it('ne fait plus remonter un programme hors domaine sur des mots d’entreprise', () => {
+    // Le défaut de DIAG-0001 : « Communication digitale & Stratégie marketing
+    // pour activité événementielle » proposé à une agence immobilière.
+    const evenementiel: CatalogueEntry = {
+      productId: 'id-00661',
+      code: 'PROD-00661',
+      title: 'Communication digitale & Stratégie marketing pour activité événementielle (72h)',
+      theme: null,
+      isActive: true,
+      fundingType: 'COEUR_METIER',
+      durationHours: 72,
+      signals: [],
+      hasExcludedModule: false,
+    };
+    const out = recommendProgrammes({
+      chapterScores: [{ chapter: 9, score: 10 }],
+      alerts: [alerte('reviews_per_vente_below_benchmark', 9)],
+      catalogue: [...CATALOGUE, evenementiel],
+    });
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.code));
+    expect(tous).not.toContain('PROD-00661');
   });
 });

@@ -92,6 +92,70 @@ const PIGE_PATTERN = /\bpige\b/i;
  */
 const REGLEMENTAIRE_PATTERN = /tracfin|non[- ]?discrimination|d[ée]ontologie/i;
 
+/**
+ * Les durées manquantes — et pourquoi elles manquent.
+ *
+ * 30 des 79 modules de l'instantané sortent sans durée, et le produit d'accueil
+ * de la famille « Usecases » tombait donc à **0 h** — une valeur qui se propage
+ * ensuite en session, en convention et en dossier financeur.
+ *
+ * En regardant la source, ce ne sont pas des trous au hasard : le catalogue diag
+ * déclare le MÊME module pour trois profils (`conseiller`, `manager`,
+ * `assistant`), et seul le profil `conseiller` porte la durée, le niveau et les
+ * questions d'identification du besoin. Les variantes `manager` et `assistant`
+ * sont des déclarations de rattachement, pas d'autres modules — d'où trois
+ * lignes « Chat gpt » dans la même famille.
+ *
+ * D'où deux étages, dans cet ordre :
+ *
+ *   1. **la durée déclarée pour le même module sous un autre profil** — c'est
+ *      la vraie durée, elle existe, elle était simplement rangée ailleurs.
+ *      14 modules sur 30 se résolvent ainsi, sans la moindre ambiguïté (chaque
+ *      nom ne porte qu'une seule valeur dans tout le catalogue) ;
+ *   2. **1 h par défaut** pour les 16 qui restent — la durée la plus fréquente
+ *      du catalogue déclaré (24 modules sur 49). Choix délibérément
+ *      CONSERVATEUR : surestimer des heures qui finiront sur une convention ou
+ *      un dossier de financement est une non-conformité, les sous-estimer n'est
+ *      qu'un catalogue à affiner. Le rapport les liste une par une.
+ */
+const DEFAULT_MODULE_HOURS = 1;
+
+/** Durées déclarées dans tout le catalogue, indexées par nom normalisé. */
+let declaredHoursByName = new Map<string, number>();
+
+function indexDeclaredHours(catalog: readonly CatalogModule[]): void {
+  const byName = new Map<string, Set<number>>();
+  for (const m of catalog) {
+    if (!hasDeclaredDuration(m)) continue;
+    const k = matchKey(m.name);
+    byName.set(k, new Set([...(byName.get(k) ?? []), m.durationHours!]));
+  }
+  // Une seule valeur par nom, sinon on ne tranche pas à la place du métier :
+  // un nom qui porterait deux durées différentes retombe sur le défaut, et se
+  // voit dans le rapport.
+  declaredHoursByName = new Map(
+    [...byName.entries()].filter(([, v]) => v.size === 1).map(([k, v]) => [k, [...v][0]!]),
+  );
+}
+
+export type DurationOrigin = 'declaree' | 'autre_profil' | 'defaut';
+
+/** D'où sort la durée d'un module — le rapport en rend compte ligne par ligne. */
+function durationOrigin(m: CatalogModule): DurationOrigin {
+  if (hasDeclaredDuration(m)) return 'declaree';
+  return declaredHoursByName.has(matchKey(m.name)) ? 'autre_profil' : 'defaut';
+}
+
+/** La durée retenue pour un module. Jamais zéro. */
+function moduleHours(m: CatalogModule): number {
+  if (hasDeclaredDuration(m)) return m.durationHours!;
+  return declaredHoursByName.get(matchKey(m.name)) ?? DEFAULT_MODULE_HOURS;
+}
+
+function hasDeclaredDuration(m: CatalogModule): boolean {
+  return typeof m.durationHours === 'number' && m.durationHours > 0;
+}
+
 function isPige(m: CatalogModule): boolean {
   return (
     PIGE_PATTERN.test(m.name) ||
@@ -148,6 +212,7 @@ async function main() {
   const snapshotPath = path.resolve(HERE, 'data/diag-module-catalog.json');
   const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as CatalogSnapshot;
   const catalog = snapshot.moduleCatalog;
+  indexDeclaredHours(catalog);
 
   const tenant = await prisma.tenant.findFirst({ where: { name: TENANT_NAME } });
   if (!tenant) throw new Error(`Tenant « ${TENANT_NAME} » introuvable — lancer le seed d'abord.`);
@@ -246,7 +311,9 @@ async function main() {
   say();
 
   // ── M4 · Produits d'accueil par famille ────────────────────────────────────
-  const families = [...new Set(aCreer.map((r) => r.module.family))].sort();
+  // Les familles viennent du CATALOGUE, pas des seules créations : un import
+  // rejoué doit encore savoir de quels conteneurs il parle pour les réparer.
+  const families = [...new Set(catalog.map((m) => m.family))].sort();
   say("## Produits d'accueil à créer (inactifs)");
   say();
   say(
@@ -260,7 +327,8 @@ async function main() {
   let codeOffset = 0;
   const familyPlan: FamilyPlan[] = families.map((family) => {
     const mods = aCreer.filter((r) => r.module.family === family).map((r) => r.module);
-    const hours = mods.reduce((sum, m) => sum + (m.durationHours ?? 0), 0);
+    const allMods = catalog.filter((m) => m.family === family);
+    const hours = allMods.reduce((sum, m) => sum + moduleHours(m), 0);
     const title = `Catalogue diagnostic — ${family}`;
     // Import rejouable : si le conteneur existe déjà, on le réutilise au lieu
     // d'en créer un jumeau. Un script d'import qui double le catalogue au
@@ -270,6 +338,7 @@ async function main() {
       family,
       title,
       modules: mods,
+      allModules: allMods,
       hours,
       existingProductId: existing?.id ?? null,
       code:
@@ -282,9 +351,55 @@ async function main() {
   });
   for (const f of familyPlan) {
     const note = f.existingProductId ? ' _(déjà présent, réutilisé)_' : '';
-    say(`| \`${f.code}\` | ${f.title}${note} | ${f.modules.length} | ${f.hours} h |`);
+    const aCreerNote = f.modules.length === f.allModules.length ? '' : ` (${f.modules.length} à créer)`;
+    say(
+      `| \`${f.code}\` | ${f.title}${note} | ${f.allModules.length}${aCreerNote} | ${f.hours} h |`,
+    );
   }
   say();
+
+  // ── M9 · Durées non déclarées ──────────────────────────────────────────────
+  const reprises = catalog.filter((m) => durationOrigin(m) === 'autre_profil');
+  const defauts = catalog.filter((m) => durationOrigin(m) === 'defaut');
+  say('## Durées : ce que la source déclare, et ce qui manque');
+  say();
+  say(
+    "Le catalogue diag déclare le **même module pour trois profils** (`conseiller`, " +
+      '`manager`, `assistant`) et ne porte la durée que sur le profil `conseiller` — ' +
+      "d'où trois lignes « Chat gpt » dans la même famille, dont deux sans durée. Ce ne " +
+      'sont pas des doublons : ce sont des rattachements de profil.',
+  );
+  say();
+  say(
+    `Sur ${catalog.length} modules : ${catalog.filter(hasDeclaredDuration).length} portent leur durée, ` +
+      `**${reprises.length} la reprennent du même module déclaré sous un autre profil**, ` +
+      `et **${defauts.length} n'en ont aucune nulle part** — celles-là seulement reçoivent ` +
+      `le défaut de ${DEFAULT_MODULE_HOURS} h. Aucun module ne reste à 0 h.`,
+  );
+  say();
+  if (reprises.length > 0) {
+    say('**Durées reprises d’un autre profil** (valeur réelle, simplement rangée ailleurs) :');
+    say();
+    for (const family of [...new Set(reprises.map((m) => m.family))].sort()) {
+      const mods = reprises.filter((m) => m.family === family);
+      say(
+        `- **${family}** (${mods.length}) : ` +
+          mods.map((m) => `${m.name} → ${moduleHours(m)} h`).join(' · '),
+      );
+    }
+    say();
+  }
+  if (defauts.length > 0) {
+    say(
+      `**Durées inconnues, défaut de ${DEFAULT_MODULE_HOURS} h appliqué** — à corriger quand elles seront connues :`,
+    );
+    say();
+    for (const family of [...new Set(defauts.map((m) => m.family))].sort()) {
+      const mods = defauts.filter((m) => m.family === family);
+      say(`- **${family}** (${mods.length}) : ${mods.map((m) => m.name).join(' · ')}`);
+    }
+    say();
+  }
 
   // ── M7 · Agent Incomparable ────────────────────────────────────────────────
   const parcoursModules = readAgentIncomparableModules();
@@ -321,7 +436,11 @@ async function main() {
         r.verdict === 'apparie' ? 'apparié' : r.verdict === 'ambigu' ? '⚠️ ambigu' : 'à créer';
       say(
         `| ${r.module.name} | ${verdict} | ${r.module.isFoundationModule ? '✅' : ''} | ` +
-          `${isPige(r.module) ? '🚫' : ''} | ${r.module.durationHours ?? '—'} | ` +
+          `${isPige(r.module) ? '🚫' : ''} | ${moduleHours(r.module)}${
+            { declaree: '', autre_profil: ' _(autre profil)_', defaut: ' _(défaut)_' }[
+              durationOrigin(r.module)
+            ]
+          } | ` +
           `${r.candidates.join(' · ') || '—'} |`,
       );
     }
@@ -341,6 +460,8 @@ async function main() {
     say();
     say(`- ${created.products} produit(s) créé(s), tous inactifs`);
     say(`- ${created.modules} module(s) créé(s)`);
+    say(`- ${created.repairedModules} module(s) dont la durée a été corrigée`);
+    say(`- ${created.repairedProducts} conteneur(s) dont la durée totale a été recalculée`);
     say(`- ${created.reglementaires} produit(s) repassé(s) en fundingType REGLEMENTAIRE`);
   }
 
@@ -384,7 +505,16 @@ interface FamilyPlan {
   family: string;
   code: string;
   title: string;
+  /** Les modules que l'import doit CRÉER (verdict « à créer » uniquement). */
   modules: CatalogModule[];
+  /**
+   * TOUS les modules de la famille — y compris ceux déjà en base. C'est cette
+   * liste qui fixe la durée du conteneur et qui pilote la passe de réparation :
+   * sans elle, un import rejoué sur une base déjà peuplée ne corrige rien,
+   * puisque tous les modules y sont « appariés » et donc hors du plan de
+   * création.
+   */
+  allModules: CatalogModule[];
   hours: number;
   /** Non-null quand le conteneur existe déjà : on le complète au lieu d'en créer un. */
   existingProductId: string | null;
@@ -398,6 +528,8 @@ async function applyImport(
 ) {
   let createdProducts = 0;
   let createdModules = 0;
+  let repairedProducts = 0;
+  let repairedModules = 0;
 
   for (const plan of familyPlan) {
     let productId = plan.existingProductId;
@@ -438,7 +570,7 @@ async function applyImport(
           order,
           title: m.name,
           contentMd: m.needIdentification ?? '',
-          durationMin: Math.round((m.durationHours ?? 0) * 60),
+          durationMin: Math.round(moduleHours(m) * 60),
           family: m.family,
           targetProfile: m.targetProfile,
           diagnosticSignals: m.diagnosticSignals,
@@ -448,6 +580,60 @@ async function applyImport(
         },
       });
       createdModules += 1;
+    }
+
+    // ── Passe de RÉPARATION ────────────────────────────────────────────────
+    //
+    // Sans elle, l'import est rejouable mais stérile : sur une base déjà
+    // peuplée, tous les modules sont « appariés », donc hors du plan de
+    // création, et une correction de durée ne serait jamais appliquée. On
+    // remet donc d'aplomb ce que l'import POSSÈDE — la durée des modules
+    // qu'il a créés, et la durée du conteneur — et rien d'autre : ni le titre,
+    // ni le code, ni l'activation, qui appartiennent à Laurent.
+    const enBase = await prisma.trainingModule.findMany({
+      where: { productId },
+      select: { id: true, title: true, durationMin: true },
+    });
+
+    // On parcourt les LIGNES en base, pas le catalogue : un même module existe
+    // en trois exemplaires (un par profil), et une correspondance nom → ligne
+    // unique n'en réparait qu'un sur trois. Les trois portent la même durée —
+    // c'est le même module, décliné.
+    const heuresParCle = new Map(plan.allModules.map((m) => [matchKey(m.name), moduleHours(m)]));
+
+    for (const row of enBase) {
+      const heures = heuresParCle.get(matchKey(row.title));
+      if (heures === undefined) continue;
+      const attendu = Math.round(heures * 60);
+      if (row.durationMin === attendu) continue;
+      await prisma.trainingModule.update({
+        where: { id: row.id },
+        data: { durationMin: attendu },
+      });
+      repairedModules += 1;
+    }
+
+    const produit = await prisma.trainingProduct.findUnique({
+      where: { id: productId },
+      select: { durationHours: true },
+    });
+    // La durée du conteneur suit ce qu'il contient VRAIMENT, ligne à ligne :
+    // le catalogue et la base peuvent diverger (un module déjà présent sous un
+    // autre produit n'est pas recréé ici), et un total qui ne correspond pas à
+    // la somme de ses modules est un total qui ment.
+    const totalEnBase = (
+      await prisma.trainingModule.findMany({
+        where: { productId },
+        select: { durationMin: true },
+      })
+    ).reduce((sum, m) => sum + m.durationMin, 0);
+    const heuresAttendues = Math.round(totalEnBase / 60);
+    if (produit && produit.durationHours !== heuresAttendues) {
+      await prisma.trainingProduct.update({
+        where: { id: productId },
+        data: { durationHours: heuresAttendues },
+      });
+      repairedProducts += 1;
     }
   }
 
@@ -505,6 +691,8 @@ async function applyImport(
   return {
     products: createdProducts,
     modules: createdModules,
+    repairedProducts,
+    repairedModules,
     reglementaires: aRequalifier.length,
   };
 }
