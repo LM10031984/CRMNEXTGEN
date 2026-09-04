@@ -217,7 +217,7 @@ Un lot = une PR, `/livraison` avant chaque commit, `pnpm test` vert (les 1 332 t
 |---|---|---|
 | D-1 | Confirmer Super PDP après lecture de la doc et création du compte (lot 0). Si l'API réelle est trop pauvre (pas de statuts, pas de webhook), basculer Iopole et demander un devis. | Super PDP |
 | D-2 | Code VATEX à utiliser pour l'art. 261-4-4°a (à demander à l'expert-comptable ou à lire dans les spécifications externes DGFiP). | Catégorie E + texte, code laissé `null` tant que non confirmé |
-| D-3 | Y a-t-il des prestations **non exonérées** (conseil, diagnostic vendu seul, licence Coach Brain…) ? Si oui, elles rendent l'émission obligatoire au 01/09/2027 et le lot 3 devient prioritaire. | Supposé non pour l'instant |
+| ~~D-3~~ | ~~Y a-t-il des prestations **non exonérées** ?~~ **TRANCHÉE le 04/09/2026 : tout est exonéré.** L'émission reste une conformité anticipée, pas une obligation au 01/09/2027 ; le lot 3 ne devient pas prioritaire pour raison réglementaire. | Laurent, 04/09/2026 |
 | D-4 | Factures payées par un financeur en subrogation (AGEFICE paie l'OF) : le « buyer » reste le stagiaire/entreprise, le financeur est un tiers payeur — à valider avec l'expert-comptable pour la représentation EN 16931 (`PayeeParty` ?). | Buyer = client, financeur en note |
 | D-5 | Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 (cascade de tarif) ? | Après — sinon on transmet des montants faux à une plateforme d'État |
 
