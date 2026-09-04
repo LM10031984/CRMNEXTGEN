@@ -27,8 +27,7 @@ le mode d'emploi.**
 - `apps/web/src/lib/storage.ts` — adaptateur MinIO/Supabase, `DOCS_BUCKET`.
 - `.planning/specs/2026-09-02-facturation-electronique-pa.md` — le pattern
   port/adaptateur à reproduire pour `SignatureProvider`.
-- Documentation DocuSeal : https://www.docuseal.com/docs/api (submissions,
-  text tags `{{Signature;role=…}}`, webhooks, audit log).
+- **Skill `docuseal-code`** (installée via `npx skills add docusealco/docuseal-agent-skills --skill docuseal-code`) : à charger AVANT d'écrire l'adaptateur — c'est la référence officielle de l'API (submissions, templates, text tags `{{Signature;role=…}}`, `send_email`, webhooks, audit log). La doc en ligne https://www.docuseal.com/docs/api ne sert qu'en complément.
 
 `--etat` : mode lecture seule — tableau A→D (migrations présentes ? drop zone ?
 adaptateur ? webhook ? certificat joint au dossier AGEFICE ?), D-x encore
