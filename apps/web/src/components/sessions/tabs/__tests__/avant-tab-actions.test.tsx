@@ -26,6 +26,13 @@ const dispatchGenerateMissing = vi.fn(
   async (..._args: unknown[]) => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] }),
 );
 const dispatchGenerateDoc = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
+vi.mock('@/server/actions/qualiopi-matrix', () => ({
+  // Lot A signature — l'onglet embarque `<SignedDocDropZone>`, qui importe la
+  // server action. Sans ce mock, la chaîne @/lib/rbac → @/lib/auth exécute
+  // `cache()` de React, indisponible en jsdom.
+  uploadSignedScans: vi.fn().mockResolvedValue({ ok: true, saved: 0, failures: [] }),
+}));
+
 vi.mock('@/server/actions/dispatch-generate-doc', () => ({
   dispatchGenerateMissing: (...args: unknown[]) => dispatchGenerateMissing(...args),
   dispatchGenerateDoc: (...args: unknown[]) => dispatchGenerateDoc(...args),

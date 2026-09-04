@@ -38,6 +38,9 @@ vi.mock('@qualiof/db', () => ({
     },
     document: {
       deleteMany: vi.fn(),
+      // Le cœur partagé `persistSignedScan` porte le PDF signé sur le
+      // `Document` existant (spec signature §4.1) quand il y en a un.
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -304,7 +307,10 @@ describe('uploadSignedDoc', () => {
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
     const uploadArgs = uploadFileMock.mock.calls[0]!;
     expect(uploadArgs[0]).toBe('qualiof-docs');
-    expect(uploadArgs[1]).toMatch(/^signed\//);
+    // Spec signature 2026-09-04 §4.4 — les NOUVEAUX écrits vont sous
+    // `sessions/{tenantId}/{sessionCode}/signed/…` (une session = un préfixe
+    // zippable). L'ancien préfixe `signed/{tenantId}/…` reste lisible.
+    expect(uploadArgs[1]).toMatch(/^sessions\/.+\/signed\//);
     expect(uploadArgs[1]).toContain('SES-0010');
     expect(uploadArgs[1]).toContain(VALID_PARTICIPANT_ID);
     expect(uploadArgs[1]).toContain('CONVENTION');

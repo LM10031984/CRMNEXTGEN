@@ -25,11 +25,16 @@ import crypto from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { Prisma } from '@qualiof/db';
 import { prisma } from '@qualiof/db';
-import { DocStatusState } from '@qualiof/shared';
+import {
+  DocStatusState,
+  SignedScansInputSchema,
+  MAX_SIGNED_SCANS_PER_BATCH,
+} from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { logDocumentEvent } from '@/lib/document-audit';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
-import { DOC_TYPE_TO_CLOSURE_KIND } from '@/lib/doc-scope';
+import { DOC_TYPE_TO_CLOSURE_KIND, isDocumentDocType } from '@/lib/doc-scope';
+import { splitPdfPages } from '@/lib/pdf-split';
 import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
@@ -136,16 +141,113 @@ export async function markDocStatus(
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 Mo
 
+type SignedScanParticipant = {
+  id: string;
+  sessionId: string;
+  session: { code: string | null };
+  docStatus: unknown;
+};
+
+const SIGNED_SCAN_PARTICIPANT_SELECT = {
+  id: true,
+  sessionId: true,
+  session: { select: { code: true } },
+  docStatus: true,
+} as const;
+
+/** Garde-fous communs à tout PDF signé entrant (spec §5 A). */
+function validateSignedPdf(file: File): string | null {
+  if (file.type !== 'application/pdf') {
+    return 'Format non supporté. Le fichier doit être un PDF.';
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return 'Fichier trop volumineux (max 10 Mo).';
+  }
+  return null;
+}
+
 /**
- * Upload du PDF signé scanné → MinIO `DOCS_BUCKET` + patch atomique
+ * Cœur partagé du dépôt d'un PDF signé (scan manuel).
+ *
+ * Un seul chemin d'écriture pour les deux entrées UI — la modale par cellule
+ * (`uploadSignedDoc`) et la zone de dépôt de la fiche session
+ * (`uploadSignedScans`). Ne journalise PAS : chaque appelant pose sa propre
+ * action AuditLog.
+ *
+ * Chemin bucket — spec §4.4 :
+ *   `sessions/{tenantId}/{sessionCode}/signed/{docType}-{entityId}-{sha8}.pdf`
+ * Une session = un préfixe = un dossier zippable pour le pack audit (lot D).
+ * L'ancien préfixe `signed/{tenantId}/…` reste lisible : rien n'est déplacé.
+ */
+async function persistSignedScan(opts: {
+  userId: string;
+  tenantId: string;
+  participant: SignedScanParticipant;
+  docType: string;
+  buf: Buffer;
+}): Promise<{ key: string; before: unknown; entry: Record<string, unknown> }> {
+  const { userId, tenantId, participant, docType, buf } = opts;
+
+  const sha8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 8);
+  const safeCode = (participant.session.code ?? 'unknown').replace(/[^A-Za-z0-9_-]/g, '_');
+  const key = `sessions/${tenantId}/${safeCode}/signed/${docType}-${participant.id}-${sha8}.pdf`;
+  await uploadFile(DOCS_BUCKET, key, buf, 'application/pdf');
+
+  const currentMap = (participant.docStatus ?? {}) as Record<string, unknown>;
+  const before = currentMap[docType] ?? null;
+  const now = new Date();
+  const entry = {
+    state: 'MANUAL_OK' as const,
+    uploadedSignedPdfKey: key,
+    uploadedSignedAt: now.toISOString(),
+    uploadedByUserId: userId,
+    updatedAt: now.toISOString(),
+  };
+
+  const jsonPath = `{${docType}}`;
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "SessionParticipant"
+    SET "docStatus" = jsonb_set(
+          COALESCE("docStatus", '{}'::jsonb),
+          ${jsonPath}::text[],
+          ${JSON.stringify(entry)}::jsonb,
+          true
+        ),
+        "updatedAt" = NOW()
+    WHERE id = ${participant.id}::uuid
+      AND "sessionId" IN (
+        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${tenantId}::uuid
+      )
+  `);
+
+  // Règle métier n°2 — le PDF signé fait foi. Si un `Document` de ce type
+  // existe déjà pour ce participant, il porte désormais le signé. On n'en crée
+  // JAMAIS un nouveau : le mécanisme `docStatus` suffit pour les scans sans
+  // Document (l'émargement papier d'une session sans pack généré, par ex.).
+  if (isDocumentDocType(docType)) {
+    await prisma.document.updateMany({
+      where: { tenantId, participantId: participant.id, type: docType },
+      data: {
+        signedPdfUrl: key,
+        signedAt: now,
+        signatureKind: 'MANUAL_SCAN',
+        status: 'signed',
+      },
+    });
+  }
+
+  return { key, before, entry };
+}
+
+/**
+ * Upload du PDF signé scanné → bucket `DOCS_BUCKET` + patch atomique
  * `docStatus[docType] = { state: 'MANUAL_OK', uploadedSignedPdfKey, ... }`.
  *
  * Signature `(formData: FormData)` car Server Actions Next.js 14 acceptent
  * directement FormData pour les uploads multipart depuis client RHF.
  *
- * Key MinIO : `signed/{tenantId}/{sessionCode}/{participantId}-{docType}-{sha8}.pdf`
- *   - sha8 du contenu PDF garantit unicité même upload répété.
- *   - Le nom est non-PII (pas le nom du participant en clair) — Person reste opaque.
+ * Entrée « une cellule à la fois » (modale de la matrice). Pour un dépôt de
+ * plusieurs scans d'un coup, cf. `uploadSignedScans`.
  */
 export async function uploadSignedDoc(
   formData: FormData,
@@ -167,73 +269,185 @@ export async function uploadSignedDoc(
   if (!(file instanceof File)) {
     return { ok: false, error: 'Fichier manquant' };
   }
-  if (file.type !== 'application/pdf') {
-    return { ok: false, error: 'Format non supporté. Le fichier doit être un PDF.' };
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return { ok: false, error: 'Fichier trop volumineux (max 10 Mo).' };
-  }
+  const invalid = validateSignedPdf(file);
+  if (invalid) return { ok: false, error: invalid };
   if (!participantId || !docType) {
     return { ok: false, error: 'Données invalides' };
   }
 
   const participant = await prisma.sessionParticipant.findFirst({
-    where: {
-      id: participantId,
-      session: { tenantId: user.tenantId },
-    },
-    select: {
-      id: true,
-      sessionId: true,
-      session: { select: { code: true } },
-      docStatus: true,
-    },
+    where: { id: participantId, session: { tenantId: user.tenantId } },
+    select: SIGNED_SCAN_PARTICIPANT_SELECT,
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const sha8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 8);
-  const safeCode = (participant.session.code ?? 'unknown').replace(/[^A-Za-z0-9_-]/g, '_');
-  const key = `signed/${user.tenantId}/${safeCode}/${participantId}-${docType}-${sha8}.pdf`;
-  await uploadFile(DOCS_BUCKET, key, buf, 'application/pdf');
-
-  const currentMap = (participant.docStatus ?? {}) as Record<string, unknown>;
-  const before = currentMap[docType] ?? null;
-  const entry = {
-    state: 'MANUAL_OK' as const,
-    uploadedSignedPdfKey: key,
-    uploadedSignedAt: new Date().toISOString(),
-    uploadedByUserId: user.id,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const jsonPath = `{${docType}}`;
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "SessionParticipant"
-    SET "docStatus" = jsonb_set(
-          COALESCE("docStatus", '{}'::jsonb),
-          ${jsonPath}::text[],
-          ${JSON.stringify(entry)}::jsonb,
-          true
-        ),
-        "updatedAt" = NOW()
-    WHERE id = ${participantId}::uuid
-      AND "sessionId" IN (
-        SELECT id FROM "TrainingSession" WHERE "tenantId" = ${user.tenantId}::uuid
-      )
-  `);
+  const { before, entry } = await persistSignedScan({
+    userId: user.id,
+    tenantId: user.tenantId,
+    participant,
+    docType,
+    buf: Buffer.from(await file.arrayBuffer()),
+  });
 
   await logDocumentEvent({
     tenantId: user.tenantId,
     actorUserId: user.id,
     targetEntityId: participantId,
     action: 'documents.upload_signed',
-    // mask key en log (sécurité — la clé MinIO contient tenantId/sessionCode)
+    // mask key en log (sécurité — la clé bucket contient tenantId/sessionCode)
     diff: { [docType]: { before, after: { ...entry, uploadedSignedPdfKey: '<masked>' } } },
   });
 
   revalidatePath(`/app/sessions/${participant.sessionId}`);
   return { ok: true };
+}
+
+// ─── 2 bis. uploadSignedScans (lot A — zone de dépôt) ─────────────────────
+
+export type SignedScanFailure = { filename: string; error: string };
+export type UploadSignedScansResult =
+  | { ok: true; saved: number; failures: SignedScanFailure[] }
+  | { ok: false; error: string };
+
+/**
+ * Dépôt de plusieurs scans signés sur une session, un par participant
+ * (spec 2026-09-04 §5 lot A).
+ *
+ * Rappel métier : **la fiche d'émargement est individuelle**. Le scan revient
+ * participant par participant — jamais un « signé » posé sur toute la session
+ * d'un coup. D'où l'affectation explicite fichier → participant.
+ *
+ * FormData :
+ *   sessionId, docType, mode (`assign` | `split`),
+ *   files[]           — N PDF en mode assign, 1 seul en mode split
+ *   participantIds[]  — aligné sur files en mode assign,
+ *                       ordre des pages en mode split
+ *
+ * Tolérant par fichier : un scan refusé (mauvais format, trop lourd, stagiaire
+ * introuvable) n'annule pas les autres — il ressort dans `failures` pour que
+ * l'admin le retraite. Seules les erreurs de cadrage (RBAC, affectation
+ * incohérente, découpage impossible) rendent `ok: false`.
+ */
+export async function uploadSignedScans(formData: FormData): Promise<UploadSignedScansResult> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const parsed = SignedScansInputSchema.safeParse({
+    sessionId: formData.get('sessionId'),
+    docType: formData.get('docType'),
+    mode: formData.get('mode') ?? undefined,
+    participantIds: formData.getAll('participantIds').map(String),
+  });
+  if (!parsed.success) return { ok: false, error: 'Données invalides' };
+  const { sessionId, docType, mode, participantIds } = parsed.data;
+
+  const files = formData.getAll('files').filter((f): f is File => f instanceof File);
+  if (files.length === 0) return { ok: false, error: 'Aucun fichier déposé.' };
+  if (files.length > MAX_SIGNED_SCANS_PER_BATCH) {
+    return { ok: false, error: `Trop de fichiers (max ${MAX_SIGNED_SCANS_PER_BATCH}).` };
+  }
+  if (mode === 'assign' && files.length !== participantIds.length) {
+    return { ok: false, error: 'Chaque fichier doit être affecté à un stagiaire.' };
+  }
+  if (mode === 'split' && files.length !== 1) {
+    return { ok: false, error: 'Le mode « une fiche par page » attend un seul PDF.' };
+  }
+
+  const rows = await prisma.sessionParticipant.findMany({
+    where: {
+      id: { in: participantIds },
+      sessionId,
+      session: { tenantId: user.tenantId },
+    },
+    select: SIGNED_SCAN_PARTICIPANT_SELECT,
+  });
+  const participantById = new Map<string, SignedScanParticipant>(rows.map((r) => [r.id, r]));
+
+  // Chaque item = un PDF à poser sur un participant.
+  const items: Array<{ filename: string; participantId: string; buf?: Buffer; error?: string }> = [];
+
+  if (mode === 'split') {
+    const file = files[0]!;
+    const invalid = validateSignedPdf(file);
+    if (invalid) return { ok: false, error: invalid };
+
+    let pages: Buffer[];
+    try {
+      pages = await splitPdfPages(Buffer.from(await file.arrayBuffer()));
+    } catch {
+      return { ok: false, error: 'PDF illisible : le découpage par page a échoué.' };
+    }
+    if (pages.length !== participantIds.length) {
+      return {
+        ok: false,
+        error: `Le PDF contient ${pages.length} page(s) pour ${participantIds.length} stagiaire(s) sélectionné(s).`,
+      };
+    }
+    participantIds.forEach((participantId, index) => {
+      items.push({
+        filename: `${file.name} — page ${index + 1}`,
+        participantId,
+        buf: pages[index]!,
+      });
+    });
+  } else {
+    for (const [index, file] of files.entries()) {
+      const invalid = validateSignedPdf(file);
+      items.push({
+        filename: file.name,
+        participantId: participantIds[index]!,
+        ...(invalid ? { error: invalid } : { buf: Buffer.from(await file.arrayBuffer()) }),
+      });
+    }
+  }
+
+  const failures: SignedScanFailure[] = [];
+  let saved = 0;
+
+  for (const item of items) {
+    if (item.error || !item.buf) {
+      failures.push({ filename: item.filename, error: item.error ?? 'Fichier illisible' });
+      continue;
+    }
+    const participant = participantById.get(item.participantId);
+    if (!participant) {
+      failures.push({ filename: item.filename, error: 'Inscription introuvable' });
+      continue;
+    }
+
+    try {
+      const { key } = await persistSignedScan({
+        userId: user.id,
+        tenantId: user.tenantId,
+        participant,
+        docType,
+        buf: item.buf,
+      });
+      await logDocumentEvent({
+        tenantId: user.tenantId,
+        actorUserId: user.id,
+        targetEntityId: participant.id,
+        action: 'document.signed_scan_uploaded',
+        diff: { sessionId, docType, participantId: participant.id, key },
+      });
+      saved += 1;
+    } catch (e) {
+      failures.push({
+        filename: item.filename,
+        error: e instanceof Error ? e.message : 'Enregistrement impossible',
+      });
+    }
+  }
+
+  revalidatePath(`/app/sessions/${sessionId}`);
+  return { ok: true, saved, failures };
 }
 
 // ─── 3. regenerateParticipantDoc ─────────────────────────────────────────

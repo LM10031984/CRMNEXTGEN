@@ -684,6 +684,20 @@ export default async function SessionDetailPage({
   const productCode = session.product?.code ?? null;
   const productDuration = session.product?.durationHours ?? null;
 
+  // Lot A signature (spec 2026-09-04 §5 A) — stagiaires de la zone de dépôt des
+  // scans signés. `stateByDocType` montre à l'admin ce qu'il s'apprête à écraser
+  // (« Signé (scan) » l'emporte sur « Généré », même priorité que deriveCellState).
+  const dropZoneParticipants = matrixParticipants.map((p) => {
+    const generated = participantDocsByPid.get(p.id);
+    const stateByDocType: Record<string, string> = {};
+    for (const docType of ['EMARGEMENT', 'CONVENTION', 'AGEFICE', 'CONVOCATION']) {
+      const manual = (p.docStatus?.[docType] as { state?: string } | undefined)?.state;
+      if (manual === 'MANUAL_OK') stateByDocType[docType] = 'Signé (scan)';
+      else if (generated?.has(docType)) stateByDocType[docType] = 'Généré';
+    }
+    return { id: p.id, fullName: p.fullName, stateByDocType };
+  });
+
   // Items pré-formation Qualiopi (source unique) — alimentent l'onglet « Avant »
   // (TabAvant) qui réembarque les actions dispatchGenerate* de l'ancien drawer.
   const docDockItems = buildDocDockItems({
@@ -1362,7 +1376,12 @@ export default async function SessionDetailPage({
             {/* Phase 15 Lot 2 — actions par doc/stagiaire réembarquées depuis le
                 drawer supprimé : « Tout générer » + 1 ligne par doc (Convention/
                 Convocation/AGEFICE/Analyse besoin/Assiduité AGEFICE). */}
-            <TabAvant sessionId={session.id} items={avantItems} canGenerate={canWrite} />
+            <TabAvant
+              sessionId={session.id}
+              items={avantItems}
+              canGenerate={canWrite}
+              dropZoneParticipants={dropZoneParticipants}
+            />
           </div>
         }
         apres={
@@ -1372,6 +1391,7 @@ export default async function SessionDetailPage({
             canWrite={canWrite}
             sessionDocs={apresSessionDocs}
             closureItems={closureItems}
+            dropZoneParticipants={dropZoneParticipants}
             batch={
               latestBatch
                 ? {

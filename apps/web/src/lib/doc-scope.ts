@@ -42,6 +42,46 @@ export const SESSION_ONLY_DOC_TYPES = [
 export type SessionOnlyDocType = (typeof SESSION_ONLY_DOC_TYPES)[number];
 
 /**
+ * Valeurs réellement présentes dans l'enum Prisma `DocType` (schema.prisma).
+ *
+ * Les clés de `SessionParticipant.docStatus` sont plus larges que l'enum
+ * (SATISFACTION_CHAUD, POSITIONNEMENT, ANALYSE_BESOIN n'ont pas de `Document`).
+ * Avant tout `prisma.document.*` filtré par `type`, passer par
+ * `isDocumentDocType()` — sinon Prisma lève sur une valeur d'enum inconnue.
+ *
+ * Miroir manuel de l'enum : à tenir à jour avec `schema.prisma`.
+ */
+export const DOCUMENT_DOC_TYPES = [
+  'CONVENTION',
+  'PROGRAMME',
+  'DEROULE_PEDAGOGIQUE',
+  'CHECKLIST_FORMATION',
+  'GRILLE_OBS_SESSION',
+  'CONVOCATION',
+  'EMARGEMENT',
+  'ASSIDUITE',
+  'ATTESTATION_FIN',
+  'CERTIFICAT_REALISATION',
+  'AGEFICE',
+  'EVALUATION_ACQUIS',
+  'SATISFACTION',
+  'SATISFACTION_SESSION',
+  'SUPPORT_PEDAGOGIQUE',
+  'PRE_ACCORD_OPCO',
+  'VALIDATION_OPCO',
+  'FACTURE',
+  'CGV',
+  'REGLEMENT_INTERIEUR',
+  'CUSTOM',
+  'VEILLE_AUDIT',
+] as const;
+export type DocumentDocType = (typeof DOCUMENT_DOC_TYPES)[number];
+
+export function isDocumentDocType(value: string): value is DocumentDocType {
+  return (DOCUMENT_DOC_TYPES as readonly string[]).includes(value);
+}
+
+/**
  * D-09.3-08 — Mapping cible figé `DocType → qualiopiIndicator` du seed
  * `QualiopiDocCatalog` (`packages/db/prisma/seed.ts`), recoupé sur le RNQ V9
  * (plan §1) + la grille des 2 rapports d'audit BCI précédents.

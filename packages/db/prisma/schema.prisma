@@ -1014,6 +1014,9 @@ model Document {
   entityId      String
   pdfUrl        String
   hashSha256    String
+  /// `generated` | `sent_for_signature` | `signed` | `declined` | `expired`.
+  /// Reste une String en v1 (spec signature 2026-09-04 §4.1) : colonne existante,
+  /// aucune reprise — les anciennes lignes gardent "generated".
   status        String              @default("generated")
   sessionId     String?
   session       TrainingSession?    @relation(fields: [sessionId], references: [id])
@@ -1021,8 +1024,23 @@ model Document {
   participant   SessionParticipant? @relation(fields: [participantId], references: [id])
   createdAt     DateTime            @default(now())
 
+  /// Spec signature 2026-09-04 §4.1 — trace du document signé (e-signature OU
+  /// scan manuel). Le PDF signé fait foi : /api/documents/[id] sert
+  /// `signedPdfUrl ?? pdfUrl`.
+  signedPdfUrl  String? // clé bucket du PDF signé (§4.4)
+  signedAt      DateTime?
+  signatureKind SignatureKind?
+
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, type])
+}
+
+/// Spec signature 2026-09-04 §4.1.
+/// E_SIGNATURE : retour d'un prestataire (DocuSeal, lot C).
+/// MANUAL_SCAN : scan d'un document signé à la main (émargement — lot A).
+enum SignatureKind {
+  E_SIGNATURE
+  MANUAL_SCAN
 }
 
 // =====================================================

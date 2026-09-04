@@ -29,6 +29,10 @@ import { generateDerouleForProduct } from '@/server/actions/deroule-product-gene
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
 import { generateSatisfactionSessionForSession } from '@/server/actions/generate-satisfaction-session';
+import {
+  SignedDocDropZone,
+  type DropZoneParticipant,
+} from '../qualiopi-matrix/signed-doc-drop-zone';
 
 type SessionDocKey = 'deroule' | 'grilleObs' | 'checklist' | 'satisfactionSession';
 
@@ -59,6 +63,12 @@ interface Props {
     doneDocs: number;
     errorDocs: number;
   } | null;
+  /**
+   * Lot A signature (spec 2026-09-04 §5 A) — stagiaires de la session, pour la
+   * zone de dépôt des émargements signés. L'émargement est signé à la main en
+   * salle (décision O-3) : le scan revient ici, participant par participant.
+   */
+  dropZoneParticipants?: DropZoneParticipant[];
   /** Slots pré-rendus côté serveur (nœuds React, pas de fonction client). */
   packCta?: React.ReactNode;
   pendantBlock?: React.ReactNode;
@@ -83,6 +93,7 @@ export function TabApres({
   sessionDocs,
   closureItems,
   batch,
+  dropZoneParticipants,
   packCta,
   pendantBlock,
   closureBlock,
@@ -159,6 +170,17 @@ export function TabApres({
 
       {/* Bloc pack détaillé (slot serveur). */}
       {closureBlock}
+
+      {/* Lot A signature — dépôt des émargements signés à la main (O-3).
+          Le geste doit être visible ici, pas caché dans le menu d'une cellule. */}
+      {canWrite && dropZoneParticipants && dropZoneParticipants.length > 0 && (
+        <SignedDocDropZone
+          sessionId={sessionId}
+          docType="EMARGEMENT"
+          docLabel="émargements"
+          participants={dropZoneParticipants}
+        />
+      )}
 
       {/* 4 docs niveau session — une ligne par doc, câblée sur SA server action. */}
       <section className="rounded-2xl border border-border bg-white p-5">

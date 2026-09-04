@@ -19,7 +19,9 @@
  * DocCellMenu pris en charge en plus de la pastille (UI-SPEC §MatrixRow composite).
  */
 
-import { usePathname } from 'next/navigation';
+import { useState, useTransition } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { withFrom } from '@/lib/nav/from-link';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -27,6 +29,10 @@ import { DocStatusBadge } from './doc-status-badge';
 import { DocCellMenu } from './doc-cell-menu';
 import { DOC_TYPE_LABELS } from '@/lib/doc-scope';
 import type { CellState } from '@/lib/derive-cell-state';
+import { uploadSignedDoc } from '@/server/actions/qualiopi-matrix';
+
+/** Même plafond que la server action (spec §5 A). */
+const MAX_DROP_BYTES = 10 * 1024 * 1024;
 
 export interface RowParticipant {
   /** SessionParticipant.id (utilisé pour la sélection + actions). */
@@ -60,7 +66,53 @@ export function MatrixRow({
   columns,
 }: MatrixRowProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const cellByType = new Map(cells.map((c) => [c.docType, c.state]));
+
+  // Lot A signature (spec §5 A) — « lâcher un PDF sur la cellule Émargement
+  // d'un participant = affectation directe, sans passer par la liste ». C'est
+  // le geste le plus rapide pour 5-8 stagiaires.
+  const [dragOverDocType, setDragOverDocType] = useState<string | null>(null);
+  const [droppingDocType, setDroppingDocType] = useState<string | null>(null);
+  const [, startDropTransition] = useTransition();
+
+  function handleCellDrop(docType: string, files: FileList | null) {
+    setDragOverDocType(null);
+    const file = files?.[0];
+    if (!file) return;
+    if (files.length > 1) {
+      toast.error('Un seul PDF par cellule — utilisez la zone de dépôt pour un lot.');
+      return;
+    }
+    if (file.type !== 'application/pdf') {
+      toast.error('Format non supporté. Le fichier doit être un PDF.');
+      return;
+    }
+    if (file.size > MAX_DROP_BYTES) {
+      toast.error('Fichier trop volumineux (max 10 Mo).');
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('participantId', participant.id);
+    fd.append('docType', docType);
+
+    setDroppingDocType(docType);
+    startDropTransition(async () => {
+      try {
+        const res = await uploadSignedDoc(fd);
+        if (res.ok) {
+          toast.success(`PDF signé enregistré — ${participant.fullName}`);
+          router.refresh();
+        } else {
+          toast.error(res.error ?? "Erreur lors de l'enregistrement.");
+        }
+      } finally {
+        setDroppingDocType(null);
+      }
+    });
+  }
 
   return (
     <tr
@@ -105,7 +157,29 @@ export function MatrixRow({
         return (
           <td
             key={docType}
-            className="px-1 py-1.5 text-center border-b min-w-[48px] align-middle"
+            onDragOver={
+              readOnly
+                ? undefined
+                : (e) => {
+                    e.preventDefault();
+                    setDragOverDocType(docType);
+                  }
+            }
+            onDragLeave={readOnly ? undefined : () => setDragOverDocType(null)}
+            onDrop={
+              readOnly
+                ? undefined
+                : (e) => {
+                    e.preventDefault();
+                    handleCellDrop(docType, e.dataTransfer.files);
+                  }
+            }
+            title={readOnly ? undefined : `Déposer le PDF signé — ${label}`}
+            className={cn(
+              'px-1 py-1.5 text-center border-b min-w-[48px] align-middle transition-colors',
+              dragOverDocType === docType && 'bg-primary-50 ring-2 ring-inset ring-primary',
+              droppingDocType === docType && 'opacity-50',
+            )}
           >
             <div className="inline-flex items-center gap-0.5">
               {cell.state === 'GENERATED' && pdfRef ? (
