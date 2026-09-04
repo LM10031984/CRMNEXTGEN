@@ -58,23 +58,60 @@ Il n'y a **pas** de `.env.local` dans ce worktree : tout pointe Supabase sauf
 `TEST_DATABASE_URL`. (Le `files/.env.local` qui pointe `qualiof_dev` appartient
 à une autre session, dans un autre arbre.)
 
-## 3. Ce qui reste du lot 1
+## 3. Le lot 1 est complet — `f91d703` · `246cfae` · `2acf646`
 
-Par ordre de dépendance. C'est la moitié dense : elle réécrit `invoices.ts`.
+Ce que la section 3 annonçait comme « la moitié dense » est livré.
 
-1. **Les trois actions écrivent lignes + parties figées + `sourceFingerprint`**,
-   dans la **même transaction** que la facture :
-   `createInvoiceFromParticipant` (l. 70) · `createInvoiceForSponsorGroup`
-   (l. 255) · `createCreditNote` (l. 554).
-2. **SIREN client bloquant à l'émission** : `Organization.siren` absent ⇒
-   erreur explicite renvoyée à l'UI, pas une facture incomplète. La spec parle
-   d'un « écran de complétion » — à concevoir, il n'existe pas.
-3. **`scripts/backfill-invoice-lines.ts`** : une ligne de synthèse par facture
-   existante (label = titre de session, quantité 1, `totalHT = amountHT`),
-   **aucune modification de montant**, dry-run par défaut, `--apply` pour
-   écrire, rapport en sortie. Modèle à copier : `scripts/purge-orphan-drafts.ts`
-   (même discipline « inventaire d'abord, écriture sur demande »).
-4. **Test de contrat** `amountHT === Σ lines.totalHT` sur toute facture ISSUED.
+| Livré | Où |
+|---|---|
+| Projections pures (SIREN, parties, lignes, empreinte) | `lib/einvoice/invoice-snapshot.ts` |
+| Les trois actions écrivent lignes + parties + empreinte dans la MÊME transaction | `server/actions/invoices.ts` |
+| SIREN client bloquant à l'émission | idem, avant toute écriture |
+| Backfill du parc | `scripts/backfill-invoice-lines.ts` · `pnpm invoices:backfill-lines` |
+| Contrat `amountHT === Σ lines.totalHT` | `__tests__/invoices-lines-contract.test.ts` + garde d'exécution |
+
+Portes : `tsc` 0 · `pnpm lint` 3/3 · **214 fichiers, 1856 tests verts** côté web (départ : 212 / 1816) — soit +2 fichiers et +40 tests, aucun test existant modifié sauf les mocks de `credit-note.test.ts`, que la nouvelle lecture du Tenant rendait incomplets.
+
+### Les conventions à ne pas « simplifier »
+
+- **Quantité 1, unité C62.** Le prix de QualiOF est une place de formation, pas
+  un tarif horaire. Mettre la durée en quantité avec l'unité HUR ferait dire à
+  la facture un prix unitaire que personne n'a négocié.
+- **Ligne d'avoir NÉGATIVE**, parce que `Invoice.amountHT` l'est déjà dans ce
+  dépôt et que le contrat de montants doit tenir dès le premier avoir. ⚠ L'EN
+  16931 fait l'inverse — montants positifs, signe porté par le `TypeCode 381`.
+  **La bascule appartient au builder du lot 2**, et c'est le premier endroit où
+  quelqu'un se trompera.
+- **`deliveryAddressJson` est DÉRIVÉE** de la partie DELIVERY
+  (`deliveryAddressJson(party)`), jamais construite à côté. Deux écritures
+  parallèles de la même adresse reproduiraient le piège ① ci-dessous.
+- **`vatExemptionReasonCode` reste null.** D-2 non tranchée.
+
+### L'écart assumé du lot : l'avoir ne bloque pas sur le SIREN
+
+L'émission d'une facture NEUVE est refusée si le payeur n'a ni SIREN ni SIRET
+(le SIREN se dérive des 9 premiers chiffres du SIRET — exact, ce n'est pas une
+devinette). Message explicite, nommant la fiche à compléter, déjà affiché tel
+quel par les trois boutons appelants.
+
+**L'avoir, lui, passe.** Le code de commerce impose d'annuler une facture émise
+PAR un avoir ; refuser celui-ci pour une fiche client incomplète fermerait la
+seule correction légale d'une pièce déjà partie chez le client. Et quand
+l'original porte ses parties figées, l'avoir les **recopie** au lieu de relire
+la base : un avoir corrige UNE facture, pas l'état du monde d'aujourd'hui.
+
+### Ce qui reste à faire tourner (hors code)
+
+`pnpm invoices:backfill-lines` n'a **pas** été passé sur Supabase : la
+migration `20260904090000_einvoice_socle` n'y est pas encore (elle part par la
+CI au merge). Ordre à respecter, une fois la PR mergée :
+
+1. `prisma migrate deploy` (par la CI) ;
+2. `pnpm invoices:backfill-lines` — inventaire, à lire ;
+3. `pnpm invoices:backfill-lines --apply`.
+
+L'inventaire dira aussi combien de fiches clients sont sans SIREN ni SIRET —
+ce sont celles dont l'émission est désormais refusée.
 
 ## 4. Mes trois écarts assumés par rapport à la spec
 
@@ -141,7 +178,11 @@ Aucune facture n'a de lignes aujourd'hui. Le test doit soit s'exécuter après l
 backfill, soit ne porter que sur les factures **qui ont au moins une ligne** —
 sinon il échoue sur des données que le code de commerce interdit de réécrire.
 
-**⑥ `Document` type=FACTURE n'a pas d'empreinte.**
+**⑥ `Document` type=FACTURE n'a pas d'empreinte.** *(traité — l'empreinte vit
+sur `Invoice.sourceFingerprint`, calculée par `invoice-snapshot.ts` ; le
+commentaire de `source-fingerprint.ts` pointe désormais le bon fichier. Le
+reste du piège tient toujours : ne pas ajouter `FACTURE` à
+`FINGERPRINTED_DOC_TYPES`.)*
 `FINGERPRINTED_DOC_TYPES` (`lib/docs/source-fingerprint.ts`) exclut
 volontairement `FACTURE` : l'empreinte d'une facture appartient à
 `Invoice.sourceFingerprint`, ce lot-ci. Ne pas rajouter `FACTURE` à cette liste
