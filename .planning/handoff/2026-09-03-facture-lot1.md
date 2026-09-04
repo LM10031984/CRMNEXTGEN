@@ -107,11 +107,13 @@ migration `20260904090000_einvoice_socle` n'y est pas encore (elle part par la
 CI au merge). Ordre à respecter, une fois la PR mergée :
 
 1. `prisma migrate deploy` (par la CI) ;
-2. `pnpm invoices:backfill-lines` — inventaire, à lire ;
-3. `pnpm invoices:backfill-lines --apply`.
+2. `pnpm invoices:backfill-lines` — dry-run, **inventaire à remonter à Laurent** ;
+3. **STOP.** `--apply` seulement après son feu vert (décision du 04/09).
 
 L'inventaire dira aussi combien de fiches clients sont sans SIREN ni SIRET —
-ce sont celles dont l'émission est désormais refusée.
+ce sont celles dont l'émission est désormais refusée. C'est cette liste que
+Laurent veut voir **avant** l'écriture : le backfill n'est pas réversible sans
+suppression de lignes sur des pièces comptables.
 
 ## 4. Mes trois écarts assumés par rapport à la spec
 
@@ -207,6 +209,8 @@ masse, jamais une garde maison.
 | **D-2** Code VATEX art. 261-4-4°a | **Ouverte.** `vatExemptionReasonCode` reste null en attendant. |
 | **D-4** Financeur en subrogation (AGEFICE paie l'OF) | **Ouverte.** Buyer = client, financeur en note, à valider avec l'expert-comptable pour EN 16931. |
 | **E-9** `settleInvoiceForParticipant` | **Ouverte** — Laurent tranche avant le lot 3. |
+| **Avoir non bloquant sur le SIREN** | **Validée par Laurent le 04/09/2026.** L'écart du lot 1 est acquis : une facture neuve est refusée sans SIREN ni SIRET, un avoir passe. Ne pas le re-litiger. |
+| **Lot 2 (Factur-X)** | **Repoussé — pas avant le salon** (décision Laurent, 04/09/2026). |
 
 ## 7. Rappels de forme
 
