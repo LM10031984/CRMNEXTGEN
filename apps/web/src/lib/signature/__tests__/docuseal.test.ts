@@ -397,6 +397,34 @@ describe('DocuSeal — parseEvent', () => {
     expect(ev.signerEmail).toBe('dirigeant@agence.fr');
   });
 
+  it('form.completed réel : l’id de l’envoi est SOUS data.submission, pas data.submission_id', () => {
+    // Payload documenté par la skill docuseal-code (references/api/form-webhook.md).
+    // `data` ne porte PAS de `submission_id` : le lot C perdrait la corrélation
+    // et ne saurait pas quel SignatureRequest avancer.
+    const ev = provider().parseEvent(
+      JSON.stringify({
+        event_type: 'form.completed',
+        timestamp: '2026-09-10T09:10:00.000Z',
+        data: {
+          id: 1,
+          email: 'john.doe@example.com',
+          role: 'Client',
+          status: 'completed',
+          completed_at: '2026-09-10T09:10:00.000Z',
+          submission: {
+            id: 12,
+            audit_log_url: 'https://docuseal.test/blobs/audit-log.pdf',
+            status: 'completed',
+          },
+        },
+      }),
+    );
+    expect(ev.type).toBe('signer.completed');
+    expect(ev.providerId).toBe('12');
+    expect(ev.signerId).toBe('1');
+    expect(ev.auditTrailUrl).toBe('https://docuseal.test/blobs/audit-log.pdf');
+  });
+
   it('submission.completed → tout le monde a signé, certificat disponible', () => {
     const ev = provider().parseEvent(
       JSON.stringify({

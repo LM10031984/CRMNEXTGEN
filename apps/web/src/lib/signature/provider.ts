@@ -78,6 +78,17 @@ export function getSignatureProviderStatus(): SignatureProviderStatus {
     };
   }
 
+  if (!(env.DOCUSEAL_BASE_URL ?? '').trim()) {
+    return {
+      available: false,
+      provider: 'docuseal',
+      reason:
+        'DOCUSEAL_BASE_URL vide — impossible de savoir à quelle région DocuSeal ' +
+        'parler. Renseigner l’URL d’API de la région du compte (instance UE pour ' +
+        'les données d’apprenants).',
+    };
+  }
+
   if (!apiKey) {
     const reason = 'DOCUSEAL_API_KEY absente — signature électronique indisponible.';
     return isProd
@@ -115,7 +126,10 @@ export function getSignatureProvider(): SignatureProvider {
 
   return createDocusealProvider({
     apiKey: (env.DOCUSEAL_API_KEY ?? '').trim(),
-    baseUrl: (env.DOCUSEAL_BASE_URL ?? '').trim() || 'https://api.docuseal.com',
+    // Pas de repli codé en dur : `getSignatureProviderStatus` a déjà refusé une
+    // base URL vide. Le host de signature s'en déduit — rien d'autre dans le
+    // code ne connaît la région.
+    baseUrl: (env.DOCUSEAL_BASE_URL ?? '').trim(),
     webhookSecret: webhookSecret || undefined,
   });
 }

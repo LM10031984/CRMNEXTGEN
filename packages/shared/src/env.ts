@@ -106,9 +106,14 @@ export const sharedEnv = createEnv({
     // dry-run silencieux.
     SIGNATURE_PROVIDER: z.enum(['docuseal', 'dry-run']).default('dry-run'),
     DOCUSEAL_API_KEY: z.string().optional(),
-    // api.docuseal.com (global) ou api.docuseal.eu (serveur UE — la clé API est
-    // liée à la région du compte, ce n'est pas un simple changement d'URL).
-    DOCUSEAL_BASE_URL: z.string().url().default('https://api.docuseal.com'),
+    // SEUL endroit du dépôt où un host DocuSeal est écrit : le code déduit tout
+    // le reste de cette valeur (y compris le host des liens de signature).
+    // Défaut = serveur UE : les conventions et dossiers AGEFICE portent de la
+    // PII (identité, adresse, n° de sécurité sociale via la pièce jointe), un
+    // défaut hors UE serait le mauvais réglage par omission.
+    // ⚠ La clé API est liée à la RÉGION du compte : basculer d'URL suppose un
+    // compte créé sur console.docuseal.eu, pas seulement une variable changée.
+    DOCUSEAL_BASE_URL: z.string().url().default('https://api.docuseal.eu'),
     // Secret HMAC des webhooks (`whsec_…`). Absent ⇒ tout webhook est rejeté.
     DOCUSEAL_WEBHOOK_SECRET: z.string().optional(),
 

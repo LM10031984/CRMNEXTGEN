@@ -29,7 +29,8 @@ import { SIGNATURE_ROLES } from '../src/lib/signature/text-tags';
 
 const OUT = process.env.PROOF_OUT ?? '/tmp/preuve-signature-lot-b';
 const API_KEY = (process.env.DOCUSEAL_API_KEY ?? '').trim();
-const BASE_URL = (process.env.DOCUSEAL_BASE_URL ?? 'https://api.docuseal.com').trim();
+// Aucun repli : le script ne choisit pas la région à la place de l'opérateur.
+const BASE_URL = (process.env.DOCUSEAL_BASE_URL ?? '').trim();
 
 /** Le signataire client du test — par défaut l'OF lui-même, jamais un tiers. */
 const CLIENT_EMAIL = process.env.SMOKE_CLIENT_EMAIL ?? 'laurent@start-academy.fr';
@@ -92,6 +93,7 @@ async function relire(submissionId: string): Promise<void> {
 
 async function main(): Promise<void> {
   if (!API_KEY) throw new Error('DOCUSEAL_API_KEY absente — rien à tester.');
+  if (!BASE_URL) throw new Error('DOCUSEAL_BASE_URL absente — région DocuSeal inconnue.');
 
   if (process.env.SMOKE_ARCHIVE) {
     await api(`/submissions/${process.env.SMOKE_ARCHIVE}`, 'DELETE');
