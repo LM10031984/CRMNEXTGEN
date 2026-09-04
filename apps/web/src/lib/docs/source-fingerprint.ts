@@ -171,9 +171,12 @@ export function computeFingerprint(source: unknown): string {
  *
  * Hors périmètre volontairement :
  *  - `EMARGEMENT` : porté par `PedagogicalAsset`, qui n'a pas la colonne.
- *  - `FACTURE`    : `Invoice.sourceFingerprint` appartient au lot 2.1
- *    (spec facturation électronique du 02/09). Deux définitions rivales de
- *    l'empreinte d'une facture seraient pires que pas d'empreinte du tout.
+ *  - `FACTURE`    : l'empreinte d'une facture vit sur `Invoice.sourceFingerprint`
+ *    et se calcule dans `lib/einvoice/invoice-snapshot.ts` (livré au lot 1 de
+ *    la spec facturation électronique du 02/09) — mêmes primitives, projection
+ *    propre à la pièce comptable. NE PAS ajouter `FACTURE` ici : deux
+ *    définitions rivales de la même empreinte seraient pires que pas
+ *    d'empreinte du tout.
  */
 export const FINGERPRINTED_DOC_TYPES = [
   'CONVENTION',
