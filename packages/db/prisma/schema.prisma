@@ -1395,6 +1395,10 @@ model AgeficePointAccueil {
   website        String?
   contactName    String? // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
   numberPta      String? // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
+  // Départements RÉELLEMENT couverts par ce point d'accueil (source officielle
+  // agefice.fr). `department` ci-dessus dit seulement où il est implanté : 24
+  // départements n'ont aucun point chez eux et sont servis par un voisin.
+  departmentsServed String[] @default([])
   source         String           @default("agefice.fr-2025") // versioning du référentiel
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
