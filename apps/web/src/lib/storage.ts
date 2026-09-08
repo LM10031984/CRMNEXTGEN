@@ -189,11 +189,19 @@ export async function createSignedDownloadUrl(
   bucket: string,
   key: string,
   expiresInSec = 60 * 10,
+  downloadAs?: string,
 ): Promise<string> {
   if (PROVIDER === 'supabase') {
+    // `downloadAs` : nom de fichier vu par l'utilisateur. INDISPENSABLE ici —
+    // les routes /api/documents|apprenants|pedagogical-assets redirigent (302)
+    // vers cette URL, donc le `Content-Disposition` qu'elles posent n'est jamais
+    // appliqué et le navigateur retombe sur le nom technique de l'objet
+    // (« …-9f136578.pdf »). Supabase traduit l'option en `?download=<nom>`, ce
+    // qui pose l'en-tête côté storage. Nom ASCII garanti par
+    // `buildDownloadFilename` (cf. lib/docs/download-filename.ts).
     const { data, error } = await supabase()
       .storage.from(bucket)
-      .createSignedUrl(key, expiresInSec);
+      .createSignedUrl(key, expiresInSec, downloadAs ? { download: downloadAs } : undefined);
     if (error) throw new Error(`Supabase signedUrl failed : ${error.message}`);
     return data.signedUrl;
   }

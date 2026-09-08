@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, createSignedDownloadUrl, DOCS_BUCKET, _internals } from '@/lib/storage';
+import { buildDownloadFilename, extFromStorageKey } from '@/lib/docs/download-filename';
 
-const KIND_TO_LABEL: Record<string, string> = {
-  cni: 'cni',
-  rib: 'rib',
-  cfp: 'cfp',
+/** kind d'URL (minuscule) → DocType du catalogue, pour le nom de fichier. */
+const KIND_TO_DOC_TYPE: Record<string, string> = {
+  cni: 'CNI',
+  rib: 'RIB',
+  cfp: 'CFP',
 };
 
 function inferContentType(key: string): string {
@@ -24,12 +26,14 @@ export async function GET(
   const { user } = await validateRequest();
   if (!user) return new NextResponse('Unauthorized', { status: 401 });
   const { id, kind } = await context.params;
-  if (!KIND_TO_LABEL[kind]) return new NextResponse('Bad kind', { status: 400 });
+  if (!KIND_TO_DOC_TYPE[kind]) return new NextResponse('Bad kind', { status: 400 });
 
   const person = await prisma.person.findFirst({
     where: { id, tenantId: user.tenantId },
     select: {
       id: true,
+      firstName: true,
+      lastName: true,
       ribKey: true,
       sensitiveData: { select: { idDocumentUrl: true } },
       legalLinks: {
@@ -57,11 +61,20 @@ export async function GET(
 
   if (!key) return new NextResponse('Document non disponible', { status: 404 });
 
+  // « Piece-identite-Stephane-ROUSSEAU.pdf » plutôt que le nom technique de
+  // l'objet stocké (cas signalé par Laurent le 2026-09-08).
+  const filename = buildDownloadFilename({
+    docType: KIND_TO_DOC_TYPE[kind],
+    firstName: person.firstName,
+    lastName: person.lastName,
+    ext: extFromStorageKey(key, 'bin'),
+  });
+
   try {
     // Prod Supabase : redirect 302 vers une signed URL FRAÎCHE (TTL 600s) —
     // contourne le cap 4,5 Mo réponse Vercel sur les scans CNI/RIB/CFP.
     if (_internals.PROVIDER === 'supabase') {
-      const url = await createSignedDownloadUrl(DOCS_BUCKET, key, 600);
+      const url = await createSignedDownloadUrl(DOCS_BUCKET, key, 600, filename);
       return NextResponse.redirect(url, 302);
     }
     // MinIO local : proxy inchangé.
@@ -70,7 +83,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': inferContentType(key),
-        'Content-Disposition': `inline; filename="${KIND_TO_LABEL[kind]}-${id.slice(0, 8)}.${key.split('.').pop() ?? 'bin'}"`,
+        'Content-Disposition': `inline; filename="${filename}"`,
         'Cache-Control': 'private, max-age=3600',
       },
     });
