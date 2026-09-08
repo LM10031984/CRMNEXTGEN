@@ -6,10 +6,11 @@
  */
 
 import { useState, useTransition } from 'react';
-import { Plus, X, Star, StarOff, Briefcase, Search } from 'lucide-react';
+import { Plus, X, Star, StarOff, Briefcase, Search, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { searchOrganizations, createLegalLink, deleteLegalLink, setPrimaryLegalLink } from '@/server/actions/legal-links';
 import { formatFunderCode } from '@/lib/funder-codes';
+import { classifyEiRename } from '@/lib/persons/ei-organization-name';
 
 const ROLE_OPTIONS = [
   { value: 'DIRIGEANT', label: 'Dirigeant' },
@@ -40,9 +41,16 @@ interface LegalLink {
 interface Props {
   personId: string;
   links: LegalLink[];
+  /**
+   * Nom courant de l'apprenant — sert à signaler une auto-entreprise dont la
+   * raison sociale porte encore un ancien nom (quick 260908-lhg). Optionnel :
+   * sans lui, aucune mention n'est affichée, le composant reste utilisable tel
+   * quel par ses autres appelants.
+   */
+  personName?: { firstName: string; lastName: string };
 }
 
-export function LegalLinkEditor({ personId, links }: Props) {
+export function LegalLinkEditor({ personId, links, personName }: Props) {
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +115,18 @@ export function LegalLinkEditor({ personId, links }: Props) {
         <ul className="space-y-2">
           {links.map((link) => {
             const isEi = SOLO_FORMS.includes(link.organization.legalForm);
+            // Auto-entreprise dont la raison sociale contient le nom de famille
+            // sans lui être égale : soit un ancien nom resté en place, soit un
+            // nom de naissance légitime. On le signale, on ne corrige rien —
+            // une raison sociale figure sur les conventions et les pièces OPCO.
+            const nameMismatch =
+              !!personName &&
+              link.role === 'EI_SELF' &&
+              classifyEiRename({
+                legalName: link.organization.legalName,
+                oldFirstName: personName.firstName,
+                oldLastName: personName.lastName,
+              }) === 'warn';
             return (
               <li
                 key={link.id}
@@ -129,6 +149,15 @@ export function LegalLinkEditor({ personId, links }: Props) {
                       <Badge variant="default">{formatFunderCode(link.organization.opcoCode)}</Badge>
                     )}
                   </div>
+                  {nameMismatch && (
+                    <div className="text-xs text-amber-700 mt-1 inline-flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        Raison sociale différente du nom de l'apprenant — à vérifier avant
+                        d'éditer une convention ou une attestation.
+                      </span>
+                    </div>
+                  )}
                   {link.organization.siret && (
                     <div className="text-xs text-muted-foreground mt-1">
                       SIRET <code className="font-mono">{link.organization.siret}</code>

@@ -598,7 +598,11 @@ export default async function ApprenantDetailPage({
                   <Badge variant="primary">Cas multi-casquettes</Badge>
                 )}
               </div>
-              <LegalLinkEditor personId={person.id} links={person.legalLinks} />
+              <LegalLinkEditor
+                personId={person.id}
+                links={person.legalLinks}
+                personName={{ firstName: person.firstName, lastName: person.lastName }}
+              />
             </section>
           </div>
 
