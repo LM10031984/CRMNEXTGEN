@@ -33,6 +33,9 @@ import { DOC_TYPE_LABELS } from '@/lib/doc-scope';
  * automatiquement de `DOC_TYPE_LABELS[type].long`.
  */
 const FILENAME_LABEL_OVERRIDES: Record<string, string> = {
+  // Pseudo-type : l'archive « tous les documents d'un apprenant », qui n'est
+  // pas un DocType du catalogue (cf. lib/docs/learner-zip-entries.ts).
+  DOSSIER_APPRENANT: 'Documents',
   CNI: 'Piece-identite',
   RIB: 'RIB',
   CFP: 'Attestation-CFP',
