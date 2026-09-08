@@ -88,6 +88,7 @@ export async function generateVeilleAuditForTheme(
         tenantName: of.name,
       },
       snapshotFromOfConfig(of),
+      of,
     );
 
     let pdfBuffer: Buffer;

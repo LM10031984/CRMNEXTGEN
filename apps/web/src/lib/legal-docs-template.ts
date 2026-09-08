@@ -87,7 +87,7 @@ export function renderLegalDocHtml(
 </style>
 </head>
 <body>
-${renderOfPagedFooter()}
+${renderOfPagedFooter(of)}
 
 <div class="header">
   ${logoSrc ? `<img src="${escapeHtml(logoSrc)}" alt="Logo ${escapeHtml(of.name)}">` : `<div><strong>${escapeHtml(of.name)}</strong></div>`}
