@@ -12,7 +12,7 @@ import { downloadFile, createSignedDownloadUrl, DOCS_BUCKET, _internals } from '
 import { buildDownloadFilename, extFromStorageKey } from '@/lib/docs/download-filename';
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { user } = await validateRequest();
@@ -44,11 +44,23 @@ export async function GET(
     ext: extFromStorageKey(asset.pdfUrl),
   });
 
+  // `?dl=1` — téléchargement explicite (nom parlant, pièce jointe). Sans le
+  // paramètre, la route reste en consultation : le PDF s'ouvre dans un onglet,
+  // comme avant. La distinction compte : l'option `download` de Supabase force
+  // `Content-Disposition: attachment`, donc l'appliquer partout ferait
+  // télécharger un document que l'utilisateur voulait seulement regarder.
+  const wantsDownload = new URL(req.url).searchParams.get('dl') === '1';
+
   try {
     // Prod Supabase : redirect 302 vers une signed URL FRAÎCHE (TTL 600s, régénérée
     // à chaque hit = préserve le no-store) — contourne le cap 4,5 Mo réponse Vercel.
     if (_internals.PROVIDER === 'supabase') {
-      const url = await createSignedDownloadUrl(DOCS_BUCKET, asset.pdfUrl, 600, filename);
+      const url = await createSignedDownloadUrl(
+        DOCS_BUCKET,
+        asset.pdfUrl,
+        600,
+        wantsDownload ? filename : undefined,
+      );
       return NextResponse.redirect(url, 302);
     }
     // MinIO local : proxy inchangé.
@@ -57,7 +69,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${filename}"`,
+        'Content-Disposition': `${wantsDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
         // no-store : un doc régénéré garde le MÊME id/URL. Avec un cache navigateur
         // (avant : max-age=3600), l'ancienne version était resservie jusqu'à 1h après
         // régénération (« je revois l'ancienne version », Laurent 2026-07-01).

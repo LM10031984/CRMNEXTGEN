@@ -303,13 +303,13 @@ export function DocCellMenu({
             {showDownload && (
               <DropdownMenu.Item asChild>
                 <a
+                  // `?dl=1` : téléchargement avec un nom parlant. Le clic sur la
+                  // pastille elle-même reste en consultation (ouvre le PDF).
                   href={
                     pdfRef!.kind === 'asset'
-                      ? `/api/pedagogical-assets/${pdfRef!.id}`
-                      : `/api/documents/${pdfRef!.id}`
+                      ? `/api/pedagogical-assets/${pdfRef!.id}?dl=1`
+                      : `/api/documents/${pdfRef!.id}?dl=1`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className={ITEM_CLS}
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />

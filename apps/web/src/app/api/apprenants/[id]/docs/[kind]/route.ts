@@ -20,7 +20,7 @@ function inferContentType(key: string): string {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string; kind: string }> },
 ) {
   const { user } = await validateRequest();
@@ -70,11 +70,23 @@ export async function GET(
     ext: extFromStorageKey(key, 'bin'),
   });
 
+  // `?dl=1` — téléchargement explicite (nom parlant, pièce jointe). Sans le
+  // paramètre, la route reste en consultation : le PDF s'ouvre dans un onglet,
+  // comme avant. La distinction compte : l'option `download` de Supabase force
+  // `Content-Disposition: attachment`, donc l'appliquer partout ferait
+  // télécharger un document que l'utilisateur voulait seulement regarder.
+  const wantsDownload = new URL(req.url).searchParams.get('dl') === '1';
+
   try {
     // Prod Supabase : redirect 302 vers une signed URL FRAÎCHE (TTL 600s) —
     // contourne le cap 4,5 Mo réponse Vercel sur les scans CNI/RIB/CFP.
     if (_internals.PROVIDER === 'supabase') {
-      const url = await createSignedDownloadUrl(DOCS_BUCKET, key, 600, filename);
+      const url = await createSignedDownloadUrl(
+        DOCS_BUCKET,
+        key,
+        600,
+        wantsDownload ? filename : undefined,
+      );
       return NextResponse.redirect(url, 302);
     }
     // MinIO local : proxy inchangé.
@@ -83,7 +95,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': inferContentType(key),
-        'Content-Disposition': `inline; filename="${filename}"`,
+        'Content-Disposition': `${wantsDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
         'Cache-Control': 'private, max-age=3600',
       },
     });
