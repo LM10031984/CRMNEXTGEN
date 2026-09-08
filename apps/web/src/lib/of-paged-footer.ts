@@ -17,7 +17,7 @@
  *   - Placer `renderOfPagedFooter()` en TÊTE du <body> (avant le contenu)
  */
 
-import { getOfConfig } from './of-config';
+import { getOfConfig, type OfConfig } from './of-config';
 import { DOC_VERSION } from './doc-version';
 
 const BRAND_DARK = '#00527A';
@@ -62,11 +62,17 @@ export const OF_PAGED_PAGE_RULE = `
  * dès qu'il le rencontre dans le flow → doit être présent AVANT le contenu
  * de la page 1 pour apparaître dans `@bottom-center` dès la page 1.
  */
-export function renderOfPagedFooter(): string {
-  const of = getOfConfig();
-  const contactNom = `${of.contact.prenom} ${of.contact.nom}`.trim();
+export function renderOfPagedFooter(of?: OfConfig): string {
+  // `of` vient de `loadOfConfig(tenantId)` : la BASE d'abord, l'environnement
+  // seulement en repli. Sans lui (anciens appelants), on retombe sur
+  // `getOfConfig()` qui ne lit QUE l'environnement — et l'écran Paramètres
+  // n'atteignait alors pas ce pied de page. C'est ce qui pouvait faire cohabiter
+  // deux SIRET différents dans une même convention : le bon dans le corps
+  // (lu en base), l'ancien en pied de page (lu dans l'environnement).
+  const cfg = of ?? getOfConfig();
+  const contactNom = `${cfg.contact.prenom} ${cfg.contact.nom}`.trim();
   return `<footer class="corp">
-  <strong>${escapeHtml(of.name)}</strong> – Siège social : ${escapeHtml(of.addressFull)} - SIRET : ${escapeHtml(of.siret)} – NDA ${escapeHtml(of.rnq)}<br>
-  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(of.contact.email)} - ${escapeHtml(of.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
+  <strong>${escapeHtml(cfg.name)}</strong> – Siège social : ${escapeHtml(cfg.addressFull)} - SIRET : ${escapeHtml(cfg.siret)} – NDA ${escapeHtml(cfg.rnq)}<br>
+  Coordonnées de contact : ${escapeHtml(contactNom)} - ${escapeHtml(cfg.contact.email)} - ${escapeHtml(cfg.contact.phone)}<br><span style="font-size:9pt;color:#64748B;">${escapeHtml(DOC_VERSION)}</span>
 </footer>`;
 }
