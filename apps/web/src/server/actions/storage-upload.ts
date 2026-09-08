@@ -10,26 +10,29 @@
  *   2. confirmer l'upload post-facto et recâbler l'OCR (Pitfall 4 : l'OCR ne meurt pas)
  *
  * Le composant client d'upload (progression, retry) vient au plan 18-04.
- * ⚠ upload-apprenant-docs.ts et submitPreEnrollmentForm restent en place jusqu'à
- * la bascule client (plan 04) — ne rien casser.
+ * Quick 260908-lrj : `upload-apprenant-docs.ts` (envoi par server action, donc
+ * plafonné à 4,5 Mo par Vercel) a été SUPPRIMÉ — le formulaire de création
+ * d'apprenant est passé au dépôt unique direct-to-storage. Il ne reste que ce
+ * chemin-ci pour les pièces d'apprenant.
  */
 
 import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { filterOwnApprenantKeys } from '@/lib/storage-keys/apprenant-keys';
 import { createSignedUploadUrl, DOCS_BUCKET, PREENROLLMENT_BUCKET } from '@/lib/storage';
 
 export type ApprenantDocKind = 'CNI' | 'RIB' | 'CFP';
 
-/** Extension nettoyée (alphanum only) — reprend upload-apprenant-docs.ts. */
+/** Extension nettoyée (alphanum only) — repris de l'ancien upload-apprenant-docs.ts. */
 function safeExt(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() ?? 'bin';
   return /^[a-z0-9]+$/.test(ext) ? ext : 'bin';
 }
 
 /**
- * Content-type déduit de l'extension — reprend upload-apprenant-docs.ts.
+ * Content-type déduit de l'extension — repris de l'ancien upload-apprenant-docs.ts.
  * PAS exporté : fichier 'use server' → Next n'autorise que des exports async.
  */
 function guessContentType(name: string, fallback?: string): string {
@@ -176,7 +179,14 @@ export async function confirmApprenantUpload(
 ): Promise<{ ok: true; keys: Partial<Record<ApprenantDocKind, string>> } | ActionError> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
-  return { ok: true, keys };
+  // Les clés arrivent du navigateur après l'upload direct : elles sont une
+  // entrée utilisateur. Sans ce filtre, une clé forgée pouvait faire attacher
+  // à une fiche apprenant un objet d'un AUTRE tenant (quick 260908-lrj).
+  const { accepted, rejected } = filterOwnApprenantKeys(keys, user.tenantId);
+  if (rejected.length > 0) {
+    return { ok: false, error: `Pièce non reconnue (${rejected.join(', ')}) — recommence le dépôt.` };
+  }
+  return { ok: true, keys: accepted };
 }
 
 // Downscale avant vision OCR (Pitfall 3) : déplacé dans @/lib/ocr-downscale
