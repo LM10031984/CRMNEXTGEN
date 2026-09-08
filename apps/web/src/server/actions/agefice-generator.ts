@@ -6,6 +6,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
+import { departmentOfPostalCode, pickPointAccueil } from '@/lib/agefice/select-point-accueil';
 import { buildDeroulementPedagogique } from '@/lib/pedagogy-templates';
 import {
   fillAgeficePdf,
@@ -173,12 +174,22 @@ export async function generateAgeficeForParticipant(
   };
   if (!pointAccueil) {
     const cp = personalAddress?.postalCode ?? orgAddress?.postalCode ?? null;
-    if (cp) {
-      const dept = cp.startsWith('97') || cp.startsWith('98') ? cp.slice(0, 3) : cp.slice(0, 2);
-      pointAccueil = await prisma.ageficePointAccueil.findFirst({
-        where: { department: dept },
-        orderBy: { city: 'asc' },
+    const dept = departmentOfPostalCode(cp);
+    if (dept) {
+      // Quick 260908-m1v — avant : `findFirst({ where: { department }, orderBy:
+      // { city: 'asc' } })`, soit le premier point d'accueil du département par
+      // ordre alphabétique de ville (Arles plutôt que Marseille), et RIEN du
+      // tout pour les 24 départements sans point implanté. On classe désormais
+      // sur la couverture officielle (cf. lib/agefice/select-point-accueil).
+      const candidates = await prisma.ageficePointAccueil.findMany({
+        where: { OR: [{ department: dept }, { departmentsServed: { has: dept } }] },
       });
+      const best = pickPointAccueil(candidates, {
+        department: dept,
+        city: personalAddress?.city ?? orgAddress?.city ?? null,
+        postalCode: cp,
+      });
+      pointAccueil = best ? (candidates.find((c) => c.id === best.id) ?? null) : null;
       if (!pointAccueil) {
         warnings.push(`Aucun PA AGEFICE trouvé pour le département ${dept} dans le référentiel.`);
       }
