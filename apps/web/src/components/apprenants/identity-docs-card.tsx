@@ -12,6 +12,7 @@ import {
   CreditCard,
   Receipt,
   Eye,
+  Download,
   Upload,
   RotateCw,
   Loader2,
@@ -66,6 +67,10 @@ function DocRow({ personId, chip }: { personId: string; chip: ChipDef }) {
   const router = useRouter();
 
   const docUrl = `/api/apprenants/${personId}/docs/${chip.kind}`;
+  // `?dl=1` = téléchargement avec un nom parlant (« Piece-identite-Stephane-ROUSSEAU.pdf »)
+  // au lieu du nom technique de l'objet stocké. Sans le paramètre on reste en
+  // consultation — c'est ce que veut l'aperçu ci-dessous.
+  const downloadUrl = `${docUrl}?dl=1`;
 
   function onPickFile(file: File) {
     const fd = new FormData();
@@ -126,12 +131,10 @@ function DocRow({ personId, chip }: { personId: string; chip: ChipDef }) {
                   </Dialog.Title>
                   <div className="flex items-center gap-2">
                     <a
-                      href={docUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={downloadUrl}
                       className="text-xs text-muted-foreground hover:text-foreground underline"
                     >
-                      Ouvrir / Télécharger
+                      Télécharger
                     </a>
                     <Dialog.Close asChild>
                       <button
@@ -148,6 +151,15 @@ function DocRow({ personId, chip }: { personId: string; chip: ChipDef }) {
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>
+        )}
+
+        {present && (
+          <a
+            href={downloadUrl}
+            className="inline-flex items-center gap-1 rounded-md border border-current/30 bg-white/60 px-2 py-1 text-xs font-medium hover:bg-white"
+          >
+            <Download className="h-3.5 w-3.5" /> Télécharger
+          </a>
         )}
 
         <button

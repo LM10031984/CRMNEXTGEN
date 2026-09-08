@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   ArrowLeft, Mail, Phone, MapPin, GraduationCap, Briefcase, Calendar, FileText, Clock, Wallet,
-  ChevronRight,
+  ChevronRight, Download,
 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
@@ -878,14 +878,34 @@ export default async function ApprenantDetailPage({
               09.3-03-fix CORRECTION 2 — compteur = versions COURANTES uniquement
               (UnifiedDocsList n'affiche que isCurrent). */}
           <section className="rounded-2xl border border-border bg-white overflow-hidden">
-            <div className="p-5 border-b border-border">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                Tous les documents (toutes sources) ({unifiedDocs.filter((d) => d.isCurrent).length})
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Preuves Qualiopi consolidées — session, produit, participant et organisme
-                (CGV/RI). Un document en mode stub est signalé « non conforme ».
-              </p>
+            <div className="p-5 border-b border-border flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+                  Tous les documents (toutes sources) ({unifiedDocs.filter((d) => d.isCurrent).length})
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Preuves Qualiopi consolidées — session, produit, participant et organisme
+                  (CGV/RI). Un document en mode stub est signalé « non conforme ».
+                </p>
+              </div>
+              {/* Laurent 2026-09-08 — « un bouton pour télécharger tous les documents pour
+                  un apprenant ». Compte identique au filtre du ZIP (version courante,
+                  présente, téléchargeable) : le bouton ne promet que ce qu'il livre.
+                  Les pièces d'identité/RIB/CFP n'ont pas de href → jamais dans l'archive. */}
+              {(() => {
+                const zippable = unifiedDocs.filter(
+                  (d) => d.isCurrent && d.status !== 'missing' && !!d.href,
+                ).length;
+                if (zippable === 0) return null;
+                return (
+                  <a
+                    href={`/api/apprenants/${person.id}/zip`}
+                    className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors shrink-0"
+                  >
+                    <Download className="h-4 w-4" /> Télécharger tout ({zippable})
+                  </a>
+                );
+              })()}
             </div>
             <UnifiedDocsList docs={unifiedDocs} />
           </section>
