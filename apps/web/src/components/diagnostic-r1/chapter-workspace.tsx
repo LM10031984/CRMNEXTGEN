@@ -56,6 +56,10 @@ export interface AnswerState {
   questionId: string;
   value: unknown;
   isSkipped: boolean;
+  /** Extraction du compte rendu pas encore relue (lot C). */
+  aRelire?: boolean;
+  /** L'extrait qui la justifie, affiché sous le champ. */
+  quote?: string | null;
 }
 
 export interface ChapterWorkspaceProps {
@@ -139,7 +143,10 @@ export function ChapterWorkspace({
     (questionId: string, value: unknown, isSkipped: boolean) => {
       setAnswers((prev) => {
         const next = prev.filter((a) => a.questionId !== questionId);
-        next.push({ questionId, value, isSkipped });
+        // Reprendre la main sur une réponse extraite VAUT confirmation :
+        // `saveDiagnosticAnswer` la repasse en COMMERCIAL confirmée côté
+        // serveur, le badge doit tomber ici dans la seconde.
+        next.push({ questionId, value, isSkipped, aRelire: false, quote: null });
         return next;
       });
       if (readOnly) return;
@@ -308,6 +315,8 @@ export function ChapterWorkspace({
                   question={q}
                   value={a?.value ?? null}
                   isSkipped={a?.isSkipped ?? false}
+                  aRelire={a?.aRelire ?? false}
+                  quote={a?.quote ?? null}
                   disabled={readOnly}
                   onChange={(v) => setAnswer(q.id, v, false)}
                   onSkipToggle={(skipped) =>

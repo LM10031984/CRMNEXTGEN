@@ -6,7 +6,10 @@
  *  2. la purge des traces d'envoi arrivées à échéance (RGPD art. 30,
  *     Traitement 5 — lot 0 · 0.2). Elle passe APRÈS et dans son propre
  *     `try` : une purge qui échoue ne doit pas priver Laurent de ses relances ;
- *  3. la veille de chronologie des numéros de facture (lot B du 10/09/2026),
+ *  3. la purge des comptes rendus de rendez-vous de diagnostic à J+90 (lot C
+ *     de la chaîne diagnostic, spec §6.4) — le texte part, les réponses
+ *     confirmées restent ;
+ *  4. la veille de chronologie des numéros de facture (lot B du 10/09/2026),
  *     même discipline : après, dans son propre `try`, et SILENCIEUSE tant qu'il
  *     n'y a rien à dire.
  *
@@ -27,6 +30,7 @@ import '@qualiof/shared/env'; // fail-loud au boot (parité closure-worker-postg
 import { Cron } from 'croner';
 import { processReminderJob } from '../src/lib/invoice-reminders/worker';
 import { purgeExpiredEmailMessages } from '../src/lib/rgpd/purge-email-messages';
+import { purgeExpiredTranscripts } from '../src/lib/rgpd/purge-transcripts';
 import { scanChronologyBreaks } from './audit-invoice-chronology';
 
 // Quotidien 8h Europe/Paris (remplace repeat { pattern:'0 8 * * *', tz:'Europe/Paris' } BullMQ)
@@ -53,6 +57,20 @@ const job = new Cron(
       }
     } catch (e) {
       console.error('[invoice-reminder-worker] purge RGPD en échec', e);
+    }
+
+    // RGPD — les comptes rendus de rendez-vous de diagnostic (lot C, §6.4).
+    // Même discipline que la purge précédente : après, dans son propre `try`,
+    // et silencieuse quand il n'y a rien à supprimer.
+    try {
+      const transcripts = await purgeExpiredTranscripts();
+      if (transcripts.purges > 0) {
+        console.log(
+          `[invoice-reminder-worker] purge RGPD : ${transcripts.purges} compte(s) rendu(s) de diagnostic échu(s) sur ${transcripts.examines} examiné(s)`,
+        );
+      }
+    } catch (e) {
+      console.error('[invoice-reminder-worker] purge des comptes rendus en échec', e);
     }
 
     // Veille de chronologie (lot B du 10/09/2026). A remplacé l'alerte
