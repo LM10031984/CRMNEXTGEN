@@ -96,3 +96,10 @@ apps/web/src/app/app/**/*.pdf
 # positif. Si un jour un nom légitime en porte un, l'exclure avec « ! ».
 * [2-9].*
 * [2-9]
+
+# Skills d'agent installées localement (npx skills add ...). Ce sont des docs
+# fournisseur, pas du code du produit : elles gonflaient une PR de 78 fichiers
+# et main n'en suivait aucune. Réinstallation documentée dans
+# .claude/commands/signature.md.
+.agents/skills/
+skills-lock.json
