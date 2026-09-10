@@ -44,9 +44,6 @@ export function CreateSponsorInvoiceButton({
       const r = await createInvoiceForSponsorGroup({ sessionId, sponsorOrgId });
       if (r.ok) {
         toast.success(`Facture ${r.number} émise — ${totalHT.toFixed(2)} € HT`);
-        // Sentinelle de chronologie : informe, ne bloque rien. La facture est
-        // émise, le succès s'affiche — le warning s'ajoute, il ne remplace pas.
-        if (r.warning) toast.warning(r.warning);
         router.refresh();
       } else {
         toast.error(r.error ?? 'Erreur lors de la génération de la facture');

@@ -53,9 +53,6 @@ export function EmitInvoiceButton({
         return;
       }
       toast.success(`Facture ${r.number} émise`);
-      // Sentinelle de chronologie : informe, ne bloque rien. Le PDF s'ouvre
-      // quand même juste après.
-      if (r.warning) toast.warning(r.warning);
       setOpen(false);
       setNotes('');
       // Ouvre le PDF dans un nouvel onglet

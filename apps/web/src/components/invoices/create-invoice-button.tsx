@@ -22,9 +22,6 @@ export function CreateInvoiceButton({ participantId, alreadyInvoiced }: { partic
       if (r.ok && r.documentId) {
         setDocId(r.documentId);
         setNumber(r.number ?? null);
-        // Informe sans rien bloquer : le bouton passe quand même en succès et
-        // le lien vers le PDF s'affiche.
-        if (r.warning) toast.warning(r.warning);
       } else {
         setError(r.error ?? 'Erreur');
       }

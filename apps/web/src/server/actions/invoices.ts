@@ -16,7 +16,6 @@ import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { resolveInvoiceIssueDate, resolveInvoiceDueDate } from '@/lib/invoice-dates';
-import { sequencePrefixOf, chronologyWarning } from '@/lib/invoice-chronology';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
@@ -169,8 +168,6 @@ export async function createInvoiceFromParticipant(
   documentId?: string;
   number?: string;
   error?: string;
-  /** Sentinelle de chronologie — informatif, la facture est émise. */
-  warning?: string;
 }> {
   let user;
   try {
@@ -274,22 +271,8 @@ export async function createInvoiceFromParticipant(
   // La transaction rend un COUPLE plutôt que d'affecter une variable
   // extérieure : une transaction peut être rejouée, une écriture hors de son
   // périmètre ne se rejoue pas proprement.
-  const { invoice, alert } = await prisma.$transaction(async (tx) => {
+  const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-
-    // Sentinelle de chronologie — lue DANS la transaction, après le numéro et
-    // AVANT le create : après le create, le « prédécesseur » serait la pièce
-    // qu'on vient d'écrire. Voir `lib/invoice-chronology.ts` : en usage normal
-    // elle se tait, et c'est le résultat attendu.
-    const prefix = sequencePrefixOf(number);
-    const previous = prefix
-      ? await tx.invoice.findFirst({
-          where: { tenantId: user.tenantId, number: { startsWith: prefix } },
-          orderBy: { number: 'desc' },
-          select: { number: true, issueDate: true },
-        })
-      : null;
-    const alert = chronologyWarning({ number, issueDate: emission, previous });
 
     const created = await tx.invoice.create({
       data: {
@@ -318,7 +301,7 @@ export async function createInvoiceFromParticipant(
       },
     });
 
-    return { invoice: created, alert };
+    return created;
   });
 
   // Génération PDF
@@ -439,7 +422,6 @@ export async function createInvoiceFromParticipant(
     invoiceId: invoice.id,
     documentId: doc.id,
     number: invoice.number,
-    ...(alert ? { warning: alert } : {}),
   };
 }
 
@@ -463,8 +445,6 @@ export async function createInvoiceForSponsorGroup(input: {
   documentId?: string;
   number?: string;
   error?: string;
-  /** Sentinelle de chronologie — informatif, la facture est émise. */
-  warning?: string;
 }> {
   let user;
   try {
@@ -571,19 +551,8 @@ export async function createInvoiceForSponsorGroup(input: {
   // Idem facture individuelle : les deux dates partent du même instant.
   const emission = resolveInvoiceIssueDate();
 
-  const { invoice, alert } = await prisma.$transaction(async (tx) => {
+  const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-
-    // Idem facture individuelle : sentinelle après le numéro, avant le create.
-    const prefix = sequencePrefixOf(number);
-    const previous = prefix
-      ? await tx.invoice.findFirst({
-          where: { tenantId: user.tenantId, number: { startsWith: prefix } },
-          orderBy: { number: 'desc' },
-          select: { number: true, issueDate: true },
-        })
-      : null;
-    const alert = chronologyWarning({ number, issueDate: emission, previous });
 
     const created = await tx.invoice.create({
       data: {
@@ -612,7 +581,7 @@ export async function createInvoiceForSponsorGroup(input: {
       },
     });
 
-    return { invoice: created, alert };
+    return created;
   });
 
   // Génération PDF multi-lignes
@@ -739,7 +708,6 @@ export async function createInvoiceForSponsorGroup(input: {
     invoiceId: invoice.id,
     documentId: doc.id,
     number: invoice.number,
-    ...(alert ? { warning: alert } : {}),
   };
 }
 

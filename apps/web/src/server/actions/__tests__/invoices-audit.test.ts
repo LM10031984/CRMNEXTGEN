@@ -117,15 +117,14 @@ describe('Backfill FACT-01 — logInvoiceEvent dans recordInvoicePayment', () =>
 });
 
 describe('Anti-régression FACT-01 — backfill non bloquant pour signature existante', () => {
-  // Quick 260910-lon (lot B) — les deux regex ci-dessous ont été RELÂCHÉES
-  // délibérément : elles assertaient la chaîne EXACTE, `number: invoice.number }`
-  // accolade fermante comprise, et le lot B ajoute un `warning` optionnel au
-  // retour (sentinelle de chronologie). Un champ optionnel est ADDITIF : il ne
-  // casse aucun appelant, et les quatre champs historiques ne bougent pas.
-  // Le test garde donc son rôle d'anti-régression de signature — on tolère
-  // seulement ce qui suit `number`, on ne cesse pas de vérifier les 4 champs.
+  // Quick 260910-o52 — regex RESSERRÉE sur la chaîne exacte, accolade fermante
+  // comprise. Elle avait été relâchée au lot B pour tolérer un `warning`
+  // optionnel (la sentinelle d'émission) ; cette sentinelle a été retirée le
+  // 10/09/2026 au profit de la veille quotidienne du worker, donc le retour
+  // redevient exactement ses quatre champs. Relâcher une assertion pour un
+  // champ qui n'existe plus, ce serait garder la dette sans la contrepartie.
   const RETOUR_SUCCES =
-    /return {\s*ok: true,\s*invoiceId: invoice\.id,\s*documentId: doc\.id,\s*number: invoice\.number[,}]/;
+    /return {\s*ok: true,\s*invoiceId: invoice\.id,\s*documentId: doc\.id,\s*number: invoice\.number,?\s*}/;
 
   it("createInvoiceFromParticipant retourne toujours { ok, invoiceId, documentId, number, error }", () => {
     expect(INVOICES_SRC).toMatch(RETOUR_SUCCES);

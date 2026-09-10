@@ -91,6 +91,29 @@ enjeu financier. Le remède serait pire que le mal. Jamais d'`UPDATE`, dans aucu
 
 Gates habituelles (`/quick`, `/livraison`). Le lot B touche le gabarit de facture : regarder un PDF produit, pas seulement les tests.
 
+### Checklist de déploiement du lot B
+
+À faire **dans cet ordre**, une fois le lot mergé sur `main` et parti en production :
+
+1. **Vérifier qu'une facture émise en production porte la date du jour** (pas la fin de session).
+2. **Relancer l'inventaire** : `pnpm --filter @qualiof/web run invoices:audit-chronology`.
+   C'est ce passage-là qui arrête le périmètre définitif — pas celui du 10/09, qui a déjà
+   vieilli d'une pièce (FAC-000031, créée le 10/09 à 14:09 sous l'ancienne règle).
+3. **Figer la note comptable** `docs/comptabilite/note-chronologie-factures-2026.md` :
+   - écrire le périmètre définitif, sous la forme
+     « **arrêté au JJ/MM/AAAA, N pièces, dernière émise sous l'ancienne règle : FAC-0000NN** » ;
+   - **supprimer l'encadré de statut du §4** — il annonce que la correction est planifiée et
+     non déployée ; une fois déployée, il est sans objet et ne peut plus que tromper ;
+   - remplacer le rapport joint par celui de l'étape 2.
+
+   La note est une pièce **opposable** : tant que l'étape 3 n'est pas faite, elle dit le
+   contraire du réel. Ne pas la mettre à jour AVANT le déploiement non plus — elle dirait
+   déployé ce qui ne l'est pas encore. C'est le même défaut dans l'autre sens.
+4. **Vérifier que la veille quotidienne parle** : le worker `invoice-reminders` (8h
+   Europe/Paris) porte désormais la veille de chronologie et reste muet s'il n'y a rien.
+   Les 5 ruptures historiques la feront parler tous les jours tant qu'elles existent — c'est
+   voulu et c'est le seul bruit attendu.
+
 ## 8. Décisions
 
 **~~D-1 (Lagean)~~ — TRANCHÉE le 10/09/2026 par Laurent, sans consultation de l'expert-comptable.**

@@ -5,7 +5,10 @@
  *  1. les relances d'impayés (raison d'être historique du process) ;
  *  2. la purge des traces d'envoi arrivées à échéance (RGPD art. 30,
  *     Traitement 5 — lot 0 · 0.2). Elle passe APRÈS et dans son propre
- *     `try` : une purge qui échoue ne doit pas priver Laurent de ses relances.
+ *     `try` : une purge qui échoue ne doit pas priver Laurent de ses relances ;
+ *  3. la veille de chronologie des numéros de facture (lot B du 10/09/2026),
+ *     même discipline : après, dans son propre `try`, et SILENCIEUSE tant qu'il
+ *     n'y a rien à dire.
  *
  *
  * WORK-02 (D-03 « Redis viré partout ») : plus de BullMQ ni de Redis. La
@@ -24,6 +27,7 @@ import '@qualiof/shared/env'; // fail-loud au boot (parité closure-worker-postg
 import { Cron } from 'croner';
 import { processReminderJob } from '../src/lib/invoice-reminders/worker';
 import { purgeExpiredEmailMessages } from '../src/lib/rgpd/purge-email-messages';
+import { scanChronologyBreaks } from './audit-invoice-chronology';
 
 // Quotidien 8h Europe/Paris (remplace repeat { pattern:'0 8 * * *', tz:'Europe/Paris' } BullMQ)
 const job = new Cron(
@@ -49,6 +53,33 @@ const job = new Cron(
       }
     } catch (e) {
       console.error('[invoice-reminder-worker] purge RGPD en échec', e);
+    }
+
+    // Veille de chronologie (lot B du 10/09/2026). A remplacé l'alerte
+    // d'émission : celle-ci ne voyait que les deux server actions où elle était
+    // branchée, celle-là relit tout le parc — imports et scripts compris.
+    // Lecture seule. Muette s'il n'y a aucune rupture : un worker qui parle
+    // tous les jours pour dire « rien » n'est plus lu le jour où il parle.
+    try {
+      const ruptures = await scanChronologyBreaks();
+      if (ruptures.length > 0) {
+        const total = ruptures.reduce((n, r) => n + r.report.breaks.length, 0);
+        console.warn(
+          `[invoice-reminder-worker] ⚠ chronologie : ${total} rupture(s) de numérotation`,
+        );
+        for (const { tenantName, report } of ruptures) {
+          for (const b of report.breaks) {
+            console.warn(
+              `  ${tenantName} · ${report.label} · ${b.number} émise le ` +
+                `${b.issueDate.toISOString().slice(0, 10)} recule de ${b.backwardDays} j ` +
+                `derrière ${b.previousNumber} (${b.previousIssueDate.toISOString().slice(0, 10)})`,
+            );
+          }
+        }
+        console.warn('  → inventaire complet : pnpm invoices:audit-chronology');
+      }
+    } catch (e) {
+      console.error('[invoice-reminder-worker] veille de chronologie en échec', e);
     }
   },
 );

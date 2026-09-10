@@ -59,24 +59,24 @@ const BASE: InvoiceData = {
 describe('renderInvoiceHtml — la période de formation survit au lot B', () => {
   it('le bloc désignation porte la période RÉELLE de la formation', () => {
     const html = renderInvoiceHtml(BASE);
-    expect(html).toContain('<strong>Dates :</strong> du 01/06/2026 au 03/06/2026');
+    expect(html).toContain('<strong>Période de formation :</strong> du 01/06/2026 au 03/06/2026');
   });
 
   it('l’en-tête porte la date d’ÉMISSION, celle du jour d’établissement', () => {
     const html = renderInvoiceHtml(BASE);
-    expect(html).toContain('Date: 07/09/2026');
+    expect(html).toContain("Date d'émission: 07/09/2026");
   });
 
   it('les deux valeurs sont DISTINCTES sur la même page — c’est tout l’objet du lot', () => {
     const html = renderInvoiceHtml(BASE);
 
     // L'en-tête ne doit pas porter une date de juin…
-    const enTete = html.match(/<div class="date">Date: ([^<]+)<\/div>/);
+    const enTete = html.match(/<div class="date">Date d\'émission: ([^<]+)<\/div>/);
     expect(enTete).not.toBeNull();
     expect(enTete![1]).toBe('07/09/2026');
 
     // …et le bloc désignation ne doit pas porter la date d'émission.
-    const designation = html.match(/<strong>Dates :<\/strong> ([^<]+)</);
+    const designation = html.match(/<strong>Période de formation :<\/strong> ([^<]+)</);
     expect(designation).not.toBeNull();
     expect(designation![1]!.trim()).toBe('du 01/06/2026 au 03/06/2026');
     expect(designation![1]).not.toContain('07/09/2026');
@@ -89,8 +89,8 @@ describe('renderInvoiceHtml — la période de formation survit au lot B', () =>
       formationDateFin: new Date('2026-06-01T17:00:00Z'),
     });
 
-    expect(html).toContain('<strong>Dates :</strong> le 01/06/2026');
-    expect(html).not.toContain('<strong>Dates :</strong> du 01/06/2026');
+    expect(html).toContain('<strong>Période de formation :</strong> le 01/06/2026');
+    expect(html).not.toContain('<strong>Période de formation :</strong> du 01/06/2026');
   });
 
   it('la période reste lisible sur une facture GROUPÉE (plusieurs stagiaires)', () => {
@@ -101,7 +101,7 @@ describe('renderInvoiceHtml — la période de formation survit au lot B', () =>
       amountTTC: 4500,
     });
 
-    expect(html).toContain('<strong>Dates :</strong> du 01/06/2026 au 03/06/2026');
-    expect(html).toContain('Date: 07/09/2026');
+    expect(html).toContain('<strong>Période de formation :</strong> du 01/06/2026 au 03/06/2026');
+    expect(html).toContain("Date d'émission: 07/09/2026");
   });
 });

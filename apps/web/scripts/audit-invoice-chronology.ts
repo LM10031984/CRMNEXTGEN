@@ -470,6 +470,49 @@ async function main(): Promise<void> {
   console.log('');
 }
 
+/**
+ * Le même inventaire, sans affichage, pour le worker quotidien.
+ *
+ * Ne rend QUE les séquences porteuses d'au moins une rupture : un worker qui
+ * parle tous les jours pour dire « rien » finit par n'être plus lu, et le jour
+ * où il dit quelque chose personne ne le voit.
+ *
+ * C'est cette fonction qui a remplacé l'alerte d'émission (décision du
+ * 10/09/2026). L'alerte ne surveillait que les deux server actions où elle
+ * était branchée ; celle-ci relit TOUT le parc, donc aussi les pièces nées d'un
+ * import, d'un script, ou d'un futur troisième point d'émission. Et comme ni
+ * l'une ni l'autre ne bloque quoi que ce soit, c'est la couverture qui tranche.
+ *
+ * Lecture seule, comme tout ce fichier.
+ */
+export async function scanChronologyBreaks(): Promise<
+  { tenantName: string; report: SequenceReport }[]
+> {
+  const tenants = await prisma.tenant.findMany({
+    select: { id: true, name: true, invoicePrefix: true, creditNotePrefix: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const avecRupture: { tenantName: string; report: SequenceReport }[] = [];
+
+  for (const tenant of tenants) {
+    const invoicePrefix = (tenant.invoicePrefix ?? 'FAC').trim() || 'FAC';
+    const creditNotePrefix = (tenant.creditNotePrefix ?? 'AVO').trim() || 'AVO';
+
+    const invoices = await prisma.invoice.findMany({
+      where: { tenantId: tenant.id },
+      select: { number: true, issueDate: true, createdAt: true, status: true },
+    });
+    if (invoices.length === 0) continue;
+
+    for (const report of auditTenant(invoices, invoicePrefix, creditNotePrefix)) {
+      if (report.breaks.length > 0) avecRupture.push({ tenantName: tenant.name, report });
+    }
+  }
+
+  return avecRupture;
+}
+
 // Garde : main() (accès BDD de production) ne s'exécute que lancé directement,
 // jamais à l'import — le test unitaire importe parseSequenceNumber,
 // diffInDays et auditSequence sans jamais ouvrir une connexion.
