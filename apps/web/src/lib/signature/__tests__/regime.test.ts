@@ -185,18 +185,180 @@ describe('resolveRegimeSignature — quelles pièces, quel rôle, quelle cible',
 });
 
 /**
- * Test 7 — garde anti-`if` financeur.
+ * Garde-fou « régime incohérent » — décision D-5 (Laurent, 10/09/2026).
+ *
+ * LE CAS RÉEL : Florent HAUSSWIRTH. Inscrit avec pour organisation bénéficiaire
+ * l'agence qui l'emploie (financeur salarié), alors que son dossier est celui
+ * d'un TNS — il a une entreprise individuelle rattachée, et c'est elle qui porte
+ * le financement. Le régime du sponsor ne connaît ni dossier de financement
+ * individuel ni attestation d'assiduité : sans garde-fou, ces pièces sortent en
+ * `NA` et son dossier DISPARAÎT de l'écran. Un dossier qui disparaît ne se
+ * corrige jamais.
+ *
+ * L'avertissement ne déclenche AUCUN envoi : il rend l'anomalie bruyante et
+ * invite à corriger la donnée (le financeur de l'inscription).
+ */
+describe('resolveRegimeSignature — avertissement « régime incohérent »', () => {
+  it('cas Florent HAUSSWIRTH : sponsor salarié + EI rattachée qui ouvre les pièces TNS', () => {
+    const { pieces, blocages, avertissements } = resolveRegimeSignature({
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-florent',
+      sponsorOrgId: 'org-agence',
+      signauxDossierPropre: {
+        aLienEiSelfHorsSponsor: true,
+        reglesAutresOrgs: [REGLE_AGEFICE],
+      },
+    });
+
+    // L'avertissement ne fabrique RIEN : la seule pièce reste celle du régime
+    // du sponsor. Un avertissement qui produirait un envoi enverrait signer une
+    // pièce que le financeur ne demande pas.
+    expect(pieces).toEqual([
+      {
+        docType: 'CONVENTION',
+        role: 'DIRIGEANT',
+        cible: { kind: 'ORGANISATION', organizationId: 'org-agence' },
+      },
+    ]);
+    expect(blocages).toEqual([]);
+
+    // Les DEUX pièces que le régime de son EI ouvrirait sont signalées, dans
+    // l'ordre de `DOC_TYPES_SIGNABLES`. Assertion sur le CONTENU exact : un
+    // `.length > 0` laisserait passer un avertissement sur la mauvaise pièce.
+    expect(avertissements).toEqual([
+      { docType: 'AGEFICE', raison: 'REGIME_INCOHERENT' },
+      { docType: 'ASSIDUITE', raison: 'REGIME_INCOHERENT' },
+    ]);
+
+    // …et l'avertissement ne remet PAS les pièces en régime : la matrice
+    // continue d'afficher `NA`, avec le signal à côté.
+    expect([...docTypesHorsRegime(REGLE_OPCO_EP)].sort()).toEqual(['AGEFICE', 'ASSIDUITE']);
+  });
+
+  it('aucun signal : pas un mot — le salarié ordinaire ne doit pas faire de bruit', () => {
+    // La grande majorité des inscriptions. Si ce test rougissait, l'admin
+    // recevrait un avertissement par salarié et cesserait de les lire.
+    const { avertissements } = resolveRegimeSignature({
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-1',
+      sponsorOrgId: 'org-agence',
+      signauxDossierPropre: { aLienEiSelfHorsSponsor: false, reglesAutresOrgs: [] },
+    });
+
+    expect(avertissements).toEqual([]);
+  });
+
+  it('champ absent (appelants du lot C.1) : aucun avertissement, aucune régression', () => {
+    const { pieces, avertissements } = resolveRegimeSignature({
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-1',
+      sponsorOrgId: 'org-agence',
+    });
+
+    expect(avertissements).toEqual([]);
+    expect(pieces).toHaveLength(1);
+  });
+
+  it('signal présent MAIS sponsor qui ouvre déjà la pièce : rien d’incohérent', () => {
+    // Le TNS inscrit AVEC son EI comme organisation bénéficiaire : dossier
+    // propre, aucun avertissement — même si les signaux sont là.
+    const { pieces, avertissements } = resolveRegimeSignature({
+      regle: REGLE_AGEFICE,
+      participantId: 'part-1',
+      sponsorOrgId: 'org-ei',
+      signauxDossierPropre: {
+        aLienEiSelfHorsSponsor: true,
+        reglesAutresOrgs: [REGLE_AGEFICE],
+      },
+    });
+
+    expect(avertissements).toEqual([]);
+    expect(pieces).toHaveLength(3);
+  });
+
+  it('EI rattachée SANS catalogue : le lien seul suffit à signaler le dossier de financement', () => {
+    // Une entreprise individuelle rattachée mais dont le financeur n'est pas
+    // renseigné est elle-même une donnée à corriger. Le signal porte sur la
+    // pièce du dossier de financement uniquement : le lien ne dit rien de
+    // l'attestation d'assiduité.
+    const { avertissements } = resolveRegimeSignature({
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-1',
+      sponsorOrgId: 'org-agence',
+      signauxDossierPropre: { aLienEiSelfHorsSponsor: true, reglesAutresOrgs: [] },
+    });
+
+    expect(avertissements).toEqual([{ docType: 'AGEFICE', raison: 'REGIME_INCOHERENT' }]);
+  });
+
+  it('une autre organisation qui n’ouvre QUE le dossier de financement ne signale que lui', () => {
+    const regleQuiNOuvreQueLeDossier: RegleSignatureFinanceur = {
+      conventionSigner: null,
+      ageficeSigner: 'STAGIAIRE',
+      assiduiteSigner: null,
+    };
+
+    const { avertissements } = resolveRegimeSignature({
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-1',
+      sponsorOrgId: 'org-agence',
+      signauxDossierPropre: {
+        aLienEiSelfHorsSponsor: false,
+        reglesAutresOrgs: [regleQuiNOuvreQueLeDossier],
+      },
+    });
+
+    expect(avertissements).toEqual([{ docType: 'AGEFICE', raison: 'REGIME_INCOHERENT' }]);
+  });
+
+  it('PUISSANCE — retomber sur un `NA` silencieux doit ROUGIR', () => {
+    // Ce test est la raison d'être du garde-fou. Il compare la MÊME entrée avec
+    // et sans signaux : si neutraliser le garde-fou (avertissements toujours
+    // vides) laissait le test vert, c'est que l'assertion décrirait le code au
+    // lieu de décrire la règle. Le `toEqual` porte donc sur le contenu exact des
+    // deux tableaux, et la sortie DOIT différer entre les deux appels.
+    const base = {
+      regle: REGLE_OPCO_EP,
+      participantId: 'part-florent',
+      sponsorOrgId: 'org-agence',
+    };
+
+    const sansSignal = resolveRegimeSignature(base);
+    const avecSignal = resolveRegimeSignature({
+      ...base,
+      signauxDossierPropre: { aLienEiSelfHorsSponsor: true, reglesAutresOrgs: [] },
+    });
+
+    expect(sansSignal.avertissements).toEqual([]);
+    expect(avecSignal.avertissements).toEqual([
+      { docType: 'AGEFICE', raison: 'REGIME_INCOHERENT' },
+    ]);
+    expect(avecSignal.avertissements).not.toEqual(sansSignal.avertissements);
+    // Et les pièces, elles, sont IDENTIQUES : l'avertissement ne déclenche rien.
+    expect(avecSignal.pieces).toEqual(sansSignal.pieces);
+  });
+});
+
+/**
+ * Test 7 — garde anti-`if` financeur, ÉTENDUE AUX TROIS MODULES PURS (lot C.2a).
  *
  * Le moteur doit lire la règle dans la donnée, jamais reconnaître un code
  * financeur. Chaque `if (code === 'X')` est la dette qui se paiera au financeur
  * suivant (règle de la commande `/financeur`).
  *
+ * La boucle est FACTORISÉE sur une liste de fichiers plutôt que triplée : un
+ * quatrième module pur du régime s'ajoutera par une ligne, et il sera gardé le
+ * jour même. Trois `describe` copiés auraient divergé au premier correctif.
+ *
  * On ne cherche PAS `'AGEFICE'` : c'est un `DocType` légitime du corpus
  * documentaire, présent dans `DOC_TYPES_SIGNABLES`. Un test qui l'interdirait
  * serait rouge dès la première ligne écrite — et se ferait désactiver.
  */
-describe('regime.ts — la règle vient de la donnée, pas d’un code financeur', () => {
-  const SOURCE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../regime.ts');
+describe('les modules purs du régime — la règle vient de la donnée, pas d’un code financeur', () => {
+  const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+  /** Les modules purs du régime de signature. En ajouter un = une ligne ici. */
+  const MODULES = ['regime.ts', 'plan-envoi.ts', 'representant.ts'] as const;
 
   /** Retire commentaires de bloc, commentaires de ligne et littéraux de message. */
   function codeSeul(source: string): string[] {
@@ -206,31 +368,27 @@ describe('regime.ts — la règle vient de la donnée, pas d’un code financeur
       .filter((l) => !/^\s*(\/\/|\*)/.test(l));
   }
 
-  const lignes = codeSeul(readFileSync(SOURCE, 'utf-8'));
-
-  it('aucun code financeur en position de code', () => {
-    const fautifs = lignes
+  function fautifs(fichier: string, motif: RegExp): string[] {
+    const lignes = codeSeul(readFileSync(path.join(RACINE, fichier), 'utf-8'));
+    return lignes
       .map((l, i) => ({ l, i }))
-      .filter(({ l }) => /OPCO_EP|OPCOMMERCE|FI-FPL|ATLAS|CPF\b/.test(l))
-      .map(({ l, i }) => `regime.ts:${i + 1} → ${l.trim()}`);
-    expect(fautifs).toEqual([]);
-  });
+      .filter(({ l }) => motif.test(l))
+      .map(({ l, i }) => `${fichier}:${i + 1} → ${l.trim()}`);
+  }
 
-  it('aucune comparaison sur un `code`', () => {
-    const fautifs = lignes
-      .map((l, i) => ({ l, i }))
-      .filter(({ l }) => /\bcode\s*===/.test(l))
-      .map(({ l, i }) => `regime.ts:${i + 1} → ${l.trim()}`);
-    expect(fautifs).toEqual([]);
-  });
+  for (const fichier of MODULES) {
+    it(`${fichier} — aucun code financeur en position de code`, () => {
+      expect(fautifs(fichier, /OPCO_EP|OPCOMMERCE|FI-FPL|ATLAS|CPF\b/)).toEqual([]);
+    });
 
-  it('le module est pur : ni Prisma, ni réseau, ni async', () => {
-    const fautifs = lignes
-      .map((l, i) => ({ l, i }))
-      .filter(({ l }) =>
-        /\bprisma\b|@qualiof\/db|@prisma\/client|fetch\(|\basync\b|\bawait\b/.test(l),
-      )
-      .map(({ l, i }) => `regime.ts:${i + 1} → ${l.trim()}`);
-    expect(fautifs).toEqual([]);
-  });
+    it(`${fichier} — aucune comparaison sur un \`code\``, () => {
+      expect(fautifs(fichier, /\bcode\s*===/)).toEqual([]);
+    });
+
+    it(`${fichier} — module pur : ni Prisma, ni réseau, ni async`, () => {
+      expect(
+        fautifs(fichier, /\bprisma\b|@qualiof\/db|@prisma\/client|fetch\(|\basync\b|\bawait\b/),
+      ).toEqual([]);
+    });
+  }
 });
