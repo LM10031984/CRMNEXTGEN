@@ -40,10 +40,17 @@
  * — rien n'est perdu — mais personne n'est prévenu tant que C.2c n'est pas livré.
  */
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
-import { preparerEnvoiSignatureSchema } from '@qualiof/shared';
+import {
+  preparerEnvoiSignatureSchema,
+  sendForSignatureSchema,
+  signatureSignersSchema,
+  type CibleEnvoiSignature,
+} from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { DOCS_BUCKET, downloadFile } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
@@ -70,22 +77,40 @@ import {
   type OrganisationRepresentee,
 } from '@/lib/signature/representant';
 import { resolveTenantSignatory } from '@/lib/signature/signatory';
+import { getSignatureProvider, SignatureNotConfiguredError } from '@/lib/signature/provider';
+import type { SignatureSignerInput } from '@/lib/signature/port';
 import {
+  messageAucunChampDeSignature,
+  messageCleInconnue,
   messageDejaSigne,
   messageDocNonGenere,
+  messageDocumentModifie,
   messageEnvoiEnCours,
+  messageErreurPrestataire,
   messageRegenerationImpossible,
   ofSigneLaPiece,
+  roleAncreClient,
+  roleAncreOf,
   type DocumentAEnvoyer,
   type Empechement,
+  type EnvoiEffectue,
   type EnvoiPrepare,
   type PreparerEnvoiSignatureResult,
+  type RefusEnvoi,
+  type SendForSignatureResult,
   type SignataireResolu,
 } from '@/lib/signature/envoi-contrats';
 
 /** Statuts de `Document.status` qui interdisent de toucher au PDF. */
 const STATUT_SIGNE = 'signed';
 const STATUT_ENVOYE = 'sent_for_signature';
+
+/**
+ * Durée de validité d'une demande (spec §5 lot C, filet `signature-sync` :
+ * « marque EXPIRED au-delà de `expiresAt`, 30 j par défaut »). Sans date, une
+ * demande jamais signée resterait `SENT` indéfiniment.
+ */
+const VALIDITE_DEMANDE_JOURS = 30;
 
 // ─── Chargement ──────────────────────────────────────────────────────────────
 
@@ -645,4 +670,310 @@ export async function preparerEnvoiSignature(
   };
 }
 
+// ─── Action 2 — envoyer exactement ce qui a été confirmé ─────────────────────
+
+/**
+ * Envoie en signature les pièces confirmées au récapitulatif.
+ *
+ * Chaque cible porte le `hashConfirme` vu à l'aperçu. Un hash qui a bougé fait
+ * REFUSER cette pièce : ni appel prestataire, ni écriture. C'est ce contrôle —
+ * pas l'ordre des écrans — qui garantit que le clic confirme le PDF relu.
+ *
+ * Un refus ne fait pas tomber le lot : les autres pièces partent, et le refus
+ * est rendu nommé.
+ */
+export async function sendForSignature(input: unknown): Promise<SendForSignatureResult> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const parsed = sendForSignatureSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: `Demande d'envoi invalide : ${Object.values(parsed.error.flatten().fieldErrors)
+        .flat()
+        .join(', ')}`,
+    };
+  }
+  const { sessionId, scope, cibles, force } = parsed.data;
+
+  // Fail-closed : sans provider configuré, on ne « tente » pas. Le message est
+  // écrit pour être lu par un humain — on le rend tel quel.
+  let provider;
+  try {
+    provider = getSignatureProvider();
+  } catch (e) {
+    if (e instanceof SignatureNotConfiguredError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const contexte = await chargerContexte(user.tenantId, sessionId, scope);
+  if (!contexte) {
+    return {
+      ok: false,
+      error:
+        "Session introuvable dans cet espace : aucun envoi n'est parti pour une session qui " +
+        "n'appartient pas à votre organisme.",
+    };
+  }
+
+  const planParCle = new Map(contexte.plan.envois.map((e) => [e.cle, e]));
+  const signataireOf = await resoudreSignataireOf(user.tenantId);
+
+  const envoyes: EnvoiEffectue[] = [];
+  const refus: RefusEnvoi[] = [];
+
+  // Ordre du PLAN, pas ordre de saisie : deux envois identiques doivent produire
+  // le même journal.
+  const parOrdreDuPlan = [...cibles].sort(
+    (g, d) => indexDansLePlan(contexte.plan.envois, g) - indexDansLePlan(contexte.plan.envois, d),
+  );
+
+  for (const cible of parOrdreDuPlan) {
+    const envoi = planParCle.get(cible.cle);
+    if (envoi === undefined) {
+      refus.push({
+        cle: cible.cle,
+        docType: null,
+        raison: 'CLE_INCONNUE',
+        message: messageCleInconnue(cible.cle),
+      });
+      continue;
+    }
+
+    const refuser = (raison: RefusEnvoi['raison'], message: string) => {
+      refus.push({ cle: envoi.cle, docType: envoi.docType, raison, message });
+    };
+
+    const couverts = contexte.participants.filter((p) => envoi.participantIds.includes(p.id));
+    const forme = formeDuDocument(envoi, couverts);
+    if (!forme.ok) {
+      refuser('REGENERATION_IMPOSSIBLE', forme.error);
+      continue;
+    }
+
+    const doc = await trouverDocument(user.tenantId, sessionId, envoi.docType, forme.forme);
+    if (doc === null) {
+      refuser('DOC_NON_GENERE', messageDocNonGenere(envoi.libelle));
+      continue;
+    }
+
+    // LE contrôle. Il vient AVANT les garde-fous d'état : si le PDF n'est plus
+    // celui qui a été relu, le reste de la décision a été prise sur autre chose.
+    if (doc.hashSha256 !== cible.hashConfirme) {
+      refuser('DOCUMENT_MODIFIE', messageDocumentModifie(envoi.libelle));
+      continue;
+    }
+
+    if (doc.status === STATUT_SIGNE && !force) {
+      refuser('DEJA_SIGNE', messageDejaSigne(envoi.libelle));
+      continue;
+    }
+    if (doc.status === STATUT_ENVOYE) {
+      refuser('ENVOI_EN_COURS', messageEnvoiEnCours(envoi.libelle));
+      continue;
+    }
+
+    const client = resoudreSignataireClient({
+      docType: envoi.docType,
+      forme: forme.forme,
+      envoi,
+      couverts,
+      emailSaisi: cible.emailSaisi,
+    });
+    if (!client.ok) {
+      refuser('SIGNATAIRE_SANS_EMAIL', client.error);
+      continue;
+    }
+
+    const signers: SignatureSignerInput[] = [];
+    const roleOf = roleAncreOf(envoi.docType);
+    if (roleOf !== null && !signataireOf.ok) {
+      refuser('SIGNATAIRE_OF_INCOMPLET', signataireOf.error);
+      continue;
+    }
+    // D-3 / D-8 : séquentiel, l'OF signe APRÈS le client par défaut.
+    const ofAvant = signataireOf.ok && signataireOf.signatory.order === 'BEFORE';
+    const rangClient = roleOf !== null && ofAvant ? 1 : 0;
+    signers.push({
+      role: roleAncreClient(envoi.docType),
+      name: client.signataire.nom,
+      email: client.signataire.email,
+      order: rangClient,
+    });
+    if (roleOf !== null && signataireOf.ok) {
+      signers.push({
+        role: roleOf,
+        name: signataireOf.signatory.name,
+        email: signataireOf.signatory.email,
+        order: rangClient === 0 ? 1 : 0,
+      });
+    }
+    signers.sort((g, d) => g.order - d.order);
+
+    let pdf: Buffer;
+    try {
+      pdf = await downloadFile(DOCS_BUCKET, doc.pdfUrl);
+    } catch (e) {
+      refuser(
+        'ERREUR_PRESTATAIRE',
+        messageErreurPrestataire(envoi.libelle, messageDe(e) + ' (lecture du PDF stocké).'),
+      );
+      continue;
+    }
+
+    // Id pré-généré AVANT l'appel réseau : la corrélation `externalId` existe
+    // même si la transaction échoue ensuite, donc la submission reste
+    // identifiable pour être annulée.
+    const signatureRequestId = randomUUID();
+    const expiresAt = new Date(Date.now() + VALIDITE_DEMANDE_JOURS * 24 * 60 * 60 * 1000);
+
+    let creation;
+    try {
+      creation = await provider.createRequest({
+        name: `${envoi.libelle} — ${contexte.sessionCode}`,
+        documents: [{ name: `${envoi.libelle}.pdf`, pdf }],
+        signers,
+        externalId: signatureRequestId,
+        expiresAt,
+      });
+    } catch (e) {
+      refuser('ERREUR_PRESTATAIRE', messageErreurPrestataire(envoi.libelle, messageDe(e)));
+      continue;
+    }
+
+    // Écart n°6 du lot B : l'échec des ancres est SILENCIEUX chez le
+    // prestataire. Zéro champ = personne n'a rien à signer.
+    if (creation.signatureFieldCount === 0) {
+      await annulerSansBruit(provider, creation.providerId);
+      refuser('AUCUN_CHAMP_DE_SIGNATURE', messageAucunChampDeSignature(envoi.libelle));
+      continue;
+    }
+
+    const signersJson = signatureSignersSchema.parse(
+      creation.signers.map((s) => ({
+        role: s.role,
+        name: s.name,
+        email: s.email,
+        providerSignerId: s.providerSignerId,
+        status: s.status,
+        signedAt: s.signedAt === null ? null : s.signedAt.toISOString(),
+        // D-9 : le lien est PERSISTÉ ici ; c'est le lot C.2c qui l'enverra.
+        signUrl: s.signUrl,
+      })),
+    );
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.signatureRequest.create({
+          data: {
+            id: signatureRequestId,
+            tenantId: user.tenantId,
+            provider: provider.name,
+            providerId: creation.providerId,
+            status: 'SENT',
+            sessionId,
+            signers: signersJson,
+            sentAt: new Date(),
+            expiresAt: creation.expiresAt ?? expiresAt,
+          },
+        });
+        await tx.document.update({
+          where: { id: doc.id },
+          data: { status: STATUT_ENVOYE, signatureRequestId },
+        });
+        await tx.auditLog.create({
+          data: {
+            tenantId: user.tenantId,
+            userId: user.id,
+            entity: 'Document',
+            entityId: doc.id,
+            action: 'signature.sent',
+            diff: {
+              cle: envoi.cle,
+              docType: envoi.docType,
+              providerId: creation.providerId,
+              signatureRequestId,
+              participantIds: envoi.participantIds,
+              hashSha256: doc.hashSha256,
+              // Le COUPLE retenu, nom ET email, avec sa provenance : c'est la
+              // contrepartie de la dérogation « adresse saisie par l'admin ».
+              signataire: {
+                nom: client.signataire.nom,
+                email: client.signataire.email,
+                sourceNom: client.signataire.sourceNom,
+                sourceEmail: client.signataire.sourceEmail,
+              },
+              status: { before: doc.status, after: STATUT_ENVOYE },
+            },
+          },
+        });
+      });
+    } catch (e) {
+      // Refus APRÈS création de la submission : on annule chez le prestataire,
+      // sinon une demande fantôme reste ouverte et le prochain envoi fait doublon.
+      await annulerSansBruit(provider, creation.providerId);
+      refuser('ERREUR_PRESTATAIRE', messageErreurPrestataire(envoi.libelle, messageDe(e)));
+      continue;
+    }
+
+    envoyes.push({
+      cle: envoi.cle,
+      docType: envoi.docType,
+      signatureRequestId,
+      providerId: creation.providerId,
+      documentId: doc.id,
+      hash: doc.hashSha256,
+      signataire: {
+        nom: client.signataire.nom,
+        email: client.signataire.email,
+        source: client.signataire.sourceEmail,
+      },
+    });
+  }
+
+  if (envoyes.length > 0) {
+    revalidatePath(`/app/sessions/${sessionId}`);
+    // La liste des sessions porte un filtre de signature : elle lit la même donnée.
+    revalidatePath('/app/sessions');
+  }
+
+  return { ok: true, envoyes, refus };
+}
+
 // ─── Petits utilitaires ──────────────────────────────────────────────────────
+
+function indexDansLePlan(envois: EnvoiPlanifie[], cible: CibleEnvoiSignature): number {
+  const i = envois.findIndex((e) => e.cle === cible.cle);
+  // Les clés inconnues finissent à la fin : elles ne portent pas d'ordre.
+  return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+function messageDe(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Annulation « au mieux ». Si elle échoue à son tour, on le journalise sans
+ * masquer le refus d'origine : l'admin doit voir POURQUOI rien n'est parti, pas
+ * une seconde erreur technique par-dessus.
+ */
+async function annulerSansBruit(
+  provider: { cancel: (id: string) => Promise<void> },
+  providerId: string,
+): Promise<void> {
+  try {
+    await provider.cancel(providerId);
+  } catch (e) {
+    console.error(
+      `[signature] annulation de la demande ${providerId} impossible : ${messageDe(e)}`,
+    );
+  }
+}

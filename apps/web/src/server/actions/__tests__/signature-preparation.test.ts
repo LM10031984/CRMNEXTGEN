@@ -87,6 +87,20 @@ vi.mock('@/lib/storage', () => ({
   downloadFile: vi.fn().mockResolvedValue(Buffer.from('pdf')),
 }));
 
+/**
+ * Hermétisme (cf. 17-02) : `provider.ts` valide l'environnement AU CHARGEMENT.
+ * La préparation ne s'en sert pas, mais elle vit dans le même fichier que
+ * l'envoi — le module est donc chargé, et sans ce mock la suite tombe sur un
+ * `DATABASE_URL` absent.
+ */
+vi.mock('@/lib/signature/provider', () => {
+  class SignatureNotConfiguredError extends Error {}
+  return {
+    getSignatureProvider: vi.fn(),
+    SignatureNotConfiguredError,
+  };
+});
+
 vi.mock('@/lib/closure/convention-core', () => ({
   generateConventionCore: conventionCoreMock,
   generateConventionEntrepriseCore: conventionEntrepriseCoreMock,

@@ -90,12 +90,21 @@ vi.mock('@/lib/storage', () => ({
   downloadFile: downloadFileMock,
 }));
 
-// Le provider est remplacé, mais `SignatureNotConfiguredError` reste la VRAIE
-// classe : le code fait `instanceof` dessus.
-vi.mock('@/lib/signature/provider', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/lib/signature/provider')>('@/lib/signature/provider');
-  return { ...actual, getSignatureProvider: getProviderMock };
+/**
+ * Le module `provider.ts` est remplacé ENTIÈREMENT, sans `importActual` : il
+ * lit `@qualiof/shared/env`, qui valide l'environnement AU CHARGEMENT et fait
+ * tomber la suite sur un `DATABASE_URL` absent (hermétisme, cf. 17-02). La
+ * classe d'erreur est donc redéfinie ici — et c'est celle-là que le code sous
+ * test importe, donc son `instanceof` reste vrai.
+ */
+vi.mock('@/lib/signature/provider', () => {
+  class SignatureNotConfiguredError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'SignatureNotConfiguredError';
+    }
+  }
+  return { getSignatureProvider: getProviderMock, SignatureNotConfiguredError };
 });
 
 vi.mock('@/lib/closure/convention-core', () => ({
@@ -159,9 +168,9 @@ function tnsViaSonEi() {
   };
 }
 
-function salarieAgence(contacts = [
-  { firstName: 'Paul', lastName: 'Martin', email: 'paul@agence.fr', isPrimary: true },
-]) {
+function salarieAgence(
+  contacts = [{ firstName: 'Paul', lastName: 'Martin', email: 'paul@agence.fr', isPrimary: true }],
+) {
   return {
     id: P_SALARIE,
     sponsorOrgId: 'org-agence',
