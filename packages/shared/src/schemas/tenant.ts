@@ -147,6 +147,10 @@ export const EmailSettingsSchema = z.object({
   /// A-3 « nouvelle pré-inscription ». Défaut false : fail-closed.
   newLeadAlertsEnabled: z.boolean().default(false),
   preEnrollmentAlertsEnabled: z.boolean().default(false),
+  /// D-21 — envoi de la proposition au client, déclenché par le commercial.
+  /// Le seul email de la chaîne qui sorte vers un prospect, d'où sa propre
+  /// case : on peut le couper sans couper les alertes internes.
+  proposalSendEnabled: z.boolean().default(false),
   testSessionIds: z
     .array(z.string().uuid('Identifiant de session invalide'))
     .max(20, 'Maximum 20 sessions de test')

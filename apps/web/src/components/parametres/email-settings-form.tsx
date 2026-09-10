@@ -94,6 +94,11 @@ const CATEGORY_FIELDS: Array<{
     category: 'preenrollment_submitted',
     hint: 'Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l\'écran de validation.',
   },
+  {
+    field: 'proposalSendEnabled',
+    category: 'proposal_sent',
+    hint: 'Destinataire : le client, quand le commercial clique « Envoyer par email » sur une proposition. Jamais automatique — décochée, le bouton le dit au lieu d\'envoyer.',
+  },
 ];
 
 export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Props) {
@@ -112,6 +117,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
       newLeadAlertsEnabled: initial.newLeadAlertsEnabled,
       preEnrollmentAlertsEnabled: initial.preEnrollmentAlertsEnabled,
+      proposalSendEnabled: initial.proposalSendEnabled,
     },
   });
 
