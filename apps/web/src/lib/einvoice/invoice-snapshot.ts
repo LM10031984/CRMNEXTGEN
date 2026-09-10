@@ -29,12 +29,32 @@
  *    signe étant porté par le `TypeCode 381`. La bascule appartient au builder
  *    du lot 2 (`builder/invoice-to-en16931.ts`), pas au stockage.
  *
- * 3. `vatExemptionReasonCode` RESTE NULL. La décision D-2 (code VATEX de
- *    l'art. 261-4-4°a) n'est pas tranchée. On porte la catégorie E et le texte
- *    de la mention ; on n'invente pas un code fiscal.
+ * 3. LE CODE VATEX EST POSÉ, ET IL EST FIXE. D-2 a été tranchée le 10/09/2026
+ *    par Laurent, sans passer par l'expert-comptable : toute ligne de catégorie
+ *    `E` porte `VATEX-EU-132-1I`, en plus du texte de la mention.
+ *
+ *    POURQUOI CE CODE. L'art. 261-4-4°a du CGI transpose l'art. 132-1-i de la
+ *    directive TVA (formation professionnelle dispensée par un organisme
+ *    reconnu). La liste VATEX de l'EN 16931 code cette exonération-là
+ *    `VATEX-EU-132-1I`.
+ *
+ *    POURQUOI LES DEUX. La règle BR-E-10 de l'EN 16931 n'exige que L'UN des
+ *    deux, code OU texte. On met les deux : c'est permis, et le texte reste
+ *    lisible par un humain là où le code ne l'est pas.
+ *
+ *    LE REPLI, écrit maintenant pour que personne ne le redécouvre. Le
+ *    validateur de la plateforme tranchera au lot 2 (`POST /validation_reports`
+ *    est une étape obligatoire avant `POST /invoices`, cf. handoff du 03/09).
+ *    S'IL REFUSE LE CODE, ON GARDE LE TEXTE SEUL — on ne cherche pas un autre
+ *    code, on ne bricole pas.
+ *
+ *    Le code n'est surchargeable par personne : ni colonne, ni champ tenant, ni
+ *    paramètre. Un OF à un autre régime porterait une autre catégorie que `E`,
+ *    ce que `vatCategoryFor()` sait déjà faire.
  */
 
 import { computeFingerprint } from '@/lib/docs/source-fingerprint';
+import { CODE_VATEX_EXONERATION_TVA } from '@/lib/tva-exoneration';
 
 // ─── Identifiants ─────────────────────────────────────────────────────────
 
@@ -318,7 +338,8 @@ export interface TrainingLinesInput {
  */
 export function buildTrainingLines(input: TrainingLinesInput): LineSnapshot[] {
   const vatCategory = vatCategoryFor(input.vatRate);
-  const exoneration = vatCategory === 'E' ? (input.vatExemptionText?.trim() || null) : null;
+  const exonere = vatCategory === 'E';
+  const exoneration = exonere ? (input.vatExemptionText?.trim() || null) : null;
 
   const debut = jour(input.startDate);
   const fin = jour(input.endDate);
@@ -343,8 +364,8 @@ export function buildTrainingLines(input: TrainingLinesInput): LineSnapshot[] {
       unitPriceHT: prix,
       vatRate: input.vatRate,
       vatCategory,
-      // D-2 non tranchée — cf. convention 3 en tête de fichier.
-      vatExemptionReasonCode: null,
+      // Code ET texte, jamais l'un sans l'autre — cf. convention 3 en tête.
+      vatExemptionReasonCode: exonere ? CODE_VATEX_EXONERATION_TVA : null,
       vatExemptionReasonText: exoneration,
       participantId: p.participantId,
       totalHT: prix,
@@ -364,6 +385,8 @@ export interface CreditNoteLineInput {
 
 export function buildCreditNoteLine(input: CreditNoteLineInput): LineSnapshot {
   const vatCategory = vatCategoryFor(input.vatRate);
+  // Un avoir ne s'exonère pas autrement que la pièce qu'il corrige.
+  const exonere = vatCategory === 'E';
   const montant = -Math.abs(centimes(input.amountHtToCredit));
   return {
     position: 1,
@@ -373,8 +396,8 @@ export function buildCreditNoteLine(input: CreditNoteLineInput): LineSnapshot {
     unitPriceHT: montant,
     vatRate: input.vatRate,
     vatCategory,
-    vatExemptionReasonCode: null,
-    vatExemptionReasonText: vatCategory === 'E' ? (input.vatExemptionText?.trim() || null) : null,
+    vatExemptionReasonCode: exonere ? CODE_VATEX_EXONERATION_TVA : null,
+    vatExemptionReasonText: exonere ? (input.vatExemptionText?.trim() || null) : null,
     participantId: input.participantId,
     totalHT: montant,
   };
