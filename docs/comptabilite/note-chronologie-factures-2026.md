@@ -3,7 +3,8 @@
 > **Objet** : écart constaté entre l'ordre des numéros de facture et l'ordre de leurs
 > dates d'émission, sur l'exercice 2026 de Start Academy.
 > **Établie le** : 10/09/2026 · **Par** : Laurent Marx, Start Academy
-> **Statut** : constat clos. Aucune pièce n'est réécrite.
+> **Statut** : **constat clos et périmètre arrêté.** La règle est corrigée et en production
+> depuis le 10/09/2026. Aucune pièce n'est réécrite.
 > **Pièce jointe** : `audit-chronologie-2026-09-10.txt` (inventaire exhaustif, généré par
 > l'outil de gestion en lecture seule le 10/09/2026).
 
@@ -11,8 +12,14 @@
 
 ## 1. Le constat
 
-Au 10/09/2026, le parc compte **31 pièces** : 30 factures (28 427,43 € HT) et 1 avoir
-(−336,00 € HT).
+**Périmètre arrêté au 10/09/2026 : 32 pièces, dernière émise sous l'ancienne règle :
+FAC-000031.**
+
+Le parc compte 31 factures (31 451,43 € HT) et 1 avoir (−336,00 € HT), soit 31 115,43 € HT.
+La règle de datation ayant été corrigée et mise en production le 10/09/2026 (cf. §4), ce
+périmètre est **définitif** : aucune pièce nouvelle ne viendra s'y ajouter. FAC-000031, créée
+le 10/09/2026 à 14 h 09 et datée du 05/08/2026, est la dernière facture établie sous
+l'ancienne règle.
 
 Sur la séquence des factures (`FAC-`), **5 pièces portent une date d'émission antérieure
 à celle de la pièce qui les précède immédiatement dans la numérotation**.
@@ -87,10 +94,8 @@ Conséquence : la numérotation redevient chronologique **par construction**, sa
 faille l'y contraindre. Un contrôle automatique de cet ordre est mis en place et vérifié à
 chaque évolution de l'outil.
 
-> **Statut au 10/09/2026** : la mesure (constat ci-dessus et pièce jointe) est faite. La
-> correction de la règle est spécifiée et planifiée — lot B de la spécification interne du
-> 10/09/2026 — et **n'est pas encore déployée à la date de la présente note**. Elle le sera
-> avant toute nouvelle campagne de facturation de rattrapage.
+Cette correction est **en production depuis le 10/09/2026**. Toute facture établie à partir
+de cette date porte la date de son établissement réel.
 
 ## 5. Le passé n'est pas régularisé — et pourquoi
 
