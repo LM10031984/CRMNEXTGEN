@@ -304,6 +304,17 @@ describe('getInvoicesListData — Filtres + Tri + Pagination', () => {
     );
   });
 
+  it("Test 10 bis — la colonne cliquée passe jusqu'à Prisma (Laurent 2026-09-10)", async () => {
+    await getInvoicesListData({ filters: {}, page: 1, pageSize: 50, sort: 'montant', dir: 'asc' });
+    expect(findManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Départage par numéro : sans lui, deux factures du même montant
+        // permutent d'un rafraîchissement à l'autre, donc d'une page à l'autre.
+        orderBy: [{ amountTTC: 'asc' }, { number: 'desc' }],
+      }),
+    );
+  });
+
   it("Test 11 — pagination skip=(page-1)*pageSize, take=pageSize", async () => {
     await getInvoicesListData({ filters: {}, page: 3, pageSize: 25 });
     expect(findManyMock).toHaveBeenCalledWith(
