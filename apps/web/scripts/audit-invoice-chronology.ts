@@ -471,9 +471,49 @@ async function main(): Promise<void> {
 }
 
 /**
+ * Le périmètre FIGÉ : les cinq ruptures que la note comptable documente.
+ *
+ * `docs/comptabilite/note-chronologie-factures-2026.md` — périmètre arrêté au
+ * 10/09/2026, 32 pièces, dernière émise sous l'ancienne règle FAC-000031. Le
+ * lot C étant fermé (aucune régularisation), ces cinq-là ne disparaîtront
+ * JAMAIS du parc.
+ *
+ * Cette liste ne bougera plus. Si elle bouge un jour, c'est que quelqu'un a
+ * réécrit une pièce émise — ce que le code de commerce interdit.
+ */
+export const RUPTURES_DOCUMENTEES: ReadonlySet<string> = new Set([
+  'FAC-000021',
+  'FAC-000024',
+  'FAC-000025',
+  'FAC-000027',
+  'FAC-000030',
+]);
+
+/**
+ * Ne garde que les ruptures que la note ne documente PAS.
+ *
+ * Le filtre porte sur la pièce FAUTIVE, jamais sur son prédécesseur : une
+ * facture neuve qui recule derrière une rupture documentée est une rupture
+ * neuve, et doit être dite. Filtrer sur le prédécesseur la ferait disparaître.
+ *
+ * Pourquoi filtrer : une veille qui répète chaque matin cinq ruptures
+ * immuables garantit qu'on cesse de la lire, et le jour où une VRAIE rupture
+ * apparaîtra elle sera noyée dans les cinq autres. Le filtre ne cache rien —
+ * il rend l'alerte lisible.
+ *
+ * ⚠ L'INVENTAIRE ne filtre rien. `pnpm invoices:audit-chronology` continue de
+ * tout montrer : c'est lui qui a produit la note, et une pièce opposable ne se
+ * construit pas sur une vue filtrée.
+ */
+export function rupturesNouvelles(breaks: ChronologyBreak[]): ChronologyBreak[] {
+  return breaks.filter((b) => !RUPTURES_DOCUMENTEES.has(b.number));
+}
+
+/**
  * Le même inventaire, sans affichage, pour le worker quotidien.
  *
- * Ne rend QUE les séquences porteuses d'au moins une rupture : un worker qui
+ * Ne rend QUE les séquences porteuses d'au moins une rupture NEUVE — celles du
+ * périmètre figé (cf. `RUPTURES_DOCUMENTEES`) sont écartées. Un worker qui
  * parle tous les jours pour dire « rien » finit par n'être plus lu, et le jour
  * où il dit quelque chose personne ne le voit.
  *
@@ -506,7 +546,12 @@ export async function scanChronologyBreaks(): Promise<
     if (invoices.length === 0) continue;
 
     for (const report of auditTenant(invoices, invoicePrefix, creditNotePrefix)) {
-      if (report.breaks.length > 0) avecRupture.push({ tenantName: tenant.name, report });
+      // Seules les ruptures NEUVES remontent au worker : les cinq du périmètre
+      // figé sont déjà documentées et ne s'effaceront jamais.
+      const nouvelles = rupturesNouvelles(report.breaks);
+      if (nouvelles.length > 0) {
+        avecRupture.push({ tenantName: tenant.name, report: { ...report, breaks: nouvelles } });
+      }
     }
   }
 

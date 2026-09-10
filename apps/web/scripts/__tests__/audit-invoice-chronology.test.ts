@@ -18,6 +18,9 @@ import {
   auditSequence,
   diffInDays,
   parseSequenceNumber,
+  rupturesNouvelles,
+  RUPTURES_DOCUMENTEES,
+  type ChronologyBreak,
   type ChronologyRow,
 } from '../audit-invoice-chronology';
 
@@ -159,5 +162,71 @@ describe('auditSequence', () => {
     ]);
 
     expect(rapport.breaks).toEqual([]);
+  });
+});
+
+describe('rupturesNouvelles — la veille se tait sur ce que la note documente déjà', () => {
+  /**
+   * Les 5 ruptures du parc sont FIGÉES et documentées :
+   * `docs/comptabilite/note-chronologie-factures-2026.md`, périmètre arrêté au
+   * 10/09/2026, dernière pièce sous l'ancienne règle FAC-000031. Le lot C étant
+   * fermé, elles ne disparaîtront JAMAIS.
+   *
+   * Une veille qui les répète chaque matin garantit qu'on ne la lira plus — et
+   * le jour où une VRAIE rupture apparaîtra, elle sera noyée dans les cinq
+   * autres. C'est le seul motif de ce filtre : il ne cache rien, il rend
+   * l'alerte lisible.
+   *
+   * ⚠ L'INVENTAIRE, lui, ne filtre rien : `pnpm invoices:audit-chronology`
+   * continue de tout montrer. C'est lui qui a produit la note, et une pièce
+   * opposable ne se construit pas sur une vue filtrée.
+   */
+  function rupture(number: string, previousNumber = 'FAC-000000'): ChronologyBreak {
+    return {
+      number,
+      issueDate: new Date('2026-04-23T00:00:00Z'),
+      createdAt: new Date('2026-09-04T10:00:00Z'),
+      status: 'PAID',
+      antidatedDays: 134,
+      previousNumber,
+      previousIssueDate: new Date('2026-08-12T00:00:00Z'),
+      backwardDays: 111,
+    };
+  }
+
+  it('connaît exactement les 5 ruptures de la note, pas une de plus', () => {
+    expect([...RUPTURES_DOCUMENTEES].sort()).toEqual([
+      'FAC-000021',
+      'FAC-000024',
+      'FAC-000025',
+      'FAC-000027',
+      'FAC-000030',
+    ]);
+  });
+
+  it('se tait quand toutes les ruptures sont celles du périmètre figé', () => {
+    const connues = [...RUPTURES_DOCUMENTEES].map((n) => rupture(n));
+    expect(rupturesNouvelles(connues)).toEqual([]);
+  });
+
+  it('parle dès qu’une pièce NOUVELLE rompt la chronologie', () => {
+    const melange = [rupture('FAC-000021'), rupture('FAC-000034'), rupture('FAC-000030')];
+    const nouvelles = rupturesNouvelles(melange);
+
+    expect(nouvelles).toHaveLength(1);
+    expect(nouvelles[0]!.number).toBe('FAC-000034');
+  });
+
+  it('parle aussi quand la NOUVELLE pièce recule derrière une rupture documentée', () => {
+    // Le prédécesseur est dans le périmètre figé, la fautive non : c'est la
+    // fautive qui compte, sinon une rupture neuve se cacherait derrière une vieille.
+    const nouvelles = rupturesNouvelles([rupture('FAC-000032', 'FAC-000030')]);
+    expect(nouvelles).toHaveLength(1);
+    expect(nouvelles[0]!.number).toBe('FAC-000032');
+  });
+
+  it('ne filtre rien sur une séquence qui n’a aucune rupture documentée', () => {
+    const avoirs = [rupture('AVO-000004')];
+    expect(rupturesNouvelles(avoirs)).toHaveLength(1);
   });
 });

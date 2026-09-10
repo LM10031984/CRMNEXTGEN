@@ -92,7 +92,10 @@ détaillées. Elles en portent depuis le 10/09/2026.
 
 Conséquence : la numérotation redevient chronologique **par construction**, sans qu'il
 faille l'y contraindre. Un contrôle automatique de cet ordre est mis en place et vérifié à
-chaque évolution de l'outil.
+chaque évolution de l'outil, doublé d'une surveillance quotidienne de l'ensemble du parc.
+Cette surveillance ne signale que les écarts **postérieurs** au périmètre arrêté ci-dessus :
+les cinq écarts constatés étant documentés par la présente note et non régularisables, les
+répéter chaque jour ferait perdre à l'alerte toute valeur de signal.
 
 Cette correction est **en production depuis le 10/09/2026**. Toute facture établie à partir
 de cette date porte la date de son établissement réel.
