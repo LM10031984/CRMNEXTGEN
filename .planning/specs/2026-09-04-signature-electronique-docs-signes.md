@@ -51,6 +51,52 @@ APRÈS session (clôture)
                    signataires : stagiaire  +  OF
 ```
 
+**Règle métier ajoutée le 10/09 (Laurent) — qui signe quoi dépend du régime de financement du participant, jamais d'un `if` sur le code financeur (piloter par `OpcoCatalog.requiredDocs`, règle `/financeur`) :**
+
+| Participant | CONVENTION | AGEFICE | ASSIDUITE | EMARGEMENT |
+|---|---|---|---|---|
+| Salarié d'une entreprise (OPCO EP ou autre OPCO) | signée par le **dirigeant de l'entreprise** + OF — le salarié ne signe **rien** | — | **aucune** (l'attestation d'assiduité est une pièce AGEFICE, pas OPCO) | papier, en salle |
+| Dirigeant TNS financé AGEFICE | s'il est lui-même l'entreprise bénéficiaire : il signe la convention ; s'il est salarié-dirigeant couvert par la convention entreprise : idem ligne 1 | signée par le **stagiaire-dirigeant** (OF = image) | stagiaire + OF | papier, en salle |
+| Indépendant hors AGEFICE / autofinancement | signée par lui-même + OF | — | — | papier, en salle |
+
+Conséquences pour le lot C : l'envoi « AVANT » ne crée un dossier AGEFICE que pour les participants dont le financeur l'exige ; l'envoi « APRÈS » (assiduité) est **vide** pour une session 100 % salariés OPCO et ne doit pas proposer le bouton ; la matrice affiche NA (pas MISSING) pour ASSIDUITE/AGEFICE d'un salarié OPCO.
+
+### 3 bis. Qui signe quoi dépend du RÉGIME DE FINANCEMENT (Laurent, 10/09/2026)
+
+Le découpage ci-dessus vaut pour un dossier AGEFICE. Il ne vaut pas pour tous.
+
+| Régime | Convention | Dossier AGEFICE | Assiduité |
+|---|---|---|---|
+| **Salarié financé OPCO** | signée par le **dirigeant** de l'entreprise | — | **aucune** |
+| | le salarié ne signe **rien** | | |
+| **TNS AGEFICE** | — | **oui**, par le stagiaire-dirigeant | **oui** |
+| **Indépendant** | **sa** convention, qu'il signe lui-même | selon éligibilité | selon éligibilité |
+
+Conséquences attendues :
+- une session **100 % OPCO** n'a **rien** à envoyer en signature côté APRÈS :
+  le bouton « Envoyer pour signature » doit être **absent**, pas grisé — un bouton
+  grisé laisse croire qu'il manque un réglage ;
+- dans la matrice, un document **hors régime** est **`NA`**, jamais `MISSING`.
+  `MISSING` appelle une action ; `NA` dit qu'il n'y a rien à faire. Confondre les
+  deux fait courir l'admin après des pièces qui n'existent pas.
+
+**Piloté par la donnée, pas par le code financeur.** Aucun `if (code === 'AGEFICE')`
+dans le moteur : c'est `OpcoCatalog` qui porte la règle, comme
+`ProductFundingType` porte le taux horaire.
+
+> ⚠ **`OpcoCatalog.requiredDocs` ne peut pas piloter ça en l'état** — constaté le
+> 10/09/2026 en prod. C'est du texte libre destiné à la fiche financeur :
+> « Convention de formation signée, Programme de formation détaillé, … ». Deux
+> financeurs sur six (ATLAS, OPCOMMERCE) l'ont **vide**. Un moteur qui déduirait
+> les signataires de cette prose serait un analyseur de chaînes déguisé.
+>
+> Il faut donc, avant le lot C, **structurer la règle** : soit `requiredDocs`
+> devient une liste de `DocType` (et la prose actuelle passe dans un champ
+> d'affichage), soit on ajoute à `OpcoCatalog` un champ dédié — par exemple
+> `signatureMatrix: Json` de forme `{ CONVENTION: 'DIRIGEANT' | 'STAGIAIRE' | null,
+> AGEFICE: 'STAGIAIRE' | null, ASSIDUITE: 'STAGIAIRE' | null }`. **Décision à
+> prendre (D-10)**, avec reprise des 6 financeurs du catalogue.
+
 Le signataire « OF » est toujours le même : un `TenantSignatory` (nom, email, rôle) configuré une fois dans les paramètres tenant, signé automatiquement en premier ou en dernier selon le réglage (par défaut : OF signe **après** le client, comme aujourd'hui).
 
 ## 4. Modèle de données
@@ -232,6 +278,7 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 | D-7 | Localisation de la zone de signature dans le PDF | Text tags DocuSeal dans les templates (texte blanc). |
 | D-9 | Qui envoie les emails aux signataires : DocuSeal ou QualiOF ? | QualiOF (`send_email: false`, lien de signature récupéré via l'API) pour garder le mailer fail-closed et la catégorie décochable. |
 | D-8 | Signature OF automatique ou manuelle ? | Manuelle en v1 (DocuSeal envoie le lien à l'OF en dernier ; un clic). Automatique si l'API le permet proprement. |
+| D-10 | Comment `OpcoCatalog` porte-t-il « qui signe quoi » ? `requiredDocs` est de la prose libre, vide chez 2 financeurs sur 6. | Champ dédié `signatureMatrix: Json` sur `OpcoCatalog`, `requiredDocs` restant l'affichage. À trancher AVANT le lot C — c'est lui qui décide si le bouton d'envoi existe. |
 | D-6 | Copie d'archive Drive ? | Hors scope v1. Si besoin : worker qui pousse `sessions/{code}/signed/*` dans un dossier Drive par session. |
 
 ## 7. Ordre de livraison et taille
