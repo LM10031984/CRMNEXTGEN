@@ -282,11 +282,25 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    la donnée.
 
 - Server action `sendForSignature({ sessionId, scope: 'BEFORE' | 'AFTER', targets })` :
-  - `BEFORE` : pour chaque organisation payeuse → 1 SignatureRequest portant la CONVENTION (+ les AGEFICE de ses participants AGEFICE, chacun signé par son stagiaire) ; pour chaque indépendant → sa convention + son AGEFICE.
-  - `AFTER` : 1 SignatureRequest par participant AGEFICE portant l'ASSIDUITE.
-  - Résolution des signataires : dirigeant = `Contact` de l'organisation avec `function` dirigeant / signataire, sinon premier `Contact` avec email, sinon **blocage avec message** (« Aucun signataire avec email pour {org} ») — jamais de devinette. Stagiaire = `Person.email`.
-  - Garde-fous : doc non généré → refus ; doc déjà `signed` → refus sauf `force` ; doc `sent_for_signature` → propose d'annuler et renvoyer.
+  - **Un envoi porte UN document** (D-4 amendé, amendement n°1 ci-dessus).
+    - `BEFORE` : une `SignatureRequest` par **organisation bénéficiaire** portant la **seule convention** (signée par son représentant) ; une `SignatureRequest` **par participant** pour son dossier AGEFICE (signé par le stagiaire seul, l'OF ayant déjà son image apposée).
+    - `AFTER` : une `SignatureRequest` par participant portant l'ASSIDUITE.
+    - Quelles pièces pour qui : jamais un `if` sur un code financeur — `sponsorOrg.opcoCode` → `OpcoCatalog` → colonnes `conventionSigner` / `ageficeSigner` / `assiduiteSigner` (lot C.1). `null` ⇒ hors régime ⇒ `NA`, jamais `MISSING`.
+  - **Deux organisations à ne pas confondre**, portées par le même participant :
+    - `sponsorOrg` = l'**entreprise bénéficiaire** (l'employeur, ou l'EI du TNS). C'est elle qui groupe la convention et fournit le représentant — c'est déjà elle que `convention-core.ts` imprime en « entreprise bénéficiaire ». Son champ `opcoCode` désigne le financeur.
+    - `payerOrg` ne sert qu'à la **facturation** et n'a **aucun effet** sur la signature. **Le financeur n'est jamais signataire.**
+  - **Résolution des signataires — la cascade RÉELLE, pas une nouvelle** (amendement n°2) :
+    - `DIRIGEANT` → lien `EI_SELF` vers l'organisation ⇒ l'apprenant lui-même ; sinon `Organization.representative` ; sinon le **contact principal** (`isPrimary`, le plus ancien). **`Contact.function` ne joue aucun rôle** : saisi librement, il ne prouve rien.
+    - `STAGIAIRE` → `Person.email`.
+    - Une seule implémentation, `lib/signature/representant.ts`, appelée par la génération de la convention **et** par l'envoi : le signataire ne peut pas diverger du nom que le PDF imprime.
+    - **Email : celui du représentant, ou rien** (amendement n°3). Pas d'email ⇒ **refus nominatif** renvoyant vers la fiche entreprise. **Aucun repli sur un autre contact.** Seule dérogation : une adresse **saisie explicitement par l'admin** au récapitulatif d'envoi (source `SAISI_PAR_ADMIN`), journalisée avec le nom retenu.
+    - Participant sans organisation bénéficiaire résoluble ⇒ blocage nominatif. Jamais de devinette.
+  - **Régénération à l'envoi** (Laurent, 10/09) : le document part **avec ses ancres et sans le tampon image de l'OF** (convention et assiduité ; le formulaire AGEFICE conserve son image, une seule partie y signe). Le générateur **écrase `pdfUrl` et recalcule `hashSha256`** — un seul objet, jamais deux, sans quoi le hash cesserait de décrire ce qui est réellement parti en signature. `AuditLog document.regenerated_for_signature` avant `sent_for_signature`.
+    - ⚠ **Point ouvert** : régénérer signifie que ce qui part n'est pas forcément ce que l'admin a relu (un prix ou une date ont pu bouger depuis). À traiter au récapitulatif de C.2b — signaler la régénération, ou exiger une confirmation quand le document diffère. Sujet jumeau de la skill `coherence-docs`, pris par l'autre bout.
+  - Garde-fous : doc non généré → refus ; doc déjà `signed` → refus sauf `force` ; doc `sent_for_signature` → propose d'annuler et renvoyer ; **`signatureFieldCount === 0` → refus** (écart n°6 du lot B : sinon l'envoi part et personne n'a rien à signer).
+    - Tout refus survenant **après** la création de la submission chez le prestataire appelle `provider.cancel(providerId)` d'abord — sans quoi une submission zombie subsiste et le prochain envoi fait doublon.
   - Transaction : `SignatureRequest` + `Document.status = sent_for_signature` + AuditLog `signature.sent`.
+  - **Les emails aux signataires ne sont PAS dans ce lot** : D-9 exige que QualiOF les envoie (catégorie décochable, `EmailTemplate`, relances D-5 J+3/J+7). C'est le **lot C.2c**. C.2a persiste `signUrl` ; personne n'est prévenu tant que C.2c n'est pas livré.
 - UI : bouton **« Envoyer pour signature »** dans Avant (convention + AGEFICE) et Après (assiduité), avec récapitulatif des signataires avant confirmation ; badge « En attente » sur les cellules ; lien « Relancer » (renvoi email) ; « Annuler l'envoi ».
 - Route `POST /api/webhooks/docuseal` : vérification de la signature/secret, idempotence sur `(providerId, event)`, événements `form.completed` (un signataire), `submission.completed` (tous), `form.declined`. Sur `submission.completed` : télécharge le PDF signé **et le certificat de signature (audit log)** → bucket (§4.4, le certificat en `.audit-trail.pdf`) → `Document.signedPdfUrl / signedAt / signatureKind = E_SIGNATURE / status = signed` → `SignatureRequest.completedAt` → AuditLog `signature.completed` → `Notification` à l'ADMIN.
 - Filet : cron quotidien `signature-sync` qui re-interroge DocuSeal pour les requêtes `SENT` > 1 h sans webhook (webhook perdu) et marque `EXPIRED` au-delà de `expiresAt` (30 j par défaut).
