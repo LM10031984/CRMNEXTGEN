@@ -48,7 +48,7 @@ apps/web/test-results/
 apps/web/playwright-report/
 
 # TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
-packages/*/tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # Python (doc-engine)
 __pycache__/
