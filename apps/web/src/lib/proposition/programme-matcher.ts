@@ -174,7 +174,13 @@ export function normalize(text: string): string {
     .toLowerCase();
 }
 
-const IA_PATTERN =
+/**
+ * Le vocabulaire qui trahit un contenu IA. Exporté parce que le moteur au
+ * niveau module (lot I-1) classe avec le MÊME motif : deux définitions de « ce
+ * qui est de l'IA » finiraient par diverger, et la règle métier n°7 (une
+ * douleur métier reçoit un module métier) reposerait alors sur du sable.
+ */
+export const IA_PATTERN =
   /\b(ia|i\.a\.|intelligence artificielle|chatgpt|claude|copilot|prompt|generative?)\b/;
 
 /**

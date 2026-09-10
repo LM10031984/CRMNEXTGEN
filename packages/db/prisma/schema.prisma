@@ -435,6 +435,15 @@ model TrainingProduct {
   // REGLEMENTAIRE (TRACFIN / non-discrimination / déontologie) = 40 €/h,
   // COEUR_METIER = 30 €/h. Jamais de `if (code === ...)` dans le moteur.
   fundingType          ProductFundingType @default(COEUR_METIER)
+  /// Bibliothèque de modules (lot I-1, D-19) — d'où vient ce RAYON quand il a
+  /// été importé : `drive:058`, `diag:famille-vendeur`, `faros:parcours`…
+  /// Null pour les produits saisis à la main dans QualiOF.
+  ///
+  /// Sert à deux choses, et à rien d'autre : rejouer un import sans créer de
+  /// doublon (on retrouve le conteneur par sa source, pas par un titre qui a pu
+  /// être corrigé entre-temps), et dire dans un rapport d'où sort un module.
+  /// Ce n'est PAS un critère de vente : un rayon importé n'est jamais activé.
+  sourceRef            String?
   modules              TrainingModule[]
   trainingSessions     TrainingSession[]
   leads                Lead[]
@@ -443,6 +452,7 @@ model TrainingProduct {
   updatedAt            DateTime           @updatedAt
 
   @@unique([tenantId, code])
+  @@unique([tenantId, sourceRef])
   @@index([tenantId, isActive])
 }
 
@@ -474,9 +484,18 @@ model TrainingModule {
   /// Pige : interdite dans tout contenu remis au client depuis le 11/08/2026.
   /// Le questionnaire interne peut l'aborder ; l'audit et la proposition non.
   excludedFromClientOutputs Boolean         @default(false)
+  /// Bibliothèque de modules (lot I-1, D-19) — l'identité stable du module dans
+  /// sa source : `drive:058#3`, `diag:mod-chatgpt-conseiller`…
+  ///
+  /// Un module est désormais l'unité RECOMMANDABLE : la reco le retient, et la
+  /// proposition devra pouvoir dire de quel programme source il vient même si
+  /// son titre a été retouché depuis. Un identifiant technique (`id`) ne le
+  /// permet pas — il change à chaque recréation.
+  sourceRef                 String?
 
   @@index([productId, order])
   @@index([family])
+  @@index([sourceRef])
 }
 
 // =====================================================
