@@ -42,6 +42,8 @@ import {
   type DropZoneParticipant,
 } from '../qualiopi-matrix/signed-doc-drop-zone';
 import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
+import { BlocSignature } from '../signature/bloc-signature';
+import type { VueSignature } from '@/lib/sessions/bloc-signature-vue';
 
 interface Props {
   sessionId: string;
@@ -67,6 +69,12 @@ interface Props {
    * dossier de CHAQUE apprenant, parce que l'OPCO le demande annexé.
    */
   avantGroups?: PhaseParticipantGroup[];
+  /**
+   * Lot C.2b-2 — la vue du bloc « Signature » pour le scope AVANT (convention +
+   * dossier de financement). Calculée côté serveur par `construireVueSignature`
+   * : l'onglet ne décide RIEN, il met en page.
+   */
+  vueSignature?: VueSignature;
 }
 
 /** Docs pré-formation qui peuvent revenir signés à la main. */
@@ -85,6 +93,7 @@ export function TabAvant({
   canGenerate,
   dropZoneParticipants,
   avantGroups = [],
+  vueSignature,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -289,6 +298,13 @@ export function TabAvant({
           ))}
         </DocLineSection>
       ))}
+
+      {/* Lot C.2b-2 — envoi en signature électronique, JUSTE AU-DESSUS du dépôt
+          de scans : même voisinage que dans l'onglet « Après », pour que Laurent
+          ne cherche pas deux fois le même geste selon l'onglet où il est. */}
+      {vueSignature && (
+        <BlocSignature sessionId={sessionId} scope="BEFORE" vue={vueSignature} />
+      )}
 
       {/* Lot A signature — dépôt d'un doc pré-formation signé à la main.
           Repliée par défaut : le cas courant avant la session reste la

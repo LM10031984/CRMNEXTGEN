@@ -38,6 +38,8 @@ import {
   SignedDocDropZone,
   type DropZoneParticipant,
 } from '../qualiopi-matrix/signed-doc-drop-zone';
+import { BlocSignature } from '../signature/bloc-signature';
+import type { VueSignature } from '@/lib/sessions/bloc-signature-vue';
 
 type SessionDocKey = 'deroule' | 'grilleObs' | 'checklist' | 'satisfactionSession';
 
@@ -88,6 +90,12 @@ interface Props {
    */
   pendantGroups?: PhaseParticipantGroup[];
   apresGroups?: PhaseParticipantGroup[];
+  /**
+   * Lot C.2b-2 — la vue du bloc « Signature » pour le scope APRÈS
+   * (l'attestation d'assiduité). Calculée côté serveur par
+   * `construireVueSignature` : l'onglet ne décide RIEN, il met en page.
+   */
+  vueSignature?: VueSignature;
 }
 
 const SESSION_CARDS: Array<{
@@ -114,6 +122,7 @@ export function TabApres({
   closureBlock,
   pendantGroups = [],
   apresGroups = [],
+  vueSignature,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -299,6 +308,15 @@ export function TabApres({
         onGenerateAll={handleGenerateForLearner}
         onGenerateAssiduite={handleGenerateAssiduite}
       />
+
+      {/* Lot C.2b-2 — envoi en signature électronique, JUSTE AU-DESSUS du dépôt
+          de scans : les deux gestes se lisent d'un coup d'œil et ne se
+          cherchent pas dans deux endroits. L'un fait signer à distance, l'autre
+          récupère la feuille signée en salle ; sur une pièce nominative ils
+          coexistent, et s'excluent dès qu'un signé existe (décision n°4). */}
+      {vueSignature && (
+        <BlocSignature sessionId={sessionId} scope="AFTER" vue={vueSignature} />
+      )}
 
       {/* Lot A signature — dépôt des émargements signés à la main (O-3).
           Le geste doit être visible ici, pas caché dans le menu d'une cellule.

@@ -113,11 +113,38 @@ beforeEach(() => {
 });
 
 describe('PUISSANCE (a) — pas de bouton quand il n’y a rien à envoyer', () => {
-  it('session 100 % OPCO côté APRÈS : AUCUN élément nommé « Envoyer pour signature »', () => {
-    render(<BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [] })} />);
+  /**
+   * ⚠ CE TEST A ÉTÉ RENFORCÉ APRÈS LA MUTATION. La première version prenait
+   * une session 100 % OPCO côté APRÈS — plan vide, donc bloc entièrement MUET.
+   * Elle restait verte sous la mutation « bouton grisé au lieu d'absent »,
+   * parce que le bloc ne rendait rien du tout : elle gardait le silence du
+   * bloc, pas l'absence du bouton. Le cas qui compte est celui où le bloc
+   * S'AFFICHE — il a des lignes à montrer — et n'a pourtant rien à envoyer.
+   */
+  it('le bloc S’AFFICHE (ses lignes sont là) et n’a pourtant AUCUN bouton d’envoi', () => {
+    const { container } = render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={{
+          ...vue({ lignes: [ligne({ etat: 'SIGNE', envoyable: false })] }),
+        }}
+      />,
+    );
+    // Le bloc n'est PAS muet : la preuve que l'absence du bouton est bien une
+    // décision de rendu, et non l'effet de bord d'une section entière masquée.
+    expect(container.textContent).toContain('Signature électronique');
     // Ni actif, ni `disabled` : un bouton grisé laisse croire qu'il manque un
     // réglage (décision Laurent n°3). `queryAllByRole` voit AUSSI les boutons
     // désactivés — c'est ce qui fait échouer la mutation « disabled ».
+    expect(screen.queryAllByRole('button', { name: /envoyer pour signature/i })).toHaveLength(0);
+  });
+
+  it('session 100 % OPCO côté APRÈS : plan vide ⇒ bloc muet, donc rien à cliquer', () => {
+    const { container } = render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [] })} />,
+    );
+    expect(container.textContent).toBe('');
     expect(screen.queryAllByRole('button', { name: /envoyer pour signature/i })).toHaveLength(0);
   });
 

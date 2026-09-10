@@ -71,6 +71,14 @@ import {
 } from '@/lib/signature/participants-regime';
 import { docTypesEnRegime } from '@/lib/signature/regime';
 import { planifierEnvoi } from '@/lib/signature/plan-envoi';
+// Bloc « Signature » des onglets Avant / Après (lot C.2b-2) : la VUE est
+// calculée ici, côté serveur, pour que « le bouton existe ou n'existe pas »
+// reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
+import {
+  construireVueSignature,
+  type DocumentDeLaPiece,
+  type VueSignature,
+} from '@/lib/sessions/bloc-signature-vue';
 import { contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
@@ -212,7 +220,23 @@ export default async function SessionDetailPage({
               { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
             ],
           },
-          select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
+          select: {
+            id: true,
+            type: true,
+            participantId: true,
+            entityType: true,
+            entityId: true,
+            // Lot C.2b-2 — l'état de SIGNATURE de la pièce, pas seulement son
+            // existence. `status` distingue « parti » de « prêt à partir » ;
+            // `signedPdfUrl` dit qu'une preuve existe déjà (webhook C.3 comme
+            // scan du lot A) ; `signatureRequestId` porte l'annulation, qui
+            // s'applique à la DEMANDE et non au document. Aucune requête de
+            // plus : ce `findMany` charge déjà les documents participants ET
+            // les conventions de groupe, toutes formes de stockage confondues.
+            status: true,
+            signedPdfUrl: true,
+            signatureRequestId: true,
+          },
         }),
         prisma.pedagogicalAsset.findMany({
           where: {
@@ -474,10 +498,15 @@ export default async function SessionDetailPage({
   );
 
   // Le scope AVANT est le seul à porter AGEFICE (`PIECES_PAR_SCOPE`).
-  const avertissementsRegimeAvant = planifierEnvoi({
+  const planSignatureAvant = planifierEnvoi({
     scope: 'BEFORE',
     participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
-  }).avertissements;
+  });
+  const planSignatureApres = planifierEnvoi({
+    scope: 'AFTER',
+    participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
+  });
+  const avertissementsRegimeAvant = planSignatureAvant.avertissements;
   const participantsAvertisAgefice = new Set(
     avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
   );
@@ -515,6 +544,68 @@ export default async function SessionDetailPage({
     ),
     participantsAvertisAgefice,
   });
+
+  // ══ Bloc « Signature » des onglets Avant / Après — lot C.2b-2 ══════════════
+  //
+  // RBAC : `ADMIN | MANAGER`, le MÊME ensemble que `canEdit` (défini plus bas
+  // pour l'édition des champs structurants) — calculé ici parce que le bloc en a
+  // besoin avant. ⚠ SURTOUT PAS `canWrite`, qui inclut `COMMERCIAL` : les trois
+  // server actions de signature refusent ce rôle. Un bouton visible pour un rôle
+  // refusé est un bouton qui ment.
+  const canSign = ['ADMIN', 'MANAGER'].includes(user.role);
+
+  // L'état de signature de chaque document déjà chargé, indexé par id.
+  const etatDocParId = new Map<string, DocumentDeLaPiece>(
+    sessionDocs.map((d) => [
+      d.id,
+      {
+        id: d.id,
+        status: d.status,
+        signedPdfUrl: d.signedPdfUrl,
+        signatureRequestId: d.signatureRequestId,
+      },
+    ]),
+  );
+
+  // Le dépôt manuel du lot A ne touche PAS `Document.status` : il écrit
+  // `SessionParticipant.docStatus[docType].state = 'MANUAL_OK'`. Lu ici depuis
+  // la même source que `deriveCellState`, pour que la ligne du bloc ne dise
+  // jamais autre chose que la cellule de la matrice.
+  const docStatusParParticipant = new Map<string, Record<string, string | null>>(
+    session.participants.map((p) => {
+      const brut = (p.docStatus as Record<string, unknown> | null) ?? {};
+      const etats: Record<string, string | null> = {};
+      for (const [type, valeur] of Object.entries(brut)) {
+        const state = (valeur as { state?: unknown } | null)?.state;
+        etats[type] = typeof state === 'string' ? state : null;
+      }
+      return [p.id, etats] as const;
+    }),
+  );
+
+  /**
+   * La vue d'un scope. Le document d'une pièce est celui du PREMIER participant
+   * couvert : `docsByParticipant` reporte déjà la convention de groupe sur
+   * chaque salarié (`expandGroupConventions`), donc tous les couverts pointent
+   * le même document — en lire un suffit, et en lire plusieurs inventerait un
+   * arbitrage que le moteur ne fait pas.
+   */
+  const vuePourScope = (plan: ReturnType<typeof planifierEnvoi>): VueSignature => {
+    const documentParCle = new Map<string, DocumentDeLaPiece>();
+    const docStatusParCle = new Map<string, string | null>();
+    for (const envoi of plan.envois) {
+      const premier = envoi.participantIds[0];
+      if (premier === undefined) continue;
+      const docId = docsByParticipant.get(premier)?.get(envoi.docType);
+      const etat = docId === undefined ? undefined : etatDocParId.get(docId);
+      if (etat !== undefined) documentParCle.set(envoi.cle, etat);
+      const manuel = docStatusParParticipant.get(premier)?.[envoi.docType] ?? null;
+      docStatusParCle.set(envoi.cle, manuel);
+    }
+    return construireVueSignature({ plan, documentParCle, docStatusParCle, canSign });
+  };
+  const vueSignatureAvant = vuePourScope(planSignatureAvant);
+  const vueSignatureApres = vuePourScope(planSignatureApres);
 
   // Lot 0 (audit 28/08, E-1) — état documentaire de la session : périmé,
   // non vérifiable (produit avant le suivi des empreintes), engagé. Une seule
@@ -1064,7 +1155,10 @@ export default async function SessionDetailPage({
   // canEdit : seuls ADMIN/MANAGER éditent les champs structurants (titre,
   // tarif, notes, capacités, dates). COMMERCIAL peut écrire (inscrire,
   // générer docs) mais pas modifier la structure de la session.
-  const canEdit = ['ADMIN', 'MANAGER'].includes(user.role);
+  // Même ensemble que `canSign` (lot C.2b-2), calculé plus haut parce que le
+  // bloc « Signature » en a besoin avant : une seule source, pas deux listes de
+  // rôles à faire diverger.
+  const canEdit = canSign;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -1552,6 +1646,7 @@ export default async function SessionDetailPage({
               canGenerate={canWrite}
               dropZoneParticipants={dropZoneParticipants}
               avantGroups={avantGroups}
+              vueSignature={vueSignatureAvant}
             />
           </div>
         }
@@ -1565,6 +1660,7 @@ export default async function SessionDetailPage({
             dropZoneParticipants={dropZoneParticipants}
             pendantGroups={pendantGroups}
             apresGroups={apresGroups}
+            vueSignature={vueSignatureApres}
             batch={
               latestBatch
                 ? {
