@@ -20,6 +20,14 @@
  * `MISSING` appelle une action, `NA` dit qu'il n'y a rien à faire, et confondre
  * les deux fait courir l'admin après des pièces qui n'existent pas.
  *
+ * LE GARDE-FOU « RÉGIME INCOHÉRENT » (Laurent, 10/09/2026 — cas Florent
+ * HAUSSWIRTH ; consigné en §5 lot C de la spec, amendement n°4). Un `NA` silencieux fait
+ * DISPARAÎTRE un dossier de l'écran. Quand le dossier du participant porte les
+ * signaux d'un régime que son sponsor n'ouvre pas, le module rend un
+ * AVERTISSEMENT nommé — qui ne déclenche aucun envoi et invite à corriger la
+ * donnée. Les signaux sont eux-mêmes de la donnée (`SignauxDossierPropre`) :
+ * aucune comparaison sur un code financeur n'entre ici.
+ *
  * CE MODULE IGNORE ET PRISMA ET DOCUSEAL. Il ne lit pas la base : l'appelant
  * (lot C.2) charge `OpcoCatalog` et lui passe les trois colonnes. Il ne connaît
  * pas non plus le prestataire : il désigne QUI signe par son entité
@@ -61,13 +69,57 @@ export interface BlocageRegime {
   raison: 'ORG_PAYEUSE_ABSENTE';
 }
 
+/**
+ * Signaux d'un dossier PROPRE au participant (Laurent, 10/09/2026).
+ *
+ * Calculés par l'appelant à partir de la DONNÉE (liens juridiques, catalogues
+ * des organisations rattachées), jamais d'un code financeur. C'est la
+ * reformulation en donnée du signal BUG-11 : le code de la page session testait
+ * un code financeur en dur ; ici on demande « une autre organisation dont le
+ * catalogue ouvre la pièce », ce qui reste vrai au septième financeur.
+ */
+export interface SignauxDossierPropre {
+  /** Un LegalLink `EI_SELF` vers une organisation qui n'est PAS le sponsor de cette session. */
+  aLienEiSelfHorsSponsor: boolean;
+  /** Les règles des AUTRES organisations rattachées au participant. */
+  reglesAutresOrgs: RegleSignatureFinanceur[];
+}
+
+/**
+ * Une pièce hors régime chez le sponsor, alors que le dossier du participant en
+ * porte les signaux. Ce n'est PAS un blocage : rien n'était prévu, donc rien
+ * n'échoue. C'est une invitation à corriger la donnée.
+ */
+export interface AvertissementRegime {
+  docType: DocTypeSignable;
+  raison: 'REGIME_INCOHERENT';
+}
+
 export interface ContexteRegime {
   /** Les 3 colonnes du financeur du participant. `null` = financeur inconnu → rien en régime. */
   regle: RegleSignatureFinanceur | null;
   participantId: string;
   /** L'organisation payeuse : `SessionParticipant.sponsorOrgId`. */
   sponsorOrgId: string | null;
+  /**
+   * ABSENT par défaut : les appelants du lot C.1 continuent de compiler et de
+   * rendre exactement la même chose. Un appelant qui ne sait pas calculer les
+   * signaux ne doit pas être forcé d'inventer des `false`.
+   */
+  signauxDossierPropre?: SignauxDossierPropre;
 }
+
+/**
+ * Les pièces qu'un simple lien `EI_SELF` hors sponsor suffit à signaler.
+ *
+ * Une entreprise individuelle rattachée dont le financeur n'est pas renseigné
+ * est elle-même une donnée à corriger : elle ne dit rien de l'assiduité, mais
+ * elle dit tout du dossier de financement. Table de DONNÉES, comme
+ * `COLONNE_PAR_DOCTYPE` : une pièce de plus = une ligne de plus.
+ */
+const PIECES_SIGNALEES_PAR_LIEN_EI: ReadonlySet<DocTypeSignable> = new Set<DocTypeSignable>([
+  'AGEFICE',
+]);
 
 /** LA table qui remplace les `if` : docType → colonne du financeur. Ajouter une pièce = une ligne ici. */
 const COLONNE_PAR_DOCTYPE: Record<DocTypeSignable, keyof RegleSignatureFinanceur> = {
@@ -149,9 +201,47 @@ function cibleDe(role: SignerRole, ctx: ContexteRegime): CibleSignature | null {
  * signataires se résolvent, ils ne se devinent pas, et un envoi qui manque doit
  * être bruyant plutôt que muet.
  */
+/**
+ * Les pièces hors régime chez le sponsor que le dossier du participant réclame
+ * pourtant — le cas Florent HAUSSWIRTH.
+ *
+ * Inscrit sous le financeur de l'agence qui l'emploie alors que son dossier est
+ * celui d'un TNS : sans ce garde-fou, ses pièces sortent en `NA` et son dossier
+ * DISPARAÎT de l'écran. Un dossier qui disparaît ne se corrige jamais.
+ *
+ * Deux signaux, tous deux tirés de la donnée : (a) une autre organisation
+ * rattachée dont le catalogue OUVRE la pièce, (b) pour les seules pièces de
+ * `PIECES_SIGNALEES_PAR_LIEN_EI`, un lien `EI_SELF` hors sponsor.
+ */
+function avertissementsRegimeIncoherent(ctx: ContexteRegime): AvertissementRegime[] {
+  const signaux = ctx.signauxDossierPropre;
+  if (signaux === undefined) return [];
+
+  const horsRegime = docTypesHorsRegime(ctx.regle);
+  const avertissements: AvertissementRegime[] = [];
+
+  for (const docType of DOC_TYPES_SIGNABLES) {
+    // En régime chez le sponsor : rien d'incohérent, la pièce part normalement.
+    if (!horsRegime.has(docType)) continue;
+
+    const ouvertePourUneAutreOrg = signaux.reglesAutresOrgs.some(
+      (regle) => signataireDe(docType, regle) !== null,
+    );
+    const signaleeParLeLien =
+      signaux.aLienEiSelfHorsSponsor && PIECES_SIGNALEES_PAR_LIEN_EI.has(docType);
+
+    if (ouvertePourUneAutreOrg || signaleeParLeLien) {
+      avertissements.push({ docType, raison: 'REGIME_INCOHERENT' });
+    }
+  }
+
+  return avertissements;
+}
+
 export function resolveRegimeSignature(ctx: ContexteRegime): {
   pieces: PieceASigner[];
   blocages: BlocageRegime[];
+  avertissements: AvertissementRegime[];
 } {
   const pieces: PieceASigner[] = [];
   const blocages: BlocageRegime[] = [];
@@ -169,5 +259,7 @@ export function resolveRegimeSignature(ctx: ContexteRegime): {
     pieces.push({ docType, role, cible });
   }
 
-  return { pieces, blocages };
+  // L'avertissement se calcule À PART et ne touche NI `pieces` NI `blocages` :
+  // il ne déclenche aucun envoi, il rend l'anomalie bruyante.
+  return { pieces, blocages, avertissements: avertissementsRegimeIncoherent(ctx) };
 }

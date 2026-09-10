@@ -185,7 +185,8 @@ describe('resolveRegimeSignature — quelles pièces, quel rôle, quelle cible',
 });
 
 /**
- * Garde-fou « régime incohérent » — décision D-5 (Laurent, 10/09/2026).
+ * Garde-fou « régime incohérent » — décision de Laurent du 10/09/2026
+ * (spec §5 lot C, amendement n°4).
  *
  * LE CAS RÉEL : Florent HAUSSWIRTH. Inscrit avec pour organisation bénéficiaire
  * l'agence qui l'emploie (financeur salarié), alors que son dossier est celui

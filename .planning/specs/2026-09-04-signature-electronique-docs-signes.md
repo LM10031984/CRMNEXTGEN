@@ -248,6 +248,39 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 
 ### Lot C — Envoi, webhook, retour du PDF signé
 
+> **Écarts constatés / amendements (10/09/2026, lot C.2a)** — la spec est corrigée ici,
+> sur le modèle du bloc du lot B :
+>
+> 1. **D-4 AMENDÉ — un envoi porte UN document.** La spec écrivait « 1 SignatureRequest
+>    portant la CONVENTION (+ les AGEFICE de ses participants) ». On sépare : une
+>    `SignatureRequest` par **organisation bénéficiaire** portant la **seule convention**, et
+>    une **par participant** pour son dossier AGEFICE. **Motif** : un dossier AGEFICE n'a
+>    qu'UN signataire — le grouper ferait dépendre sa complétion de celle du dirigeant, et un
+>    dossier prêt à partir resterait bloqué derrière une signature qui ne le concerne pas.
+>    Implémenté dans `lib/signature/plan-envoi.ts`, verrouillé par un test de puissance
+>    (fusionner AGEFICE dans la convention fait rougir la suite).
+> 2. **La cascade du signataire n'est pas celle décrite plus bas.** La spec proposait
+>    « `Contact` de l'organisation avec `function` dirigeant / signataire ». Le code qui
+>    imprime « Représentée par X » sur la convention depuis le 21/08 résout autrement :
+>    `Organization.representative`, sinon le **premier contact principal** (`isPrimary`, le
+>    plus ancien). **`Contact.function` n'y joue aucun rôle** — il est saisi librement et ne
+>    prouve rien. C'est cette cascade RÉELLE qui fait foi ; elle a été extraite dans
+>    `lib/signature/representant.ts` et les deux chemins de `convention-core.ts` l'appellent,
+>    pour que le signataire ne puisse plus diverger du nom que le PDF imprime.
+> 3. **Aucun repli sur un autre contact** (Laurent, 10/09/2026). Le « sinon premier `Contact`
+>    avec email » est **annulé**. Envoyer le lien dans la boîte de B pour une pièce qui nomme
+>    A ferait enregistrer l'email et l'adresse IP de B dans le certificat de signature : la
+>    preuve serait inexploitable devant un financeur. Représentant sans email ⇒ **refus
+>    nominatif**. Seule dérogation : une adresse **saisie explicitement par l'admin** au
+>    moment de l'envoi (source `SAISI_PAR_ADMIN`), journalisée avec le nom retenu.
+> 4. **Garde-fou « régime incohérent »** (Laurent, 10/09/2026 — cas Florent HAUSSWIRTH). Un
+>    participant dont le dossier porte les signaux d'un autre régime (lien `EI_SELF` vers une
+>    organisation qui n'est pas le sponsor, ou autre organisation rattachée dont le catalogue
+>    OUVRE la pièce) alors que son organisation bénéficiaire ne l'ouvre pas produit un
+>    **avertissement nommé**, jamais un `NA` silencieux — un dossier qui disparaît de l'écran
+>    ne se corrige jamais. L'avertissement ne déclenche **aucun** envoi : il invite à corriger
+>    la donnée.
+
 - Server action `sendForSignature({ sessionId, scope: 'BEFORE' | 'AFTER', targets })` :
   - `BEFORE` : pour chaque organisation payeuse → 1 SignatureRequest portant la CONVENTION (+ les AGEFICE de ses participants AGEFICE, chacun signé par son stagiaire) ; pour chaque indépendant → sa convention + son AGEFICE.
   - `AFTER` : 1 SignatureRequest par participant AGEFICE portant l'ASSIDUITE.
@@ -261,6 +294,9 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 
 ### Lot D — Intégration financeur & audit
 
+**Attente Laurent (10/09) — « le dossier AGEFICE prêt à partir en un geste »** : quand conventions et dossiers AGEFICE sont signés, l'admin ouvre le dossier du participant et trouve un écran « Dossier prêt » : point d'accueil AGEFICE **résolu automatiquement depuis le département du stagiaire** (table `agefice_pta_departments_served` de main, 08/09), destinataire pré-rempli, objet et corps pré-composés (`OpcoSubmission` existant), pièces jointes = versions **signées** + certificats de signature, et **un seul bouton Envoyer**. Envoi depuis QualiOF avec l'expéditeur en copie (le mail arrive aussi dans sa boîte, avec les pièces) — pas de `mailto:` (ne joint pas de fichiers de façon fiable). Si une pièce manque ou n'est pas signée : bloquant nominatif, jamais d'envoi partiel silencieux.
+
+
 - `OpcoSubmission` : la composition des pièces jointes prend `signedPdfUrl` quand il existe ; si convention ou AGEFICE non signés → avertissement bloquant « dossier incomplet : X non signé » (option ADMIN pour forcer).
 - Pack closure / ZIP audit (`closure-pack.ts`, `/api/closure/[batch]/zip`) : inclut les signés + audit trails dans un sous-dossier `signes/`.
 - Alerte J-15 (plan cloud §E) : `Task` + notification ADMIN/MANAGER « Convention non envoyée pour signature » pour toute session à J-15 sans SignatureRequest.
@@ -273,7 +309,7 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 | D-1 | Où vit le signataire OF (nom/email/ordre) ? | Champs sur `Tenant` (ou `TenantEmailSettings`), édités dans Paramètres. |
 | D-2 | ~~Que teste réellement le filtre `signed` de la liste des sessions ?~~ **RÉPONDU 04/09** | Lu : `sessions/page.tsx` filtre sur `TrainingSession.status IN (VALIDATED, IN_PROGRESS, COMPLETED)` — **aucun rapport avec une signature**, le libellé ment. À rebrancher sur `Document.status = 'signed'` en lot D. |
 | D-3 | Ordre de signature : client puis OF, ou parallèle ? | Séquentiel client → OF (l'OF signe après avoir vu que le client a signé). |
-| D-4 | Convention entreprise multi-participants : 1 envoi avec convention + N AGEFICE, ou envois séparés ? | 1 envoi par organisation (moins de mails pour le dirigeant) ; les stagiaires ne signent que leur AGEFICE. |
+| D-4 | ~~Convention entreprise multi-participants : 1 envoi avec convention + N AGEFICE, ou envois séparés ?~~ **AMENDÉ 10/09** | **Envois séparés — un envoi porte UN document.** 1 `SignatureRequest` par organisation bénéficiaire portant la seule convention ; 1 par participant pour son dossier AGEFICE. Motif et détail : §5 lot C, amendement n°1. |
 | D-5 | Rappels aux signataires | Cron QualiOF J+3 / J+7, catégorie email décochable (DocuSeal a aussi ses relances, mais on garde la main sur les emails). |
 | D-7 | Localisation de la zone de signature dans le PDF | Text tags DocuSeal dans les templates (texte blanc). |
 | D-9 | Qui envoie les emails aux signataires : DocuSeal ou QualiOF ? | QualiOF (`send_email: false`, lien de signature récupéré via l'API) pour garder le mailer fail-closed et la catégorie décochable. |
