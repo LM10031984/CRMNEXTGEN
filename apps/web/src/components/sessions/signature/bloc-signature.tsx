@@ -47,6 +47,7 @@ import { annulerEnvoiSignature } from '@/server/actions/signature-envoi';
 import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
 import { UploadSignedDocDialog } from '../qualiopi-matrix/upload-signed-doc-dialog';
+import { RecapitulatifEnvoi } from './recapitulatif-envoi';
 
 export interface BlocSignatureProps {
   sessionId: string;
@@ -85,14 +86,17 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
   /** La ligne dont le dépôt de scan est ouvert (`cle`), ou `null`. */
   const [depotOuvert, setDepotOuvert] = useState<string | null>(null);
   /**
-   * Les clés que le récapitulatif doit préparer. `undefined` = tout le plan du
-   * moment ; une seule clé = l'envoi d'une ligne.
+   * Les clés que le récapitulatif doit préparer. `cles: undefined` = tout le
+   * plan du moment ; une seule clé = l'envoi d'une ligne.
    *
-   * TODO tâche 3 (commit suivant) : ouvre `<RecapitulatifEnvoi>`. Le bouton
-   * n'est PAS grisé en attendant — il l'est encore moins masqué : la décision
-   * n°3 porte sur « rien à envoyer », pas sur « la modale n'est pas là ».
+   * ⚠ `null` FERME la modale, et c'est ce qui garantit une préparation NEUVE à
+   * chaque ouverture : `<RecapitulatifEnvoi>` relance `preparerEnvoiSignature`
+   * sur la transition `open`, donc l'aperçu — et le hash qu'il porte — ne
+   * peuvent pas dater d'une session de travail antérieure.
    */
-  const [, setDemandeRecapitulatif] = useState<{ cles?: string[] } | null>(null);
+  const [demandeRecapitulatif, setDemandeRecapitulatif] = useState<{
+    cles?: string[];
+  } | null>(null);
 
   // Le bloc se tait quand il n'a rien à dire : une section vide, titrée
   // « Signature électronique », ferait chercher ce qu'il manque.
@@ -318,6 +322,20 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
             );
           })}
         </ul>
+      )}
+
+      {/* Le récapitulatif : monté SEULEMENT quand une demande existe, pour que
+          chaque ouverture reparte d'une préparation neuve (cf. l'état ci-dessus). */}
+      {demandeRecapitulatif !== null && (
+        <RecapitulatifEnvoi
+          open
+          onOpenChange={(ouvert) => {
+            if (!ouvert) setDemandeRecapitulatif(null);
+          }}
+          sessionId={sessionId}
+          scope={scope}
+          cles={demandeRecapitulatif.cles}
+        />
       )}
     </section>
   );

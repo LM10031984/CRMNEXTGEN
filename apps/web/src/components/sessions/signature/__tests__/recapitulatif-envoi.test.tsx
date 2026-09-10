@@ -57,27 +57,32 @@ vi.mock('sonner', () => ({
 }));
 
 import { RecapitulatifEnvoi } from '../recapitulatif-envoi';
-import { messageDocumentModifie } from '@/lib/signature/envoi-contrats';
+import { messageDocumentModifie, type EnvoiPrepare } from '@/lib/signature/envoi-contrats';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
-const CONVENTION = {
+/**
+ * ⚠ La fixture est typée `EnvoiPrepare`, le contrat RÉEL du moteur — pas un
+ * objet libre. Un champ renommé ou retiré côté `envoi-contrats.ts` fait rougir
+ * `tsc` ici, au lieu de laisser la modale lire une forme qui n'existe plus.
+ */
+const CONVENTION: EnvoiPrepare = {
   cle: 'CONVENTION:org-1',
-  docType: 'CONVENTION' as const,
+  docType: 'CONVENTION',
   libelle: 'Convention — AGENCE MARTIN (2 participants)',
-  role: 'DIRIGEANT' as const,
+  role: 'DIRIGEANT',
   participantIds: ['part-1', 'part-2'],
   document: { documentId: 'doc-conv', pdfUrl: 'docs/conv.pdf', hash: 'HASH-A', regenere: true },
   signataire: {
     nom: 'Paul MARTIN',
     email: 'paul@agence-martin.fr',
-    sourceNom: 'ORG_REPRESENTATIVE' as const,
-    sourceEmail: 'PERSON' as const,
+    sourceNom: 'ORG_REPRESENTATIVE',
+    sourceEmail: 'PERSON',
   },
-  empechements: [] as { raison: string; message: string }[],
+  empechements: [],
 };
 
-function preparationOk(over: Partial<typeof CONVENTION>[] = [CONVENTION]) {
+function preparationOk(over: EnvoiPrepare[] = [CONVENTION]) {
   return {
     ok: true as const,
     sessionId: SESSION_ID,
@@ -196,9 +201,9 @@ describe('Le couple qui signera — quel NOM, quelle ADRESSE, et d’où viennen
 });
 
 describe('Adresse dérogatoire — saisie, jamais devinée', () => {
-  const sansEmail = {
+  const sansEmail: EnvoiPrepare = {
     ...CONVENTION,
-    signataire: null as (typeof CONVENTION)['signataire'] | null,
+    signataire: null,
     empechements: [
       {
         raison: 'SIGNATAIRE_SANS_EMAIL',
@@ -215,7 +220,7 @@ describe('Adresse dérogatoire — saisie, jamais devinée', () => {
     await waitFor(() => expect(screen.getByLabelText(/adresse email du signataire/i)).toBeTruthy());
     // Rien à envoyer tant que l'adresse manque : pas de repli automatique sur
     // un autre contact — c'est le sens même de la dérogation.
-    expect(document.body.textContent).toContain('ne partira pas');
+    expect(screen.getByText(/ne partira pas/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
     await waitFor(() => expect(sendForSignature).not.toHaveBeenCalled());
   });
@@ -285,13 +290,13 @@ describe('PUISSANCE (c) — un refus DOCUMENT_MODIFIE se comprend au lieu de se 
     ouvrir();
     await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
-    await waitFor(() => expect(document.body.textContent).toContain('a changé depuis l’aperçu'));
+    await waitFor(() => expect(document.body.textContent).toContain("a changé depuis l'aperçu"));
 
     const texte = document.body.textContent ?? '';
     // Les trois choses que le message dit, et qu'un « Erreur » perdrait :
     // ce qui s'est passé, ce qui n'a PAS eu lieu, et le geste.
-    expect(texte).toContain('a changé depuis l’aperçu');
-    expect(texte).toContain('rien n’a été envoyé');
+    expect(texte).toContain("a changé depuis l'aperçu");
+    expect(texte).toContain("rien n'a été envoyé");
     expect(texte).toContain('Rouvrez le récapitulatif');
     // Le message intégral, mot pour mot.
     expect(texte).toContain(MESSAGE);
@@ -310,7 +315,7 @@ describe('PUISSANCE (c) — un refus DOCUMENT_MODIFIE se comprend au lieu de se 
           .getAllByRole('alert')
           .map((n) => n.textContent ?? '')
           .join(' '),
-      ).toContain('a changé depuis l’aperçu'),
+      ).toContain("a changé depuis l'aperçu"),
     );
   });
 
@@ -330,7 +335,12 @@ describe('PUISSANCE (c) — un refus DOCUMENT_MODIFIE se comprend au lieu de se 
         preparationOk([
           {
             ...CONVENTION,
-            document: { ...CONVENTION.document, hash: 'HASH-B', regenere: true },
+            document: {
+              documentId: 'doc-conv',
+              pdfUrl: 'docs/conv.pdf',
+              hash: 'HASH-B',
+              regenere: true,
+            },
           },
         ]),
       );
@@ -436,7 +446,7 @@ describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', 
     await waitFor(() => expect(document.body.textContent).toContain('Paul MARTIN'));
     // Un lot ne tombe pas parce qu'une pièce a refusé.
     expect(document.body.textContent).toContain('Dossier AGEFICE — Jean DUPONT');
-    expect(document.body.textContent).toContain('a changé depuis l’aperçu');
+    expect(document.body.textContent).toContain("a changé depuis l'aperçu");
   });
 
   it('rafraîchit la fiche session après un envoi réussi', async () => {

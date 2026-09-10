@@ -183,6 +183,40 @@ describe('PUISSANCE (a) — pas de bouton quand il n’y a rien à envoyer', () 
   });
 });
 
+describe('Le bouton OUVRE quelque chose — il ne fait pas semblant', () => {
+  /**
+   * Le plan avertissait explicitement : « ne pas exposer le bouton en
+   * production dans l'intervalle : sans la modale, il n'ouvre rien ». Ces deux
+   * tests sont ce qui empêche cet intervalle de durer sans qu'on le voie.
+   */
+  it('le bouton du bloc ouvre le récapitulatif sur TOUT le plan du moment', async () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /^envoyer pour signature \(\d+\)$/i }),
+    );
+    await waitFor(() => expect(preparerEnvoiSignature).toHaveBeenCalledTimes(1));
+    const arg = preparerEnvoiSignature.mock.calls[0]![0] as { scope: string; cles?: string[] };
+    expect(arg.scope).toBe('AFTER');
+    // Pas de `cles` : le récapitulatif prépare tout ce qui peut partir.
+    expect(arg.cles).toBeUndefined();
+  });
+
+  it('le bouton d’une LIGNE n’ouvre le récapitulatif que sur SA pièce', async () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /envoyer pour signature — attestation/i }),
+    );
+    await waitFor(() => expect(preparerEnvoiSignature).toHaveBeenCalledTimes(1));
+    expect(
+      (preparerEnvoiSignature.mock.calls[0]![0] as { cles?: string[] }).cles,
+    ).toEqual(['ASSIDUITE:part-1']);
+  });
+});
+
 describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit et se lit', () => {
   const avertissement = {
     participantId: 'part-3',
