@@ -10,3 +10,5 @@ export * from './qualiopi-matrix';
 export * from './invoice';
 export * from './session';
 export * from './veille';
+export * from './diagnostic';
+export * from './proposition';

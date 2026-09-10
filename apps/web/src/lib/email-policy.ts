@@ -23,7 +23,9 @@ export type EmailCategory =
   | 'opco_submission'
   | 'internal_notification'
   | 'user_invitation'
-  | 'diagnostic_program';
+  | 'diagnostic_program'
+  | 'new_lead'
+  | 'preenrollment_submitted';
 
 /**
  * Snapshot structurel des réglages — compatible avec le model Prisma
@@ -39,6 +41,8 @@ export interface EmailPolicySettings {
   internalNotificationsEnabled: boolean;
   userInvitationsEnabled: boolean;
   diagnosticProgramsEnabled: boolean;
+  newLeadAlertsEnabled: boolean;
+  preEnrollmentAlertsEnabled: boolean;
   testSessionIds: string[];
 }
 
@@ -61,6 +65,8 @@ export const EMAIL_CATEGORY_FIELD: Record<EmailCategory, keyof Omit<EmailPolicyS
   internal_notification: 'internalNotificationsEnabled',
   user_invitation: 'userInvitationsEnabled',
   diagnostic_program: 'diagnosticProgramsEnabled',
+  new_lead: 'newLeadAlertsEnabled',
+  preenrollment_submitted: 'preEnrollmentAlertsEnabled',
 };
 
 /** Libellés FR pour l'UI Paramètres organisme (section « Envois d'emails »). */
@@ -72,6 +78,8 @@ export const EMAIL_CATEGORY_LABELS: Record<EmailCategory, string> = {
   internal_notification: 'Notifications internes (équipe)',
   user_invitation: 'Invitations utilisateurs',
   diagnostic_program: 'Programme du diagnostic express (stand)',
+  new_lead: 'Alertes nouveaux leads (équipe)',
+  preenrollment_submitted: 'Alertes pré-inscriptions (admin)',
 };
 
 /**

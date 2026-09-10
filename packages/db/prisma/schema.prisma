@@ -69,6 +69,25 @@ model Tenant {
   signatoryTitle             String?
   // D-3 : par défaut l'OF signe APRÈS le client.
   signatoryOrder             SignatoryOrder    @default(AFTER)
+  // ── Facturation électronique (spec 02/09/2026) ───────────────────────
+  /// "SUPERPDP" | "IOPOLE" | "MOCK". Null = aucune plateforme raccordée.
+  einvoiceProvider           String?
+  /// Feature flag : tant qu'il est faux, RIEN n'est visible dans l'UI et
+  /// rien ne part vers une plateforme. On n'expose pas une promesse non tenue.
+  einvoiceEnabled            Boolean           @default(false)
+  /// SIREN émetteur (dérivable du SIRET, mais figé explicitement : c'est
+  /// l'identifiant d'annuaire, il ne se déduit pas au moment de l'envoi).
+  siren                      String?
+  /// Mention d'exonération portée par chaque ligne de facture.
+  /// Défaut applicatif : MENTION_TVA de `lib/catalogue-constants.ts`.
+  vatExemptionText           String?           @db.Text
+  /// Curseur de synchronisation : plus grand `invoice_event.id` déjà lu chez
+  /// la plateforme. Super PDP n'expose AUCUN webhook (doc lue le 03/09) — le
+  /// suivi se fait par polling `starting_after_id`, et la séquence est
+  /// garantie strictement croissante : repartir de ce maximum ne peut pas
+  /// laisser de trou. Stocké en texte parce que les ids sont des int64, que
+  /// `Number` ne représente pas fidèlement au-delà de 2^53.
+  einvoiceLastEventId        String?
   users                      User[]
   notifications              Notification[]
   regulatoryWatches          RegulatoryWatch[]
@@ -92,27 +111,29 @@ enum UserRole {
 }
 
 model User {
-  id            String           @id @default(uuid())
-  tenantId      String
-  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email         String           @unique
-  hashedPwd     String
-  firstName     String
-  lastName      String
-  role          UserRole         @default(LECTEUR)
+  id               String           @id @default(uuid())
+  tenantId         String
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email            String           @unique
+  hashedPwd        String
+  firstName        String
+  lastName         String
+  role             UserRole         @default(LECTEUR)
   // Phase 8 — soft-delete + métadonnées invitation (D-03 CONTEXT.md)
-  disabledAt    DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
-  lastLoginAt   DateTime? // mis à jour dans loginAction sur succès
-  invitedAt     DateTime? // null = créé manuellement (seed)
-  invitedBy     String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
-  invitations   UserInvitation[] @relation("UserInvitations")
-  authSessions  AuthSession[]
-  auditLogs     AuditLog[]
-  leadsOwned    Lead[]
-  tasksOwned    Task[]
-  notifications Notification[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  disabledAt       DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
+  lastLoginAt      DateTime? // mis à jour dans loginAction sur succès
+  invitedAt        DateTime? // null = créé manuellement (seed)
+  invitedBy        String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
+  invitations      UserInvitation[] @relation("UserInvitations")
+  authSessions     AuthSession[]
+  auditLogs        AuditLog[]
+  leadsOwned       Lead[]
+  tasksOwned       Task[]
+  diagnosticsOwned Diagnostic[]     @relation("DiagnosticOwner")
+  proposalsOwned   Proposal[]       @relation("ProposalOwner")
+  notifications    Notification[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, disabledAt])
@@ -151,39 +172,40 @@ model UserInvitation {
 // =====================================================
 
 model Person {
-  id                     String                @id @default(uuid())
-  tenantId               String
-  civility               String?
-  firstName              String
-  lastName               String
-  birthName              String?
-  birthDate              DateTime?
-  email                  String?
-  phone                  String?
-  personalAddress        Json?
-  educationLevel         String?
-  diplomas               String? // texte libre depuis Airtable.Diplômes / SmartOF
-  professionalExperience String? // "1-3 ans", "4 ans", "10 ans", "Plus de 10 ans"
-  professionalStatus     String? // "Agent commercial", "Conseiller commercial", etc.
+  id                       String                  @id @default(uuid())
+  tenantId                 String
+  civility                 String?
+  firstName                String
+  lastName                 String
+  birthName                String?
+  birthDate                DateTime?
+  email                    String?
+  phone                    String?
+  personalAddress          Json?
+  educationLevel           String?
+  diplomas                 String? // texte libre depuis Airtable.Diplômes / SmartOF
+  professionalExperience   String? // "1-3 ans", "4 ans", "10 ans", "Plus de 10 ans"
+  professionalStatus       String? // "Agent commercial", "Conseiller commercial", etc.
   // Documents stockés en MinIO (uploadés au wizard de création apprenant)
-  ribKey                 String? // RIB scanné (PDF/image) en MinIO
-  bpfDefaultStatus       String?
-  rgpdConsentAt          DateTime?
-  requiresCleanup        Boolean               @default(false)
-  cleanupNotes           String?
-  archived               Boolean               @default(false)
+  ribKey                   String? // RIB scanné (PDF/image) en MinIO
+  bpfDefaultStatus         String?
+  rgpdConsentAt            DateTime?
+  requiresCleanup          Boolean                 @default(false)
+  cleanupNotes             String?
+  archived                 Boolean                 @default(false)
   // Relations
-  legalLinks             LegalLink[]
-  participations         SessionParticipant[]
-  trainerSessions        SessionTrainer[]
-  attendances            Attendance[]
-  trainerAvailabilities  TrainerAvailability[]
-  sensitiveData          SensitiveData?
-  contactRoles           Contact[] // un Person peut être référencé comme Contact d'organisations
-  leadsAsPerson          Lead[]                @relation("LeadPerson")
-  comments               InternalComment[]
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  legalLinks               LegalLink[]
+  participations           SessionParticipant[]
+  trainerSessions          SessionTrainer[]
+  attendances              Attendance[]
+  trainerAvailabilities    TrainerAvailability[]
+  sensitiveData            SensitiveData?
+  contactRoles             Contact[] // un Person peut être référencé comme Contact d'organisations
+  leadsAsPerson            Lead[]                  @relation("LeadPerson")
+  comments                 InternalComment[]
+  diagnosticParticipations DiagnosticParticipant[]
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 
   @@index([tenantId, lastName, firstName])
   @@index([tenantId, email])
@@ -240,6 +262,8 @@ model Organization {
   invoices                Invoice[]
   comments                InternalComment[]
   opcoSubmissions         OpcoSubmission[]
+  diagnostics             Diagnostic[]
+  proposals               Proposal[]
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
 
@@ -334,6 +358,14 @@ model BillingProfile {
 // === Catalogue de formation
 // =====================================================
 
+/// Nature du contenu au sens OPCO EP — détermine le taux horaire pris en charge.
+enum ProductFundingType {
+  /// TRACFIN, non-discrimination, déontologie — taux réglementaire.
+  REGLEMENTAIRE
+  /// Tout le reste (défaut).
+  COEUR_METIER
+}
+
 enum Modality {
   PRESENTIEL
   DISTANCIEL
@@ -342,7 +374,7 @@ enum Modality {
 }
 
 model TrainingProduct {
-  id                   String            @id @default(uuid())
+  id                   String             @id @default(uuid())
   tenantId             String
   code                 String
   title                String
@@ -363,18 +395,18 @@ model TrainingProduct {
   trainerProfile       String?
   pedagogicalSupport   String?
   accessConditions     String?
-  priceHT              Decimal           @default(0) @db.Decimal(10, 2)
-  vatRate              Decimal           @default(0) @db.Decimal(5, 2)
-  groupFlatPrice       Decimal?          @db.Decimal(10, 2) // Tarif_forfait_groupe
+  priceHT              Decimal            @default(0) @db.Decimal(10, 2)
+  vatRate              Decimal            @default(0) @db.Decimal(5, 2)
+  groupFlatPrice       Decimal?           @db.Decimal(10, 2) // Tarif_forfait_groupe
   theme                String? // "Acquisition", "Stratégie", "Management", "IA", etc.
-  version              Int               @default(1)
-  isActive             Boolean           @default(true)
-  excludedFromBpf      Boolean           @default(false)
+  version              Int                @default(1)
+  isActive             Boolean            @default(true)
+  excludedFromBpf      Boolean            @default(false)
   bpfSpecialty         String?
   bpfCategory          String?
   bpfLevel             String?
-  capacityMin          Int               @default(1)
-  capacityMax          Int               @default(12)
+  capacityMin          Int                @default(1)
+  capacityMax          Int                @default(12)
   // ── Conformité Cerfa AGEFICE (Section C/D) ─────────────────────────────
   // Valeurs unions définies dans `lib/agefice-form-fill.ts` (FormationType,
   // FormationNiveau, FormationCertif, AttestationType, EvaluationType).
@@ -398,11 +430,16 @@ model TrainingProduct {
   // blocker `product_ai_unreviewed` dans getSessionCompleteness, action
   // "Valider" (set null) ou "Réviser" (édition manuelle = set null aussi).
   aiDraftedAt          DateTime?
+  // Chaîne diagnostic (lot A §5.3) — pilote le taux horaire OPCO EP :
+  // REGLEMENTAIRE (TRACFIN / non-discrimination / déontologie) = 40 €/h,
+  // COEUR_METIER = 30 €/h. Jamais de `if (code === ...)` dans le moteur.
+  fundingType          ProductFundingType @default(COEUR_METIER)
   modules              TrainingModule[]
   trainingSessions     TrainingSession[]
   leads                Lead[]
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  enrollmentBatches    EnrollmentBatch[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive])
@@ -420,8 +457,25 @@ model TrainingModule {
   presentielCollectifHours  Int?
   distancielSyncHours       Int?
   distancielAsyncHours      Int?
+  // ── Import catalogue diagnostic (lot A §5.3) ─────────────────────────────
+  /// Famille du catalogue Start Academy ("Base (paramétrages fonctionnalités)",
+  /// "Acquisition", "Management"…).
+  family                    String?
+  /// Profil visé ("conseiller", "manager", "assistant"…).
+  targetProfile             String?
+  /// Phrases entendues en RDV qui déclenchent ce module (string[]).
+  /// Consommé par le moteur de recommandation (lot D/E).
+  diagnosticSignals         Json?
+  /// Les questions à poser pour vérifier que le besoin est réel.
+  needIdentification        String?
+  /// Module socle (à proposer en priorité avant les modules avancés).
+  isFoundation              Boolean         @default(false)
+  /// Pige : interdite dans tout contenu remis au client depuis le 11/08/2026.
+  /// Le questionnaire interne peut l'aborder ; l'audit et la proposition non.
+  excludedFromClientOutputs Boolean         @default(false)
 
   @@index([productId, order])
+  @@index([family])
 }
 
 // =====================================================
@@ -777,9 +831,16 @@ model Lead {
   // Phase 9 — Date de transition vers WON (LEAD-02 KPI 2/4).
   // Set automatiquement par `updateLeadStatus` quand status passe à WON ; null sinon.
   wonAt                 DateTime?
+  /// Chaîne diagnostic §11.1 (A-2) — horodatage de l'alerte « lead non traité ».
+  /// Sa seule raison d'être est l'idempotence : UNE alerte par lead, jamais un
+  /// rappel toutes les heures parce qu'un cron repasse. Remis à null dès qu'une
+  /// action est enregistrée : un lead re-délaissé doit pouvoir ré-alerter.
+  staleAlertedAt        DateTime?
   // Relations
   actions               LeadAction[]
   diagnosticSubmissions DiagnosticSubmission[]
+  diagnostics           Diagnostic[]
+  proposals             Proposal[]
   tasks                 Task[]
   comments              InternalComment[]
   createdAt             DateTime               @default(now())
@@ -818,45 +879,63 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id                String              @id @default(uuid())
-  tenantId          String
-  number            String              @unique // numérotation continue (FAC-NNNNNN)
-  status            InvoiceStatus       @default(DRAFT)
+  id                  String                 @id @default(uuid())
+  tenantId            String
+  number              String                 @unique // numérotation continue (FAC-NNNNNN)
+  status              InvoiceStatus          @default(DRAFT)
   // Phase 11 — Avoirs (D-01). Self-FK : un avoir pointe vers la facture annulée.
-  originalInvoiceId String?
-  originalInvoice   Invoice?            @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
-  creditNotes       Invoice[]           @relation("InvoiceToCreditNote")
+  originalInvoiceId   String?
+  originalInvoice     Invoice?               @relation("InvoiceToCreditNote", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  creditNotes         Invoice[]              @relation("InvoiceToCreditNote")
   // Phase 11 — Tracking relances (D-13b). Idempotence + auto-stop.
-  lastReminderAt    DateTime?
-  reminderCount     Int                 @default(0)
+  lastReminderAt      DateTime?
+  reminderCount       Int                    @default(0)
   // Liens métier
-  participantId     String?
-  participant       SessionParticipant? @relation(fields: [participantId], references: [id])
-  participantIds    Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
-  sessionId         String? // session dont sont issus les participants (pour facture groupée)
-  payerOrgId        String?
-  payerOrg          Organization?       @relation(fields: [payerOrgId], references: [id])
-  payerContactId    String? // optionnel : un Contact spécifique
-  billingProfileId  String?
-  billingProfile    BillingProfile?     @relation(fields: [billingProfileId], references: [id])
+  participantId       String?
+  participant         SessionParticipant?    @relation(fields: [participantId], references: [id])
+  participantIds      Json? // si facture multi-participants groupée par sponsor (salariés d'une SARL)
+  sessionId           String? // session dont sont issus les participants (pour facture groupée)
+  payerOrgId          String?
+  payerOrg            Organization?          @relation(fields: [payerOrgId], references: [id])
+  payerContactId      String? // optionnel : un Contact spécifique
+  billingProfileId    String?
+  billingProfile      BillingProfile?        @relation(fields: [billingProfileId], references: [id])
   // Montants
-  amountHT          Decimal             @default(0) @db.Decimal(10, 2)
-  vatRate           Decimal             @default(0) @db.Decimal(5, 2)
-  amountTTC         Decimal             @default(0) @db.Decimal(10, 2)
-  amountPaid        Decimal             @default(0) @db.Decimal(10, 2)
+  amountHT            Decimal                @default(0) @db.Decimal(10, 2)
+  vatRate             Decimal                @default(0) @db.Decimal(5, 2)
+  amountTTC           Decimal                @default(0) @db.Decimal(10, 2)
+  amountPaid          Decimal                @default(0) @db.Decimal(10, 2)
   // Dates
-  issueDate         DateTime?
-  dueDate           DateTime?
-  paidAt            DateTime?
+  issueDate           DateTime?
+  dueDate             DateTime?
+  paidAt              DateTime?
   // PDF
-  pdfUrl            String?
-  hashSha256        String?
+  pdfUrl              String?
+  hashSha256          String?
   // Notes
-  notes             String?
+  notes               String?
+  // ── Facturation électronique (spec 02/09/2026, lot 1) ──────────────────
+  /// Adresse de livraison quand elle diffère de l'adresse de facturation —
+  /// mention devenue obligatoire par la réforme. Pour un OF : le lieu de
+  /// formation, qui n'est presque jamais le siège du payeur.
+  deliveryAddressJson Json?
+  /// Nature de l'opération : SERVICES | GOODS | MIXED (mention obligatoire).
+  supplyNature        String                 @default("SERVICES")
+  /// Option TVA sur les débits (mention obligatoire). Faux pour une
+  /// prestation exonérée, mais le champ doit exister et être figé.
+  vatOnDebits         Boolean                @default(false)
+  /// Lot 0 · E-1 appliqué à la facture : empreinte des données rendues,
+  /// figée à l'émission. Cf. `apps/web/src/lib/docs/source-fingerprint.ts`
+  /// pour la primitive — même normalisation, mêmes trois verdicts.
+  sourceFingerprint   String?
   // Paiements
-  payments          InvoicePayment[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  payments            InvoicePayment[]
+  // Facturation électronique
+  lines               InvoiceLine[]
+  parties             InvoiceParty[]
+  transmissions       EInvoiceTransmission[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, issueDate])
@@ -920,6 +999,10 @@ model Quote {
   rejectedAt       DateTime? // passage SENT → REJECTED
   // PDF
   pdfUrl           String? // MinIO key, null tant que non généré
+  // Chaîne diagnostic (lot A) — un devis peut naître d'une proposition R2.
+  // Nullable : les devis créés à la main depuis le module Devis n'en ont pas.
+  proposalId       String?
+  proposal         Proposal?   @relation(fields: [proposalId], references: [id])
   // Relations
   lines            QuoteLine[]
   createdAt        DateTime    @default(now())
@@ -927,6 +1010,7 @@ model Quote {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([proposalId])
 }
 
 enum QuoteStatus {
@@ -989,6 +1073,12 @@ enum DocType {
   /// entityId={theme}, persisté en MinIO (D-02), traçable AuditLog
   /// `regulatoryWatch.exported`.
   VEILLE_AUDIT
+  /// Chaîne diagnostic (lot A §9.2) — rapport d'audit d'agence remis en R2,
+  /// ≥ 15 pages, valorisé 3 000 €. entityType='Diagnostic'.
+  DIAGNOSTIC_AUDIT
+  /// Chaîne diagnostic (lot A §9.1) — proposition commerciale chiffrée.
+  /// entityType='Proposal'.
+  PROPOSITION
 }
 
 // Référentiel des types de documents Qualiopi (issu de la table Airtable Documents_Qualiopi)
@@ -1456,6 +1546,10 @@ model PreEnrollment {
   // Pré-inscription ciblée à une session (optionnel)
   intendedSessionId      String?
   intendedSession        TrainingSession?    @relation(fields: [intendedSessionId], references: [id])
+  // Campagne de pré-inscription par RDV (lot A §7). Nullable : les liens
+  // individuels existants (envoi nominatif) n'appartiennent à aucune campagne.
+  batchId                String?
+  batch                  EnrollmentBatch?    @relation(fields: [batchId], references: [id])
   // Audit
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
@@ -1463,6 +1557,7 @@ model PreEnrollment {
   @@index([tenantId, status])
   @@index([token])
   @@index([intendedSessionId, status])
+  @@index([batchId, status])
 }
 
 // Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
@@ -1756,6 +1851,11 @@ model TenantEmailSettings {
   internalNotificationsEnabled   Boolean  @default(false)
   userInvitationsEnabled         Boolean  @default(false)
   diagnosticProgramsEnabled      Boolean  @default(false)
+  /// Chaîne diagnostic §11.1 — A-1 « nouveau lead » et A-3 « nouvelle
+  /// pré-inscription ». Défaut false comme toutes les autres : fail-closed,
+  /// une catégorie qu'on n'a pas cochée n'envoie rien.
+  newLeadAlertsEnabled           Boolean  @default(false)
+  preEnrollmentAlertsEnabled     Boolean  @default(false)
   testSessionIds                 String[] @default([])
   createdAt                      DateTime @default(now())
   updatedAt                      DateTime @default(now()) @updatedAt
@@ -1807,4 +1907,451 @@ enum DiagnosticProgrammeStatus {
   /// Catégorie d'email décochée dans Paramètres : rien n'est parti, et ce n'est
   /// pas une erreur. Distinguer les deux évite de chercher une panne.
   SKIPPED
+}
+
+// =====================================================
+// === Chaîne Diagnostic → Proposition (lot A)
+// === Spec : .planning/specs/2026-09-01-chaine-diagnostic-proposition.md §4
+// =====================================================
+
+/// Référentiel de financement paramétrable (port de `funding_config` du repo diag).
+///
+/// Pourquoi une table et pas des constantes : les plafonds AGEFICE, les taux
+/// horaires OPCO EP et le tarif de vente changent par décision (Laurent) ou par
+/// décision de branche — jamais par redéploiement. Chaque valeur est datée :
+/// une proposition signée en septembre reste explicable en mars même si le
+/// plafond a bougé entre-temps.
+///
+/// Une seule ligne ACTIVE par clé (`validTo IS NULL`) — garanti par un index
+/// unique partiel posé en SQL dans la migration (Prisma ne sait pas les décrire).
+model FundingRule {
+  id           String    @id @default(uuid())
+  tenantId     String
+  key          String
+  valueNumeric Decimal?  @db.Decimal(12, 2)
+  valueText    String?
+  validFrom    DateTime  @default(now())
+  /// null = règle en vigueur. Une révision ferme l'ancienne ligne et en crée une neuve.
+  validTo      DateTime?
+  notes        String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId, key, validTo])
+}
+
+enum DiagnosticVariant {
+  LEGER
+  COMPLET
+}
+
+enum DiagnosticMode {
+  GUIDE
+  TRANSCRIPT
+  HYBRIDE
+}
+
+enum DiagnosticStatus {
+  EN_COURS
+  TERMINE
+  ARCHIVE
+}
+
+/// Le diagnostic d'agence mené en R1 (à ne pas confondre avec
+/// `DiagnosticSubmission`, l'express 8 questions du stand MLS).
+model Diagnostic {
+  id                   String            @id @default(uuid())
+  tenantId             String
+  /// DIAG-NNNN, compteur par tenant (même mécanique que DEV-NNNN).
+  reference            String            @unique
+  leadId               String
+  lead                 Lead              @relation(fields: [leadId], references: [id])
+  /// L'agence diagnostiquée — liée dès que le SIRET est connu.
+  organizationId       String?
+  organization         Organization?     @relation(fields: [organizationId], references: [id])
+  /// Le commercial qui mène le RDV.
+  ownerUserId          String
+  owner                User              @relation("DiagnosticOwner", fields: [ownerUserId], references: [id])
+  variant              DiagnosticVariant @default(LEGER)
+  mode                 DiagnosticMode    @default(GUIDE)
+  status               DiagnosticStatus  @default(EN_COURS)
+  meetingAt            DateTime?
+  /// Date du R2 — pilotage commercial et relances (lot H).
+  r2PlannedAt          DateTime?
+  /// Fige le set de questions applicable (ex "2026-09"). Un diagnostic ouvert
+  /// sous v1 ne change pas de questionnaire parce que le référentiel a bougé.
+  referentialVersion   String
+  declaredGoal         String?
+  expectedParticipants Int?
+
+  /// Transcript collé/déposé (modes TRANSCRIPT / HYBRIDE). JAMAIS exposé en
+  /// lien public ni dans un document client ; purge à J+90 (RGPD, phase 22).
+  transcriptText   String?   @db.Text
+  /// "colle" | "fichier" | "plaud"
+  transcriptSource String?
+  prefillModel     String?
+  prefillAt        DateTime?
+
+  /// Snapshot des moteurs purs (ratios, alertes, financement) recalculé à
+  /// chaque complétion de chapitre : { ratios, alerts, funding, computedAt, rulesVersion }.
+  computedSnapshot  Json?
+  /// SHA-256 des données rendues dans le dernier rapport d'audit (leçon E-1).
+  /// Comparé aux données courantes, il dit si le PDF déjà remis raconte encore
+  /// la même histoire que l'écran — réponses, fiches équipe, règles de
+  /// financement, barème et version du référentiel entrent tous dans le calcul.
+  sourceFingerprint String?
+  completedAt       DateTime?
+
+  answers         DiagnosticAnswer[]
+  participants    DiagnosticParticipant[]
+  proposals       Proposal[]
+  enrollmentBatch EnrollmentBatch?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, ownerUserId, status])
+  @@index([organizationId])
+}
+
+enum AnswerOrigin {
+  COMMERCIAL
+  IA_TRANSCRIPT
+}
+
+/// Une réponse du questionnaire. `questionId` référence le référentiel CODE
+/// (`@qualiof/shared/diagnostic`), pas une table — le référentiel est versionné
+/// avec le code et verrouillé par tests de contrat.
+model DiagnosticAnswer {
+  id            String       @id @default(uuid())
+  diagnosticId  String
+  diagnostic    Diagnostic   @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+  questionId    String
+  /// Typée selon la question (int/percent/money/choice/multichoice/text/yesno/date/url).
+  value         Json?
+  isSkipped     Boolean      @default(false)
+  origin        AnswerOrigin @default(COMMERCIAL)
+  /// 0..1 — renseigné uniquement quand origin = IA_TRANSCRIPT.
+  aiConfidence  Decimal?     @db.Decimal(4, 3)
+  /// Extrait du transcript qui justifie la réponse (revue par exception §6.4).
+  aiQuote       String?      @db.Text
+  /// null + origin IA = « à confirmer » : ne sort d'aucun document client.
+  confirmedAt   DateTime?
+  confirmedById String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([diagnosticId, questionId])
+  @@index([diagnosticId])
+}
+
+enum DiagParticipantStatut {
+  INDEPENDANT
+  SALARIE
+  DIRIGEANT
+}
+
+/// Fiche équipe répétable du Ch.2 — c'est CE modèle qui alimente le moteur budget.
+///
+/// PII : `displayName` + `caN1` sont des données sensibles. Elles ne sortent
+/// jamais dans un lien public, un prompt IA (agrégats pseudonymisés p1/p2/…)
+/// ni un log (spec §5 L-10).
+model DiagnosticParticipant {
+  id                 String                @id @default(uuid())
+  diagnosticId       String
+  diagnostic         Diagnostic            @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+  /// Lié au CRM 360° quand la personne existe. Nullable : en R1 on saisit vite.
+  personId           String?
+  person             Person?               @relation(fields: [personId], references: [id])
+  displayName        String
+  statut             DiagParticipantStatut
+  fonction           String?
+  fullTime           Boolean?
+  entryDate          DateTime?
+  /// debutant | confirme | expert
+  experienceLevel    String?
+  /// Indés — pivot AGEFICE (seuil CA N-1, cf FundingRule AGEFICE_THRESHOLD_CA_N1).
+  caN1               Decimal?              @db.Decimal(12, 2)
+  /// Projection — JAMAIS présentée comme un droit acquis.
+  caCurrent          Decimal?              @db.Decimal(12, 2)
+  /// Salariés — pré-coché oui (IDCC 1527).
+  opcoEligible       Boolean?
+  trainings24mCount  Int?
+  trainings24mHours  Int?
+  trainings24mFunded Decimal?              @db.Decimal(12, 2)
+  wantsTraining      Boolean?
+  /// Mapping familles catalogue.
+  priorityNeed       String?
+  /// Objectif proposé (page « équipe » de l'audit), validé en entretien.
+  objectiveCa        Decimal?              @db.Decimal(12, 2)
+  /// Forces/constats individuels saisis par le commercial — nourrit la
+  /// préconisation nominative de l'audit.
+  strengths          String?
+  includedInProposal Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([diagnosticId])
+  @@index([personId])
+}
+
+enum ProposalStatus {
+  BROUILLON
+  PRETE
+  ENVOYEE
+  ACCEPTEE
+  REFUSEE
+  EXPIREE
+}
+
+/// La proposition chiffrée remise en R2. Les devis (`Quote`) en sont dérivés,
+/// un par payeur — Σ devis = Σ proposition (test de contrat, lot E).
+model Proposal {
+  id                   String         @id @default(uuid())
+  tenantId             String
+  /// PROP-NNNN, compteur par tenant.
+  reference            String         @unique
+  diagnosticId         String
+  diagnostic           Diagnostic     @relation(fields: [diagnosticId], references: [id])
+  leadId               String
+  lead                 Lead           @relation(fields: [leadId], references: [id])
+  organizationId       String?
+  organization         Organization?  @relation(fields: [organizationId], references: [id])
+  ownerUserId          String
+  owner                User           @relation("ProposalOwner", fields: [ownerUserId], references: [id])
+  status               ProposalStatus @default(BROUILLON)
+  title                String
+  /// Défaut : +30 j (FundingRule PROPOSAL_VALIDITY_DAYS).
+  validUntil           DateTime?
+  /// Narratif structuré (ProposalSchema Zod §9.1) : executiveSummary, constats,
+  /// programme, calendrier, prochaines étapes.
+  contentJson          Json
+  /// Chiffrage : LIGNES PAR PAYEUR (§8.3) — la main du commercial.
+  pricingJson          Json
+  /// Ventilation par régime (AGEFICE / OPCO EP) + reste à charge consolidé.
+  fundingJson          Json
+  /// "llm:<model>" | "heuristique" | "manuel". E-3 : jamais silencieux.
+  generationSource     String
+  /// Relecture humaine OBLIGATOIRE avant envoi (§10).
+  reviewedAt           DateTime?
+  /// Une remise au-delà de `DISCOUNT_WARNING_PERCENT` % du reste à charge exige
+  /// la validation d'un MANAGER/ADMIN (§8.3, D-3). Tant que ces deux champs
+  /// sont nuls, l'envoi est BLOQUÉ — c'est un fait en base, pas un drapeau
+  /// dans un JSON qu'une saisie pourrait poser elle-même.
+  discountApprovedAt   DateTime?
+  discountApprovedById String?
+  sentAt               DateTime?
+  acceptedAt           DateTime?
+  declinedAt           DateTime?
+  declineReason        String?
+  /// Lien lecture seule dirigeant — SHA-256, le brut n'est affiché qu'une fois.
+  publicTokenHash      String?
+  publicTokenExpiresAt DateTime?
+  pdfKey               String?
+  /// SHA-256 des données rendues → isDocumentStale() (leçon E-1).
+  sourceFingerprint    String?
+  quotes               Quote[]
+  /// Session créée à l'acceptation (lot G).
+  sessionId            String?
+  /// Campagne de pré-inscription liée (§7).
+  batchId              String?
+  version              Int            @default(1)
+  /// Une proposition renégociée = NOUVELLE version, l'ancienne passe EXPIREE.
+  supersedesId         String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([tenantId, status])
+  @@index([diagnosticId])
+  @@index([leadId])
+}
+
+enum BatchStatus {
+  OUVERTE
+  CLOTUREE
+  ANNULEE
+}
+
+/// Campagne de pré-inscription par RDV (§7) : UN lien multi-usages diffusé à
+/// l'équipe de l'agence. Chaque soumission crée un `PreEnrollment` qui entre
+/// dans le pipeline OCR/validation existant — pas de second pipeline.
+model EnrollmentBatch {
+  id             String            @id @default(uuid())
+  tenantId       String
+  /// "RDV OPTIMMO — R1 du 12/09"
+  label          String
+  diagnosticId   String?           @unique
+  diagnostic     Diagnostic?       @relation(fields: [diagnosticId], references: [id])
+  proposalId     String?
+  /// Produit pressenti — pré-remplit les pré-inscriptions.
+  productId      String?
+  product        TrainingProduct?  @relation(fields: [productId], references: [id])
+  /// Lien public hashé SHA-256 — le token brut n'est affiché qu'une seule fois.
+  tokenHash      String            @unique
+  expiresAt      DateTime
+  /// Défaut : 3 × effectif attendu.
+  maxUses        Int?
+  usedCount      Int               @default(0)
+  status         BatchStatus       @default(OUVERTE)
+  createdById    String
+  dateOptions    BatchDateOption[]
+  preEnrollments PreEnrollment[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([tenantId, status])
+}
+
+/// Date prévisionnelle proposée aux participants. La date retenue devient la
+/// (les) `TrainingSession` à l'acceptation de la proposition (lot G).
+model BatchDateOption {
+  id         String          @id @default(uuid())
+  batchId    String
+  batch      EnrollmentBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  startsAt   DateTime
+  endsAt     DateTime
+  /// "Journée 1 — 8 h, dans vos locaux"
+  label      String?
+  isRetained Boolean         @default(false)
+  /// { preEnrollmentId: true } — choix exprimés par les participants.
+  votes      Json?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([batchId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Facturation électronique — spec du 02/09/2026, lot 1 (socle de données)
+//
+// Le profil EN 16931 exige des LIGNES (quantité, prix unitaire, catégorie
+// de TVA par ligne) : `Invoice` portait ses montants à plat, ce qui rendait
+// tout Factur-X impossible. Et il exige un vendeur et un acheteur FIGÉS —
+// un PDF rendu depuis des données vivantes est l'écart E-1 appliqué à une
+// pièce comptable, cette fois transmise à une plateforme d'État.
+// ═══════════════════════════════════════════════════════════════════════
+
+model InvoiceLine {
+  id                     String  @id @default(uuid())
+  invoiceId              String
+  invoice                Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  position               Int
+  label                  String
+  quantity               Decimal @db.Decimal(10, 2)
+  /// UN/ECE rec. 20 : C62 unité, HUR heure, DAY jour.
+  unit                   String  @default("C62")
+  unitPriceHT            Decimal @db.Decimal(10, 2)
+  vatRate                Decimal @db.Decimal(5, 2)
+  /// EN 16931 : S standard, E exonéré, K intracom, AE autoliquidation…
+  /// Start Academy est en E (formation professionnelle continue).
+  vatCategory            String  @default("E")
+  /// Code VATEX — décision D-2 NON tranchée : laissé null tant que le code
+  /// exact de l'art. 261-4-4°a n'est pas confirmé. Ne pas inventer.
+  vatExemptionReasonCode String?
+  vatExemptionReasonText String?
+  /// Traçabilité sur une facture groupée : quelle ligne pour quel stagiaire.
+  participantId          String?
+  totalHT                Decimal @db.Decimal(10, 2)
+
+  @@index([invoiceId, position])
+}
+
+/// Snapshot des parties, figé à l'émission. Pas de FK vivante : une facture
+/// émise ne doit plus jamais changer parce qu'une organisation a été éditée.
+model InvoiceParty {
+  id                      String           @id @default(uuid())
+  invoiceId               String
+  invoice                 Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  role                    InvoicePartyRole
+  legalName               String
+  siren                   String?
+  siret                   String?
+  vatNumber               String?
+  addressLine1            String?
+  addressLine2            String?
+  postalCode              String?
+  city                    String?
+  countryCode             String           @default("FR")
+  email                   String?
+  /// Identifiant d'annuaire : "0225" = SIREN France, "0002" = SIRET.
+  electronicAddressScheme String?
+  electronicAddress       String?
+
+  @@unique([invoiceId, role])
+}
+
+enum InvoicePartyRole {
+  SELLER
+  BUYER
+  DELIVERY
+}
+
+/// Une transmission = une tentative vers une plateforme. Plusieurs par
+/// facture : un rejet puis un renvoi sont deux tentatives, pas un écrasement.
+model EInvoiceTransmission {
+  id            String          @id @default(uuid())
+  tenantId      String
+  invoiceId     String
+  invoice       Invoice         @relation(fields: [invoiceId], references: [id])
+  provider      String
+  format        EInvoiceFormat
+  profile       String          @default("EN16931")
+  /// Clé de stockage de l'XML EXACT envoyé — pas une régénération.
+  xmlStorageKey String
+  pdfStorageKey String?
+  xmlSha256     String
+  /// Id côté plateforme. Texte : les ids Super PDP sont des int64.
+  externalId    String?
+  status        EInvoiceStatus  @default(PENDING)
+  statusDetail  String?
+  submittedAt   DateTime?
+  lastPolledAt  DateTime?
+  events        EInvoiceEvent[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  /// Idempotence : le même XML renvoyé ne crée pas un doublon côté plateforme.
+  @@unique([invoiceId, xmlSha256])
+  @@index([tenantId, status])
+  @@index([invoiceId])
+}
+
+enum EInvoiceFormat {
+  FACTURX
+  UBL
+  CII
+}
+
+/// Cycle de vie normalisé (sous-ensemble DGFiP). Ne REMPLACE PAS
+/// `InvoiceStatus` : l'un est le cycle interne, l'autre celui de la
+/// plateforme. Les deux coexistent et ne disent pas la même chose.
+enum EInvoiceStatus {
+  PENDING
+  SUBMITTED
+  DEPOSITED
+  REJECTED_PLATFORM
+  RECEIVED
+  REFUSED_BUYER
+  APPROVED
+  PAID_REPORTED
+  ERROR
+}
+
+model EInvoiceEvent {
+  id             String               @id @default(uuid())
+  transmissionId String
+  transmission   EInvoiceTransmission @relation(fields: [transmissionId], references: [id], onDelete: Cascade)
+  status         EInvoiceStatus
+  /// Réponse brute de la plateforme, conservée telle quelle : le jour où un
+  /// statut est contesté, c'est elle qui fait foi, pas notre interprétation.
+  payload        Json?
+  /// Code natif de la plateforme (`api:validated`, `fr:205`, `ppf:refused`…)
+  /// gardé À CÔTÉ du statut normalisé : le mapping vers `EInvoiceStatus` est
+  /// une interprétation, et le code d'origine doit rester relisible.
+  providerCode   String?
+  occurredAt     DateTime
+  createdAt      DateTime             @default(now())
+
+  @@index([transmissionId, occurredAt])
 }

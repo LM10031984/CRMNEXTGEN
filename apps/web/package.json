@@ -19,6 +19,8 @@
     "worker:diagnostic": "dotenv -e ../../.env -- tsx watch --clear-screen=false scripts/diagnostic-worker.ts",
     "test:veille": "dotenv -e ../../.env -- tsx scripts/test-veille-worker.ts",
     "probe:veille": "dotenv -e ../../.env -- tsx scripts/probe-veille-sources.ts",
+    "probe:reco": "dotenv -e ../../.env -- tsx scripts/probe-recommandation.ts",
+    "probe:reco:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-recommandation.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
     "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",
@@ -29,7 +31,8 @@
     "storage:migrate": "tsx scripts/migrate-storage.ts",
     "storage:purge-drafts": "dotenv -e ../../.env -- tsx scripts/purge-orphan-drafts.ts",
     "docs:empreintes": "dotenv -e ../../.env -- tsx scripts/coherence-empreintes.ts",
-    "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts"
+    "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts",
+    "invoices:backfill-lines": "dotenv -e ../../.env -- tsx scripts/backfill-invoice-lines.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {

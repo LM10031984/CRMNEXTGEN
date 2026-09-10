@@ -143,6 +143,10 @@ export const EmailSettingsSchema = z.object({
   internalNotificationsEnabled: z.boolean().default(false),
   userInvitationsEnabled: z.boolean().default(false),
   diagnosticProgramsEnabled: z.boolean().default(false),
+  /// Chaîne diagnostic §11.1 — A-1 « nouveau lead » (et sa relance à 24 h) et
+  /// A-3 « nouvelle pré-inscription ». Défaut false : fail-closed.
+  newLeadAlertsEnabled: z.boolean().default(false),
+  preEnrollmentAlertsEnabled: z.boolean().default(false),
   testSessionIds: z
     .array(z.string().uuid('Identifiant de session invalide'))
     .max(20, 'Maximum 20 sessions de test')
