@@ -17,3 +17,21 @@ Le défaut a été corrigé après coup — l'ancre est devenue une zone dédié
 180 × 60 pt alignée à droite — et revérifié sur l'envoi **1619495**, signé lui
 aussi. Ces fichiers-ci restent la preuve de la **chaîne de signature** ; la
 preuve du **placement** est l'envoi 1619495.
+
+---
+
+## Portée exacte de ces preuves
+
+Elles portent sur la **convention**, rendue en HTML par WeasyPrint. Elles ne
+disent rien des deux autres documents, qui n'ont pas le même mécanisme :
+
+| Document | Rendu | Ancrage | Signataires |
+|---|---|---|---|
+| Convention | HTML → WeasyPrint | zone HTML invisible | client + OF |
+| Attestation d'assiduité | HTML → WeasyPrint | zone HTML invisible | stagiaire + OF |
+| **Dossier AGEFICE** | **formulaire officiel rempli par pdf-lib** | **ancre dessinée** (`ANCRE_DEMANDEUR`) | **stagiaire seul** — l'OF a déjà son image apposée |
+
+Le 10/09/2026, une première version de ce README affirmait que « les 3 gabarits »
+partageaient les ancres HTML. C'était faux : `renderAgeficeHtml` n'est appelé
+par personne, et le dossier AGEFICE serait parti **sans champ à signer**.
+Corrigé le même jour ; ancrage vérifié en sandbox sur les trois types.

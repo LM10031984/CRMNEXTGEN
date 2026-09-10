@@ -8,6 +8,7 @@
  */
 
 import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, StandardFonts, rgb } from 'pdf-lib';
+import { SIGNATURE_ROLES, signatureTag } from './signature/text-tags';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
@@ -108,6 +109,19 @@ export interface AgeficeFormData {
     lieu: string | null;
     date: Date | null;               // null = laissé vide pour signature manuscrite
   };
+
+  /**
+   * Complément lot B (spec signature 2026-09-04, D-7 — précisé le 10/09/2026).
+   *
+   * Pose l'ancre invisible que DocuSeal transforme en champ de signature dans
+   * la case « Nom prénom et signature du demandeur ». Faux par défaut : le
+   * dossier imprimé pour signature manuscrite reste strictement inchangé.
+   *
+   * Une seule ancre, pour le STAGIAIRE. La case de droite est celle de l'OF et
+   * porte déjà l'image de signature de Laurent (`applyOfSignature`) : on ne la
+   * fait pas re-signer (consigne du 10/09).
+   */
+  signatureTags?: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -306,6 +320,63 @@ async function applyOfSignature(
   page.drawImage(sigImage, { x: sigX, y: sigY, width: sigWidth, height: sigHeight });
 }
 
+/**
+ * Zone de signature du DEMANDEUR dans le formulaire officiel — page 3, en bas
+ * à gauche, sous le libellé « Nom prénom et signature du demandeur ».
+ *
+ * Repères mesurés sur `src/assets/agefice-template.pdf` (A4, origine bas-gauche) :
+ *   · « Fait à … le … » (champs Lieu/Date de Signature) : y = 235 ;
+ *   · le libellé du demandeur juste dessous, la case s'étend jusqu'à la ligne
+ *     « En cas de mandat, ces signatures valent bon pour mandat » vers y = 105 ;
+ *   · la case de l'OF commence à x = 365 — d'où la largeur bornée à 180, pour
+ *     qu'un paraphe du stagiaire ne déborde jamais dans le cadre de l'OF.
+ *
+ * Exportée pour que les tests vérifient le cadrage sans relire un PDF à l'œil.
+ * Cf. `scripts/_inspect-agefice-signature-box.ts` pour re-mesurer si l'AGEFICE
+ * publie un nouveau formulaire.
+ */
+export const ANCRE_DEMANDEUR = {
+  page: 2, // index 0-based → page 3 du formulaire
+  x: 95,
+  y: 120,
+  width: 180,
+  height: 60,
+} as const;
+
+/**
+ * Dessine l'ancre `{{…}}` en blanc dans la case du demandeur.
+ *
+ * Pourquoi dessiner plutôt que passer des coordonnées au prestataire : le port
+ * `SignatureProvider` reste ignorant de toute géométrie (décision D-7), et les
+ * trois documents partagent UN seul mécanisme d'ancrage. Le texte est un vrai
+ * objet texte PDF, donc extractible par DocuSeal — c'est ce qui fait le champ.
+ */
+async function applyDemandeurAnchor(pdf: PDFDocument): Promise<void> {
+  const pages = pdf.getPages();
+  const page = pages[ANCRE_DEMANDEUR.page] ?? pages[pages.length - 1]!;
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+
+  const tag = signatureTag({
+    name: 'Signature stagiaire',
+    role: SIGNATURE_ROLES.STAGIAIRE,
+    type: 'signature',
+    width: ANCRE_DEMANDEUR.width,
+    height: ANCRE_DEMANDEUR.height,
+  });
+
+  // Blanc sur blanc : invisible à l'écran comme à l'impression. DocuSeal
+  // retire de toute façon les tags du PDF final (`remove_tags`, défaut).
+  // L'ancre est posée en HAUT de la zone : le champ se déploie vers le bas et
+  // la droite, donc exactement sur la case réservée.
+  page.drawText(tag, {
+    x: ANCRE_DEMANDEUR.x,
+    y: ANCRE_DEMANDEUR.y + ANCRE_DEMANDEUR.height - 6,
+    size: 4,
+    font,
+    color: rgb(1, 1, 1),
+  });
+}
+
 export async function fillAgeficePdf(data: AgeficeFormData): Promise<Buffer> {
   const bytes = await loadTemplate();
   const pdf = await PDFDocument.load(bytes);
@@ -427,6 +498,11 @@ export async function fillAgeficePdf(data: AgeficeFormData): Promise<Buffer> {
     prenom: data.of.resp.prenom,
     titre: data.of.resp.titre,
   });
+
+  // Ancre de signature électronique du stagiaire-dirigeant, si demandée.
+  if (data.signatureTags) {
+    await applyDemandeurAnchor(pdf);
+  }
 
   // On laisse les champs ré-éditables (pas de form.flatten()) pour permettre
   // à Laurent ou au stagiaire de corriger / signer manuellement après coup.

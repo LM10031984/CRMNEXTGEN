@@ -40,7 +40,10 @@ AVANT session (J-15 idéalement, cf. plan cloud §E)
   ├─ CONVENTION  : 1 doc par organisation payeuse (convention entreprise) ou par participant (indépendant)
   │                signataires : dirigeant de l'entreprise (Contact / LegalLink)  +  OF (Laurent)
   └─ AGEFICE     : 1 doc par participant AGEFICE — demande de prise en charge
-                   signataire : le stagiaire-dirigeant TNS (Person.email)
+                   FORMULAIRE OFFICIEL rempli par pdf-lib (pas un gabarit HTML) ;
+                   ancre DESSINÉE dans la case « signature du demandeur ».
+                   1 SEUL signataire : le stagiaire-dirigeant TNS (Person.email).
+                   L'OF n'y re-signe pas — son image est déjà apposée.
 PENDANT session
   └─ EMARGEMENT  : papier, signé en salle → scan déposé (lot A). Pas de Yousign.
 APRÈS session (clôture)
@@ -160,7 +163,29 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 - Dépendance : aucune lib DocuSeal obligatoire (REST simple, `fetch`). `packages/shared` : `TenantSignatory` (nom, email, ordre) dans les paramètres tenant — **D-1**.
 - `apps/web/src/lib/signature/port.ts` : interface `SignatureProvider { createRequest, cancel, remind, downloadSignedDocument, downloadAuditTrail, verifyWebhook, parseEvent }`.
 - `apps/web/src/lib/signature/docuseal.ts` : API DocuSeal — création d'une *submission* à partir du PDF généré (envoi du PDF en base64 avec champs de signature positionnés), signataires ordonnés (client puis OF), envoi des emails par DocuSeal (ou par QualiOF avec `send_email: false` + lien de signature — **D-9**, préférer QualiOF pour garder le mailer fail-closed et la catégorie décochable), webhooks `form.completed` / `form.declined` / `submission.completed`.
-- Champs de signature : DocuSeal supporte les **text tags** dans le PDF (`{{Signature;role=Client}}`) — les 3 templates WeasyPrint (`convention-template.ts`, `agefice-template.ts`, `agefice-attendance-generator.ts`) reçoivent l'ancre en texte blanc à l'emplacement signature. Plus de coordonnées à maintenir.
+- Champs de signature : DocuSeal supporte les **text tags** dans le PDF
+  (`{{Signature;role=…}}`). **Deux mécanismes, pas un** — corrigé le 10/09/2026 :
+  - **Convention** (`convention-template.ts`) et **attestation d'assiduité**
+    (`closure/agefice-attendance-template.ts`, rendue par le générateur
+    `agefice-attendance-generator.ts`) : HTML → WeasyPrint, l'ancre est une
+    **zone HTML invisible** (`renderSignatureAnchor`).
+  - **Dossier AGEFICE** : ce n'est PAS un gabarit HTML. C'est le **formulaire
+    officiel** `src/assets/agefice-template.pdf`, rempli champ par champ par
+    `agefice-form-fill.ts` (pdf-lib). `renderAgeficeHtml` n'est appelé par
+    personne — vérifié le 10/09. L'ancre y est donc **dessinée** par pdf-lib
+    dans la case « Nom prénom et signature du demandeur » (page 3, bas gauche),
+    aux coordonnées `ANCRE_DEMANDEUR`.
+
+  Dans les deux cas le port `SignatureProvider` reste ignorant de toute
+  géométrie : c'est le PDF qui porte l'ancre, jamais l'appel au prestataire.
+  L'alternative — passer à DocuSeal un champ positionné par coordonnées — a été
+  écartée pour cette raison : elle aurait fait entrer les `areas` du prestataire
+  dans le port, et compliqué toute implémentation future.
+
+  **Le dossier AGEFICE n'a qu'UNE partie signataire** : le stagiaire-dirigeant.
+  La case de droite est celle de l'OF et porte déjà l'image de signature de
+  Laurent (`applyOfSignature`) — on ne la fait pas re-signer (décision Laurent
+  du 10/09/2026).
 - `apps/web/src/lib/signature/dry-run.ts` : provider fictif quand `DOCUSEAL_API_KEY` est vide (comme `MAIL_DRY_RUN`) → statut simulé, complétion déclenchable depuis une route dev, pour tests et preview.
 - Env : `SIGNATURE_PROVIDER=docuseal|dry-run`, `DOCUSEAL_API_KEY`, `DOCUSEAL_BASE_URL` (cloud `https://api.docuseal.com` ou instance auto-hébergée), `DOCUSEAL_WEBHOOK_SECRET`. Fail-closed : sans clé en prod → bouton désactivé avec message, jamais d'envoi silencieux.
 - **Test d'acceptation du lot** : ✅ **PASSÉ le 10/09/2026** (envoi **1619115**, instance UE).
@@ -218,7 +243,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 | Lot | Statut | Détail |
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
-| **B** | ✅ **livré — test d'acceptation passé le 10/09/2026** | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 gabarits · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** (envoi 1619115, instance UE, signé par les deux rôles) : Adobe Reader déclare la **signature valide après mise à jour AATL**, certificat **Netrust** ; certificat de signature complet ; les deux pièces servies par `docuseal.eu` ; `send_email=false` et `sent_at=jamais`, aucun email parti de DocuSeal. Pièces versées dans `.planning/specs/evidence/signature-B/`. Placement des signatures corrigé après ce test (zone dédiée 180 × 60 pt alignée à droite) et revérifié sur l'envoi 1619495. |
+| **B** | ✅ **livré — test d'acceptation passé le 10/09/2026** | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 documents — zones HTML pour la convention et l'assiduité, ancre **dessinée par pdf-lib** pour le formulaire AGEFICE officiel (corrigé le 10/09) · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** (envoi 1619115, instance UE, signé par les deux rôles) : Adobe Reader déclare la **signature valide après mise à jour AATL**, certificat **Netrust** ; certificat de signature complet ; les deux pièces servies par `docuseal.eu` ; `send_email=false` et `sent_at=jamais`, aucun email parti de DocuSeal. Pièces versées dans `.planning/specs/evidence/signature-B/`. Placement des signatures corrigé après ce test (zone dédiée 180 × 60 pt alignée à droite) et revérifié sur l'envoi 1619495. |
 | **C** | ⬜ à faire | Pas de `/api/webhooks/`, pas de `sendForSignature`. |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 

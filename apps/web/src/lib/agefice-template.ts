@@ -4,9 +4,15 @@
  * Reproduit la structure du formulaire AGEFICE officiel avec tous les champs
  * pré-remplis. Quand Laurent fournira le PDF officiel, on bascule sur un
  * form-fill via pdf-lib (les noms de champs PDF sont déjà mappés ci-dessous).
+ *
+ * ⚠ **CE GABARIT NE PRODUIT PLUS AUCUN DOCUMENT.** La bascule annoncée
+ * ci-dessus a eu lieu : le dossier AGEFICE réellement généré, puis envoyé en
+ * signature, sort de `fillAgeficePdf` (`agefice-form-fill.ts`), qui remplit le
+ * formulaire officiel. `renderAgeficeHtml` n'est appelé par personne — constaté
+ * le 10/09/2026, après que le lot B y eut posé des ancres de signature restées
+ * sans effet. Toute ancre ou champ ajouté ICI est sans effet : c'est
+ * `agefice-form-fill.ts` qu'il faut modifier.
  */
-
-import { SIGNATURE_ROLES, renderSignatureAnchor } from './signature/text-tags';
 
 export interface AgeficePdfData {
   // Stagiaire (Person + SensitiveData)
@@ -63,14 +69,6 @@ export interface AgeficePdfData {
   ofEmail: string;
   // Date de la demande
   demandeDate: Date;
-
-  /**
-   * Spec signature 2026-09-04 §5 lot B (D-7) — ancres invisibles DocuSeal.
-   * Faux par défaut : le dossier imprimé pour signature manuscrite est
-   * strictement inchangé. Le signataire du dossier AGEFICE est le
-   * stagiaire-dirigeant TNS lui-même (§3).
-   */
-  signatureTags?: boolean;
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -289,29 +287,11 @@ ${STYLES}
     <div class="label">Le Stagiaire — Lu et approuvé</div>
     <strong>${escapeHtml(`${d.stagiairePrenom} ${d.stagiaireNom}`)}</strong>
     <div style="margin-top: 8px; font-size: 8pt;">Date et signature :</div>
-    ${
-      d.signatureTags
-        ? renderSignatureAnchor({
-            name: 'Signature stagiaire',
-            role: SIGNATURE_ROLES.STAGIAIRE,
-            type: 'signature',
-          })
-        : ''
-    }
   </div>
   <div>
     <div class="label">L'Organisme de formation — Lu et approuvé</div>
     <strong>${escapeHtml(d.ofName)}</strong>
     <div style="margin-top: 8px; font-size: 8pt;">Cachet, date et signature :</div>
-    ${
-      d.signatureTags
-        ? renderSignatureAnchor({
-            name: "Signature organisme de formation",
-            role: SIGNATURE_ROLES.OF,
-            type: 'signature',
-          })
-        : ''
-    }
   </div>
 </div>
 

@@ -190,16 +190,27 @@ describe('convention — ancres de signature', () => {
   });
 });
 
-describe('dossier AGEFICE — ancres de signature', () => {
-  it('aucune ancre par défaut', () => {
+/**
+ * Le dossier AGEFICE n'est PAS couvert par ce gabarit HTML : le document réel
+ * sort du formulaire officiel rempli par pdf-lib. Ses ancres sont testées dans
+ * `agefice-form-fill.signature-anchor.test.ts`.
+ *
+ * Ce qui est verrouillé ici, c'est l'absence : plus personne ne doit croire que
+ * poser une ancre dans `agefice-template.ts` produit quoi que ce soit.
+ */
+describe('gabarit AGEFICE HTML — hors circuit', () => {
+  it('ne porte AUCUNE ancre : il ne produit aucun document', () => {
     expect(renderAgeficeHtml(ageficeData())).not.toContain('{{');
   });
 
-  it('pose l’ancre du stagiaire (le signataire TNS) et celle de l’OF', () => {
-    const html = renderAgeficeHtml(ageficeData({ signatureTags: true }));
-
-    expect(html).toContain(`role=${SIGNATURE_ROLES.STAGIAIRE};type=signature`);
-    expect(html).toContain(`role=${SIGNATURE_ROLES.OF};type=signature`);
+  it('porte l’avertissement qui évite de refaire l’erreur', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../agefice-template.ts', import.meta.url),
+      'utf-8',
+    );
+    expect(src).toMatch(/NE PRODUIT PLUS AUCUN DOCUMENT/);
+    expect(src).toMatch(/agefice-form-fill\.ts/);
   });
 });
 
@@ -221,7 +232,6 @@ describe('invisibilité des ancres', () => {
   it('les ancres restent invisibles à l’œil (blanc sur blanc) dans les 3 gabarits', () => {
     for (const html of [
       renderConventionHtml(conventionData({ signatureTags: true }), of),
-      renderAgeficeHtml(ageficeData({ signatureTags: true })),
       renderAgeficeAttendanceHtml(attendanceData({ signatureTags: true })),
     ]) {
       // Chaque `{{` doit appartenir à un span blanc — jamais de tag « nu ».
