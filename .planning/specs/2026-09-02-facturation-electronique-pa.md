@@ -182,6 +182,12 @@ Règles :
 4. **Avoirs** : `InvoiceStatus.CREDIT_NOTE` → `TypeCode 381` avec référence à la facture d'origine (`originalInvoiceId`) — cohérent avec la règle « avoir, jamais réécriture » de `/tarification`.
 5. **Hash** : `Invoice.hashSha256` reste le hash du PDF ; `EInvoiceTransmission.xmlSha256` est celui de l'XML. Les deux sont audités.
 6. Le PDF Factur-X **remplace** le PDF envoyé par mail au client (c'est un PDF valide) — un seul fichier, pas deux.
+7. **Financeur en subrogation (AGEFICE, OPCO) — D-4 tranchée le 10/09/2026.** Trois rôles à ne pas confondre dans le pivot EN 16931 :
+   - **`BuyerParty` (BG-7) = le client** — le stagiaire ou son entreprise. C'est lui le preneur de la prestation et le débiteur de la créance. Le financeur ne prend jamais sa place, même quand c'est lui qui paie.
+   - **`PayeeParty` (BG-10) : NE PAS L'UTILISER.** BG-10 ne sert qu'à désigner un bénéficiaire du règlement **différent du vendeur** — cas de l'affacturage. Ici l'argent va à Start Academy, qui est déjà le vendeur : renseigner BG-10 serait factuellement faux et ferait croire à une cession de créance. **Le payee reste Start Academy**, donc le champ reste absent.
+   - **Le financeur figure dans les conditions de règlement** (`PaymentTerms`, BT-20) : mention en clair du type « Réglé par subrogation par l'AGEFICE, dossier n° … ». C'est une information de paiement, pas une partie à la facture.
+
+   Le financeur n'est donc **ni buyer, ni payee** : il est une modalité de règlement. Piège à ne pas rouvrir au lot 2.
 
 ---
 
@@ -224,7 +230,7 @@ Un lot = une PR, `/livraison` avant chaque commit, `pnpm test` vert (les 1 332 t
 | D-1 | Confirmer Super PDP après lecture de la doc et création du compte (lot 0). Si l'API réelle est trop pauvre (pas de statuts, pas de webhook), basculer Iopole et demander un devis. | Super PDP |
 | ~~D-2~~ | ~~Code VATEX à utiliser pour l'art. 261-4-4°a ?~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** catégorie **E** + texte + code **`VATEX-EU-132-1I`** (261-4-4°a CGI = transposition de l'art. 132-1-i directive TVA). BR-E-10 n'exige que l'un des deux, on met les deux. Repli si le validateur refuse le code au lot 2 : texte seul. | Laurent, 10/09/2026 |
 | ~~D-3~~ | ~~Y a-t-il des prestations **non exonérées** ?~~ **TRANCHÉE le 04/09/2026 : tout est exonéré.** L'émission reste une conformité anticipée, pas une obligation au 01/09/2027 ; le lot 3 ne devient pas prioritaire pour raison réglementaire. | Laurent, 04/09/2026 |
-| D-4 | Factures payées par un financeur en subrogation (AGEFICE paie l'OF) : le « buyer » reste le stagiaire/entreprise, le financeur est un tiers payeur — à valider avec l'expert-comptable pour la représentation EN 16931 (`PayeeParty` ?). | Buyer = client, financeur en note |
+| ~~D-4~~ | ~~Représentation EN 16931 d'un financeur en subrogation (`PayeeParty` ?)~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** **buyer = le client** ; le financeur (AGEFICE) figure **dans les conditions de règlement** (BT-20), **jamais en `PayeeParty`** — BG-10 ne désigne qu'un bénéficiaire différent du vendeur (affacturage), or ici l'argent va à Start Academy. **Le payee reste Start Academy**, le champ reste absent. Règle détaillée en §5.7, à appliquer au lot 2. | Laurent, 10/09/2026 |
 | D-5 | Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 (cascade de tarif) ? | Après — sinon on transmet des montants faux à une plateforme d'État |
 
 ---
