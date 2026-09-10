@@ -15,6 +15,7 @@
 
 import { marked } from 'marked';
 import type { OfConfig } from './of-config';
+import { MENTION_EXONERATION_TVA } from './tva-exoneration';
 import { loadLogoColorDataUrl, loadSignatureDataUrl } from './closure/shared-template';
 import { SIGNATURE_ROLES, renderSignatureAnchor } from './signature/text-tags';
 import {
@@ -363,7 +364,7 @@ ${renderOfPagedFooter(of)}
 
 <section>
   <h2 class="article">Article 7 — Dispositions financières</h2>
-  <p>Le prix de l'action de formation s'élève à <strong>${fmtEUR.format(totalHT)} HT</strong>${showUnitBreakdown ? ` (soit ${fmtEUR.format(data.produitPriceHTPerStagiaire)} HT × ${nbStagiaires} stagiaires)` : ''} (<em>TVA non applicable en vertu de l'article 261-4-4° du CGI</em>).</p>
+  <p>Le prix de l'action de formation s'élève à <strong>${fmtEUR.format(totalHT)} HT</strong>${showUnitBreakdown ? ` (soit ${fmtEUR.format(data.produitPriceHTPerStagiaire)} HT × ${nbStagiaires} stagiaires)` : ''} (<em>${MENTION_EXONERATION_TVA}</em>).</p>
   <p>À l'issue du délai de rétractation prévu à l'article 6, un acompte de <strong>${fmtEUR.format(totalHT * 0.3)}</strong> (30 % du prix indiqué ci-dessus) doit être versé par le commanditaire. Le solde devra être réglé au maximum la veille de la formation.</p>
   <p>En cas de subrogation de paiement par un OPCO ou financeur tiers, l'accord du financeur doit être communiqué à l'organisme avant le début de la formation.</p>
 </section>

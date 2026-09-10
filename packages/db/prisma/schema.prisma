@@ -79,7 +79,7 @@ model Tenant {
   /// l'identifiant d'annuaire, il ne se déduit pas au moment de l'envoi).
   siren                      String?
   /// Mention d'exonération portée par chaque ligne de facture.
-  /// Défaut applicatif : MENTION_TVA de `lib/catalogue-constants.ts`.
+  /// Défaut applicatif : MENTION_EXONERATION_TVA de `lib/tva-exoneration.ts`.
   vatExemptionText           String?           @db.Text
   /// Curseur de synchronisation : plus grand `invoice_event.id` déjà lu chez
   /// la plateforme. Super PDP n'expose AUCUN webhook (doc lue le 03/09) — le
@@ -2277,8 +2277,9 @@ model InvoiceLine {
   /// EN 16931 : S standard, E exonéré, K intracom, AE autoliquidation…
   /// Start Academy est en E (formation professionnelle continue).
   vatCategory            String  @default("E")
-  /// Code VATEX — décision D-2 NON tranchée : laissé null tant que le code
-  /// exact de l'art. 261-4-4°a n'est pas confirmé. Ne pas inventer.
+  /// Code VATEX EN 16931 — D-2 tranchée le 10/09/2026 : `VATEX-EU-132-1I`
+  /// (art. 261-4-4°a CGI = transposition de l'art. 132-1-i directive TVA).
+  /// Non surchargeable par tenant. Posé par `lib/einvoice/invoice-snapshot.ts`.
   vatExemptionReasonCode String?
   vatExemptionReasonText String?
   /// Traçabilité sur une facture groupée : quelle ligne pour quel stagiaire.

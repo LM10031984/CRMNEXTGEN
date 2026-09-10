@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Loader2, Layout, StickyNote } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateQuote } from '@/server/actions/quotes';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 
 interface Props {
   quoteId: string;
@@ -121,7 +122,7 @@ export function QuoteHeaderEditor({ quoteId, disabled, initial }: Props) {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
-              placeholder="Paiement à 30 jours fin de mois.&#10;Formation exonérée de TVA (art. 261-4-4° CGI)."
+              placeholder={`Paiement à 30 jours fin de mois.\n${MENTION_EXONERATION_TVA}.`}
               className="w-full px-2 py-1.5 border border-border rounded text-xs"
             />
           </div>

@@ -29,7 +29,7 @@ export interface BilanRow {
   causeAbandon: string;
   noteMoyenneSatisfaction: number | null; // /5 — moyenne sur les ratings TC/B/M
   tauxRecommandation: number | null; // % stagiaires recommandant
-  prixTTC: number; // somme priceHT × participants (TVA non applicable selon CGI 261-4-4°)
+  prixTTC: number; // somme priceHT × participants (exonéré art. 261-4-4°, cf. MENTION_EXONERATION_TVA)
 }
 
 export interface BilanData {

@@ -19,6 +19,7 @@
  * pédagogique de la proposition, au centime**.
  */
 
+import { MENTION_EXONERATION_TVA } from '../tva-exoneration';
 import { plural } from './plural';
 import type { PricingSynthesis } from './pricing';
 import { COVERAGE_STATE_LABEL } from './pricing';
@@ -33,9 +34,8 @@ const eur = new Intl.NumberFormat('fr-FR', {
   maximumFractionDigits: 2,
 });
 
-/** Mention d'exonération — art. 261-4-4° a du CGI, activité de formation. */
-export const VAT_EXEMPTION_NOTE =
-  'TVA non applicable — article 261-4-4° a du Code général des impôts (activité de formation professionnelle exonérée).';
+/** La mention ponctuée pour un bloc de notes : le point appartient à l'appelant. */
+const MENTION_PONCTUEE = `${MENTION_EXONERATION_TVA}.`;
 
 export interface QuoteDraftLine {
   order: number;
@@ -122,9 +122,9 @@ export function buildQuoteNotes(args: {
 }): string {
   const { synthesis } = args;
   const payer = synthesis.payers.find((p) => p.payer.id === args.payerId);
-  if (!payer) return VAT_EXEMPTION_NOTE;
+  if (!payer) return MENTION_PONCTUEE;
 
-  const parts: string[] = [VAT_EXEMPTION_NOTE];
+  const parts: string[] = [MENTION_PONCTUEE];
 
   for (const c of payer.coverages) {
     parts.push(`Prise en charge estimée ${c.funder === 'OPCO_EP' ? 'OPCO EP' : 'AGEFICE'} : ${eur.format(c.amount)} — ${c.label}.`);

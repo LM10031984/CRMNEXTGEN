@@ -50,7 +50,8 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 ## 4. Migrations
 
 **`prisma db push` est INTERDIT** — sur `qualiof_test` comme sur n'importe quelle
-base (règle Laurent, 2026-09-10). Une seule voie :
+base (règle Laurent, 2026-09-10), y compris « juste pour aligner la base de test
+avant de lancer les tests ». Une seule voie :
 
 ```
 pnpm --filter @qualiof/db exec prisma migrate dev --name <slug>   # créer
@@ -61,7 +62,13 @@ Pourquoi : `db push` écrit le schéma dans la base **sans laisser de migration*
 L'historique et la base divergent alors en silence, et la production ne reçoit
 jamais le changement — le déploiement rejoue `migrations/`, pas le schéma. On ne
 s'en aperçoit qu'au premier `P2022` en prod, sur une colonne qui n'existe que sur
-la machine où le `db push` a été lancé.
+la machine où le `db push` a été lancé. Le chemin réellement utilisé en production
+(`migrate deploy`, lancé par `.github/workflows/deploy.yml` à chaque push `main`)
+n'est alors jamais exercé avant d'atteindre Supabase.
+
+Aggravant : `db push` réclame `--accept-data-loss` dès qu'une contrainte se
+resserre, et le réflexe est de l'ajouter pour « débloquer ». C'est une destruction
+silencieuse que personne ne relit.
 
 L'inverse existe aussi, et il est plus sournois : une migration peut créer un
 objet que le schéma ne déclare pas. Rien ne le signale — la base est juste,
@@ -84,6 +91,17 @@ Jamais `db push` comme raccourci.
 **Avant de livrer** : `pnpm --filter @qualiof/db run check:schema` doit être vert
 — base jetable, migrations rejouées pour de vrai, diff VIDE. Ce garde tourne
 aussi en CI. S'il rougit, c'est le schéma ou la migration qui ment, pas lui.
+
+- La migration générée se **commit avec le code** qui en dépend, jamais après.
+- Base de test repartie de zéro : `prisma migrate reset`, qui rejoue l'historique —
+  c'est justement ce qu'on veut vérifier.
+- Ne jamais pointer une commande Prisma sur `DATABASE_URL` depuis le poste : c'est
+  Supabase de production. Les migrations partent par la CI, pas à la main.
+  **La seule exception est la base d'APERÇU** (`qualiof-apercu`, pooler `aws-1`,
+  jamais `aws-0`) : elle doit recevoir migrations et seed pour que Laurent puisse
+  relire une PR sur des données réelles. On y va en surchargeant explicitement
+  `DATABASE_URL`/`DIRECT_URL` sur la ligne de commande, jamais en lisant le `.env`
+  du dépôt — qui, lui, pointe la production.
 
 ## 5. Gates — les trois, dans cet ordre
 
