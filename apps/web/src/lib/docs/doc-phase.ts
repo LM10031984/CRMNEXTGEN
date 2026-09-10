@@ -20,6 +20,9 @@
  * Les deux sont mappés, sinon le ZIP raterait la moitié des documents.
  */
 
+import { DOC_TYPE_TO_CLOSURE_KIND } from '@/lib/doc-scope';
+import { CLOSURE_DOC_KINDS } from '@/lib/closure/types';
+
 export type DocPhase = 'avant' | 'pendant' | 'apres';
 
 export const DOC_PHASES: ReadonlyArray<{
@@ -131,4 +134,29 @@ export function phaseLabel(phase: DocPhase): string {
 /** Segment ASCII utilisé dans les noms de fichiers et dossiers d'archive. */
 export function phaseSlug(phase: DocPhase): string {
   return DOC_PHASES.find((p) => p.id === phase)?.slug ?? phase;
+}
+
+/**
+ * Les `ClosureDocKind` que le pack de fin sait produire pour cette phase —
+ * ce que « Tout générer » doit demander à `generateClosurePack` en mode
+ * mono-participant.
+ *
+ * Tous les documents d'une phase n'y figurent pas : le support pédagogique se
+ * dépose à la main, et l'attestation d'assiduité AGEFICE a son propre
+ * générateur synchrone (`dispatchGenerateDoc({ docType: 'ASSIDUITE_AGEFICE' })`),
+ * hors pack — c'est `DOC_TYPE_TO_CLOSURE_KIND` qui le dit, et on le lit plutôt
+ * que de recopier la liste ici.
+ *
+ * Le croisement avec `CLOSURE_DOC_KINDS` n'est pas une ceinture de sécurité
+ * décorative : `DOC_TYPE_TO_CLOSURE_KIND` mappe encore `ANALYSE_BESOIN`, que le
+ * pack ne produit PLUS depuis la Phase 15 (c'est devenu un document d'avant).
+ * Sans ce filtre, « Tout générer » sur l'avant demanderait au pack un kind
+ * qu'il ignore, et ne produirait rien en promettant le contraire.
+ */
+export function closureKindsForPhase(phase: DocPhase): string[] {
+  const produits = new Set<string>(CLOSURE_DOC_KINDS);
+  const kinds = PARTICIPANT_DOC_TYPES_BY_PHASE[phase]
+    .map((t) => DOC_TYPE_TO_CLOSURE_KIND[t] ?? null)
+    .filter((k): k is string => !!k && produits.has(k));
+  return Array.from(new Set(kinds));
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DOC_PHASES,
   PARTICIPANT_DOC_TYPES_BY_PHASE,
+  closureKindsForPhase,
   coercePhase,
   phaseLabel,
   phaseOfDocType,
@@ -71,6 +72,23 @@ describe('doc-phase — source unique des phases', () => {
     expect(coercePhase('après')).toBeNull();
     expect(coercePhase(undefined)).toBeNull();
     expect(coercePhase(null)).toBeNull();
+  });
+
+  it('dit quels kinds du pack « Tout générer » doit demander', () => {
+    // L'avant n'a rien à demander au pack : convention, convocation, AGEFICE et
+    // analyse ont des générateurs synchrones dédiés.
+    expect(closureKindsForPhase('avant')).toEqual([]);
+    expect(closureKindsForPhase('pendant')).toEqual(['EMARGEMENT']);
+    expect(closureKindsForPhase('apres')).toEqual([
+      'ATTESTATION',
+      'CERTIFICAT',
+      'QCM',
+      'POSITIONNEMENT',
+      'SATISFACTION_CHAUD',
+      'SATISFACTION_FROID',
+    ]);
+    // ASSIDUITE reste hors pack (générateur synchrone) — ne jamais l'y glisser.
+    expect(closureKindsForPhase('apres')).not.toContain('ASSIDUITE');
   });
 
   it('donne un libellé lisible et un slug ASCII', () => {
