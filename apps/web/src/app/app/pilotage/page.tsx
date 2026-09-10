@@ -8,6 +8,14 @@
  *  - comparaison N-1 ;
  *  - formulaire de saisie de l'objectif annuel.
  *
+ * Ajouts du 2026-09-10 (Laurent, après audit du calcul) :
+ *  - l'objectif AU RYTHME du calendrier — « 55 % atteint » au 10 septembre ne
+ *    disait pas si on était en avance ou en retard ;
+ *  - Vendu / Facturé / Encaissé — trois réalités que la page confondait ;
+ *  - les analyses par axe (produit, financeur, formateur, client, remplissage,
+ *    entonnoir) ;
+ *  - « à corriger » : ce qui fausse le chiffre, chiffré, chaque ligne cliquable.
+ *
  * RBAC : réservé ADMIN/MANAGER (garde `hasRole` + `redirect('/app')`, pattern
  * distribution-leads / budget-agefice). La sécurité réelle de la mutation est
  * dans `setRevenueTarget` (requireRole). Données via `getPilotageData` (Plan 01).
@@ -29,8 +37,24 @@ import { hasRole } from '@/lib/rbac';
 import { PageHeader } from '@/components/ui/page-header';
 import { FilterChips } from '@/components/ui/filter-chips';
 import { getPilotageData } from '@/lib/pilotage-stats';
+import {
+  objectifADate,
+  partAnnuelleEcoulee,
+  pctObjectifADate,
+  projectionAuRythme,
+  repartitionUtilisee,
+} from '@/lib/pilotage/objectif-rythme';
+import {
+  assembleFlux,
+  getFactureMensuel,
+  getEncaisseMensuel,
+  getDelaiParFinanceur,
+} from '@/lib/pilotage/flux-financiers';
+import { getAxesPilotage } from '@/lib/pilotage/axes';
+import { getAnomaliesPilotage } from '@/lib/pilotage/anomalies';
 import { PilotageBarChart } from './pilotage-bar-chart';
 import { RevenueTargetForm } from './revenue-target-form';
+import { BlocFlux, BlocAxes, BlocAnomalies } from './pilotage-blocs';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +81,37 @@ export default async function PilotagePage({
   const currentYear = new Date().getFullYear();
   const year = sp.year ? parseInt(sp.year, 10) : currentYear;
 
-  const data = await getPilotageData(user.tenantId, year);
+  const [data, factureMensuel, encaisseMensuel, delais, axes, anomalies] = await Promise.all([
+    getPilotageData(user.tenantId, year),
+    getFactureMensuel(user.tenantId, year),
+    getEncaisseMensuel(user.tenantId, year),
+    getDelaiParFinanceur(user.tenantId, year),
+    getAxesPilotage(user.tenantId, year),
+    getAnomaliesPilotage(user.tenantId, year),
+  ]);
+
+  // L'objectif au rythme du calendrier. Sur une année passée, on se place au
+  // 31 décembre : demander « où devrais-je en être » en 2025 n'a de sens qu'à
+  // la fin de 2025, pas à la date d'aujourd'hui.
+  const aujourdhui = new Date();
+  const dateDeLecture =
+    year < aujourdhui.getUTCFullYear() ? new Date(Date.UTC(year, 11, 31)) : aujourdhui;
+  // Garde-fou : avec un historique d'un seul exercice, la saisonnalité laisse
+  // des mois entiers à zéro (janvier→avril en 2026, alors qu'ils ont fait
+  // 113 k€). On repasse alors en répartition uniforme, et on le DIT — sinon
+  // l'objectif à date ne réclame que 29 % de l'année et la projection annonce
+  // 548 k€ pour un carnet de 221 k€.
+  const repartition = repartitionUtilisee(data.objectifMensuel, data.objectifAnnuel);
+  const objectifDu = objectifADate(repartition.mensuel, dateDeLecture);
+  const partEcoulee = partAnnuelleEcoulee(repartition.mensuel, dateDeLecture);
+  const pctRythme = pctObjectifADate(data.kpis.caRealiseYTD, objectifDu);
+  const projection = projectionAuRythme(data.kpis.caRealiseYTD, partEcoulee);
+
+  const flux = assembleFlux({
+    vendu: data.realiseMonthly.map((v, i) => v + (data.previsionnelMonthly[i] ?? 0)),
+    facture: factureMensuel,
+    encaisse: encaisseMensuel,
+  });
   const { kpis } = data;
 
   // Sélecteur d'année : année courante et 4 précédentes.
@@ -136,6 +190,29 @@ export default async function PilotagePage({
           accent={kpis.ecartVsObjectif >= 0 ? 'emerald' : 'amber'}
           hint="atterrissage − objectif"
         />
+        <KPICard
+          label="Objectif à date"
+          value={objectifDu > 0 ? fmtEUR.format(objectifDu) : '—'}
+          icon={Target}
+          hint={
+            partEcoulee !== null
+              ? `${Math.round(partEcoulee * 100)} % de l'année · ${repartition.source === 'saisonnalite' ? 'saisonnalité constatée' : 'réparti uniformément, historique trop mince'}`
+              : 'aucun objectif saisi'
+          }
+        />
+        <KPICard
+          label="Au rythme"
+          value={pctRythme !== null ? `${pctRythme} %` : '—'}
+          icon={pctRythme !== null && pctRythme >= 100 ? TrendingUp : TrendingDown}
+          accent={pctRythme === null ? 'default' : pctRythme >= 100 ? 'emerald' : 'amber'}
+          hint="réalisé ÷ objectif à date"
+        />
+        <KPICard
+          label="Projection au rythme"
+          value={projection !== null ? fmtEUR.format(projection) : '—'}
+          icon={BarChart3}
+          hint="si l'année continue ainsi"
+        />
       </div>
 
       {/* Graphe mensuel */}
@@ -144,6 +221,15 @@ export default async function PilotagePage({
         previsionnelMonthly={data.previsionnelMonthly}
         objectifMensuel={data.objectifMensuel}
       />
+
+      {/* Ce qui fausse le chiffre, chiffré (2026-09-10). */}
+      <BlocAnomalies familles={anomalies} />
+
+      {/* Vendu / Facturé / Encaissé */}
+      <BlocFlux flux={flux} delais={delais} />
+
+      {/* Analyses par axe */}
+      <BlocAxes axes={axes} />
 
       {/* Comparaison N-1 */}
       <section className="rounded-2xl border border-border bg-white p-5">
