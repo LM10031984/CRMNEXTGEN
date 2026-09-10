@@ -16,6 +16,7 @@ import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { resolveInvoiceIssueDate, resolveInvoiceDueDate } from '@/lib/invoice-dates';
+import { sequencePrefixOf, chronologyWarning } from '@/lib/invoice-chronology';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
@@ -162,7 +163,15 @@ function nestedInvoiceWrites(lines: LineSnapshot[], parties: (PartySnapshot | nu
 
 export async function createInvoiceFromParticipant(
   input: CreateInvoiceInput,
-): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  invoiceId?: string;
+  documentId?: string;
+  number?: string;
+  error?: string;
+  /** Sentinelle de chronologie — informatif, la facture est émise. */
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
@@ -261,10 +270,28 @@ export async function createInvoiceFromParticipant(
   // Les DEUX dates de la pièce partent du même instant (cf. `invoice-dates.ts`).
   const emission = resolveInvoiceIssueDate();
 
-  // Création atomique : numéro + invoice + lignes + parties figées
-  const invoice = await prisma.$transaction(async (tx) => {
+  // Création atomique : numéro + invoice + lignes + parties figées.
+  // La transaction rend un COUPLE plutôt que d'affecter une variable
+  // extérieure : une transaction peut être rejouée, une écriture hors de son
+  // périmètre ne se rejoue pas proprement.
+  const { invoice, alert } = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-    return tx.invoice.create({
+
+    // Sentinelle de chronologie — lue DANS la transaction, après le numéro et
+    // AVANT le create : après le create, le « prédécesseur » serait la pièce
+    // qu'on vient d'écrire. Voir `lib/invoice-chronology.ts` : en usage normal
+    // elle se tait, et c'est le résultat attendu.
+    const prefix = sequencePrefixOf(number);
+    const previous = prefix
+      ? await tx.invoice.findFirst({
+          where: { tenantId: user.tenantId, number: { startsWith: prefix } },
+          orderBy: { number: 'desc' },
+          select: { number: true, issueDate: true },
+        })
+      : null;
+    const alert = chronologyWarning({ number, issueDate: emission, previous });
+
+    const created = await tx.invoice.create({
       data: {
         tenantId: user.tenantId,
         number,
@@ -290,6 +317,8 @@ export async function createInvoiceFromParticipant(
         notes: input.notes ?? null,
       },
     });
+
+    return { invoice: created, alert };
   });
 
   // Génération PDF
@@ -405,7 +434,13 @@ export async function createInvoiceFromParticipant(
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
 
-  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+  return {
+    ok: true,
+    invoiceId: invoice.id,
+    documentId: doc.id,
+    number: invoice.number,
+    ...(alert ? { warning: alert } : {}),
+  };
 }
 
 /**
@@ -422,7 +457,15 @@ export async function createInvoiceForSponsorGroup(input: {
   vatRate?: number;
   dueDateDays?: number;
   notes?: string;
-}): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  invoiceId?: string;
+  documentId?: string;
+  number?: string;
+  error?: string;
+  /** Sentinelle de chronologie — informatif, la facture est émise. */
+  warning?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
@@ -528,9 +571,21 @@ export async function createInvoiceForSponsorGroup(input: {
   // Idem facture individuelle : les deux dates partent du même instant.
   const emission = resolveInvoiceIssueDate();
 
-  const invoice = await prisma.$transaction(async (tx) => {
+  const { invoice, alert } = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-    return tx.invoice.create({
+
+    // Idem facture individuelle : sentinelle après le numéro, avant le create.
+    const prefix = sequencePrefixOf(number);
+    const previous = prefix
+      ? await tx.invoice.findFirst({
+          where: { tenantId: user.tenantId, number: { startsWith: prefix } },
+          orderBy: { number: 'desc' },
+          select: { number: true, issueDate: true },
+        })
+      : null;
+    const alert = chronologyWarning({ number, issueDate: emission, previous });
+
+    const created = await tx.invoice.create({
       data: {
         tenantId: user.tenantId,
         number,
@@ -556,6 +611,8 @@ export async function createInvoiceForSponsorGroup(input: {
         notes: input.notes ?? null,
       },
     });
+
+    return { invoice: created, alert };
   });
 
   // Génération PDF multi-lignes
@@ -677,7 +734,13 @@ export async function createInvoiceForSponsorGroup(input: {
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
 
-  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+  return {
+    ok: true,
+    invoiceId: invoice.id,
+    documentId: doc.id,
+    number: invoice.number,
+    ...(alert ? { warning: alert } : {}),
+  };
 }
 
 export async function recordInvoicePayment(input: {

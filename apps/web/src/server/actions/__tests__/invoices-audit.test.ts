@@ -117,13 +117,23 @@ describe('Backfill FACT-01 — logInvoiceEvent dans recordInvoicePayment', () =>
 });
 
 describe('Anti-régression FACT-01 — backfill non bloquant pour signature existante', () => {
+  // Quick 260910-lon (lot B) — les deux regex ci-dessous ont été RELÂCHÉES
+  // délibérément : elles assertaient la chaîne EXACTE, `number: invoice.number }`
+  // accolade fermante comprise, et le lot B ajoute un `warning` optionnel au
+  // retour (sentinelle de chronologie). Un champ optionnel est ADDITIF : il ne
+  // casse aucun appelant, et les quatre champs historiques ne bougent pas.
+  // Le test garde donc son rôle d'anti-régression de signature — on tolère
+  // seulement ce qui suit `number`, on ne cesse pas de vérifier les 4 champs.
+  const RETOUR_SUCCES =
+    /return {\s*ok: true,\s*invoiceId: invoice\.id,\s*documentId: doc\.id,\s*number: invoice\.number[,}]/;
+
   it("createInvoiceFromParticipant retourne toujours { ok, invoiceId, documentId, number, error }", () => {
-    expect(INVOICES_SRC).toMatch(/return { ok: true, invoiceId: invoice\.id, documentId: doc\.id, number: invoice\.number }/);
+    expect(INVOICES_SRC).toMatch(RETOUR_SUCCES);
   });
 
   it("createInvoiceForSponsorGroup retourne toujours { ok, invoiceId, documentId, number, error }", () => {
     // Le second return success similaire
-    const count = (INVOICES_SRC.match(/return { ok: true, invoiceId: invoice\.id, documentId: doc\.id, number: invoice\.number }/g) ?? []).length;
+    const count = (INVOICES_SRC.match(new RegExp(RETOUR_SUCCES, 'g')) ?? []).length;
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
