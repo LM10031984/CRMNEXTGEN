@@ -47,7 +47,38 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 - [ ] Email : passer `context: { tenantId, category, sessionId? }` au mailer
       (le type l'exige, c'est le filet exhaustivité tsc)
 
-## 4. Gates — les trois, dans cet ordre
+## 4. Migrations
+
+**`prisma db push` est INTERDIT — `prisma migrate dev` uniquement.** Y compris sur
+`qualiof_test`, y compris « juste pour aligner la base de test avant de lancer les
+tests ».
+
+Pourquoi : `db push` modifie le schéma **sans écrire de migration**. La base finit
+alors dans un état qu'aucun fichier ne décrit, et le chemin réellement utilisé en
+production — `prisma migrate deploy`, lancé par `.github/workflows/deploy.yml` sur
+chaque push `main` — n'est jamais exercé avant d'atteindre Supabase. Une migration
+qui casse ne se découvre plus en local mais en production.
+
+Aggravant : `db push` réclame `--accept-data-loss` dès qu'une contrainte se resserre,
+et le réflexe est de l'ajouter pour « débloquer ». C'est une destruction silencieuse
+que personne ne relit.
+
+```
+# NON
+pnpm --filter @qualiof/db exec prisma db push
+pnpm --filter @qualiof/db exec prisma db push --accept-data-loss
+
+# OUI — crée le fichier de migration, l'applique, régénère le client
+pnpm --filter @qualiof/db exec dotenv -e ../../.env -- prisma migrate dev --name <slug_parlant>
+```
+
+- La migration générée se **commit avec le code** qui en dépend, jamais après.
+- Base de test repartie de zéro : `prisma migrate reset`, qui rejoue l'historique —
+  c'est justement ce qu'on veut vérifier.
+- Ne jamais pointer une commande Prisma sur `DATABASE_URL` depuis le poste : c'est
+  Supabase de production. Les migrations partent par la CI, pas à la main.
+
+## 5. Gates — les trois, dans cet ordre
 
 ```
 pnpm lint
@@ -59,7 +90,7 @@ Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
 
-## 5. Rendre compte
+## 6. Rendre compte
 
 Trois lignes : ce qui change pour l'utilisateur, ce qui a été mis de côté, ce
 qu'il reste à vérifier à la main.
