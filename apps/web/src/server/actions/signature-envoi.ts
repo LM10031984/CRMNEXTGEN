@@ -67,7 +67,13 @@ import {
   type ParticipantPourEnvoi,
   type ScopeEnvoi,
 } from '@/lib/signature/plan-envoi';
-import type { DocTypeSignable, RegleSignatureFinanceur } from '@/lib/signature/regime';
+import type { DocTypeSignable } from '@/lib/signature/regime';
+import { chargerReglesSignature } from '@/lib/signature/catalogue-regime';
+import {
+  codesFinanceursDe,
+  participantPourEnvoi,
+  type ParticipantLu,
+} from '@/lib/signature/participants-regime';
 import {
   nomAffiche,
   resoudreEmailRepresentant,
@@ -188,51 +194,25 @@ async function chargerContexte(
   });
   if (!session) return null;
 
-  // Tous les codes financeurs rencontrés — celui du commanditaire ET ceux des
-  // autres organisations rattachées, qui servent au garde-fou « régime
-  // incohérent ». Un seul aller-retour, quel que soit le nombre d'inscrits.
-  const codes = new Set<string>();
-  for (const p of session.participants) {
-    const duSponsor = p.sponsorOrg?.opcoCode?.trim();
-    if (duSponsor) codes.add(duSponsor);
-    for (const lien of p.person.legalLinks) {
-      const code = lien.organization?.opcoCode?.trim();
-      if (code) codes.add(code);
-    }
-  }
+  // Le régime se lit par le MÊME chemin que la fiche session (lot C.2b-1) :
+  // `codesFinanceursDe` → `chargerReglesSignature` → `participantPourEnvoi`.
+  // Deux mappers pour une question, c'est la divergence que C.2a avait déjà
+  // supprimée pour `representant.ts` — un seul aller-retour vers `OpcoCatalog`,
+  // quel que soit le nombre d'inscrits.
+  const lus: ParticipantLu[] = session.participants.map((p) => ({
+    participantId: p.id,
+    nomAffiche: nomAffiche(p.person),
+    sponsorOrgId: p.sponsorOrgId ?? null,
+    sponsorOrgLabel: p.sponsorOrg?.brandName ?? p.sponsorOrg?.legalName ?? null,
+    sponsorOpcoCode: p.sponsorOrg?.opcoCode ?? null,
+    liens: p.person.legalLinks,
+  }));
+  const reglesParCode = await chargerReglesSignature(codesFinanceursDe(lus));
 
-  // ⚠ PAS de `tenantId` ici, et ce n'est pas un oubli de scope : `OpcoCatalog`
-  // est un RÉFÉRENTIEL GLOBAL (aucune colonne `tenantId` au schéma), partagé par
-  // tous les organismes. Les six financeurs y sont seedés.
-  const catalogue =
-    codes.size === 0
-      ? []
-      : await prisma.opcoCatalog.findMany({
-          where: { code: { in: [...codes] } },
-          select: {
-            code: true,
-            conventionSigner: true,
-            ageficeSigner: true,
-            assiduiteSigner: true,
-          },
-        });
-
-  const reglesParCode = new Map<string, RegleSignatureFinanceur>();
-  for (const ligne of catalogue) {
-    reglesParCode.set(ligne.code, {
-      conventionSigner: ligne.conventionSigner,
-      ageficeSigner: ligne.ageficeSigner,
-      assiduiteSigner: ligne.assiduiteSigner,
-    });
-  }
-  /** Financeur inconnu ⇒ `null` : l'inconnu ne vaut pas trois signatures par défaut. */
-  const regleDe = (code: string | null | undefined): RegleSignatureFinanceur | null =>
-    reglesParCode.get((code ?? '').trim()) ?? null;
-
-  const participants: ParticipantCharge[] = session.participants.map((p) => {
+  const participants: ParticipantCharge[] = session.participants.map((p, index) => {
     const nom = nomAffiche(p.person);
     const lienSponsor = p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId);
-    const autresLiens = p.person.legalLinks.filter((l) => l.organizationId !== p.sponsorOrgId);
+    const lu = lus[index]!;
 
     return {
       id: p.id,
@@ -262,19 +242,7 @@ async function chargerContexte(
         sponsorLegalForm: p.sponsorOrg?.legalForm,
         roleChezSponsor: lienSponsor?.role ?? null,
       }),
-      pourLePlan: {
-        participantId: p.id,
-        nomAffiche: nom,
-        sponsorOrgId: p.sponsorOrgId ?? null,
-        sponsorOrgLabel: p.sponsorOrg?.brandName ?? p.sponsorOrg?.legalName ?? null,
-        regle: regleDe(p.sponsorOrg?.opcoCode),
-        signauxDossierPropre: {
-          aLienEiSelfHorsSponsor: autresLiens.some((l) => l.role === 'EI_SELF'),
-          reglesAutresOrgs: autresLiens
-            .map((l) => regleDe(l.organization?.opcoCode))
-            .filter((r): r is RegleSignatureFinanceur => r !== null),
-        },
-      },
+      pourLePlan: participantPourEnvoi(lu, reglesParCode),
     };
   });
 
@@ -587,7 +555,13 @@ export async function preparerEnvoiSignature(
           tenantId: user.tenantId,
           userId: user.id,
           entity: 'Document',
-          entityId: avant?.id ?? null,
+          // `AuditLog.entityId` n'est PAS nullable au schéma. Une pièce pas
+          // encore générée n'a pas d'id de Document : on inscrit la clé du plan
+          // (« AGEFICE:part-3 »), qui désigne la pièce visée aussi précisément.
+          // Écrire `null` faisait tomber la préparation de toute pièce absente —
+          // exactement le cas où l'admin ouvre le récapitulatif pour la première
+          // fois. Corrigé le 10/09/2026 (lot C.2b-1), régression de C.2a-2.
+          entityId: avant?.id ?? envoi.cle,
           action: 'document.regeneration_requested',
           diff: {
             cle: envoi.cle,

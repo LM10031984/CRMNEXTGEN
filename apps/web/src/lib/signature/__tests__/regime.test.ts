@@ -364,6 +364,10 @@ describe('les modules purs du régime — la règle vient de la donnée, pas d�
     'plan-envoi.ts',
     'representant.ts',
     'envoi-contrats.ts',
+    // Lot C.2b-1 : le mapper partagé par la fiche session et le moteur d'envoi.
+    // Sa lecture d'`OpcoCatalog` vit à part (`catalogue-regime.ts`, impur) pour
+    // que celui-ci reste gardé ici.
+    'participants-regime.ts',
   ] as const;
 
   /** Retire commentaires de bloc, commentaires de ligne et littéraux de message. */

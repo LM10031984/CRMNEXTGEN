@@ -58,6 +58,19 @@ import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
 import { SessionEnrollmentRequests } from '@/components/sessions/session-enrollment-requests';
 import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
+// Régime de signature (spec 2026-09-04 §3 bis, D-10 ; lot C.2b-1) — le MÊME
+// chemin que le moteur d'envoi, pour que l'écran ne promette jamais un envoi
+// que `planifierEnvoi` ne planifie pas.
+import { chargerReglesSignature } from '@/lib/signature/catalogue-regime';
+import {
+  codesFinanceursDe,
+  colonneAgeficeVisible,
+  docTypesSansObjet,
+  participantPourEnvoi,
+  type ParticipantLu,
+} from '@/lib/signature/participants-regime';
+import { docTypesEnRegime } from '@/lib/signature/regime';
+import { planifierEnvoi } from '@/lib/signature/plan-envoi';
 import { contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
@@ -134,9 +147,13 @@ export default async function SessionDetailPage({
               id: true,
               firstName: true,
               lastName: true,
-              // BUG-11 — pour permettre AGEFICE même si sponsorOrg n'est pas
-              // AGEFICE : on lit les LegalLinks pour détecter EI_SELF (TNS)
-              // ou un autre rattachement à une org AGEFICE.
+              // Les liens juridiques ne servent PLUS à décider du régime
+              // (dérivation élargie BUG-11 retirée le 10/09/2026, lot C.2b-1 :
+              // c'est le financeur du commanditaire qui décide, et lui seul).
+              // Ils restent chargés pour les SIGNAUX du garde-fou « régime
+              // incohérent » — une EI rattachée, une autre organisation dont le
+              // financeur ouvre la pièce — qui rend l'anomalie bruyante au lieu
+              // de faire disparaître un dossier de l'écran.
               legalLinks: {
                 select: {
                   role: true,
@@ -412,33 +429,92 @@ export default async function SessionDetailPage({
     inner.set(assetDocType, { id: a.id });
   }
 
-  // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
-  const matrixParticipants = session.participants.map((p) => ({
-    id: p.id,
-    personId: p.person.id,
-    fullName: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+  // ══ Régime de financement — spec signature §3 bis (D-10), lot C.2b-1 ═══════
+  //
+  // CE QUI A CHANGÉ LE 10/09/2026 (décision Laurent). Cette page décidait
+  // elle-même « ce participant relève-t-il d'AGEFICE ? » avec la dérivation
+  // élargie BUG-11 : commanditaire AGEFICE **ou** lien `EI_SELF` **ou** autre
+  // organisation rattachée à ce financeur. Pendant ce temps, le moteur d'envoi
+  // (lot C.2a) lisait les trois colonnes d'`OpcoCatalog`. Deux règles pour une
+  // question : l'écran promettait des envois que `planifierEnvoi` ne planifiait
+  // pas. Le RÉGIME fait foi désormais — un seul financeur par participant, celui
+  // du commanditaire DE CETTE INSCRIPTION.
+  //
+  // La contrepartie est l'avertissement « régime incohérent » (`regime.ts`) :
+  // il ne déclenche aucun envoi, il rend l'anomalie bruyante au lieu de faire
+  // disparaître un dossier de l'écran. Son AFFICHAGE nominatif est le lot
+  // C.2b-2 (bloc « Signature ») ; ici il sert déjà à garder la colonne AGEFICE.
+  //
+  // Même chemin que le moteur, à la ligne près : `codesFinanceursDe` →
+  // `chargerReglesSignature` → `participantPourEnvoi`. Une seule requête
+  // `OpcoCatalog` pour toute la page.
+  const participantsLus: ParticipantLu[] = session.participants.map((p) => ({
+    participantId: p.id,
+    nomAffiche: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
-    sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
-    financingMode: p.financingMode as string | null,
-    docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
-    // BUG-11 — élargi : participant éligible AGEFICE si SOIT son sponsor est
-    // AGEFICE, SOIT il a un LegalLink EI_SELF (auto-entrepreneur TNS), SOIT
-    // il a une autre org rattachée avec opcoCode=AGEFICE. Permet de
-    // générer le dossier AGEFICE depuis la matrice même si le sponsor de la
-    // session est un OPCO classique (cas Florent HAUSSWIRTH / Imagimmo OPCO_EP
-    // qui est aussi auto-entrepreneur AGEFICE en parallèle).
-    isAgefice:
-      p.sponsorOrg.opcoCode === 'AGEFICE' ||
-      p.person.legalLinks.some(
-        (l) =>
-          l.role === 'EI_SELF' || l.organization?.opcoCode === 'AGEFICE',
-      ),
-    participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
-    pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+    sponsorOpcoCode: p.sponsorOrg.opcoCode,
+    liens: p.person.legalLinks,
   }));
+  const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
+  const regimeParParticipant = new Map(
+    participantsLus.map((lu) => {
+      const pourLePlan = participantPourEnvoi(lu, reglesSignature);
+      return [
+        lu.participantId,
+        {
+          pourLePlan,
+          enRegime: docTypesEnRegime(pourLePlan.regle),
+          // `docTypesSansObjet`, PAS `docTypesHorsRegime` : un commanditaire
+          // sans code financeur doit toujours sa convention (cf. le module).
+          sansObjet: docTypesSansObjet(pourLePlan.regle) as ReadonlySet<string>,
+        },
+      ] as const;
+    }),
+  );
 
-  const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
+  // Le scope AVANT est le seul à porter AGEFICE (`PIECES_PAR_SCOPE`).
+  const avertissementsRegimeAvant = planifierEnvoi({
+    scope: 'BEFORE',
+    participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
+  }).avertissements;
+  const participantsAvertisAgefice = new Set(
+    avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
+  );
+
+  // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
+  const matrixParticipants = session.participants.map((p) => {
+    const regime = regimeParParticipant.get(p.id);
+    return {
+      id: p.id,
+      personId: p.person.id,
+      fullName: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+      sponsorOrgId: p.sponsorOrg.id,
+      sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
+      sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
+      financingMode: p.financingMode as string | null,
+      docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
+      isAgefice: regime?.enRegime.has('AGEFICE') ?? false,
+      docTypesHorsRegime: regime?.sansObjet,
+      participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+      pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+    };
+  });
+
+  // ⚠ TROIS raisons de garder la colonne, et la deuxième est la contrepartie du
+  // changement de règle : un dossier AGEFICE DÉJÀ GÉNÉRÉ ne disparaît pas de
+  // l'écran parce que le régime a cessé de reconnaître son porteur. Un dossier
+  // qui disparaît de l'écran ne se corrige jamais.
+  const hasAgeficeParticipant = colonneAgeficeVisible({
+    participants: matrixParticipants.map((p) => ({
+      participantId: p.id,
+      enRegime: regimeParParticipant.get(p.id)?.enRegime ?? new Set(),
+    })),
+    participantsAvecDocumentAgefice: new Set(
+      matrixParticipants.filter((p) => p.participantDocs.has('AGEFICE')).map((p) => p.id),
+    ),
+    participantsAvertisAgefice,
+  });
 
   // Lot 0 (audit 28/08, E-1) — état documentaire de la session : périmé,
   // non vérifiable (produit avant le suivi des empreintes), engagé. Une seule

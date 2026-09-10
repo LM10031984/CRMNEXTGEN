@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 
 /**
  * Lot C.2b-1 — la matrice cesse de trancher le régime toute seule.
@@ -71,6 +71,12 @@ function monter(participants: MatrixParticipant[], hasAgeficeParticipant = true)
     />,
   );
 }
+
+// Sans `globals: true`, l'auto-cleanup de testing-library ne s'arme pas : le
+// DOM du test précédent survivrait et rendrait tous les `queryBy*` menteurs.
+beforeEach(() => {
+  cleanup();
+});
 
 describe('ParticipantDocMatrix — le régime décide, pas le composant', () => {
   it('une pièce HORS RÉGIME et SANS document est « NA », jamais « MISSING »', () => {
