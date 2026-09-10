@@ -186,6 +186,39 @@ export function TabApres({
     });
   }
 
+  /**
+   * L'attestation d'assiduité AGEFICE, seule, pour un apprenant.
+   *
+   * Elle a son générateur synchrone dédié (`ASSIDUITE_AGEFICE`) : elle ne fait
+   * pas partie du pack de fin de formation, donc « Tout générer » ne suffit pas
+   * à la REgénérer quand elle existe déjà. Ce bouton de ligne remplace celui
+   * qu'elle avait dans l'onglet « Avant », d'où elle vient d'être retirée
+   * (elle y faisait doublon et faussait le compteur de l'archive).
+   */
+  function handleGenerateAssiduite(participantId: string, fullName: string, force: boolean) {
+    setBusyParticipant(participantId);
+    startTransition(async () => {
+      try {
+        const r = await dispatchGenerateDoc({
+          sessionId,
+          docType: 'ASSIDUITE_AGEFICE',
+          participantId,
+          force,
+        });
+        if (r.ok) {
+          toast.success(
+            `${fullName} — attestation d'assiduité ${force ? 'régénérée' : 'générée'}`,
+          );
+          router.refresh();
+        } else {
+          toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+        }
+      } finally {
+        setBusyParticipant(null);
+      }
+    });
+  }
+
   function handleGenerate(key: SessionDocKey, label: string, force = false) {
     if (key === 'deroule') {
       if (!productId) {
@@ -253,6 +286,7 @@ export function TabApres({
         canWrite={canWrite}
         busyParticipant={busyParticipant}
         onGenerateAll={handleGenerateForLearner}
+        onGenerateAssiduite={handleGenerateAssiduite}
       />
 
       {/* 4 docs niveau session — une ligne par doc, câblée sur SA server action. */}
@@ -336,6 +370,7 @@ function PhaseLearnerBlocks({
   canWrite,
   busyParticipant,
   onGenerateAll,
+  onGenerateAssiduite,
 }: {
   phase: DocPhase;
   groups: PhaseParticipantGroup[];
@@ -343,6 +378,8 @@ function PhaseLearnerBlocks({
   canWrite: boolean;
   busyParticipant: string | null;
   onGenerateAll: (group: PhaseParticipantGroup, phase: DocPhase) => void;
+  /** Générateur dédié de l'attestation d'assiduité AGEFICE (hors pack). */
+  onGenerateAssiduite?: (participantId: string, fullName: string, force: boolean) => void;
 }) {
   if (groups.length === 0) return null;
 
@@ -369,6 +406,9 @@ function PhaseLearnerBlocks({
               participantName={group.fullName}
               phase={phase}
               readyCount={group.readyCount}
+              readyLabels={group.items
+                .filter((it) => it.state === 'generated')
+                .map((it) => it.label)}
               missingCount={group.missingCount}
               canGenerate={canWrite}
               onGenerateAll={() => onGenerateAll(group, phase)}
@@ -410,8 +450,28 @@ function PhaseLearnerBlocks({
                     </a>
                   </div>
                 )}
-                {!item.pdfUrl && (
+                {!item.pdfUrl && !(item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite) && (
                   <span className="text-xs text-muted-foreground shrink-0">À générer</span>
+                )}
+                {item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onGenerateAssiduite(group.participantId, group.fullName, !!item.pdfUrl)
+                    }
+                    disabled={busyParticipant === group.participantId}
+                    aria-label={`${item.pdfUrl ? 'Régénérer' : 'Générer'} l'attestation d'assiduité de ${group.fullName}`}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold shrink-0 transition-colors disabled:opacity-60 disabled:cursor-wait shadow-sm bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    {busyParticipant === group.participantId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : item.pdfUrl ? (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {item.pdfUrl ? 'Régénérer' : 'Générer'}
+                  </button>
                 )}
               </li>
             ))}

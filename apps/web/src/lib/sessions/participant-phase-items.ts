@@ -17,7 +17,7 @@
  * dit prêt, l'onglet dit manquant ».
  */
 
-import { deriveCellState } from '@/lib/derive-cell-state';
+import { deriveCellState, type CellPdfRef } from '@/lib/derive-cell-state';
 import { DOC_TYPE_LABELS } from '@/lib/doc-scope';
 import { PARTICIPANT_DOC_TYPES_BY_PHASE, type DocPhase } from '@/lib/docs/doc-phase';
 
@@ -58,42 +58,95 @@ export interface PhaseParticipantInput {
  */
 const AGEFICE_ONLY = new Set(['AGEFICE', 'ASSIDUITE']);
 
+/** Une pièce d'une phase, résolue : son type, son intitulé, où la lire. */
+export interface ResolvedPhaseDoc {
+  docType: string;
+  label: string;
+  /** Absent = la pièce n'existe pas encore. */
+  pdfRef?: CellPdfRef;
+}
+
+export interface ResolvePhaseDocsInput {
+  phase: DocPhase;
+  /** Réservé aux affiliés : voir `AGEFICE_ONLY`. */
+  isAgefice: boolean;
+  docStatus: Record<string, unknown> | null;
+  participantDocs: Map<string, { id: string }>;
+  productDocs: Map<string, { id: string }>;
+  sessionDocs: Map<string, { id: string }>;
+  pedagogicalAssets: Map<string, { id: string }>;
+}
+
+/**
+ * SOURCE UNIQUE — « quelles pièces, pour cet inscrit, sur cette phase ».
+ *
+ * Deux consommateurs, et c'est tout l'enjeu : l'écran (compteur du bouton
+ * « Télécharger (N) », lignes des blocs nominatifs) et la route ZIP
+ * (`buildSessionLearnerZip`). Ils lisaient chacun leur liste jusqu'au
+ * 2026-09-10 — l'onglet « Avant » comptait l'attestation d'assiduité que
+ * l'archive ne pouvait pas contenir, et l'archive embarquait le programme que
+ * l'onglet ne comptait pas. Les deux affichaient 5. Une seule pièce manquait,
+ * en silence, dans un dossier OPCO.
+ *
+ * Tant que les deux passent par ici, le nombre annoncé EST le nombre livré.
+ */
+export function resolveParticipantPhaseDocs(input: ResolvePhaseDocsInput): ResolvedPhaseDoc[] {
+  const out: ResolvedPhaseDoc[] = [];
+  for (const docType of PARTICIPANT_DOC_TYPES_BY_PHASE[input.phase]) {
+    const cell = deriveCellState(
+      docType,
+      { docStatus: input.docStatus as never },
+      input.participantDocs,
+      input.productDocs,
+      input.sessionDocs,
+      input.pedagogicalAssets,
+    );
+    const pdfRef = 'pdfRef' in cell ? cell.pdfRef : undefined;
+    // « Sans objet » ne vaut que pour un document ABSENT : une pièce AGEFICE
+    // qui existe pour un inscrit non affilié (double casquette EI + enseigne)
+    // part quand même dans son archive, donc elle doit rester comptée ici —
+    // sinon le bouton annonce une pièce de moins qu'il n'en livre.
+    if (AGEFICE_ONLY.has(docType) && !input.isAgefice && !pdfRef) continue;
+    out.push({
+      docType,
+      label: DOC_TYPE_LABELS[docType]?.long ?? docType,
+      ...(pdfRef ? { pdfRef } : {}),
+    });
+  }
+  return out;
+}
+
 export function buildParticipantPhaseGroups(input: {
   phase: DocPhase;
   participants: readonly PhaseParticipantInput[];
   productDocs: Map<string, { id: string }>;
   sessionDocs: Map<string, { id: string }>;
 }): PhaseParticipantGroup[] {
-  const docTypes = PARTICIPANT_DOC_TYPES_BY_PHASE[input.phase];
-
   return input.participants.map((p) => {
-    const items: PhaseDocLine[] = [];
-    for (const docType of docTypes) {
-      if (AGEFICE_ONLY.has(docType) && !p.isAgefice) continue;
-      const cell = deriveCellState(
-        docType,
-        { docStatus: p.docStatus as never },
-        p.participantDocs,
-        input.productDocs,
-        input.sessionDocs,
-        p.pedagogicalAssets,
-      );
-      const pdfRef = 'pdfRef' in cell ? cell.pdfRef : undefined;
-      const href = pdfRef
-        ? pdfRef.kind === 'asset'
-          ? `/api/pedagogical-assets/${pdfRef.id}`
-          : `/api/documents/${pdfRef.id}`
+    const items: PhaseDocLine[] = resolveParticipantPhaseDocs({
+      phase: input.phase,
+      isAgefice: p.isAgefice,
+      docStatus: p.docStatus,
+      participantDocs: p.participantDocs,
+      productDocs: input.productDocs,
+      sessionDocs: input.sessionDocs,
+      pedagogicalAssets: p.pedagogicalAssets,
+    }).map((d) => {
+      const href = d.pdfRef
+        ? d.pdfRef.kind === 'asset'
+          ? `/api/pedagogical-assets/${d.pdfRef.id}`
+          : `/api/documents/${d.pdfRef.id}`
         : undefined;
-      items.push({
-        docType,
-        label: DOC_TYPE_LABELS[docType]?.long ?? docType,
-        state: href ? 'generated' : 'missing',
+      return {
+        docType: d.docType,
+        label: d.label,
+        state: (href ? 'generated' : 'missing') as PhaseDocLine['state'],
         pdfUrl: href,
         // `?dl=1` : le téléchargement porte un nom parlant, la consultation
         // reste une consultation (cf. api/documents/[id]/route.ts).
         downloadUrl: href ? `${href}?dl=1` : undefined,
-      });
-    }
+      };
+    });
     const readyCount = items.filter((i) => i.state === 'generated').length;
     return {
       participantId: p.id,
