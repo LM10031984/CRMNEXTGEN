@@ -487,6 +487,21 @@ Parcours : le commercial mène son R1 en conversation libre (enregistré, ex. Pl
 
 Garde-fous : transcript jamais dans un lien public, jamais dans le rapport client ; purge du `transcriptText` à J+90 (paramètre RGPD, aligné phase 22) ; l'extraction passe par le rate-limit et le monitoring IA existants ; job visible avec statut (pattern `AIGenerationJob`).
 
+**Tranché à la construction du lot C (10/09/2026) — ces points ne se renégocient plus :**
+
+1. **La citation fait foi, et son absence fait rejeter.** Une réponse dont le `quote` ne se retrouve pas dans le transcript (comparaison insensible à la casse, aux accents, à la ponctuation et aux retours à la ligne — mais pas à un mot changé) est ÉCARTÉE, pas rétrogradée en « confiance faible ». Motif : une citation inventée mais crédible est exactement ce qu'une relecture rapide ne rattrape pas — le relecteur la lit, elle sonne juste, il confirme. Le prompt l'interdit, `normalize.ts` le vérifie ; un prompt n'est pas un garde-fou.
+2. **Une extraction non confirmée compte dans la PROGRESSION, jamais dans un CHIFFRE.** Le champ est rempli à l'écran : prétendre le contraire serait faux. Mais synthèse financement, pipeline, snapshot, rapport d'audit et proposition lisent tous par `REPONSES_CONFIRMEES`. Le constat qui l'impose : avant le lot C, **personne ne lisait `confirmedAt`** — les six lecteurs auraient imprimé du non-relu. Un test de contrat lit désormais le code source pour qu'un septième lecteur ait à choisir explicitement.
+3. **Reprendre la main vaut confirmation.** Modifier une valeur extraite dans son chapitre la repasse en `origin=COMMERCIAL`, confirmée, `aiConfidence`/`aiQuote` effacées : il n'existe pas d'état « corrigée mais toujours douteuse ».
+4. **Rétention : 90 jours après la dernière preuve d'usage**, c'est-à-dire le plus récent de `meetingAt`, `prefillAt` et `createdAt` — et non la seule date de rendez-vous. Sinon un enregistrement qui a dormi trois mois dans un Plaud serait purgé la nuit de son dépôt. La purge efface le TEXTE seul ; les réponses confirmées survivent, ainsi que `prefillAt`/`prefillModel` (traçabilité Qualiopi, pas donnée personnelle). Greffée sur le worker quotidien, à côté de la purge des traces d'envoi.
+5. **Le mode se déduit, on ne le demande pas** : un questionnaire déjà entamé au clavier passe en `HYBRIDE`, un questionnaire vierge en `TRANSCRIPT`.
+6. **Aucune migration** : le lot A avait déjà posé `transcriptText`, `transcriptSource`, `prefillModel`, `prefillAt`, `AnswerOrigin.IA_TRANSCRIPT`, `aiConfidence`, `aiQuote`, `confirmedAt`, `confirmedById`.
+
+**Reste ouvert après le lot C :**
+
+- **Le seuil de 0,7 n'est pas encore réglable par tenant.** Il est un paramètre de `trierParException`, pas un champ de `TenantEmailSettings` : le rendre configurable demande une migration, à faire quand deux R1 réels auront dit si 0,7 est le bon nombre.
+- **Le registre des traitements ne connaît pas encore le transcript.** Le lot C crée un stockage de données personnelles (verbatim d'une conversation, propos nommés sur des salariés non informés) absent du registre art. 30. Amendement à porter, avec la durée de 90 jours et la base légale.
+- **L'import direct Plaud reste au lot H**, comme prévu : v1 = collage et dépôt de fichier (`.txt`, `.md`, `.vtt`, `.srt`).
+
 ---
 
 ## 7. Le lien de pré-inscription par RDV (`EnrollmentBatch`)

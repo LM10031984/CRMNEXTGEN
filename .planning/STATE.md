@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Lot F — deux tours de relecture passés (D-22 à D-25), aperçu semé et vérifié écran par écran, #38 en attente du feu vert de Laurent
-last_updated: "2026-09-10T16:00:00.000Z"
+stopped_at: Lot C (transcript) construit sur `chaine/lot-c-transcript` — moteurs purs, revue par exception, filtre « rien de non confirmé ne sort », purge J+90. PAS fusionné, et le « fini quand » attend un transcript réel de Laurent.
+last_updated: "2026-09-10T19:50:00.000Z"
 last_activity: "2026-09-10 (arbitrages) - TRACFIN ramené à UNE demi-journée (4 h sur site, 8 h conv.) dans le jeu de démo. **D-25 précisée** : le ×2 est une règle de TARIFICATION, la convention n'a pas à nommer deux formateurs — et **D-25 bis** pose la conséquence juste en dessous, pour que les deux se lisent ensemble : ce même facteur fixe le nombre d'heures DÉCLARÉ au financeur, qui s'imprime sur la convention et l'attestation. **D-6 reformulée en toutes lettres** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » — réponse ET source à consigner dès que Laurent les a ; non bloquant pour le lot F, qui ne produit aucun document conventionnel. **D-26 posée, hors lot F** : Laurent anime parfois SEUL, donc le nombre de formateurs doit être corrigeable PAR SESSION avant émission des documents (heures conventionnées dérivées, émargement cohérent) — à planifier après F. 2026-09-10 (2e tour) - **D-25** : `TrainingProduct.durationHours` porte les heures CONVENTIONNÉES, tranché sur preuve (journées Faros FRM-0004..0007 = 336 € pour durationHours 8, et le champ alimente convention + attestation AGEFICE). La page publique affichait « 36 h » nu ; elle nomme désormais les deux valeurs via `decrireDureeProduit`. **Le seed de démo se trompait** — il y avait mis les heures sur site, la convention aurait déclaré 36 h là où le financeur en attend 72 ; les produits se déclarent maintenant en demi-journées. **D-24** : quatre tuiles exclusives et totalisantes (Non rendu · Pièces manquantes · Rejeté · Bon), somme = effectif attendu ; « en cours de vérification » passe en sous-libellé. **Dates** : `lib/dates-fr.ts` créé, la classe Tailwind `capitalize` retirée des trois écrans (elle majusculait chaque mot). Gates : lint, tsc, 2467 tests. 2026-09-10 (soir) - Relecture du lot F sur l'aperçu Vercel, trois points traités. **D-22** : une campagne porte TOUJOURS une agence (`organizationId` non-null) ; le diagnostic et le lead redeviennent du contexte. Le défaut était plus large que constaté — aucun écran ne menait au formulaire pré-rattaché, donc 100 % des campagnes naissaient orphelines : bouton « Organiser les pré-inscriptions » posé sur la fiche diagnostic. **D-23** : les créneaux se comptent en demi-journées (défaut matin, préréglages Matin/Après-midi/Journée 2×4 h), chaque date annonce ses heures conventionnées dérivées de `conventionedHoursPerHalfDay` — une seule source, ligne rouge §8.1 tenue. **Défaut trouvé en relisant l'aperçu** : la page publique annonçait « 07:00 – 11:00 » un créneau de 09:00, le rendu serveur tournant en UTC ; les heures se formatent désormais en Europe/Paris et les tests passent sous trois fuseaux. **Aperçu** : `seed-demo.ts` (3 produits, 2 agences, 1 lead, DEMO-DIAG-0001 avec 37 réponses et 4 indés, 1 campagne + 4 dossiers en quatre états) — la fixture canonique tombe juste, 9 demi-journées / 72 h / 12 000 € / 96 € d'écart. Migration `20260910170000_campagne_agence_obligatoire` appliquée à la base d'aperçu SEULEMENT, pas à la prod. Gates : lint, tsc, 2446 tests verts. 2026-09-10 - D-19/D-20 consignées (le catalogue est une bibliothèque de modules, l'unité de vente est le bloc de 8 h), lot I créé en §13, garde-fou de la ligne rouge posé dans l'import ; lot F à reprendre en session fraîche. 04/09 - Catalogue diagnostic corrigé (durées par profil, D-17) et appliqué en local, recommandation rejouée sans programme hors domaine (D-18) ; lot E : éditeur de proposition, PDF conforme à la maquette, lien public sans PII et devis générés au centime depuis DIAG-0001 ; socle de rendu WeasyPrint extrait en module partagé ; six défauts trouvés en jouant le parcours, PDF relu page par page"
 progress:
   total_phases: 6
@@ -345,6 +345,54 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 | 260910-o1z | **Tri cliquable sur la liste des factures.** Numéro · Date · Payeur · Montant TTC · Statut cliquables, cycle asc → desc → défaut, état dans l'URL (`?sort=&dir=`). `SortableTh` généralisé depuis les dossiers OPCO vers `components/ui/` (un seul geste dans toute l'app) ; tri fait par Postgres et non dans le navigateur (liste paginée par 50) ; `lib/invoices/list-sort.ts` valide l'URL avant Prisma et départage toujours par numéro. « Reste » et « Relances » restent fixes (valeurs calculées). Un changement de tri remet à la page 1. | 2026-09-10 | 6fceb8a | [260910-o1z-tri-cliquable-sur-la-liste-des-factures-](./quick/260910-o1z-tri-cliquable-sur-la-liste-des-factures-/) |
 
 ## Last session
+
+**Lot C — transcript — construit le 10/09/2026, branche `chaine/lot-c-transcript`, PAS fusionnée.**
+Constaté dans le code avant de commencer : A, B, D, E livrés, **F mergé** (#38 est dans
+`origin/main`), G bloqué (pas de `SessionPricing`), I-1 en cours dans `files-chaine` (arbre sale,
+autre session) — donc C était bien le premier lot non livré, et il n'entre en collision avec I-1
+sur aucun fichier. Travaillé dans `files-audit`, dont le chantier précédent (E-9, #43) était mergé :
+`files-chaine` était occupé, la règle « une session = un worktree » a été tenue autrement.
+
+Contenu : 4 moteurs purs (`lib/diagnostic-r1/transcript/`) testés avant toute UI · onglet
+« Compte rendu » avec collage/dépôt de fichier · route `/api/diagnostic-r1/prefill`
+(`maxDuration=300`, même raison que `/api/diagnostic/traiter`) · écran de revue à trois files ·
+badge « à confirmer » + citation dans les écrans de saisie · purge RGPD J+90 greffée au worker
+quotidien. **Aucune migration** : le lot A avait tout posé.
+
+🔎 **Le vrai travail du lot n'était pas l'extraction, c'était le filtre.** Personne ne lisait
+`confirmedAt` : l'audit, la proposition et le snapshot auraient imprimé des réponses que personne
+n'avait relues — exactement ce que le « fini quand » interdit. Ils lisent maintenant par
+`REPONSES_CONFIRMEES`, et un test de contrat relit le CODE pour que le prochain lecteur ait à
+choisir explicitement. Vérifié en mutation : retirer le filtre de l'audit fait virer 2 tests rouge.
+
+⚠ **Nuance à ne pas perdre** : une extraction non confirmée COMPTE dans la progression (le champ
+est rempli à l'écran) mais ne pèse sur AUCUN chiffre. Le bandeau de la fiche le dit dans ces
+termes ; ouvrir un diagnostic en attente de relecture mène à la revue, pas au chapitre 1.
+
+Gates : `pnpm lint` vert (2 warnings préexistants), `tsc --noEmit` vert, `next build` vert (les deux
+nouvelles routes apparaissent), **2608 tests** (275 fichiers, +72).
+
+**Ce qui reste à faire à la main, et que je ne peux pas faire :**
+1. Le « fini quand » du lot C exige **un transcript RÉEL** — ≥ 60 % de pré-remplissage mesuré. Le
+   taux s'affiche à l'écran, il n'y a rien à calculer à la main ; il faut juste un vrai compte rendu.
+2. Vérifier que `AI_PROVIDER`/`OPENROUTER_API_KEY` sont posés là où tourne l'extraction (tier
+   `quality`).
+3. **Amender le registre des traitements** : le lot C crée un stockage de données personnelles
+   (verbatim, propos nommés sur des salariés non informés) qui n'y figure pas. 90 jours.
+
+Décisions consignées **dans la spec** (§6.4, bloc « Tranché à la construction du lot C ») : citation
+non ancrée = rejet et non confiance faible · non confirmé = zéro chiffre · corriger vaut confirmer ·
+rétention comptée depuis la dernière preuve d'usage · mode déduit, jamais demandé.
+
+Ouvert après C : le seuil 0,7 n'est pas encore réglable par tenant (migration à faire quand deux R1
+réels auront dit si 0,7 est le bon nombre) · import Plaud toujours au lot H.
+
+Prochain lot conseillé : **I-1** (en cours dans `files-chaine`), puis **G** dès que
+`SessionPricing` (phase 23) est livrée. **D-6** (4 h ou 8 h déclarées) et **D-26** (nombre de
+formateurs par session) restent ouvertes et bloquent les documents conventionnels, pas C.
+
+---
+
 
 Stopped at: **la chaîne diagnostic est EN PRODUCTION (10/09)** — lots A, B, D, E et le socle du lot F. Le gel décidé le 03/09 est levé sur mot de Laurent. Déroulé : merge (6 conflits, tous nés des commits du stand présents en double — main portait à chaque fois la version la plus récente), 4 migrations additives appliquées sur Supabase, 18 `FundingRule` créées, catalogue diagnostic importé (7 produits inactifs, 86 modules, **0 durée recalculée** — ligne rouge D-20 tenue). 🔀 Écart en cours de route : Laurent a fusionné la **PR #32** (facturation électronique) dans `main` à 12h28, pendant la session — les deux chantiers ont donc été intégrés ensemble, un seul conflit (`schema.prisma`, alignement + modèles ajoutés au même endroit), prouvé sans perte par un `migrate diff` identique avant/après. Les 2 commits « horaires depuis les créneaux » restent sur `quick/260902-diagnostic-boucle`, non fusionnés. ⚠ RESTE OUVERT (hérité du 08/09) : la 3ᵉ question du matin — les « icônes grises avec une page et un ? » dans la rubrique documents — jamais élucidée faute de capture d'écran ; aucune icône de ce genre n'existe dans le code de la matrice (dont les 5 pastilles sont Check / Check plein / AlertTriangle / X / Minus).
 Last commit: 21edf93 — merge: intégrer le lot 1 de la facturation électronique (PR #32)
