@@ -21,10 +21,49 @@ export type CellPdfRef = {
 };
 
 export type CellState =
-  | { state: 'GENERATED'; pdfRef: CellPdfRef }
+  /**
+   * Lot 0 — trois qualificatifs ADDITIFS sur un document généré, exclusifs à
+   * l'affichage dans cet ordre de gravité :
+   *  · `stub`         (0.3) contenu GÉNÉRIQUE — l'IA a échoué et deux stagiaires
+   *                   ont mot pour mot le même texte. Pire qu'un document absent :
+   *                   il a l'air d'une preuve ;
+   *  · `stale`        (0.2) un champ que le document PORTE a changé depuis sa
+   *                   génération (empreinte recalculée) ;
+   *  · `unverifiable` (0.2) type couvert par l'empreinte, mais document produit
+   *                   sans empreinte. Ni périmé ni à jour : inconnu, et on le dit.
+   *
+   * `engaged` n'est pas un état d'affichage mais une contrainte d'action : la
+   * sortie du document est PROUVÉE (email tracé, dossier parti, signature).
+   */
+  | {
+      state: 'GENERATED';
+      pdfRef: CellPdfRef;
+      stale?: boolean;
+      stub?: boolean;
+      unverifiable?: boolean;
+      engaged?: boolean;
+    }
   | { state: 'MANUAL_OK'; pdfRef?: CellPdfRef; warning?: 'no_proof' }
   | { state: 'MISSING' }
   | { state: 'NA' };
+
+/**
+ * Ensembles d'ids qualifiant les documents d'une session (lot 0).
+ *
+ * Regroupés dans un objet plutôt qu'en paramètres positionnels : la fonction en
+ * prenait déjà six, et quatre ensembles de `string` côte à côte auraient fini
+ * par être passés dans le désordre sans que le typage n'en dise rien.
+ */
+export interface CellFlagSets {
+  /** Documents dont une donnée rendue a bougé depuis la génération (0.2). */
+  stale?: ReadonlySet<string>;
+  /** PedagogicalAsset au contenu générique (0.3). */
+  stub?: ReadonlySet<string>;
+  /** Documents d'un type couvert par l'empreinte, mais sans empreinte (0.2). */
+  unverifiable?: ReadonlySet<string>;
+  /** Documents dont la sortie de la maison est prouvée (0.2). */
+  engaged?: ReadonlySet<string>;
+}
 
 /**
  * Dérive l'état d'une cellule matrice à partir des sources documentaires.
@@ -45,6 +84,9 @@ export type CellState =
  * @param productDocs Index DocType → Document pour le produit de cette session (Programme, etc.).
  * @param sessionDocs Index DocType → Document pour cette session (déroulé, grille, checklist).
  * @param pedagogicalAssets Index DocType → PedagogicalAsset pour ce participant.
+ * @param flags Ensembles qualifiant les documents (lot 0). Optionnel : un
+ *   appelant qui ne les passe pas retrouve exactement le comportement d'avant,
+ *   sans « à jour » de complaisance.
  */
 export function deriveCellState(
   docType: string,
@@ -53,6 +95,7 @@ export function deriveCellState(
   productDocs: Map<string, { id: string }>,
   sessionDocs: Map<string, { id: string }>,
   pedagogicalAssets: Map<string, { id: string }>,
+  flags?: CellFlagSets,
 ): CellState {
   const manual = participant.docStatus?.[docType];
 
@@ -64,19 +107,38 @@ export function deriveCellState(
     return { state: 'MANUAL_OK' };
   }
 
-  const partDoc = participantDocs.get(docType);
-  if (partDoc) return { state: 'GENERATED', pdfRef: { kind: 'document', id: partDoc.id } };
+  /** Qualificatifs d'un Document : périmé / non vérifiable / engagé. */
+  const qualifie = (id: string) => ({
+    ...(flags?.stale?.has(id) ? { stale: true } : {}),
+    ...(flags?.unverifiable?.has(id) ? { unverifiable: true } : {}),
+    ...(flags?.engaged?.has(id) ? { engaged: true } : {}),
+  });
 
+  const partDoc = participantDocs.get(docType);
+  if (partDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'document', id: partDoc.id }, ...qualifie(partDoc.id) };
+
+  // Les PedagogicalAsset n'ont pas de colonne `sourceFingerprint` : jamais
+  // marqués périmés, jamais marqués à jour non plus. En revanche ce sont les
+  // SEULS à pouvoir être génériques (les Document sont des gabarits
+  // déterministes — cf. resolve-docs.ts).
   const asset = pedagogicalAssets.get(docType);
-  if (asset) return { state: 'GENERATED', pdfRef: { kind: 'asset', id: asset.id } };
+  if (asset)
+    return {
+      state: 'GENERATED',
+      pdfRef: { kind: 'asset', id: asset.id },
+      ...(flags?.stub?.has(asset.id) ? { stub: true } : {}),
+    };
 
   const sessDoc = sessionDocs.get(docType);
-  if (sessDoc) return { state: 'GENERATED', pdfRef: { kind: 'sessionDoc', id: sessDoc.id } };
+  if (sessDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'sessionDoc', id: sessDoc.id }, ...qualifie(sessDoc.id) };
 
   // Bug P0 anti-régression : PROGRAMME a Document.entityType='product'
   // partagé entre tous les participants. La cellule lit ce ref partagé.
   const prodDoc = productDocs.get(docType);
-  if (prodDoc) return { state: 'GENERATED', pdfRef: { kind: 'productDoc', id: prodDoc.id } };
+  if (prodDoc)
+    return { state: 'GENERATED', pdfRef: { kind: 'productDoc', id: prodDoc.id }, ...qualifie(prodDoc.id) };
 
   return { state: 'MISSING' };
 }
@@ -102,6 +164,7 @@ export function buildMatrixData(
   }>,
   productDocs: Map<string, { id: string }>,
   sessionDocs: Map<string, { id: string }>,
+  flags?: CellFlagSets,
 ): Array<{ participantId: string; cells: Record<string, CellState> }> {
   return participants.map((p) => {
     const cells: Record<string, CellState> = {};
@@ -113,6 +176,7 @@ export function buildMatrixData(
         productDocs,
         sessionDocs,
         p.pedagogicalAssets,
+        flags,
       );
     }
     return { participantId: p.id, cells };

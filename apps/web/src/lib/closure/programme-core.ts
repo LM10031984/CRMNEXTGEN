@@ -17,7 +17,9 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
-import { resoudreTarifProgramme } from './tarif-programme';
+import { resoudrePrixProgramme } from './tarif-programme';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 /**
  * Cœur SANS auth du programme PRODUIT (réutilisable par scripts pipeline).
@@ -116,6 +118,14 @@ export async function generateProgrammeForProductCore(
 
   const hash = createHash('sha256').update(pdfBuffer).digest('hex');
 
+  // Lot 0 · 0.2 — empreinte des champs rendus (contenu pedagogique + tarif
+  // catalogue du produit).
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'PROGRAMME',
+    productId,
+  });
+
   // Reutilise un Document existant pour ce produit avec le meme hash
   const existing = await prisma.document.findFirst({
     where: {
@@ -127,6 +137,12 @@ export async function generateProgrammeForProductCore(
     },
   });
   if (existing) {
+    if (sourceFingerprint && existing.sourceFingerprint !== sourceFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
   }
 
@@ -146,6 +162,7 @@ export async function generateProgrammeForProductCore(
       entityId: productId,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint,
     },
   });
 
@@ -183,13 +200,36 @@ export async function generateProgrammeForSessionCore(
       product: true,
       location: true,
       trainers: { include: { person: true } },
+      participants: {
+        select: {
+          priceHT: true,
+          sponsorOrgId: true,
+          sponsorOrg: { select: { legalForm: true } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+        },
+      },
     },
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
   const product = session.product;
   if (!product) return { ok: false, error: 'Produit lié à la session manquant' };
 
-  const prixHT = resoudreTarifProgramme(session.pricePerLearner, product.priceHT);
+  // Une convention d'entreprise engage sur un montant GLOBAL : le programme doit
+  // annoncer ce total, pas un prix par tête (correction du 02/09).
+  const prix = resoudrePrixProgramme({
+    inscrits: session.participants.map((p) => ({
+      priceHT: Number(p.priceHT),
+      sponsorOrgId: p.sponsorOrgId,
+      couvertParConvention: releveDeLaConvention({
+        sponsorLegalForm: p.sponsorOrg?.legalForm,
+        roleChezSponsor:
+          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+      }),
+    })),
+    tarifSession: session.pricePerLearner,
+    prixProduit: product.priceHT,
+  });
+  const prixHT = prix.montantHT;
   if (!(prixHT > 0)) {
     return {
       ok: false,
@@ -223,6 +263,7 @@ export async function generateProgrammeForSessionCore(
     produitCode: product.code,
     produitDureeHeures: product.durationHours,
     produitPriceHT: prixHT,
+    prixMode: prix.mode,
     produitObjectifs: objectives,
     produitProgrammeMd: programmeMd,
     produitPrerequisites: product.prerequisites,
@@ -254,11 +295,25 @@ export async function generateProgrammeForSessionCore(
 
   // Idempotence par le CONTENU : changer le tarif change le hash, donc produit
   // un nouveau document ; recliquer sans rien changer n'en crée aucun.
+  // Lot 0 · 0.2 — meme contenu pedagogique, mais le TARIF de la session : c'est
+  // exactement le champ qui bouge apres coup et rend le PDF faux.
+  const sessionFingerprint = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'PROGRAMME',
+    sessionId,
+  });
+
   const existing = await prisma.document.findFirst({
     where: { tenantId, type: 'PROGRAMME', entityType: 'session', entityId: sessionId, hashSha256: hash },
-    select: { id: true, pdfUrl: true },
+    select: { id: true, pdfUrl: true, sourceFingerprint: true },
   });
   if (existing && !opts.force) {
+    if (sessionFingerprint && existing.sourceFingerprint !== sessionFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint: sessionFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id, pdfUrl: existing.pdfUrl };
   }
 
@@ -286,6 +341,7 @@ export async function generateProgrammeForSessionCore(
       sessionId,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint: sessionFingerprint,
     },
   });
 

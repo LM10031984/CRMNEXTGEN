@@ -209,6 +209,32 @@ describe('createSignedDownloadUrl (Supabase)', () => {
     const url = await storage.createSignedDownloadUrl('qualiof-docs', 'k');
 
     expect(url).toBe('https://sb/dl?tok');
-    expect(createSignedUrlMock).toHaveBeenCalledWith('k', 600);
+    // Sans `downloadAs`, aucune option n'est transmise — la signed URL garde
+    // exactement le comportement d'origine.
+    expect(createSignedUrlMock).toHaveBeenCalledWith('k', 600, undefined);
+  });
+
+  it("Test 7 : `downloadAs` devient l'option download de la signature", async () => {
+    // Quick 260908-jjj — c'est CE paramètre qui donne son nom au fichier côté
+    // navigateur : les routes redirigent (302) vers cette URL, donc leur propre
+    // Content-Disposition n'est jamais appliqué en production.
+    createSignedUrlMock.mockResolvedValueOnce({
+      data: { signedUrl: 'https://sb/dl?tok&download=x' },
+      error: null,
+    });
+
+    const url = await storage.createSignedDownloadUrl(
+      'qualiof-docs',
+      'closure/x/rousseau-certificat-9f13.pdf',
+      600,
+      'Certificat-de-realisation-Stephane-ROUSSEAU-SES-0110.pdf',
+    );
+
+    expect(url).toBe('https://sb/dl?tok&download=x');
+    expect(createSignedUrlMock).toHaveBeenCalledWith(
+      'closure/x/rousseau-certificat-9f13.pdf',
+      600,
+      { download: 'Certificat-de-realisation-Stephane-ROUSSEAU-SES-0110.pdf' },
+    );
   });
 });

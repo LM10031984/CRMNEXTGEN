@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Check, ChevronDown, ExternalLink, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ExternalLink, Loader2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -225,6 +225,7 @@ export function StepDocRow({
   indic,
   funder,
   pdfHref,
+  action,
 }: {
   done?: boolean;
   pending?: boolean;
@@ -250,6 +251,17 @@ export function StepDocRow({
    * reste le hub per-stagiaire.
    */
   pdfHref?: string;
+  /**
+   * Action de bout de ligne (ex : « Régénérer »), rendue À CÔTÉ du lien et non
+   * dedans — un `<button>` imbriqué dans un `<a>` est du HTML invalide, et le
+   * clic partirait sur l'ouverture du PDF.
+   *
+   * Ajouté le 02/09 : le bloc « Préparation pédagogique » montrait le programme
+   * en lecture seule, et son CTA « Compléter » ne traite que ce qui MANQUE. Un
+   * document déjà produit mais devenu faux (tarif revu) n'avait donc aucun
+   * moyen d'être refait depuis cet écran.
+   */
+  action?: React.ReactNode;
 }) {
   const showCounter = typeof count === 'number' && typeof total === 'number';
   // HOTFIX 2 (2026-06-10) — borne d'affichage : un compteur « X/Y » ne peut
@@ -301,13 +313,13 @@ export function StepDocRow({
 
   if (allDone && pdfHref) {
     return (
-      <li>
+      <li className="flex items-center gap-1">
         <a
           href={pdfHref}
           target="_blank"
           rel="noopener noreferrer"
           title={`Ouvrir ${label}`}
-          className="group flex items-center gap-2 text-sm rounded-md -mx-1.5 px-1.5 py-1 hover:bg-emerald-50/50 transition-colors"
+          className="group flex flex-1 min-w-0 items-center gap-2 text-sm rounded-md -mx-1.5 px-1.5 py-1 hover:bg-emerald-50/50 transition-colors"
         >
           {inner}
           <ExternalLink
@@ -315,6 +327,20 @@ export function StepDocRow({
             aria-hidden="true"
           />
         </a>
+        {/* Le lien ci-dessus CONSULTE (onglet, nom technique de l'objet stocké) ;
+            celui-ci ENREGISTRE. Seul `?dl=1` déclenche le nom parlant — l'option
+            `download` de Supabase forçant `Content-Disposition: attachment`, on ne
+            peut pas l'appliquer à la consultation sans transformer chaque coup
+            d'œil en téléchargement. */}
+        <a
+          href={`${pdfHref}${pdfHref.includes('?') ? '&' : '?'}dl=1`}
+          aria-label={`Télécharger ${label}`}
+          title="Télécharger avec un nom de fichier lisible"
+          className="shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        </a>
+        {action}
       </li>
     );
   }

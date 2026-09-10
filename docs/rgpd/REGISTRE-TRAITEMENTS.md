@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| **Version** | 1.4 |
-| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) — amendé le 2026-09-01 (v1.3, Traitement 9 : diagnostic express du stand) — amendé le 2026-09-04 (v1.4, Traitement 10 : signature électronique des pièces contractuelles) |
+| **Version** | 1.6 |
+| **Date de rédaction** | 2026-07-06 (v1.0) — amendé et validé le 2026-07-07 (v1.1) — amendé le 2026-08-28 (v1.2, Traitement 2 : inscriptions publiques par session) — amendé le 2026-09-01 (v1.3, Traitement 9 : diagnostic express du stand) — amendé le 2026-09-02 (v1.4, sous-traitant SMTP : OVH → Google Workspace ; v1.5, Traitement 5 : les traces d'envoi `EmailMessage` deviennent effectives + purge automatique) — amendé le 2026-09-10 (v1.6, Traitement 10 : signature électronique des pièces contractuelles) |
 | **Responsable de traitement** | Start Academy — Organisme de formation certifié Qualiopi (siège : Vence) |
 | **Contact** | laurent@start-academy.fr |
 | **Rédaction** | Générée par assistance IA (Claude), sous contrôle du responsable de traitement |
-| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.**<br>⏳ **v1.3 (2026-09-01) : ajout du Traitement 9 (diagnostic express du stand, base légale consentement, conservation 24 mois) — à contresigner par le responsable de traitement.**<br>⏳ **v1.4 (2026-09-04) : ajout du Traitement 10 (signature électronique via DocuSeal, instance UE, conservation 5 ans) — à contresigner. ⚠ Gate : le DPA DocuSeal doit être accepté avant tout envoi sur un dossier réel (lot C).** |
+| **Statut** | ✅ **Validé le 2026-07-07 par Laurent MARX, responsable de traitement (amendement : durée de conservation CNI/RIB étendue)** — gate D-13 levé.<br>⏳ **v1.2 (2026-08-28) : le Traitement 2 a été étendu au lien public par session et à la collecte du n° de sécurité sociale — à contresigner par le responsable de traitement.**<br>⏳ **v1.3 (2026-09-01) : ajout du Traitement 9 (diagnostic express du stand, base légale consentement, conservation 24 mois) — à contresigner par le responsable de traitement.**<br>⏳ **v1.4 (2026-09-02) : le sous-traitant du transport d'emails est **Google Workspace**, pas OVH — à contresigner par le responsable de traitement.**<br>⏳ **v1.5 (2026-09-02) : Traitement 5 — la table `EmailMessage` existait au schéma mais n'avait aucun écrivain ; elle devient un stockage réel (destinataire, objet, corps, documents joints) au service d'une seconde finalité (preuve d'envoi). Durée inchangée (dossier de formation), désormais APPLIQUÉE par une purge quotidienne — **la valeur de 5 ans retenue pour l'automatiser est à contresigner**.**<br>⏳ **v1.6 (2026-09-10) : ajout du Traitement 10 (signature électronique via DocuSeal, instance UE, conservation 5 ans) — à contresigner. ⚠ Gate : le DPA DocuSeal doit être accepté avant tout envoi sur un dossier réel (lot C).** |
 
 > Ce registre couvre les traitements de données à caractère personnel opérés via l'application interne **QualiOF** (CRM/back-office de Start Academy, non commercialisé à des tiers) déployée sur infrastructure cloud (voir § Localisation des données). Il est versionné dans le dépôt de code (`docs/rgpd/`) et exportable en PDF pour présentation à un auditeur Qualiopi ou à la CNIL.
 
@@ -62,7 +62,7 @@
 | **Base légale** | Exécution du contrat (art. 6.1.b) ; obligations comptables et fiscales (art. 6.1.c). |
 | **Catégories de données** | Identité et coordonnées des payeurs (règle métier : l'auto-entrepreneur est son propre payeur — une relance facture peut donc toucher directement un apprenant), montants, dates d'échéance, emails de relance. |
 | **Catégories de personnes** | Payeurs : organisations (enseignes, financeurs OPCO/AGEFICE) et personnes physiques (apprenants auto-entrepreneurs). |
-| **Destinataires / sous-traitants** | Base et PDF factures : [dpa/supabase.md](dpa/supabase.md) · Envoi des relances : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) · Cron de relance : [dpa/railway.md](dpa/railway.md). |
+| **Destinataires / sous-traitants** | Base et PDF factures : [dpa/supabase.md](dpa/supabase.md) · Envoi des relances : [dpa/google.md](dpa/google.md) (SMTP Google Workspace) · Cron de relance : [dpa/railway.md](dpa/railway.md). ⚠ Au 2026-09-02 **aucune relance n'a jamais été transmise** : l'egress SMTP est bloqué chez Railway, d'où part le cron. |
 | **Durée de conservation** | Pièces comptables 10 ans (obligation légale du Code de commerce). Données de relance : durée du dossier. Validée par le responsable de traitement le 2026-07-07. |
 | **Mesures techniques** | `MAIL_DRY_RUN` actif tant que la bascule production n'est pas validée (aucun email réel), montants stockés en centimes, RBAC (rôle COMPTABLE), scoping `tenantId`. |
 
@@ -70,13 +70,13 @@
 
 | Rubrique | Contenu |
 |---|---|
-| **Finalité** | Envoi des convocations, notifications de documents et suivis liés aux formations. |
+| **Finalité** | 1. Envoi des convocations, notifications de documents et suivis liés aux formations.<br>2. **(v1.5)** **Preuve d'envoi** : savoir qu'un document a quitté l'organisme, à qui et quand. Sans cette trace, l'application régénérait en silence une convention déjà partie chez un financeur — le destinataire gardant une version que l'outil croyait obsolète (correctif du 02/09/2026, lot 0 · 0.2). |
 | **Base légale** | Exécution du contrat de formation (art. 6.1.b). |
-| **Catégories de données** | Adresses email des apprenants et payeurs, contenus des emails (noms, sessions, pièces jointes documentaires). |
+| **Catégories de données** | Adresses email des apprenants et payeurs, contenus des emails (noms, sessions, pièces jointes documentaires).<br>**(v1.5) Ce qui est effectivement écrit en base** dans `EmailMessage`, et seulement quand l'envoi emportait des documents : expéditeur, **destinataire**, **objet**, **corps du message**, **ids des documents joints** (`documentIds`), horodatage d'envoi, rattachement libre (ex. `opcoSubmission:<id>`). **Rien n'est écrit** pour un envoi sans pièce jointe, ni en mode `MAIL_DRY_RUN`, ni quand les réglages `TenantEmailSettings` suppriment l'envoi, ni sur échec SMTP : on ne trace que ce qui est réellement parti. |
 | **Catégories de personnes** | Apprenants, payeurs, formateurs. |
-| **Destinataires / sous-traitants** | Transport SMTP : [dpa/ovh-smtp.md](dpa/ovh-smtp.md). |
-| **Durée de conservation** | Traces d'envoi (`EmailMessage`) conservées avec le dossier de formation. Validée par le responsable de traitement le 2026-07-07. |
-| **Mesures techniques** | **Aucun envoi de masse vers les apprenants sans action explicite** (exigence du responsable de traitement : `notifyLearners` défaut `false`, boutons manuels, opt-in par case à cocher) ; crons de relance préinscriptions/OPCO volontairement débranchés ; `MAIL_DRY_RUN` en staging ; connexion SMTP chiffrée (SSL :465). |
+| **Destinataires / sous-traitants** | Transport SMTP : [dpa/google.md](dpa/google.md) — **Google Workspace** (`smtp.gmail.com:587`, compte d'envoi `formation@start-academy.fr`). La fiche [dpa/ovh-smtp.md](dpa/ovh-smtp.md) décrivait le fournisseur envisagé jusqu'au 2026-09-02 ; **aucun email n'a jamais transité par OVH** (le circuit était en `MAIL_DRY_RUN` jusqu'à l'activation, puis a été ouvert directement sur Workspace). |
+| **Durée de conservation** | Traces d'envoi (`EmailMessage`) conservées avec le dossier de formation. Validée par le responsable de traitement le 2026-07-07.<br>**(v1.5) Application effective** : purge automatique quotidienne (worker 8h Europe/Paris), échéance ancrée sur la **fin de la formation la plus tardive** parmi les documents joints — pas sur la date d'envoi, sinon une convocation expédiée six mois avant la session serait purgée six mois avant le dossier qu'elle documente. Trace orpheline (documents supprimés) : repli sur la date d'envoi. **Durée retenue pour automatiser : 5 ans** (`DUREE_CONSERVATION_DOSSIER_FORMATION_ANNEES`, `lib/rgpd/retention.ts` — une seule valeur à changer). Justification : le cycle de certification Qualiopi est de 3 ans, mais les contrôles a posteriori des financeurs (AGEFICE, OPCO, DREETS) portent au-delà — même raisonnement que l'extension décidée le 2026-07-07 pour les scans CNI/RIB. ⏳ **À contresigner.** |
+| **Mesures techniques** | **Aucun envoi de masse vers les apprenants sans action explicite** (exigence du responsable de traitement : `notifyLearners` défaut `false`, boutons manuels, opt-in par case à cocher) ; crons de relance préinscriptions/OPCO volontairement débranchés ; `MAIL_DRY_RUN` en staging ; connexion SMTP chiffrée (STARTTLS :587) ; **garde-fou applicatif par catégorie** (`TenantEmailSettings`, fail-closed : sans case cochée, rien ne part).<br>**(v1.5)** Écriture de la trace **après** le départ SMTP réel et **hors du chemin d'erreur** : un échec d'enregistrement n'annule pas l'envoi et ne fait pas croire à un échec. Minimisation : aucune ligne pour les envois sans document joint. Purge quotidienne journalisée (nombre de traces supprimées, sans PII).<br>⚠ **Effet de bord assumé** : la trace d'envoi est aussi ce qui prouve qu'un document est « engagé » et ne doit pas être régénéré. La purger fait retomber le document en « libre ». Acceptable **uniquement** parce qu'à l'échéance le dossier de formation lui-même est hors durée de conservation ; si cette durée devait être raccourcie sous celle des documents, ce raisonnement tomberait. |
 
 ## Traitement 6 — Synchronisation Google Calendar (rappels formations)
 
@@ -124,13 +124,34 @@
 |---|---|
 | **Finalité** | Proposer à un visiteur de salon, en 90 secondes, la journée de formation du catalogue qui correspond à sa priorité déclarée ; lui envoyer par email le programme de cette journée ; permettre un rappel commercial qu'il a lui-même sollicité. |
 | **Base légale** | **Consentement** (art. 6.1.a) — case à cocher obligatoire et horodatée sur le formulaire, portant explicitement sur l'envoi du programme **et** sur le rappel. Sans la case, aucune donnée n'est enregistrée. |
+| **Minimisation vers l'IA** | Le prompt d'assemblage du programme ne contient **que les réponses aux questions fermées** et le programme du catalogue : ni prénom, ni nom, ni email, ni téléphone ne sont transmis à OpenRouter/Anthropic. |
 | **Catégories de données** | Réponses à 8 questions fermées de qualification professionnelle (rôle, taille d'équipe, origine des affaires, évolution des mandats, usage de l'IA, priorité déclarée, formation suivie dans l'année) ; créneau de rappel souhaité ; identité et coordonnées saisies (prénom, nom, email, téléphone — le téléphone devient obligatoire si la personne demande un rappel dans la semaine). **Aucune pièce, aucun document, aucune donnée sensible au sens de l'art. 9.** |
 | **Catégories de personnes** | Visiteurs professionnels du salon (agents et conseillers immobiliers, dirigeants d'agence) — prospects. |
-| **Destinataires / sous-traitants** | Base : [dpa/supabase.md](dpa/supabase.md) · Runtime du formulaire public : [dpa/vercel.md](dpa/vercel.md) · Assemblage du programme personnalisé par IA : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic en sous-sous-traitance : [dpa/anthropic.md](dpa/anthropic.md)) · Envoi de l'email : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) · Rattrapage des envois : [dpa/railway.md](dpa/railway.md). **Aucune diffusion à un tiers, aucune revente, aucun partage avec les autres exposants du salon.** |
+| **Destinataires / sous-traitants** | Base : [dpa/supabase.md](dpa/supabase.md) · Runtime du formulaire public : [dpa/vercel.md](dpa/vercel.md) · Assemblage du programme personnalisé par IA : [dpa/openrouter.md](dpa/openrouter.md) (modèles Anthropic en sous-sous-traitance : [dpa/anthropic.md](dpa/anthropic.md)) · Envoi de l'email : [dpa/google.md](dpa/google.md) (SMTP Google Workspace) · Rattrapage des envois : cron Vercel, même runtime que le formulaire ([dpa/vercel.md](dpa/vercel.md)) — **Railway ne participe plus à ce traitement**. **Aucune diffusion à un tiers, aucune revente, aucun partage avec les autres exposants du salon.** |
 | **Durée de conservation** | **24 mois** à compter de la collecte pour les prospects sans suite (durée usuelle recommandée par la CNIL en prospection commerciale), puis effacement. Un prospect qui devient apprenant bascule dans le Traitement 1 et suit sa durée. Effacement immédiat sur demande (`laurent@start-academy.fr`). La soumission (`DiagnosticSubmission`) est supprimée **en cascade** avec le lead — pas de PII orpheline. |
 | **Mesures techniques** | Consentement horodaté et tracé en clair dans la fiche du prospect ; le formulaire ne LIT aucune donnée, il n'en crée que ; aucune écriture en base avant validation du formulaire complet ; plafond de 250 soumissions / 15 min / IP (garde-fou anti-remplissage automatisé, calibré pour un événement où plusieurs centaines de personnes partagent la même IP publique) ; validation serveur de toutes les réponses contre la liste fermée des questions (le navigateur ne dicte pas le contenu enregistré) ; envoi de l'email conditionné à une case dédiée dans Paramètres → Emails (fail-closed : décochée, rien ne part) ; email transactionnel unitaire déclenché par la personne elle-même — **aucun envoi de masse**. |
 | **Ce qui n'est PAS fait** | Pas de création de compte, pas de mot de passe, pas d'upload de pièce, pas de cookie de mesure d'audience sur la page publique, pas de croisement avec un fichier acheté, pas de profilage automatisé produisant un effet juridique (le routage vers une problématique est un simple barème de points, explicable et communicable à la personne). |
 
+
+## Traitement 10 — Signature électronique des pièces contractuelles
+
+> **Ajouté le 2026-09-10 (v1.6)** — spec « Signature électronique & retour des
+> documents signés » du 2026-09-04. Remplace Adobe Sign et met fin à
+> l'éparpillement des PDF signés sur Google Drive : la source de vérité
+> documentaire redevient QualiOF.
+
+| Rubrique | Contenu |
+|---|---|
+| **Finalité** | Faire signer électroniquement les pièces contractuelles d'une formation — convention de formation, demande de prise en charge AGEFICE, attestation d'assiduité — et **rapatrier le document signé et sa preuve de signature** dans le dossier de formation, pour les contrôles des financeurs et l'audit Qualiopi. |
+| **Base légale** | Exécution du contrat de formation (art. 6.1.b) ; obligations légales de l'OF et exigences des financeurs (art. 6.1.c) pour la conservation d'une preuve de signature opposable. |
+| **Catégories de données** | **Contenu du document signé** : identité et coordonnées de l'entreprise bénéficiaire et de son représentant, identité complète du stagiaire (nom, prénom, date et lieu de naissance, adresse), **n° de sécurité sociale** et **IBAN/BIC** pour le dossier AGEFICE, SIRET, montants et heures.<br>**Données propres à la signature**, constituant le certificat : nom, adresse email et rôle du signataire, **adresse IP**, user-agent, horodatages d'envoi/ouverture/signature, **image de la signature manuscrite tracée**. |
+| **Catégories de personnes** | Dirigeants des entreprises bénéficiaires, stagiaires (dont travailleurs indépendants AGEFICE), signataire de l'organisme de formation. |
+| **Destinataires / sous-traitants** | Signature électronique : [dpa/docuseal.md](dpa/docuseal.md) (**instance UE**) · Envoi des liens de signature : [dpa/google.md](dpa/google.md) (SMTP Google Workspace) — **c'est QualiOF qui écrit aux signataires, pas le prestataire de signature** · Stockage du signé et du certificat : [dpa/supabase.md](dpa/supabase.md) · Rendu du PDF à signer : [dpa/railway.md](dpa/railway.md). |
+| **Durée de conservation** | **5 ans**, alignée sur la durée du dossier de formation et de financement (contrôles a posteriori AGEFICE / OPCO / DREETS, cycle de certification Qualiopi) — cohérent avec l'amendement du 2026-07-07 sur les pièces justificatives. Le document signé et son certificat sont **rapatriés dans le bucket privé QualiOF** dès la complétion : le prestataire n'est pas la source de vérité, sa copie résiduelle est purgée à l'échéance. |
+| **Mesures techniques** | **Aucun email envoyé par le prestataire de signature** (`send_email: false` sur l'envoi et sur chaque signataire) : les liens partent du mailer QualiOF, fail-closed, avec catégorie décochable par tenant — le prestataire ne constitue aucune liste de diffusion à partir de nos signataires.<br>**Webhooks authentifiés** HMAC-SHA256 sur `timestamp.corps`, fenêtre de rejeu de 5 minutes, comparaison à temps constant ; **sans secret configuré, tout webhook est rejeté**.<br>**Fail-closed en production** : sans clé API ni région configurées, la fonction est désactivée avec un message à l'admin — jamais d'envoi silencieux ni de repli en mode simulé.<br>**Aucun modèle de document stocké chez le prestataire** : chaque envoi part du PDF généré par QualiOF, les champs de signature étant posés par des ancres textuelles invisibles — pas de copie de gabarit porteuse de PII côté prestataire.<br>**Signataires résolus, jamais devinés** : sans email identifié, l'envoi est bloqué avec un message nominatif plutôt qu'adressé à une adresse approximative.<br>Signé et certificat servis par signed URL à TTL court depuis un bucket privé. |
+| **Ce qui n'est PAS fait** | Pas de signature qualifiée ni avancée avec vérification d'identité par pièce (niveau simple/SES assumé) ; pas de copie d'archive sur un Drive tiers (décision O-1 : Drive n'est plus une destination de travail) ; pas de conservation du document chez le prestataire comme source de vérité. |
+
+---
 
 ---
 
@@ -143,29 +164,10 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 | **Supabase** (projet `gntlqyscahbgjrmsbzil`) | Base Postgres + Storage (pièces CNI/RIB/PDF) | `eu-west-1` (définitive — région immuable, dérogation actée) | Irlande (UE) |
 | **Vercel** | Application + fonctions serverless | `cdg1` | France (Paris) |
 | **Railway** | Worker de génération + moteurs PDF | `europe-west4` | Pays-Bas (UE) |
-| **OVH** (SMTP `ssl0.ovh.net:465`) | Envoi d'emails | Infrastructure OVH | France (UE) |
+| **Google Workspace** (SMTP `smtp.gmail.com:587`) | Envoi d'emails | Infrastructure mondiale Google — transferts encadrés par le Cloud Data Processing Addendum | Google Ireland Ltd (contractant UE) |
 | **DocuSeal** (`api.docuseal.eu`) | Signature électronique des pièces contractuelles | Instance **EU Cloud** | UE — région exacte à confirmer sur le DPA |
 
 **Note Vercel :** les fonctions s'exécutent en `cdg1` (Paris) mais le réseau edge de Vercel est mondial — les réponses HTTP transitent par le point de présence le plus proche du visiteur (voir [dpa/vercel.md](dpa/vercel.md)).
-
-## Traitement 10 — Signature électronique des pièces contractuelles
-
-> **Ajouté le 2026-09-04 (v1.4)** — spec « Signature électronique & retour des
-> documents signés ». Remplace Adobe Sign et met fin à l'éparpillement des PDF
-> signés sur Google Drive : la source de vérité documentaire redevient QualiOF.
-
-| Rubrique | Contenu |
-|---|---|
-| **Finalité** | Faire signer électroniquement les pièces contractuelles d'une formation — convention de formation, demande de prise en charge AGEFICE, attestation d'assiduité — et **rapatrier le document signé et sa preuve de signature** dans le dossier de formation, pour les contrôles des financeurs et l'audit Qualiopi. |
-| **Base légale** | Exécution du contrat de formation (art. 6.1.b) ; obligations légales de l'OF et exigences des financeurs (art. 6.1.c) pour la conservation d'une preuve de signature opposable. |
-| **Catégories de données** | **Contenu du document signé** : identité et coordonnées de l'entreprise bénéficiaire et de son représentant, identité complète du stagiaire (nom, prénom, date et lieu de naissance, adresse), **n° de sécurité sociale** et **IBAN/BIC** pour le dossier AGEFICE, SIRET, montants et heures.<br>**Données propres à la signature**, constituant le certificat : nom, adresse email et rôle du signataire, **adresse IP**, user-agent, horodatages d'envoi/ouverture/signature, **image de la signature manuscrite tracée**. |
-| **Catégories de personnes** | Dirigeants des entreprises bénéficiaires, stagiaires (dont travailleurs indépendants AGEFICE), signataire de l'organisme de formation. |
-| **Destinataires / sous-traitants** | Signature électronique : [dpa/docuseal.md](dpa/docuseal.md) (**instance UE**) · Envoi des liens de signature : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) — **c'est QualiOF qui écrit aux signataires, pas le prestataire** · Stockage du signé et du certificat : [dpa/supabase.md](dpa/supabase.md) · Rendu du PDF à signer : [dpa/railway.md](dpa/railway.md). |
-| **Durée de conservation** | **5 ans**, alignée sur la durée du dossier de formation et de financement (contrôles a posteriori AGEFICE / OPCO / DREETS, cycle de certification Qualiopi) — cohérent avec l'amendement du 2026-07-07 sur les pièces justificatives. Le document signé et son certificat sont **rapatriés dans le bucket privé QualiOF** dès la complétion : le prestataire n'est pas la source de vérité, sa copie résiduelle est purgée à l'échéance. |
-| **Mesures techniques** | **Aucun email envoyé par le prestataire** (`send_email: false` sur l'envoi et sur chaque signataire) : les liens partent du mailer QualiOF, fail-closed, avec catégorie décochable par tenant — le prestataire ne constitue aucune liste de diffusion à partir de nos signataires.<br>**Webhooks authentifiés** HMAC-SHA256 sur `timestamp.corps`, fenêtre de rejeu de 5 minutes, comparaison à temps constant ; **sans secret configuré, tout webhook est rejeté**.<br>**Fail-closed en production** : sans clé API ni région configurées, la fonction est désactivée avec un message à l'admin — jamais d'envoi silencieux ni de repli en mode simulé.<br>**Aucun modèle de document stocké chez le prestataire** : chaque envoi part du PDF généré par QualiOF, les champs de signature étant posés par des ancres textuelles invisibles — pas de copie de gabarit porteuse de PII côté prestataire.<br>**Signataires résolus, jamais devinés** : sans email identifié, l'envoi est bloqué avec un message nominatif plutôt qu'adressé à une adresse approximative.<br>Signé et certificat servis par signed URL à TTL court depuis un bucket privé. |
-| **Ce qui n'est PAS fait** | Pas de signature qualifiée ni avancée avec vérification d'identité par pièce (niveau simple/SES assumé) ; pas de copie d'archive sur un Drive tiers (décision O-1 : Drive n'est plus une destination de travail) ; pas de conservation du document chez le prestataire comme source de vérité. |
-
----
 
 ## Transferts hors UE
 
@@ -184,8 +186,8 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 | 3 | Supabase | Base Postgres + Storage | TOUTE la base (PII apprenants, `SensitiveData`) + pièces (CNI/RIB/PDF) | [dpa/supabase.md](dpa/supabase.md) |
 | 4 | Vercel | Hébergement application | Runtime app : cookies de session, formulaire public de préinscription | [dpa/vercel.md](dpa/vercel.md) |
 | 5 | Railway | Worker + moteurs PDF | Génération de documents, logs (audités D-17, plan 22-02) | [dpa/railway.md](dpa/railway.md) |
-| 6 | Google | Calendar (events sessions) + Drive (programmes) | Noms sessions/formateurs, emails apprenants en attendees | [dpa/google.md](dpa/google.md) |
-| 7 | OVH | SMTP transactionnel | Emails apprenants/payeurs (convocations, relances factures) | [dpa/ovh-smtp.md](dpa/ovh-smtp.md) |
+| 6 | Google | Calendar (events sessions) + Drive (programmes) + **SMTP transactionnel** (`smtp.gmail.com:587`) | Noms sessions/formateurs, emails apprenants en attendees ; contenu des emails sortants (convocations, relances, programme du diagnostic) | [dpa/google.md](dpa/google.md) |
+| ~~7~~ | ~~OVH~~ | ~~SMTP transactionnel~~ | **Écarté le 2026-09-02** — jamais activé, aucun email transmis. Fiche conservée à titre d'historique : [dpa/ovh-smtp.md](dpa/ovh-smtp.md) |
 | 8 | DocuSeal | Signature électronique (instance **UE**) | PDF des pièces contractuelles (identité, adresse, n° SS et IBAN véhiculés par le dossier AGEFICE) + données de signature (email, IP, horodatages, image de la signature) | [dpa/docuseal.md](dpa/docuseal.md) |
 
 ## Mesures techniques et organisationnelles (synthèse)
@@ -193,7 +195,7 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 - **Isolement des données sensibles** : table `SensitiveData` séparée (n° SS, pièce d'identité), relation 1:1 avec `Person`, suppression en cascade.
 - **Storage privé** : bucket non public, accès exclusivement par **signed URL à TTL de quelques minutes** ; upload direct-to-storage (les pièces ne transitent pas par les serveurs applicatifs).
 - **Contrôle d'accès** : RBAC 6 rôles (ADMIN/MANAGER/FORMATEUR/COMMERCIAL/COMPTABLE/LECTEUR), authentification Lucia + argon2, multi-tenant `tenantId` systématique sur les requêtes.
-- **Régions EU verrouillées** par écrit (Phase 17) avec checklist anti-défaut-US ; Supabase `eu-west-1`, Vercel `cdg1`, Railway `europe-west4`.
+- **Régions EU verrouillées** par écrit (Phase 17) avec checklist anti-défaut-US ; Supabase `eu-west-1`, Vercel `cdg1`, Railway `europe-west4`. Le seul maillon hors UE par nature est le transport d'emails (Google Workspace) — encadré par le CDPA et ses clauses contractuelles types.
 - **Sauvegardes** : backups Supabase quotidiens, rétention 7 jours, stockés dans la même région que le projet (eu-west-1, UE).
 - **Emails** : dry-run par défaut hors production, aucun envoi de masse apprenants sans action explicite (opt-in), SMTP chiffré :465.
 - **Logs** : audit des `console.*` réalisé (plan 22-02) — les logs applicatifs référencent des identifiants techniques, jamais nom/CNI/RIB en clair.
@@ -204,7 +206,7 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 1. **Backups non off-site** : les sauvegardes Supabase quotidiennes (7 jours) résident dans la **même région que le projet** (eu-west-1). Un export `pg_dump` périodique vers un stockage hors vendor est au backlog (décision D-12). Risque accepté par le responsable de traitement le 2026-07-07 (validation du registre, gate D-13).
 2. **OpenRouter sans DPA signé** en tier self-serve (voir Transferts hors UE et [dpa/openrouter.md](dpa/openrouter.md)) — mitigations : politique de non-rétention par défaut, réglages ZDR/logging OFF, passage au tier enterprise si exigé. Risque accepté par le responsable de traitement le 2026-07-07 (validation du registre, gate D-13).
 3. ~~Type de compte Google inconnu~~ — **résolu le 2026-07-07** : compte **Google Workspace** confirmé par le responsable de traitement (DPA processeur inclus, voir [dpa/google.md](dpa/google.md)).
-4. ⚠ **DocuSeal : DPA non encore récupéré ni accepté** (v1.4, 2026-09-04). Le compte est bien sur l'**instance UE** (`api.docuseal.eu`, créé le 2026-09-04). Reste à obtenir le DPA, vérifier la liste des sous-traitants ultérieurs et conserver la preuve d'acceptation. **Gate : aucun envoi sur un dossier réel avant.** Voir [dpa/docuseal.md](dpa/docuseal.md).
+4. ⚠ **DocuSeal : DPA non encore récupéré ni accepté** (v1.6, 2026-09-10). Le compte est bien sur l'**instance UE** (`api.docuseal.eu`, créé le 2026-09-04). Reste à obtenir le DPA, vérifier la liste des sous-traitants ultérieurs et conserver la preuve d'acceptation. **Gate : aucun envoi sur un dossier réel avant.** Voir [dpa/docuseal.md](dpa/docuseal.md).
 
 ---
 
@@ -212,7 +214,8 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 
 - [x] Les 8 traitements validés le 2026-07-07 sont exacts et complets.
 - [ ] **v1.3** — Traitement 9 (diagnostic express du stand) : finalité, base légale consentement et durée de conservation de 24 mois à contresigner.
-- [ ] **v1.4** — Traitement 10 (signature électronique DocuSeal) : catégories de données (dont adresse IP, image de la signature, n° SS et IBAN véhiculés par le dossier AGEFICE), hébergement UE et durée de conservation de 5 ans à contresigner. Gate associé : DPA accepté avant le lot C.
+- [ ] **v1.5** — Traitement 5 : la seconde finalité (preuve d'envoi), les données réellement écrites dans `EmailMessage` (destinataire, objet, corps, documents joints) et **la durée de 5 ans retenue pour automatiser la purge** sont à contresigner. La durée est le seul point qui appelle un arbitrage : le registre disait « avec le dossier de formation » sans nombre, il en fallait un pour purger.
+- [ ] **v1.6** — Traitement 10 (signature électronique DocuSeal) : catégories de données (dont adresse IP, image de la signature, n° SS et IBAN véhiculés par le dossier AGEFICE), hébergement UE et durée de conservation de 5 ans à contresigner. Gate associé : DPA accepté avant le lot C.
 - [x] Les durées de conservation sont confirmées — **avec un amendement** : la durée de conservation des scans CNI/RIB est **étendue** (alignée sur la durée du dossier de financement/formation, PAS de suppression après justification du financement) pour rester disponibles lors des contrôles a posteriori des financeurs (AGEFICE, OPCO, DREETS) et du cycle Qualiopi — décision du responsable de traitement du 2026-07-07 (voir Traitement 2). Les autres durées proposées sont validées telles quelles.
 - [x] La question du type de compte Google est tranchée : **Google Workspace** (DPA processeur inclus).
 - [x] Les 2 limites assumées (backups non off-site, OpenRouter self-serve) sont acceptées.
@@ -221,4 +224,4 @@ Source de vérité : `.planning/phases/17-fondations-cloud-r-gion-eu-env/17-REGI
 Cette validation lève le gate D-13 : la bascule production (plan 22-06, Wave 2) est autorisée côté RGPD.
 
 ---
-*Start Academy — Registre des traitements (art. 30 RGPD) — v1.4 — socle validé le 2026-07-07, amendements v1.2, v1.3 et v1.4 en attente de contreseing*
+*Start Academy — Registre des traitements (art. 30 RGPD) — v1.6 — socle validé le 2026-07-07, amendements v1.2 à v1.6 en attente de contreseing*

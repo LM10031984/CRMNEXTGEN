@@ -1,5 +1,12 @@
 /**
- * Phase 11 Plan 11-06 → Phase 20 Plan 20-01 — Entry-point cron relances (croner).
+ * Phase 11 Plan 11-06 → Phase 20 Plan 20-01 — Entry-point cron quotidien (croner).
+ *
+ * Deux tâches quotidiennes y vivent, dans cet ordre :
+ *  1. les relances d'impayés (raison d'être historique du process) ;
+ *  2. la purge des traces d'envoi arrivées à échéance (RGPD art. 30,
+ *     Traitement 5 — lot 0 · 0.2). Elle passe APRÈS et dans son propre
+ *     `try` : une purge qui échoue ne doit pas priver Laurent de ses relances.
+ *
  *
  * WORK-02 (D-03 « Redis viré partout ») : plus de BullMQ ni de Redis. La
  * planification quotidienne (8h Europe/Paris) renaît du code au boot du process
@@ -16,6 +23,7 @@
 import '@qualiof/shared/env'; // fail-loud au boot (parité closure-worker-postgres.ts)
 import { Cron } from 'croner';
 import { processReminderJob } from '../src/lib/invoice-reminders/worker';
+import { purgeExpiredEmailMessages } from '../src/lib/rgpd/purge-email-messages';
 
 // Quotidien 8h Europe/Paris (remplace repeat { pattern:'0 8 * * *', tz:'Europe/Paris' } BullMQ)
 const job = new Cron(
@@ -28,6 +36,20 @@ const job = new Cron(
   },
   async () => {
     await processReminderJob({ triggered_by: 'cron' });
+
+    // RGPD — le registre annonce que les traces d'envoi sont conservées « avec
+    // le dossier de formation ». Sans ce balayage, la durée annoncée ne serait
+    // qu'une phrase dans un document.
+    try {
+      const purge = await purgeExpiredEmailMessages();
+      if (purge.supprimees > 0) {
+        console.log(
+          `[invoice-reminder-worker] purge RGPD : ${purge.supprimees} trace(s) d'envoi échue(s) sur ${purge.examinees} examinée(s)`,
+        );
+      }
+    } catch (e) {
+      console.error('[invoice-reminder-worker] purge RGPD en échec', e);
+    }
   },
 );
 console.log(

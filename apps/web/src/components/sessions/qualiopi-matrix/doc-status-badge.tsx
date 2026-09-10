@@ -18,7 +18,16 @@
  * A11y : aria-label + title (couleur dupliquée par icône + texte FR).
  */
 
-import { Check, AlertTriangle, X, Minus, Loader2 } from 'lucide-react';
+import {
+  Check,
+  AlertTriangle,
+  X,
+  Minus,
+  Loader2,
+  History,
+  FileWarning,
+  FileQuestion,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DocStatusState as DocStatusStateType } from '@qualiof/shared';
 
@@ -31,11 +40,76 @@ export interface DocStatusBadgeProps {
   label: string;
   /** Si state==='MANUAL_OK' + uploadedSignedPdfKey présent → variant solid. */
   hasUploadedPdf?: boolean;
+  /**
+   * Lot 0 · 0.2 — le PDF existe mais une donnée qu'il PORTE a changé depuis sa
+   * génération. Ce n'est pas un manque : c'est un document qui ment. Il prend
+   * donc le pas sur le vert « généré ».
+   */
+  stale?: boolean;
+  /**
+   * Lot 0 · 0.3 — contenu GÉNÉRIQUE (l'IA a échoué). Pire qu'un document
+   * absent : il ressemble à une preuve, et deux stagiaires ont le même texte.
+   * Passe donc devant « périmé » comme devant « généré ».
+   */
+  stub?: boolean;
+  /**
+   * Lot 0 · 0.2 — document d'un type couvert par l'empreinte, mais produit
+   * sans empreinte (avant le 02/09/2026). Ni périmé ni à jour : on ne sait
+   * pas, et un vert de complaisance serait le mensonge qu'on corrige.
+   */
+  unverifiable?: boolean;
 }
 
 const BASE_CLS = 'inline-flex items-center justify-center h-6 w-6 rounded-full';
 
-export function DocStatusBadge({ state, warning, label, hasUploadedPdf }: DocStatusBadgeProps) {
+export function DocStatusBadge({
+  state,
+  warning,
+  label,
+  hasUploadedPdf,
+  stale,
+  stub,
+  unverifiable,
+}: DocStatusBadgeProps) {
+  if (stub) {
+    const ariaLabel = `${label} : contenu générique, à régénérer`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Contenu générique — l'IA a échoué, ce document est identique d'un stagiaire à l'autre. À régénérer avant toute remise."
+        className={cn(BASE_CLS, 'bg-red-100 text-red-700 border border-red-400')}
+      >
+        <FileWarning className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (unverifiable && !stale && state === 'GENERATED') {
+    const ariaLabel = `${label} : non vérifiable, produit avant le suivi des empreintes`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Non vérifiable — produit avant le suivi des empreintes (02/09/2026). L'application ne peut pas dire si les données ont bougé depuis. Régénérer le rend vérifiable."
+        className={cn(BASE_CLS, 'bg-slate-100 text-slate-600 border border-slate-400 border-dashed')}
+      >
+        <FileQuestion className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (stale && (state === 'GENERATED' || state === 'MANUAL_OK')) {
+    const ariaLabel = `${label} : données modifiées depuis la génération`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title="Données modifiées depuis la génération — ce PDF n'est plus à jour"
+        className={cn(BASE_CLS, 'bg-amber-100 text-amber-800 border border-amber-400')}
+      >
+        <History className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+
   if (state === 'RUNNING') {
     const ariaLabel = `${label} : génération en cours`;
     return (

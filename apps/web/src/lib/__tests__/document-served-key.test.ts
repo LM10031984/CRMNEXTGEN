@@ -44,8 +44,12 @@ describe('resolveServedDocumentKey', () => {
     expect(resolveServedDocumentKey({ ...nonSigne, signedPdfUrl: '   ' }, {}).key).toBe(nonSigne.pdfUrl);
   });
 
-  it('nomme le fichier téléchargé pour qu’on distingue signé et original', () => {
-    expect(resolveServedDocumentKey(signe, {}).suffix).toBe('-signe');
-    expect(resolveServedDocumentKey(nonSigne, {}).suffix).toBe('');
+  it('signale la version servie pour que la route sache nommer le fichier', () => {
+    // `/api/documents/[id]` en fait un suffixe « -signe » via
+    // buildDownloadFilename : signé et original se retrouvent côte à côte
+    // dans le dossier de téléchargement de l'admin.
+    expect(resolveServedDocumentKey(signe, {}).isSigned).toBe(true);
+    expect(resolveServedDocumentKey(nonSigne, {}).isSigned).toBe(false);
+    expect(resolveServedDocumentKey(signe, { original: true }).isSigned).toBe(false);
   });
 });

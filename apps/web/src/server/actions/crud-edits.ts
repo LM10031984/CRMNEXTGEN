@@ -13,6 +13,7 @@ import { Prisma, prisma } from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { buildEiLegalName, classifyEiRename } from '@/lib/persons/ei-organization-name';
 
 // ── Person ────────────────────────────────────────────────────────────────
 export async function updatePerson(input: {
@@ -29,13 +30,24 @@ export async function updatePerson(input: {
   professionalExperience?: string | null;
   professionalStatus?: string | null;
   bpfDefaultStatus?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  /** Raisons sociales d'auto-entreprises renommées dans la foulée. */
+  renamedOrgs?: string[];
+  /** Organisations liées qui portent encore l'ancien nom, à vérifier à la main. */
+  nameWarnings?: string[];
+}> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
 
+  // firstName/lastName lus AVANT l'écriture : ils servent à reconnaître les
+  // auto-entreprises dont la raison sociale avait été dérivée du nom (cf.
+  // propagation plus bas). Sans l'ancien nom, impossible de distinguer une
+  // raison sociale à corriger d'une vraie société.
   const person = await prisma.person.findFirst({
     where: { id: input.personId, tenantId: user.tenantId },
-    select: { id: true },
+    select: { id: true, firstName: true, lastName: true },
   });
   if (!person) return { ok: false, error: 'Apprenant introuvable.' };
 
@@ -60,9 +72,101 @@ export async function updatePerson(input: {
   if (Object.keys(data).length === 0) return { ok: true };
 
   await prisma.person.update({ where: { id: input.personId }, data });
+
+  // Quick 260908-lhg — le nom vit à DEUX endroits : sur la personne, et sur la
+  // raison sociale de son auto-entreprise, figée à la création. Sans cette
+  // propagation, la convention affichait le nom corrigé pour l'apprenant et
+  // l'ancien pour le payeur (cas EL GUERTIT signalé par Laurent le 08/09).
+  const newFirstName = (data.firstName as string | undefined) ?? person.firstName;
+  const newLastName = (data.lastName as string | undefined) ?? person.lastName;
+  const nameChanged =
+    newFirstName !== person.firstName || newLastName !== person.lastName;
+
+  const { renamedOrgs, nameWarnings } = nameChanged
+    ? await syncEiOrganizationName({
+        personId: person.id,
+        tenantId: user.tenantId,
+        userId: user.id,
+        oldFirstName: person.firstName,
+        oldLastName: person.lastName,
+        newFirstName,
+        newLastName,
+      })
+    : { renamedOrgs: [], nameWarnings: [] };
+
   revalidatePath(`/app/apprenants/${input.personId}`);
   revalidatePath('/app/apprenants');
-  return { ok: true };
+  if (renamedOrgs.length) revalidatePath('/app/organisations');
+  return { ok: true, renamedOrgs, nameWarnings };
+}
+
+/**
+ * Aligne la raison sociale des auto-entreprises (`LegalLink.role = EI_SELF`)
+ * sur le nouveau nom du titulaire — mais SEULEMENT quand cette raison sociale
+ * était exactement l'ancien nom. Le reste (vraie société, nom de naissance,
+ * lien erroné) est renvoyé en avertissement, jamais réécrit : voir la règle et
+ * les cas réels dans `lib/persons/ei-organization-name.ts`.
+ */
+async function syncEiOrganizationName(opts: {
+  personId: string;
+  tenantId: string;
+  userId: string;
+  oldFirstName: string;
+  oldLastName: string;
+  newFirstName: string;
+  newLastName: string;
+}): Promise<{ renamedOrgs: string[]; nameWarnings: string[] }> {
+  const links = await prisma.legalLink.findMany({
+    where: { personId: opts.personId, role: 'EI_SELF' },
+    select: {
+      organization: { select: { id: true, legalName: true, tenantId: true } },
+    },
+  });
+
+  const renamedOrgs: string[] = [];
+  const nameWarnings: string[] = [];
+  const newLegalName = buildEiLegalName(opts.newFirstName, opts.newLastName);
+
+  for (const { organization: org } of links) {
+    // Scope tenant : un LegalLink ne devrait jamais traverser les tenants, mais
+    // l'écriture, elle, doit le garantir explicitement.
+    if (org.tenantId !== opts.tenantId) continue;
+
+    const verdict = classifyEiRename({
+      legalName: org.legalName,
+      oldFirstName: opts.oldFirstName,
+      oldLastName: opts.oldLastName,
+    });
+
+    if (verdict === 'warn') {
+      nameWarnings.push(org.legalName);
+      continue;
+    }
+    if (verdict !== 'rename' || org.legalName === newLegalName) continue;
+
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { legalName: newLegalName },
+    });
+    // Une raison sociale part sur les conventions et les pièces OPCO : le
+    // changement est tracé, même quand il corrige une faute de frappe.
+    await prisma.auditLog.create({
+      data: {
+        tenantId: opts.tenantId,
+        userId: opts.userId,
+        entity: 'Organization',
+        entityId: org.id,
+        action: 'organization.update',
+        diff: {
+          legalName: { before: org.legalName, after: newLegalName },
+          _source: `Propagation du renommage de l'apprenant ${opts.personId}`,
+        },
+      },
+    });
+    renamedOrgs.push(newLegalName);
+  }
+
+  return { renamedOrgs, nameWarnings };
 }
 
 // ── Organization ──────────────────────────────────────────────────────────

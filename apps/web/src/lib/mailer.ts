@@ -15,6 +15,18 @@
  * Le champ `context` de SendMailInput est REQUIS : impossible d'ajouter un
  * envoi non catégorisé (tsc échoue). Voir `email-policy.ts` pour la matrice.
  *
+ * TRAÇABILITÉ DES PIÈCES JOINTES (Lot 0 · 0.2, audit 28/08) : quand un envoi
+ * emporte des `Document`, leurs ids sont passés dans `context.documentIds` et
+ * une ligne `EmailMessage` est écrite APRÈS un départ SMTP réel. C'est la seule
+ * preuve que l'application possède qu'un document a quitté la maison — elle
+ * alimente la règle « document engagé » qui empêche de régénérer en silence une
+ * convention déjà partie chez un financeur.
+ *
+ * Conséquence RGPD à connaître : jusqu'ici la table `EmailMessage` existait au
+ * schéma mais n'avait AUCUN écrivain. Elle devient un stockage réel de données
+ * personnelles (destinataire, objet, corps). À reporter au registre art. 30 et
+ * à couvrir par une durée de conservation.
+ *
  * Variables .env :
  *   MAIL_DRY_RUN         — true pour forcer log-only même si SMTP configuré
  *   SMTP_HOST            — ex: ssl0.ovh.net, smtp.gmail.com
@@ -40,6 +52,14 @@ export interface SendMailContext {
   tenantId: string;
   category: EmailCategory;
   sessionId?: string | null;
+  /**
+   * Ids des `Document` réellement joints à cet envoi. Non vide ⇒ une ligne
+   * `EmailMessage` est écrite après un départ SMTP réel (ni dry-run, ni
+   * suppression par réglages, ni échec : on ne trace que ce qui est parti).
+   */
+  documentIds?: string[];
+  /** Rattachement libre pour la relecture (ex. `opcoSubmission:<id>`). */
+  relatedEntity?: string | null;
 }
 
 export interface SendMailInput {
@@ -58,6 +78,36 @@ export interface SendMailResult {
   /** true si l'envoi a été bloqué par les réglages tenant (TenantEmailSettings). */
   suppressed?: boolean;
   error?: string;
+}
+
+/**
+ * Écrit la trace d'un envoi qui emportait des documents. Ne relance jamais :
+ * le mail EST parti, perdre la trace est ennuyeux, faire croire à un échec
+ * d'envoi le serait davantage.
+ */
+async function tracerDocumentsEnvoyes(input: SendMailInput, from: string): Promise<void> {
+  const documentIds = input.context.documentIds ?? [];
+  if (documentIds.length === 0) return;
+  try {
+    await prisma.emailMessage.create({
+      data: {
+        tenantId: input.context.tenantId,
+        fromEmail: from,
+        toEmails: [input.to],
+        subject: input.subject,
+        bodyHtml: input.html,
+        status: 'sent',
+        sentAt: new Date(),
+        relatedEntity: input.context.relatedEntity ?? null,
+        documentIds,
+      },
+    });
+  } catch (e) {
+    console.error(
+      `[mailer] trace d'envoi non enregistrée (${documentIds.length} document(s)) :`,
+      e instanceof Error ? e.message : e,
+    );
+  }
 }
 
 let _transporter: Transporter | null = null;
@@ -146,6 +196,9 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       replyTo: process.env.MAIL_REPLY_TO,
       attachments: input.attachments,
     });
+    // Lot 0 · 0.2 — le document a quitté la maison : on l'écrit, sinon on ne
+    // pourra plus jamais le savoir.
+    await tracerDocumentsEnvoyes(input, from);
     return { ok: true, messageId: info.messageId };
   } catch (e: any) {
     console.error('[mailer] send failed', e?.message ?? e);

@@ -31,7 +31,7 @@ import { choisirJournee } from './catalogue-map';
 import { MAX_TENTATIVES } from './file-attente';
 import { genererProgrammeSurMesure } from './programme-sur-mesure';
 import type { ProblematiqueKey } from './questions';
-import { PROBLEMATIQUES } from './questions';
+import { PROBLEMATIQUES, lireRole, lireEquipe } from './questions';
 
 /** Traitées par tick. Un stand génère des rafales, pas un flux continu. */
 const LOT = 20;
@@ -119,12 +119,24 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
       return await echec('aucune journée candidate');
     }
 
-    const produit = await prisma.trainingProduct.findFirst({
-      where: { tenantId: sub.tenantId, code: selection.code, isActive: true },
-      select: { title: true, durationHours: true, objectives: true, programMd: true },
+    // `codes` est ordonné : la journée Faros de l'axe, puis ses replis. On prend
+    // la première qui EXISTE et qui est active. Un produit désactivé un soir de
+    // salon ne doit pas priver le prospect de son programme — c'est justement le
+    // moment où personne ne surveille les logs.
+    const produits = await prisma.trainingProduct.findMany({
+      where: { tenantId: sub.tenantId, code: { in: selection.codes }, isActive: true },
+      select: { code: true, title: true, durationHours: true, objectives: true, programMd: true },
     });
+    const produit = selection.codes
+      .map((code) => produits.find((p) => p.code === code))
+      .find((p) => p !== undefined);
     if (!produit) {
-      return await echec(`produit ${selection.code} introuvable ou inactif`);
+      return await echec(`aucun produit actif parmi ${selection.codes.join(', ')}`);
+    }
+    if (produit.code !== selection.codes[0]) {
+      console.warn(
+        `[diagnostic-worker] ${sub.id} : ${selection.codes[0]} indisponible, repli sur ${produit.code}`,
+      );
     }
 
     const objectifs = Array.isArray(produit.objectives)
@@ -136,6 +148,9 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
     const sm = await genererProgrammeSurMesure({
       reponses,
       dominante: sub.dominante,
+      // Ne départage plus les produits : sert au modèle à ORDONNER la journée
+      // (le socle en tête pour un débutant, les agents pour un habitué).
+      niveau: selection.niveau,
       produitTitre: produit.title,
       produitObjectifs: objectifs,
       produitProgrammeMd: produit.programMd,
@@ -152,6 +167,12 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
         firstName: sub.lead.firstName,
         dominante: sub.dominante,
         secondaire: sub.secondaire && estProblematique(sub.secondaire) ? sub.secondaire : null,
+        // Le bloc financement dépend du STATUT, pas de la formation : annoncer
+        // des droits AGEFICE à un conseiller salarié est faux, et ça se retourne
+        // au premier appel. Les gardes rendent `null` sur une valeur inconnue,
+        // et le gabarit retombe alors sur le bloc individuel.
+        role: lireRole(reponses.role),
+        equipe: lireEquipe(reponses.equipe),
         produit: {
           title: produit.title,
           dureeHeures: produit.durationHours,
@@ -180,6 +201,17 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
       });
       return 'SUPPRIMEE';
     }
+    if (envoi.dryRun) {
+      // Couche env du mailer (MAIL_DRY_RUN=true ou SMTP_HOST vide) : rien n'a
+      // quitté le serveur. Constaté le 02/09/2026 : ce cas passait pour un
+      // succès et la soumission était marquée SENT alors que le prospect
+      // n'avait rien reçu. Un dry-run n'est JAMAIS un envoi.
+      await prisma.diagnosticSubmission.update({
+        where: { id: sub.id },
+        data: { programmeStatus: 'SKIPPED', lastError: 'dry-run : MAIL_DRY_RUN=true ou SMTP_HOST vide' },
+      });
+      return 'SUPPRIMEE';
+    }
     if (!envoi.ok) {
       return await echec(`envoi échoué : ${envoi.error ?? '?'}`);
     }
@@ -190,9 +222,14 @@ async function traiterSoumission(sub: SoumissionATraiter): Promise<IssueSoumissi
         programmeStatus: 'SENT',
         programmeSentAt: new Date(),
         lastError: null,
-        personnalisation: sm.ok
-          ? { ancrage: sm.ancrage, programme: sm.programme }
-          : { ancrage: 0, repliCatalogue: true, raison: sm.raison },
+        personnalisation: {
+          ...(sm.ok
+            ? { ancrage: sm.ancrage, programme: sm.programme }
+            : { ancrage: 0, repliCatalogue: true, raison: sm.raison }),
+          // Preuve d'envoi : l'identifiant retourné par le serveur SMTP. Sans
+          // lui, SENT ne prouve qu'un retour ok du mailer.
+          envoi: { messageId: envoi.messageId ?? null },
+        },
       },
     });
     return 'ENVOYEE';

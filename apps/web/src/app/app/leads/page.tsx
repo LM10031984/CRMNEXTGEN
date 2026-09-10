@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { AutoAssignLeadsButton } from '@/components/leads/auto-assign-button';
 import { ProgrammesEnAttenteButton } from '@/components/diagnostic/programmes-en-attente-button';
 import { compterDiagnosticsEnAttente } from '@/lib/diagnostic/file-attente';
+import { RappelsDuJour } from '@/components/diagnostic/rappels-du-jour';
 
 export const dynamic = 'force-dynamic';
 /**
@@ -101,6 +102,9 @@ export default async function LeadsPage() {
           </div>
         }
       />
+
+      {/* J+1 du stand — en TÊTE, avant le pipeline : c'est ce qu'on ouvre à 9 h. */}
+      <RappelsDuJour leads={leads} />
 
       {commercials.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 inline-flex items-center gap-2">

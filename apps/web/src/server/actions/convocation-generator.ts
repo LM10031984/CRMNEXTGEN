@@ -23,6 +23,7 @@ import {
   type ConvocationData,
 } from '@/lib/convocation-template';
 import { loadOfConfig } from '@/lib/of-config';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 const MODALITY_LABELS: Record<string, string> = {
   PRESENTIEL: 'Présentiel',
@@ -141,9 +142,27 @@ export async function generateConvocationForParticipant(
       participantId,
       hashSha256: hash,
     },
-    select: { id: true, pdfUrl: true },
+    select: { id: true, pdfUrl: true, sourceFingerprint: true },
   });
+
+  // Lot 0 · 0.2 — empreinte des champs rendus (dates, créneaux réels, lieu,
+  // formateur signataire).
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId: user.tenantId,
+    docType: 'CONVOCATION',
+    participantId,
+    sessionId: participant.session.id,
+  });
+
   if (existing) {
+    // Le PDF est identique bit à bit : on en profite pour poser l'empreinte
+    // sur une ligne qui n'en avait pas (parc antérieur à la colonne).
+    if (sourceFingerprint && existing.sourceFingerprint !== sourceFingerprint) {
+      await prisma.document.update({
+        where: { id: existing.id },
+        data: { sourceFingerprint },
+      });
+    }
     return { ok: true, documentId: existing.id };
   }
 
@@ -171,6 +190,7 @@ export async function generateConvocationForParticipant(
       participantId: participant.id,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint,
     },
   });
 

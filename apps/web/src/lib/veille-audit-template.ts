@@ -117,6 +117,8 @@ const BRAND_DARK = '#00527A';
 export function renderVeilleAuditHtml(
   data: VeilleAuditData,
   tenantSnapshot: VeilleTenantSnapshot,
+  /** Config OF lue en base — alimente le pied de page (sinon : environnement). */
+  of?: OfConfig,
 ): string {
   const rows = data.watches
     .map(
@@ -220,7 +222,7 @@ export function renderVeilleAuditHtml(
 </style>
 </head>
 <body>
-${renderOfPagedFooter()}
+${renderOfPagedFooter(of)}
 
 <header class="doc-header">
   <div class="top-row">

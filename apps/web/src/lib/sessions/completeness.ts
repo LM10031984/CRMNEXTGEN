@@ -22,11 +22,25 @@ export type SessionCompletenessBlockerKey =
   | 'location_incomplete'
   | 'no_program'
   | 'no_participants'
-  | 'product_ai_unreviewed';
+  | 'product_ai_unreviewed'
+  | 'stub_documents';
 
 export type SessionCompletenessBlocker = {
   /** Identifiant stable pour cibler (analytics, deep link) */
   key: SessionCompletenessBlockerKey;
+  /**
+   * Lot 0 · 0.3 — CE QUE ce blocker empêche.
+   *
+   * `'generation'` (défaut, tous les blockers historiques) : on ne peut pas
+   * produire des documents corrects tant qu'il est là.
+   *
+   * `'delivery'` : les documents EXISTENT mais ne doivent pas sortir. Le seul
+   * cas aujourd'hui est le contenu générique (`usedStub`). Il ne peut pas
+   * bloquer la génération : la génération est justement le remède, et l'y
+   * mettre fermerait la seule porte de sortie (bouton « Générer » désactivé
+   * parce qu'un stub existe, stub qu'on ne peut corriger qu'en régénérant).
+   */
+  blocks?: 'generation' | 'delivery';
   /** Libellé affiché à l'utilisateur (français) */
   label: string;
   /** Hint : où corriger (URL anchor, modal, etc.) */
@@ -50,6 +64,12 @@ export interface SessionCompletenessInputWithProductId
 }
 
 export interface SessionCompletenessInput {
+  /**
+   * Lot 0 · 0.3 — nombre de documents au contenu GÉNÉRIQUE dans cette session
+   * (`usedStub` : l'IA a échoué et on a servi un texte de remplacement).
+   * Optionnel : un appelant qui ne le passe pas garde le comportement d'avant.
+   */
+  stubDocsCount?: number;
   startDate: Date | null;
   endDate: Date | null;
   pricePerLearner: { toNumber(): number } | number | null;
@@ -68,10 +88,22 @@ export interface SessionCompletenessInput {
 }
 
 export interface SessionCompleteness {
-  /** true si la session est prête à générer le pack fin de formation */
+  /** true si la session est prête à GÉNÉRER le pack fin de formation */
   ready: boolean;
-  /** Liste des blockers à corriger (vide si ready) */
+  /**
+   * Lot 0 · 0.3 — true si les documents peuvent être REMIS (téléchargés,
+   * envoyés au financeur, considérés comme la preuve de la session). Un
+   * document au contenu générique casse ça sans empêcher la régénération.
+   */
+  deliverable: boolean;
+  /** Tous les blockers, à afficher (vide si tout va bien) */
   blockers: SessionCompletenessBlocker[];
+  /**
+   * Sous-ensemble à passer aux boutons de génération. Existe pour qu'un appel
+   * site n'ait pas à se souvenir de filtrer — l'oubli produirait exactement
+   * l'impasse décrite sur `blocks`.
+   */
+  generationBlockers: SessionCompletenessBlocker[];
   /** Ratio 0-1 (pour barre de progression visuelle) */
   ratio: number;
 }
@@ -187,6 +219,21 @@ export function getSessionCompleteness(
     });
   }
 
+  // Lot 0 · 0.3 (audit 28/08, E-3) — `usedStub = true` n'était bloquant nulle
+  // part : le PDF générique partait chez l'apprenant, job DONE, badge vert.
+  // Deux grilles d'observation identiques mot pour mot, c'est le premier signal
+  // que cherche un auditeur.
+  if (s.stubDocsCount && s.stubDocsCount > 0) {
+    blockers.push({
+      key: 'stub_documents',
+      blocks: 'delivery',
+      label: `${s.stubDocsCount} document${s.stubDocsCount > 1 ? 's' : ''} au contenu générique`,
+      hint:
+        'L’IA a échoué sur ces documents et un texte de remplacement a été servi : il est identique d’un stagiaire à l’autre. À régénérer avant toute remise à l’apprenant ou au financeur.',
+      fix: { href: '#section-doc-matrix', label: 'Voir les documents concernés' },
+    });
+  }
+
   if (s.participantsCount === 0) {
     blockers.push({
       key: 'no_participants',
@@ -196,16 +243,20 @@ export function getSessionCompleteness(
     });
   }
 
-  // 8 critères = 6 originaux + product_ai_unreviewed (BUG-P0-02)
-  // + location_incomplete (AGEFICE 2026-08-28).
+  // 9 critères = 6 originaux + product_ai_unreviewed (BUG-P0-02)
+  // + location_incomplete (AGEFICE 2026-08-28) + stub_documents (lot 0 · 0.3).
   // Le ratio reste cohérent : si tous les critères sont OK, ratio = 1.
-  const totalCriteria = 8;
+  const totalCriteria = 9;
   const okCount = totalCriteria - blockers.length;
   const ratio = okCount / totalCriteria;
 
+  const generationBlockers = blockers.filter((b) => b.blocks !== 'delivery');
+
   return {
-    ready: blockers.length === 0,
+    ready: generationBlockers.length === 0,
+    deliverable: blockers.length === 0,
     blockers,
+    generationBlockers,
     ratio,
   };
 }

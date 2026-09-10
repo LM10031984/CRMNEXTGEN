@@ -23,7 +23,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ExternalLink, Loader2, RefreshCw, Sparkles, Zap } from 'lucide-react';
+import { Check, Download, ExternalLink, Loader2, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -31,6 +31,7 @@ import {
   dispatchGenerateMissing,
 } from '@/server/actions/dispatch-generate-doc';
 import { docCompletion } from '@/lib/sessions/doc-completion';
+import { LearnerPhaseActions } from '../learner-phase-actions';
 import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
 import {
   SignedDocDropZone,
@@ -74,16 +75,28 @@ export function TabAvant({ sessionId, items, canGenerate, dropZoneParticipants }
     .filter((it) => it.section === 'shared')
     .sort((a, b) => SHARED_ORDER.indexOf(a.docType) - SHARED_ORDER.indexOf(b.docType));
 
-  const participantGroups: Array<[string, DocDockItem[]]> = (() => {
-    const byParticipant = new Map<string, DocDockItem[]>();
+  // Groupé par `participantId` et non par nom : deux homonymes dans la même
+  // session (ça arrive dans une fratrie d'agents commerciaux) partageaient
+  // sinon un seul bloc — et un seul bouton de téléchargement, qui aurait servi
+  // le dossier de l'un pour l'autre.
+  const participantGroups: Array<{
+    participantId?: string;
+    name: string;
+    items: DocDockItem[];
+  }> = (() => {
+    const byParticipant = new Map<string, { participantId?: string; name: string; items: DocDockItem[] }>();
     for (const it of items) {
       if (it.section === 'shared') continue;
-      const key = it.participantName ?? '—';
-      const arr = byParticipant.get(key) ?? [];
-      arr.push(it);
-      byParticipant.set(key, arr);
+      const key = it.participantId ?? it.participantName ?? '—';
+      const group = byParticipant.get(key) ?? {
+        participantId: it.participantId,
+        name: it.participantName ?? '—',
+        items: [],
+      };
+      group.items.push(it);
+      byParticipant.set(key, group);
     }
-    return Array.from(byParticipant.entries());
+    return Array.from(byParticipant.values());
   })();
 
   function setBusy(key: string, on: boolean) {
@@ -123,8 +136,8 @@ export function TabAvant({ sessionId, items, canGenerate, dropZoneParticipants }
     });
   }
 
-  function handleGenerateAll() {
-    const missing = items.filter((it) => it.state === 'missing');
+  function handleGenerateAll(scope: DocDockItem[] = items) {
+    const missing = scope.filter((it) => it.state === 'missing');
     if (missing.length === 0) return;
     setBusyKeys((prev) => {
       const next = new Set(prev);
@@ -179,7 +192,7 @@ export function TabAvant({ sessionId, items, canGenerate, dropZoneParticipants }
             {canGenerate && completion.missing > 0 && (
               <button
                 type="button"
-                onClick={handleGenerateAll}
+                onClick={() => handleGenerateAll()}
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-wait transition-colors shadow-sm"
               >
@@ -207,10 +220,29 @@ export function TabAvant({ sessionId, items, canGenerate, dropZoneParticipants }
         </DocLineSection>
       )}
 
-      {/* Par stagiaire */}
-      {participantGroups.map(([name, group]) => (
-        <DocLineSection key={name} title={name}>
-          {group.map((it) => (
+      {/* Par stagiaire — la ligne du nom porte SES actions de phase
+          (Laurent 2026-09-10 : « ici un bouton par apprenant »). */}
+      {participantGroups.map((group) => (
+        <DocLineSection
+          key={group.participantId ?? group.name}
+          title={group.name}
+          actions={
+            group.participantId ? (
+              <LearnerPhaseActions
+                sessionId={sessionId}
+                participantId={group.participantId}
+                participantName={group.name}
+                phase="avant"
+                readyCount={group.items.filter((it) => it.state === 'generated').length}
+                missingCount={group.items.filter((it) => it.state === 'missing').length}
+                canGenerate={canGenerate}
+                onGenerateAll={() => handleGenerateAll(group.items)}
+                busy={group.items.some((it) => busyKeys.has(it.key))}
+              />
+            ) : null
+          }
+        >
+          {group.items.map((it) => (
             <DocLine
               key={it.key}
               item={it}
@@ -248,12 +280,24 @@ export function TabAvant({ sessionId, items, canGenerate, dropZoneParticipants }
 
 /* ── Sous-composants ──────────────────────────────────────────────────── */
 
-function DocLineSection({ title, children }: { title: string; children: React.ReactNode }) {
+function DocLineSection({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  /** Actions de la ligne du nom (téléchargement / génération par apprenant). */
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-2xl border border-border bg-white p-5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        {actions}
+      </div>
       <ul className="divide-y divide-border">{children}</ul>
     </section>
   );
@@ -301,6 +345,18 @@ function DocLine({
           >
             Ouvrir <ExternalLink className="h-3 w-3" />
           </a>
+          {/* « Ouvrir » consulte, « Télécharger » enregistre — et seul le second
+              porte `?dl=1`, donc un nom parlant. Sans ce lien, enregistrer depuis
+              la visionneuse du navigateur redonnait le nom technique de l'objet
+              stocké (« Rousseau Stéphane 24-96-3C95 », Laurent 2026-09-08). */}
+          <a
+            href={`${item.pdfUrl}?dl=1`}
+            aria-label={`Télécharger ${item.label}`}
+            title="Télécharger avec un nom de fichier lisible"
+            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" /> Télécharger
+          </a>
           {canGenerate && (
             <button
               type="button"
@@ -308,10 +364,16 @@ function DocLine({
               disabled={busy}
               // Nom accessible = label du doc → ciblé par les tests par docType.
               aria-label={`Régénérer ${item.label}`}
-              title="Régénérer"
-              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
+              title="Régénérer ce document (le tarif ou le contenu a changé)"
+              // LIBELLÉ VISIBLE, pas une icône seule (retour Laurent 02/09 :
+              // « j'ai pas de bouton pour regénérer le programme »). L'action
+              // existait, mais un carré de 32 px sans texte à côté d'un lien
+              // « Ouvrir » ne se voit pas — et c'est le seul moyen de refaire
+              // un document après une correction de tarif ou de fiche.
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Régénérer
             </button>
           )}
         </div>

@@ -130,7 +130,7 @@ function DocRow({ doc, dimmed }: { doc: UnifiedDoc; dimmed?: boolean }) {
       <div className="flex items-center gap-2 shrink-0">
         {doc.href && (
           <a
-            href={doc.href}
+            href={`${doc.href}?dl=1`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

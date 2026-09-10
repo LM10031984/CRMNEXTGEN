@@ -22,9 +22,12 @@ export interface ServedDocumentSource {
 export interface ServedDocumentKey {
   /** Clé bucket à télécharger. */
   key: string;
+  /**
+   * Vrai si c'est la version signée qui part. L'appelant s'en sert pour
+   * nommer le fichier (`…-signe.pdf` via `buildDownloadFilename`) afin que
+   * signé et original ne se confondent pas dans le dossier de l'admin.
+   */
   isSigned: boolean;
-  /** Suffixe de nom de fichier, pour distinguer un signé d'un original. */
-  suffix: string;
 }
 
 export function resolveServedDocumentKey(
@@ -34,7 +37,7 @@ export function resolveServedDocumentKey(
   const signed = (doc.signedPdfUrl ?? '').trim();
 
   if (!opts.original && signed) {
-    return { key: signed, isSigned: true, suffix: '-signe' };
+    return { key: signed, isSigned: true };
   }
-  return { key: doc.pdfUrl, isSigned: false, suffix: '' };
+  return { key: doc.pdfUrl, isSigned: false };
 }

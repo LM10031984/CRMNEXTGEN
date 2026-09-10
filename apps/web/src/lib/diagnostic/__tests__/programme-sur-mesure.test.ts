@@ -4,8 +4,9 @@
  * crédibles et personne ne s'en aperçoit avant l'audit.
  */
 
-import { describe, it, expect } from 'vitest';
-import { ancrerProgramme, contientTermeBanni } from '../programme-sur-mesure';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ancrerProgramme, contientTermeBanni, genererProgrammeSurMesure } from '../programme-sur-mesure';
+import { callLlm } from '@/lib/llm-client';
 
 const PROGRAMME_SOURCE = `Matinée (9h - 13h00) : Introduction à l'IA et Prospection Immobilière
 
@@ -159,5 +160,92 @@ describe('termes bannis', () => {
       expect(tout.toLowerCase()).not.toContain('pige');
       expect(r.programme.sequences).toHaveLength(3);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La seconde chance sur échec transitoire (08/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+vi.mock('@/lib/llm-client', () => ({ callLlm: vi.fn() }));
+
+const PROGRAMME_VALIDE = {
+  accroche: 'Vos matinées partent en rédaction : cette journée attaque ce point précis et rien d’autre.',
+  objectifs: ['Rédiger une annonce en trois minutes', 'Automatiser vos relances', 'Préparer un rendez-vous vendeur'],
+  sequences: ['A', 'B', 'C'].map((n) => ({
+    moment: 'MATIN' as const,
+    titre: `Séquence ${n}`,
+    pourquoiVous: 'Parce que c’est là que part votre temps chaque semaine.',
+    points: [{ source: 'Présentation de ChatGPT et des outils d’IA.', texte: 'Découvrir ChatGPT et ses limites' }],
+  })),
+};
+
+const ENTREE = {
+  reponses: { usage_ia: 'JAMAIS' },
+  dominante: 'IA_PRODUCTIVITE' as const,
+  niveau: 'DEBUTANT' as const,
+  produitTitre: "L'IA au service des conseillers immobiliers",
+  produitObjectifs: ['Comprendre ChatGPT'],
+  produitProgrammeMd: PROGRAMME_SOURCE,
+};
+
+describe('seconde chance — un accident de forme ne doit pas coûter l’email personnalisé', () => {
+  beforeEach(() => {
+    vi.mocked(callLlm).mockReset();
+  });
+
+  it('rejoue une fois quand le modèle rend un JSON hors schéma, et réussit', async () => {
+    // Le cas RÉEL du 03/09/2026 : 1 envoi sur 3 partait en repli catalogue pour
+    // cette seule raison, et le prospect recevait le déroulé brut.
+    vi.mocked(callLlm)
+      .mockResolvedValueOnce({ parsedJson: { accroche: 'trop court' }, finishReason: 'stop' } as never)
+      .mockResolvedValueOnce({ parsedJson: PROGRAMME_VALIDE, finishReason: 'stop' } as never);
+
+    const r = await genererProgrammeSurMesure(ENTREE);
+    expect(r.ok, 'la seconde tentative aurait dû sauver l’email').toBe(true);
+    expect(vi.mocked(callLlm)).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejoue une fois quand l’appel au modèle échoue', async () => {
+    vi.mocked(callLlm)
+      .mockRejectedValueOnce(new Error('502 upstream'))
+      .mockResolvedValueOnce({ parsedJson: PROGRAMME_VALIDE, finishReason: 'stop' } as never);
+
+    const r = await genererProgrammeSurMesure(ENTREE);
+    expect(r.ok).toBe(true);
+    expect(vi.mocked(callLlm)).toHaveBeenCalledTimes(2);
+  });
+
+  it('ne rejoue PAS quand la première tentative réussit — pas de coût inutile', async () => {
+    vi.mocked(callLlm).mockResolvedValue({ parsedJson: PROGRAMME_VALIDE, finishReason: 'stop' } as never);
+    const r = await genererProgrammeSurMesure(ENTREE);
+    expect(r.ok).toBe(true);
+    expect(vi.mocked(callLlm)).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne rejoue JAMAIS un ancrage insuffisant : c’est un verdict, pas un accident', async () => {
+    // Rejouer ici reviendrait à retenter sa chance sur la garde qui protège la
+    // conformité Qualiopi. Le repli catalogue est la bonne réponse.
+    const invente = {
+      ...PROGRAMME_VALIDE,
+      sequences: PROGRAMME_VALIDE.sequences.map((s) => ({
+        ...s,
+        points: [{ source: 'Atelier de sophrologie appliquée à la vente.', texte: 'Respirer avant de closer' }],
+      })),
+    };
+    vi.mocked(callLlm).mockResolvedValue({ parsedJson: invente, finishReason: 'stop' } as never);
+
+    const r = await genererProgrammeSurMesure(ENTREE);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.raison).toBe('ancrage-insuffisant');
+    expect(vi.mocked(callLlm), 'un ancrage insuffisant ne se rejoue pas').toHaveBeenCalledTimes(1);
+  });
+
+  it('s’arrête à deux tentatives : le rattrapage du cron prend le relais', async () => {
+    vi.mocked(callLlm).mockResolvedValue({ parsedJson: { accroche: 'trop court' }, finishReason: 'stop' } as never);
+    const r = await genererProgrammeSurMesure(ENTREE);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.raison).toBe('json-invalide');
+    expect(vi.mocked(callLlm)).toHaveBeenCalledTimes(2);
   });
 });

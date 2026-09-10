@@ -7,6 +7,11 @@ import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { ReassignLeadButton } from '@/components/leads/reassign-lead-button';
 import { LeadStatusSelect } from '@/components/leads/lead-status-select';
 import { LeadDiagnosticSection } from '@/components/diagnostic/lead-diagnostic-section';
+import { SuiviStandPanel, type BrouillonRelance } from '@/components/diagnostic/suivi-stand-panel';
+import { composerRelance, scriptAppel, ETAPE_LIBELLE, type EtapeRelance } from '@/lib/diagnostic/relances';
+import { PROBLEMATIQUES, SOURCE_STAND, type ProblematiqueKey } from '@/lib/diagnostic/questions';
+import { loadOfConfig } from '@/lib/of-config';
+import { signataire } from '@/lib/mailer-templates/diagnostic-programme';
 
 /**
  * Fiche détail Lead (Phase 9 Plan 09-03 — LEAD-01).
@@ -39,9 +44,18 @@ export default async function LeadDetailPage({
       owner: { select: { id: true, firstName: true, lastName: true } },
       // Diagnostic du stand : ce que le prospect a réellement reçu, et si
       // l'envoi est parti. C'est ce qui manque quand on décroche pour rappeler.
+      // Relances déjà parties : on ne remontre pas « Envoyer » comme si de rien
+      // n'était sur un prospect déjà relancé deux fois.
+      actions: {
+        where: { type: 'email' },
+        orderBy: { occurredAt: 'desc' },
+        select: { subject: true },
+        take: 20,
+      },
       diagnosticSubmissions: {
         orderBy: { createdAt: 'desc' },
         select: {
+          reponses: true,
           id: true,
           createdAt: true,
           dominante: true,
@@ -68,6 +82,60 @@ export default async function LeadDetailPage({
   const ownerName = lead.owner
     ? `${lead.owner.firstName} ${lead.owner.lastName}`.trim()
     : null;
+
+  // ── Suivi du stand ────────────────────────────────────────────────────────
+  // Les brouillons sont composés ICI, au rendu serveur : la copie commerciale
+  // reste dans un module pur (`lib/diagnostic/relances.ts`), et le composant
+  // client n'a qu'à l'afficher et à déclencher l'envoi.
+  const derniereSoumission = lead.diagnosticSubmissions[0];
+  const estDuStand = lead.source === SOURCE_STAND && derniereSoumission !== undefined;
+  const dominante =
+    derniereSoumission && derniereSoumission.dominante in PROBLEMATIQUES
+      ? (derniereSoumission.dominante as ProblematiqueKey)
+      : null;
+
+  let suiviStand: {
+    script: string;
+    brouillons: BrouillonRelance[];
+  } | null = null;
+
+  if (estDuStand && dominante) {
+    const of = await loadOfConfig(user.tenantId);
+    const signature = signataire(of);
+    const prenom = lead.firstName ?? prospectName.split(' ')[0] ?? 'Bonjour';
+    const evenement = SOURCE_STAND.replace(/^Salon — /, '');
+    const reponses = (derniereSoumission.reponses ?? {}) as Record<string, string>;
+
+    const objetsEnvoyes = new Set(lead.actions.map((a) => a.subject));
+    const brouillons = (['J4', 'J10'] as EtapeRelance[]).map((etape) => {
+      const { subject, text } = composerRelance(etape, {
+        prenom,
+        dominante,
+        signataire: signature.nom,
+        evenement,
+      });
+      return {
+        etape,
+        libelle: ETAPE_LIBELLE[etape],
+        subject,
+        text,
+        dejaEnvoyee: objetsEnvoyes.has(subject),
+      };
+    });
+
+    suiviStand = {
+      script: scriptAppel({
+        prenom,
+        dominante,
+        signataire: signature.nom,
+        evenement,
+        // La phrase « vous n'avez rien fait cette année » ne se dit à voix haute
+        // que si le prospect l'a effectivement déclaré.
+        droitsIntacts: reponses.formation_annee === 'NON',
+      }),
+      brouillons,
+    };
+  }
 
   return (
     <div className="space-y-6">
@@ -187,6 +255,15 @@ export default async function LeadDetailPage({
       </section>
 
       <LeadDiagnosticSection soumissions={lead.diagnosticSubmissions} />
+
+      {suiviStand && (
+        <SuiviStandPanel
+          leadId={lead.id}
+          script={suiviStand.script}
+          brouillons={suiviStand.brouillons}
+          email={lead.email}
+        />
+      )}
 
       {lead.notes && (
         <section className="border-t border-border pt-6">

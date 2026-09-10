@@ -19,6 +19,7 @@ import { StepCreation } from '@/components/sessions/step-creation';
 import { StepPendantFormation } from '@/components/sessions/step-pendant-formation';
 import { StepFacturation } from '@/components/sessions/step-facturation';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
+import { buildParticipantPhaseGroups } from '@/lib/sessions/participant-phase-items';
 import { buildClosureCompletionItems } from '@/lib/sessions/build-closure-completion-items';
 import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
 import { NextActionHero } from '@/components/sessions/next-action-hero';
@@ -76,6 +77,7 @@ import {
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
+import { analyzeSessionDocuments } from '@/lib/docs/session-document-analysis';
 
 // Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
 export const maxDuration = 300;
@@ -438,6 +440,30 @@ export default async function SessionDetailPage({
 
   const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
 
+  // Lot 0 (audit 28/08, E-1) — état documentaire de la session : périmé,
+  // non vérifiable (produit avant le suivi des empreintes), engagé. Une seule
+  // lecture des documents, jamais de N+1, et jamais bloquant : en cas d'échec
+  // on n'affiche aucun avertissement plutôt que de faire tomber la page.
+  const docAnalysis = await analyzeSessionDocuments(
+    user.tenantId,
+    session.id,
+    session.product?.id ?? null,
+  );
+
+  // Lot 0 · 0.3 (audit 28/08, E-3) — les documents au contenu GÉNÉRIQUE : l'IA
+  // a échoué et un texte de remplacement a été servi, identique d'un stagiaire
+  // à l'autre. Filtré côté Postgres (`rawJson.source`) pour ne pas charger les
+  // JSON de tous les assets de la session.
+  const stubAssets = await prisma.pedagogicalAsset.findMany({
+    where: {
+      tenantId: user.tenantId,
+      sessionId: session.id,
+      rawJson: { path: ['source'], equals: 'stub' },
+    },
+    select: { id: true },
+  });
+  const stubAssetIds = new Set(stubAssets.map((a) => a.id));
+
   // Bug I — proxy de présence aligné sur deriveCellState (derive-cell-state.ts L70-71).
   // La matrice considère la grille obs comme générée dès qu'un PedagogicalAsset existe
   // par participant ; on reflète ça côté sidebar pour cohérence visuelle.
@@ -541,7 +567,17 @@ export default async function SessionDetailPage({
       : null,
     participantsCount: session.participants.length,
     productId: session.product?.id ?? null,
+    stubDocsCount: stubAssetIds.size,
   });
+
+  // Drapeaux passés à la matrice — regroupés pour ne pas dépendre de l'ordre
+  // des paramètres (cf. CellFlagSets).
+  const matrixFlags = {
+    stale: docAnalysis.stale,
+    unverifiable: docAnalysis.unverifiable,
+    engaged: docAnalysis.engaged,
+    stub: stubAssetIds,
+  };
 
   // Quick task 260525-kl5 — état agrégé des 6 catégories de docs de préparation
   // pédagogique pour le bloc PreparationPedagogiqueBlock. La server action est
@@ -737,6 +773,32 @@ export default async function SessionDetailPage({
     satisfactionChaud: closureStatus.satisfactionChaud,
     satisfactionFroid: closureStatus.satisfactionFroid,
     assiduites: closureStatus.assiduites,
+  });
+
+  // Laurent 2026-09-10 — blocs NOMINATIFS des phases « pendant » et « après ».
+  // L'onglet Après n'en avait aucun : il n'y avait donc aucune ligne « nom
+  // d'apprenant » sur laquelle poser un bouton par apprenant. Dérivés avec le
+  // MÊME `deriveCellState` que la matrice, à partir des mêmes maps.
+  const phaseParticipantsInput = matrixParticipants.map((p) => ({
+    id: p.id,
+    fullName: p.fullName,
+    sponsorOrgLabel: p.sponsorOrgLabel,
+    isAgefice: p.isAgefice,
+    docStatus: p.docStatus,
+    participantDocs: p.participantDocs,
+    pedagogicalAssets: p.pedagogicalAssets,
+  }));
+  const pendantGroups = buildParticipantPhaseGroups({
+    phase: 'pendant',
+    participants: phaseParticipantsInput,
+    productDocs: productDocsMap,
+    sessionDocs: sessionDocsMap,
+  });
+  const apresGroups = buildParticipantPhaseGroups({
+    phase: 'apres',
+    participants: phaseParticipantsInput,
+    productDocs: productDocsMap,
+    sessionDocs: sessionDocsMap,
   });
 
   // État des 4 docs niveau session pour les boutons unitaires de l'onglet Après.
@@ -1136,7 +1198,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             )}
             {session.status === 'IN_PROGRESS' && (
@@ -1158,7 +1220,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             ) : (
               <StageCtaLink
@@ -1202,7 +1264,7 @@ export default async function SessionDetailPage({
             <GenerateClosurePackButton
               sessionId={session.id}
               participantCount={session.participants.length}
-              blockers={sessionCompleteness.blockers}
+              blockers={sessionCompleteness.generationBlockers}
             />
           ) : null
         }
@@ -1392,6 +1454,8 @@ export default async function SessionDetailPage({
             sessionDocs={apresSessionDocs}
             closureItems={closureItems}
             dropZoneParticipants={dropZoneParticipants}
+            pendantGroups={pendantGroups}
+            apresGroups={apresGroups}
             batch={
               latestBatch
                 ? {
@@ -1406,7 +1470,7 @@ export default async function SessionDetailPage({
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
-                blockers={sessionCompleteness.blockers}
+                blockers={sessionCompleteness.generationBlockers}
               />
             }
             pendantBlock={
@@ -1448,6 +1512,8 @@ export default async function SessionDetailPage({
             participants={matrixParticipants}
             productDocs={productDocsMap}
             sessionDocs={sessionDocsMap}
+            flags={matrixFlags}
+            stubCount={stubAssetIds.size}
             zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
           />
         }

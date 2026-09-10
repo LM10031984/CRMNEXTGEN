@@ -34,6 +34,7 @@ import { resolveConventionDate } from './convention-date';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
 import { isPersonneMoralePayeur, releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
+import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -258,6 +259,15 @@ export async function generateConventionCore(
     return { ok: false, error: `Erreur upload MinIO : ${e?.message ?? e}` };
   }
 
+  // Lot 0 · 0.2 — on fige l'état des champs rendus (prix, dates, lieu,
+  // bénéficiaire, programme) pour pouvoir dire plus tard si ce PDF ment.
+  const sourceFingerprint = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'CONVENTION',
+    participantId: participant.id,
+    sessionId: participant.session.id,
+  });
+
   const document = await prisma.document.create({
     data: {
       tenantId,
@@ -268,6 +278,7 @@ export async function generateConventionCore(
       participantId: participant.id,
       pdfUrl: objectKey,
       hashSha256: hash,
+      sourceFingerprint,
     },
   });
 
@@ -516,6 +527,13 @@ export async function generateConventionEntrepriseCore(
     );
   }
 
+  const sourceFingerprintGroupe = await computeDocumentFingerprint({
+    tenantId,
+    docType: 'CONVENTION',
+    sessionId,
+    organizationId: sponsorOrgId,
+  });
+
   // Idempotence + règle « jamais une convention par stagiaire » : on remplace
   // l'ancienne convention groupe ET on retire les conventions individuelles
   // des participants désormais couverts par celle-ci.
@@ -559,6 +577,10 @@ export async function generateConventionEntrepriseCore(
         participantId: null,
         pdfUrl: objectKey,
         hashSha256: hash,
+        // Lot 0 · 0.2 — l'empreinte du groupe inclut la LISTE des salariés
+        // couverts : un salarié inscrit après coup rend la convention groupe
+        // incomplète, et c'est précisément ce qu'on veut voir remonter.
+        sourceFingerprint: sourceFingerprintGroupe,
       },
     }),
   ];

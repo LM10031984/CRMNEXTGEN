@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { callLlm } from '@/lib/llm-client';
 import { QUESTIONS, PROBLEMATIQUES, type ProblematiqueKey } from './questions';
+import type { NiveauIa } from './catalogue-map';
 
 /**
  * Termes bannis des programmes envoyés aux prospects.
@@ -92,6 +93,13 @@ Ce que tu personnalises :
 - la SÉLECTION et l'ORDRE des points, selon ce qui lui coûte du temps et son niveau ;
 - le "pourquoiVous" de chaque séquence : une phrase qui relie la séquence à sa situation.
 
+RÈGLE IA × MÉTIER : chaque séquence doit relier explicitement un geste d'IA à un résultat métier — un mandat rentré, un vendeur trouvé ou rassuré, une heure gagnée, de la visibilité sur son secteur. C'est ce qui distingue cette journée d'un cours d'informatique. Tu tiens cette règle SANS jamais sortir du programme source : si un point ne porte pas de résultat métier, c'est le "pourquoiVous" de la séquence qui le porte.
+
+NIVEAU D'USAGE DE L'IA — il ne change pas le contenu, il change l'ORDRE et l'angle :
+- DEBUTANT : mets le socle en tête de journée (parler à l'IA, paramétrer son assistant, premiers réflexes). Ne suppose aucun outil déjà installé.
+- INITIE : passe vite sur le socle, insiste sur les routines et les ateliers.
+- AVANCE : commence par les usages avancés du programme source quand ils existent (commandes, projets, agents, automatisations). Ne lui réexplique pas ce qu'est un prompt.
+
 Ce que tu ne touches pas : le fond pédagogique, la durée, le prix (n'en mentionne JAMAIS).
 
 INTERDIT : le mot « pige » et ses dérivés. Cette pratique est interdite depuis le 11/08/2026. Si le programme source la mentionne, saute ce point.
@@ -102,6 +110,8 @@ Réponds en JSON strict, sans texte autour.`;
 export interface EntreeSurMesure {
   reponses: Record<string, string>;
   dominante: ProblematiqueKey;
+  /** Usage de l'IA déclaré (question 5) — pilote l'ordre, jamais le contenu. */
+  niveau: NiveauIa;
   produitTitre: string;
   produitObjectifs: string[];
   produitProgrammeMd: string;
@@ -110,6 +120,72 @@ export interface EntreeSurMesure {
 export type ResultatSurMesure =
   | { ok: true; programme: ProgrammeSurMesure; ancrage: number }
   | { ok: false; raison: 'llm-error' | 'json-invalide' | 'ancrage-insuffisant'; detail?: string };
+
+/**
+ * Les échecs qui méritent qu'on rejoue le dé — et ceux qui n'en méritent PAS.
+ *
+ * Mesuré sur les envois réels : 1 programme sur 3 partait en repli catalogue
+ * pour un `json-invalide` (03/09/2026). Le prospect recevait alors le déroulé
+ * brut du catalogue : honnête, mais sans accroche ni « pourquoi vous » — l'email
+ * fade au lieu de l'email qui accroche. Sur 80 prospects un soir de salon, ça
+ * fait une vingtaine de versions fades pour une raison purement technique.
+ *
+ * `json-invalide` et `llm-error` sont des accidents de FORME : le modèle a rendu
+ * du JSON qui ne colle pas au schéma, ou l'appel a échoué. Rien ne dit que la
+ * même demande échouera deux fois — c'est de la variance d'échantillonnage.
+ *
+ * `ancrage-insuffisant` n'est PAS dans cette liste, et c'est délibéré. Ce n'est
+ * pas un accident de forme, c'est un VERDICT : le modèle est sorti du programme
+ * source. Rejouer pour « avoir de la chance » sur la garde qui protège la
+ * conformité Qualiopi, ce serait la contourner. Le repli catalogue est alors la
+ * bonne réponse — mieux vaut un programme vrai qu'un programme flatteur.
+ *
+ * Une seule seconde chance : la génération prend 30 à 45 s et la route dispose
+ * de 300 s. Deux tentatives tiennent largement, trois commenceraient à mordre
+ * sur le rattrapage du cron sans rien apporter.
+ */
+const MERITE_UNE_SECONDE_CHANCE: ReadonlySet<string> = new Set(['json-invalide', 'llm-error']);
+
+/**
+ * UNE tentative complète : appel du modèle, validation du schéma, ancrage.
+ *
+ * Isolée pour être rejouable telle quelle. Ne lève jamais — toute panne devient
+ * un `ResultatSurMesure` en échec, parce que l'appelant (le worker) doit pouvoir
+ * décider d'un repli plutôt que de propager une exception.
+ */
+async function tenterUneFois(
+  prompt: string,
+  programmeMd: string,
+): Promise<ResultatSurMesure> {
+  let brut: unknown;
+  try {
+    const r = await callLlm({
+      tier: 'quality',
+      systemPrompt: SYSTEM,
+      prompt,
+      jsonOutput: true,
+      temperature: 0.4,
+      maxTokens: 4000,
+    });
+    if (r.finishReason === 'length') {
+      return { ok: false, raison: 'llm-error', detail: 'réponse coupée (maxTokens)' };
+    }
+    brut = r.parsedJson;
+  } catch (e) {
+    return { ok: false, raison: 'llm-error', detail: e instanceof Error ? e.message : String(e) };
+  }
+
+  const parsed = ProgrammeSchema.safeParse(brut);
+  if (!parsed.success) {
+    return { ok: false, raison: 'json-invalide', detail: parsed.error.issues[0]?.message };
+  }
+
+  const verdict = ancrerProgramme(parsed.data, programmeMd);
+  if (!verdict.ok) {
+    return { ok: false, raison: 'ancrage-insuffisant', detail: verdict.detail };
+  }
+  return { ok: true, programme: verdict.programme, ancrage: verdict.ancrage };
+}
 
 export async function genererProgrammeSurMesure(
   entree: EntreeSurMesure,
@@ -122,6 +198,8 @@ ${probl.accroche}
 
 RÉPONSES DU PROSPECT
 ${decrireReponses(entree.reponses)}
+
+NIVEAU D'USAGE DE L'IA : ${entree.niveau}
 
 FORMATION RETENUE (catalogue Start Academy)
 ${entree.produitTitre}
@@ -146,34 +224,19 @@ Assemble la journée pour ce prospect. Format JSON attendu :
   ]
 }`;
 
-  let brut: unknown;
-  try {
-    const r = await callLlm({
-      tier: 'quality',
-      systemPrompt: SYSTEM,
-      prompt,
-      jsonOutput: true,
-      temperature: 0.4,
-      maxTokens: 4000,
-    });
-    if (r.finishReason === 'length') {
-      return { ok: false, raison: 'llm-error', detail: 'réponse coupée (maxTokens)' };
-    }
-    brut = r.parsedJson;
-  } catch (e) {
-    return { ok: false, raison: 'llm-error', detail: e instanceof Error ? e.message : String(e) };
+  const premiere = await tenterUneFois(prompt, entree.produitProgrammeMd);
+  if (premiere.ok || !MERITE_UNE_SECONDE_CHANCE.has(premiere.raison)) {
+    return premiere;
   }
 
-  const parsed = ProgrammeSchema.safeParse(brut);
-  if (!parsed.success) {
-    return { ok: false, raison: 'json-invalide', detail: parsed.error.issues[0]?.message };
+  console.warn(
+    `[programme-sur-mesure] échec ${premiere.raison} (${premiere.detail ?? ''}) — seconde tentative`,
+  );
+  const seconde = await tenterUneFois(prompt, entree.produitProgrammeMd);
+  if (!seconde.ok) {
+    console.warn(`[programme-sur-mesure] seconde tentative échouée aussi : ${seconde.raison}`);
   }
-
-  const verdict = ancrerProgramme(parsed.data, entree.produitProgrammeMd);
-  if (!verdict.ok) {
-    return { ok: false, raison: 'ancrage-insuffisant', detail: verdict.detail };
-  }
-  return { ok: true, programme: verdict.programme, ancrage: verdict.ancrage };
+  return seconde;
 }
 
 /**

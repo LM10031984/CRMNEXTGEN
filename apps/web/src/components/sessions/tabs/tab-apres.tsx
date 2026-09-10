@@ -18,13 +18,18 @@
  * matrice). AUCUN recompte local.
  */
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ExternalLink, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, Download, ExternalLink, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { BatchProgressAutoRefresh } from '../batch-progress-auto-refresh';
+import { LearnerPhaseActions } from '../learner-phase-actions';
 import { docCompletion, type CompletionItem, type DocState } from '@/lib/sessions/doc-completion';
 import { apresMissingCount } from './tab-apres-helpers';
+import { closureKindsForPhase, phaseLabel, type DocPhase } from '@/lib/docs/doc-phase';
+import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
+import { generateClosurePack } from '@/server/actions/closure-pack';
+import { dispatchGenerateDoc } from '@/server/actions/dispatch-generate-doc';
 import { generateDerouleForProduct } from '@/server/actions/deroule-product-generator';
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
@@ -73,6 +78,16 @@ interface Props {
   packCta?: React.ReactNode;
   pendantBlock?: React.ReactNode;
   closureBlock?: React.ReactNode;
+  /**
+   * Blocs NOMINATIFS des phases « pendant » et « après » (Laurent 2026-09-10).
+   * L'onglet n'en avait aucun : il n'affichait que les documents de niveau
+   * session et le bloc pack, donc il n'y avait aucune ligne « nom d'apprenant »
+   * sur laquelle poser un bouton par apprenant.
+   * Dérivés côté serveur par `buildParticipantPhaseGroups` — même
+   * `deriveCellState` que la matrice, donc jamais un état divergent.
+   */
+  pendantGroups?: PhaseParticipantGroup[];
+  apresGroups?: PhaseParticipantGroup[];
 }
 
 const SESSION_CARDS: Array<{
@@ -97,9 +112,13 @@ export function TabApres({
   packCta,
   pendantBlock,
   closureBlock,
+  pendantGroups = [],
+  apresGroups = [],
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  /** Apprenant dont la génération est en cours (une ligne à la fois). */
+  const [busyParticipant, setBusyParticipant] = useState<string | null>(null);
 
   // Source unique : compteur dérivé de docCompletion (via apresMissingCount).
   const completion = docCompletion(closureItems);
@@ -117,6 +136,63 @@ export function TabApres({
         }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : `Erreur génération ${label}`);
+      }
+    });
+  }
+
+  /**
+   * « Tout générer » pour UN apprenant, sur UNE phase.
+   *
+   * Deux moteurs, parce que les documents d'après-formation en ont deux :
+   *  - le pack `generateClosurePack` en mode mono-participant (attestation,
+   *    certificat, QCM, positionnement, satisfactions, émargement) — il saute
+   *    de lui-même ce qui existe déjà, donc rien n'est écrasé ;
+   *  - `dispatchGenerateDoc` pour l'attestation d'assiduité AGEFICE, qui a son
+   *    générateur synchrone dédié et ne fait PAS partie du pack.
+   */
+  function handleGenerateForLearner(group: PhaseParticipantGroup, phase: DocPhase) {
+    const kinds = closureKindsForPhase(phase);
+    const assiduiteManquante = group.items.some(
+      (i) => i.docType === 'ASSIDUITE' && i.state === 'missing',
+    );
+    if (kinds.length === 0 && !assiduiteManquante) return;
+
+    setBusyParticipant(group.participantId);
+    startTransition(async () => {
+      try {
+        let lance = 0;
+        if (kinds.length > 0) {
+          const r = await generateClosurePack(sessionId, {
+            participantIds: [group.participantId],
+            kinds: kinds as never,
+          });
+          if (!r.ok) {
+            toast.error(r.error ?? `Erreur génération pour ${group.fullName}`);
+            return;
+          }
+          if (r.alreadyComplete) {
+            toast.info(`${group.fullName} — tout est déjà généré`);
+          } else {
+            lance += r.total ?? 0;
+          }
+        }
+        if (assiduiteManquante) {
+          const r = await dispatchGenerateDoc({
+            sessionId,
+            docType: 'ASSIDUITE_AGEFICE',
+            participantId: group.participantId,
+          });
+          if (r.ok) lance += 1;
+          else toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+        }
+        if (lance > 0) {
+          toast.success(
+            `${group.fullName} — ${lance} document${lance > 1 ? 's' : ''} en cours de génération`,
+          );
+        }
+        router.refresh();
+      } finally {
+        setBusyParticipant(null);
       }
     });
   }
@@ -171,8 +247,29 @@ export function TabApres({
       {/* Bloc pack détaillé (slot serveur). */}
       {closureBlock}
 
+      {/* Par apprenant — la ligne du nom porte SES actions de phase
+          (Laurent 2026-09-10 : « ici un bouton par apprenant »). */}
+      <PhaseLearnerBlocks
+        phase="pendant"
+        groups={pendantGroups}
+        sessionId={sessionId}
+        canWrite={canWrite}
+        busyParticipant={busyParticipant}
+        onGenerateAll={handleGenerateForLearner}
+      />
+      <PhaseLearnerBlocks
+        phase="apres"
+        groups={apresGroups}
+        sessionId={sessionId}
+        canWrite={canWrite}
+        busyParticipant={busyParticipant}
+        onGenerateAll={handleGenerateForLearner}
+      />
+
       {/* Lot A signature — dépôt des émargements signés à la main (O-3).
-          Le geste doit être visible ici, pas caché dans le menu d'une cellule. */}
+          Le geste doit être visible ici, pas caché dans le menu d'une cellule.
+          Placé sous les lignes par apprenant : c'est le geste de masse qui les
+          complète, une fois les feuilles récupérées en salle. */}
       {canWrite && dropZoneParticipants && dropZoneParticipants.length > 0 && (
         <SignedDocDropZone
           sessionId={sessionId}
@@ -242,6 +339,109 @@ export function TabApres({
           })}
         </ul>
       </section>
+    </div>
+  );
+}
+
+/* ── Blocs nominatifs d'une phase ─────────────────────────────────────── */
+
+/**
+ * Un bloc par apprenant : son nom, ses actions de phase, puis ses documents.
+ *
+ * Volontairement calqué sur l'onglet « Avant » (une section arrondie, un titre
+ * en petites capitales, une ligne par document) : Laurent passe d'un onglet à
+ * l'autre pour le même dossier, deux mises en page différentes lui feraient
+ * chercher deux fois.
+ */
+function PhaseLearnerBlocks({
+  phase,
+  groups,
+  sessionId,
+  canWrite,
+  busyParticipant,
+  onGenerateAll,
+}: {
+  phase: DocPhase;
+  groups: PhaseParticipantGroup[];
+  sessionId: string;
+  canWrite: boolean;
+  busyParticipant: string | null;
+  onGenerateAll: (group: PhaseParticipantGroup, phase: DocPhase) => void;
+}) {
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {phaseLabel(phase)} · par apprenant
+      </h3>
+      {groups.map((group) => (
+        <section
+          key={group.participantId}
+          className="rounded-2xl border border-border bg-white p-5"
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {group.fullName}
+              {group.sponsorOrgLabel && (
+                <span className="normal-case font-normal"> ({group.sponsorOrgLabel})</span>
+              )}
+            </h4>
+            <LearnerPhaseActions
+              sessionId={sessionId}
+              participantId={group.participantId}
+              participantName={group.fullName}
+              phase={phase}
+              readyCount={group.readyCount}
+              missingCount={group.missingCount}
+              canGenerate={canWrite}
+              onGenerateAll={() => onGenerateAll(group, phase)}
+              busy={busyParticipant === group.participantId}
+            />
+          </div>
+          <ul className="divide-y divide-border">
+            {group.items.map((item) => (
+              <li key={item.docType} className="flex items-center gap-3 py-2.5">
+                {item.state === 'generated' ? (
+                  <span className="h-4 w-4 rounded-full bg-emerald-500 text-white inline-flex items-center justify-center shrink-0">
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                ) : (
+                  <span
+                    className="h-4 w-4 rounded-full border-2 border-amber-300 bg-amber-50 shrink-0"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="flex-1 min-w-0 text-sm font-medium truncate">{item.label}</span>
+                {item.pdfUrl && (
+                  <div className="inline-flex items-center gap-1 shrink-0">
+                    <a
+                      href={item.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-primary hover:bg-primary-50 transition-colors"
+                    >
+                      Ouvrir <ExternalLink className="h-3 w-3" />
+                    </a>
+                    {/* Seul ce lien porte `?dl=1`, donc un nom parlant. */}
+                    <a
+                      href={item.downloadUrl}
+                      aria-label={`Télécharger ${item.label} de ${group.fullName}`}
+                      title="Télécharger avec un nom de fichier lisible"
+                      className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Télécharger
+                    </a>
+                  </div>
+                )}
+                {!item.pdfUrl && (
+                  <span className="text-xs text-muted-foreground shrink-0">À générer</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

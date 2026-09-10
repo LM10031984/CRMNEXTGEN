@@ -30,8 +30,8 @@ toucher au métier.
 ## Mesures techniques côté QualiOF
 
 - **Aucun email envoyé par DocuSeal** (`send_email: false` sur l'envoi et sur
-  chaque signataire) : les liens de signature partent du mailer QualiOF, qui est
-  fail-closed et dispose d'une catégorie décochable par tenant. Le prestataire ne
+  chaque signataire) : les liens de signature partent du mailer QualiOF (SMTP Google Workspace
+  depuis le 2026-09-02, voir [google.md](google.md)), qui est fail-closed et dispose d'une catégorie décochable par tenant. Le prestataire ne
   constitue donc pas de liste de diffusion à partir de nos signataires.
 - **Webhooks authentifiés** : HMAC-SHA256 sur `timestamp.corps`, fenêtre de rejeu
   de 5 minutes, comparaison à temps constant. **Sans secret configuré, tout

@@ -53,12 +53,22 @@ vi.mock('@qualiof/db', () => {
       document: {
         deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
         create: vi.fn().mockResolvedValue({ id: 'doc-1' }),
+        // Lot 0 · 0.2 — lu par la ceinture du worker : null = rien à protéger,
+        // le remplacement suit son cours normal.
+        findFirst: vi.fn().mockResolvedValue(null),
       },
       pedagogicalAsset: { upsert: vi.fn().mockResolvedValue({ id: 'asset-1' }) },
       $transaction: transactionMock,
     },
   };
 });
+
+// Lot 0 · 0.2 — la ceinture du worker. La DÉCISION est testée dans
+// `replacement-guard.test.ts` ; ici on teste ce que le worker en FAIT.
+const { checkDocumentReplacement } = vi.hoisted(() => ({
+  checkDocumentReplacement: vi.fn(),
+}));
+vi.mock('@/lib/docs/replacement-guard', () => ({ checkDocumentReplacement }));
 
 vi.mock('bullmq', () => ({
   Worker: class {},
@@ -142,6 +152,13 @@ function buildParticipant() {
 }
 
 beforeEach(() => {
+  checkDocumentReplacement.mockReset();
+  checkDocumentReplacement.mockResolvedValue({
+    allowed: true,
+    engagement: null,
+    documentId: null,
+    motif: null,
+  });
   vi.clearAllMocks();
   documentDeleteMany.mockResolvedValue({ count: 1 });
   documentCreate.mockResolvedValue({ id: 'doc-1' });
@@ -216,5 +233,78 @@ describe('processClosureJobPayload — idempotence Document (Task 1)', () => {
     expect(pedagogicalAssetUpsert).toHaveBeenCalledTimes(1);
     expect(documentDeleteMany).not.toHaveBeenCalled();
     expect(documentCreate).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * Lot 0 · 0.2 — la ceinture, au point d'écriture.
+ *
+ * Le worker est le dernier maillon : même si un chemin d'appel oubliait la
+ * garde, une attestation déjà envoyée à l'apprenant ne doit pas pouvoir être
+ * écrasée ici. Le pack reste complet — le job pointe sur la pièce réellement
+ * remise plutôt que d'échouer.
+ */
+describe('processClosureJobPayload — document engagé, régime groupé strict', () => {
+  const payload: ClosureJobPayload = {
+    jobId: 'job-engage',
+    batchId: 'batch-1',
+    tenantId: 'tenant-1',
+    sessionId: 'session-1',
+    participantId: 'participant-1',
+    kind: 'ATTESTATION',
+  };
+
+  function participantChargé() {
+    sessionParticipantFindFirst.mockResolvedValue({
+      id: 'participant-1',
+      person: { firstName: 'Catherine', lastName: 'ALENDA', civility: null, legalLinks: [] },
+      session: {
+        id: 'session-1',
+        code: 'SES-0082',
+        startDate: new Date('2026-10-12'),
+        endDate: new Date('2026-10-14'),
+        product: { title: 'Formation', durationHours: 14, programMd: '' },
+        location: null,
+        trainers: [],
+      },
+    });
+  }
+
+  it('ne remplace PAS le document : ni deleteMany, ni create', async () => {
+    participantChargé();
+    checkDocumentReplacement.mockResolvedValue({
+      allowed: false,
+      refusal: 'engage_chemin_groupe',
+      warning: 'Document engagé (envoyé par email) — conservé, non remplacé.',
+      engagement: { level: 'ENGAGED', reasons: ['envoyé par email'] },
+      documentId: 'doc-deja-envoye',
+    });
+
+    await processClosureJobPayload(payload, { attemptsMade: 0, maxAttempts: 3 });
+
+    expect(documentDeleteMany).not.toHaveBeenCalled();
+    expect(documentCreate).not.toHaveBeenCalled();
+  });
+
+  it('marque le job terminé en pointant sur la pièce réellement remise', async () => {
+    participantChargé();
+    checkDocumentReplacement.mockResolvedValue({
+      allowed: false,
+      refusal: 'engage_chemin_groupe',
+      warning: 'Document engagé (parti dans un dossier financeur) — conservé.',
+      engagement: { level: 'ENGAGED', reasons: ['parti dans un dossier financeur'] },
+      documentId: 'doc-deja-envoye',
+    });
+
+    await processClosureJobPayload(payload, { attemptsMade: 0, maxAttempts: 3 });
+
+    const call = closureJobUpdate.mock.calls.at(-1)![0];
+    expect(call.where.id).toBe('job-engage');
+    expect(call.data.status).toBe('DONE');
+    // Le pack doit contenir le document qui a VRAIMENT été remis.
+    expect(call.data.documentId).toBe('doc-deja-envoye');
+    expect(call.data.usedStub).toBe(false);
+    expect(call.data.errorMessage).toContain('engagé');
   });
 });

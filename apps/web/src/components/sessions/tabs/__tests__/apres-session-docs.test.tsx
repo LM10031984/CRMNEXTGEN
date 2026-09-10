@@ -43,12 +43,26 @@ vi.mock('@/server/actions/generate-satisfaction-session', () => ({
   generateSatisfactionSessionForSession: (...a: unknown[]) => generateSatisfactionSessionForSession(...a),
 }));
 
+// Blocs par apprenant (Laurent 2026-09-10) : deux moteurs de plus. Sans ces
+// mocks, l'import de `closure-pack` traîne `@/lib/auth` et son `React.cache`,
+// qui n'existe pas hors runtime Next — le fichier de test ne se collectait même
+// plus (« cache is not a function »).
+const generateClosurePack = vi.fn(async (..._a: unknown[]) => ({ ok: true, total: 6 }));
+const dispatchGenerateDoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+vi.mock('@/server/actions/closure-pack', () => ({
+  generateClosurePack: (...a: unknown[]) => generateClosurePack(...a),
+}));
+vi.mock('@/server/actions/dispatch-generate-doc', () => ({
+  dispatchGenerateDoc: (...a: unknown[]) => dispatchGenerateDoc(...a),
+  dispatchGenerateMissing: vi.fn(),
+}));
+
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh }),
 }));
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 import { TabApres } from '../tab-apres';
@@ -79,6 +93,8 @@ beforeEach(() => {
   generateGrilleObsSessionForSession.mockClear();
   generateChecklistForSession.mockClear();
   generateSatisfactionSessionForSession.mockClear();
+  generateClosurePack.mockClear();
+  dispatchGenerateDoc.mockClear();
   refresh.mockClear();
 });
 
@@ -116,5 +132,144 @@ describe('TabApres — 4 docs niveau session câblés sur la bonne action', () =
     await waitFor(() => expect(generateSatisfactionSessionForSession).toHaveBeenCalledTimes(1));
     expect(generateSatisfactionSessionForSession.mock.calls[0]![0]).toBe(SESSION_ID);
     expect(generateChecklistForSession).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Laurent 2026-09-10 : « à côté de chaque apprenant, un bouton pour télécharger
+ * les docs par apprenant par rapport à chaque phase […] tu m'as dit l'avoir
+ * fait mais ce n'est pas le cas ».
+ *
+ * L'onglet Après n'avait AUCUN bloc nominatif : ces tests verrouillent le fait
+ * qu'il y en a un par apprenant, et que ses deux boutons pointent bien sur LUI.
+ */
+describe('TabApres — actions par apprenant sur la ligne du nom', () => {
+  const GROUPE = {
+    participantId: 'part-42',
+    fullName: 'Johanna FOURNEAU',
+    sponsorOrgLabel: 'SOLUTION IMMO',
+    readyCount: 2,
+    missingCount: 1,
+    items: [
+      {
+        docType: 'ATTESTATION_FIN',
+        label: 'Attestation de fin',
+        state: 'generated' as const,
+        pdfUrl: '/api/documents/d1',
+        downloadUrl: '/api/documents/d1?dl=1',
+      },
+      {
+        docType: 'CERTIFICAT_REALISATION',
+        label: 'Certificat de réalisation',
+        state: 'generated' as const,
+        pdfUrl: '/api/documents/d2',
+        downloadUrl: '/api/documents/d2?dl=1',
+      },
+      { docType: 'EVALUATION_ACQUIS', label: 'QCM', state: 'missing' as const },
+    ],
+  };
+
+  function renderAvecApprenant() {
+    return render(
+      <TabApres
+        sessionId={SESSION_ID}
+        productId={PRODUCT_ID}
+        canWrite
+        sessionDocs={{
+          deroule: { state: 'missing' },
+          grilleObs: { state: 'missing' },
+          checklist: { state: 'missing' },
+          satisfactionSession: { state: 'missing' },
+        }}
+        closureItems={[{ state: 'missing' }]}
+        apresGroups={[GROUPE]}
+      />,
+    );
+  }
+
+  it("pose un lien de téléchargement d'archive ciblé sur CET apprenant et CETTE phase", () => {
+    renderAvecApprenant();
+    const lien = screen.getByRole('link', {
+      name: /télécharger les documents de Johanna FOURNEAU/i,
+    });
+    expect(lien.getAttribute('href')).toBe(
+      `/api/sessions/${SESSION_ID}/apprenants/part-42/zip?phase=apres`,
+    );
+  });
+
+  it('annonce le nombre de documents réellement téléchargeables', () => {
+    renderAvecApprenant();
+    expect(
+      screen.getByRole('link', { name: /télécharger les documents de Johanna/i }).textContent,
+    ).toContain('(2)');
+  });
+
+  it('« Tout générer » ne lance le pack QUE pour cet apprenant', async () => {
+    renderAvecApprenant();
+    fireEvent.click(
+      screen.getByRole('button', { name: /générer les documents manquants de Johanna/i }),
+    );
+    await waitFor(() => expect(generateClosurePack).toHaveBeenCalledTimes(1));
+    const [sessionId, options] = generateClosurePack.mock.calls[0] as [string, any];
+    expect(sessionId).toBe(SESSION_ID);
+    expect(options.participantIds).toEqual(['part-42']);
+    // Les kinds demandés sont ceux de la phase, jamais tout le pack.
+    expect(options.kinds).toContain('ATTESTATION');
+    expect(options.kinds).not.toContain('EMARGEMENT');
+  });
+
+  it("n'appelle pas le générateur d'assiduité quand l'apprenant n'est pas AGEFICE", async () => {
+    renderAvecApprenant();
+    fireEvent.click(
+      screen.getByRole('button', { name: /générer les documents manquants de Johanna/i }),
+    );
+    await waitFor(() => expect(generateClosurePack).toHaveBeenCalled());
+    expect(dispatchGenerateDoc).not.toHaveBeenCalled();
+  });
+
+  it("lance le générateur dédié quand l'assiduité AGEFICE manque (hors pack)", async () => {
+    render(
+      <TabApres
+        sessionId={SESSION_ID}
+        productId={PRODUCT_ID}
+        canWrite
+        sessionDocs={{
+          deroule: { state: 'missing' },
+          grilleObs: { state: 'missing' },
+          checklist: { state: 'missing' },
+          satisfactionSession: { state: 'missing' },
+        }}
+        closureItems={[{ state: 'missing' }]}
+        apresGroups={[
+          {
+            ...GROUPE,
+            items: [
+              ...GROUPE.items,
+              { docType: 'ASSIDUITE', label: 'Assiduité AGEFICE', state: 'missing' as const },
+            ],
+            missingCount: 2,
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /générer les documents manquants de Johanna/i }),
+    );
+    await waitFor(() => expect(dispatchGenerateDoc).toHaveBeenCalledTimes(1));
+    expect((dispatchGenerateDoc.mock.calls[0] as [any])[0]).toMatchObject({
+      docType: 'ASSIDUITE_AGEFICE',
+      participantId: 'part-42',
+    });
+  });
+
+  it('propose « Télécharger » à côté d’« Ouvrir » — seul le premier porte ?dl=1', () => {
+    renderAvecApprenant();
+    const dl = screen.getByRole('link', { name: /télécharger Attestation de fin/i });
+    expect(dl.getAttribute('href')).toBe('/api/documents/d1?dl=1');
+  });
+
+  it('ne montre aucun bloc nominatif quand la session n’a pas d’inscrit', () => {
+    renderTab();
+    expect(screen.queryByText(/par apprenant/i)).toBeNull();
   });
 });

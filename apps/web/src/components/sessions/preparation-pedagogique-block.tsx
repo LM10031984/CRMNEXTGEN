@@ -20,13 +20,14 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, ClipboardList, Loader2 } from 'lucide-react';
+import { AlertCircle, ClipboardList, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   getSessionPreparationStatus,
   prepareSession,
   type SessionPreparationStatus,
 } from '@/server/actions/prepare-training';
+import { dispatchGenerateDoc } from '@/server/actions/dispatch-generate-doc';
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { buildPrepCompletionItems } from '@/lib/sessions/build-prep-completion-items';
 import { TimelineStep, StepDocRow, type StepState } from './timeline-step';
@@ -99,6 +100,55 @@ export function PreparationPedagogiqueBlock({
     }, 5000);
     return () => clearInterval(id);
   }, [analyseBesoinInflight, sessionId, router]);
+
+  /**
+   * Refaire un document PARTAGÉ déjà produit.
+   *
+   * « Compléter » ne traite que ce qui MANQUE : un document existant mais
+   * devenu faux — le cas typique étant un tarif de session revu après coup —
+   * n'avait aucun moyen d'être refait depuis cet écran (constat Laurent 02/09 :
+   * « j'ai pas de bouton pour regénérer le programme »).
+   *
+   * On passe par le MÊME dispatch que l'onglet « Avant » : une seule porte
+   * d'entrée pour la génération, deux endroits où l'ouvrir.
+   */
+  function handleRegenerer(docType: 'PROGRAMME' | 'DEROULE' | 'CHECKLIST', label: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await dispatchGenerateDoc({ sessionId, docType, force: true });
+      if (!r.ok) {
+        setError(r.error ?? `Erreur ${label}`);
+        toast.error(r.error ?? `Erreur ${label}`);
+        return;
+      }
+      toast.success(`${label} régénéré`);
+      const fresh = await getSessionPreparationStatus(sessionId);
+      if (fresh.ok) setStatus(fresh);
+      router.refresh();
+    });
+  }
+
+  function BoutonRegenerer({
+    docType,
+    label,
+  }: {
+    docType: 'PROGRAMME' | 'DEROULE' | 'CHECKLIST';
+    label: string;
+  }) {
+    return (
+      <button
+        type="button"
+        onClick={() => handleRegenerer(docType, label)}
+        disabled={pending}
+        aria-label={`Régénérer ${label}`}
+        title="Refaire ce document (tarif ou contenu modifié)"
+        className="shrink-0 h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs font-medium text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
+      >
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        Régénérer
+      </button>
+    );
+  }
 
   function handleCompleter() {
     setError(null);
@@ -239,9 +289,39 @@ export function PreparationPedagogiqueBlock({
             Partagés (produit / session)
           </h3>
           <ul className="space-y-1.5">
-            <StepDocRow done={status.programme} label="Programme de formation" indic={indicShort('PROGRAMME')} pdfHref={programmePdfHref} />
-            <StepDocRow done={status.deroule} label="Déroulé pédagogique (IA)" indic={indicShort('DEROULE')} pdfHref={deroulePdfHref} />
-            <StepDocRow done={status.checklist} label="Check-list formation" indic={indicShort('CHECKLIST_FORMATION')} pdfHref={checklistPdfHref} />
+            <StepDocRow
+              done={status.programme}
+              label="Programme de formation"
+              indic={indicShort('PROGRAMME')}
+              pdfHref={programmePdfHref}
+              action={
+                status.programme ? (
+                  <BoutonRegenerer docType="PROGRAMME" label="Programme de formation" />
+                ) : undefined
+              }
+            />
+            <StepDocRow
+              done={status.deroule}
+              label="Déroulé pédagogique (IA)"
+              indic={indicShort('DEROULE')}
+              pdfHref={deroulePdfHref}
+              action={
+                status.deroule ? (
+                  <BoutonRegenerer docType="DEROULE" label="Déroulé pédagogique" />
+                ) : undefined
+              }
+            />
+            <StepDocRow
+              done={status.checklist}
+              label="Check-list formation"
+              indic={indicShort('CHECKLIST_FORMATION')}
+              pdfHref={checklistPdfHref}
+              action={
+                status.checklist ? (
+                  <BoutonRegenerer docType="CHECKLIST" label="Check-list formation" />
+                ) : undefined
+              }
+            />
           </ul>
         </div>
 

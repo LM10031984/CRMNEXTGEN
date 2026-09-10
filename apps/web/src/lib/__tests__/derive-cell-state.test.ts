@@ -227,3 +227,140 @@ describe('deriveCellState', () => {
     }
   });
 });
+
+/**
+ * Lot 0 (audit produit du 28/08) — trois états qui manquaient à la matrice :
+ *  · 0.2 « périmé »        : une donnée que le document porte a bougé ;
+ *  · 0.2 « non vérifiable » : produit avant le suivi des empreintes — on ne
+ *    peut rien affirmer, et le dire vaut mieux qu'un vert de complaisance ;
+ *  · 0.3 « générique »      : contenu de remplacement, identique d'un stagiaire
+ *    à l'autre — le premier écart que cherche un auditeur.
+ *
+ * Plus une contrainte d'action : `engaged`, quand la sortie du document est
+ * prouvée. Tous sont ADDITIFS — sans les ensembles, le comportement d'avant.
+ */
+describe('lot 0 — périmé, non vérifiable, générique, engagé', () => {
+  function celluleDoc(flags?: Parameters<typeof deriveCellState>[6]) {
+    const maps = emptyMaps();
+    maps.participantDocs.set('CONVENTION', { id: 'doc-1' });
+    return deriveCellState(
+      'CONVENTION',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      flags,
+    );
+  }
+
+  it('sans drapeaux, une cellule générée reste ce qu’elle était', () => {
+    const r = celluleDoc();
+    expect(r.state).toBe('GENERATED');
+    expect('stale' in r && r.stale).toBeFalsy();
+    expect('stub' in r && r.stub).toBeFalsy();
+    expect('unverifiable' in r && r.unverifiable).toBeFalsy();
+    expect('engaged' in r && r.engaged).toBeFalsy();
+  });
+
+  it('un document dont la donnée a bougé est marqué périmé', () => {
+    const r = celluleDoc({ stale: new Set(['doc-1']) });
+    expect('stale' in r && r.stale).toBe(true);
+  });
+
+  it('un document sans empreinte est marqué non vérifiable', () => {
+    const r = celluleDoc({ unverifiable: new Set(['doc-1']) });
+    expect('unverifiable' in r && r.unverifiable).toBe(true);
+    // Et surtout PAS périmé : on ne sait pas, on ne prétend pas.
+    expect('stale' in r && r.stale).toBeFalsy();
+  });
+
+  it('un document dont la sortie est prouvée est marqué engagé', () => {
+    const r = celluleDoc({ engaged: new Set(['doc-1']) });
+    expect('engaged' in r && r.engaged).toBe(true);
+  });
+
+  it('les qualificatifs se cumulent sur un même document', () => {
+    const r = celluleDoc({ stale: new Set(['doc-1']), engaged: new Set(['doc-1']) });
+    expect('stale' in r && r.stale).toBe(true);
+    expect('engaged' in r && r.engaged).toBe(true);
+  });
+
+  it('un id qui n’est dans aucun ensemble n’est pas qualifié', () => {
+    const r = celluleDoc({ stale: new Set(['autre']), unverifiable: new Set(['autre']) });
+    expect('stale' in r && r.stale).toBeFalsy();
+    expect('unverifiable' in r && r.unverifiable).toBeFalsy();
+  });
+
+  it('le programme partagé (productDoc) est qualifié lui aussi', () => {
+    const maps = emptyMaps();
+    maps.productDocs.set('PROGRAMME', { id: 'prod-1' });
+
+    const r = deriveCellState(
+      'PROGRAMME',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      { stale: new Set(['prod-1']) },
+    );
+
+    expect('stale' in r && r.stale).toBe(true);
+  });
+
+  it('un asset au contenu générique est marqué comme tel', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-1' });
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      { stub: new Set(['asset-1']) },
+    );
+
+    expect(r.state).toBe('GENERATED');
+    expect('stub' in r && r.stub).toBe(true);
+  });
+
+  it('un asset n’est jamais dit « non vérifiable » — il n’a pas d’empreinte à avoir', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-1' });
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      { unverifiable: new Set(['asset-1']) },
+    );
+
+    expect('unverifiable' in r && r.unverifiable).toBeFalsy();
+  });
+
+  it('une preuve signée manuelle continue de primer sur tout', () => {
+    const maps = emptyMaps();
+    maps.pedagogicalAssets.set('GRILLE_OBS', { id: 'asset-1' });
+    const docStatus: DocStatusMap = {
+      GRILLE_OBS: { state: 'MANUAL_OK', updatedAt: isoNow },
+    };
+
+    const r = deriveCellState(
+      'GRILLE_OBS',
+      { docStatus },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      { stub: new Set(['asset-1']) },
+    );
+
+    expect(r.state).toBe('MANUAL_OK');
+  });
+});

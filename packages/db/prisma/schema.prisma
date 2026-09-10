@@ -1020,24 +1020,30 @@ model DocumentTemplate {
 }
 
 model Document {
-  id            String              @id @default(uuid())
-  tenantId      String
-  templateId    String?
-  template      DocumentTemplate?   @relation(fields: [templateId], references: [id])
-  type          DocType
-  entityType    String // "session" | "participant" | "invoice"
-  entityId      String
-  pdfUrl        String
-  hashSha256    String
+  id                String              @id @default(uuid())
+  tenantId          String
+  templateId        String?
+  template          DocumentTemplate?   @relation(fields: [templateId], references: [id])
+  type              DocType
+  entityType        String // "session" | "participant" | "invoice"
+  entityId          String
+  pdfUrl            String
+  hashSha256        String
+  /// Lot 0 · 0.2 (audit 28/08, E-1) — SHA-256 du JSON des champs d'ENTRÉE
+  /// effectivement rendus, posé à la génération. `hashSha256` prouve que le PDF
+  /// n'a pas bougé ; celui-ci dit s'il raconte encore la vérité. null = document
+  /// antérieur au 02/09/2026 ou type non couvert → verdict « inconnu », jamais
+  /// « à jour ». Cf. `apps/web/src/lib/docs/source-fingerprint.ts`.
+  sourceFingerprint String?
   /// `generated` | `sent_for_signature` | `signed` | `declined` | `expired`.
   /// Reste une String en v1 (spec signature 2026-09-04 §4.1) : colonne existante,
   /// aucune reprise — les anciennes lignes gardent "generated".
-  status        String              @default("generated")
-  sessionId     String?
-  session       TrainingSession?    @relation(fields: [sessionId], references: [id])
-  participantId String?
-  participant   SessionParticipant? @relation(fields: [participantId], references: [id])
-  createdAt     DateTime            @default(now())
+  status            String              @default("generated")
+  sessionId         String?
+  session           TrainingSession?    @relation(fields: [sessionId], references: [id])
+  participantId     String?
+  participant       SessionParticipant? @relation(fields: [participantId], references: [id])
+  createdAt         DateTime            @default(now())
 
   /// Spec signature 2026-09-04 §4.1 — trace du document signé (e-signature OU
   /// scan manuel). Le PDF signé fait foi : /api/documents/[id] sert
@@ -1134,7 +1140,15 @@ model EmailMessage {
   status        String // "queued" | "sent" | "bounced"
   sentAt        DateTime?
   relatedEntity String?
+  /// Lot 0 · 0.2 — ids des `Document` réellement partis en pièce jointe.
+  /// C'est la seule preuve que l'application possède qu'un document a QUITTÉ
+  /// la maison : un document cité ici compte comme ENGAGÉ, on ne le régénère
+  /// pas en silence. Les envois antérieurs au 02/09/2026 n'ont pas de ligne du
+  /// tout — d'où l'avertissement « ce document a pu être envoyé ».
+  documentIds   Json?
   createdAt     DateTime  @default(now())
+
+  @@index([tenantId, sentAt])
 }
 
 // =====================================================
@@ -1453,23 +1467,27 @@ model PreEnrollment {
 
 // Référentiel officiel des Points d'Accueil AGEFICE en France (438 PA, source : agefice.fr)
 model AgeficePointAccueil {
-  id             String           @id @default(uuid())
-  name           String // "CCI Nice Côte d'Azur"
-  address1       String?
-  address2       String?
-  postalCode     String // "06000" (string padding 5)
-  city           String // "NICE"
-  department     String // "06" — calculé depuis postalCode (2 chars, 3 pour DOM-TOM 97X/98X)
-  departmentName String?
-  phone          String? // "04 93 13 75 00"
-  email          String?
-  website        String?
-  contactName    String? // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
-  numberPta      String? // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
-  source         String           @default("agefice.fr-2025") // versioning du référentiel
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  profiles       AgeficeProfile[]
+  id                String           @id @default(uuid())
+  name              String // "CCI Nice Côte d'Azur"
+  address1          String?
+  address2          String?
+  postalCode        String // "06000" (string padding 5)
+  city              String // "NICE"
+  department        String // "06" — calculé depuis postalCode (2 chars, 3 pour DOM-TOM 97X/98X)
+  departmentName    String?
+  phone             String? // "04 93 13 75 00"
+  email             String?
+  website           String?
+  contactName       String? // ex: "Virginie BEHIN" — interlocuteur principal du PA pour les dossiers AGEFICE
+  numberPta         String? // n° de Point d'Accueil attribué par AGEFICE (ex: "370" pour Nice)
+  // Départements RÉELLEMENT couverts par ce point d'accueil (source officielle
+  // agefice.fr). `department` ci-dessus dit seulement où il est implanté : 24
+  // départements n'ont aucun point chez eux et sont servis par un voisin.
+  departmentsServed String[]         @default([])
+  source            String           @default("agefice.fr-2025") // versioning du référentiel
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  profiles          AgeficeProfile[]
 
   @@unique([postalCode, name]) // clé naturelle pour upsert idempotent
   @@index([department])

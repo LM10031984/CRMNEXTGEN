@@ -1,17 +1,24 @@
 /**
- * Quelle JOURNÉE du catalogue proposer à l'issue du diagnostic.
+ * Quelle JOURNÉE proposer à l'issue du diagnostic.
  *
  * Objectif : générer des leads sur un stand avec un email qui ne ressemble pas
  * à un flyer. Le prospect reçoit UNE journée — pas un parcours de 72 h qu'on ne
  * vend pas sur un salon — et c'est une VRAIE journée du catalogue Start Academy,
  * avec ses objectifs et son déroulé réels. Rien n'est inventé.
  *
- * ⚠ CLASSEMENT À RELIRE PAR LAURENT (établi le 01/09/2026 à partir des titres et
- * objectifs des 36 produits actifs).
+ * DEPUIS LE 02/09/2026 : chaque axe pointe d'abord sur SA journée Faros
+ * (`seed-journees-faros.ts`). C'est ce qui donne à l'email la patte de la
+ * maison : le contenu couple l'IA et le métier par construction, puisqu'il vient
+ * des capsules « L'Agent Incomparable ». Les journées de l'ancien catalogue
+ * restent en second choix — le résolveur y descend si la journée Faros a été
+ * désactivée ou supprimée, plutôt que de laisser un prospect sans rien.
  *
- * Clé = `TrainingProduct.code` (stable), jamais le titre (qui se réécrit). Un
- * code absent ou désactivé au moment de l'envoi est ignoré : le diagnostic ne
- * tombe pas en panne parce qu'un produit a bougé.
+ * Le niveau IA du prospect (question 5) ne départage PLUS entre produits : les
+ * quatre journées Faros s'adressent au débutant comme à l'utilisateur régulier.
+ * Il est passé au modèle, qui l'utilise pour ordonner la journée — le socle en
+ * tête pour un débutant, les commandes et les agents pour un habitué.
+ *
+ * Clé = `TrainingProduct.code` (stable), jamais le titre (qui se réécrit).
  *
  * Module NEUTRE : aucun import prisma/auth/React.
  */
@@ -19,59 +26,57 @@
 import type { ProblematiqueKey } from './questions';
 
 /**
- * Critère de départage À L'INTÉRIEUR d'une problématique.
+ * Niveau d'usage de l'IA déduit de la question 5.
  *
- * Deux prospects qui tombent sur le même axe ne reçoivent pas la même journée
- * s'ils n'en sont pas au même point : celui qui n'a jamais touché à l'IA reçoit
- * les fondamentaux, celui qui s'en sert déjà reçoit l'outil avancé. C'est ce
- * qui rend le diagnostic crédible — et c'est tiré de leurs réponses, pas d'un
- * tirage au sort.
+ * Ne sert plus à choisir le produit, mais à personnaliser le déroulé dans le
+ * prompt du sur-mesure. Conservé ici parce que c'est une lecture des réponses,
+ * pas une décision d'assemblage.
  */
 export type NiveauIa = 'DEBUTANT' | 'INITIE' | 'AVANCE';
 
 export interface JourneeCandidate {
   /** `TrainingProduct.code`. */
   code: string;
-  /** Niveaux auxquels cette journée s'adresse. */
-  niveaux: NiveauIa[];
   /** Aide-mémoire pour la relecture — le titre réel vient de la base. */
   memo: string;
 }
 
 /**
- * Journées éligibles par problématique, dans l'ordre de préférence commerciale.
- * Le résolveur prend la PREMIÈRE qui accepte le niveau du prospect.
+ * Journées éligibles par problématique, dans l'ordre de préférence.
+ *
+ * Le premier code est la journée Faros de l'axe. Les suivants sont des replis
+ * de continuité de service, essayés dans l'ordre si le précédent est introuvable
+ * ou désactivé au moment de l'envoi.
  */
 export const JOURNEES: Record<ProblematiqueKey, JourneeCandidate[]> = {
-  IA_PRODUCTIVITE: [
-    { code: 'PROD-0058', niveaux: ['DEBUTANT', 'INITIE'], memo: "8 h — L'IA au service des conseillers immobiliers" },
-    { code: 'FRM-0001', niveaux: ['DEBUTANT', 'INITIE'], memo: "8 h — Exploiter la puissance de l'IA dans son activité immobilière" },
-    { code: 'FRM-0002', niveaux: ['INITIE', 'AVANCE'], memo: "8 h — Claude d'Anthropic pour les conseillers immobiliers" },
-    { code: 'PROD-0663', niveaux: ['AVANCE'], memo: '8 h — Claude Anthropic pour les conseillers immo' },
-    { code: 'PROD-0043', niveaux: ['DEBUTANT'], memo: "4 h — L'IA & l'humain : l'harmonie dans l'immobilier" },
+  PROSPECTION_MANDATS: [
+    { code: 'FRM-0004', memo: "8 h — J1 Faros : rentrer plus de mandats avec l'IA" },
+    { code: 'PROD-0059', memo: '8 h — Booster vendeur (ancien catalogue)' },
+    { code: 'PROD-0044', memo: "8 h — Vendez mieux avec l'IA (ancien catalogue)" },
   ],
 
-  PROSPECTION_MANDATS: [
-    { code: 'PROD-0059', niveaux: ['DEBUTANT', 'INITIE', 'AVANCE'], memo: '8 h — Booster vendeur' },
-    { code: 'PROD-0044', niveaux: ['INITIE', 'AVANCE'], memo: "8 h — Vendez mieux avec l'IA" },
+  IA_PRODUCTIVITE: [
+    { code: 'FRM-0005', memo: "8 h — J2 Faros : gagner 5 à 10 heures par semaine grâce à l'IA" },
+    { code: 'PROD-0058', memo: "8 h — L'IA au service des conseillers immobiliers (ancien catalogue)" },
+    { code: 'FRM-0001', memo: "8 h — Exploiter la puissance de l'IA (ancien catalogue)" },
   ],
 
   NOTORIETE_DIGITALE: [
-    { code: 'PROD-0044', niveaux: ['DEBUTANT', 'INITIE', 'AVANCE'], memo: "8 h — Vendez mieux avec l'IA (annonces, contenus, suivi vendeur)" },
+    { code: 'FRM-0006', memo: '8 h — J3 Faros : devenir le professionnel le plus visible de son secteur' },
+    { code: 'PROD-0044', memo: "8 h — Vendez mieux avec l'IA (ancien catalogue)" },
   ],
 
-  /**
-   * ⚠ TROU DE CATALOGUE ASSUMÉ — aucune journée courte de pilotage d'équipe.
-   * Les produits « entreprise/agence » existants font 40 h, 88 h et 152 h :
-   * impossibles à proposer sur un stand. Le résolveur bascule donc sur l'axe
-   * IA productivité, en assumant le décalage plutôt qu'en promettant une
-   * journée qui n'existe pas. Une journée « piloter son équipe avec l'IA »
-   * serait à créer — c'est un manque commercial, pas un bug.
-   */
-  MANAGEMENT_EQUIPE: [],
+  MANAGEMENT_EQUIPE: [
+    { code: 'FRM-0007', memo: "8 h — J4 Faros : piloter son agence et son équipe avec l'IA" },
+  ],
 };
 
-/** Axe de repli quand une problématique n'a aucune journée d'une seule journée. */
+/**
+ * Axe de repli, utilisé UNIQUEMENT si un axe se retrouvait sans aucune journée
+ * résoluble. Ce n'est plus le cas depuis que les quatre axes ont la leur — mais
+ * un produit peut être désactivé un soir de salon, et le prospect doit repartir
+ * avec quelque chose plutôt qu'avec rien.
+ */
 export const REPLI: ProblematiqueKey = 'IA_PRODUCTIVITE';
 
 /**
@@ -93,15 +98,14 @@ export const HORS_DIAGNOSTIC: Record<string, string> = {
 
 /**
  * Niveau IA déduit de la question 5 (« votre usage de l'IA aujourd'hui »).
- * Une valeur inconnue retombe sur DEBUTANT : sur un stand, mieux vaut proposer
- * les fondamentaux à quelqu'un d'avancé que l'inverse.
+ * Une valeur inconnue retombe sur DEBUTANT : sur un stand, mieux vaut donner le
+ * socle à quelqu'un d'avancé que sauter le socle pour un débutant.
  */
 export function niveauDepuisReponses(reponses: Record<string, string>): NiveauIa {
   switch (reponses.usage_ia) {
     case 'REGULIER':
       return 'AVANCE';
     case 'PONCTUEL':
-      return 'INITIE';
     case 'ESSAI':
       return 'INITIE';
     case 'JAMAIS':
@@ -111,11 +115,14 @@ export function niveauDepuisReponses(reponses: Record<string, string>): NiveauIa
 }
 
 /**
- * La journée retenue : un code produit, et la trace de la décision.
- * `replied` = on a basculé d'axe faute de journée courte sur l'axe d'origine.
+ * La journée retenue, et la trace de la décision.
+ *
+ * `codes` est ORDONNÉ : le premier est la journée voulue, les suivants sont les
+ * replis à essayer si elle ne se résout pas en base. C'est l'appelant qui tranche,
+ * parce que lui seul sait ce qui existe — ce module reste neutre.
  */
 export interface SelectionJournee {
-  code: string;
+  codes: string[];
   axeRetenu: ProblematiqueKey;
   replie: boolean;
   niveau: NiveauIa;
@@ -132,9 +139,9 @@ export function choisirJournee(
     [REPLI, true],
   ] as const) {
     const candidates = JOURNEES[axe];
-    const exact = candidates.find((c) => c.niveaux.includes(niveau));
-    const choisi = exact ?? candidates[0];
-    if (choisi) return { code: choisi.code, axeRetenu: axe, replie, niveau };
+    if (candidates.length > 0) {
+      return { codes: candidates.map((c) => c.code), axeRetenu: axe, replie, niveau };
+    }
   }
   return null;
 }

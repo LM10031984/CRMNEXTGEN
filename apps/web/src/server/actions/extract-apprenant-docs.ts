@@ -2,6 +2,9 @@
 
 import { validateRequest } from '@/lib/auth';
 import { extractDocsFromBuffers, type DocFile, type ExtractedDocs } from '@/lib/preinscription-extractor';
+import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
+import { filterOwnApprenantKeys } from '@/lib/storage-keys/apprenant-keys';
+import { detectNameDivergences } from '@/lib/persons/name-divergence';
 
 /**
  * Pré-extrait les champs Person depuis les fichiers uploadés (CFP/CNI/RIB).
@@ -41,6 +44,14 @@ export interface ExtractApprenantResult {
     accountHolder: string | null;
   };
   warnings?: string[];
+  /**
+   * Divergences d'identité ENTRE les pièces (nom lu différemment sur la CNI et
+   * sur l'attestation URSSAF). Canal distinct des `warnings` techniques : une
+   * lettre de travers sur un nom se retrouve dans la convention, l'attestation
+   * d'assiduité et la raison sociale de l'auto-entreprise — ça mérite mieux
+   * qu'une ligne en 10 px. Cas déclencheur : EL GUERTIT lu EL GUERTIJ.
+   */
+  identityWarnings?: string[];
   error?: string;
   durationMs?: number;
 }
@@ -62,6 +73,53 @@ export async function extractApprenantDocs(formData: FormData): Promise<ExtractA
     return { ok: false, error: 'Aucun fichier fourni (attendu : CNI, RIB, CFP)' };
   }
 
+  return runExtraction(files);
+}
+
+/**
+ * Même extraction, mais à partir des pièces DÉJÀ déposées dans le stockage
+ * (quick 260908-lrj). C'est ce qui permet un dépôt unique : le fichier part
+ * une fois du navigateur vers Supabase, et le serveur le relit ensuite pour
+ * pré-remplir la fiche. Aucun octet ne repasse par Vercel, donc plus de
+ * plafond 4,5 Mo sur une photo de pièce d'identité.
+ *
+ * Les clés viennent du navigateur : on ne lit QUE celles du tenant courant.
+ */
+export async function extractApprenantDocsFromKeys(
+  keys: Partial<Record<'CNI' | 'RIB' | 'CFP', string>>,
+): Promise<ExtractApprenantResult> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const { accepted, rejected } = filterOwnApprenantKeys(keys, user.tenantId);
+  if (rejected.length > 0) {
+    return { ok: false, error: `Pièce non reconnue (${rejected.join(', ')}) — recommence le dépôt.` };
+  }
+
+  const files: DocFile[] = [];
+  for (const kind of ['CNI', 'RIB', 'CFP'] as const) {
+    const key = accepted[kind];
+    if (!key) continue;
+    try {
+      files.push({
+        kind,
+        buffer: await downloadFile(DOCS_BUCKET, key),
+        contentType: guessFromName(key),
+      });
+    } catch (e: any) {
+      return { ok: false, error: `Lecture de la pièce ${kind} impossible : ${e?.message ?? e}` };
+    }
+  }
+
+  if (files.length === 0) {
+    return { ok: false, error: 'Dépose au moins une pièce (CNI, RIB ou attestation CFP).' };
+  }
+
+  return runExtraction(files);
+}
+
+/** Pipeline commun aux deux entrées : OCR puis fusion des champs. */
+async function runExtraction(files: DocFile[]): Promise<ExtractApprenantResult> {
   let extracted: ExtractedDocs;
   try {
     extracted = await extractDocsFromBuffers(files);
@@ -96,10 +154,19 @@ export async function extractApprenantDocs(formData: FormData): Promise<ExtractA
     accountHolder: extracted.rib?.accountHolder ?? null,
   };
 
+  // Le nom figure sur la CNI ET sur l'attestation URSSAF. Jusqu'ici la CNI
+  // gagnait et l'autre valeur était jetée sans rien dire — une lecture
+  // douteuse passait donc inaperçue.
+  const identityWarnings = detectNameDivergences(
+    { label: "la carte d'identité", firstName: extracted.cni?.firstName, lastName: extracted.cni?.lastName },
+    { label: "l'attestation URSSAF", firstName: extracted.cfp?.firstName, lastName: extracted.cfp?.lastName },
+  ).map((d) => d.message);
+
   return {
     ok: true,
     data,
     warnings: extracted.warnings,
+    identityWarnings,
     durationMs: extracted.durationMs,
   };
 }
