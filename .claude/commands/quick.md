@@ -47,6 +47,32 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 - [ ] Email : passer `context: { tenantId, category, sessionId? }` au mailer
       (le type l'exige, c'est le filet exhaustivité tsc)
 
+### Migrations
+
+**`prisma db push` est INTERDIT — sur toutes les bases, y compris `qualiof_test`
+en CI. Une évolution de schéma passe par `prisma migrate dev`, point.**
+(Décision Laurent, 10/09/2026.)
+
+Pourquoi cette interdiction, et pas seulement « en prod » : `db push` aligne une
+base sur le schéma **sans écrire de migration**. La base obtenue est donc juste,
+et l'historique de migrations, lui, ne l'est plus — il peut manquer un objet
+sans que rien ne le signale. Une CI qui vérifie sur une base poussée par
+`db push` valide le schéma contre lui-même : elle ne peut structurellement pas
+voir l'écart. C'est ainsi que l'index GIN `AgeficePointAccueil.departmentsServed`
+a vécu deux jours en base sans exister au schéma (constat du 10/09) — le premier
+`migrate dev` venu l'aurait supprimé en silence.
+
+- Nouvelle migration : `pnpm --filter @qualiof/db run db:migrate:local`
+  (`migrate dev` sur `.env.local`). Nom explicite, migration **additive**.
+- Environnement non interactif (agent, CI) où `migrate dev` refuse de tourner :
+  générer le SQL avec `prisma migrate diff --from-migrations
+  --to-schema-datamodel --script`, écrire le dossier de migration à la main,
+  puis `migrate deploy`. Jamais `db push` comme raccourci.
+- Prod : `prisma migrate deploy`, **jamais** `db push`, jamais `migrate dev`.
+- Avant de livrer : `pnpm --filter @qualiof/db run check:schema` doit être vert
+  (base jetable, migrations rejouées pour de vrai, diff VIDE). Ce garde tourne
+  aussi en CI — s'il rougit, c'est le schéma ou la migration qui ment, pas lui.
+
 ## 4. Gates — les trois, dans cet ordre
 
 ```
