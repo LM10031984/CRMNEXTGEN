@@ -8,6 +8,7 @@ import {
   CRENEAU_PRESETS,
   creneauDefaut,
   decrireCreneau,
+  formaterHeureOf,
   mesurerCreneau,
   presetDuCreneau,
 } from '../creneaux';
@@ -16,9 +17,18 @@ const RULES = Object.fromEntries(
   FUNDING_RULE_SEEDS.map((s) => [s.key, s.valueNumeric]),
 ) as FundingRuleValues;
 
-/** 4 h sur site, 2 formateurs — les valeurs d'usine de Start Academy. */
+/**
+ * 4 h sur site, 2 formateurs — les valeurs d'usine de Start Academy.
+ *
+ * Le décalage est écrit en clair (`+02:00`, le 5 octobre 2026 est en heure
+ * d'été) : une fixture qui s'appuierait sur le fuseau de la machine passerait
+ * à Paris et échouerait en CI, ce qui est exactement le défaut qu'on corrige.
+ */
 function creneau(debut: string, fin: string) {
-  return { startsAt: new Date(`2026-10-05T${debut}:00`), endsAt: new Date(`2026-10-05T${fin}:00`) };
+  return {
+    startsAt: new Date(`2026-10-05T${debut}:00+02:00`),
+    endsAt: new Date(`2026-10-05T${fin}:00+02:00`),
+  };
 }
 
 describe('mesurerCreneau — la demi-journée est l’unité, pas la journée', () => {
@@ -133,5 +143,43 @@ describe('decrireCreneau — la phrase que lisent l’admin et le participant', 
     expect(decrireCreneau(mesurerCreneau(creneau('09:00', '11:30'), RULES))).toBe(
       '1 demi-journée · 2,5 h sur site · 8 h conventionnées',
     );
+  });
+});
+
+describe('l’heure affichée est celle de l’organisme, pas celle du serveur', () => {
+  /**
+   * Le défaut vu sur l'aperçu du 10/09/2026 : un créneau de 09:00 à Paris est
+   * stocké 07:00 UTC, et le rendu serveur — qui tourne en UTC sur Vercel —
+   * l'affichait « 07:00 – 11:00 » au participant. Deux heures d'écart entre ce
+   * qu'on annonce et ce qu'on tient.
+   */
+  it('rend 09:00 pour un créneau stocké à 07:00 UTC (heure d’été)', () => {
+    expect(formaterHeureOf(new Date('2026-10-08T07:00:00.000Z'))).toBe('09:00');
+    expect(formaterHeureOf(new Date('2026-10-08T11:00:00.000Z'))).toBe('13:00');
+  });
+
+  it('suit le changement d’heure — en janvier, Paris est à UTC+1', () => {
+    expect(formaterHeureOf(new Date('2027-01-14T08:00:00.000Z'))).toBe('09:00');
+  });
+
+  it('reconnaît le préréglage sur les heures de l’organisme, pas sur celles du serveur', () => {
+    expect(
+      presetDuCreneau(
+        {
+          startsAt: new Date('2026-10-08T07:00:00.000Z'),
+          endsAt: new Date('2026-10-08T11:00:00.000Z'),
+        },
+        RULES,
+      ),
+    ).toBe('MATIN');
+    expect(
+      presetDuCreneau(
+        {
+          startsAt: new Date('2026-10-22T07:00:00.000Z'),
+          endsAt: new Date('2026-10-22T15:00:00.000Z'),
+        },
+        RULES,
+      ),
+    ).toBe('JOURNEE');
   });
 });

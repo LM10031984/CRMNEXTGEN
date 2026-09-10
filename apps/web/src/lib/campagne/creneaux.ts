@@ -19,6 +19,14 @@
  * la première le jour où un paramètre bouge — et c'est alors la convention qui
  * ment, ou le dossier financeur. Une seule source, par construction.
  *
+ * ── Le fuseau, et pourquoi il est écrit en toutes lettres ──────────────────
+ * Les heures s'affichent en `Europe/Paris`, jamais dans le fuseau du serveur.
+ * L'aperçu du 10/09/2026 a montré le prix de l'oubli : un créneau de 09:00 à
+ * Paris est stocké 07:00 UTC, et le rendu serveur — qui tourne en UTC sur
+ * Vercel — annonçait « 07:00 – 11:00 » au participant. Deux heures d'écart
+ * entre ce qu'on promet et ce qu'on tient, invisibles depuis un poste français
+ * où le rendu local retombait juste par hasard.
+ *
  * ── L'arrondi, et pourquoi il n'est pas « au supérieur » sur le temps écoulé ──
  * Le nombre de demi-journées se déduit de la durée du créneau arrondie AU PLUS
  * PROCHE, pas au supérieur. Le cas qui tranche est la journée réelle : 09:00 →
@@ -140,14 +148,29 @@ export function CRENEAU_PRESETS(rules: CreneauRules): CreneauPresetOption[] {
 
 /** Relit un créneau enregistré pour retrouver le bouton à allumer. */
 export function presetDuCreneau(creneau: Creneau, rules: CreneauRules): CreneauPreset {
-  const debut = formaterHeureLocale(creneau.startsAt);
-  const fin = formaterHeureLocale(creneau.endsAt);
+  const debut = formaterHeureOf(creneau.startsAt);
+  const fin = formaterHeureOf(creneau.endsAt);
   const trouve = CRENEAU_PRESETS(rules).find((p) => p.debut === debut && p.fin === fin);
   return trouve?.key ?? 'PERSONNALISE';
 }
 
-export function formaterHeureLocale(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+/**
+ * Le fuseau de l'organisme. Écrit ici une fois, jamais déduit de la machine :
+ * un rendu serveur et un rendu navigateur doivent donner la même heure, sinon
+ * l'écran de l'admin et celui du participant se contredisent.
+ */
+const FUSEAU_OF = 'Europe/Paris';
+
+const HEURE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: FUSEAU_OF,
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+/** « 09:00 » — l'heure telle qu'elle sera vécue sur place. */
+export function formaterHeureOf(d: Date): string {
+  return HEURE_FMT.format(d).replace('h', ':');
 }
 
 /** 4 → "4", 2.5 → "2,5". Français, et sans décimale inutile. */

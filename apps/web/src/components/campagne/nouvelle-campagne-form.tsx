@@ -35,7 +35,6 @@ import {
   creneauDefaut,
   decrireCreneau,
   mesurerCreneau,
-  presetDuCreneau,
   type CreneauRules,
 } from '@/lib/campagne/creneaux';
 
@@ -318,13 +317,12 @@ export function NouvelleCampagneForm({
             },
             rules,
           );
-          const actif = presetDuCreneau(
-            {
-              startsAt: new Date(`2026-01-01T${d.debut || defaut.debut}:00`),
-              endsAt: new Date(`2026-01-01T${d.fin || defaut.fin}:00`),
-            },
-            rules,
-          );
+          // Comparaison de chaînes, et non d'objets Date : les champs `time`
+          // portent déjà l'heure murale, la convertir en Date pour la
+          // reconvertir ferait entrer un fuseau là où il n'y en a pas.
+          const actif =
+            presets.find((p) => p.debut === (d.debut || defaut.debut) && p.fin === (d.fin || defaut.fin))
+              ?.key ?? null;
           return (
             <div key={d.cle} className="rounded-xl border border-border p-3 space-y-2">
               <div className="flex flex-wrap items-end gap-2">

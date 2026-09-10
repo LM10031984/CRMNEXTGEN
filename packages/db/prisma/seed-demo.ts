@@ -30,13 +30,24 @@
  *  · 1 diagnostic LÉGER terminé, DEMO-DIAG-0001, avec ses 4 fiches équipe et
  *    toutes ses réponses — l'exemple canonique de la spec : 4 indés au-dessus
  *    du seuil AGEFICE, donc 9 demi-journées de groupe et une prise en charge
- *    plafonnée.
+ *    plafonnée ;
+ *  · 1 campagne de RDV ouverte sur ce diagnostic, avec deux dates (une matinée
+ *    et une journée, pour que le décompte en demi-journées se voie) et quatre
+ *    dossiers dans quatre états différents — complet, pièces manquantes, rejeté,
+ *    et formulaire non rendu. Sans eux, l'écran « ce qui bloque » du lot F
+ *    reste vide et il n'y a rien à relire.
+ *
+ * Le lien public de la campagne est DÉTERMINISTE en démonstration, et le script
+ * l'affiche : sans lui, la page `/rdv/[token]` serait inatteignable, puisqu'un
+ * token réel ne s'affiche qu'une fois à la création. C'est un écart assumé, et
+ * la raison pour laquelle ce script refuse toute base qui n'est pas jetable.
  *
  * Usage :
  *   DATABASE_URL=… DIRECT_URL=… pnpm --filter @qualiof/db exec tsx prisma/seed-demo.ts
  *   … --purge   pour retirer le jeu de démo sans toucher au reste
  */
 
+import { createHash } from 'node:crypto';
 import { config as loadEnv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
@@ -87,6 +98,37 @@ function verifierCible(): void {
       `La production de QualiOF est sur le pooler aws-0 ; l'aperçu sur aws-1.\n` +
       `Si la cible est bien jetable, relancez avec SEED_DEMO_FORCE=1.`,
   );
+}
+
+/**
+ * Dans N jours, à H heures pile **à Paris**.
+ *
+ * `setHours` suivrait le fuseau de la machine qui lance le seed : lancé depuis
+ * un runner en UTC, il fabriquerait des créneaux décalés de deux heures, et la
+ * page publique annoncerait au participant une heure qu'on ne tiendra pas.
+ * Le décalage est donc lu pour la date visée — il change entre l'été et l'hiver.
+ */
+const FUSEAU_OF = 'Europe/Paris';
+
+function decalageOf(d: Date): string {
+  const nom = new Intl.DateTimeFormat('en-US', {
+    timeZone: FUSEAU_OF,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(d)
+    .find((p) => p.type === 'timeZoneName')?.value;
+  return nom?.replace('GMT', '') || '+00:00';
+}
+
+function dateA(joursPlusTard: number, heure: number): Date {
+  const jour = new Date(Date.now() + joursPlusTard * 86_400_000);
+  const aaaammjj = new Intl.DateTimeFormat('fr-CA', {
+    timeZone: FUSEAU_OF,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(jour);
+  return new Date(`${aaaammjj}T${String(heure).padStart(2, '0')}:00:00${decalageOf(jour)}`);
 }
 
 /** Une valeur plausible par TYPE de question — le seed ne périme pas quand le référentiel bouge. */
@@ -346,7 +388,107 @@ async function main(): Promise<void> {
   }
   console.log(`✓ ${equipe.length} fiches équipe`);
 
+  // ── Campagne de RDV + dossiers ────────────────────────────────────────────
+  const token = createHash('sha256').update(`${MARQUE}-campagne-v1`).digest('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const labelCampagne = `${MARQUE} RDV OPTIMMO Conseil (démo)`;
+
+  const campagneExistante = await prisma.enrollmentBatch.findFirst({
+    where: { tenantId: tenant.id, label: labelCampagne },
+    select: { id: true },
+  });
+
+  const dansNJours = (n: number) => new Date(Date.now() + n * 86_400_000);
+  const produitPhare = await prisma.trainingProduct.findFirst({
+    where: { tenantId: tenant.id, code: `${MARQUE}-PROD-001` },
+    select: { id: true },
+  });
+
+  const campagne =
+    campagneExistante ??
+    (await prisma.enrollmentBatch.create({
+      data: {
+        tenantId: tenant.id,
+        label: labelCampagne,
+        organizationId: optimmo.id,
+        leadId: lead.id,
+        diagnosticId: diagnostic.id,
+        productId: produitPhare?.id ?? null,
+        tokenHash,
+        expiresAt: dansNJours(30),
+        maxUses: 12,
+        usedCount: 4,
+        createdById: owner.id,
+        dateOptions: {
+          create: [
+            // Une matinée et une journée : le décompte en demi-journées se voit
+            // d'un écran à l'autre (D-23).
+            { startsAt: dateA(28, 9), endsAt: dateA(28, 13), label: 'Axe 1 — dans vos locaux' },
+            { startsAt: dateA(42, 9), endsAt: dateA(42, 17), label: 'Axes 2 et 3 — journée' },
+          ],
+        },
+      },
+      select: { id: true },
+    }));
+
+  const dossiers = [
+    {
+      firstName: 'Marie',
+      lastName: 'Delaunay (démo)',
+      status: 'VALIDATED' as const,
+      pieces: true,
+      rendu: true,
+    },
+    {
+      firstName: 'Julien',
+      lastName: 'Pasquier (démo)',
+      status: 'EXTRACTED' as const,
+      pieces: false,
+      rendu: true,
+    },
+    {
+      firstName: 'Sophie',
+      lastName: 'Lambert (démo)',
+      status: 'REJECTED' as const,
+      pieces: true,
+      rendu: true,
+      motif: 'RIB illisible — à redéposer.',
+    },
+    {
+      firstName: 'Karim',
+      lastName: 'Benali (démo)',
+      status: 'PENDING_FORM' as const,
+      pieces: false,
+      rendu: false,
+    },
+  ];
+
+  for (const [i, d] of dossiers.entries()) {
+    const jeton = createHash('sha256').update(`${MARQUE}-dossier-${i}`).digest('hex');
+    await prisma.preEnrollment.upsert({
+      where: { token: jeton },
+      update: { batchId: campagne.id },
+      create: {
+        tenantId: tenant.id,
+        token: jeton,
+        expiresAt: dansNJours(30),
+        batchId: campagne.id,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        email: `${d.firstName.toLowerCase()}@exemple-demo.invalid`,
+        status: d.status,
+        submittedAt: d.rendu ? new Date(Date.now() - (i + 1) * 86_400_000) : null,
+        cniKey: d.pieces ? `demo/${i}/cni.jpg` : null,
+        ribKey: d.pieces ? `demo/${i}/rib.pdf` : null,
+        cfpKey: d.pieces ? `demo/${i}/cfp.pdf` : null,
+        rejectionReason: d.motif ?? null,
+      },
+    });
+  }
+  console.log(`✓ campagne de RDV + ${dossiers.length} dossiers (complet, incomplet, rejeté, non rendu)`);
+
   console.log('\nJeu de démonstration en place. Tout porte « démo » ou le préfixe DEMO-.');
+  console.log(`Lien public de la campagne (démo, déterministe) : /rdv/${token}`);
 }
 
 main()
