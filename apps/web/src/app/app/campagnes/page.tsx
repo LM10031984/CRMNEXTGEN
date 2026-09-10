@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Route } from 'next';
-import { Users2, Link2 } from 'lucide-react';
+import { Users2, Link2, Plus } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -71,6 +71,14 @@ export default async function CampagnesPage() {
       <PageHeader
         title="Campagnes de pré-inscription"
         subtitle="Un lien par rendez-vous : l’équipe du client dépose ses dossiers, vous voyez ce qui est bon."
+        actions={
+          <Link
+            href={'/app/campagnes/nouvelle' as Route}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white"
+          >
+            <Plus className="h-4 w-4" /> Nouvelle campagne
+          </Link>
+        }
       />
 
       {campagnes.length === 0 ? (
@@ -78,8 +86,8 @@ export default async function CampagnesPage() {
           <Users2 className="h-8 w-8 mx-auto text-muted-foreground" />
           <p className="mt-3 font-medium">Aucune campagne pour l’instant</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Une campagne se crée depuis un diagnostic ou une proposition : c’est le lien que le
-            dirigeant diffuse à son équipe.
+            Une campagne, c’est le lien que le dirigeant diffuse à son équipe après le rendez-vous.
+            Créez-la depuis un diagnostic, ou directement ici.
           </p>
         </div>
       ) : (
