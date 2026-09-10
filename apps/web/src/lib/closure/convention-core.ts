@@ -35,6 +35,10 @@ import { requiresContratIndividuel } from '@/lib/legal-forms';
 import { isPersonneMoralePayeur, releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
+import {
+  resoudreRepresentantEntreprise,
+  resoudreRepresentantIndividuel,
+} from '@/lib/signature/representant';
 
 /**
  * Cœur SANS auth de la génération de convention (réutilisable par scripts
@@ -172,10 +176,34 @@ export async function generateConventionCore(
   );
   const isSelfEmployed = linkToSponsor?.role === 'EI_SELF';
 
-  // Représentant qui signe la convention
-  const representantNom = isSelfEmployed
-    ? `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`.trim()
-    : (participant.sponsorOrg.representative?.trim() || `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`.trim());
+  // Représentant qui signe la convention — cascade PARTAGÉE avec le moteur
+  // d'envoi (`@/lib/signature/representant`, lot C.2a). Comportement inchangé :
+  // EI_SELF ⇒ l'apprenant, sinon le champ `representative`, sinon l'apprenant en
+  // repli. Ce qui change, c'est qu'il n'existe plus qu'UNE cascade : le
+  // signataire à qui part la demande de signature ne peut plus diverger du nom
+  // que ce PDF imprime.
+  const representant = resoudreRepresentantIndividuel({
+    org: {
+      id: participant.sponsorOrg.id,
+      legalName: participant.sponsorOrg.legalName,
+      representative: participant.sponsorOrg.representative,
+      // Ce chemin ne charge aucun contact : il n'en a jamais eu besoin, et
+      // élargir sa requête pour le confort du module serait payer une jointure
+      // pour rien.
+      contacts: [],
+    },
+    apprenant: {
+      firstName: participant.person.firstName,
+      lastName: participant.person.lastName,
+      email: participant.person.email,
+    },
+    estEiSelf: isSelfEmployed,
+  });
+  // Le chemin individuel ne refuse JAMAIS (l'apprenant est le repli). Le test
+  // n'existe que pour affiner le type — et pour que, si la cascade se durcissait
+  // un jour, l'échec soit nommé au lieu d'imprimer « Représentée par , ».
+  if (!representant.ok) return { ok: false, error: representant.error };
+  const representantNom = representant.nom;
 
   // Stagiaire(s) couverts par cette convention. Pour le MVP, 1 seule personne.
   const stagiaires: ConventionStagiaire[] = [
@@ -404,21 +432,25 @@ export async function generateConventionEntrepriseCore(
   // n'est pas opposable — elle ne doit pas pouvoir être produite. Le refus
   // tombe ICI, à côté de la garde des prix manquants, donc AVANT tout rendu
   // PDF et toute écriture.
-  const contactPrincipal = org.contacts?.[0];
-  const representantNom =
-    org.representative?.trim() ||
-    (contactPrincipal
-      ? `${contactPrincipal.firstName} ${contactPrincipal.lastName.toUpperCase()}`.trim()
-      : '');
-  if (!representantNom) {
-    return {
-      ok: false,
-      error:
-        `Représentant légal inconnu pour « ${org.legalName} » : renseignez le représentant ` +
-        `sur la fiche entreprise (/app/organisations/${org.id}) ou désignez un contact ` +
-        `principal. Une convention sans signataire n'est pas opposable.`,
-    };
-  }
+  const representant = resoudreRepresentantEntreprise({
+    id: org.id,
+    legalName: org.legalName,
+    representative: org.representative,
+    // `isPrimary: true` n'est pas une supposition : la requête ci-dessus filtre
+    // `where: { isPrimary: true }`, et cette forme est elle-même verrouillée par
+    // le test « ne charge QUE le contact principal, le plus ancien, scopé
+    // tenant ». On REDIT donc au module ce que la requête garantit déjà, parce
+    // que son contrat exige le drapeau explicite : c'est lui qui refuse de
+    // nommer un signataire tiré d'un contact secondaire, et il ne peut le faire
+    // que sur une donnée qu'on lui donne.
+    contacts: (org.contacts ?? []).map((c) => ({
+      firstName: c.firstName,
+      lastName: c.lastName,
+      isPrimary: true,
+    })),
+  });
+  if (!representant.ok) return { ok: false, error: representant.error };
+  const representantNom = representant.nom;
 
   // Annexe nominative : nom + prénom UNIQUEMENT (consigne Laurent — aucune CSP
   // ni poste occupé sur les documents). `ConventionStagiaire` ne porte
