@@ -26,6 +26,15 @@ export interface LearnerPhaseActionsProps {
   phase: 'avant' | 'pendant' | 'apres';
   /** Documents de cette phase déjà produits pour cet apprenant. */
   readyCount: number;
+  /**
+   * Intitulés des pièces que l'archive contiendra, pour l'infobulle.
+   *
+   * Le compteur seul a déjà menti une fois (bug remonté le 2026-09-10 :
+   * « Télécharger (5) » alors que l'attestation d'assiduité n'était pas dans
+   * le zip). Un nombre ne se vérifie qu'après décompression ; la liste, elle,
+   * se lit avant de cliquer.
+   */
+  readyLabels?: string[];
   /** Documents de cette phase encore à produire. */
   missingCount: number;
   /** RBAC : afficher ou non l'action de génération. */
@@ -42,6 +51,7 @@ export function LearnerPhaseActions({
   participantName,
   phase,
   readyCount,
+  readyLabels,
   missingCount,
   canGenerate,
   onGenerateAll,
@@ -67,7 +77,11 @@ export function LearnerPhaseActions({
         <a
           href={`/api/sessions/${sessionId}/apprenants/${participantId}/zip?phase=${phase}`}
           aria-label={`Télécharger les documents de ${participantName} pour cette phase`}
-          title={`Télécharger les ${readyCount} document${readyCount > 1 ? 's' : ''} de cette phase pour ${participantName}, en une archive`}
+          title={
+            readyLabels && readyLabels.length > 0
+              ? `Archive de ${participantName} — ${readyLabels.join(' · ')}`
+              : `Télécharger les ${readyCount} document${readyCount > 1 ? 's' : ''} de cette phase pour ${participantName}, en une archive`
+          }
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border text-xs font-semibold hover:bg-muted transition-colors"
         >
           <Download className="h-3.5 w-3.5" />

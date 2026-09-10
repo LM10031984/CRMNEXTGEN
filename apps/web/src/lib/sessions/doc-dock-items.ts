@@ -122,21 +122,17 @@ export function buildDocDockItems(input: BuildInput): DocDockItem[] {
         pdfUrl: ageficeId ? `/api/documents/${ageficeId}` : undefined,
       });
 
-      // Phase 15 Lot 2 — ASSIDUITE_AGEFICE réembarquée dans l'onglet Avant.
-      // Cette action vivait UNIQUEMENT dans le DocDockDrawer (supprimé) et
-      // n'était couverte NI par les 4 cartes session NI par SessionOnlyDocsBlock
-      // (RESEARCH Q2). Présence = Document type='ASSIDUITE' pour ce stagiaire.
-      const assiduiteId = docs?.get('ASSIDUITE');
-      items.push({
-        key: `assiduite-agefice-${p.id}`,
-        docType: 'ASSIDUITE_AGEFICE',
-        label: `Assiduité AGEFICE — ${p.fullName}`,
-        participantName: p.fullName,
-        participantId: p.id,
-        section: 'participant',
-        state: assiduiteId ? 'generated' : 'missing',
-        pdfUrl: assiduiteId ? `/api/documents/${assiduiteId}` : undefined,
-      });
+      // ⚠️ L'attestation d'assiduité AGEFICE N'EST PLUS ICI (Laurent 2026-09-10).
+      // La Phase 15 Lot 2 l'avait réembarquée dans l'onglet « Avant » parce que
+      // le DocDockDrawer venait d'être supprimé et qu'aucun autre écran ne
+      // portait son bouton. Depuis, l'onglet « Après » a ses blocs nominatifs :
+      // elle y est affichée, téléchargeable et régénérable.
+      //
+      // La garder ici la comptait DEUX fois et, surtout, faisait mentir le
+      // bouton « Télécharger (N) » de la phase Avant : le compteur l'incluait
+      // alors que l'archive `?phase=avant` ne peut pas la contenir — elle est
+      // classée « après » dans `doc-phase.ts` (elle atteste d'une présence
+      // constatée). Un document, une phase, un endroit.
     }
 
     // Analyse besoin = IA Ollama, gérée comme un kind PedagogicalAsset
