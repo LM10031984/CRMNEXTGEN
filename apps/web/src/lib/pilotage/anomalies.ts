@@ -147,9 +147,12 @@ export async function getAnomaliesPilotage(
       });
     }
 
-    // 4. Une session terminée, vendue, sans la moindre facture : soit elle a
-    //    été facturée ailleurs, soit elle ne l'a jamais été. Les deux méritent
-    //    d'être vues.
+    // 4. Une session terminée et vendue dont AUCUNE facture n'existe DANS
+    //    QUALIOF. Laurent, 10/09/2026 : ses factures partent aujourd'hui depuis
+    //    un tableau de suivi tenu à part — l'absence de facture ici ne prouve
+    //    donc pas qu'elle n'a pas été émise, seulement que l'outil l'ignore.
+    //    La ligne reste utile (le suivi de trésorerie est aveugle sur ce
+    //    montant) mais elle ne doit accuser personne.
     if (terminee && total > 0) {
       const aUneFacture =
         idsAvecFacture.has(s.id) || s.participants.some((p) => participantsFactures.has(p.id));
@@ -197,9 +200,9 @@ export async function getAnomaliesPilotage(
     },
     {
       cle: 'sans-facture',
-      titre: 'Sessions terminées et vendues, sans aucune facture',
+      titre: 'Sessions vendues dont QualiOF ne connaît aucune facture',
       explication:
-        'Soit la facture est à émettre, soit elle a été faite hors de l’outil — et le suivi de trésorerie est aveugle sur ce montant.',
+        'Ces formations ont peut-être été facturées ailleurs (tableau de suivi, SmartOF) : ce n’est pas un reproche, c’est la part de votre trésorerie sur laquelle cet écran ne peut rien dire.',
       montant: total(sansFacture),
       lignes: sansFacture.sort(parMontant),
     },
