@@ -292,6 +292,37 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    qui a été relu. `sendForSignature` reçoit donc les **hashes vus à l'aperçu** et **refuse**
 >    dès qu'un hash a bougé, en invitant à rouvrir le récapitulatif. C'est un contrôle, pas une
 >    convention d'appel — verrouillé par un test de puissance.
+>
+> 6. **Le rôle de l'ancre vient du GABARIT, jamais du régime** (constaté à l'implémentation,
+>    10/09/2026). `ANCRES_PAR_PIECE` (`lib/signature/envoi-contrats.ts`) est la **seule
+>    autorité** sur le nom de rôle passé au prestataire.
+>
+>    Le piège, qui aurait été **silencieux** : le régime dit `STAGIAIRE` pour un indépendant
+>    signant sa propre convention — mais le gabarit de convention n'écrit qu'une ancre
+>    `role=Client`, quel que soit le signataire. Dériver le rôle du régime aurait envoyé un
+>    signataire « Stagiaire » sur un PDF ne portant aucune ancre de ce nom : champ non
+>    attribué, **personne ne signe, aucune alerte**. `signatureFieldCount` ne l'aurait pas vu
+>    — le champ existe bel et bien, il n'est simplement attribué à personne. C'est l'échec
+>    silencieux que l'écart n°6 du lot B fermait, revenu par une autre porte.
+>
+>    **Règle, pour toute pièce signable à venir** : elle déclare son rôle d'ancre dans
+>    `ANCRES_PAR_PIECE`, en recopiant ce que son gabarit écrit réellement. Le régime décide
+>    **QUI** signe ; le gabarit décide **COMMENT le champ s'appelle**. Ne jamais dériver l'un
+>    de l'autre.
+>
+> 7. **Deux traces pour la régénération : intention puis résultat** (Laurent, 10/09/2026).
+>    `document.regenerated_for_signature` ne peut pas partager la transaction du remplacement
+>    du `Document` : celui-ci est fait par les générateurs, partagés avec cinq autres
+>    appelants (dette ouverte en **lot H**). Si cette trace échouait, un document serait
+>    remplacé — `pdfUrl` et `hashSha256` changés — **sans trace**, sur un outil dont un
+>    auditeur Qualiopi lit le journal.
+>
+>    Le trou se ferme par l'autre bout : **`document.regeneration_requested` est écrite AVANT
+>    la régénération**, validée seule, et porte **l'ANCIEN hash**. Couplée à `signature.sent`
+>    — transactionnel, porteur des hashes réellement confirmés — elle permet de reconstituer
+>    ce qui s'est passé même quand la trace de résultat manque. Elle est écrite même si la
+>    régénération ne change rien : avant de l'avoir faite, on ne peut pas le savoir. C'est le
+>    prix de l'antériorité.
 
 - Server actions `preparerEnvoiSignature({ sessionId, scope, cles? })` puis `sendForSignature({ sessionId, scope, cibles, force? })` — chaque cible porte `{ cle, hashConfirme, emailSaisi? }` (amendement n°5) :
   - **Un envoi porte UN document** (D-4 amendé, amendement n°1 ci-dessus).
@@ -328,6 +359,23 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 - Pack closure / ZIP audit (`closure-pack.ts`, `/api/closure/[batch]/zip`) : inclut les signés + audit trails dans un sous-dossier `signes/`.
 - Alerte J-15 (plan cloud §E) : `Task` + notification ADMIN/MANAGER « Convention non envoyée pour signature » pour toute session à J-15 sans SignatureRequest.
 - Filtre sessions `signed` existant (`sessions/page.tsx`) : le rebrancher sur `Document.status = signed` (aujourd'hui son critère est à vérifier — **D-2**).
+
+### Lot H — Générateurs transactionnels (dette, à planifier APRÈS le lot D)
+
+**Décision Laurent, 10/09/2026** — ouvert en dette assumée plutôt que toléré en silence.
+
+Les générateurs remplacent un `Document` en deux temps (`deleteMany` puis `create`) **hors
+transaction**, et sont appelés depuis **six** endroits. Conséquence constatée en lot C.2a :
+aucun appelant ne peut envelopper le remplacement dans sa transaction, donc aucun ne peut
+écrire sa trace d'audit *avec* l'écriture qu'elle décrit. Le lot C s'en accommode par la
+trace d'intention (amendement n°7) — un filet, pas une solution.
+
+Portée : rendre le remplacement atomique et accepter un client transactionnel en paramètre,
+pour les six appelants. Le bénéfice dépasse la signature : tout appelant qui journalise un
+remplacement de document y gagne la même garantie.
+
+**À planifier après le lot D.** Ne pas l'entamer pendant C — toucher aux générateurs pendant
+qu'on bâtit dessus, c'est déplacer les fondations sous le chantier.
 
 ## 6. Décisions ouvertes
 
