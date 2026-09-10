@@ -56,9 +56,9 @@ async function main(): Promise<void> {
     }
   }
   for (const [idx, champs] of [...parPage.entries()].sort((a, b) => a[0] - b[0])) {
-    const bas = champs.filter((c) => c.y < 260).sort((a, b) => a.y - b.y);
-    console.log(`\n  ── page ${idx + 1} — champs du bas de page (y < 260) ──`);
-    for (const c of bas) console.log(`     y=${c.y.toFixed(0)} x=${c.x.toFixed(0)}  ${c.nom}`);
+    const tri = [...champs].sort((a, b) => b.y - a.y);
+    console.log(`\n  ── page ${idx + 1} — ${champs.length} champ(s) ──`);
+    for (const c of tri) console.log(`     y=${c.y.toFixed(0)} x=${c.x.toFixed(0)}  ${c.nom}`);
   }
 }
 

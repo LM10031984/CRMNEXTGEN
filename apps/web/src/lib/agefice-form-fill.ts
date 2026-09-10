@@ -211,6 +211,18 @@ function sanitizeWinAnsi(s: string): string {
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/…/g, '...')
+    // Ligatures et lettres cp1252 hors 0x20-0xFF : sans translittération, le
+    // filtre final les EFFACE — « Gaëlle LŒB » deviendrait « Gaelle LB ».
+    // Un nom amputé d'une lettre sur une demande de financement se fait
+    // refuser. Les accents, eux, sont dans WinAnsi et passent tels quels.
+    .replace(/Œ/g, 'OE')
+    .replace(/œ/g, 'oe')
+    .replace(/Æ/g, 'AE')
+    .replace(/æ/g, 'ae')
+    .replace(/Š/g, 'S')
+    .replace(/š/g, 's')
+    .replace(/Ž/g, 'Z')
+    .replace(/ž/g, 'z')
     .replace(/ /g, ' ')         // espace insécable → espace
     .replace(/[ -​]/g, ' ') // espaces fines
     // Strip tout caractère hors WinAnsi (cp1252 ≈ 0x20-0xFF sauf 0x80-0x9F).
@@ -342,6 +354,46 @@ export const ANCRE_DEMANDEUR = {
   width: 180,
   height: 60,
 } as const;
+
+/**
+ * Ligne de base du nom du demandeur, juste au-dessus de sa zone de signature.
+ *
+ * Le formulaire officiel n'a AUCUN champ nommé pour ce nom — la page 3 ne porte
+ * que « Mandat (Oui) », « Lieu de Signature » et « Date de Signature » (vérifié
+ * le 10/09/2026). La case « Nom prénom et signature du demandeur » attend donc
+ * un nom dessiné : sans lui, elle part vide et l'AGEFICE bloque le dossier.
+ *
+ * Même décalage relatif que le nom de l'OF dans `applyOfSignature` : 14 pt
+ * au-dessus du haut de la zone de signature, en Helvetica-Bold 9.
+ */
+export const NOM_DEMANDEUR_Y = ANCRE_DEMANDEUR.y + ANCRE_DEMANDEUR.height + 14;
+
+/**
+ * Imprime « Prénom NOM » dans la case du demandeur.
+ *
+ * Posé QUEL QUE SOIT le mode de signature : un dossier signé à la main a le
+ * même besoin qu'un dossier signé électroniquement — c'est l'AGEFICE qui exige
+ * le nom, pas le prestataire de signature.
+ */
+async function applyDemandeurName(
+  pdf: PDFDocument,
+  stagiaire: { prenom: string; nom: string },
+): Promise<void> {
+  const nom = sanitizeWinAnsi(`${stagiaire.prenom} ${stagiaire.nom}`.trim());
+  if (!nom) return;
+
+  const pages = pdf.getPages();
+  const page = pages[ANCRE_DEMANDEUR.page] ?? pages[pages.length - 1]!;
+  const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  page.drawText(nom, {
+    x: ANCRE_DEMANDEUR.x + 10,
+    y: NOM_DEMANDEUR_Y,
+    size: 9,
+    font,
+    color: rgb(0, 0, 0),
+  });
+}
 
 /**
  * Dessine l'ancre `{{…}}` en blanc dans la case du demandeur.
@@ -497,6 +549,12 @@ export async function fillAgeficePdf(data: AgeficeFormData): Promise<Buffer> {
     nom: data.of.resp.nom,
     prenom: data.of.resp.prenom,
     titre: data.of.resp.titre,
+  });
+
+  // Nom du demandeur dans sa case — toujours, l'AGEFICE l'exige.
+  await applyDemandeurName(pdf, {
+    prenom: data.stagiaire.prenom,
+    nom: data.stagiaire.nom,
   });
 
   // Ancre de signature électronique du stagiaire-dirigeant, si demandée.

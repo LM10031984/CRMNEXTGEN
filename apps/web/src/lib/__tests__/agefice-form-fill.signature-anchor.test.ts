@@ -81,6 +81,62 @@ function data(overrides: Partial<AgeficeFormData> = {}): AgeficeFormData {
   } as AgeficeFormData;
 }
 
+/** Texte de la page demandée (1-based) — l'extraction fusionne les pages par défaut. */
+async function textePage(pdf: Buffer, page: number): Promise<string> {
+  const { extractText, getDocumentProxy } = await import('unpdf');
+  const doc = await getDocumentProxy(new Uint8Array(pdf));
+  const res = await extractText(doc, { mergePages: false });
+  const pages = res.text as unknown as string[];
+  return pages[page - 1] ?? '';
+}
+
+/**
+ * Le formulaire officiel n'a AUCUN champ nommé pour le nom du demandeur : la
+ * page 3 ne porte que « Mandat (Oui) », « Lieu de Signature » et « Date de
+ * Signature » (vérifié le 10/09/2026 via
+ * `scripts/_inspect-agefice-signature-box.ts`). La case
+ * « Nom prénom et signature du demandeur » attend donc un nom DESSINÉ — sinon
+ * elle part vide et l'AGEFICE bloque le dossier.
+ *
+ * Le nom est imprimé QUEL QUE SOIT le mode : un dossier signé à la main a le
+ * même besoin qu'un dossier signé électroniquement.
+ */
+describe('dossier AGEFICE — nom du demandeur imprimé', () => {
+  it('imprime « Prénom NOM » sur la page 3, même sans signature électronique', async () => {
+    const pdf = await fillAgeficePdf(data());
+    expect(await textePage(pdf, 3)).toContain('Sophie AUGUSTIN');
+  }, 30_000);
+
+  it('l’imprime aussi en mode signature électronique', async () => {
+    const pdf = await fillAgeficePdf(data({ signatureTags: true } as Partial<AgeficeFormData>));
+    expect(await textePage(pdf, 3)).toContain('Sophie AUGUSTIN');
+  }, 30_000);
+
+  it('assainit les accents pour WinAnsi, comme le nom de l’OF', async () => {
+    // `drawText` avec une police standard lève sur un caractère hors WinAnsi :
+    // un stagiaire nommé « Gaëlle LŒB » ne doit pas faire échouer la génération.
+    const pdf = await fillAgeficePdf(
+      data({
+        stagiaire: { ...data().stagiaire, prenom: 'Gaëlle', nom: 'LŒB' },
+      } as Partial<AgeficeFormData>),
+    );
+    const texte = await textePage(pdf, 3);
+    expect(texte).toContain('Ga');
+    expect(texte).toMatch(/L(OE|Œ)B/);
+  }, 30_000);
+
+  it('place le nom AU-DESSUS de la zone de signature, sans la chevaucher', async () => {
+    const { ANCRE_DEMANDEUR, NOM_DEMANDEUR_Y } = await import('../agefice-form-fill');
+    // La zone occupe y..y+height ; le nom doit commencer au-dessus.
+    expect(NOM_DEMANDEUR_Y).toBeGreaterThanOrEqual(
+      ANCRE_DEMANDEUR.y + ANCRE_DEMANDEUR.height,
+    );
+    // …et rester sous le libellé imprimé « Nom prénom et signature du
+    // demandeur », qui court juste sous les champs Lieu/Date (y = 235).
+    expect(NOM_DEMANDEUR_Y).toBeLessThan(220);
+  });
+});
+
 describe('dossier AGEFICE — ancre de signature du demandeur', () => {
   it('n’en pose AUCUNE par défaut (dossier imprimé, signature manuscrite)', async () => {
     const pdf = await fillAgeficePdf(data());
