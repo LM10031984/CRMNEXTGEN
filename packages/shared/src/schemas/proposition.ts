@@ -29,6 +29,34 @@ import { z } from 'zod';
  * de la proposition. Un axe qu'on ne sait pas relier à un signal du diagnostic
  * n'a rien à faire dans le document — c'est du catalogue, pas une réponse.
  */
+/**
+ * Un module retenu dans un axe (lot I-2, D-19).
+ *
+ * C'est la traçabilité qui rend la composition défendable : chaque module dit
+ * de quel programme source il vient, à quel besoin il répond, et **par quelle
+ * réponse du dirigeant il est entré**. Un contrôle OPCO regarde exactement cette
+ * cohérence besoin ↔ programme ↔ durée.
+ *
+ * `durationMin` est une durée SUR SITE. Elle sert à savoir ce qui tient dans une
+ * demi-journée, **jamais à chiffrer** : le volume vendu est un multiple du bloc
+ * de 8 h conventionnées (D-20).
+ */
+export const ProposalModuleSchema = z.object({
+  moduleId: z.string().min(1),
+  title: z.string().min(1).max(300),
+  /** Le programme d'origine — « composé depuis plusieurs programmes » se prouve ici. */
+  sourceCode: z.string().max(40).default(''),
+  sourceTitle: z.string().max(300).default(''),
+  needLabel: z.string().max(200).default(''),
+  durationMin: z.number().int().min(0).max(600).default(0),
+  /** Les mots du dirigeant qui ont fait entrer ce module. */
+  quotes: z.array(z.string().max(300)).max(6).default([]),
+  /** Le signal du catalogue qui a fait le rapprochement, s'il y en a un. */
+  signal: z.string().max(300).nullable().default(null),
+  confidence: z.enum(['forte', 'faible']).default('faible'),
+});
+export type ProposalModule = z.infer<typeof ProposalModuleSchema>;
+
 export const ProposalAxisSchema = z.object({
   id: z.string().min(1),
   /** Titre commercial de l'axe (« Axe 1 »… porté par `label`). */
@@ -45,6 +73,12 @@ export const ProposalAxisSchema = z.object({
   periodLabel: z.string().max(60).default(''),
   /** D'où sort la recommandation : signaux du catalogue, lexique, ou main humaine. */
   matchSource: z.enum(['signaux', 'lexique', 'manuel']).default('manuel'),
+  /**
+   * Les modules qui composent cet axe (lot I-2). Vide sur les propositions
+   * antérieures à la composition — d'où le défaut : une proposition déjà
+   * envoyée doit continuer à se relire telle qu'elle a été envoyée.
+   */
+  modules: z.array(ProposalModuleSchema).max(20).default([]),
 });
 export type ProposalAxis = z.infer<typeof ProposalAxisSchema>;
 

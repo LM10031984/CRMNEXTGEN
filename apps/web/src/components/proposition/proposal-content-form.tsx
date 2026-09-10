@@ -24,12 +24,15 @@ export function ProposalContentForm({
   initial,
   readOnly,
   catalogueNotices,
+  composedWarnings,
   participantCount,
 }: {
   proposalId: string;
   initial: ProposalContent;
   readOnly: boolean;
   catalogueNotices: string[];
+  /** Ce qui manque au programme Qualiopi du parcours composé (lot I-2). */
+  composedWarnings: string[];
   participantCount: number;
 }) {
   const router = useRouter();
@@ -80,6 +83,19 @@ export function ProposalContentForm({
           <ul className="list-disc space-y-1 pl-4">
             {catalogueNotices.map((n) => (
               <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {composedWarnings.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="mb-1 font-semibold">
+            Le programme Qualiopi de ce parcours n’est pas encore remettable
+          </p>
+          <ul className="list-disc space-y-1 pl-4">
+            {composedWarnings.map((w) => (
+              <li key={w}>{w}</li>
             ))}
           </ul>
         </div>
@@ -147,7 +163,7 @@ export function ProposalContentForm({
                       why: '',
                       halfDays: 0,
                       periodLabel: '',
-                      matchSource: 'manuel',
+                      matchSource: 'manuel', modules: [],
                     },
                   ],
                 })
@@ -217,8 +233,33 @@ export function ProposalContentForm({
               placeholder="Pourquoi ce module — le constat du diagnostic auquel il répond"
               onChange={(e) => updateAxis(i, { why: e.target.value })}
             />
+            {axe.modules.length > 0 && (
+              <div className="space-y-1.5 rounded-md bg-muted/40 p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Modules composés — et ce qui les a fait entrer
+                </p>
+                {axe.modules.map((m) => (
+                  <div key={m.moduleId} className="border-l-2 border-border pl-2.5 text-[11px]">
+                    <p className="font-medium text-foreground">{m.title}</p>
+                    <p className="text-muted-foreground">
+                      {m.sourceTitle ? `issu de ${m.sourceTitle}` : 'origine inconnue'}
+                      {m.durationMin > 0 ? ` · ${m.durationMin} min sur site` : ''}
+                      {m.confidence === 'faible' ? ' · rapprochement à vérifier' : ''}
+                    </p>
+                    {m.needLabel && <p className="text-muted-foreground">Besoin : {m.needLabel}</p>}
+                    {m.quotes.length > 0 && (
+                      <p className="italic text-muted-foreground">« {m.quotes[0]} »</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
-              {axe.productCode ? `Programme ${axe.productCode} · ` : ''}
+              {axe.modules.length > 0
+                ? `${axe.modules.length} module(s), ${new Set(axe.modules.map((m) => m.sourceCode)).size} programme(s) source · `
+                : axe.productCode
+                  ? `Programme ${axe.productCode} · `
+                  : ''}
               rapprochement {axe.matchSource === 'signaux' ? 'par signaux du catalogue' : axe.matchSource === 'lexique' ? 'par lexique (heuristique)' : 'saisi à la main'}
             </p>
           </div>

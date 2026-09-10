@@ -135,6 +135,8 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
         reviewedAt={ws.proposal.reviewedAt?.toISOString() ?? null}
         blockers={ws.blockers}
         warnings={ws.warnings}
+        composedProductCode={ws.composedProduct?.code ?? null}
+        composedModuleCount={ws.composedModuleCount}
         freshness={ws.freshness}
         hasPdf={Boolean(ws.proposal.pdfKey)}
         documentId={document?.id ?? null}
@@ -214,6 +216,7 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
         initial={ws.content}
         readOnly={readOnly}
         catalogueNotices={ws.catalogueNotices}
+        composedWarnings={ws.composedWarnings}
         participantCount={ws.pricing.payers.reduce((s, p) => s + p.participantCount, 0)}
       />
 
