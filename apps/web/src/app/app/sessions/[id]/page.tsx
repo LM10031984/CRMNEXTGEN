@@ -779,15 +779,47 @@ export default async function SessionDetailPage({
   // L'onglet Après n'en avait aucun : il n'y avait donc aucune ligne « nom
   // d'apprenant » sur laquelle poser un bouton par apprenant. Dérivés avec le
   // MÊME `deriveCellState` que la matrice, à partir des mêmes maps.
-  const phaseParticipantsInput = matrixParticipants.map((p) => ({
-    id: p.id,
-    fullName: p.fullName,
-    sponsorOrgLabel: p.sponsorOrgLabel,
-    isAgefice: p.isAgefice,
-    docStatus: p.docStatus,
-    participantDocs: p.participantDocs,
-    pedagogicalAssets: p.pedagogicalAssets,
-  }));
+  //
+  // Les deux pièces d'ENTREPRISE sont reportées ici comme la route ZIP les
+  // reporte (convention de groupe, analyse des besoins collective) : le
+  // compteur du bouton « Télécharger (N) » doit annoncer EXACTEMENT le nombre
+  // de fichiers que l'archive contiendra, pas le nombre de lignes à l'écran.
+  const phaseParticipantsInput = matrixParticipants.map((p) => {
+    const raw = session.participants.find((sp) => sp.id === p.id);
+    const participantDocs = new Map(p.participantDocs);
+    const conventionGroupeId = groupConventionByParticipant.get(p.id);
+    if (conventionGroupeId && !participantDocs.has('CONVENTION')) {
+      participantDocs.set('CONVENTION', { id: conventionGroupeId });
+    }
+    const pedagogicalAssets = new Map(p.pedagogicalAssets);
+    if (
+      analyseEntrepriseAssetId &&
+      !pedagogicalAssets.has('ANALYSE_BESOIN') &&
+      raw &&
+      releveDeLaConventionPour(raw)
+    ) {
+      pedagogicalAssets.set('ANALYSE_BESOIN', { id: analyseEntrepriseAssetId });
+    }
+    return {
+      id: p.id,
+      fullName: p.fullName,
+      sponsorOrgLabel: p.sponsorOrgLabel,
+      isAgefice: p.isAgefice,
+      docStatus: p.docStatus,
+      participantDocs,
+      pedagogicalAssets,
+    };
+  });
+  // « Avant » : l'onglet affiche ses lignes depuis `buildDocDockItems` (elles
+  // portent les actions de génération), mais son bouton de téléchargement doit
+  // compter ce que l'archive embarque — d'où ce groupe dérivé de la table des
+  // phases, source unique partagée avec la route ZIP.
+  const avantGroups = buildParticipantPhaseGroups({
+    phase: 'avant',
+    participants: phaseParticipantsInput,
+    productDocs: productDocsMap,
+    sessionDocs: sessionDocsMap,
+  });
   const pendantGroups = buildParticipantPhaseGroups({
     phase: 'pendant',
     participants: phaseParticipantsInput,
@@ -1443,6 +1475,7 @@ export default async function SessionDetailPage({
               items={avantItems}
               canGenerate={canWrite}
               dropZoneParticipants={dropZoneParticipants}
+              avantGroups={avantGroups}
             />
           </div>
         }

@@ -268,6 +268,70 @@ describe('TabApres — actions par apprenant sur la ligne du nom', () => {
     expect(dl.getAttribute('href')).toBe('/api/documents/d1?dl=1');
   });
 
+  /**
+   * L'attestation d'assiduité AGEFICE a quitté l'onglet « Avant » le
+   * 2026-09-10 (elle y faussait le compteur de l'archive). Son bouton de ligne
+   * l'a suivie ici : sans lui, on ne pourrait plus la RÉgénérer, le pack de fin
+   * de formation ne la produisant pas.
+   */
+  function renderAvecAssiduite(state: 'generated' | 'missing') {
+    return render(
+      <TabApres
+        sessionId={SESSION_ID}
+        productId={PRODUCT_ID}
+        canWrite
+        sessionDocs={{
+          deroule: { state: 'missing' },
+          grilleObs: { state: 'missing' },
+          checklist: { state: 'missing' },
+          satisfactionSession: { state: 'missing' },
+        }}
+        closureItems={[{ state: 'missing' }]}
+        apresGroups={[
+          {
+            ...GROUPE,
+            items: [
+              ...GROUPE.items,
+              {
+                docType: 'ASSIDUITE',
+                label: "Attestation d'assiduité",
+                state,
+                ...(state === 'generated'
+                  ? { pdfUrl: '/api/documents/d9', downloadUrl: '/api/documents/d9?dl=1' }
+                  : {}),
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+  }
+
+  it("porte le bouton « Générer » de l'attestation d'assiduité sur sa ligne", async () => {
+    renderAvecAssiduite('missing');
+    fireEvent.click(
+      screen.getByRole('button', { name: /générer l'attestation d'assiduité de Johanna/i }),
+    );
+    await waitFor(() => expect(dispatchGenerateDoc).toHaveBeenCalledTimes(1));
+    expect((dispatchGenerateDoc.mock.calls[0] as [any])[0]).toMatchObject({
+      docType: 'ASSIDUITE_AGEFICE',
+      participantId: 'part-42',
+      force: false,
+    });
+  });
+
+  it("propose « Régénérer » quand l'attestation existe déjà, et force la reprise", async () => {
+    renderAvecAssiduite('generated');
+    fireEvent.click(
+      screen.getByRole('button', { name: /régénérer l'attestation d'assiduité de Johanna/i }),
+    );
+    await waitFor(() => expect(dispatchGenerateDoc).toHaveBeenCalledTimes(1));
+    expect((dispatchGenerateDoc.mock.calls[0] as [any])[0]).toMatchObject({
+      docType: 'ASSIDUITE_AGEFICE',
+      force: true,
+    });
+  });
+
   it('ne montre aucun bloc nominatif quand la session n’a pas d’inscrit', () => {
     renderTab();
     expect(screen.queryByText(/par apprenant/i)).toBeNull();

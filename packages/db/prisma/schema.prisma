@@ -1587,6 +1587,12 @@ model AgeficePointAccueil {
   @@unique([postalCode, name]) // clé naturelle pour upsert idempotent
   @@index([department])
   @@index([city])
+  // L'index GIN existait dans la migration du 08/09 mais PAS ici : le schéma ne
+  // le connaissait donc pas, et le prochain `migrate dev` aurait généré un
+  // `DROP INDEX` silencieux — l'index qui sert la recherche « quels points
+  // couvrent ce département » serait tombé sans que rien ne le dise.
+  // Déclaré le 10/09 ; aucune migration à créer, l'index est déjà en base.
+  @@index([departmentsServed], type: Gin)
 }
 
 enum PedagogicalKind {
