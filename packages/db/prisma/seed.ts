@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
 loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
-import { UserRole, OpcoStatus, DocType } from '@prisma/client';
+import { UserRole, OpcoStatus, DocType, SignerRole } from '@prisma/client';
 import { FUNDING_RULE_SEEDS } from '@qualiof/shared/diagnostic';
 import argon2 from 'argon2';
 // [AUDIT-SANDBOX] client partagé (supporte PRISMA_USE_PG_ADAPTER=1 — sandbox
@@ -60,6 +60,22 @@ async function seedTenantAndAdmin() {
 }
 
 async function seedOpcoCatalog() {
+  // Régime de signature (spec signature 2026-09-04 §3 bis, décision D-10, tranchée
+  // par Laurent le 10/09/2026). `null` ne veut pas dire « pas encore renseigné »,
+  // mais « pièce HORS RÉGIME » → NA dans la matrice, jamais MISSING.
+  // Trois points à NE PAS « corriger » à la relecture :
+  //  · AGEFICE est DIRIGEANT sur la convention (et non null) : le TNS signe bien
+  //    la sienne — son EI est l'organisation payeuse et il en est le représentant
+  //    légal, donc DIRIGEANT retombe sur lui. Aucun cas particulier à coder ;
+  //  · CPF et FI-FPL sont STAGIAIRE sur la convention : l'apprenant paie et signe
+  //    lui-même, souvent sans organisation payeuse — DIRIGEANT y ferait échouer
+  //    la résolution du signataire ;
+  //  · FI-FPL est null sur agefice ET assiduité : `ageficeSigner` déclenche le
+  //    formulaire officiel AGEFICE (src/assets/agefice-template.pdf) et
+  //    l'attestation d'assiduité est elle aussi une pièce AGEFICE — un adhérent
+  //    FI-FPL n'a affaire ni à l'un ni à l'autre.
+  // `requiredDocs` reste ce qu'il est : de la prose d'affichage pour la fiche
+  // financeur, qui ne dit jamais QUI signe. C'est pour ça que ces colonnes existent.
   const opcos = [
     {
       code: 'AGEFICE',
@@ -77,6 +93,9 @@ async function seedOpcoCatalog() {
         "Facture acquittée ou attestation sur l'honneur",
       ],
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.DIRIGEANT,
+      ageficeSigner: SignerRole.STAGIAIRE,
+      assiduiteSigner: SignerRole.STAGIAIRE,
     },
     {
       code: 'OPCO_EP',
@@ -96,6 +115,9 @@ async function seedOpcoCatalog() {
         'Facture acquittée',
       ],
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.DIRIGEANT,
+      ageficeSigner: null,
+      assiduiteSigner: null,
     },
     {
       code: 'ATLAS',
@@ -106,6 +128,9 @@ async function seedOpcoCatalog() {
       conditions:
         'OPCO des services financiers et conseil. Couvre les agences immobilières franchisées.',
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.DIRIGEANT,
+      ageficeSigner: null,
+      assiduiteSigner: null,
     },
     {
       code: 'CPF',
@@ -123,6 +148,9 @@ async function seedOpcoCatalog() {
         'Certificat de réalisation (obligatoire)',
       ],
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.STAGIAIRE,
+      ageficeSigner: null,
+      assiduiteSigner: null,
     },
     {
       code: 'FI-FPL',
@@ -140,6 +168,9 @@ async function seedOpcoCatalog() {
         'Certificat de réalisation',
       ],
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.STAGIAIRE,
+      ageficeSigner: null,
+      assiduiteSigner: null,
     },
     {
       code: 'OPCOMMERCE',
@@ -150,6 +181,9 @@ async function seedOpcoCatalog() {
       conditions:
         'OPCO des entreprises du commerce — couvre certaines agences immobilières et leurs salariés.',
       status: OpcoStatus.ACTIVE,
+      conventionSigner: SignerRole.DIRIGEANT,
+      ageficeSigner: null,
+      assiduiteSigner: null,
     },
   ];
 

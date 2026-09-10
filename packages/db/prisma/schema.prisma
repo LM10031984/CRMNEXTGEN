@@ -1251,6 +1251,14 @@ enum OpcoStatus {
   ARCHIVED
 }
 
+/// Qui signe une pièce, pour un régime de financement donné (spec signature §3 bis, D-10).
+/// DIRIGEANT = le représentant légal de l'organisation payeuse (SessionParticipant.sponsorOrg).
+/// STAGIAIRE = le participant lui-même.
+enum SignerRole {
+  DIRIGEANT
+  STAGIAIRE
+}
+
 // Calqué sur la table Airtable "Opco" : référentiel partagé pour ne pas répéter
 // les délais / plafonds / docs requis sur chaque Organization.
 model OpcoCatalog {
@@ -1273,6 +1281,13 @@ model OpcoCatalog {
   organizations        Organization[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
+
+  /// Régime de signature du financeur (spec signature §3 bis, D-10).
+  /// null = la pièce est HORS RÉGIME pour ce financeur → NA dans la matrice, jamais MISSING.
+  /// `requiredDocs` ci-dessus reste de la prose d'affichage : elle ne dit jamais QUI signe.
+  conventionSigner SignerRole?
+  ageficeSigner    SignerRole?
+  assiduiteSigner  SignerRole?
 }
 
 /// Statut du dossier OPCO envoyé au financeur (AGEFICE, etc.).
