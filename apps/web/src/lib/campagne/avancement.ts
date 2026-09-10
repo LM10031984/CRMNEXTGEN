@@ -38,11 +38,42 @@ export interface DateOptionSnapshot {
   votes: unknown;
 }
 
+/**
+ * Les quatre compteurs de l'écran — EXCLUSIFS et TOTALISANTS
+ * (arbitrage de Laurent du 10/09/2026).
+ *
+ * L'aperçu affichait cinq tuiles dont la somme faisait 5 pour 4 dossiers :
+ * « en cours de vérification » disait un STATUT, « pièces manquantes » disait
+ * une COMPLÉTUDE, et un même dossier tombait dans les deux. Un tableau de bord
+ * dont les cases se recouvrent ne se lit pas — on ne sait plus si 5 signifie
+ * cinq personnes ou cinq mentions.
+ *
+ * Désormais chaque dossier occupe une case et une seule, dans l'ordre du
+ * parcours : non rendu → pièces manquantes → rejeté → bon. Les arbitrages qui
+ * en découlent :
+ *
+ *  • **En vérification ET incomplet → « pièces manquantes ».** C'est la seule
+ *    des deux informations sur laquelle quelqu'un peut agir.
+ *  • **Rendu, complet, pas encore validé → « bon ».** Rien ne bloque ; que
+ *    l'admin n'ait pas encore cliqué ne concerne pas le participant et ne se
+ *    relance pas. Le compte reste disponible en `rendusNonTranches`, à mettre
+ *    en sous-libellé — pas en tuile.
+ *  • **Une validation admin l'emporte sur le contrôle automatique des pièces.**
+ *    Rouvrir la question ferait clignoter en rouge un dossier que quelqu'un a
+ *    déjà accepté en connaissance de cause.
+ *  • **Les attendus qui n'ont pas ouvert le lien comptent comme non rendus.**
+ *    Sans cela, une campagne où personne n'a cliqué afficherait quatre zéros
+ *    pour quatre personnes attendues, et la somme ne vaudrait plus l'effectif.
+ */
 export interface AvancementCampagne {
   attendus: number | null;
-  /** Liens ouverts qui n'ont pas encore rendu leur formulaire. */
+  /**
+   * Formulaires non rendus — y compris les personnes attendues qui n'ont pas
+   * même ouvert le lien.
+   */
   pasEncoreRendus: number;
-  enCours: number;
+  /** Rendus mais que l'admin n'a pas encore tranchés. Sous-libellé, pas tuile. */
+  rendusNonTranches: number;
   bons: number;
   rejetes: number;
   /** A rendu son formulaire, quel que soit l'aboutissement. */
@@ -83,8 +114,8 @@ export function calculerAvancement(args: {
   preEnrollments: readonly PreEnrollmentSnapshot[];
   dateOptions: readonly DateOptionSnapshot[];
 }): AvancementCampagne {
-  let pasEncoreRendus = 0;
-  let enCours = 0;
+  let dossiersNonRendus = 0;
+  let rendusNonTranches = 0;
   let bons = 0;
   let rejetes = 0;
   let piecesCompletes = 0;
@@ -92,19 +123,19 @@ export function calculerAvancement(args: {
   const aRelancer: AvancementCampagne['aRelancer'] = [];
 
   for (const p of args.preEnrollments) {
+    // ── 1. Non rendu ────────────────────────────────────────────────────────
     if (STATUT_PAS_ENCORE_RENDU.has(p.status)) {
-      pasEncoreRendus += 1;
+      dossiersNonRendus += 1;
       aRelancer.push({
         id: p.id,
         nom: nomAffiche(p),
         motif: 'formulaire-non-rendu',
         detail: null,
       });
-      // Un formulaire non rendu n'a pas de pièces à compter : le décompter
-      // « incomplet » ferait doublon avec la ligne de relance ci-dessus.
       continue;
     }
 
+    // ── 2. Rejeté ───────────────────────────────────────────────────────────
     if (STATUT_REJETE.has(p.status)) {
       rejetes += 1;
       aRelancer.push({
@@ -116,13 +147,10 @@ export function calculerAvancement(args: {
       continue;
     }
 
-    if (STATUT_BON.has(p.status)) bons += 1;
-    else if (STATUT_EN_COURS.has(p.status)) enCours += 1;
-
-    const manque = piecesManquantes(p);
-    if (manque.length === 0) {
-      piecesCompletes += 1;
-    } else {
+    // ── 3. Pièces manquantes, SAUF si l'admin a déjà tranché ────────────────
+    const valideParAdmin = STATUT_BON.has(p.status);
+    const manque = valideParAdmin ? [] : piecesManquantes(p);
+    if (manque.length > 0) {
       piecesIncompletes += 1;
       aRelancer.push({
         id: p.id,
@@ -130,16 +158,28 @@ export function calculerAvancement(args: {
         motif: 'pieces-manquantes',
         detail: manque.join(', '),
       });
+      continue;
     }
+
+    // ── 4. Bon ──────────────────────────────────────────────────────────────
+    bons += 1;
+    piecesCompletes += 1;
+    if (!valideParAdmin) rendusNonTranches += 1;
   }
+
+  // Les personnes attendues qui n'ont pas même ouvert le lien : sans elles, la
+  // somme des quatre tuiles ne vaudrait que le nombre de dossiers ouverts.
+  // Jamais négatif — plus de dossiers que d'attendus se dit tel quel.
+  const jamaisVenus = Math.max(0, (args.attendus ?? 0) - args.preEnrollments.length);
+  const pasEncoreRendus = dossiersNonRendus + jamaisVenus;
 
   return {
     attendus: args.attendus,
     pasEncoreRendus,
-    enCours,
+    rendusNonTranches,
     bons,
     rejetes,
-    rendus: enCours + bons + rejetes,
+    rendus: args.preEnrollments.length - dossiersNonRendus,
     piecesCompletes,
     piecesIncompletes,
     votesParDate: args.dateOptions

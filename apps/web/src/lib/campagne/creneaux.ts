@@ -187,3 +187,33 @@ export function decrireCreneau(m: CreneauMesure): string {
   const dj = `${m.halfDays} demi-journée${m.halfDays > 1 ? 's' : ''}`;
   return `${dj} · ${formaterHeures(m.onsiteHours)} h sur site · ${formaterHeures(m.conventionedHours)} h conventionnées`;
 }
+
+/**
+ * La durée d'un produit, dépliée et NOMMÉE.
+ *
+ * `TrainingProduct.durationHours` porte les **heures conventionnées** — c'est
+ * ce que prouvent les journées Faros (FRM-0004..0007 : 336 € HT, soit une
+ * demi-journée au tarif §8.1, pour `durationHours = 8`), et c'est cohérent avec
+ * les deux endroits où ce champ finit : la convention et l'attestation
+ * d'assiduité AGEFICE, donc le dossier financeur. Règle gravée n°2 : c'est LA
+ * valeur unique.
+ *
+ * D'où la correction de la relecture du 10/09/2026 : la page publique affichait
+ * « 36 h » sous le nom de la formation, sans dire de quelles heures il
+ * s'agissait, juste au-dessus de dates qui, elles, distinguaient soigneusement
+ * « h sur site » et « h conventionnées ». Un nombre d'heures qui ne dit pas
+ * lequel il est vaut moins que pas de nombre du tout — il invite le participant
+ * à le comparer au mauvais.
+ *
+ * Rend `null` plutôt que « 0 h » quand la durée est absente : l'appelant masque
+ * alors la ligne.
+ */
+export function decrireDureeProduit(
+  conventionedHours: number | null | undefined,
+  rules: CreneauRules,
+): string | null {
+  if (!conventionedHours || conventionedHours <= 0) return null;
+  const formateurs = rules.TRAINER_COUNT_DEFAULT > 0 ? rules.TRAINER_COUNT_DEFAULT : 1;
+  const onsite = conventionedHours / formateurs;
+  return `${formaterHeures(onsite)} h sur site · ${formaterHeures(conventionedHours)} h conventionnées`;
+}

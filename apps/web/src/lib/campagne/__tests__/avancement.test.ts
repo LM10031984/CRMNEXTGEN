@@ -23,18 +23,23 @@ function pe(over: Partial<PreEnrollmentSnapshot> = {}): PreEnrollmentSnapshot {
 }
 
 describe('l’avancement d’une campagne', () => {
-  it('compte zéro partout quand personne n’a ouvert le lien', () => {
+  // Depuis l'arbitrage du 10/09/2026, « personne n'a ouvert le lien » ne se dit
+  // plus par quatre zéros : les quatre personnes attendues sont quatre
+  // formulaires non rendus. Un écran à zéro partout laissait croire qu'il n'y
+  // avait rien à attendre.
+  it('compte les attendus comme non rendus tant que personne n’a ouvert le lien', () => {
     const a = calculerAvancement({ attendus: 4, preEnrollments: [], dateOptions: [] });
     expect(a).toMatchObject({
       attendus: 4,
-      pasEncoreRendus: 0,
-      enCours: 0,
+      pasEncoreRendus: 4,
+      rendusNonTranches: 0,
       bons: 0,
       rejetes: 0,
       rendus: 0,
       piecesCompletes: 0,
       piecesIncompletes: 0,
     });
+    // Personne n'a de nom à relancer : on ne relance pas un lien jamais ouvert.
     expect(a.aRelancer).toEqual([]);
   });
 
@@ -52,9 +57,12 @@ describe('l’avancement d’une campagne', () => {
       dateOptions: [],
     });
     expect(a.pasEncoreRendus).toBe(1);
-    expect(a.enCours).toBe(2);
-    expect(a.bons).toBe(2);
     expect(a.rejetes).toBe(1);
+    // SUBMITTED, EXTRACTED, VALIDATED et CONVERTED ont tous leurs pièces : rien
+    // ne bloque, donc tous « bons ». Le fait que deux d'entre eux n'aient pas
+    // encore été tranchés par l'admin se dit à part, en sous-libellé.
+    expect(a.bons).toBe(4);
+    expect(a.rendusNonTranches).toBe(2);
     expect(a.rendus).toBe(5);
   });
 
@@ -75,7 +83,11 @@ describe('l’avancement d’une campagne', () => {
   it('nomme qui bloque, et sur quelle pièce', () => {
     const a = calculerAvancement({
       attendus: 1,
-      preEnrollments: [pe({ firstName: 'Marie', lastName: 'Curie', ribKey: null })],
+      // Statut non tranché : une fois l'admin passé, c'est SA décision qui
+      // fait foi, pas le contrôle automatique (cf. plus bas).
+      preEnrollments: [
+        pe({ status: 'EXTRACTED', firstName: 'Marie', lastName: 'Curie', ribKey: null }),
+      ],
       dateOptions: [],
     });
     expect(a.piecesIncompletes).toBe(1);
@@ -202,5 +214,115 @@ describe('la deadline administrative', () => {
     expect(deadlineDepassee(passee, new Date('2026-09-10T00:00:00Z'))).toBe(true);
     expect(deadlineDepassee(passee, new Date('2026-08-01T00:00:00Z'))).toBe(false);
     expect(deadlineDepassee(null, new Date())).toBe(false);
+  });
+});
+
+/**
+ * Arbitrage de Laurent du 10/09/2026 — les compteurs doivent être EXCLUSIFS et
+ * TOTALISANTS. L'aperçu affichait cinq tuiles dont la somme faisait 5 pour
+ * 4 dossiers : « en cours de vérification » et « pièces manquantes » sont deux
+ * axes, et un dossier tombait dans les deux. Personne ne peut lire ça.
+ *
+ * Quatre catégories, dans l'ordre du parcours, et une seule par dossier :
+ * non rendu → pièces manquantes → rejeté → bon.
+ */
+describe('les quatre compteurs — exclusifs et totalisants', () => {
+  it('chaque dossier tombe dans une case et une seule, et la somme fait l’effectif attendu', () => {
+    const a = calculerAvancement({
+      attendus: 4,
+      preEnrollments: [
+        pe({ status: 'PENDING_FORM' }),
+        // En vérification ET incomplet : « pièces manquantes » l'emporte,
+        // c'est l'information sur laquelle l'admin peut agir.
+        pe({ status: 'EXTRACTED', cniKey: null }),
+        pe({ status: 'REJECTED', rejectionReason: 'RIB illisible' }),
+        pe({ status: 'VALIDATED' }),
+      ],
+      dateOptions: [],
+    });
+
+    expect(a.pasEncoreRendus).toBe(1);
+    expect(a.piecesIncompletes).toBe(1);
+    expect(a.rejetes).toBe(1);
+    expect(a.bons).toBe(1);
+    expect(a.pasEncoreRendus + a.piecesIncompletes + a.rejetes + a.bons).toBe(4);
+  });
+
+  it('un dossier rendu, complet mais pas encore tranché compte comme BON', () => {
+    // Rien ne bloque : les pièces sont là. Que l'admin n'ait pas encore cliqué
+    // « valider » ne regarde pas le participant, et ne se relance pas.
+    const a = calculerAvancement({
+      attendus: 1,
+      preEnrollments: [pe({ status: 'EXTRACTED' })],
+      dateOptions: [],
+    });
+    expect(a.bons).toBe(1);
+    expect(a.piecesIncompletes).toBe(0);
+    // L'information reste disponible, mais en sous-libellé, pas en tuile.
+    expect(a.rendusNonTranches).toBe(1);
+  });
+
+  it('une validation admin l’emporte sur le contrôle automatique des pièces', () => {
+    // Si l'admin a validé, la question des pièces est tranchée — la rouvrir
+    // ferait clignoter en rouge un dossier que quelqu'un a déjà accepté.
+    const a = calculerAvancement({
+      attendus: 1,
+      preEnrollments: [pe({ status: 'VALIDATED', ribKey: null })],
+      dateOptions: [],
+    });
+    expect(a.bons).toBe(1);
+    expect(a.piecesIncompletes).toBe(0);
+    expect(a.aRelancer).toEqual([]);
+  });
+
+  it('les attendus qui n’ont pas même ouvert le lien comptent comme non rendus', () => {
+    // Sans cela, la somme des tuiles ne vaudrait que le nombre de dossiers
+    // ouverts, et une campagne où personne n'a cliqué afficherait quatre zéros
+    // pour quatre personnes attendues.
+    const a = calculerAvancement({
+      attendus: 4,
+      preEnrollments: [pe({ status: 'VALIDATED' })],
+      dateOptions: [],
+    });
+    expect(a.bons).toBe(1);
+    expect(a.pasEncoreRendus).toBe(3);
+    expect(a.pasEncoreRendus + a.piecesIncompletes + a.rejetes + a.bons).toBe(4);
+  });
+
+  it('sans effectif attendu, la somme vaut simplement le nombre de dossiers', () => {
+    const a = calculerAvancement({
+      attendus: null,
+      preEnrollments: [pe({ status: 'VALIDATED' }), pe({ status: 'PENDING_FORM' })],
+      dateOptions: [],
+    });
+    expect(a.pasEncoreRendus + a.piecesIncompletes + a.rejetes + a.bons).toBe(2);
+  });
+
+  it('plus de dossiers que d’attendus : on dit la vérité, on ne plafonne pas', () => {
+    const a = calculerAvancement({
+      attendus: 1,
+      preEnrollments: [pe({ status: 'VALIDATED' }), pe({ status: 'VALIDATED' })],
+      dateOptions: [],
+    });
+    expect(a.bons).toBe(2);
+    expect(a.pasEncoreRendus).toBe(0);
+  });
+
+  it('les compteurs s’accordent avec « ce qui bloque »', () => {
+    const a = calculerAvancement({
+      attendus: 4,
+      preEnrollments: [
+        pe({ status: 'PENDING_FORM' }),
+        pe({ status: 'EXTRACTED', cniKey: null }),
+        pe({ status: 'REJECTED', rejectionReason: 'RIB illisible' }),
+        pe({ status: 'VALIDATED' }),
+      ],
+      dateOptions: [],
+    });
+    // Une ligne de relance par dossier qui n'est pas « bon ». Jamais deux pour
+    // le même dossier : c'était le doublon de l'aperçu.
+    expect(a.aRelancer).toHaveLength(3);
+    expect(new Set(a.aRelancer.map((r) => r.id)).size).toBe(3);
+    expect(a.aRelancer.length).toBe(a.pasEncoreRendus + a.piecesIncompletes + a.rejetes);
   });
 });

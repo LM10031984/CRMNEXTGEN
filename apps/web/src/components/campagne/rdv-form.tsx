@@ -83,7 +83,10 @@ export function RdvForm({ token, dateOptions }: { token: string; dateOptions: Da
                       : 'border-border bg-white hover:border-primary/40'
                   }`}
                 >
-                  <div className="font-medium capitalize">
+                  {/* Pas de `capitalize` : en français ni le jour ni le mois
+                      ne prennent de majuscule, et cette classe les majusculait
+                      tous les deux. Le formatage vient de `dates-fr.ts`. */}
+                  <div className="font-medium">
                     {d.texte} <span className="tabular-nums">· {d.horaire}</span>
                   </div>
                   <div className="text-sm text-muted-foreground tabular-nums">{d.creneau}</div>

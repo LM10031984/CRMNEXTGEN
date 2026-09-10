@@ -24,7 +24,13 @@ import {
 } from '@/lib/proposition/public-link';
 import { campagneLinkState, CAMPAGNE_LINK_MESSAGE } from '@/lib/campagne/lien';
 import { deadlineAdministrative } from '@/lib/campagne/avancement';
-import { decrireCreneau, formaterHeureOf, mesurerCreneau } from '@/lib/campagne/creneaux';
+import {
+  decrireCreneau,
+  decrireDureeProduit,
+  formaterHeureOf,
+  mesurerCreneau,
+} from '@/lib/campagne/creneaux';
+import { jourLongAvecAnnee } from '@/lib/dates-fr';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import { RdvForm } from '@/components/campagne/rdv-form';
 
@@ -36,13 +42,12 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-const dateFmt = new Intl.DateTimeFormat('fr-FR', {
-  weekday: 'long',
+const jourFmt = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'Europe/Paris',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 });
-const jourFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 function Cadre({ children }: { children: React.ReactNode }) {
   return (
@@ -143,8 +148,16 @@ export default async function CampagnePage({
             Votre formation
           </div>
           <div className="mt-1 font-semibold">{batch.product?.title ?? batch.label}</div>
-          {batch.product?.durationHours ? (
-            <div className="text-sm text-muted-foreground">{batch.product.durationHours} h</div>
+          {/*
+            Jamais « 36 h » tout court : la ligne dit de quelles heures il
+            s'agit, exactement comme les dates juste en dessous (règle n°2 —
+            les heures conventionnées sont LA valeur unique, et c'est elle qui
+            partira sur la convention et le dossier financeur).
+          */}
+          {decrireDureeProduit(batch.product?.durationHours, regles.values) ? (
+            <div className="text-sm text-muted-foreground tabular-nums">
+              {decrireDureeProduit(batch.product?.durationHours, regles.values)}
+            </div>
           ) : null}
         </div>
 
@@ -168,7 +181,7 @@ export default async function CampagnePage({
           dateOptions={batch.dateOptions.map((d) => ({
             id: d.id,
             label: d.label,
-            texte: dateFmt.format(d.startsAt),
+            texte: jourLongAvecAnnee(d.startsAt),
             // Le participant ne voyait que le jour : il ne pouvait pas
             // distinguer une matinée d'une journée entière, et arrivait donc
             // sans savoir combien de temps bloquer. Il lit maintenant l'horaire

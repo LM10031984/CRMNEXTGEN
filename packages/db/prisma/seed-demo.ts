@@ -215,13 +215,32 @@ async function main(): Promise<void> {
   }
 
   // ── Produits ───────────────────────────────────────────────────────────────
-  // Les durées sont des multiples de la demi-journée (§8.1, D-20) : 4 h sur
-  // site par demi-journée. 36 h = 9 demi-journées, le parcours canonique.
+  //
+  // Les produits se déclarent en DEMI-JOURNÉES, la seule unité qui ne dérive
+  // pas (§8.1). Tout le reste s'en déduit :
+  //
+  //   heures conventionnées = demi-journées × HALF_DAY_ONSITE_HOURS × formateurs
+  //   prix HT               = demi-journées × 336 €
+  //
+  // ⚠ `TrainingProduct.durationHours` porte les heures CONVENTIONNÉES, pas les
+  // heures sur site. La preuve est dans le catalogue réel : les journées Faros
+  // (FRM-0004..0007) valent 336 € HT — une demi-journée au tarif §8.1 — pour
+  // `durationHours = 8`. Et ce champ finit sur la convention et l'attestation
+  // d'assiduité AGEFICE, donc sur le dossier financeur : c'est bien la valeur
+  // unique de la règle gravée n°2. Une première version de ce seed y avait mis
+  // les heures sur site ; la convention aurait déclaré 36 h là où le financeur
+  // en attend 72.
+  const HEURES_SUR_SITE_PAR_DEMI_JOURNEE = 4;
+  const FORMATEURS = 2;
+  const PRIX_DEMI_JOURNEE_HT = 336;
+  const heuresConventionnees = (demiJournees: number) =>
+    demiJournees * HEURES_SUR_SITE_PAR_DEMI_JOURNEE * FORMATEURS;
+
   const produits = [
     {
       code: `${MARQUE}-PROD-001`,
       title: 'Prise de mandat en exclusivité — parcours 9 demi-journées (démo)',
-      durationHours: 36,
+      demiJournees: 9,
       theme: 'Acquisition',
       objectives: [
         'Argumenter l’exclusivité face à un vendeur réticent',
@@ -232,40 +251,42 @@ async function main(): Promise<void> {
     {
       code: `${MARQUE}-PROD-002`,
       title: 'IA appliquée à la prospection immobilière (démo)',
-      durationHours: 8,
+      demiJournees: 1,
       theme: 'IA',
       objectives: ['Rédiger une annonce assistée par IA', 'Qualifier un fichier de prospection'],
     },
     {
       code: `${MARQUE}-PROD-003`,
       title: 'Obligations réglementaires — TRACFIN et non-discrimination (démo)',
-      durationHours: 4,
+      demiJournees: 2,
       theme: 'Réglementaire',
       objectives: ['Identifier une opération atypique', 'Tenir le registre des mandats'],
     },
   ];
 
   for (const p of produits) {
+    const duree = heuresConventionnees(p.demiJournees);
+    const prix = p.demiJournees * PRIX_DEMI_JOURNEE_HT;
     await prisma.trainingProduct.upsert({
       where: { tenantId_code: { tenantId: tenant.id, code: p.code } },
-      update: { title: p.title, durationHours: p.durationHours, isActive: true },
+      update: { title: p.title, durationHours: duree, priceHT: prix, isActive: true },
       create: {
         tenantId: tenant.id,
         code: p.code,
         title: p.title,
-        durationHours: p.durationHours,
+        durationHours: duree,
         modality: Modality.PRESENTIEL,
         objectives: p.objectives,
         programMd: `## ${p.title}\n\nProgramme de démonstration — contenu fictif.`,
         theme: p.theme,
-        // 336 € HT la demi-journée par participant (§8.1) : le prix affiché
-        // découle du nombre de demi-journées, il n'est pas saisi au hasard.
-        priceHT: (p.durationHours / 4) * 336,
+        priceHT: prix,
         isActive: true,
       },
     });
   }
-  console.log(`✓ ${produits.length} produits de formation`);
+  console.log(
+    `✓ ${produits.length} produits de formation (le parcours phare : 9 demi-journées = ${heuresConventionnees(9)} h conventionnées, ${9 * PRIX_DEMI_JOURNEE_HT} € HT)`,
+  );
 
   // ── Agences ────────────────────────────────────────────────────────────────
   const agences = [

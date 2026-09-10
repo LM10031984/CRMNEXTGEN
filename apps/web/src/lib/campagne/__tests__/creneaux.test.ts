@@ -8,6 +8,7 @@ import {
   CRENEAU_PRESETS,
   creneauDefaut,
   decrireCreneau,
+  decrireDureeProduit,
   formaterHeureOf,
   mesurerCreneau,
   presetDuCreneau,
@@ -181,5 +182,57 @@ describe('l’heure affichée est celle de l’organisme, pas celle du serveur',
         RULES,
       ),
     ).toBe('JOURNEE');
+  });
+});
+
+/**
+ * La durée d'un `TrainingProduct` est exprimée en HEURES CONVENTIONNÉES —
+ * c'est ce que prouvent les journées Faros (FRM-0004..0007) : 336 € HT, soit
+ * une demi-journée au tarif §8.1, pour `durationHours = 8`. Ce champ part sur
+ * la convention (`convention-template.ts`) et sur l'attestation d'assiduité
+ * AGEFICE (`agefice-attendance-generator.ts`), donc sur le dossier financeur :
+ * la règle gravée n°2 impose que ce soit LA valeur unique.
+ *
+ * L'écran ne doit donc jamais afficher « 36 h » ni « 72 h » tout court, mais
+ * nommer laquelle des deux il montre.
+ */
+describe('decrireDureeProduit — nommer l’heure qu’on affiche', () => {
+  it('déplie les heures conventionnées en heures sur site, et dit les deux', () => {
+    expect(decrireDureeProduit(72, RULES)).toBe('36 h sur site · 72 h conventionnées');
+  });
+
+  it('une demi-journée : 8 h conventionnées, 4 h sur site', () => {
+    expect(decrireDureeProduit(8, RULES)).toBe('4 h sur site · 8 h conventionnées');
+  });
+
+  it('suit le nombre de formateurs du tenant', () => {
+    expect(decrireDureeProduit(9, { ...RULES, TRAINER_COUNT_DEFAULT: 3 })).toBe(
+      '3 h sur site · 9 h conventionnées',
+    );
+  });
+
+  it('ne rend rien pour une durée absente ou nulle — mieux vaut taire que mentir', () => {
+    expect(decrireDureeProduit(0, RULES)).toBeNull();
+    expect(decrireDureeProduit(null, RULES)).toBeNull();
+  });
+});
+
+describe('ligne rouge §8.1 — le produit et le chiffrage disent le même nombre', () => {
+  it('un produit de N demi-journées porte les heures conventionnées du chiffrage', () => {
+    for (const halfDays of [1, 2, 9]) {
+      const heuresProduit = halfDays * conventionedHoursPerHalfDay(RULES);
+      expect(decrireDureeProduit(heuresProduit, RULES)).toContain(
+        `${halfDays * conventionedHoursPerHalfDay(RULES)} h conventionnées`,
+      );
+      // …et les heures sur site retombent sur l'assiette du prix (§8.1).
+      expect(decrireDureeProduit(heuresProduit, RULES)).toContain(
+        `${halfDays * RULES.HALF_DAY_ONSITE_HOURS} h sur site`,
+      );
+    }
+  });
+
+  it('le parcours canonique de la spec : 9 demi-journées = 72 h conventionnées', () => {
+    expect(9 * conventionedHoursPerHalfDay(RULES)).toBe(72);
+    expect(decrireDureeProduit(72, RULES)).toBe('36 h sur site · 72 h conventionnées');
   });
 });

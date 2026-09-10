@@ -8,7 +8,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { calculerAvancement, deadlineAdministrative, deadlineDepassee } from '@/lib/campagne/avancement';
 import { campagneLinkState } from '@/lib/campagne/lien';
-import { decrireCreneau, mesurerCreneau } from '@/lib/campagne/creneaux';
+import { decrireCreneau, decrireDureeProduit, mesurerCreneau } from '@/lib/campagne/creneaux';
+import { jourLongAvecAnnee } from '@/lib/dates-fr';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import { CampagneActions } from '@/components/campagne/campagne-actions';
 
@@ -36,17 +37,19 @@ const MOTIF_LABEL = {
   rejete: 'Dossier rejeté',
 } as const;
 
-const dateFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'full' });
-const jourFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' });
+const jourFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'long' });
 
 function Compteur({
   valeur,
   libelle,
   variant,
+  detail,
 }: {
   valeur: number;
   libelle: string;
   variant?: 'ok' | 'warn' | 'neutre';
+  /** Nuance qui ne mérite pas sa propre tuile — « dont 2 pas encore tranchés ». */
+  detail?: string | null;
 }) {
   const couleur =
     variant === 'ok' ? 'text-emerald-700' : variant === 'warn' ? 'text-amber-700' : 'text-foreground';
@@ -54,6 +57,7 @@ function Compteur({
     <div className="rounded-xl border border-border bg-white px-4 py-3">
       <div className={`text-2xl font-bold tabular-nums ${couleur}`}>{valeur}</div>
       <div className="text-xs text-muted-foreground mt-0.5">{libelle}</div>
+      {detail ? <div className="text-[11px] text-muted-foreground mt-0.5">{detail}</div> : null}
     </div>
   );
 }
@@ -126,6 +130,7 @@ export default async function CampagneDetailPage({
   });
   const enRetard = deadlineDepassee(deadline, now);
   const dateRetenue = c.dateOptions.find((d) => d.isRetained) ?? null;
+  const dureeProduit = decrireDureeProduit(c.product?.durationHours, regles.values);
 
   return (
     <div className="space-y-6">
@@ -156,6 +161,9 @@ export default async function CampagneDetailPage({
         <div className="rounded-xl border border-border bg-white px-4 py-3">
           <div className="text-xs text-muted-foreground">Formation</div>
           <div className="mt-0.5 font-medium">{c.product?.title ?? 'À préciser'}</div>
+          {dureeProduit ? (
+            <div className="text-xs text-muted-foreground tabular-nums">{dureeProduit}</div>
+          ) : null}
           {dateRetenue ? (
             <div className="text-xs text-muted-foreground">
               Date retenue : {jourFmt.format(dateRetenue.startsAt)} ·{' '}
@@ -201,12 +209,27 @@ export default async function CampagneDetailPage({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Compteur valeur={a.bons} libelle="Dossiers bons" variant="ok" />
-        <Compteur valeur={a.enCours} libelle="En cours de vérification" />
+      {/*
+        Quatre tuiles, dans l'ordre du parcours, et exclusives : chaque dossier
+        n'en occupe qu'une, si bien que leur somme vaut l'effectif attendu
+        (arbitrage du 10/09/2026). « En cours de vérification » n'est plus une
+        tuile — c'est « rendu, pas encore tranché », qui ne bloque personne et
+        se dit en sous-libellé de « Dossiers bons ».
+      */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Compteur valeur={a.pasEncoreRendus} libelle="Formulaire non rendu" variant="warn" />
         <Compteur valeur={a.piecesIncompletes} libelle="Pièces manquantes" variant="warn" />
         <Compteur valeur={a.rejetes} libelle="Rejetés" variant="warn" />
+        <Compteur
+          valeur={a.bons}
+          libelle="Dossiers bons"
+          variant="ok"
+          detail={
+            a.rendusNonTranches > 0
+              ? `dont ${a.rendusNonTranches} pas encore tranché${a.rendusNonTranches > 1 ? 's' : ''}`
+              : null
+          }
+        />
       </div>
 
       {attendus ? (
@@ -222,7 +245,7 @@ export default async function CampagneDetailPage({
         status={c.status}
         dateOptions={c.dateOptions.map((d) => ({
           id: d.id,
-          texte: dateFmt.format(d.startsAt),
+          texte: jourLongAvecAnnee(d.startsAt),
           creneau: decrireCreneau(mesurerCreneau(d, regles.values)),
           label: d.label,
           isRetained: d.isRetained,

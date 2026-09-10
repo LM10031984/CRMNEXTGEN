@@ -105,7 +105,7 @@ export function TabAgenda({ sessionId, isPastSession, slots, canEdit }: Props) {
                 data-testid="agenda-slot"
                 className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm"
               >
-                <span className="font-medium capitalize">{formatDay(slot.date)}</span>
+                <span className="font-medium">{formatDay(slot.date)}</span>
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <span className="rounded-full bg-muted/50 px-2 py-0.5 text-xs">
                     {HALF_DAY_LABEL[slot.halfDay] ?? slot.halfDay}
