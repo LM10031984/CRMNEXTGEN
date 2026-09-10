@@ -280,8 +280,20 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    **avertissement nommé**, jamais un `NA` silencieux — un dossier qui disparaît de l'écran
 >    ne se corrige jamais. L'avertissement ne déclenche **aucun** envoi : il invite à corriger
 >    la donnée.
+> 5. **La régénération se fait à l'OUVERTURE DU RÉCAPITULATIF, pas à l'envoi** (Laurent,
+>    10/09/2026 — clôt le « point ouvert » ci-dessous). « La régénération avec ancres se fait à
+>    l'ouverture du récapitulatif, qui affiche un aperçu du PDF exact qui partira ; le clic
+>    Envoyer confirme ce PDF-là, jamais une autre version. » D'où **deux server actions** :
+>    `preparerEnvoiSignature` (plan + régénération + hashes + signataires résolus) puis
+>    `sendForSignature` (envoi de ce qui a été confirmé).
+>
+>    ⚠ **Ce que l'ordre des écrans ne garantit pas.** Deux admins en parallèle, ou une
+>    régénération déclenchée ailleurs entre l'aperçu et le clic, enverraient autre chose que ce
+>    qui a été relu. `sendForSignature` reçoit donc les **hashes vus à l'aperçu** et **refuse**
+>    dès qu'un hash a bougé, en invitant à rouvrir le récapitulatif. C'est un contrôle, pas une
+>    convention d'appel — verrouillé par un test de puissance.
 
-- Server action `sendForSignature({ sessionId, scope: 'BEFORE' | 'AFTER', targets })` :
+- Server actions `preparerEnvoiSignature({ sessionId, scope, cles? })` puis `sendForSignature({ sessionId, scope, cibles, force? })` — chaque cible porte `{ cle, hashConfirme, emailSaisi? }` (amendement n°5) :
   - **Un envoi porte UN document** (D-4 amendé, amendement n°1 ci-dessus).
     - `BEFORE` : une `SignatureRequest` par **organisation bénéficiaire** portant la **seule convention** (signée par son représentant) ; une `SignatureRequest` **par participant** pour son dossier AGEFICE (signé par le stagiaire seul, l'OF ayant déjà son image apposée).
     - `AFTER` : une `SignatureRequest` par participant portant l'ASSIDUITE.
@@ -295,8 +307,9 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
     - Une seule implémentation, `lib/signature/representant.ts`, appelée par la génération de la convention **et** par l'envoi : le signataire ne peut pas diverger du nom que le PDF imprime.
     - **Email : celui du représentant, ou rien** (amendement n°3). Pas d'email ⇒ **refus nominatif** renvoyant vers la fiche entreprise. **Aucun repli sur un autre contact.** Seule dérogation : une adresse **saisie explicitement par l'admin** au récapitulatif d'envoi (source `SAISI_PAR_ADMIN`), journalisée avec le nom retenu.
     - Participant sans organisation bénéficiaire résoluble ⇒ blocage nominatif. Jamais de devinette.
-  - **Régénération à l'envoi** (Laurent, 10/09) : le document part **avec ses ancres et sans le tampon image de l'OF** (convention et assiduité ; le formulaire AGEFICE conserve son image, une seule partie y signe). Le générateur **écrase `pdfUrl` et recalcule `hashSha256`** — un seul objet, jamais deux, sans quoi le hash cesserait de décrire ce qui est réellement parti en signature. `AuditLog document.regenerated_for_signature` avant `sent_for_signature`.
-    - ⚠ **Point ouvert** : régénérer signifie que ce qui part n'est pas forcément ce que l'admin a relu (un prix ou une date ont pu bouger depuis). À traiter au récapitulatif de C.2b — signaler la régénération, ou exiger une confirmation quand le document diffère. Sujet jumeau de la skill `coherence-docs`, pris par l'autre bout.
+  - **Régénération à l'ouverture du récapitulatif** (Laurent, 10/09 — amendement n°5) : le document part **avec ses ancres et sans le tampon image de l'OF** (convention et assiduité ; le formulaire AGEFICE conserve son image, une seule partie y signe). Le générateur **écrase `pdfUrl` et recalcule `hashSha256`** — un seul objet, jamais deux, sans quoi le hash cesserait de décrire ce qui est réellement parti en signature. `AuditLog document.regenerated_for_signature` avant `sent_for_signature`.
+    - **Qui garde son tampon vient du GABARIT**, pas d'un `if` sur le type de document : `signatureTags: true` est passé à l'identique aux trois générateurs, et chaque gabarit tranche chez lui. La table `ANCRES_PAR_PIECE` (`lib/signature/envoi-contrats.ts`) est la lecture de cette réalité — elle dit du même coup **quel nom de rôle** le gabarit attend dans son ancre.
+    - ~~Point ouvert : ce qui part n'est pas forcément ce que l'admin a relu.~~ **TRANCHÉ le 10/09** : l'aperçu affiche le PDF régénéré lui-même, et l'envoi refuse si son hash a bougé depuis. Le décalage ne peut plus exister sans être nommé.
   - Garde-fous : doc non généré → refus ; doc déjà `signed` → refus sauf `force` ; doc `sent_for_signature` → propose d'annuler et renvoyer ; **`signatureFieldCount === 0` → refus** (écart n°6 du lot B : sinon l'envoi part et personne n'a rien à signer).
     - Tout refus survenant **après** la création de la submission chez le prestataire appelle `provider.cancel(providerId)` d'abord — sans quoi une submission zombie subsiste et le prochain envoi fait doublon.
   - Transaction : `SignatureRequest` + `Document.status = sent_for_signature` + AuditLog `signature.sent`.
@@ -341,7 +354,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
 | **B** | ✅ **livré — test d'acceptation passé le 10/09/2026** | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 documents — zones HTML pour la convention et l'assiduité, ancre **dessinée par pdf-lib** pour le formulaire AGEFICE officiel (corrigé le 10/09) · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** (envoi 1619115, instance UE, signé par les deux rôles) : Adobe Reader déclare la **signature valide après mise à jour AATL**, certificat **Netrust** ; certificat de signature complet ; les deux pièces servies par `docuseal.eu` ; `send_email=false` et `sent_at=jamais`, aucun email parti de DocuSeal. Pièces versées dans `.planning/specs/evidence/signature-B/`. Placement des signatures corrigé après ce test (zone dédiée 180 × 60 pt alignée à droite) et revérifié sur l'envoi 1619495. |
-| **C** | ⬜ à faire | Pas de `/api/webhooks/`, pas de `sendForSignature`. |
+| **C** | 🟨 en cours | **C.1** (régime : 3 colonnes `SignerRole` sur `OpcoCatalog`) et **C.2a** livrés le 10/09/2026 : `lib/signature/{representant,plan-envoi,envoi-contrats}.ts` (purs), `server/actions/signature-envoi.ts` (`preparerEnvoiSignature` + `sendForSignature`), `signatureTags` plombé dans les 4 générateurs. Restent **C.2b** (l'UI : bouton, récapitulatif, saisie d'adresse), **C.2c** (emails aux signataires, D-9/D-5) et **C.3** (webhook `POST /api/webhooks/docuseal`, cron `signature-sync`). |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 
 **Trouvé en montant la preuve du lot A** (corrigé dans la foulée, commit `fix(qualiopi-matrix)`) : le SQL brut de `markDocStatus`, `uploadSignedDoc` et `deleteDocument` castait des identifiants **TEXT** en `::uuid` → `operator does not exist: text = uuid`. Les trois actions échouaient à chaque appel depuis leur écriture ; les tests unitaires mockaient `$executeRaw` et ne pouvaient pas le voir.
