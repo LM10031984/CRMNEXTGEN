@@ -564,6 +564,44 @@ export async function preparerEnvoiSignature(
         : { documentId: avant.id, pdfUrl: avant.pdfUrl, hash: avant.hashSha256, regenere: false };
 
     if (intouchable === null) {
+      // TRACE D'INTENTION, écrite AVANT la régénération et validée seule
+      // (décision Laurent, 10/09/2026).
+      //
+      // Pourquoi elle existe : la trace de RÉSULTAT ne peut pas partager la
+      // transaction du remplacement du Document — celui-ci est fait par les
+      // générateurs, partagés avec cinq autres appelants (dette ouverte en
+      // lot H). Si cette trace de résultat échouait, un document se retrouverait
+      // remplacé — `pdfUrl` et `hashSha256` changés — sans trace, sur un outil
+      // dont un auditeur Qualiopi lit le journal.
+      //
+      // L'intention ferme ce trou par l'autre bout : elle dit « on s'apprête à
+      // régénérer CETTE pièce, dont le hash vaut CECI ». Couplée à
+      // `signature.sent` — transactionnel, et porteur des hashes réellement
+      // confirmés — elle permet de reconstituer ce qui s'est passé même si la
+      // trace de résultat manque.
+      //
+      // Elle est écrite même quand la régénération ne changera rien : avant de
+      // l'avoir faite, on ne peut pas le savoir. C'est le prix de l'antériorité.
+      await prisma.auditLog.create({
+        data: {
+          tenantId: user.tenantId,
+          userId: user.id,
+          entity: 'Document',
+          entityId: avant?.id ?? null,
+          action: 'document.regeneration_requested',
+          diff: {
+            cle: envoi.cle,
+            docType: envoi.docType,
+            motif:
+              "Régénération avec ancres de signature demandée à l'ouverture du récapitulatif d'envoi.",
+            // L'ANCIEN hash : c'est lui qui permet de dire, après coup, sur quelle
+            // version portait l'intention.
+            hashAvant: avant?.hashSha256 ?? null,
+            pdfUrlAvant: avant?.pdfUrl ?? null,
+          },
+        },
+      });
+
       const resultat = await REGENERATION_PAR_PIECE[envoi.docType]({
         tenantId: user.tenantId,
         sessionId,
@@ -599,10 +637,12 @@ export async function preparerEnvoiSignature(
           // Pas d'AuditLog quand le PDF n'a pas bougé : un journal qui répète
           // « rien n'a changé » se cesse d'être lu.
           //
-          // Écrit hors transaction, sciemment : le remplacement du Document est
-          // fait par les générateurs, partagés avec cinq autres appels. Les
-          // envelopper d'une transaction depuis ici demanderait de les réécrire.
-          // La trace suit donc l'écriture au lieu de l'accompagner.
+          // TRACE DE RÉSULTAT. Écrite hors transaction, sciemment : le
+          // remplacement du Document est fait par les générateurs, partagés avec
+          // cinq autres appelants — les envelopper depuis ici demanderait de les
+          // réécrire (dette ouverte en lot H de la spec). La trace suit donc
+          // l'écriture au lieu de l'accompagner ; c'est la trace d'intention
+          // ci-dessus, écrite avant et validée seule, qui couvre l'intervalle.
           await prisma.auditLog.create({
             data: {
               tenantId: user.tenantId,

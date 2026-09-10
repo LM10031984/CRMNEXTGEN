@@ -366,8 +366,10 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
       cles: ['AGEFICE:' + P_TNS],
     });
 
-    expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const arg = auditLogCreate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    // DEUX traces désormais : l'intention AVANT la régénération, le résultat après
+    // (décision Laurent, 10/09/2026). La trace de résultat est la SECONDE.
+    expect(auditLogCreate).toHaveBeenCalledTimes(2);
+    const arg = auditLogCreate.mock.calls[1]![0] as { data: Record<string, unknown> };
     expect(arg.data).toMatchObject({
       tenantId: TENANT_ID,
       userId: USER_ID,
@@ -380,6 +382,66 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
       docType: 'AGEFICE',
       hashSha256: { before: 'hash-doc-age', after: 'hash-doc-age-ancres' },
     });
+  });
+
+  it('journalise l’INTENTION avant de régénérer, avec l’ancien hash', async () => {
+    // Décision Laurent, 10/09/2026. La trace de résultat ne peut pas partager la
+    // transaction du remplacement du Document (générateurs partagés — dette du
+    // lot H). Si elle échouait, un document serait remplacé sans trace.
+    // L'intention, écrite AVANT et validée seule, ferme ce trou par l'autre bout.
+    sessionAvec([tnsViaSonEi()]);
+    docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
+
+    await preparerEnvoiSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cles: ['AGEFICE:' + P_TNS],
+    });
+
+    const intention = auditLogCreate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(intention.data).toMatchObject({
+      tenantId: TENANT_ID,
+      userId: USER_ID,
+      action: 'document.regeneration_requested',
+    });
+    // L'ANCIEN hash : c'est lui qui dit sur quelle version portait l'intention.
+    // Y trouver le nouveau signifierait que la trace est écrite APRÈS coup,
+    // donc qu'elle ne couvre plus rien.
+    expect(intention.data.diff).toMatchObject({
+      cle: 'AGEFICE:' + P_TNS,
+      hashAvant: 'hash-doc-age',
+    });
+    expect((intention.data.diff as Record<string, unknown>).hashAvant).not.toBe(
+      'hash-doc-age-ancres',
+    );
+  });
+
+  it('PUISSANCE — l’intention est écrite AVANT que le générateur ne tourne', async () => {
+    // Ce test compare l'ordre d'appel de la TRACE et du GÉNÉRATEUR, pas l'ordre
+    // des deux traces entre elles.
+    //
+    // Première version de ce test : elle asseyait l'ordre des deux `action` du
+    // journal. Elle restait VERTE quand on déplaçait l'intention après la
+    // régénération — parce que la trace de résultat est écrite plus loin encore,
+    // si bien que l'ordre des deux traces ne bougeait pas. Elle ne gardait rien.
+    //
+    // `invocationCallOrder` est un compteur GLOBAL à tous les mocks : il permet
+    // de situer une écriture au journal par rapport à un appel qui n'en est pas
+    // une. C'est la seule façon d'observer l'antériorité qui nous intéresse.
+    sessionAvec([tnsViaSonEi()]);
+    docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
+
+    await preparerEnvoiSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cles: ['AGEFICE:' + P_TNS],
+    });
+
+    const rangIntention = auditLogCreate.mock.invocationCallOrder[0]!;
+    const rangGenerateur = ageficeMock.mock.invocationCallOrder[0]!;
+
+    expect(auditLogCreate.mock.calls[0]![0].data.action).toBe('document.regeneration_requested');
+    expect(rangIntention).toBeLessThan(rangGenerateur);
   });
 
   it('un document DÉJÀ PARTI en signature n’est jamais régénéré — le régénérer l’effacerait', async () => {
