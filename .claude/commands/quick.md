@@ -47,7 +47,30 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 - [ ] Email : passer `context: { tenantId, category, sessionId? }` au mailer
       (le type l'exige, c'est le filet exhaustivité tsc)
 
-## 4. Gates — les trois, dans cet ordre
+## 4. Migrations
+
+**`prisma db push` est INTERDIT** — sur `qualiof_test` comme sur n'importe quelle
+base (règle Laurent, 2026-09-10). Une seule voie :
+
+```
+pnpm --filter @qualiof/db exec prisma migrate dev --name <slug>   # créer
+pnpm --filter @qualiof/db exec prisma migrate deploy              # appliquer
+```
+
+Pourquoi : `db push` écrit le schéma dans la base **sans laisser de migration**.
+L'historique et la base divergent alors en silence, et la production ne reçoit
+jamais le changement — le déploiement rejoue `migrations/`, pas le schéma. On ne
+s'en aperçoit qu'au premier `P2022` en prod, sur une colonne qui n'existe que sur
+la machine où le `db push` a été lancé.
+
+Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune base
+(il ne fait que régénérer le client TypeScript).
+
+Toute migration créée doit être appliquée (`migrate deploy`) avant d'écrire dans
+la base depuis une branche en avance — sinon l'`INSERT` part avec les défauts
+d'enum de la base, pas ceux du schéma.
+
+## 5. Gates — les trois, dans cet ordre
 
 ```
 pnpm lint
@@ -59,7 +82,7 @@ Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
 
-## 5. Rendre compte
+## 6. Rendre compte
 
 Trois lignes : ce qui change pour l'utilisateur, ce qui a été mis de côté, ce
 qu'il reste à vérifier à la main.
