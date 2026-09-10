@@ -20,6 +20,7 @@ import { prisma } from '@qualiof/db';
 import { quotaDiagnosticOk, ipDepuisHeaders } from '@/lib/diagnostic/quota';
 import { diagnostiquer, resumerPourLead } from '@/lib/diagnostic/scoring';
 import { prioriser, ligneSuiviCrm } from '@/lib/diagnostic/priorite';
+import { alerterNouveauLead } from '@/lib/alertes/notifier';
 import {
   QUESTIONS,
   PROBLEMATIQUES,
@@ -160,6 +161,13 @@ export async function soumettreDiagnostic(input: {
 
     return { lead, submission };
   });
+
+  // A-1 (spec §11.1) — HORS de la transaction, et volontairement.
+  // Le lead et sa soumission sont ce qui compte : ils sont écrits, engagés,
+  // et rien de ce qui suit ne doit pouvoir les annuler. Prévenir l'équipe est
+  // un effet de bord — `alerterNouveauLead` avale ses propres erreurs, mais
+  // même un throw ici ne toucherait plus la transaction refermée.
+  await alerterNouveauLead({ tenantId: tenant.id, leadId: lead.id });
 
   return { ok: true, leadId: lead.id, submissionId: submission.id };
 }

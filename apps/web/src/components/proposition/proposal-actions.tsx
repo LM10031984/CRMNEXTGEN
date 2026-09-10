@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Link2,
   Loader2,
+  Mail,
   Receipt,
   RefreshCw,
   Send,
@@ -27,6 +28,7 @@ import {
   markProposalReviewed,
   markProposalSent,
   revokeProposalPublicLink,
+  sendProposalByEmail,
 } from '@/server/actions/propositions';
 import type { FingerprintComparison } from '@/lib/proposition/fingerprint';
 
@@ -274,6 +276,36 @@ export function ProposalActions({
           >
             <Send className="h-4 w-4" />
             Marquer comme remise
+          </button>
+        )}
+
+        {/* D-21 — l'envoi par email, déclenché ici et nulle part ailleurs. Il
+            reste proposé même après ENVOYEE : une proposition remise en main
+            propre se renvoie parfois par écrit, et le refuser obligerait à
+            passer par sa propre boîte mail, hors de toute trace. */}
+        {status !== 'ACCEPTEE' && (
+          <button
+            type="button"
+            onClick={() =>
+              start(async () => {
+                const r = await sendProposalByEmail(proposalId);
+                if (r.ok) {
+                  toast.success(`Proposition envoyée à ${r.data?.sentTo ?? 'ce client'}.`);
+                  router.refresh();
+                } else {
+                  // Une catégorie décochée ou un dry-run remontent ici : le
+                  // commercial doit savoir que rien n'est parti, plutôt que de
+                  // croire son client servi.
+                  toast.error(r.error ?? 'Envoi impossible', { duration: 8000 });
+                }
+              })
+            }
+            disabled={pending || blockers.length > 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+            title={blockers[0] ?? 'Envoie le lien de lecture au prospect'}
+          >
+            <Mail className="h-4 w-4" />
+            Envoyer par email
           </button>
         )}
       </div>

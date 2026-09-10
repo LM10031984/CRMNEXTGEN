@@ -49,6 +49,11 @@ apps/web/playwright-report/
 
 # TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
 packages/*/tsconfig.tsbuildinfo
+# `apps/*` manquait à la règle ci-dessus : `apps/web/tsconfig.tsbuildinfo` était
+# donc suivi alors que c'est un cache de compilation incrémentale. Il entrait en
+# conflit à CHAQUE fusion, sur un contenu que personne ne relit et que `tsc`
+# régénère seul. Constat du 10/09/2026, en fusionnant le lot F.
+apps/*/tsconfig.tsbuildinfo
 
 # Python (doc-engine)
 __pycache__/

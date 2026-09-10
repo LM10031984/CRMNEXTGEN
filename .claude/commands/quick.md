@@ -70,6 +70,12 @@ Aggravant : `db push` réclame `--accept-data-loss` dès qu'une contrainte se
 resserre, et le réflexe est de l'ajouter pour « débloquer ». C'est une destruction
 silencieuse que personne ne relit.
 
+L'inverse existe aussi, et il est plus sournois : une migration peut créer un
+objet que le schéma ne déclare pas. Rien ne le signale — la base est juste,
+l'appli marche, les tests passent — et le premier `migrate dev` venu génère un
+`DROP`. C'est arrivé à l'index GIN `AgeficePointAccueil.departmentsServed`, resté
+deux jours ainsi (constat du 10/09).
+
 Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune base
 (il ne fait que régénérer le client TypeScript).
 
@@ -77,11 +83,25 @@ Toute migration créée doit être appliquée (`migrate deploy`) avant d'écrire
 la base depuis une branche en avance — sinon l'`INSERT` part avec les défauts
 d'enum de la base, pas ceux du schéma.
 
+**Environnement non interactif** (agent, CI), où `migrate dev` refuse de tourner :
+générer le SQL avec `prisma migrate diff --from-migrations --to-schema-datamodel
+--script`, écrire le dossier de migration à la main, puis `migrate deploy`.
+Jamais `db push` comme raccourci.
+
+**Avant de livrer** : `pnpm --filter @qualiof/db run check:schema` doit être vert
+— base jetable, migrations rejouées pour de vrai, diff VIDE. Ce garde tourne
+aussi en CI. S'il rougit, c'est le schéma ou la migration qui ment, pas lui.
+
 - La migration générée se **commit avec le code** qui en dépend, jamais après.
 - Base de test repartie de zéro : `prisma migrate reset`, qui rejoue l'historique —
   c'est justement ce qu'on veut vérifier.
 - Ne jamais pointer une commande Prisma sur `DATABASE_URL` depuis le poste : c'est
   Supabase de production. Les migrations partent par la CI, pas à la main.
+  **La seule exception est la base d'APERÇU** (`qualiof-apercu`, pooler `aws-1`,
+  jamais `aws-0`) : elle doit recevoir migrations et seed pour que Laurent puisse
+  relire une PR sur des données réelles. On y va en surchargeant explicitement
+  `DATABASE_URL`/`DIRECT_URL` sur la ligne de commande, jamais en lisant le `.env`
+  du dépôt — qui, lui, pointe la production.
 
 ## 5. Gates — les trois, dans cet ordre
 

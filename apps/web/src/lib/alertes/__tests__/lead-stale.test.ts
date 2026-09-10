@@ -33,6 +33,24 @@ describe('A-2 — « ce lead dort depuis 24 h »', () => {
     });
   });
 
+  /**
+   * Le piège du lead venu du stand, et la raison d'être de ce test.
+   *
+   * `Lead.lastAction` / `lastActionAt` sont posés DÈS LA CRÉATION par le
+   * diagnostic express : ils portent la ligne de priorité « [A] Diagnostic —
+   * … », un résumé écrit par le système, pas une action commerciale. Un
+   * appelant qui alimenterait `lastActionAt` depuis ce champ dénormalisé
+   * conclurait « déjà traité », et **A-2 ne partirait jamais sur les leads du
+   * stand** — précisément ceux qu'on risque d'oublier après un salon.
+   *
+   * L'autorité est la table `LeadAction` (spec §11.1 : « statut NEW, aucune
+   * LeadAction »). Le cron lit donc la relation, jamais le champ.
+   */
+  it('alerte sur un lead du stand, dont seul le résumé système est renseigné', () => {
+    const leadDuStand = { ...base, actionCount: 0, lastActionAt: null };
+    expect(decideLeadStaleAlert(leadDuStand, NOW).alert).toBe(true);
+  });
+
   it('ne réveille personne pour un lead déjà pris en main', () => {
     expect(decideLeadStaleAlert({ ...base, actionCount: 1 }, NOW)).toEqual({
       alert: false,
