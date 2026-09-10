@@ -59,6 +59,8 @@ import {
   type FingerprintComparison,
 } from '@/lib/proposition/fingerprint';
 import { hashPublicToken, PUBLIC_TOKEN_BYTES } from '@/lib/proposition/public-link';
+import { sendMail } from '@/lib/mailer';
+import { renderPropositionRemise } from '@/lib/mailer-templates/proposition-remise';
 import { renderPropositionHtml } from '@/lib/proposition/templates/proposition-template';
 import type { PropositionData } from '@/lib/proposition/templates/proposition-data';
 
@@ -1258,6 +1260,142 @@ export async function markProposalSent(proposalId: string): Promise<ActionResult
 
   revalidateProposal(proposalId, ws.proposal.diagnosticId);
   return { ok: true };
+}
+
+/**
+ * Envoyer la proposition au client par email (D-21, 10/09/2026).
+ *
+ * DÉCLENCHÉ PAR LE COMMERCIAL, JAMAIS AUTOMATIQUE. La proposition se présente
+ * en rendez-vous, c'est là qu'elle se vend ; ce bouton sert aux cas où le
+ * rendez-vous n'a pas lieu, ou pour laisser une trace écrite après coup. Les
+ * relances automatiques sont un autre sujet, et restent au lot H — les mêler
+ * ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer.
+ *
+ * Trois portes, les mêmes que la remise en main propre : relecture humaine,
+ * validation de remise, PDF à jour. Un email ne contourne aucun contrôle.
+ *
+ * Un token PUBLIC NEUF est émis à chaque envoi, et c'est volontaire : seule
+ * l'empreinte est stockée, le lien précédent est donc irrécupérable. Émettre
+ * plutôt que tenter de relire évite le seul autre chemin possible — stocker le
+ * token en clair pour pouvoir le renvoyer.
+ *
+ * Le statut ne passe à ENVOYEE que si l'email est RÉELLEMENT parti. Un dry-run
+ * n'est pas un envoi, et une catégorie décochée non plus : dans les deux cas on
+ * le DIT au commercial au lieu de lui laisser croire que le client a reçu
+ * quelque chose. C'est la leçon de `fix(diagnostic): un dry-run n'est pas un
+ * envoi`, appliquée ici avant d'avoir eu à la réapprendre.
+ */
+export async function sendProposalByEmail(
+  proposalId: string,
+): Promise<ActionResult<{ sentTo: string }>> {
+  const g = await guard();
+  if (!g.ok) return { ok: false, error: g.error };
+
+  const ws = await buildWorkspace(proposalId, g.user.tenantId);
+  if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.blockers.length > 0) return { ok: false, error: ws.blockers[0]! };
+
+  const destinataire = await prisma.proposal.findFirst({
+    where: { id: proposalId, tenantId: g.user.tenantId },
+    select: {
+      validUntil: true,
+      title: true,
+      diagnosticId: true,
+      lead: { select: { firstName: true, email: true } },
+      owner: { select: { firstName: true } },
+    },
+  });
+  if (!destinataire) return { ok: false, error: 'Proposition introuvable' };
+
+  const email = destinataire.lead?.email?.trim();
+  if (!email) {
+    return {
+      ok: false,
+      error:
+        'Ce prospect n’a pas d’adresse email renseignée. Ajoutez-la sur la fiche lead, ou remettez la proposition par votre propre canal.',
+    };
+  }
+
+  const token = randomBytes(PUBLIC_TOKEN_BYTES).toString('hex');
+  const expiresAt = destinataire.validUntil ?? new Date(Date.now() + 30 * 24 * 3600 * 1000);
+  const base = (process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+  const of = await loadOfConfig(g.user.tenantId);
+  const { subject, html, text } = renderPropositionRemise(
+    {
+      destinataireFirstName: destinataire.lead?.firstName ?? null,
+      titre: destinataire.title,
+      lienUrl: `${base}/proposition/${token}`,
+      validiteTexte: destinataire.validUntil
+        ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(destinataire.validUntil)
+        : null,
+      commercialFirstName: destinataire.owner?.firstName ?? null,
+    },
+    of,
+  );
+
+  // Le lien est posé AVANT l'envoi : un email qui porterait un lien non encore
+  // enregistré arriverait avant lui, et les premières secondes donneraient un
+  // 404 au client. L'inverse — un lien posé pour rien si l'envoi échoue — ne
+  // coûte qu'un token inutilisé.
+  await prisma.proposal.update({
+    where: { id: proposalId },
+    data: { publicTokenHash: hashPublicToken(token), publicTokenExpiresAt: expiresAt },
+  });
+
+  const envoi = await sendMail({
+    to: email,
+    subject,
+    html,
+    text,
+    context: { tenantId: g.user.tenantId, category: 'proposal_sent', sessionId: null },
+  });
+
+  if (envoi.suppressed) {
+    return {
+      ok: false,
+      error:
+        'Rien n’est parti : la catégorie « Envoi de la proposition au client » est décochée dans Paramètres › Envois d’emails. Cochez-la, puis réessayez.',
+    };
+  }
+  if (envoi.dryRun) {
+    return {
+      ok: false,
+      error:
+        'Rien n’est parti : l’application est en mode dry-run (MAIL_DRY_RUN ou SMTP non configuré).',
+    };
+  }
+  if (!envoi.ok) {
+    return { ok: false, error: `L’envoi a échoué : ${envoi.error ?? 'raison inconnue'}` };
+  }
+
+  // Parti pour de bon : on trace la remise. Même statut et même horodatage
+  // qu'une remise en main propre — le commercial ne doit pas avoir à se
+  // demander laquelle des deux il a faite.
+  await prisma.$transaction(async (tx) => {
+    await tx.proposal.update({
+      where: { id: proposalId },
+      data: { status: 'ENVOYEE', sentAt: new Date() },
+    });
+    await tx.auditLog.create({
+      data: {
+        tenantId: g.user.tenantId,
+        userId: g.user.id,
+        entity: 'Proposal',
+        entityId: proposalId,
+        action: 'proposition.sent_email',
+        diff: {
+          // L'adresse, oui — c'est la preuve de la remise. Le token, jamais.
+          sentTo: email,
+          linkExpiresAt: expiresAt.toISOString(),
+          totalHt: ws.synthesis.totalHt,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  revalidateProposal(proposalId, destinataire.diagnosticId);
+  return { ok: true, data: { sentTo: email } };
 }
 
 // Schémas locaux : ils référencent les schémas partagés, mais restent ici pour

@@ -35,6 +35,11 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
     confondre avec `/diagnostic` (public, express 8 questions du stand MLS) : deux
     fonctionnalités distinctes, deux modèles distincts (`Diagnostic` vs
     `DiagnosticSubmission`). Redirect 308 `/app/diagnostic(/:path*)` posé.
+  - `/app/campagnes` (pluriel, FR — chaîne diagnostic lot F, 10/09/2026) pour
+    l'écran admin, et `/rdv/:token` (SINGULIER, public) pour le lien diffusé à
+    l'équipe du client. Redirects 308 posés sur `/app/campagne(/:path*)` et
+    `/rdvs/:token`. ⚠ `/rdv/:token` ne porte AUCUN formulaire : il distribue des
+    liens individuels `/preinscription/:token`, seuls porteurs du dossier.
 - **Toujours ajouter un redirect 308 dans `apps/web/next.config.mjs`** pour les variantes naturelles (avec et sans `:path*`) afin que les URLs tapées à la main par les utilisateurs n'aboutissent pas à un 404. Cf. audit 2026-05-12 BUG-03.
 - Avant d'ajouter une nouvelle route : décider hyphen vs no-hyphen, FR vs EN, et documenter ici.
 <!-- GSD:project-end -->
