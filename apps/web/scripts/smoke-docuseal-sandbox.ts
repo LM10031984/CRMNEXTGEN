@@ -22,6 +22,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { renderConventionHtml, type ConventionData } from '../src/lib/convention-template';
+import { extractTextFromPdf } from '../src/lib/pdf-extract';
 import { renderHtmlToPdfWeasy } from '../src/lib/pdf-render';
 import { resolveOfConfig } from '../src/lib/of-config';
 import { createDocusealProvider } from '../src/lib/signature/docuseal';
@@ -79,16 +80,69 @@ async function relire(submissionId: string): Promise<void> {
   }
   console.log(`  certificat : ${etat.auditTrailUrl ?? '— pas encore produit'}`);
 
-  if (etat.status === 'DONE') {
-    const signes = await provider.downloadSignedDocument(submissionId);
-    for (const d of signes) {
-      writeFileSync(`${OUT}-docuseal-${d.name}.pdf`, d.pdf);
-      console.log(`  → PDF signé écrit : ${OUT}-docuseal-${d.name}.pdf (${d.pdf.length} o)`);
-    }
-    const cert = await provider.downloadAuditTrail(submissionId);
-    writeFileSync(`${OUT}-docuseal-certificat.pdf`, cert);
-    console.log(`  → certificat écrit : ${OUT}-docuseal-certificat.pdf (${cert.length} o)`);
+  if (etat.status !== 'DONE') {
+    console.log('\n(rien à télécharger tant que tous les signataires n\'ont pas signé)');
+    return;
   }
+
+  const signes = await provider.downloadSignedDocument(submissionId);
+  for (const d of signes) {
+    writeFileSync(`${OUT}-docuseal-${d.name}.pdf`, d.pdf);
+    console.log(`  → PDF signé écrit : ${OUT}-docuseal-${d.name}.pdf (${d.pdf.length} o)`);
+  }
+  const cert = await provider.downloadAuditTrail(submissionId);
+  writeFileSync(`${OUT}-docuseal-certificat.pdf`, cert);
+  console.log(`  → certificat écrit : ${OUT}-docuseal-certificat.pdf (${cert.length} o)`);
+
+  // ─── Vérification 1 : le PDF signé porte-t-il une VRAIE signature numérique ?
+  // C'est ce qui déclenche le panneau de signature d'Adobe Reader — et c'est
+  // toute la valeur probante qu'on achète chez un prestataire tiers.
+  console.log('\n=== Signature numérique du PDF (panneau Adobe) ===\n');
+  const brut = signes[0]!.pdf.toString('latin1');
+  const controles: Array<[string, boolean, string]> = [
+    ['objet de signature /Type /Sig', /\/Type\s*\/Sig/.test(brut), ''],
+    ['plage signée /ByteRange', /\/ByteRange/.test(brut), (brut.match(/\/ByteRange\s*\[[^\]]*\]/) ?? [''])[0]],
+    [
+      'format PAdES/CMS (/SubFilter)',
+      /\/SubFilter\s*\/(ETSI\.CAdES\.detached|adbe\.pkcs7\.detached|ETSI\.RFC3161)/.test(brut),
+      (brut.match(/\/SubFilter\s*\/[A-Za-z0-9.]+/) ?? [''])[0],
+    ],
+    ['champ de formulaire signature (/AcroForm)', /\/AcroForm/.test(brut), ''],
+  ];
+  for (const [libelle, ok, detail] of controles) {
+    console.log(`${ok ? '  OK  ' : ' ÉCHEC'} │ ${libelle}${detail ? ` — ${detail}` : ''}`);
+  }
+  const signeNumeriquement = controles.slice(0, 3).every(([, ok]) => ok);
+  console.log(
+    signeNumeriquement
+      ? "\n✅ PDF signé numériquement : Adobe Reader affichera le panneau de signature."
+      : "\n❌ Aucune signature numérique détectée — le PDF n'a que l'image de la signature.",
+  );
+
+  // ─── Vérification 2 : le certificat porte-t-il la trace d'un hébergement UE ?
+  console.log('\n=== Certificat de signature (ce que réclame l\'AGEFICE) ===\n');
+  const texte = (await extractTextFromPdf(cert)).text;
+  const attendus: Array<[string, RegExp]> = [
+    ['adresse email du signataire', /@/],
+    ['adresse IP', /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/],
+    ['horodatage', /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/],
+    ['identifiant d\'enveloppe', /[0-9a-f]{8,}|\b1619\d{3}\b/i],
+  ];
+  for (const [libelle, motif] of attendus) {
+    console.log(`${motif.test(texte) ? '  OK  ' : ' ABSENT'} │ ${libelle}`);
+  }
+
+  const mentionsUe = texte.match(/docuseal\.(eu|com)[^\s]*/gi) ?? [];
+  const horsUe = mentionsUe.filter((m) => /docuseal\.com/i.test(m));
+  console.log(`\n  hôtes cités dans le certificat : ${[...new Set(mentionsUe)].join(', ') || '(aucun)'}`);
+  console.log(
+    horsUe.length === 0
+      ? '✅ Aucune référence au serveur global : le certificat reste sur l\'instance UE.'
+      : `❌ ${horsUe.length} référence(s) au serveur global dans le certificat.`,
+  );
+
+  console.log('\n--- Texte du certificat (300 premiers caractères) ---');
+  console.log(texte.slice(0, 300).replace(/\s+/g, ' '));
 }
 
 async function main(): Promise<void> {
