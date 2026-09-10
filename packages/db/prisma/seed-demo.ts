@@ -258,7 +258,9 @@ async function main(): Promise<void> {
     {
       code: `${MARQUE}-PROD-003`,
       title: 'Obligations réglementaires — TRACFIN et non-discrimination (démo)',
-      demiJournees: 2,
+      // Une demi-journée à deux (arbitrage Laurent du 10/09/2026) : 4 h sur
+      // site, 8 h conventionnées. La version précédente en mettait deux.
+      demiJournees: 1,
       theme: 'Réglementaire',
       objectives: ['Identifier une opération atypique', 'Tenir le registre des mandats'],
     },
