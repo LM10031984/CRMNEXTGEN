@@ -10,12 +10,19 @@
  *   `issueDate` : number(n) > number(n-1) ⟹ issueDate(n) >= issueDate(n-1).
  *
  * Une RUPTURE est un couple de numéros consécutifs dans une même séquence où
- * la date d'émission RECULE. Elle naît de deux horloges qui ne sont pas la
- * même : le numéro est attribué à l'instant du clic (`getNextInvoiceNumber`,
- * max + 1) pendant que la date vient de la fin de prestation
- * (`resolveInvoiceIssueDate`, décision du 13/08/2026). Facturer en septembre
- * une session de juin produit FAC-000021 daté du 12 juin juste après
- * FAC-000020 daté du 3 septembre.
+ * la date d'émission RECULE. Elle naissait de deux horloges qui n'étaient pas
+ * la même : le numéro était attribué à l'instant du clic
+ * (`getNextInvoiceNumber`, max + 1) pendant que la date venait de la fin de
+ * prestation (`resolveInvoiceIssueDate`, décision du 13/08/2026). Facturer en
+ * septembre une session de juin produisait FAC-000021 daté du 12 juin juste
+ * après FAC-000020 daté du 3 septembre.
+ *
+ * ⚠ CETTE CAUSE EST ÉTEINTE. Le lot B (10/09/2026) a corrigé la règle : une
+ * facture se date désormais du jour où on l'établit, la période de formation
+ * étant portée par les lignes. Aucune pièce émise après le lot B ne peut plus
+ * produire de rupture. Ce script garde tout son sens pour autant : il mesure le
+ * PARC, dont les 5 ruptures antérieures subsistent — le lot C (réécriture de
+ * l'historique) a été FERMÉ le 10/09/2026, pas reporté (spec §7 et §8).
  *
  * ── La règle qui commande tout le reste ──────────────────────────────────
  *

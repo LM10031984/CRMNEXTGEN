@@ -473,8 +473,9 @@ export type InvoiceSourceInput = FactureSource | AvoirSource;
  *
  * Volontairement ABSENTS, parce que calculés au moment de la génération :
  *  · le NUMÉRO (attribué par la séquence à l'insertion) ;
- *  · la DATE D'ÉMISSION (`resolveInvoiceIssueDate` retombe sur le jour courant
- *    quand la session n'est pas terminée) ;
+ *  · la DATE D'ÉMISSION (`resolveInvoiceIssueDate` rend le jour courant —
+ *    depuis le lot B du 10/09/2026, toujours, et non plus seulement quand la
+ *    session n'était pas terminée) ;
  *  · l'ÉCHÉANCE (comptée depuis `Date.now()`).
  * Les inclure ferait « périmer » toute facture le lendemain de sa production
  * sans que rien n'ait bougé — règle 2 de `source-fingerprint.ts`.

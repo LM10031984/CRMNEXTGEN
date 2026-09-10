@@ -70,21 +70,36 @@ describe('invoices.ts — les deux points d’émission ne datent plus depuis la
     expect(INVOICES_SRC).not.toMatch(/resolveInvoiceIssueDate\(\s*session\.endDate/);
   });
 
-  it('les deux `issueDate:` du fichier sont alimentés par l’émission calculée', () => {
-    const issueDates = INVOICES_SRC.match(/^\s*issueDate: .*$/gm) ?? [];
-    // Deux créations de facture (individuelle + groupée) écrivent `issueDate`
-    // dans le `data:` d'un `create`. Les autres occurrences du fichier sont des
-    // LECTURES (`invoice.issueDate ?? …` pour le gabarit), pas des écritures.
-    const ecritures = issueDates.filter((l) => !l.includes('invoice.issueDate'));
-    expect(ecritures.length).toBeGreaterThanOrEqual(2);
-    for (const ligne of ecritures) {
-      expect(ligne).toMatch(/issueDate: emission,/);
-    }
+  // Les deux actions qui ÉMETTENT une facture. Le reste des `issueDate:` du
+  // fichier ne les concerne pas : `invoice.issueDate ?? …` sont des lectures
+  // pour le gabarit, `issueDate: true` un `select` Prisma, et l'avoir
+  // (`createCreditNote`) était déjà daté du jour — il n'a jamais tiré sa date
+  // de la session, la période vivant sur la facture d'origine qu'il nomme.
+  const EMETTEURS = ['createInvoiceFromParticipant', 'createInvoiceForSponsorGroup'] as const;
+
+  function corpsDe(nom: string): string {
+    const m = INVOICES_SRC.match(new RegExp(`export async function ${nom}[\\s\\S]*?\\n\\}\\n`));
+    expect(m, `fonction ${nom} introuvable`).not.toBeNull();
+    return m![0]!;
+  }
+
+  it.each(EMETTEURS)('%s écrit `issueDate: emission`', (nom) => {
+    expect(corpsDe(nom)).toMatch(/issueDate: emission,/);
   });
 
-  it('l’échéance est ancrée sur l’émission, pas sur un `Date.now()` de son côté', () => {
+  it.each(EMETTEURS)('%s calcule l’émission une seule fois, avant la transaction', (nom) => {
+    // Les DEUX dates de la pièce doivent partir du même instant — avant le lot
+    // B, `issueDate` et `dueDate` naissaient de deux horloges distantes de
+    // quelques millisecondes.
+    expect(corpsDe(nom)).toMatch(/const emission = resolveInvoiceIssueDate\(\);/);
+  });
+
+  it.each(EMETTEURS)('%s ancre l’échéance sur cette émission', (nom) => {
+    expect(corpsDe(nom)).toMatch(/dueDate: resolveInvoiceDueDate\(dueDays, emission\)/);
+  });
+
+  it('plus aucun `dueDate` de facture ne repart d’un `Date.now()` de son côté', () => {
     expect(INVOICES_SRC).not.toMatch(/dueDate: new Date\(Date\.now\(\) \+ dueDays/);
-    expect(INVOICES_SRC).toMatch(/dueDate: resolveInvoiceDueDate\(dueDays, emission\)/);
   });
 });
 
