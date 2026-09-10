@@ -11,7 +11,7 @@
 | **Document DPA public** | https://www.docuseal.com/legal/dpa — **à récupérer, vérifier et accepter/signer avant la mise en service du lot C**, et à conserver comme preuve (capture horodatée). |
 | **Garanties de transfert hors UE** | Traitement sur l'instance UE. **À confirmer sur le DPA** : liste des sous-traitants ultérieurs (hébergeur de l'instance UE) et clauses de transfert si le support ou l'administration technique sont opérés hors UE. |
 | **Durée de conservation côté fournisseur** | **Alignée sur celle du dossier de formation : 5 ans.** Le document signé et son certificat sont **rapatriés dans QualiOF** (bucket Supabase UE) dès la complétion — DocuSeal n'est pas la source de vérité documentaire (décision O-1 de la spec du 2026-09-04). La copie résiduelle chez le prestataire est purgée à l'échéance ; les envois de test sont archivés dès la fin du test. |
-| **Date de vérification** | 2026-09-04 (API et forme des réponses vérifiées contre l'instance réelle ; **DPA pas encore récupéré ni accepté** — voir points ouverts) |
+| **Date de vérification** | 2026-09-04 (API et forme des réponses vérifiées contre l'instance réelle ; **DPA pas encore récupéré ni accepté** — voir points ouverts)<br>2026-09-10 (langue du certificat de signature) |
 
 ## Pourquoi ce sous-traitant
 
@@ -45,6 +45,12 @@ toucher au métier.
   court. Voir [supabase.md](supabase.md).
 - **Secret et clé API** en variables d'environnement chiffrées, jamais dans le
   dépôt. Un seul endroit du code porte un host DocuSeal : `DOCUSEAL_BASE_URL`.
+- **Certificat de signature demandé en français** : chaque envoi pose
+  `metadata.lang = "fr-FR"` sur **chaque** signataire (DocuSeal compose le
+  certificat dans la langue du dernier signataire ayant complété). C'est une
+  pièce justificative destinée à un financeur français — l'AGEFICE la réclame
+  pour établir la valeur probante. **Portée : les libellés.** Les horodatages
+  relèvent d'un réglage de compte, voir points ouverts 5 et 6.
 
 ## Points ouverts / limites
 
@@ -58,3 +64,16 @@ toucher au métier.
    lot B doivent être **archivés** une fois les tests terminés (script
    `smoke-docuseal-sandbox.ts`, variable `SMOKE_ARCHIVE`). Ils ne contenaient que
    des données fictives et les adresses email de l'OF.
+5. ⚠ **Action manuelle du responsable de traitement — langue du compte** : régler
+   la langue sur **Français** dans `console.docuseal.eu` (écran des paramètres de
+   compte). Sans ce réglage, **les horodatages du certificat restent au format
+   anglais** (« September 10, 2026 at 12:29 PM CEST ») : ils sont formatés avec
+   la langue du **compte**, jamais avec celle de l'envoi (`fr-FR`, déjà posée par
+   le code — voir mesures techniques) ; aucun paramètre d'API ne peut les
+   atteindre. Le code ne peut donc pas s'en charger. À dater ici une fois fait,
+   comme l'a été la création du compte UE au point 3.
+6. **Limites résiduelles — trois chaînes resteront en anglais**, compte réglé en
+   français ou non : `User agent:` et `Time zone:` dans le certificat, et le
+   motif de signature apposé dans le PDF, `Signed with DocuSeal.com`. Elles sont
+   codées en dur chez le prestataire, aucun réglage ne les traduit. Noté ici pour
+   qu'un futur lecteur ne reprenne pas l'enquête en voyant cet anglais résiduel.
