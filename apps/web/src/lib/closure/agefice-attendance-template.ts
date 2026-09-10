@@ -19,6 +19,7 @@ import {
   loadSignatureDataUrl,
   loadStampDataUrl,
 } from './shared-template';
+import { SIGNATURE_ROLES, renderSignatureAnchor } from '../signature/text-tags';
 
 export interface AgeficeAttendanceTemplateData {
   tenantId: string;
@@ -55,6 +56,15 @@ export interface AgeficeAttendanceTemplateData {
   dateReglement: Date | null;
 
   dateDelivrance: Date;
+
+  /**
+   * Spec signature 2026-09-04 §5 lot B (D-7) — ancres invisibles DocuSeal.
+   * Faux par défaut : l'attestation imprimée reste strictement inchangée. En
+   * mode ancres, le tampon + la signature OF disparaissent au profit du champ
+   * DocuSeal (§3, D-8) — sinon deux signatures de la même personne, dont une
+   * hors du certificat de signature.
+   */
+  signatureTags?: boolean;
 }
 
 function fmtDateFr(d: Date | null | undefined): string {
@@ -82,8 +92,10 @@ function fmtH(n: number | null | undefined): string {
 
 export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): string {
   const logo = loadLogoColorDataUrl(d.tenantId);
-  const signature = loadSignatureDataUrl(d.tenantId, 'pedago'); // fallback bundled = signature-laurent.png
-  const stamp = loadStampDataUrl(d.tenantId);
+  // En mode e-signature, l'OF signe dans DocuSeal : ni signature ni cachet
+  // imprimés, l'ancre prend leur place.
+  const signature = d.signatureTags ? null : loadSignatureDataUrl(d.tenantId, 'pedago'); // fallback bundled = signature-laurent.png
+  const stamp = d.signatureTags ? null : loadStampDataUrl(d.tenantId);
 
   return `<!doctype html>
 <html lang="fr">
@@ -367,12 +379,29 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
         <div class="visual">
           ${signature ? `<img class="sig" src="${signature}" alt="Signature" />` : ''}
           ${stamp ? `<img class="stamp" src="${stamp}" alt="Cachet" />` : ''}
+          ${
+            d.signatureTags
+              ? renderSignatureAnchor({
+                  name: "Signature organisme de formation",
+                  role: SIGNATURE_ROLES.OF,
+                  type: 'signature',
+                })
+              : ''
+          }
         </div>
       </div>
       <div class="col">
         <div class="title">Le stagiaire</div>
         <div class="ident">${escapeHtml(d.stagiaireNomPrenom)}</div>
-        <div class="visual"></div>
+        <div class="visual">${
+          d.signatureTags
+            ? renderSignatureAnchor({
+                name: 'Signature stagiaire',
+                role: SIGNATURE_ROLES.STAGIAIRE,
+                type: 'signature',
+              })
+            : ''
+        }</div>
         <div class="caption">Signature et cachet</div>
       </div>
     </div>

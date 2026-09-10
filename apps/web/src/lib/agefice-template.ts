@@ -4,6 +4,14 @@
  * Reproduit la structure du formulaire AGEFICE officiel avec tous les champs
  * pré-remplis. Quand Laurent fournira le PDF officiel, on bascule sur un
  * form-fill via pdf-lib (les noms de champs PDF sont déjà mappés ci-dessous).
+ *
+ * ⚠ **CE GABARIT NE PRODUIT PLUS AUCUN DOCUMENT.** La bascule annoncée
+ * ci-dessus a eu lieu : le dossier AGEFICE réellement généré, puis envoyé en
+ * signature, sort de `fillAgeficePdf` (`agefice-form-fill.ts`), qui remplit le
+ * formulaire officiel. `renderAgeficeHtml` n'est appelé par personne — constaté
+ * le 10/09/2026, après que le lot B y eut posé des ancres de signature restées
+ * sans effet. Toute ancre ou champ ajouté ICI est sans effet : c'est
+ * `agefice-form-fill.ts` qu'il faut modifier.
  */
 
 export interface AgeficePdfData {

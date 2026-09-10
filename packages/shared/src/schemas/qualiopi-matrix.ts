@@ -40,3 +40,23 @@ export type DocStatusEntry = z.infer<typeof DocStatusEntrySchema>;
  */
 export const DocStatusMapSchema = z.record(z.string(), DocStatusEntrySchema);
 export type DocStatusMap = z.infer<typeof DocStatusMapSchema>;
+
+// ─── Lot A — dépôt des scans signés (spec signature 2026-09-04 §5 A) ──────
+
+/** Plafond d'un dépôt : 30 scans, soit largement une session complète. */
+export const MAX_SIGNED_SCANS_PER_BATCH = 30;
+
+/**
+ * Entrée de `uploadSignedScans` (hors fichiers, portés par le FormData).
+ *
+ * - `assign` : N fichiers ↔ N participants, affectation explicite.
+ * - `split`  : 1 PDF multipages → 1 page par participant, dans l'ordre
+ *              de `participantIds` (variante A.2).
+ */
+export const SignedScansInputSchema = z.object({
+  sessionId: z.string().uuid(),
+  docType: z.string().min(1).max(64),
+  mode: z.enum(['assign', 'split']).default('assign'),
+  participantIds: z.array(z.string().uuid()).min(1).max(MAX_SIGNED_SCANS_PER_BATCH),
+});
+export type SignedScansInput = z.infer<typeof SignedScansInputSchema>;

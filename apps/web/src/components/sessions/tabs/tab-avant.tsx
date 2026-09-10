@@ -37,6 +37,10 @@ import {
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { LearnerPhaseActions } from '../learner-phase-actions';
 import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
+import {
+  SignedDocDropZone,
+  type DropZoneParticipant,
+} from '../qualiopi-matrix/signed-doc-drop-zone';
 import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
 
 interface Props {
@@ -45,6 +49,13 @@ interface Props {
   items: DocDockItem[];
   /** RBAC : ADMIN/MANAGER/COMMERCIAL peuvent générer. */
   canGenerate: boolean;
+  /**
+   * Lot A signature (spec 2026-09-04 §5 A) — stagiaires, pour la zone de dépôt
+   * repliée : un doc pré-formation signé à la main (convention rendue papier,
+   * AGEFICE signé au stylo) revient ici en attendant la signature électronique
+   * (lot C).
+   */
+  dropZoneParticipants?: DropZoneParticipant[];
   /**
    * Ce que l'archive `?phase=avant` contiendra, apprenant par apprenant —
    * dérivé de la table des phases, comme la route ZIP.
@@ -58,10 +69,23 @@ interface Props {
   avantGroups?: PhaseParticipantGroup[];
 }
 
+/** Docs pré-formation qui peuvent revenir signés à la main. */
+const AVANT_SIGNABLE_DOC_TYPES = [
+  { value: 'CONVENTION', label: 'Convention' },
+  { value: 'AGEFICE', label: 'Dossier AGEFICE' },
+  { value: 'CONVOCATION', label: 'Convocation' },
+];
+
 /** Ordre d'affichage des docs partagés produit/session en haut. */
 const SHARED_ORDER: string[] = ['PROGRAMME', 'DEROULE', 'CHECKLIST'];
 
-export function TabAvant({ sessionId, items, canGenerate, avantGroups = [] }: Props) {
+export function TabAvant({
+  sessionId,
+  items,
+  canGenerate,
+  dropZoneParticipants,
+  avantGroups = [],
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
@@ -265,6 +289,20 @@ export function TabAvant({ sessionId, items, canGenerate, avantGroups = [] }: Pr
           ))}
         </DocLineSection>
       ))}
+
+      {/* Lot A signature — dépôt d'un doc pré-formation signé à la main.
+          Repliée par défaut : le cas courant avant la session reste la
+          génération, pas le dépôt d'un scan. */}
+      {canGenerate && dropZoneParticipants && dropZoneParticipants.length > 0 && (
+        <SignedDocDropZone
+          sessionId={sessionId}
+          docType="CONVENTION"
+          docLabel="documents"
+          participants={dropZoneParticipants}
+          defaultOpen={false}
+          docTypeOptions={AVANT_SIGNABLE_DOC_TYPES}
+        />
+      )}
 
       {items.length === 0 && (
         <p className="text-sm text-muted-foreground italic">
