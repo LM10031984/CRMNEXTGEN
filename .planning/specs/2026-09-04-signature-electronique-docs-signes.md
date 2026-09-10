@@ -323,6 +323,38 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    ce qui s'est passé même quand la trace de résultat manque. Elle est écrite même si la
 >    régénération ne change rien : avant de l'avoir faite, on ne peut pas le savoir. C'est le
 >    prix de l'antériorité.
+>
+> 8. **Le lien « Relancer » du §5 est RETIRÉ de C.2b** (Laurent, 10/09/2026 — lot C.2b-2). Il
+>    suppose deux choses qui n'existent pas : un email de relance (**lot C.2c**) et une server
+>    action appelant `provider.remind(providerId, signerId)`, qui n'a **aucun appelant**. Un
+>    lien qui ne relance rien — ou grisé avec une infobulle — est exactement le « bouton qui
+>    laisse croire qu'il manque un réglage » que la décision n°3 interdit.
+>
+>    À la place, une pièce en attente de signature porte une phrase honnête : « Le lien de
+>    signature n'a encore été communiqué à personne : l'envoi automatique des emails aux
+>    signataires arrive au lot C.2c. » Vérifié par test : aucun élément nommé /relancer/i
+>    n'existe dans `components/sessions/signature/`.
+>
+> 9. **Deux contrats manquaient au moteur pour que C.2b soit UTILISABLE — les deux sont
+>    livrés au lot C.2b-bis** (Laurent, 10/09/2026).
+>
+>    - **`signUrl` en retour de `sendForSignature`.** Le lien était persisté dans
+>      `SignatureRequest.signers[]` depuis le lot B, mais **aucun chemin de lecture ne
+>      l'exposait**. DocuSeal partant en `send_email: false` (D-9) et QualiOF n'envoyant rien
+>      avant C.2c, **personne n'était prévenu et personne ne POUVAIT l'être**. `EnvoiEffectue`
+>      porte désormais `signUrl: string | null`, et le récapitulatif l'affiche avec de quoi le
+>      copier — seul moyen de transmettre le lien en attendant C.2c.
+>    - **`annulerEnvoiSignature({ signatureRequestId })`.** Sans elle, une pièce partie était
+>      **gelée** : `Document.status = 'sent_for_signature'` fait refuser la régénération par
+>      `preparerEnvoiSignature` **et** le renvoi par `sendForSignature` (`ENVOI_EN_COURS`, que
+>      `force` ne lève pas), jusqu'à un webhook — lot C.3 — qui ne se déclencherait pas
+>      puisque personne n'a reçu le lien. `messageEnvoiEnCours` promettait d'ailleurs
+>      « Annulez l'envoi en cours », un geste qui n'existait nulle part. L'action annule chez
+>      le prestataire **d'abord** (échec ⇒ rien n'est écrit en local), puis passe la demande en
+>      `CANCELED`, rend au document le statut que le journal lui connaissait avant l'envoi, et
+>      le régénère **sans** ses ancres — sauf s'il porte déjà une preuve signée, auquel cas
+>      elle s'abstient et le dit. Le bouton qui l'appelle vit dans le bloc « Signature » des
+>      onglets Avant / Après (lot C.2b-2).
 
 - Server actions `preparerEnvoiSignature({ sessionId, scope, cles? })` puis `sendForSignature({ sessionId, scope, cibles, force? })` — chaque cible porte `{ cle, hashConfirme, emailSaisi? }` (amendement n°5) :
   - **Un envoi porte UN document** (D-4 amendé, amendement n°1 ci-dessus).
