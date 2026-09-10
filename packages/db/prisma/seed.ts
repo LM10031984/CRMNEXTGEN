@@ -24,6 +24,9 @@ import argon2 from 'argon2';
 // [AUDIT-SANDBOX] client partagé (supporte PRISMA_USE_PG_ADAPTER=1 — sandbox
 // sans binaires natifs Prisma). Comportement identique en dev/prod normal.
 import { prisma } from '../src/index.js';
+// Garde-fou de cible : ce fichier charge le .env RACINE, qui porte l'URL de
+// production. Sans cette barrière, un `tsx prisma/seed.ts` nu écrit en prod.
+import { assertCibleAutorisee } from '../scripts/assert-db-target.js';
 
 const TENANT_NAME = process.env.TENANT_DEFAULT_NAME ?? 'Start Academy';
 const TENANT_SIRET = process.env.TENANT_DEFAULT_SIRET ?? null;
@@ -396,6 +399,9 @@ async function seedFundingRules(tenantId: string) {
 }
 
 async function main() {
+  // Avant la moindre écriture. Levable par SEED_ALLOW_PROD=1, jamais dans un .env.
+  assertCibleAutorisee('Seed');
+
   const tenant = await seedTenantAndAdmin();
   await seedOpcoCatalog();
   await seedQualiopiDocCatalog();
