@@ -162,6 +162,26 @@ describe('resolveRegimeSignature — quelles pièces, quel rôle, quelle cible',
     expect(signataireDe('ASSIDUITE', REGLE_OPCO_EP)).toBeNull();
     expect(signataireDe('CONVENTION', null)).toBeNull();
   });
+
+  it('chaque pièce lit SA colonne — un câblage croisé de COLONNE_PAR_DOCTYPE se voit', () => {
+    // Ajouté après le test de puissance du 10/09/2026. Câbler ASSIDUITE sur
+    // `ageficeSigner` ne faisait tomber QU'UN test : dans les 6 régimes réels,
+    // `ageficeSigner` et `assiduiteSigner` portent toujours la MÊME valeur
+    // (STAGIAIRE/STAGIAIRE chez AGEFICE, null/null partout ailleurs) — la
+    // permutation était donc invisible. Une règle aux trois colonnes DEUX À DEUX
+    // DISTINCTES rend visible n'importe laquelle des six permutations possibles.
+    const troisValeursDistinctes: RegleSignatureFinanceur = {
+      conventionSigner: 'DIRIGEANT',
+      ageficeSigner: 'STAGIAIRE',
+      assiduiteSigner: null,
+    };
+
+    expect(signataireDe('CONVENTION', troisValeursDistinctes)).toBe('DIRIGEANT');
+    expect(signataireDe('AGEFICE', troisValeursDistinctes)).toBe('STAGIAIRE');
+    expect(signataireDe('ASSIDUITE', troisValeursDistinctes)).toBeNull();
+    expect([...docTypesEnRegime(troisValeursDistinctes)]).toEqual(['CONVENTION', 'AGEFICE']);
+    expect([...docTypesHorsRegime(troisValeursDistinctes)]).toEqual(['ASSIDUITE']);
+  });
 });
 
 /**
