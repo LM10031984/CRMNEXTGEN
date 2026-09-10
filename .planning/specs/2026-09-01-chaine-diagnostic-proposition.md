@@ -334,6 +334,70 @@ Script one-shot `scripts/import-diag-catalog.ts` : lit le `module-catalog.ts` du
 - Ajout `TrainingProduct.fundingType` : `REGLEMENTAIRE | COEUR_METIER` (défaut `COEUR_METIER`) + `format` par session déjà couvert par `Modality`.
 - Rapport d'import (créés / matchés / ambigus) déposé en `.planning/`, à valider par Laurent AVANT activation.
 
+#### D-19 — le catalogue est une BIBLIOTHÈQUE DE MODULES, pas une liste de produits figés (recadrage Laurent du 04/09/2026)
+
+C'est le renversement qui explique pourquoi les programmes métier de Laurent
+« manquaient » au catalogue QualiOF : **ils n'y sont pas parce qu'un programme
+ne se vend pas tel quel — il SE COMPOSE**. On assemble des modules venant de
+plusieurs programmes selon le point de douleur de l'agence. Le produit figé
+était une hypothèse de l'outil, pas une réalité du métier.
+
+Ce que ça change, et qui remplace le mapping « signal → programme vendu » :
+
+1. **La recommandation recommande des MODULES**, pas seulement des produits
+   entiers. Le rapprochement se fait **module ↔ signal ↔ réponse du
+   diagnostic**, et il est traçable : on doit pouvoir dire de chaque module
+   retenu quelle réponse l'a fait entrer.
+2. **La proposition COMPOSE le programme sur mesure** à partir des modules
+   retenus, et ce programme composé **devient le produit vendu à ce client** —
+   un `TrainingProduct` généré, avec son programme Qualiopi dérivé des modules
+   (objectifs, durées, prérequis).
+3. Tout doit pouvoir entrer dans la bibliothèque : le catalogue diag déjà
+   importé, la **formation Faros**, et la production du Drive « Formations et
+   programmes » (008 → 074).
+
+**C'est la vraie réponse au problème des signaux coincés sur PROD-0675..0680** :
+il ne s'agit pas de relier ces conteneurs à des produits vendus, il s'agit de
+cesser de vendre des produits pour vendre des compositions. Les conteneurs
+deviennent ce qu'ils sont : des rayons de la bibliothèque.
+
+#### D-20 — l'unité de vente est le bloc de 8 h, pas la somme des modules
+
+Un programme composé est un **multiple du bloc de 8 h** = une demi-journée de
+4 h sur site co-animée à deux formateurs — la même unité que le tarif
+(336 € HT/participant/demi-journée, §8.1). Conséquence directe :
+
+- **le total d'un programme composé ne se déduit plus de la somme des durées de
+  ses modules**. Les durées de modules servent à savoir **ce qui TIENT dans un
+  bloc de 8 h**, rien de plus ;
+- ceci clôt le sujet des 16 modules sans durée (D-17) : la valeur par défaut ne
+  pilote plus aucun montant vendu, elle ne sert qu'à la composition. Le badge
+  « durée à confirmer » reste, parce qu'il reste utile pour composer.
+
+⚠ **Ligne rouge — périmètre du chantier** : diagnostic et modules UNIQUEMENT.
+**Interdiction de retoucher la durée d'un produit qui porte déjà des sessions
+ou des conventions signées** (journées Faros) : les documents déjà émis
+porteraient alors des heures qui ne correspondent plus à leur produit, ce qui
+est une non-conformité en contrôle. _Vérifié le 10/09/2026 : les 7 conteneurs
+touchés par la passe de réparation de l'import sont inactifs et portent zéro
+session — la règle a été respectée rétroactivement, et le script la refuse
+désormais explicitement._
+
+#### Dimensionner au budget sans jamais remplir pour remplir
+
+Selon les points de douleur, on compose **plusieurs journées** de façon à
+mobiliser le maximum des droits disponibles (AGEFICE plafonné à 3 000 €/agent,
+enveloppe OPCO EP) : des droits non consommés au 31 décembre sont des droits
+perdus, et les laisser dormir n'aide personne.
+
+**Garde-fou non négociable** : chaque module retenu est **justifié par un point
+de douleur tracé**. Quand toutes les douleurs sont couvertes et qu'il reste de
+l'enveloppe, c'est un **arbitrage humain affiché**, jamais un remplissage
+automatique — c'est la règle « surplus d'enveloppe = arbitrage humain » de §8.2,
+appliquée à la composition. Un contrôle OPCO regarde la cohérence
+**besoin ↔ programme ↔ durée** : un programme dont on ne peut pas expliquer
+pourquoi chaque module y est ne la passe pas.
+
 > **État au 04/09/2026 — import VALIDÉ par Laurent et appliqué sur la base LOCALE** (`qualiof_dev`). 79 modules, 6 conteneurs inactifs, aucun module à 0 h (D-17), 3 modules pige exclus des sorties client (« Pige Faq », « Veille concurrentielle » ×2 — confirmé par Laurent : ils restent au catalogue interne). Le script est **idempotent ET réparateur** : rejoué, il corrige la durée de ce qu'il possède au lieu de ne rien faire. L'`--apply` en production reste à la checklist du 10/09.
 >
 > ⚠ **Le maillon qui manque encore** : les signaux (`diagnosticSignals`) vivent sur les modules des conteneurs **inactifs**, et **aucun produit ACTIF n'en porte**. La recommandation se rabat donc systématiquement sur le lexique, et badge chaque axe « à vérifier ». Relier les modules diag aux programmes réellement vendus (ou faire des conteneurs de vrais programmes) est une **décision de catalogue, pas de code** — c'est ce qui fera passer le rapprochement de « lexique » à « signaux ». `pnpm --filter @qualiof/web probe:reco` montre l'état du rapprochement sur un dossier réel, sans rien écrire.
@@ -475,7 +539,7 @@ Arguments contractuels affichés d'office (blocs OPTIMO réels) : **montage admi
 
 1. **Page de garde** — charte (bleu #00527A / #3EA9FF, Rajdhani/Montserrat), destinataire nommé, n° PROP-NNNN, date, validité, contact commercial.
 2. **« Ce que nous avons entendu »** — les constats du diagnostic : 4-8 puces par pôle/enjeu, chiffres du client dedans (c'est l'ultra-personnalisation : chaque puce provient d'une réponse ou d'un ratio, jamais du générique). En audit COMPLET : renvoi au rapport d'audit joint.
-3. **« Notre proposition en phases »** — le programme : phases/journées composées depuis le **catalogue complet Start Academy** — programmes MÉTIER purs (Booster vendeur 058, Booster Acheteurs 059, Face à face acheteurs 008, Maîtrise des techniques de vente 055, Cycle prospection/négociation 053, Cadastre, Tracfin/déontologie 063…) ET programmes IA (065/070/073…) — chaque module avec « pourquoi ce module » relié à un signal du diagnostic. **Règle produit : un point de douleur métier reçoit un programme métier — l'IA n'est jamais la réponse par défaut** (retour de Laurent du 01/09 sur la maquette v1).
+3. **« Notre proposition en phases »** — le programme, **COMPOSÉ à la carte** (D-19 du 04/09/2026) : les axes ne citent plus des produits pris tels quels mais des **modules assemblés** venant de plusieurs programmes, chacun rattaché au point de douleur qui l'a fait entrer (module ↔ signal ↔ réponse, traçable). Chaque axe est un **multiple du bloc de 8 h** (D-20) — les durées de modules disent ce qui tient dans un bloc, elles ne fixent pas le total vendu. Le programme ainsi composé **devient le produit vendu à ce client**, avec son programme Qualiopi dérivé (objectifs, durées, prérequis). Composés depuis le **catalogue complet Start Academy** — programmes MÉTIER purs (Booster vendeur 058, Booster Acheteurs 059, Face à face acheteurs 008, Maîtrise des techniques de vente 055, Cycle prospection/négociation 053, Cadastre, Tracfin/déontologie 063…) ET programmes IA (065/070/073…) — chaque module avec « pourquoi ce module » relié à un signal du diagnostic. **Règle produit : un point de douleur métier reçoit un programme métier — l'IA n'est jamais la réponse par défaut** (retour de Laurent du 01/09 sur la maquette v1).
 4. **Planning proposé** — les dates de la campagne (§7), équipes/groupes, et la ligne « pièces réunies au plus tard le [date session − 15 j] ».
 5. **Budget mobilisable** — LE tableau qui signe : lignes par financeur × bénéficiaires × base × montant (AGEFICE agents éligibles, AGEFICE TNS dirigeants « sous réserve attestation CFP », OPCO EP par entreprise du groupe, déductions consommation déjà engagée), total « ENVELOPPE MOBILISABLE ESTIMÉE », potentiel complémentaire. Encadré « points clés » (indemnisation agents, ALUR, montage 100 %, zéro avance). |
 6. **Détail type devis** — tableau des lignes de vente par payeur (désignation, participants, demi-journées, heures conventionnées, PU HT, total HT, TVA formation exonérée art. 261-4-4° a CGI), prise en charge estimée, **reste à charge par payeur** puis consolidé — avec remise/OFFERT le cas échéant. Ces lignes = exactement les futures `QuoteLine`. |
@@ -623,9 +687,10 @@ En lot H : la couche `CoachBrainContext` du repo diag est posée telle quelle (c
 | **E — Proposition** | Éditeur (modules, lignes par payeur, remise/OFFERT avec validation > 15 %), génération IA relue, PDF + lien public, envoi email, génération devis, fingerprint. **Rendu : réutilise le socle de compatibilité WeasyPrint de §9.5** — pas une seconde transposition à la main. Maquette `2026-09-01-maquette-proposition.html` = référence exacte. **Fini quand** : une proposition réelle générée depuis DIAG-0001, PDF **relu page par page**, Σ devis = Σ proposition **au centime**, heures conventionnées identiques partout, trois gates vertes. | A, B, D (utilisable sans C) | XL |
 | **F — Campagne RDV** | EnrollmentBatch + dates + page publique `/rdv/[token]` + écran d'avancement (réemploi PreEnrollment) + alertes A-1/A-2/A-3 (§11.1 — A-1/A-2 anticipables en `/quick`) | A (parallèle à D/E) | M |
 | **G — Acceptation → session** | Acceptation de proposition → sessions sur la date retenue + **SessionPricing** (forfait entreprise ferme / lignes indés) + conversion pré-inscrits + conventions | E, F, **phase 23 SessionPricing livrée** | L |
+| **I — Composition** | **Refonte D-19/D-20 : le catalogue devient une bibliothèque de modules.** ① modèle : `TrainingModule` promu au rang d'unité recommandable (index par signal, rattachement multi-produits), `TrainingProduct` composé généré ; ② import de la formation Faros et du Drive « Formations et programmes » (008 → 074) dans la bibliothèque ; ③ moteur de recommandation au niveau MODULE (module ↔ signal ↔ réponse, traçable) ; ④ composeur de programme par blocs de 8 h avec justification obligatoire par point de douleur et arbitrage humain affiché sur le surplus d'enveloppe ; ⑤ génération du programme Qualiopi du produit composé (objectifs, durées, prérequis) ; ⑥ éditeur de proposition branché sur la composition. **Ligne rouge** : diagnostic et modules uniquement — aucun produit portant sessions ou conventions signées n'est retouché. **Fini quand** : une proposition réelle compose un programme sur mesure depuis ≥ 2 programmes sources, chaque module y est justifié par une réponse du diagnostic, le volume tombe en multiple de 8 h, et le programme Qualiopi généré est relu par Laurent. | A, D, E | **XL** |
 | **H — Suite** | Relances auto (J+1 lead sans proposition · proposition envoyée non vue J+3 · vue sans réponse J+7 · date limite J-5 — pattern stand MLS, cron + fail-closed) · import Plaud · Coach Brain branché · pack communication dirigeant · lien formateur · signature électronique | G + arbitrages Laurent | L |
 
-Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'eau. La valeur tombe dès B (le R1 outillé) et devient décisive à E (la proposition qui signe).
+Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'eau. Le lot **I (composition, D-19/D-20)** se prend **après F**, et se chiffre à part : il touche le modèle du catalogue, le moteur de recommandation et l'éditeur de proposition — le mener dans la foulée d'un autre lot mélangerait deux refontes. La valeur tombe dès B (le R1 outillé) et devient décisive à E (la proposition qui signe).
 
 ## 14. Critères d'acceptance globaux & tests
 
@@ -648,6 +713,8 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
+| **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. | 04/09/2026 |
+| **D-20** | Le total d'un programme composé se déduit-il de la somme des durées de ses modules ? | **Non — l'unité de vente est le bloc de 8 h** (4 h sur site × 2 formateurs, cohérent avec 336 €/participant/demi-journée). Un programme composé est un multiple de ce bloc ; les durées de modules servent uniquement à savoir ce qui TIENT dans un bloc. Clôt le sujet des 16 modules à 1 h (D-17) : le défaut ne pilote plus aucun montant vendu. **Ligne rouge** : diagnostic et modules uniquement — interdiction de retoucher la durée d'un produit portant sessions ou conventions signées (journées Faros), sinon les documents émis ne correspondent plus. | 04/09/2026 |
 | **D-17** | Le catalogue diag déclare le même module pour trois profils (`conseiller`, `manager`, `assistant`) et ne porte la durée que sur `conseiller` — 30 modules sur 79 sortaient sans durée, et le conteneur « Usecases » à **0 h**. | **Deux étages, jamais zéro.** ① la durée déclarée pour le même module sous un autre profil (14 modules — c'est la vraie durée, simplement rangée ailleurs) ; ② 1 h par défaut pour les 16 restants, la durée la plus fréquente du catalogue déclaré, **choix conservateur** (surestimer des heures qui finiront sur une convention ou un dossier financeur est une non-conformité ; les sous-estimer n'est qu'un catalogue à affiner). Le rapport les liste une par une. Seul « L'Agent Incomparable » reste à 0 h : parcours v0.9 explicitement non diffusable, aucune durée connue — l'inventer serait pire. | 04/09/2026 |
 | **D-18** | La recommandation faisait remonter un programme « pour activité événementielle » sur l'e-réputation d'une agence immobilière. Faut-il un filtre de domaine ? | **Non — des mots-clés qui qualifient.** « marketing », « communication », « digital » sont du vocabulaire d'entreprise : ils matchent tout, donc ne qualifient rien. Le besoin e-réputation ne cherche plus que « avis », « réputation », « visible », « recommandation », « présence locale ». Et un besoin déclare désormais les **familles qu'il accepte, par ordre de préférence** : les sept besoins de la chaîne commerciale n'acceptent que `METIER` ; l'e-réputation accepte `METIER` puis `IA` (demander et suivre des avis est un sujet d'outillage autant que de méthode) — le métier passe devant, et servir une autre famille se DIT dans le rapport. | 04/09/2026 |
 | **D-15** | Le devis doit-il porter le reste à charge après remise, ou le coût pédagogique ? | **Le coût pédagogique**, et lui seul. Une remise en ligne négative sur le devis réduirait le coût déclaré, donc l'assiette des droits — le client financerait le geste qu'on lui fait. La prise en charge, le reste à charge et le geste commercial vivent dans les **notes** du devis. Σ lignes de devis = coût pédagogique de la proposition, au centime (test de contrat). Cf. §9.1. | 04/09/2026 |

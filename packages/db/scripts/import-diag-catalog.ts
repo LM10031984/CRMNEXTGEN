@@ -615,8 +615,26 @@ async function applyImport(
 
     const produit = await prisma.trainingProduct.findUnique({
       where: { id: productId },
-      select: { durationHours: true },
+      select: { durationHours: true, code: true, _count: { select: { trainingSessions: true } } },
     });
+
+    // ── Ligne rouge D-20 ───────────────────────────────────────────────────
+    //
+    // On ne retouche JAMAIS la durée d'un produit qui porte déjà des sessions :
+    // les conventions, feuilles d'émargement et attestations déjà émises
+    // porteraient alors des heures qui ne correspondent plus à leur produit —
+    // une non-conformité en contrôle, et un document qu'on ne peut pas
+    // rattraper une fois signé. Le cas ne se présente pas aujourd'hui (les
+    // conteneurs d'import sont inactifs et sans session), et c'est
+    // précisément pour ça qu'il faut l'écrire maintenant : le jour où
+    // quelqu'un rangera un module sous un produit vendu, ce garde-fou sera la
+    // seule chose entre lui et des documents faux.
+    if (produit && produit._count.trainingSessions > 0) {
+      say(
+        `> ⚠️ \`${produit.code}\` porte ${produit._count.trainingSessions} session(s) : sa durée n'a **pas** été recalculée (ligne rouge D-20).`,
+      );
+      continue;
+    }
     // La durée du conteneur suit ce qu'il contient VRAIMENT, ligne à ligne :
     // le catalogue et la base peuvent diverger (un module déjà présent sous un
     // autre produit n'est pas recréé ici), et un total qui ne correspond pas à
