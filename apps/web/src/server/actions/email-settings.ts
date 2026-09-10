@@ -57,6 +57,8 @@ export async function updateEmailSettings(
         internalNotificationsEnabled: true,
         userInvitationsEnabled: true,
         diagnosticProgramsEnabled: true,
+        newLeadAlertsEnabled: true,
+        preEnrollmentAlertsEnabled: true,
         testSessionIds: true,
       },
     });
@@ -74,6 +76,8 @@ export async function updateEmailSettings(
         internalNotificationsEnabled: true,
         userInvitationsEnabled: true,
         diagnosticProgramsEnabled: true,
+        newLeadAlertsEnabled: true,
+        preEnrollmentAlertsEnabled: true,
         testSessionIds: true,
       },
     });

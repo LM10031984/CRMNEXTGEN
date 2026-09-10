@@ -84,6 +84,16 @@ const CATEGORY_FIELDS: Array<{
     category: 'diagnostic_program',
     hint: 'Destinataire : le prospect qui vient de remplir le diagnostic au stand, et qui a coché la case pour recevoir son programme.',
   },
+  {
+    field: 'newLeadAlertsEnabled',
+    category: 'new_lead',
+    hint: 'Destinataires : le commercial assigné — ou tous les commerciaux et managers si le lead n\'est à personne. Inclut la relance « ce lead dort depuis 24 h ».',
+  },
+  {
+    field: 'preEnrollmentAlertsEnabled',
+    category: 'preenrollment_submitted',
+    hint: 'Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l\'écran de validation.',
+  },
 ];
 
 export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Props) {
@@ -100,6 +110,8 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       internalNotificationsEnabled: initial.internalNotificationsEnabled,
       userInvitationsEnabled: initial.userInvitationsEnabled,
       diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
+      newLeadAlertsEnabled: initial.newLeadAlertsEnabled,
+      preEnrollmentAlertsEnabled: initial.preEnrollmentAlertsEnabled,
     },
   });
 

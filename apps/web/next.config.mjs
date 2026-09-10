@@ -49,10 +49,36 @@ const nextConfig = {
   // Audit 2026-05-12 BUG-03 — voir CLAUDE.md > Routes (convention naming).
   async redirects() {
     return [
+      // Chaîne diagnostic (lot B) — la route canonique du R1 commercial est
+      // /app/diagnostics au PLURIEL. On rattrape le singulier tapé à la main.
+      // Attention au voisinage : /diagnostic (sans /app) est la page publique
+      // de l'express du stand MLS, elle n'est pas concernée.
+      {
+        source: '/app/diagnostic',
+        destination: '/app/diagnostics',
+        permanent: true,
+      },
+      {
+        source: '/app/diagnostic/:path*',
+        destination: '/app/diagnostics/:path*',
+        permanent: true,
+      },
       // Inscriptions publiques par session (spec 2026-08-28). La route
       // canonique est /inscription/{jeton} au SINGULIER ; on rattrape le
       // pluriel tapé à la main. Attention : ne matche que la racine, jamais
       // /app/inscriptions qui est l'écran admin.
+      // Chaîne diagnostic (lot E) — la route canonique est /app/propositions au
+      // PLURIEL. On rattrape le singulier, comme pour /app/diagnostics.
+      {
+        source: '/app/proposition',
+        destination: '/app/propositions',
+        permanent: true,
+      },
+      {
+        source: '/app/proposition/:path*',
+        destination: '/app/propositions/:path*',
+        permanent: true,
+      },
       {
         source: '/inscriptions/:token',
         destination: '/inscription/:token',
