@@ -63,6 +63,19 @@ export interface ModuleSourceProgramme {
    * écarter le module.
    */
   isActive: boolean;
+  /**
+   * D-19 bis (arbitrage Laurent du 10/09/2026) — **la version VENDUE fait foi**.
+   *
+   * Le code du produit vendu qui rend ce rayon caduc, `null` sinon. Quand il
+   * est renseigné, les modules du rayon **sortent du chemin de composition** :
+   * composer depuis la version importée reviendrait à bâtir une proposition sur
+   * un contenu qui n'est pas celui que la convention et la page publique
+   * annoncent au client.
+   *
+   * À ne pas confondre avec `isActive`, qui n'écarte RIEN (règle 1). Un rayon
+   * inactif est la norme ; un rayon écarté est un doublon.
+   */
+  supersededBy: string | null;
 }
 
 /** Un module de la bibliothèque, vu par le moteur de recommandation. */
@@ -389,10 +402,21 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a]));
 
   // ── La bibliothèque ────────────────────────────────────────────────────────
-  // Aucun filtre sur `source.isActive` : c'est la règle 1, et le test
-  // « tous les conteneurs inactifs » la tient. Le seul retrait est la pige.
+  //
+  // Aucun filtre sur `source.isActive` : c'est la règle 1, et le test « tous les
+  // conteneurs inactifs » la tient. Deux retraits seulement, et ils se
+  // distinguent :
+  //   • la PIGE, interdite en sortie client depuis le 11/08/2026 ;
+  //   • les rayons en DOUBLON d'un produit vendu (D-19 bis) — la version vendue
+  //     fait foi, et il n'y a rien de pire que deux versions du même programme
+  //     dans la bibliothèque : on vendrait l'une et on animerait l'autre.
   const excluded = input.library.filter((m) => m.excludedFromClientOutputs);
-  const library = input.library.filter((m) => !m.excludedFromClientOutputs);
+  const superseded = input.library.filter(
+    (m) => !m.excludedFromClientOutputs && m.source.supersededBy !== null,
+  );
+  const library = input.library.filter(
+    (m) => !m.excludedFromClientOutputs && m.source.supersededBy === null,
+  );
 
   if (library.length === 0) {
     notices.push(
@@ -551,6 +575,13 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   if (excluded.length > 0) {
     notices.push(
       `${excluded.length} module(s) écarté(s) d’office : interdits en sortie client (pige). Ils restent au catalogue interne.`,
+    );
+  }
+
+  if (superseded.length > 0) {
+    const rayons = [...new Set(superseded.map((m) => `${m.source.code} → ${m.source.supersededBy}`))];
+    notices.push(
+      `${superseded.length} module(s) écarté(s) : leur rayon fait doublon avec un produit vendu, qui fait foi (${rayons.slice(0, 4).join(', ')}). Le contenu vendu est celui de la convention et de la page publique — c'est lui qui doit être proposé.`,
     );
   }
 

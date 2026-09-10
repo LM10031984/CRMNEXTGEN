@@ -23,11 +23,15 @@
  *     porte l'état vendable. Cocher un conteneur ferait réapparaître ce que
  *     D-19 vient d'abolir : des produits figés vendus tels quels ;
  *   • **il ne touche à aucun produit existant.** Les programmes du Drive qui
- *     correspondent à un produit déjà vendu (055, 053, Booster vendeur…) ne
- *     sont pas fusionnés avec lui : le rayon est créé à côté, et la
- *     correspondance est signalée dans le rapport. Rattacher des modules à un
- *     produit actif changerait sa page publique « Programme détaillé », donc
- *     l'information préalable remise au client ;
+ *     correspondent à un produit déjà vendu (055, 053, 046, 074) ne sont pas
+ *     fusionnés avec lui : rattacher des modules à un produit actif changerait
+ *     sa page publique « Programme détaillé », donc l'information préalable
+ *     remise au client. **D-19 bis (arbitrage Laurent du 10/09/2026) : la
+ *     version VENDUE fait foi.** Le rayon en doublon est donc créé, puis
+ *     `supersededByProductId` le pointe vers le produit vendu — il reste
+ *     consultable, mais ses modules sortent du chemin de composition. Le lien
+ *     est posé UNE fois et n'est jamais recalculé : si le dossier Drive est
+ *     renommé, un prochain import ne peut pas réintroduire le doublon ;
  *   • **il ne recalcule aucune durée d'un produit portant des sessions ou des
  *     conventions signées** (ligne rouge D-20). Ce garde-fou ne devrait jamais
  *     se déclencher — les rayons naissent ici, vides de session — mais un
@@ -182,6 +186,7 @@ const existingProducts = await prisma.trainingProduct.findMany({
     sourceRef: true,
     isActive: true,
     durationHours: true,
+    supersededByProductId: true,
     _count: { select: { trainingSessions: true } },
     modules: { select: { id: true, sourceRef: true, title: true } },
   },
@@ -189,7 +194,20 @@ const existingProducts = await prisma.trainingProduct.findMany({
 const bySourceRef = new Map(
   existingProducts.filter((p) => p.sourceRef).map((p) => [p.sourceRef!, p]),
 );
-const byNormalizedTitle = new Map(existingProducts.map((p) => [normalizeName(p.title), p]));
+/**
+ * Les produits RÉELLEMENT VENDUS — ceux du catalogue commercial.
+ *
+ * On exclut les rayons (`sourceRef` non nul : ils viennent d'un import, ils ne
+ * se vendent pas) ET les produits inactifs (un programme qu'on ne vend plus ne
+ * peut pas « faire foi » contre un rayon de bibliothèque : l'écarter au profit
+ * d'un produit mort retirerait le contenu de la reco sans rien mettre à la
+ * place).
+ */
+const soldByTitle = new Map(
+  existingProducts
+    .filter((p) => p.sourceRef === null && p.isActive)
+    .map((p) => [normalizeName(p.title), p]),
+);
 
 interface Line {
   ref: string;
@@ -226,15 +244,29 @@ for (const p of snapshot.programmes) {
     continue;
   }
 
-  // Un produit VENDU porte-t-il déjà ce nom ? On ne fusionne pas — on le dit.
-  const twin = byNormalizedTitle.get(normalizeName(p.title));
-  if (twin && twin.sourceRef !== p.sourceRef) {
-    collisions.push(
-      `\`${p.sourceRef}\` « ${p.title} » ressemble au produit existant \`${twin.code}\`${twin.isActive ? ' (ACTIF)' : ''}. Le rayon est créé À CÔTÉ : rattacher des modules à un produit vendu changerait sa page publique.`,
-    );
-  }
-
   const existing = bySourceRef.get(p.sourceRef);
+
+  // D-19 bis — la version VENDUE fait foi.
+  //
+  // Un lien DÉJÀ posé ne se recalcule jamais : c'est lui qui garantit qu'un
+  // dossier Drive renommé ne fera pas réapparaître le doublon au prochain
+  // import. Sinon seulement, on cherche un produit vendu du même nom.
+  let supersededByProductId: string | null = existing?.supersededByProductId ?? null;
+  if (supersededByProductId !== null) {
+    const gardien = existingProducts.find((x) => x.id === supersededByProductId);
+    collisions.push(
+      `\`${p.sourceRef}\` reste écarté au profit de \`${gardien?.code ?? '?'}\` (lien déjà posé, non recalculé).`,
+    );
+  } else {
+    const twin = soldByTitle.get(normalizeName(p.title));
+    if (twin) {
+      supersededByProductId = twin.id;
+      collisions.push(
+        `\`${p.sourceRef}\` « ${p.title.slice(0, 50)} » fait doublon avec le produit vendu \`${twin.code}\` : **c'est la version vendue qui fait foi**, les modules du rayon sortent de la reco. Le produit vendu n'est pas touché.`,
+      );
+      notes.push(`Écarté de la reco : doublon de \`${twin.code}\` (D-19 bis).`);
+    }
+  }
 
   // Ligne rouge D-20 : on ne retouche jamais la durée d'un produit qui porte
   // des sessions. Un rayon n'en porte pas — mais on vérifie plutôt que de le
@@ -271,6 +303,7 @@ for (const p of snapshot.programmes) {
     isActive: false,
     fundingType: reglementaire ? ProductFundingType.REGLEMENTAIRE : ProductFundingType.COEUR_METIER,
     sourceRef: p.sourceRef,
+    supersededByProductId,
   };
   if (reglementaire) notes.push('Classé REGLEMENTAIRE (taux OPCO EP 40 €/h).');
 
@@ -353,7 +386,8 @@ const lines: string[] = [
   `- **${report.filter((l) => l.action === 'créé').length}** rayons créés, **${report.filter((l) => l.action === 'mis à jour').length}** mis à jour, **${report.filter((l) => l.action === 'ignoré').length}** ignorés`,
   `- **${total} modules** entrent dans la bibliothèque`,
   `- **aucun rayon activé** — corollaire D-19 du 10/09/2026 : ce qui devient vendable est le programme COMPOSÉ (lot I-2), jamais le conteneur importé`,
-  `- **aucun produit existant modifié** — les correspondances sont signalées, pas fusionnées`,
+  `- **aucun produit existant modifié** — les doublons écartent le RAYON, jamais le produit vendu (D-19 bis)`,
+  `- **${report.filter((l) => l.notes.some((n) => n.includes('D-19 bis'))).length}** rayon(s) écarté(s) de la reco pour doublon`,
   '',
 ];
 
@@ -365,9 +399,11 @@ if (guarded.length > 0) {
 
 if (collisions.length > 0) {
   lines.push(
-    '## Correspondances avec le catalogue vendu',
+    '## Doublons du catalogue vendu — la version vendue fait foi (D-19 bis)',
     '',
-    'Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à côté**, sans toucher au produit vendu : c’est au composeur (lot I-2) de savoir qu’ils parlent du même métier.',
+    'Ces programmes existent déjà comme produits QualiOF **actifs**. Le produit vendu n’est pas touché — ni sa durée, ni sa page publique « Programme détaillé », qui est l’information préalable remise au client. C’est le RAYON qui s’efface : il reste consultable en base, mais **ses modules sortent du chemin de composition**.',
+    '',
+    'Le lien est posé une fois et n’est jamais recalculé : un dossier Drive renommé ne peut pas réintroduire le doublon. Le délier est une décision de catalogue.',
     '',
   );
   for (const c of collisions) lines.push(`- ${c}`);

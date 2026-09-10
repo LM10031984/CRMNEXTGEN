@@ -29,6 +29,7 @@ function rayon(
     theme: null,
     fundingType: 'COEUR_METIER',
     isActive: false,
+    supersededBy: null,
     ...opts,
   };
 }
@@ -400,5 +401,58 @@ describe('recommendModules — composer depuis plusieurs programmes, pas revendr
     // Et le rayon voisin obtient sa place, alors que six modules mieux notés
     // auraient rempli l'axe à eux seuls.
     expect(axe.candidates.some((c) => c.moduleId === 'ailleurs')).toBe(true);
+  });
+});
+
+describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
+  /**
+   * Le cas réel : le Drive porte « 055 Maîtrise des techniques de vente » et
+   * QualiOF vend `PROD-055` sous le même nom. Le produit vendu ne bouge pas —
+   * ni sa durée, ni sa page publique, qui EST l'information préalable remise
+   * au client. C'est le rayon importé qui s'efface.
+   */
+  const RAYON_DOUBLON = rayon('BIB-D055', 'Maîtrise des techniques de vente immobilière', {
+    supersededBy: 'PROD-055',
+  });
+
+  const args = {
+    chapterScores: [chapitre(5, 30)],
+    alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
+    answers: REPONSES,
+  };
+
+  it('ne propose jamais un module dont le rayon fait doublon avec un produit vendu', () => {
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        mod('m-doublon', 'Vente de mandats exclusifs', RAYON_DOUBLON, {
+          signals: ['Mandat — Trop de mandats simples, exclusivité difficile à obtenir'],
+        }),
+      ],
+    });
+
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.moduleId));
+    expect(tous).not.toContain('m-doublon');
+    expect(out.notices.some((n) => n.includes('BIB-D055 → PROD-055'))).toBe(true);
+  });
+
+  it('n’écarte pas un rayon simplement inactif — doublon et inactif sont deux choses', () => {
+    // La confusion serait fatale : TOUS les rayons sont inactifs (c'est la
+    // norme depuis D-19), alors qu'un seul sur vingt fait doublon.
+    expect(BIBLIOTHEQUE.every((m) => !m.source.isActive)).toBe(true);
+    const out = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
+  });
+
+  it('compte le doublon à part de la pige', () => {
+    const out = recommendModules({
+      ...args,
+      library: [...BIBLIOTHEQUE, mod('m-doublon', 'Signer en exclusivité', RAYON_DOUBLON)],
+    });
+    // La bibliothèque utilisable n'a pas grandi : le module en doublon en sort.
+    expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1);
+    expect(out.notices.filter((n) => n.includes('pige')).length).toBe(1);
+    expect(out.notices.filter((n) => n.includes('fait foi')).length).toBe(1);
   });
 });

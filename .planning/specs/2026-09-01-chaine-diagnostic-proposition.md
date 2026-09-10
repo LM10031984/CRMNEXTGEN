@@ -391,6 +391,58 @@ Test qui tient la règle : une recommandation jouée alors que **tous** les
 conteneurs sont inactifs doit continuer à proposer des modules. Une liste vide
 signifie qu'un filtre `isActive` s'est glissé dans le chemin de composition.
 
+##### D-19 bis — quand un rayon importé double un produit vendu, **la version VENDUE fait foi** (arbitrage Laurent du 10/09/2026)
+
+L'import du Drive a créé quatre rayons qui portent le même programme qu'un
+produit réellement vendu : `drive:055` ↔ `PROD-055`, `drive:053` ↔ `PROD-053`,
+`drive:046` ↔ `PROD-0671`, `drive:074` ↔ `PROD-0662`.
+
+**Le produit vendu ne bouge pas** — ni sa durée, ni ses modules, ni sa page
+publique « Programme détaillé ». Cette page **est** l'information préalable
+remise au client, et la modifier après coup crée un écart entre ce qui a été
+annoncé et ce qui est réalisé : une réserve en audit Qualiopi.
+
+**C'est donc le RAYON qui s'efface** : il reste en base et reste consultable,
+mais ses modules **sortent du chemin de composition**. Motif : deux versions du
+même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en
+animer une autre. Composer depuis la version Drive bâtirait une proposition sur
+un contenu qui n'est pas celui que la convention annonce.
+
+**Comment le doublon est détecté — et pourquoi il ne peut pas revenir :**
+
+1. **À l'import seulement**, et par **égalité de nom normalisée** (accents,
+   casse et ponctuation neutralisés) contre les produits **vendus** —
+   c'est-à-dire ceux qui ne viennent pas d'un import (`sourceRef` nul) **et qui
+   sont actifs**. Un produit qu'on ne vend plus ne peut pas « faire foi » contre
+   un rayon : l'écarter au profit d'un produit mort retirerait le contenu de la
+   reco sans rien mettre à la place.
+2. **Le lien est PERSISTÉ**, pas recalculé : `TrainingProduct.supersededByProductId`.
+   C'est le point qui compte. Un rapprochement par titre est fragile — il suffit
+   que le dossier Drive soit renommé pour qu'il ne matche plus. Un lien stocké,
+   lui, survit au renommage.
+3. **Un lien déjà posé n'est JAMAIS recalculé ni retiré par un import.** Le
+   script se contente de le reconduire et de le dire au rapport. Délier un rayon
+   est une décision de catalogue, pas un effet de bord d'un script — comme la
+   suppression d'un module orphelin.
+4. **Le moteur filtre aussi**, en plus de l'import (`recommendModules` écarte
+   tout module dont le rayon est écarté, et le dit en notice avec le couple
+   `rayon → produit vendu`). Défense en profondeur : la même doctrine que pour
+   la pige, où un filtre oublié dans un template reste invisible jusqu'au jour
+   où un client le lit.
+
+⚠ **À ne pas confondre avec `isActive`.** Un rayon **inactif** est la norme
+depuis le corollaire D-19 — les 81 rayons le sont, et ça n'en écarte aucun. Un
+rayon **écarté** est un doublon, et il n'y en a que quatre. Deux notions, deux
+champs, et un test qui vérifie qu'on ne les confond pas.
+
+**Conséquence assumée, à connaître avant I-2** : ces quatre produits vendus ne
+portent **aucun module** (leur contenu vit dans `programMd`). Les écarter côté
+rayon les rend donc **invisibles à la recommandation au niveau module** — y
+compris `PROD-055 Maîtrise des techniques de vente`, qui est du métier pur. Le
+jour où le composeur devra piocher dedans, il faudra créer les modules **sur le
+produit vendu lui-même**, à partir de son `programMd` — ce qui est un travail de
+catalogue, à faire les yeux ouverts, pas un import automatique.
+
 #### D-20 — l'unité de vente est le bloc de 8 h, pas la somme des modules
 
 Un programme composé est un **multiple du bloc de 8 h** = une demi-journée de
@@ -440,6 +492,7 @@ pourquoi chaque module y est ne la passe pas.
 > - **Traçabilité** : `DiagnosticAlert.questionIds` et `ChapterScore.breakdown[].questionId` (ajouts purs) permettent de remonter de chaque axe recommandé à **la réponse du dirigeant** qui l'a déclenché. Vérifié sur DIAG-0001 : chaque axe servi cite son alerte ET la réponse chiffrée derrière elle.
 > - **Deux règles de moteur ajoutées, dans le prolongement de D-18** : ① les mots-clés sont **pesés par leur pouvoir discriminant** mesuré sur la bibliothèque du moment — « vendeur » touche un module sur cinq et ne suffit plus à badger un rapprochement « forte », « exclusivité » en touche 2 % et vaut plein tarif ; la pondération ne s'applique qu'au-dessus de 30 modules, en dessous elle mesurerait du bruit. ② **deux modules maximum par programme source dans un axe** : sans plafond, un module du catalogue diagnostic portant huit signaux transverses raflait les cinq places de presque chaque axe — l'inverse de ce que D-19 demande.
 > - **Résultat sur DIAG-0001** : 7 programmes sources représentés, dont 2 rayons du Drive, tous conteneurs inactifs, 9 modules pige écartés d'office.
+> - **Arbitrages de Laurent sur le rapport d'import (10/09/2026)** : ① **D-19 bis** — la version vendue fait foi pour les 4 doublons, cf. ci-dessus (59 modules écartés de la reco, bibliothèque utilisable 479 → 420) ; ② **les 17 programmes en bloc unique restent tels quels** — recommandables entiers, ça suffit à I-1, à réexaminer quand le composeur devra piocher dedans ; ③ **le dossier Drive `069` est en cours de vérification** par Laurent (il contient un fichier nommé `068`) — **ne rien y réimporter avant son retour**.
 > - **Reste à I-2** : le composeur par blocs de 8 h, le programme Qualiopi du produit composé, et l'éditeur de proposition branché dessus. L'éditeur lit encore `recommendProgrammes` (niveau produit) — c'est délibéré : le rebrancher sans le composeur laisserait l'écran à mi-chemin.
 
 ---
@@ -767,6 +820,7 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
 | **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. **Corollaire du 10/09 : on n'active JAMAIS les conteneurs importés** — la reco et le composeur lisent les modules quel que soit l'`isActive` du conteneur, et c'est le produit composé qui porte l'état vendable. **Appliqué en I-1 le 10/09/2026** : `recommendModules` ne filtre nulle part sur `source.isActive`, et deux tests tiennent la règle — l'un joue la reco avec TOUS les conteneurs inactifs, l'autre vérifie que les activer ne change strictement rien au résultat. Cf. §5.3. | 04/09/2026 |
+| **D-19 bis** | Quatre rayons importés du Drive portent le même programme qu'un produit déjà vendu (`drive:055`↔`PROD-055`, `drive:053`↔`PROD-053`, `drive:046`↔`PROD-0671`, `drive:074`↔`PROD-0662`). Lequel fait foi ? | **La version VENDUE.** Le produit vendu ne bouge pas — ni sa durée, ni sa page publique « Programme détaillé », qui EST l'information préalable remise au client ; la modifier après coup crée un écart annoncé/réalisé, donc une réserve Qualiopi. C'est le RAYON qui s'efface : il reste consultable, mais **ses modules sortent du chemin de composition**. Motif : deux versions du même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en animer une autre. **Détection** : égalité de nom normalisée, à l'import uniquement, contre les seuls produits **vendus** (non importés ET actifs) ; le lien est **persisté** dans `TrainingProduct.supersededByProductId` et **jamais recalculé ni retiré** par un import — c'est ce qui empêche un dossier Drive renommé de réintroduire le doublon. Le moteur filtre en plus, et le dit en notice. **À ne pas confondre avec `isActive`** : inactif = la norme (81 rayons sur 81), écarté = doublon (4). **Conséquence assumée** : ces quatre produits ne portant aucun module, ils deviennent invisibles à la reco au niveau module — cf. §5.3. | 10/09/2026 |
 | **D-20** | Le total d'un programme composé se déduit-il de la somme des durées de ses modules ? | **Non — l'unité de vente est le bloc de 8 h** (4 h sur site × 2 formateurs, cohérent avec 336 €/participant/demi-journée). Un programme composé est un multiple de ce bloc ; les durées de modules servent uniquement à savoir ce qui TIENT dans un bloc. Clôt le sujet des 16 modules à 1 h (D-17) : le défaut ne pilote plus aucun montant vendu. **Ligne rouge** : diagnostic et modules uniquement — interdiction de retoucher la durée d'un produit portant sessions ou conventions signées (journées Faros), sinon les documents émis ne correspondent plus. | 04/09/2026 |
 | **D-21** | La proposition doit-elle partir par email, et si oui automatiquement ? | **Elle se PRÉSENTE en rendez-vous — c'est là qu'elle se vend.** Mais le commercial doit pouvoir l'envoyer : bouton **« Envoyer par email », déclenché par lui, jamais automatique**. Trois garde-fous : ① une **catégorie d'email décochable de plus** dans `TenantEmailSettings`, fail-closed comme les autres (sans la case, rien ne part) ; ② on envoie le **lien de lecture public**, jamais une fiche nominative en pièce jointe — le lien porte déjà la règle « sans PII » du lot E ; ③ l'envoi est tracé comme une remise via `markProposalSent`, donc un envoi et une remise en main propre laissent la même trace et le statut ne ment pas. Livré **dans le lot F**, où le mailer est déjà touché. Les relances AUTOMATIQUES restent au **lot H** — ce sont deux sujets, et les mélanger ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer. | 10/09/2026 |
 | **D-22** | Une campagne de pré-inscription doit-elle porter un client, et lequel ? | **Elle porte TOUJOURS une agence — `organizationId` non-null sur `EnrollmentBatch`.** `diagnosticId` et `leadId` restent facultatifs, en contexte supplémentaire, jamais comme alternatives. **Motif** : un rattachement unique et obligatoire évite d'avoir à deviner, dans chaque écran et à la conversion des pré-inscriptions, lequel de trois liens facultatifs a été renseigné. Deux chemins de création, une seule règle : depuis la fiche diagnostic (bouton « Organiser les pré-inscriptions » — l'agence, le lead et le libellé se pré-remplissent), ou depuis la liste en choisissant l'agence dans le CRM, ce qui couvre le **client récurrent reformé sans nouveau R1** — l'interdire pousserait à saisir un faux diagnostic. **La création sans aucun client disparaît.** Aucune reprise de données : la fonctionnalité n'a jamais tourné en production. | 10/09/2026 |

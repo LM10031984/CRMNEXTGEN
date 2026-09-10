@@ -44,6 +44,7 @@ const products = await prisma.trainingProduct.findMany({
   where: { tenantId: d.tenantId },
   select: {
     id: true, code: true, title: true, theme: true, isActive: true, fundingType: true,
+    supersededByProductId: true,
     modules: {
       orderBy: { order: 'asc' },
       select: {
@@ -54,6 +55,8 @@ const products = await prisma.trainingProduct.findMany({
     },
   },
 });
+
+const codeById = new Map(products.map((p) => [p.id, p.code]));
 
 const library: LibraryModule[] = products.flatMap((p) =>
   p.modules.map((m) => ({
@@ -75,6 +78,9 @@ const library: LibraryModule[] = products.flatMap((p) =>
       theme: p.theme,
       fundingType: p.fundingType,
       isActive: p.isActive,
+      supersededBy: p.supersededByProductId
+        ? (codeById.get(p.supersededByProductId) ?? p.supersededByProductId)
+        : null,
     },
   })),
 );

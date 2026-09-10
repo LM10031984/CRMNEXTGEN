@@ -7,13 +7,19 @@ _**APPLIQUÉ** le 2026-09-10 · instantané du 2026-09-10 · tenant « Start Aca
 - **0** rayons créés, **74** mis à jour, **2** ignorés
 - **402 modules** entrent dans la bibliothèque
 - **aucun rayon activé** — corollaire D-19 du 10/09/2026 : ce qui devient vendable est le programme COMPOSÉ (lot I-2), jamais le conteneur importé
-- **aucun produit existant modifié** — les correspondances sont signalées, pas fusionnées
+- **aucun produit existant modifié** — les doublons écartent le RAYON, jamais le produit vendu (D-19 bis)
+- **4** rayon(s) écarté(s) de la reco pour doublon
 
-## Correspondances avec le catalogue vendu
+## Doublons du catalogue vendu — la version vendue fait foi (D-19 bis)
 
-Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à côté**, sans toucher au produit vendu : c’est au composeur (lot I-2) de savoir qu’ils parlent du même métier.
+Ces programmes existent déjà comme produits QualiOF **actifs**. Le produit vendu n’est pas touché — ni sa durée, ni sa page publique « Programme détaillé », qui est l’information préalable remise au client. C’est le RAYON qui s’efface : il reste consultable en base, mais **ses modules sortent du chemin de composition**.
 
-- `drive:008` « Face à face acheteurs » ressemble au produit existant `BIB-D020`. Le rayon est créé À CÔTÉ : rattacher des modules à un produit vendu changerait sa page publique.
+Le lien est posé une fois et n’est jamais recalculé : un dossier Drive renommé ne peut pas réintroduire le doublon. Le délier est une décision de catalogue.
+
+- `drive:046` « Tracfin » fait doublon avec le produit vendu `PROD-0671` : **c'est la version vendue qui fait foi**, les modules du rayon sortent de la reco. Le produit vendu n'est pas touché.
+- `drive:053` « Cycle complet de prospection, relation client et n » fait doublon avec le produit vendu `PROD-053` : **c'est la version vendue qui fait foi**, les modules du rayon sortent de la reco. Le produit vendu n'est pas touché.
+- `drive:055` « Maitrise des techniques de vente immobilière » fait doublon avec le produit vendu `PROD-055` : **c'est la version vendue qui fait foi**, les modules du rayon sortent de la reco. Le produit vendu n'est pas touché.
+- `drive:074` « Maîtriser l’Intelligence Artificielle pour dével » fait doublon avec le produit vendu `PROD-0662` : **c'est la version vendue qui fait foi**, les modules du rayon sortent de la reco. Le produit vendu n'est pas touché.
 
 ## Détail par rayon
 
@@ -209,6 +215,7 @@ Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à 
 
 - Aucun découpage reconnu — importé en un seul module, à découper à la main.
 - 1 module(s) sans durée lisible — défaut appliqué à l'import.
+- Écarté de la reco : doublon de `PROD-0671` (D-19 bis).
 - Classé REGLEMENTAIRE (taux OPCO EP 40 €/h).
 - 1 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -242,6 +249,7 @@ Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à 
 
 ### `drive:053` — Cycle complet de prospection, relation client et négociatio
 
+- Écarté de la reco : doublon de `PROD-053` (D-19 bis).
 - Module « Identifier et exploiter les sources de g » exclu des sorties client (pige).
 
 ### `drive:054` — L'intelligence artificielle au service des conseillers immob
@@ -253,6 +261,7 @@ Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à 
 ### `drive:055` — Maitrise des techniques de vente immobilière
 
 - 10 module(s) sans durée lisible — défaut appliqué à l'import.
+- Écarté de la reco : doublon de `PROD-055` (D-19 bis).
 - 10 module(s) à 60 min par défaut (D-17/D-20).
 
 ### `drive:056` — Vendez Mieux avec l’IA : Suivi Vendeur, Annonces Impactantes
@@ -323,6 +332,7 @@ Ces programmes existent déjà comme produits QualiOF. Le rayon est créé **à 
 ### `drive:074` — Maîtriser l’Intelligence Artificielle pour développer son 
 
 - 5 module(s) sans durée lisible — défaut appliqué à l'import.
+- Écarté de la reco : doublon de `PROD-0662` (D-19 bis).
 - 5 module(s) à 60 min par défaut (D-17/D-20).
 
 ### `faros:SA-ACQ-M003` — Trouver des vendeurs avant les autres
