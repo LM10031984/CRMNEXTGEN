@@ -74,6 +74,8 @@ export default async function ParametresPage() {
     internalNotificationsEnabled: emailSettings?.internalNotificationsEnabled ?? false,
     userInvitationsEnabled: emailSettings?.userInvitationsEnabled ?? false,
     diagnosticProgramsEnabled: emailSettings?.diagnosticProgramsEnabled ?? false,
+    newLeadAlertsEnabled: emailSettings?.newLeadAlertsEnabled ?? false,
+    preEnrollmentAlertsEnabled: emailSettings?.preEnrollmentAlertsEnabled ?? false,
     testSessionIds: emailSettings?.testSessionIds ?? [],
   };
   // Sessions sélectionnables : 30 plus récentes ∪ celles déjà en mode test

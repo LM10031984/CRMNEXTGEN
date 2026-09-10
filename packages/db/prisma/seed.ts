@@ -10,6 +10,7 @@
  *  - 1 admin (admin@startacademy.fr / admin)
  *  - le référentiel OPCO (AGEFICE, OPCO_EP, ATLAS, CPF…)
  *  - le référentiel des documents Qualiopi par indicateur
+ *  - le référentiel de financement paramétrable (FundingRule) — chaîne diagnostic
  */
 
 import { config as loadEnv } from 'dotenv';
@@ -18,6 +19,7 @@ import * as path from 'node:path';
 loadEnv({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
 import { UserRole, OpcoStatus, DocType } from '@prisma/client';
+import { FUNDING_RULE_SEEDS } from '@qualiof/shared/diagnostic';
 import argon2 from 'argon2';
 // [AUDIT-SANDBOX] client partagé (supporte PRISMA_USE_PG_ADAPTER=1 — sandbox
 // sans binaires natifs Prisma). Comportement identique en dev/prod normal.
@@ -72,7 +74,7 @@ async function seedOpcoCatalog() {
         'Convention de formation signée',
         'Programme de formation détaillé',
         'Attestation de présence ou certificat de réalisation',
-        'Facture acquittée ou attestation sur l\'honneur',
+        "Facture acquittée ou attestation sur l'honneur",
       ],
       status: OpcoStatus.ACTIVE,
     },
@@ -82,7 +84,8 @@ async function seedOpcoCatalog() {
       type: 'OPCO',
       website: 'https://www.opcoep.fr',
       averageDelayDays: 45,
-      conditions: "Opérateur de compétences des entreprises de proximité. Couvre l'immobilier, agences et professions libérales.",
+      conditions:
+        "Opérateur de compétences des entreprises de proximité. Couvre l'immobilier, agences et professions libérales.",
       requiredDocs: [
         'Dossier de prise en charge',
         'Convention de formation signée',
@@ -100,7 +103,8 @@ async function seedOpcoCatalog() {
       type: 'OPCO',
       website: 'https://www.opco-atlas.fr',
       averageDelayDays: 30,
-      conditions: 'OPCO des services financiers et conseil. Couvre les agences immobilières franchisées.',
+      conditions:
+        'OPCO des services financiers et conseil. Couvre les agences immobilières franchisées.',
       status: OpcoStatus.ACTIVE,
     },
     {
@@ -109,7 +113,8 @@ async function seedOpcoCatalog() {
       type: 'Autre',
       website: 'https://www.moncompteformation.gouv.fr',
       averageDelayDays: 30,
-      conditions: 'Compte Personnel de Formation — financement direct par le bénéficiaire via son compte CPF.',
+      conditions:
+        'Compte Personnel de Formation — financement direct par le bénéficiaire via son compte CPF.',
       requiredDocs: [
         'Inscription via plateforme Mon Compte Formation',
         'Convocation',
@@ -126,11 +131,12 @@ async function seedOpcoCatalog() {
       website: 'https://www.fifpl.fr',
       averageDelayDays: 45,
       yearlyCapPerPerson: 1200,
-      conditions: 'Fonds d\'assurance formation pour les professions libérales non-réglementées (architectes, géomètres-experts, conseils en immobilier libéraux non-affiliés AGEFICE…).',
+      conditions:
+        "Fonds d'assurance formation pour les professions libérales non-réglementées (architectes, géomètres-experts, conseils en immobilier libéraux non-affiliés AGEFICE…).",
       requiredDocs: [
         'Demande de prise en charge en ligne sur fifpl.fr',
         'Convention/Programme de formation',
-        'Attestation de paiement à l\'URSSAF (CFP)',
+        "Attestation de paiement à l'URSSAF (CFP)",
         'Certificat de réalisation',
       ],
       status: OpcoStatus.ACTIVE,
@@ -141,7 +147,8 @@ async function seedOpcoCatalog() {
       type: 'OPCO',
       website: 'https://www.lopcommerce.com',
       averageDelayDays: 45,
-      conditions: 'OPCO des entreprises du commerce — couvre certaines agences immobilières et leurs salariés.',
+      conditions:
+        'OPCO des entreprises du commerce — couvre certaines agences immobilières et leurs salariés.',
       status: OpcoStatus.ACTIVE,
     },
   ];
@@ -167,29 +174,149 @@ async function seedQualiopiDocCatalog() {
     recommendedDelay: string | null;
     responsible: string | null;
   }> = [
-    { type: DocType.CONVENTION, name: 'Convention de formation', phase: 'Pré-formation', qualiopiIndicator: 'Indicateur 9', isMandatory: true, description: "Convention signée entre l'organisme, l'apprenant et l'OPCO", recommendedDelay: 'Avant le début de la formation', responsible: 'OF' },
+    {
+      type: DocType.CONVENTION,
+      name: 'Convention de formation',
+      phase: 'Pré-formation',
+      qualiopiIndicator: 'Indicateur 9',
+      isMandatory: true,
+      description: "Convention signée entre l'organisme, l'apprenant et l'OPCO",
+      recommendedDelay: 'Avant le début de la formation',
+      responsible: 'OF',
+    },
     // D-09.3-07 : jalons workflow OpcoSubmission, hors matrice docs
-    { type: DocType.PRE_ACCORD_OPCO, name: 'Pré-accord OPCO', phase: 'Pré-formation', qualiopiIndicator: null, isMandatory: false, description: 'Accord préalable de financement de l\'OPCO', recommendedDelay: 'Avant le début de la formation', responsible: 'OPCO' },
-    { type: DocType.PROGRAMME, name: 'Programme de formation', phase: 'Pré-formation', qualiopiIndicator: 'Indicateur 1', isMandatory: true, description: "Programme détaillé remis à l'apprenant avant la formation", recommendedDelay: 'Avant le début de la formation', responsible: 'OF' },
-    { type: DocType.CONVOCATION, name: 'Convocation', phase: 'Pré-formation', qualiopiIndicator: 'Indicateur 9', isMandatory: false, description: 'Convocation à la formation envoyée à l\'apprenant', recommendedDelay: 'J-15 minimum', responsible: 'OF' },
-    { type: DocType.EMARGEMENT, name: "Feuille d'émargement", phase: 'Formation', qualiopiIndicator: 'Indicateur 12', isMandatory: true, description: "Feuille signée par l'apprenant pour chaque demi-journée de formation", recommendedDelay: 'À chaque demi-journée de formation', responsible: 'Formateur' },
+    {
+      type: DocType.PRE_ACCORD_OPCO,
+      name: 'Pré-accord OPCO',
+      phase: 'Pré-formation',
+      qualiopiIndicator: null,
+      isMandatory: false,
+      description: "Accord préalable de financement de l'OPCO",
+      recommendedDelay: 'Avant le début de la formation',
+      responsible: 'OPCO',
+    },
+    {
+      type: DocType.PROGRAMME,
+      name: 'Programme de formation',
+      phase: 'Pré-formation',
+      qualiopiIndicator: 'Indicateur 1',
+      isMandatory: true,
+      description: "Programme détaillé remis à l'apprenant avant la formation",
+      recommendedDelay: 'Avant le début de la formation',
+      responsible: 'OF',
+    },
+    {
+      type: DocType.CONVOCATION,
+      name: 'Convocation',
+      phase: 'Pré-formation',
+      qualiopiIndicator: 'Indicateur 9',
+      isMandatory: false,
+      description: "Convocation à la formation envoyée à l'apprenant",
+      recommendedDelay: 'J-15 minimum',
+      responsible: 'OF',
+    },
+    {
+      type: DocType.EMARGEMENT,
+      name: "Feuille d'émargement",
+      phase: 'Formation',
+      qualiopiIndicator: 'Indicateur 12',
+      isMandatory: true,
+      description: "Feuille signée par l'apprenant pour chaque demi-journée de formation",
+      recommendedDelay: 'À chaque demi-journée de formation',
+      responsible: 'Formateur',
+    },
     // D-09.3-07 : upload manuel, preuve ind. 19
-    { type: DocType.SUPPORT_PEDAGOGIQUE, name: 'Supports pédagogiques', phase: 'Formation', qualiopiIndicator: 'Indicateur 19', isMandatory: true, description: 'Supports de formation remis pendant ou après la formation', recommendedDelay: 'Pendant ou à la fin de la formation', responsible: 'Formateur' },
+    {
+      type: DocType.SUPPORT_PEDAGOGIQUE,
+      name: 'Supports pédagogiques',
+      phase: 'Formation',
+      qualiopiIndicator: 'Indicateur 19',
+      isMandatory: true,
+      description: 'Supports de formation remis pendant ou après la formation',
+      recommendedDelay: 'Pendant ou à la fin de la formation',
+      responsible: 'Formateur',
+    },
     // CORRECTION 2 (Kaïna audit blanc) : le certificat de réalisation se range dans l'ind. 11.
     // La mention légale Art. L6353-1 reste consignée en description (affichage composite « Indicateur 11 · Légal Art. L6353-1 »).
-    { type: DocType.CERTIFICAT_REALISATION, name: 'Certificat de réalisation', phase: 'Formation', qualiopiIndicator: 'Indicateur 11', isMandatory: true, description: "Certificat obligatoire remis à l'apprenant à la fin de la formation — obligation Légal Art. L6353-1, preuve d'audit rattachée à l'Indicateur 11", recommendedDelay: 'À la fin de la formation', responsible: 'OF' },
+    {
+      type: DocType.CERTIFICAT_REALISATION,
+      name: 'Certificat de réalisation',
+      phase: 'Formation',
+      qualiopiIndicator: 'Indicateur 11',
+      isMandatory: true,
+      description:
+        "Certificat obligatoire remis à l'apprenant à la fin de la formation — obligation Légal Art. L6353-1, preuve d'audit rattachée à l'Indicateur 11",
+      recommendedDelay: 'À la fin de la formation',
+      responsible: 'OF',
+    },
     // CORRECTION 1 (tranché Laurent V9) : l'assiduité AGEFICE n'est PAS une preuve Qualiopi (la preuve ind. 12 = émargement). Dérivé administratif financeur → aucun indicateur.
-    { type: DocType.ASSIDUITE, name: "Feuille d'assiduité", phase: 'Post-formation', qualiopiIndicator: null, isMandatory: true, description: "Récapitulatif de présence de l'apprenant — pièce administrative pour le financeur (AGEFICE), aucun indicateur Qualiopi (la preuve ind. 12 est l'émargement)", recommendedDelay: 'À la fin de la formation', responsible: 'OF' },
-    { type: DocType.EVALUATION_ACQUIS, name: 'Évaluation des acquis', phase: 'Post-formation', qualiopiIndicator: 'Indicateur 11', isMandatory: true, description: "Évaluation des compétences acquises par l'apprenant", recommendedDelay: 'À la fin de la formation', responsible: 'Formateur' },
+    {
+      type: DocType.ASSIDUITE,
+      name: "Feuille d'assiduité",
+      phase: 'Post-formation',
+      qualiopiIndicator: null,
+      isMandatory: true,
+      description:
+        "Récapitulatif de présence de l'apprenant — pièce administrative pour le financeur (AGEFICE), aucun indicateur Qualiopi (la preuve ind. 12 est l'émargement)",
+      recommendedDelay: 'À la fin de la formation',
+      responsible: 'OF',
+    },
+    {
+      type: DocType.EVALUATION_ACQUIS,
+      name: 'Évaluation des acquis',
+      phase: 'Post-formation',
+      qualiopiIndicator: 'Indicateur 11',
+      isMandatory: true,
+      description: "Évaluation des compétences acquises par l'apprenant",
+      recommendedDelay: 'À la fin de la formation',
+      responsible: 'Formateur',
+    },
     // CORRECTION 2 (swap) : l'attestation de fin devient « Légal » pur — le 11 passe au certificat de réalisation.
-    { type: DocType.ATTESTATION_FIN, name: 'Attestation de fin de formation', phase: 'Post-formation', qualiopiIndicator: 'Légal Art. L6353-1', isMandatory: false, description: 'Attestation complémentaire au certificat de réalisation (Art. L6353-1)', recommendedDelay: 'À la fin de la formation', responsible: 'OF' },
+    {
+      type: DocType.ATTESTATION_FIN,
+      name: 'Attestation de fin de formation',
+      phase: 'Post-formation',
+      qualiopiIndicator: 'Légal Art. L6353-1',
+      isMandatory: false,
+      description: 'Attestation complémentaire au certificat de réalisation (Art. L6353-1)',
+      recommendedDelay: 'À la fin de la formation',
+      responsible: 'OF',
+    },
     // D-09.3-07 : SATISFACTION nu retiré du catalog — remplacé fonctionnellement par
     // SATISFACTION_CHAUD (J+1) et SATISFACTION_FROID (J+90), stockés en PedagogicalAsset
     // et déjà présents dans MATRIX_DOC_TYPES (hors ce seed).
     // D-09.3-07 : jalon workflow OpcoSubmission (DRAFT->SENT->APPROVED), hors matrice docs
-    { type: DocType.VALIDATION_OPCO, name: 'Validation OPCO', phase: 'Administratif', qualiopiIndicator: null, isMandatory: false, description: 'Document de validation du dossier par l\'OPCO', recommendedDelay: 'Après envoi du dossier complet', responsible: 'OPCO' },
-    { type: DocType.FACTURE, name: 'Facture formation', phase: 'Administratif', qualiopiIndicator: 'Légal', isMandatory: true, description: "Facture de formation envoyée à l'apprenant ou l'OPCO", recommendedDelay: 'À la fin de la formation', responsible: 'OF' },
-    { type: DocType.AGEFICE, name: 'Demande de prise en charge AGEFICE', phase: 'Pré-formation', qualiopiIndicator: null, isMandatory: false, description: 'Formulaire AGEFICE pré-rempli pour les apprenants en EI/auto-entreprise éligibles (financement/administratif, aucun indicateur Qualiopi)', recommendedDelay: 'Avant le début de la formation', responsible: 'OF' },
+    {
+      type: DocType.VALIDATION_OPCO,
+      name: 'Validation OPCO',
+      phase: 'Administratif',
+      qualiopiIndicator: null,
+      isMandatory: false,
+      description: "Document de validation du dossier par l'OPCO",
+      recommendedDelay: 'Après envoi du dossier complet',
+      responsible: 'OPCO',
+    },
+    {
+      type: DocType.FACTURE,
+      name: 'Facture formation',
+      phase: 'Administratif',
+      qualiopiIndicator: 'Légal',
+      isMandatory: true,
+      description: "Facture de formation envoyée à l'apprenant ou l'OPCO",
+      recommendedDelay: 'À la fin de la formation',
+      responsible: 'OF',
+    },
+    {
+      type: DocType.AGEFICE,
+      name: 'Demande de prise en charge AGEFICE',
+      phase: 'Pré-formation',
+      qualiopiIndicator: null,
+      isMandatory: false,
+      description:
+        'Formulaire AGEFICE pré-rempli pour les apprenants en EI/auto-entreprise éligibles (financement/administratif, aucun indicateur Qualiopi)',
+      recommendedDelay: 'Avant le début de la formation',
+      responsible: 'OF',
+    },
   ];
 
   for (const doc of docs) {
@@ -202,10 +329,43 @@ async function seedQualiopiDocCatalog() {
   console.log(`✓ ${docs.length} types de documents Qualiopi seedés`);
 }
 
+/**
+ * Règles de financement — une ligne ACTIVE par clé et par tenant.
+ *
+ * Idempotent et NON destructif : si une clé a déjà une ligne active, on n'y
+ * touche pas. C'est volontaire — une valeur révisée à la main en production
+ * (Laurent ferme une ligne et en ouvre une neuve) ne doit jamais être ramenée
+ * à la valeur d'usine par un simple `db:seed`.
+ */
+async function seedFundingRules(tenantId: string) {
+  let created = 0;
+  for (const rule of FUNDING_RULE_SEEDS) {
+    const active = await prisma.fundingRule.findFirst({
+      where: { tenantId, key: rule.key, validTo: null },
+    });
+    if (active) continue;
+    await prisma.fundingRule.create({
+      data: {
+        tenantId,
+        key: rule.key,
+        valueNumeric: rule.valueNumeric,
+        notes: rule.notes,
+      },
+    });
+    created += 1;
+  }
+  const skipped = FUNDING_RULE_SEEDS.length - created;
+  console.log(
+    `✓ ${created} règle(s) de financement créée(s)` +
+      (skipped > 0 ? `, ${skipped} déjà active(s) et laissée(s) en l'état` : ''),
+  );
+}
+
 async function main() {
-  await seedTenantAndAdmin();
+  const tenant = await seedTenantAndAdmin();
   await seedOpcoCatalog();
   await seedQualiopiDocCatalog();
+  await seedFundingRules(tenant.id);
 }
 
 main()

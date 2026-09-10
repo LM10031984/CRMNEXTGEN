@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Rapport d'audit de performance 17 pages (spécimen)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+  :root{
+    --brand-deep:#00527A; --brand-vif:#3EA9FF; --brand-deep-08:rgba(0,82,122,.08);
+    --ink:#1c2733; --ink-2:#4a5a68; --ink-3:#7b8894; --line:#dde4ea; --paper:#ffffff; --wash:#f4f8fb;
+    --ok:#1a7f37; --warn:#9a5b00; --alert:#b42318; --ok-bg:#e8f5ec; --warn-bg:#fdf3e1; --alert-bg:#fdebe9;
+    --gold:#9a6b00; --gold-bg:#fdf6e3;
+  }
+  *{box-sizing:border-box; margin:0}
+  html{background:#e9edf1}
+  body{font-family:'Montserrat',system-ui,Segoe UI,Arial,sans-serif; color:var(--ink); font-size:10pt; line-height:1.5; background:#e9edf1; padding:24px 0}
+  h1,h2,h3,h4,.display{font-family:'Rajdhani','Montserrat',system-ui,sans-serif}
+  .page{width:210mm; min-height:297mm; margin:0 auto 24px; background:var(--paper); padding:15mm 16mm 24mm; position:relative; box-shadow:0 2px 14px rgba(16,42,67,.14); overflow:hidden}
+  .specimen{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:0}
+  .specimen span{font-family:'Rajdhani'; font-weight:700; font-size:60pt; letter-spacing:.18em; color:rgba(0,82,122,.05); transform:rotate(-28deg); white-space:nowrap}
+  .page>*:not(.specimen){position:relative; z-index:1}
+  @page{size:A4; margin:0}
+  @media print{ html,body{background:#fff; padding:0} .page{box-shadow:none; margin:0; page-break-after:always} }
+
+  .page > .footer{position:absolute; left:16mm; right:16mm; bottom:7mm; display:flex; justify-content:space-between; font-size:7.5pt; color:var(--ink-3); border-top:1px solid var(--line); padding-top:2mm}
+  .foot-brand{font-family:'Rajdhani'; font-weight:600; letter-spacing:.14em; color:var(--brand-deep)}
+
+  .kicker{font-family:'Rajdhani'; font-weight:600; letter-spacing:.22em; font-size:9.5pt; text-transform:uppercase; color:var(--brand-vif)}
+  .sec{margin-top:7mm}
+  .sec>h2, .chap-title{font-size:15.5pt; font-weight:700; color:var(--brand-deep); border-bottom:2px solid var(--brand-deep); padding-bottom:1.5mm; margin-bottom:3.5mm; display:flex; align-items:baseline; gap:3mm}
+  .sec>h2 .no, .chap-title .no{font-size:10pt; color:var(--brand-vif); font-weight:600; letter-spacing:.08em}
+  h4{font-family:'Rajdhani'; font-size:9.5pt; text-transform:uppercase; letter-spacing:.12em; color:var(--brand-deep); margin-bottom:1.5mm}
+  .muted{color:var(--ink-3); font-size:8.5pt}
+  .lead{color:var(--ink-2)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:5mm}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm}
+
+  .tile{border:1px solid var(--line); border-radius:3mm; padding:3.5mm 4.5mm; background:var(--paper)}
+  .tile .display{font-size:18pt; font-weight:700; color:var(--brand-deep); line-height:1.1}
+  .tile .display small{font-size:9.5pt; color:var(--ink-3); font-weight:500}
+  .tile p{font-size:8.3pt; color:var(--ink-2); margin-top:1mm}
+  .tile .lbl{font-size:7.8pt; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-3); font-weight:600}
+
+  .chip{display:inline-flex; align-items:center; gap:1.2mm; font-size:8pt; font-weight:600; padding:.6mm 2.4mm; border-radius:99px; white-space:nowrap}
+  .chip.ok{color:var(--ok); background:var(--ok-bg)} .chip.warn{color:var(--warn); background:var(--warn-bg)} .chip.alert{color:var(--alert); background:var(--alert-bg)}
+
+  blockquote{border-left:3px solid var(--brand-vif); background:var(--wash); padding:3mm 5mm; font-style:italic; color:var(--ink-2); border-radius:0 2mm 2mm 0; margin:2mm 0; font-size:9.5pt}
+  blockquote footer{font-style:normal; font-size:8.3pt; color:var(--ink-3); margin-top:1.2mm}
+
+  table{width:100%; border-collapse:collapse; font-size:8.8pt; margin-top:2mm}
+  th{font-family:'Rajdhani'; font-size:8.3pt; text-transform:uppercase; letter-spacing:.1em; text-align:left; color:#fff; background:var(--brand-deep); padding:2mm 2.8mm; font-weight:600}
+  td{padding:1.9mm 2.8mm; border-bottom:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:var(--wash)}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  /* Restitution « ce que vous nous avez dit » */
+  table.qa td:first-child{width:52mm; color:var(--ink-3); font-size:8.3pt}
+  table.qa td:nth-child(2){font-weight:500}
+
+  /* Scorecard */
+  .scorebars{display:grid; gap:1.8mm; margin-top:2.5mm}
+  .srow{display:grid; grid-template-columns:52mm 1fr 24mm; align-items:center; gap:3mm}
+  .srow .slabel{font-size:8.8pt; font-weight:600}
+  .srow .slabel small{display:block; font-weight:400; color:var(--ink-3); font-size:7.4pt}
+  .sbarwrap{background:var(--wash); border-radius:1.2mm; height:6.5mm; position:relative}
+  .sbar{height:100%; background:var(--brand-deep); border-radius:1.2mm; display:flex; align-items:center; justify-content:flex-end}
+  .sbar span{color:#fff; font-size:8pt; font-weight:700; padding-right:2mm; font-variant-numeric:tabular-nums}
+  .srow .schip{text-align:left}
+
+  .scorehero{display:flex; align-items:center; gap:6mm; border:1px solid var(--line); border-left:5px solid var(--brand-deep); border-radius:2.5mm; padding:4mm 6mm; background:var(--wash)}
+  .scorehero .big{font-family:'Rajdhani'; font-size:30pt; font-weight:700; color:var(--brand-deep); line-height:1; white-space:nowrap}
+  .scorehero .big small{font-size:13pt; color:var(--ink-3)}
+  .scorehero p{font-size:9pt; color:var(--ink-2)}
+
+  /* Chapitres */
+  .chap-head{display:flex; justify-content:space-between; align-items:flex-start; gap:5mm}
+  .chap-meta{text-align:right; white-space:nowrap}
+  .chap-meta .score{font-family:'Rajdhani'; font-size:20pt; font-weight:700; color:var(--brand-deep); line-height:1}
+  .chap-meta .score small{font-size:10pt; color:var(--ink-3)}
+  .chap-meta .answered{font-size:7.6pt; color:var(--ink-3); margin-top:.5mm}
+
+  .lecture{margin-top:2mm; color:var(--ink-2); font-size:9.3pt}
+  .lecture b{color:var(--ink)}
+
+  .euro{border:1.5px solid var(--gold); background:var(--gold-bg); border-radius:2.5mm; padding:3mm 4.5mm; margin-top:3mm; display:flex; gap:4mm; align-items:baseline}
+  .euro .amount{font-family:'Rajdhani'; font-size:16pt; font-weight:700; color:var(--gold); white-space:nowrap}
+  .euro p{font-size:8.6pt; color:var(--ink-2)}
+
+  .lever{border:1.5px solid var(--ok); background:var(--ok-bg); border-radius:2.5mm; padding:3mm 4.5mm; margin-top:3mm}
+  .lever h4{color:var(--ok)}
+  .lever p{font-size:8.8pt; color:var(--ink-2)}
+
+  /* Funnel */
+  .funnel{display:grid; gap:2px; margin-top:2.5mm}
+  .frow{display:grid; grid-template-columns:42mm 1fr 26mm; align-items:center; gap:3mm}
+  .frow .stage{font-size:8.8pt; font-weight:600}
+  .frow .stage small{display:block; font-weight:400; color:var(--ink-3); font-size:7.3pt}
+  .barwrap{background:var(--wash); border-radius:1.2mm; height:7mm; position:relative}
+  .bar{height:100%; background:var(--brand-deep); border-radius:1.2mm; display:flex; align-items:center; justify-content:flex-end}
+  .bar span{color:#fff; font-size:8.3pt; font-weight:600; padding-right:2.3mm; font-variant-numeric:tabular-nums}
+  .outlbl{position:absolute; top:50%; transform:translateY(-50%); color:var(--ink); font-size:8.3pt; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums}
+  .conv{font-size:8.3pt; color:var(--ink-2)}
+
+  /* Priorités */
+  .prio{display:grid; gap:3mm; margin-top:2.5mm}
+  .pcard{display:grid; grid-template-columns:11mm 1fr; gap:4mm; border:1px solid var(--line); border-left:4px solid var(--brand-deep); border-radius:2mm; padding:3.5mm 4.5mm; background:var(--paper)}
+  .pcard .n{font-family:'Rajdhani'; font-size:20pt; font-weight:700; color:var(--brand-vif); line-height:1}
+  .pcard h3{font-size:11pt; color:var(--brand-deep); font-weight:700}
+  .pcard p{font-size:8.8pt; color:var(--ink-2); margin-top:1mm}
+  .pcard .link{font-size:7.8pt; color:var(--ink-3); margin-top:1.2mm}
+
+  /* Couverture */
+  .cover-band{background:var(--brand-deep); color:#fff; margin:-15mm -16mm 0; padding:24mm 16mm 18mm}
+  .cover-band h1{font-size:31pt; font-weight:700; line-height:1.08; margin-top:6mm; color:#fff}
+  .cover-band .agency{font-size:15pt; font-weight:500; color:#cfe7f7; margin-top:3mm}
+  .cover-meta{display:flex; flex-wrap:wrap; gap:9mm; margin-top:12mm; font-size:8.8pt; color:#a9c9dd}
+  .cover-meta b{display:block; color:#fff; font-size:10pt; font-weight:600}
+  .valuecard{margin-top:9mm; border:1.5px solid var(--gold); background:var(--gold-bg); border-radius:2.5mm; padding:4mm 6mm; display:flex; align-items:center; gap:6mm}
+  .valuecard .v{font-family:'Rajdhani'; font-size:21pt; font-weight:700; color:var(--gold); white-space:nowrap}
+  .valuecard p{font-size:8.8pt; color:var(--ink-2)}
+  .cover-badges{display:flex; gap:4mm; margin-top:8mm; flex-wrap:wrap}
+  .cbadge{border:1px solid var(--line); border-radius:99px; padding:1.6mm 4.5mm; font-size:8.5pt; color:var(--ink-2); background:var(--wash); font-weight:600}
+
+  /* Sommaire */
+  .toc{columns:2; column-gap:8mm; margin-top:3mm}
+  .toc div{break-inside:avoid; display:flex; justify-content:space-between; gap:3mm; padding:1.7mm 0; border-bottom:1px dotted var(--line); font-size:9pt}
+  .toc div b{color:var(--brand-deep); font-family:'Rajdhani'; margin-right:2mm}
+  .toc div span:last-child{color:var(--ink-3); font-variant-numeric:tabular-nums}
+
+  .idgrid{display:grid; grid-template-columns:1fr 1fr; gap:0 8mm; margin-top:2mm}
+  .idgrid div{display:flex; justify-content:space-between; gap:4mm; padding:1.6mm 0; border-bottom:1px dotted var(--line); font-size:8.8pt}
+  .idgrid div span:first-child{color:var(--ink-3)}
+  .idgrid div span:last-child{font-weight:600; text-align:right}
+</style>
+</head>
+<body>
+
+<!-- ==================================================== PAGE 1 — COUVERTURE ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="cover-band">
+    <div class="kicker">Start Academy · Diagnostic d'agence immobilière</div>
+    <h1>Audit de performance<br>commerciale &amp; organisation</h1>
+    <div class="agency">Agence du Baou — Vence <span style="font-size:9pt;color:#8fb8d0">(exemple fictif)</span></div>
+    <div class="cover-meta">
+      <div><span>Réalisé le</span><b>12 septembre 2026, dans vos locaux</b></div>
+      <div><span>Par</span><b>[Prénom Nom], Start Academy</b></div>
+      <div><span>Restitué le</span><b>19 septembre 2026</b></div>
+      <div><span>Référence</span><b>DIAG-0042 · référentiel v2026-09</b></div>
+    </div>
+  </div>
+
+  <div class="valuecard">
+    <div class="v">3 000 € HT</div>
+    <p><b>Valeur de la prestation d'audit</b> — entretien structuré de 66 questions, analyse de votre chaîne commerciale complète, de vos actifs et de votre potentiel de financement, restitution écrite et plan de priorités. <b>Offerte dans le cadre de votre accompagnement Start Academy.</b></p>
+  </div>
+
+  <div class="cover-badges">
+    <span class="cbadge">66 questions · 11 chapitres</span>
+    <span class="cbadge">8 personnes cartographiées</span>
+    <span class="cbadge">17 ratios mesurés face aux repères</span>
+    <span class="cbadge">Potentiel de financement chiffré</span>
+    <span class="cbadge">3 priorités + plan 90 jours</span>
+  </div>
+
+  <div class="sec">
+    <p class="lead" style="font-size:10.5pt">Ce document restitue, mot pour mot quand ils comptent, ce que vous nous avez dit — puis ce que vos chiffres
+    disent de votre agence quand on les met face aux repères du métier. Il se termine par les trois priorités qui, à volume
+    de travail constant, changent votre résultat — et par le plan pour les traiter dans les 90 jours.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>1 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 2 — MÉTHODE + SOMMAIRE ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">02</span> Pourquoi cet audit — et comment le lire</h2>
+    <p class="lead">Une agence immobilière est une chaîne : des contacts entrent, des actes sortent, et entre les deux chaque maillon
+    transforme — ou fuit. La plupart des dirigeants connaissent leur chiffre d'affaires ; très peu savent <b>où</b> leur chaîne perd,
+    ni <b>combien</b>. Cet audit répond à ces deux questions, avec vos chiffres, pas des généralités.</p>
+    <div class="grid3" style="margin-top:4mm">
+      <div class="tile"><div class="lbl">1 · Ce que vous nous avez dit</div><p style="font-size:8.8pt">Chaque chapitre commence par la restitution fidèle de vos réponses — relues et validées avec vous. C'est votre matière, pas la nôtre.</p></div>
+      <div class="tile"><div class="lbl">2 · Notre lecture</div><p style="font-size:8.8pt">Vos chiffres face aux repères Start Academy (constatés sur les agences que nous accompagnons). Vert : sain. Orange : à surveiller. Rouge : ça fuit.</p></div>
+      <div class="tile"><div class="lbl">3 · L'enjeu et le levier</div><p style="font-size:8.8pt">Quand une fuite se chiffre, nous la chiffrons en euros — prudemment, à volume constant. Et chaque chapitre se ferme sur le premier geste à faire.</p></div>
+    </div>
+    <p class="muted" style="margin-top:3mm">Méthode : entretien structuré de 66 questions (référentiel Start Academy v2026-09, 11 chapitres) mené le 12/09/2026 avec la gérante, complété par les fiches individuelles de l'équipe. Les données sont déclaratives ; les estimations en euros sont indicatives, à volume d'activité constant, et ne constituent pas un engagement de résultat. Les fiches nominatives de l'équipe restent confidentielles.</p>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Sommaire</h2>
+    <div class="toc">
+      <div><span><b>03</b> Votre agence en un coup d'œil</span><span>p. 3</span></div>
+      <div><span><b>04</b> Synthèse dirigeant</span><span>p. 4</span></div>
+      <div><span><b>05</b> Votre chaîne commerciale — vue d'ensemble</span><span>p. 5</span></div>
+      <div><span><b>06</b> Prospection &amp; entrées vendeurs</span><span>p. 6</span></div>
+      <div><span><b>07</b> RDV vendeur, découverte &amp; estimation</span><span>p. 7</span></div>
+      <div><span><b>08</b> Mandats &amp; exclusivité</span><span>p. 8</span></div>
+      <div><span><b>09</b> Commercialisation &amp; suivi vendeur</span><span>p. 9</span></div>
+      <div><span><b>10</b> Acquéreurs</span><span>p. 10</span></div>
+      <div><span><b>11</b> Visites, offres &amp; transformation</span><span>p. 11</span></div>
+      <div><span><b>12</b> Base de données &amp; e-réputation</span><span>p. 12</span></div>
+      <div><span><b>13</b> Outils &amp; maturité IA</span><span>p. 13</span></div>
+      <div><span><b>14</b> Management &amp; pilotage</span><span>p. 14</span></div>
+      <div><span><b>15</b> La performance de votre équipe</span><span>p. 15</span></div>
+      <div><span><b>16</b> Un objectif, 3 priorités, plan 90 jours</span><span>p. 16</span></div>
+      <div><span><b>17</b> Votre potentiel de financement</span><span>p. 17</span></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Les repères utilisés</h2>
+    <p class="lead" style="font-size:9.3pt">Les repères cités dans ce rapport (« repère : ≥ 30 % ») sont les seuils de bonne santé que nous constatons
+    sur les agences indépendantes de taille comparable que Start Academy accompagne en région PACA. Ce ne sont ni des moyennes
+    nationales ni des normes — ce sont des niveaux atteignables, que nos clients atteignent. Ils sont revus chaque année.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>2 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 3 — L'AGENCE EN UN COUP D'ŒIL ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">03</span> Votre agence en un coup d'œil</h2>
+    <div class="grid2">
+      <div>
+        <h4>Identité &amp; contexte (chapitre 1)</h4>
+        <div class="idgrid" style="grid-template-columns:1fr">
+          <div><span>Structure</span><span>SARL, 1 agence — Vence (06)</span></div>
+          <div><span>Activité</span><span>Transaction ancien 84 % · Location 9 % · Gestion 7 %</span></div>
+          <div><span>CA honoraires N-1</span><span>612 000 €</span></div>
+          <div><span>Ventes actées N-1</span><span>32 (panier moyen ≈ 16 000 €)</span></div>
+          <div><span>Objectif déclaré N+1</span><span>750 000 € (+23 %)</span></div>
+          <div><span>Ambition 3 ans</span><span>Ouvrir une 2ᵉ agence (Saint-Jeannet)</span></div>
+        </div>
+      </div>
+      <div>
+        <h4>Équipe (chapitre 2 — 8 personnes)</h4>
+        <div class="idgrid" style="grid-template-columns:1fr">
+          <div><span>Dirigeante</span><span>Gérante TNS, non salariée</span></div>
+          <div><span>Agents commerciaux (indép.)</span><span>4 — production N-1 de 12 000 € à 148 000 €</span></div>
+          <div><span>Salariées</span><span>3 — 2 assistantes, 1 négociatrice</span></div>
+          <div><span>Ancienneté moyenne</span><span>3,8 ans · 1 débutant (&lt; 1 an)</span></div>
+          <div><span>Formations suivies 24 mois</span><span>1 seule (Tracfin, 2 salariées)</span></div>
+          <div><span>Envie de formation exprimée</span><span>7 personnes sur 8</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Votre score global</h2>
+    <div class="scorehero">
+      <div class="big">48<small> / 100</small></div>
+      <p><b>Une agence qui produit, une organisation qui n'encaisse pas tout.</b> L'entrée de chaîne est saine (contacts, rendez-vous,
+      conversion en mandat) — c'est en aval que la valeur s'échappe : exclusivité, suivi du stock, sécurisation des ventes, outillage.
+      La bonne nouvelle : les quatre chapitres les plus faibles sont les quatre qui se corrigent le plus vite par la méthode.</p>
+    </div>
+    <div class="scorebars">
+      <div class="srow"><div class="slabel">Prospection &amp; entrées vendeurs</div><div class="sbarwrap"><div class="sbar" style="width:58%"><span>58</span></div></div><div class="schip"><span class="chip warn">⚠ À renforcer</span></div></div>
+      <div class="srow"><div class="slabel">RDV vendeur &amp; estimation</div><div class="sbarwrap"><div class="sbar" style="width:55%"><span>55</span></div></div><div class="schip"><span class="chip warn">⚠ À renforcer</span></div></div>
+      <div class="srow"><div class="slabel">Mandats &amp; exclusivité</div><div class="sbarwrap"><div class="sbar" style="width:38%; background:var(--alert)"><span>38</span></div></div><div class="schip"><span class="chip alert">✗ Prioritaire</span></div></div>
+      <div class="srow"><div class="slabel">Commercialisation &amp; suivi vendeur</div><div class="sbarwrap"><div class="sbar" style="width:42%; background:var(--alert)"><span>42</span></div></div><div class="schip"><span class="chip alert">✗ Prioritaire</span></div></div>
+      <div class="srow"><div class="slabel">Acquéreurs</div><div class="sbarwrap"><div class="sbar" style="width:46%"><span>46</span></div></div><div class="schip"><span class="chip warn">⚠ À renforcer</span></div></div>
+      <div class="srow"><div class="slabel">Visites, offres &amp; transformation</div><div class="sbarwrap"><div class="sbar" style="width:64%"><span>64</span></div></div><div class="schip"><span class="chip ok">✓ Correct</span></div></div>
+      <div class="srow"><div class="slabel">Base de données &amp; e-réputation</div><div class="sbarwrap"><div class="sbar" style="width:44%; background:var(--alert)"><span>44</span></div></div><div class="schip"><span class="chip alert">✗ Prioritaire</span></div></div>
+      <div class="srow"><div class="slabel">Outils &amp; maturité IA</div><div class="sbarwrap"><div class="sbar" style="width:31%; background:var(--alert)"><span>31</span></div></div><div class="schip"><span class="chip alert">✗ Prioritaire</span></div></div>
+      <div class="srow"><div class="slabel">Management &amp; pilotage</div><div class="sbarwrap"><div class="sbar" style="width:52%"><span>52</span></div></div><div class="schip"><span class="chip warn">⚠ À renforcer</span></div></div>
+    </div>
+    <p class="muted" style="margin-top:2mm">Score par chapitre : pondération des réponses face aux repères (barème Start Academy v2026-09). Un score n'est pas un jugement — c'est une position de départ, mesurée pour être re-mesurée.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>3 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 4 — SYNTHÈSE DIRIGEANT ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">04</span> Synthèse dirigeant</h2>
+    <blockquote>
+      « On rentre des mandats, mais jamais en exclusivité. Et je perds des ventes au compromis — deux dossiers tombés ce
+      trimestre à cause du financement. Je n'ai pas le temps de tout suivre. »
+      <footer>Vos trois difficultés, dans vos mots — question 11.8 de l'entretien du 12/09.</footer>
+    </blockquote>
+    <p class="lecture">Ces trois phrases résument exactement ce que vos chiffres confirment. <b>Votre agence sait produire</b> :
+    40 contacts vendeurs par mois, une conversion en rendez-vous au-dessus du repère, un mandat rentré tous les six jours ouvrés.
+    Le problème n'est pas le volume — c'est ce que la chaîne fait du volume. <b>Trois fuites concentrent l'essentiel de la valeur perdue :</b></p>
+    <div class="grid3" style="margin-top:3.5mm">
+      <div class="tile"><div class="lbl">Fuite n° 1 — la valeur du stock</div><div class="display">20 %<small> d'exclusivités</small></div><p>1 mandat sur 5. Les 4 autres se partagent avec la concurrence, à des prix de rentrée « souvent » au-dessus du marché — le pire des deux mondes.</p></div>
+      <div class="tile"><div class="lbl">Fuite n° 2 — la fin de chaîne</div><div class="display">1 / 5<small> compromis perdu</small></div><p>80 % de compromis transformés (repère ≥ 85 %) : le financement acquéreur n'est vérifié qu'après l'offre. Deux ventes perdues ce trimestre, ≈ 32 000 € d'honoraires.</p></div>
+      <div class="tile"><div class="lbl">Fuite n° 3 — le temps</div><div class="display">0<small> process outillé</small></div><p>Comptes-rendus, relances, annonces, avis : tout est manuel, personne n'a d'IA paramétrée. Le pilotage repose sur vous seule, au ressenti.</p></div>
+    </div>
+    <p class="lecture" style="margin-top:3.5mm"><b>Ce qui va bien — et qu'il faut protéger :</b> l'entrée de chaîne (recommandation active, 22 % de
+    contacts transformés en rendez-vous), l'avis de valeur écrit systématique, la réunion d'équipe hebdomadaire tenue, une base de
+    3 400 contacts, et une équipe dont 7 membres sur 8 demandent à monter en compétence. C'est une fondation rare — beaucoup
+    d'agences n'ont ni le volume ni l'envie. Il manque la structure qui transforme ce volume en résultat.</p>
+    <p class="lecture"><b>L'enjeu consolidé, prudemment estimé :</b> les trois priorités de la page 16, traitées à volume constant,
+    représentent un potentiel de l'ordre de <b>+ 95 000 € d'honoraires annuels</b> (détail chiffré chapitre par chapitre) — à
+    comparer aux 612 000 € réalisés en N-1. Et vos droits à la formation, quasi intacts, financent l'essentiel du chemin (p. 17).</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>4 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 5 — CHAÎNE COMMERCIALE ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">05</span> Votre chaîne commerciale — vue d'ensemble</h2>
+    <p class="muted">Moyennes mensuelles déclarées · repères Start Academy. Les deux maillons les plus faibles sont signalés en rouge.</p>
+    <div class="funnel">
+      <div class="frow"><div class="stage">Contacts vendeurs<small>toutes sources</small></div><div class="barwrap"><div class="bar" style="width:100%"><span>40 / mois</span></div></div><div class="conv"></div></div>
+      <div class="frow"><div class="stage">RDV estimation</div><div class="barwrap"><div class="bar" style="width:64%"><span>9 / mois</span></div></div><div class="conv"><span class="chip ok">✓ 22 %</span></div></div>
+      <div class="frow"><div class="stage">Mandats rentrés</div><div class="barwrap"><div class="bar" style="width:47%"><span>5 / mois</span></div></div><div class="conv"><span class="chip ok">✓ 55 %</span></div></div>
+      <div class="frow"><div class="stage">… dont exclusifs</div><div class="barwrap"><div class="bar" style="width:16%; background:var(--alert)"></div><span class="outlbl" style="left:18.5%">1 / mois</span></div><div class="conv"><span class="chip alert">✗ 20 %</span></div></div>
+      <div class="frow"><div class="stage">Visites</div><div class="barwrap"><div class="bar" style="width:88%"><span>38 / mois</span></div></div><div class="conv"></div></div>
+      <div class="frow"><div class="stage">Offres</div><div class="barwrap"><div class="bar" style="width:52%"><span>6 / mois</span></div></div><div class="conv"><span class="chip ok">✓ 15,8 %</span></div></div>
+      <div class="frow"><div class="stage">Compromis</div><div class="barwrap"><div class="bar" style="width:40%"><span>4 / mois</span></div></div><div class="conv"><span class="chip ok">✓ 66 %</span></div></div>
+      <div class="frow"><div class="stage">Actes</div><div class="barwrap"><div class="bar" style="width:32%; background:var(--alert)"><span>3,2 / mois</span></div></div><div class="conv"><span class="chip alert">✗ 80 %</span></div></div>
+    </div>
+    <p class="muted" style="margin-top:1.5mm">Chaque barre est proportionnelle au volume mensuel (échelle indicative) ; le pourcentage mesure la conversion depuis l'étape précédente. ✓ au-dessus du repère · ⚠ à surveiller · ✗ sous le repère.</p>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Vos 8 ratios face aux repères</h2>
+    <table>
+      <thead><tr><th>Ratio</th><th class="num">Vous</th><th class="num">Repère</th><th>Lecture</th></tr></thead>
+      <tbody>
+        <tr><td>Contacts vendeurs → RDV</td><td class="num">22 %</td><td class="num">≥ 20 %</td><td><span class="chip ok">✓ Sain</span> l'entrée de chaîne fonctionne</td></tr>
+        <tr><td>RDV → mandat</td><td class="num">55 %</td><td class="num">≥ 40 %</td><td><span class="chip ok">✓ Sain</span> bonne conversion en rendez-vous</td></tr>
+        <tr><td>Part d'exclusivités (flux)</td><td class="num">20 %</td><td class="num">≥ 30 %</td><td><span class="chip alert">✗ Alerte</span> maillon faible n° 1 → p. 8</td></tr>
+        <tr><td>Visites par vente</td><td class="num">11,9</td><td class="num">≤ 15</td><td><span class="chip ok">✓ Sain</span> visites plutôt bien qualifiées</td></tr>
+        <tr><td>Offres → compromis</td><td class="num">66 %</td><td class="num">≥ 60 %</td><td><span class="chip ok">✓ Sain</span></td></tr>
+        <tr><td>Compromis → acte</td><td class="num">80 %</td><td class="num">≥ 85 %</td><td><span class="chip alert">✗ Alerte</span> maillon faible n° 2 → p. 10-11</td></tr>
+        <tr><td>Baisses de prix obtenues / mois</td><td class="num">4 %</td><td class="num">≥ 10 %</td><td><span class="chip warn">⚠ À surveiller</span> le stock vieillit sans pilotage → p. 9</td></tr>
+        <tr><td>Avis Google / ventes annuelles</td><td class="num">28 %</td><td class="num">≥ 30 %</td><td><span class="chip warn">⚠ À surveiller</span> preuve sociale sous-exploitée → p. 12</td></tr>
+      </tbody>
+    </table>
+    <p class="lecture" style="margin-top:3mm"><b>La lecture d'ensemble tient en une phrase :</b> vous êtes bons là où il faut du courage
+    (aller chercher le contact, obtenir le rendez-vous, faire signer un mandat) et fragiles là où il faut de la méthode (l'exclusivité,
+    le pilotage du stock, la sécurisation du financement). Le courage ne s'enseigne pas — la méthode, si. C'est exactement l'objet
+    des chapitres qui suivent, un maillon à la fois.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>5 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 6 — CH.3 PROSPECTION ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">06</span> Prospection &amp; entrées vendeurs</div>
+    <div class="chap-meta"><div class="score">58<small> / 100</small></div><div class="answered">8 questions · 8 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Vos sources de contacts vendeurs</td><td>Recommandation, réseaux sociaux, terrain — ni boîtage, ni farming de secteur</td></tr>
+      <tr><td>Qui prospecte réellement</td><td>« Certains seulement » — 2 agents sur 4 ont une activité de prospection régulière</td></tr>
+      <tr><td>Temps investi</td><td>≈ 3 h / semaine pour les deux agents actifs ; non mesuré pour les autres</td></tr>
+      <tr><td>Contacts vendeurs générés</td><td>≈ 40 / mois toutes sources — dont plus de la moitié par recommandation</td></tr>
+      <tr><td>Script ou trame d'appel commune</td><td>Non — chacun « à sa façon »</td></tr>
+      <tr><td>Formation prospection (24 mois)</td><td>Aucune</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Votre entrée de chaîne <b>fonctionne</b> — 40 contacts et 22 % transformés en rendez-vous, c'est au-dessus du repère.
+  Mais elle repose sur <b>deux personnes et une source</b> (la recommandation, qui ne se pilote pas). Si l'un des deux actifs
+  s'arrête, l'agence perd son carburant en un trimestre. Et sans trame commune, la qualité du premier contact dépend de qui décroche —
+  c'est exactement ce qu'un repreneur d'appel structuré corrige.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>Contacts → RDV : <b>22 %</b> / repère ≥ 20 % <span class="chip ok">✓</span><br>Part de l'équipe qui prospecte : <b>2 / 4</b> / repère : tous <span class="chip warn">⚠</span><br>Rythme hebdomadaire sanctuarisé : <b>non</b> <span class="chip alert">✗</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>Un rituel de prospection de 2 h/semaine par agent, sur un créneau fixe, avec une trame d'appel commune orientée recommandation — l'objectif n'est pas de prospecter plus, mais que <b>les quatre</b> le fassent.</p></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>6 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 7 — CH.4 RDV VENDEUR ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">07</span> RDV vendeur, découverte &amp; estimation</div>
+    <div class="chap-meta"><div class="score">55<small> / 100</small></div><div class="answered">9 questions · 8 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Rendez-vous estimation</td><td>≈ 9 / mois</td></tr>
+      <tr><td>Format du rendez-vous vendeur</td><td><b>Un seul rendez-vous</b> — estimation remise et mandat discuté dans la foulée ; pas de R2 de restitution systématique</td></tr>
+      <tr><td>Découverte vendeur formalisée</td><td>Non — « on connaît nos questions » , rien d'écrit, rien de systématique</td></tr>
+      <tr><td>Délai de remise de l'estimation</td><td>Sous 48 h</td></tr>
+      <tr><td>Avis de valeur écrit et argumenté</td><td><b>Oui, systématique</b> — vrai point fort</td></tr>
+      <tr><td>RDV → mandat</td><td>55 %</td></tr>
+      <tr><td>Formations découverte / estimation / objections (24 mois)</td><td>Aucune</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Le « tout en un rendez-vous » signe des mandats — 55 %, c'est bien — mais il signe <b>des mandats simples au prix du
+  vendeur</b> : sans découverte formalisée ni restitution dédiée, vous n'avez ni le temps ni le cadre pour vendre l'exclusivité et
+  défendre le prix de rentrée. Ce chapitre est la <b>cause racine</b> du chapitre suivant. Votre avis de valeur écrit est l'actif à
+  capitaliser : il devient la pièce maîtresse d'un R2 de restitution.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>RDV → mandat : <b>55 %</b> / repère ≥ 40 % <span class="chip ok">✓</span><br>Découverte formalisée : <b>non</b> / repère : trame écrite systématique <span class="chip alert">✗</span><br>R2 de restitution : <b>non systématique</b> <span class="chip warn">⚠</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>Passer au protocole <b>R1 découverte → R2 restitution</b> : au R1 on écoute et on cadre, au R2 on restitue l'avis de valeur et on vend l'exclusivité. C'est la méthode que vous vivez en ce moment même avec nous — elle se transmet.</p></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>7 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 8 — CH.5 MANDATS & EXCLUSIVITÉ ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">08</span> Mandats &amp; exclusivité</div>
+    <div class="chap-meta"><div class="score" style="color:var(--alert)">38<small> / 100</small></div><div class="answered">8 questions · 8 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Mandats rentrés</td><td>≈ 5 / mois</td></tr>
+      <tr><td>Stock actif</td><td>34 mandats, dont <b>7 exclusifs (21 %)</b></td></tr>
+      <tr><td>Part d'exclusivités dans le flux</td><td><b>20 %</b> — 1 mandat sur 5</td></tr>
+      <tr><td>Prix de rentrée au-dessus du marché</td><td>« <b>Souvent</b> » — accepté pour ne pas perdre le mandat</td></tr>
+      <tr><td>Méthode de défense du prix</td><td>À l'instinct — pas de grille, pas d'argumentaire commun</td></tr>
+      <tr><td>Durée de vie moyenne d'un mandat</td><td>≈ 4,5 mois</td></tr>
+      <tr><td>Formation négociation / défense du prix (24 mois)</td><td>Aucune</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">C'est le chapitre le plus faible de votre audit, et le plus coûteux : <b>4 mandats sur 5 sont partagés avec vos
+  concurrents, souvent à un prix trop haut</b>. Vous financez de la publicité pour des biens que la concurrence peut vendre, à des prix
+  qui allongent les délais et usent vos vendeurs. L'exclusivité n'est pas une faveur que le vendeur accorde — c'est une offre de service
+  qui se vend, avec un cadre (R2), des preuves (avis de valeur, plan de commercialisation) et un prix de rentrée défendu.</p>
+  <div class="euro"><div class="amount">≈ + 32 000 € / an</div><p>Passer de 20 % à 30 % d'exclusivités (le repère) ≈ 6 mandats exclusifs de plus par an. Un exclusif se transforme environ deux fois mieux qu'un simple : à volume constant, ~2 ventes de plus ≈ <b>32 000 € d'honoraires</b>. Estimation prudente, à panier moyen constant (16 000 €).</p></div>
+  <div class="lever"><h4>Premier levier</h4><p>Une <b>grille de prix de rentrée</b> (au-delà de X % au-dessus de l'avis de valeur, on ne prend pas — ou en exclusif avec plan de baisse contractualisé) + l'argumentaire exclusivité travaillé en équipe sur vos cas réels.</p></div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>8 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 9 — CH.6 COMMERCIALISATION & SUIVI ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">09</span> Commercialisation &amp; suivi vendeur</div>
+    <div class="chap-meta"><div class="score" style="color:var(--alert)">42<small> / 100</small></div><div class="answered">3 questions · 3 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Compte-rendu vendeur</td><td>« À la demande » — quand le vendeur appelle, ou quand il y a du nouveau</td></tr>
+      <tr><td>Baisses de prix obtenues</td><td>≈ 4 % du stock par mois</td></tr>
+      <tr><td>Requalification des mandats anciens</td><td>Non — pas de revue systématique du stock, pas d'avenants organisés</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Un stock à 79 % simple <b>et</b> sans rythme de compte-rendu, c'est la combinaison qui fait vieillir les mandats :
+  le vendeur n'entend l'agence que quand il s'impatiente, la baisse de prix arrive tard et mal amenée, et le bien finit par se vendre —
+  ailleurs. La baisse de prix est un produit du <b>rythme</b> : c'est la série de comptes-rendus factuels (visites, retours, comparables)
+  qui la rend naturelle. À 4 % de baisses obtenues par mois, votre stock se requalifie 2 à 3 fois trop lentement.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>CR vendeur : <b>à la demande</b> / repère : hebdomadaire systématique <span class="chip alert">✗</span><br>Baisses obtenues : <b>4 %</b>/mois / repère ≥ 10 % <span class="chip warn">⚠</span><br>Revue de stock : <b>aucune</b> / repère : mensuelle <span class="chip alert">✗</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>Le <b>rituel CR hebdo</b> (modèle fourni, 10 min par mandat, automatisable) + une revue de stock mensuelle sur matrice ancienneté × écart de prix : chaque mandat &gt; 90 jours ressort avec une décision — baisse, avenant exclusif, ou sortie.</p></div>
+  </div>
+  <div class="euro"><div class="amount">− 1 mois de délai</div><p>Objectif réaliste à 6 mois : ramener la durée de vie moyenne d'un mandat de 4,5 à 3,5 mois — trésorerie plus rapide, vendeurs mieux tenus, budgets de diffusion raccourcis.</p></div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>9 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 10 — CH.7 ACQUÉREURS ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">10</span> Acquéreurs</div>
+    <div class="chap-meta"><div class="score">46<small> / 100</small></div><div class="answered">4 questions · 4 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Origine des contacts acquéreurs</td><td>≈ 70 % portails · 20 % recommandation · 10 % base agence</td></tr>
+      <tr><td>Contacts acquéreurs</td><td>≈ 55 / mois</td></tr>
+      <tr><td>Découverte acquéreur formalisée</td><td>Non — fiche libre, remplie inégalement selon l'agent</td></tr>
+      <tr><td>Financement vérifié avant les visites</td><td><b>Non</b> — abordé « au feeling », souvent après l'offre</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Vos acquéreurs viennent massivement des portails — les moins engagés du marché — et entrent en visite <b>sans
+  vérification de financement</b>. Résultat mécanique : des visites à vide, et surtout des compromis fragiles qui cassent au
+  financement (votre fuite n° 2, chiffrée page suivante). La base de 3 400 contacts, elle, ne produit que 10 % des entrées : votre
+  meilleur vivier est en jachère.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>Financement vérifié avant visite : <b>non</b> / repère : systématique <span class="chip alert">✗</span><br>Découverte formalisée : <b>non</b> <span class="chip warn">⚠</span><br>Part de la base dans les entrées : <b>10 %</b> / repère ≥ 25 % <span class="chip warn">⚠</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>Le <b>check financement en 4 questions</b> avant toute première visite (budget validé, apport, banque/courtier consulté, délai) — 3 minutes qui sécurisent toute la fin de chaîne. Puis réveiller la base : 1 campagne ciblée par mois.</p></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>10 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 11 — CH.8 TRANSFORMATION ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">11</span> Visites, offres &amp; transformation</div>
+    <div class="chap-meta"><div class="score">64<small> / 100</small></div><div class="answered">5 questions · 5 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Visites</td><td>≈ 38 / mois</td></tr>
+      <tr><td>Offres</td><td>≈ 6 / mois (15,8 % des visites)</td></tr>
+      <tr><td>Compromis</td><td>≈ 4 / mois (66 % des offres)</td></tr>
+      <tr><td>Actes</td><td>≈ 3,2 / mois (<b>80 %</b> des compromis)</td></tr>
+      <tr><td>Cause n° 1 des compromis perdus</td><td>Le financement — deux dossiers tombés ce trimestre</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Votre milieu de chaîne est <b>bon</b> : 11,9 visites par vente et 66 % d'offres transformées en compromis, c'est le
+  travail d'une équipe qui connaît ses biens et ses clients. Tout se joue sur les derniers mètres : <b>1 compromis sur 5 n'arrive pas
+  chez le notaire</b>, pour une cause identifiée au chapitre précédent — le financement non sécurisé en amont. C'est la fuite la plus
+  rageante (tout le travail est fait) et la plus corrigible.</p>
+  <div class="euro"><div class="amount">≈ + 64 000 € / an</div><p>Passer de 80 % à 90 % de compromis transformés (repère haut) ≈ 4 ventes sauvées par an × 16 000 € de panier moyen. Ce chiffre finance à lui seul plusieurs années de l'accompagnement proposé.</p></div>
+  <div class="lever"><h4>Premier levier</h4><p><b>Aucune offre présentée sans dossier de financement joint</b> (attestation de capacité, simulation courtier ou apport justifié) + un suivi hebdomadaire outillé des compromis en cours (banque, notaire, conditions suspensives).</p></div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>11 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 12 — CH.9 BASE & E-RÉPUTATION ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">12</span> Base de données &amp; e-réputation</div>
+    <div class="chap-meta"><div class="score" style="color:var(--alert)">44<small> / 100</small></div><div class="answered">7 questions · 7 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Volume de la base</td><td>≈ 3 400 contacts (vendeurs, acquéreurs, anciens clients)</td></tr>
+      <tr><td>Base à jour dans le logiciel</td><td>Partiellement — « chacun tient ses fiches »</td></tr>
+      <tr><td>Usage réel du logiciel par l'équipe</td><td>≈ 40 %</td></tr>
+      <tr><td>Exploitation de la base</td><td><b>Aucune</b> — ni campagne, ni rapprochement automatique, ni scénario de relance</td></tr>
+      <tr><td>Avis Google</td><td><b>9 avis</b> · note <b>4,6 / 5</b></td></tr>
+      <tr><td>Process de collecte d'avis</td><td>Non — « on y pense quand on y pense »</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Vous êtes assis sur votre actif le plus sous-coté : <b>3 400 contacts qui ne reçoivent rien</b>. Les anniversaires
+  d'achat (vos vendeurs de demain), les acquéreurs déçus d'hier (vos acheteurs d'aujourd'hui), les anciens clients (vos recommandations) —
+  tout dort. Côté vitrine : 4,6/5, excellente note, mais <b>9 avis pour 32 ventes par an</b> — un prospect qui compare vous trouve
+  moins « prouvé » que des concurrents qui vendent moins bien que vous.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>Avis / ventes annuelles : <b>28 %</b> / repère ≥ 30 % <span class="chip warn">⚠</span><br>Note : <b>4,6</b> / repère ≥ 4,5 <span class="chip ok">✓</span><br>Campagnes base : <b>0</b> / repère : 1/mois <span class="chip alert">✗</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>La <b>collecte d'avis à l'acte</b> (demande systématique le jour de la signature, QR code + lien direct — objectif 30 avis en 12 mois) et <b>une campagne base par mois</b>, en commençant par les anniversaires d'achat 5-7 ans.</p></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>12 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 13 — CH.10 OUTILS & IA ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">13</span> Outils &amp; maturité IA</div>
+    <div class="chap-meta"><div class="score" style="color:var(--alert)">31<small> / 100</small></div><div class="answered">16 questions · 14 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Logiciel métier</td><td>En place et à jour <span class="chip ok">✓</span></td></tr>
+      <tr><td>Diffusion</td><td>3 portails actifs · e-signature en place</td></tr>
+      <tr><td>Outil d'estimation</td><td>Outil en ligne, utilisé ponctuellement</td></tr>
+      <tr><td>Usage de l'IA</td><td>2 personnes sur 8 utilisent ChatGPT, en compte personnel</td></tr>
+      <tr><td>Paramétrage (instructions, projets, confidentialité)</td><td>Aucun</td></tr>
+      <tr><td>Bibliothèque de prompts d'équipe</td><td>Aucune — chacun improvise</td></tr>
+      <tr><td>Garde-fous (vérification, données clients)</td><td>Aucun</td></tr>
+      <tr><td>NotebookLM · Gamma</td><td>Inconnus de l'équipe</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Le socle logiciel est sain — le problème n'est pas l'équipement, c'est la <b>couche productivité</b> :
+  annonces, comptes-rendus, relances, synthèses de pièces, réponses aux avis… tout est fait à la main, par 8 personnes, tous les jours.
+  C'est votre chapitre le plus faible (31/100) et paradoxalement le plus rapide à corriger : un socle IA d'équipe se met en place en
+  deux demi-journées et alimente <b>tous</b> les autres chapitres (CR vendeur du Ch.09, campagnes du Ch.12, dossiers financement du Ch.10-11).</p>
+  <div class="euro"><div class="amount">≈ 5-10 h / sem / personne</div><p>Temps récupérable mesuré chez nos clients sur les tâches rédactionnelles et répétitives — soit, à l'échelle de vos 8 personnes, <b>l'équivalent d'un mi-temps</b> réinvesti en prospection et suivi. (Chiffre indicatif, mesuré après mise en place du socle.)</p></div>
+  <div class="lever"><h4>Premier levier</h4><p>Le <b>socle IA commun</b> : comptes d'équipe, instructions personnalisées agence, règles de confidentialité (jamais de données clients nominatives), et 10 prompts métier validés — annonce, CR visite, relance vendeur, synthèse PV, réponse aux avis.</p></div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>13 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 14 — CH.11 MANAGEMENT & PILOTAGE ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="chap-head">
+    <div class="chap-title" style="border:none; margin:0; padding:0"><span class="no">14</span> Management &amp; pilotage</div>
+    <div class="chap-meta"><div class="score">52<small> / 100</small></div><div class="answered">9 questions · 9 renseignées</div></div>
+  </div>
+  <hr style="border:none; border-top:2px solid var(--brand-deep); margin:2mm 0 4mm">
+
+  <h4>Ce que vous nous avez dit</h4>
+  <table class="qa">
+    <tbody>
+      <tr><td>Réunion d'équipe</td><td>Hebdomadaire, tenue <span class="chip ok">✓</span></td></tr>
+      <tr><td>Coaching individuel</td><td>Non — « pas le temps »</td></tr>
+      <tr><td>Reporting des agents</td><td>Non — remontées informelles</td></tr>
+      <tr><td>Indicateurs suivis</td><td><b>Le chiffre d'affaires uniquement</b></td></tr>
+      <tr><td>Semaine type / plages protégées</td><td>Non</td></tr>
+      <tr><td>Recrutement</td><td>1 poste de négociateur ouvert — difficile à pourvoir</td></tr>
+      <tr><td>Vos 3 difficultés (verbatim)</td><td>« L'exclusivité · les ventes qui tombent · le temps »</td></tr>
+      <tr><td>Vos 3 priorités déclarées</td><td>Sécuriser le CA · recruter · digitaliser</td></tr>
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:4mm">Notre lecture</h4>
+  <p class="lecture">Vous pilotez au chiffre d'affaires — un indicateur qui raconte ce qui s'est décidé <b>il y a 4 à 6 mois</b>. Les
+  indicateurs avancés (rendez-vous, part d'exclusivités, comptes-rendus, compromis sécurisés) existent désormais — ils sont dans ce
+  rapport, et re-mesurables. Il manque le rituel : 30 minutes de coaching individuel par agent et par mois, adossées à 6 indicateurs,
+  changent une équipe en quelques semaines. Et pour le recrutement : un négociateur rejoint une agence qui a <b>une méthode et un
+  parcours à offrir</b> — cet audit et le plan qui suit sont aussi votre meilleur argument d'embauche et de rétention.</p>
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile"><div class="lbl">Repères</div><p>Indicateurs suivis : <b>1</b> / repère : 6 (RDV, mandats, % exclus, CR, offres, compromis) <span class="chip alert">✗</span><br>Coaching individuel : <b>0</b> / repère : mensuel <span class="chip alert">✗</span><br>Réunion d'équipe : <b>hebdo</b> <span class="chip ok">✓</span></p></div>
+    <div class="lever"><h4>Premier levier</h4><p>Le <b>tableau de bord 6 indicateurs</b> (rempli en 10 min/semaine à la réunion existante — pas de réunion en plus) + un point individuel mensuel de 30 min par agent, préparé par les chiffres, pas par le ressenti.</p></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>14 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 15 — LA PERFORMANCE DE VOTRE ÉQUIPE ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">15</span> La performance de votre équipe — personne par personne</h2>
+    <p class="muted">Issu des fiches individuelles du diagnostic (identités anonymisées dans ce spécimen). Objectifs proposés en cohérence avec votre objectif d'agence 750 000 € — à valider avec chacun en entretien. Production = honoraires générés N-1.</p>
+  </div>
+
+  <div class="grid2" style="margin-top:3mm">
+    <div class="tile">
+      <div style="display:flex; justify-content:space-between; align-items:baseline"><b style="font-size:10.5pt">Agent A — indépendant · 8 ans</b><span class="chip ok">✓ Top producteur</span></div>
+      <div style="margin-top:2mm" class="sbarwrap"><div class="sbar" style="width:87%"><span>148 k€</span></div></div>
+      <div class="muted" style="margin-top:.8mm">Objectif 2027 : 170 k€ · budget formation AGEFICE : 3 000 €</div>
+      <p style="margin-top:1.6mm">30 % d'exclusivités (le meilleur de l'équipe), à l'aise en défense de prix, aucun usage IA.<br><b>Préconisation :</b> viser 50 % d'exclusifs, socle IA pour le volume, et <b>co-animer</b> les R2 des juniors — votre futur référent « listing ».</p>
+    </div>
+    <div class="tile">
+      <div style="display:flex; justify-content:space-between; align-items:baseline"><b style="font-size:10.5pt">Agent B — indépendant · 5 ans</b><span class="chip warn">⚠ Fin de chaîne</span></div>
+      <div style="margin-top:2mm" class="sbarwrap"><div class="sbar" style="width:66%"><span>112 k€</span></div></div>
+      <div class="muted" style="margin-top:.8mm">Objectif 2027 : 135 k€ · budget formation AGEFICE : 3 000 €</div>
+      <p style="margin-top:1.6mm">Bon volume de visites et d'offres, mais 3 compromis perdus en 12 mois (financement).<br><b>Préconisation :</b> check financement systématique + suivi compromis outillé — son objectif se joue entièrement sur la sécurisation.</p>
+    </div>
+    <div class="tile">
+      <div style="display:flex; justify-content:space-between; align-items:baseline"><b style="font-size:10.5pt">Agente C — indépendante · 3 ans</b><span class="chip warn">⚠ Régularité</span></div>
+      <div style="margin-top:2mm" class="sbarwrap"><div class="sbar" style="width:44%"><span>74 k€</span></div></div>
+      <div class="muted" style="margin-top:.8mm">Objectif 2027 : 95 k€ · budget formation AGEFICE : 3 000 €</div>
+      <p style="margin-top:1.6mm">Excellente en relation client (ses vendeurs la recommandent), prospecte par à-coups, découverte non structurée.<br><b>Préconisation :</b> rituel prospection 2 h/sem + trame de découverte — la régularité fera le reste.</p>
+    </div>
+    <div class="tile">
+      <div style="display:flex; justify-content:space-between; align-items:baseline"><b style="font-size:10.5pt">Agent D — indépendant · 6 mois</b><span class="chip alert">✗ À équiper</span></div>
+      <div style="margin-top:2mm" class="sbarwrap"><div class="sbar" style="width:12%; background:var(--alert)"></div><span class="outlbl" style="left:14%">12 k€ (depuis mars)</span></div>
+      <div class="muted" style="margin-top:.8mm">Objectif 2027 : 45 k€ · budget formation AGEFICE : 3 000 €</div>
+      <p style="margin-top:1.6mm">Motivé, à l'aise au téléphone, aucune méthode reçue — il apprend « en regardant ».<br><b>Préconisation :</b> parcours complet (prospection → mandat → acquéreur) + binôme avec l'Agent A sur ses 10 prochains R1/R2.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:4mm">
+    <div class="tile">
+      <b style="font-size:10pt">Les 3 salariées — assistante ×2 · négociatrice</b>
+      <p style="margin-top:1.5mm">Négociatrice : 80 k€ produits N-1, mêmes constats que l'Agent B (sécurisation). Assistantes : CR, relances, annonces et pièces à la main — les premières bénéficiaires du socle IA.<br><b>Préconisation :</b> socle IA + process sinistres/CR outillés → ≈ 5 h/sem libérées chacune. Budget : enveloppe entreprise OPCO EP (2 500 €).</p>
+    </div>
+    <div class="tile" style="border-color:var(--brand-deep); background:var(--brand-deep-08)">
+      <b style="font-size:10pt">Et vous, la gérante</b>
+      <p style="margin-top:1.5mm">120 k€ produits N-1 <b>en plus</b> de la direction — tout passe encore par vous (pilotage, litiges, validation des prix). L'objectif 750 k€ ne passe pas par « vous en faire plus », mais par l'équipe outillée et un pilotage par les chiffres.<br><b>Préconisation :</b> tableau de bord 6 indicateurs + coaching mensuel 30 min/agent + votre propre enveloppe AGEFICE TNS (3 000 €, sous réserve d'attestation CFP).</p>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:2.5mm">Ces objectifs individuels et leur suivi mensuel seront re-mesurés : cet audit n'est pas une photo, c'est le point zéro d'une trajectoire (re-mesure proposée à 6 mois).</p>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>15 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 16 — PRIORITÉS & PLAN 90 JOURS ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">16</span> Un objectif, trois priorités, un plan de 90 jours</h2>
+    <div class="scorehero" style="margin-bottom:3.5mm">
+      <div class="big">750 k€</div>
+      <p><b>Votre objectif déclaré pour l'an prochain (+ 23 %).</b> Les trois priorités ci-dessous y mènent à volume de travail constant —
+      elles ne demandent pas de travailler plus, mais d'arrêter de perdre ce qui est déjà produit. Potentiel cumulé estimé : <b>≈ + 95 000 € d'honoraires / an</b>.</p>
+    </div>
+    <div class="prio">
+      <div class="pcard"><div class="n">1</div><div>
+        <h3>Sécuriser la vente — plus un compromis ne tombe pour le financement</h3>
+        <p>De 80 % → 90 % de compromis transformés (<b>≈ + 64 000 €/an</b>). Check financement avant visite · dossier de financement joint à l'offre · suivi hebdo des compromis · découverte acquéreur formalisée.</p>
+        <div class="link">↳ Constats p. 10-11 · Agent B et négociatrice en premier · programmes « acquéreur » de la proposition jointe</div>
+      </div></div>
+      <div class="pcard"><div class="n">2</div><div>
+        <h3>Vendre l'exclusivité — au bon prix de rentrée</h3>
+        <p>De 20 % → 30 % d'exclusivités (<b>≈ + 32 000 €/an</b>) et un stock qui tourne un mois plus vite. Protocole R1/R2 · grille de prix de rentrée · argumentaire exclu · rituel CR hebdo + revue de stock mensuelle.</p>
+        <div class="link">↳ Constats p. 7-9 · Agent A co-anime, Agente C et Agent D en montée · programmes « vendeur » de la proposition jointe</div>
+      </div></div>
+      <div class="pcard"><div class="n">3</div><div>
+        <h3>Reprendre le temps — socle IA d'équipe et preuve sociale</h3>
+        <p>≈ 5-10 h/sem/personne récupérées (l'équivalent d'un mi-temps sur l'agence) réinvesties en prospection à 4 · collecte d'avis à l'acte (9 → 30 avis) · 1 campagne base/mois sur vos 3 400 contacts · tableau de bord 6 indicateurs.</p>
+        <div class="link">↳ Constats p. 6, 12-14 · toute l'équipe, salariées incluses · programmes « IA &amp; pilotage » de la proposition jointe</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Les 90 premiers jours</h2>
+    <table>
+      <thead><tr><th style="width:26mm">Semaines</th><th>Ce qui se passe</th><th>Ce qui est mesuré</th></tr></thead>
+      <tbody>
+        <tr><td><b>S1-S2</b></td><td>Pièces réunies via le lien de pré-inscription · dossiers AGEFICE/OPCO déposés par Start Academy · tableau de bord installé</td><td>Point zéro : les chiffres de ce rapport</td></tr>
+        <tr><td><b>S3-S6</b></td><td>Socle IA (toute l'équipe) · protocole R1/R2 et grille de prix de rentrée en place</td><td>% exclus sur les mandats rentrés · CR envoyés/sem</td></tr>
+        <tr><td><b>S7-S10</b></td><td>Parcours acquéreur &amp; sécurisation · check financement systématique · revue de stock n°1</td><td>Offres avec dossier financement · compromis sécurisés</td></tr>
+        <tr><td><b>S11-S12</b></td><td>Bilan trimestriel avec la direction · ajustements · plan du trimestre suivant</td><td>Les 6 indicateurs vs point zéro</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:3mm; font-weight:600; color:var(--brand-deep)">La proposition d'accompagnement jointe (PROP-0042) chiffre ce plan, son calendrier et son financement — elle répond point par point aux trois priorités ci-dessus.</p>
+    <p class="muted" style="margin-top:2mm">Estimations indicatives à volume d'activité constant, fondées sur vos données déclaratives du 12/09/2026 — elles ne constituent pas un engagement de résultat. Re-mesure des indicateurs proposée à 6 mois.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>16 / 17</span></div>
+</section>
+
+<!-- ==================================================== PAGE 17 — FINANCEMENT ==================================================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">17</span> Votre potentiel de financement</h2>
+    <table>
+      <thead><tr><th>Financeur</th><th>Bénéficiaires</th><th>Base</th><th class="num">Montant</th></tr></thead>
+      <tbody>
+        <tr><td><b>AGEFICE</b></td><td>4 agents commerciaux éligibles (production N-1 &gt; 7 000 €)</td><td>3 000 € / agent (plafond annuel)</td><td class="num">12 000 €</td></tr>
+        <tr><td><b>OPCO EP</b></td><td>L'entreprise — 3 salariées (structure &lt; 11 salariés)</td><td>forfait annuel entreprise</td><td class="num">2 500 €</td></tr>
+        <tr><td>Déduction</td><td>Formation déjà engagée en 2026</td><td>—</td><td class="num">− 0 €</td></tr>
+        <tr style="background:var(--brand-deep)"><td colspan="3" style="color:#fff; font-weight:700; background:var(--brand-deep)">MOBILISABLE DÈS MAINTENANT</td><td class="num" style="color:#fff; font-weight:700; background:var(--brand-deep)">14 500 €</td></tr>
+        <tr><td><b>Potentiel</b></td><td>Vous, gérante TNS — sous réserve d'attestation CFP à demander à votre comptable</td><td>3 000 € / TNS</td><td class="num">+ 3 000 €</td></tr>
+      </tbody>
+    </table>
+    <div class="grid3" style="margin-top:4mm">
+      <div class="tile"><div class="lbl">Consommation 24 mois</div><div class="display">≈ 4 %</div><p>1 seule formation suivie (Tracfin, 2 salariées). Vos droits dorment — et l'enveloppe annuelle non consommée est <b>perdue au 31 décembre</b>.</p></div>
+      <div class="tile"><div class="lbl">Indemnisation agents</div><div class="display">700-800 €</div><p>Perçue en plus par chaque agent commercial formé (indemnité AGEFICE pour perte d'exploitation) — un argument pour embarquer l'équipe.</p></div>
+      <div class="tile"><div class="lbl">Obligation ALUR</div><div class="display">14 h / an</div><p>Les heures de formation valident l'obligation de formation continue des professionnels de l'immobilier (loi ALUR) — carte T et attestations collaborateurs.</p></div>
+    </div>
+    <p class="muted" style="margin-top:2.5mm">Montants estimatifs, sous réserve des droits réellement disponibles et de l'acceptation des dossiers par les financeurs. Une projection fondée sur l'année en cours n'est jamais un droit acquis. AGEFICE (indépendants) et OPCO EP (salariés) restent deux dossiers administratifs distincts — montés intégralement par Start Academy : vous ne remplissez rien, vous n'avancez rien.</p>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no"></span> Ce que ça change, concrètement</h2>
+    <p class="lecture">Avec la règle Start Academy (demi-journée de 4 h co-animée par 2 formateurs = 8 h conventionnées = 336 € par participant,
+    intégralement couverte AGEFICE pour un agent éligible), vos 14 500 € mobilisables financent un <b>vrai parcours d'équipe sur un
+    trimestre</b> — pas une journée isolée. Le dimensionnement exact, ligne par ligne et payeur par payeur, est dans la proposition jointe.</p>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>Audit de performance — Agence du Baou · DIAG-0042</span><span>17 / 17</span></div>
+</section>
+
+</body>
+</html>
