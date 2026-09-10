@@ -10,6 +10,7 @@ import {
   Settings,
   FileText,
   Receipt,
+  PenLine,
 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -22,11 +23,15 @@ import { OfAssetsForm } from '@/components/settings/of-assets-form';
 import { OfInvoicingForm } from '@/components/settings/of-invoicing-form';
 import { OfBankingForm } from '@/components/settings/of-banking-form';
 import { OfEmailForm } from '@/components/settings/of-email-form';
+import { OfSignatoryForm } from '@/components/settings/of-signatory-form';
 import { InvoiceSettingsForm } from '@/components/parametres/invoice-settings-form';
 import { LegalDocsForm } from '@/components/parametres/legal-docs-form';
 import { EmailSettingsForm } from '@/components/parametres/email-settings-form';
 import { EMAIL_CATEGORY_LABELS, EMAIL_CATEGORY_FIELD } from '@/lib/email-policy';
 import { formatIban } from '@/lib/iban-format';
+import { loadOfConfig } from '@/lib/of-config';
+import { getSignatureProviderStatus } from '@/lib/signature/provider';
+import { resolveTenantSignatory } from '@/lib/signature/signatory';
 
 const ICON_CLASS = 'h-5 w-5 mt-0.5 text-primary shrink-0';
 
@@ -105,6 +110,11 @@ export default async function ParametresPage() {
     .filter(([, field]) => emailSettingsInitial[field])
     .map(([category]) => EMAIL_CATEGORY_LABELS[category as keyof typeof EMAIL_CATEGORY_LABELS]);
 
+  // Spec signature 2026-09-04 D-1 — signataire OF résolu (BDD puis fallback
+  // ENV OF_RESP_*) + état de la configuration du prestataire de signature.
+  const ofConfig = await loadOfConfig(user.tenantId);
+  const signatureStatus = getSignatureProviderStatus();
+
   const opcos = await prisma.opcoCatalog.findMany({ orderBy: { name: 'asc' } });
   const docCatalog = await prisma.qualiopiDocCatalog.findMany({
     orderBy: { phase: 'asc' },
@@ -132,6 +142,10 @@ export default async function ParametresPage() {
   } | null;
 
   const invoicePrefix = tenant.invoicePrefix ?? 'FAC';
+
+  // D-1 — ce que verra réellement le lot C au moment d'envoyer : le signataire
+  // saisi ici, ou le responsable OF à défaut, ou un refus nominatif.
+  const signatory = resolveTenantSignatory(tenant, ofConfig);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -453,6 +467,57 @@ export default async function ParametresPage() {
           }
           editView={<OfEmailForm
               initial={{ emailFrom: tenant.emailFrom }}
+            />}
+        />
+
+        {/* ─── 7. Signataire (spec signature 2026-09-04, D-1) ─────────── */}
+        <SettingsSection
+          icon={<PenLine className={ICON_CLASS} aria-hidden="true" />}
+          title="Signataire de l'organisme"
+          description="Qui signe les conventions, dossiers AGEFICE et attestations d'assiduité"
+          readView={
+            <dl className="space-y-3">
+              <Field
+                label="Signataire"
+                value={
+                  signatory.ok
+                    ? `${signatory.signatory.name}${signatory.signatory.title ? `, ${signatory.signatory.title}` : ''}`
+                    : null
+                }
+              />
+              <Field
+                label="Email de signature"
+                value={signatory.ok ? signatory.signatory.email : null}
+              />
+              <Field
+                label="Ordre"
+                value={
+                  signatory.ok && signatory.signatory.order === 'BEFORE'
+                    ? "L'organisme signe avant le client"
+                    : "L'organisme signe après le client"
+                }
+              />
+              {!signatory.ok && (
+                <p className="text-[11px] text-red-600">{signatory.error}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Signature électronique :{' '}
+                {signatureStatus.available
+                  ? `active (${signatureStatus.provider})`
+                  : 'indisponible'}
+                {signatureStatus.reason ? ` — ${signatureStatus.reason}` : ''}
+              </p>
+            </dl>
+          }
+          editView={<OfSignatoryForm
+              initial={{
+                signatoryName: tenant.signatoryName,
+                signatoryEmail: tenant.signatoryEmail,
+                signatoryTitle: tenant.signatoryTitle,
+                signatoryOrder: tenant.signatoryOrder,
+              }}
+              fallbackName={ofConfig.resp.nom ? `${ofConfig.resp.prenom} ${ofConfig.resp.nom}` : ''}
+              fallbackEmail={ofConfig.resp.email}
             />}
         />
 

@@ -80,6 +80,9 @@ secrets/
 # balayée par un `git add -A` le 01/09/2026 : plus jamais.
 apps/web/src/app/app/**/*.pdf
 
+# Sorties de playwright-mcp (captures, snapshots, fichiers de test)
+.playwright-mcp/
+
 # Doublons de synchronisation iCloud Drive. iCloud renomme « foo.ts » en
 # « foo 2.ts » quand il croit voir deux versions d'un même fichier ; le dépôt en
 # a accumulé 250, jusque dans src/ et les tests.
@@ -93,3 +96,10 @@ apps/web/src/app/app/**/*.pdf
 # positif. Si un jour un nom légitime en porte un, l'exclure avec « ! ».
 * [2-9].*
 * [2-9]
+
+# Skills d'agent installées localement (npx skills add ...). Ce sont des docs
+# fournisseur, pas du code du produit : elles gonflaient une PR de 78 fichiers
+# et main n'en suivait aucune. Réinstallation documentée dans
+# .claude/commands/signature.md.
+.agents/skills/
+skills-lock.json

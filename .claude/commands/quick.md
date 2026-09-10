@@ -47,33 +47,45 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 - [ ] Email : passer `context: { tenantId, category, sessionId? }` au mailer
       (le type l'exige, c'est le filet exhaustivité tsc)
 
-### Migrations
+## 4. Migrations
 
-**`prisma db push` est INTERDIT — sur toutes les bases, y compris `qualiof_test`
-en CI. Une évolution de schéma passe par `prisma migrate dev`, point.**
-(Décision Laurent, 10/09/2026.)
+**`prisma db push` est INTERDIT** — sur `qualiof_test` comme sur n'importe quelle
+base (règle Laurent, 2026-09-10). Une seule voie :
 
-Pourquoi cette interdiction, et pas seulement « en prod » : `db push` aligne une
-base sur le schéma **sans écrire de migration**. La base obtenue est donc juste,
-et l'historique de migrations, lui, ne l'est plus — il peut manquer un objet
-sans que rien ne le signale. Une CI qui vérifie sur une base poussée par
-`db push` valide le schéma contre lui-même : elle ne peut structurellement pas
-voir l'écart. C'est ainsi que l'index GIN `AgeficePointAccueil.departmentsServed`
-a vécu deux jours en base sans exister au schéma (constat du 10/09) — le premier
-`migrate dev` venu l'aurait supprimé en silence.
+```
+pnpm --filter @qualiof/db exec prisma migrate dev --name <slug>   # créer
+pnpm --filter @qualiof/db exec prisma migrate deploy              # appliquer
+```
 
-- Nouvelle migration : `pnpm --filter @qualiof/db run db:migrate:local`
-  (`migrate dev` sur `.env.local`). Nom explicite, migration **additive**.
-- Environnement non interactif (agent, CI) où `migrate dev` refuse de tourner :
-  générer le SQL avec `prisma migrate diff --from-migrations
-  --to-schema-datamodel --script`, écrire le dossier de migration à la main,
-  puis `migrate deploy`. Jamais `db push` comme raccourci.
-- Prod : `prisma migrate deploy`, **jamais** `db push`, jamais `migrate dev`.
-- Avant de livrer : `pnpm --filter @qualiof/db run check:schema` doit être vert
-  (base jetable, migrations rejouées pour de vrai, diff VIDE). Ce garde tourne
-  aussi en CI — s'il rougit, c'est le schéma ou la migration qui ment, pas lui.
+Pourquoi : `db push` écrit le schéma dans la base **sans laisser de migration**.
+L'historique et la base divergent alors en silence, et la production ne reçoit
+jamais le changement — le déploiement rejoue `migrations/`, pas le schéma. On ne
+s'en aperçoit qu'au premier `P2022` en prod, sur une colonne qui n'existe que sur
+la machine où le `db push` a été lancé.
 
-## 4. Gates — les trois, dans cet ordre
+L'inverse existe aussi, et il est plus sournois : une migration peut créer un
+objet que le schéma ne déclare pas. Rien ne le signale — la base est juste,
+l'appli marche, les tests passent — et le premier `migrate dev` venu génère un
+`DROP`. C'est arrivé à l'index GIN `AgeficePointAccueil.departmentsServed`, resté
+deux jours ainsi (constat du 10/09).
+
+Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune base
+(il ne fait que régénérer le client TypeScript).
+
+Toute migration créée doit être appliquée (`migrate deploy`) avant d'écrire dans
+la base depuis une branche en avance — sinon l'`INSERT` part avec les défauts
+d'enum de la base, pas ceux du schéma.
+
+**Environnement non interactif** (agent, CI), où `migrate dev` refuse de tourner :
+générer le SQL avec `prisma migrate diff --from-migrations --to-schema-datamodel
+--script`, écrire le dossier de migration à la main, puis `migrate deploy`.
+Jamais `db push` comme raccourci.
+
+**Avant de livrer** : `pnpm --filter @qualiof/db run check:schema` doit être vert
+— base jetable, migrations rejouées pour de vrai, diff VIDE. Ce garde tourne
+aussi en CI. S'il rougit, c'est le schéma ou la migration qui ment, pas lui.
+
+## 5. Gates — les trois, dans cet ordre
 
 ```
 pnpm lint
@@ -85,7 +97,7 @@ Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
 
-## 5. Rendre compte
+## 6. Rendre compte
 
 Trois lignes : ce qui change pour l'utilisateur, ce qui a été mis de côté, ce
 qu'il reste à vérifier à la main.

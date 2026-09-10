@@ -8,8 +8,12 @@
  * RESEARCH Q2), sans le drawer :
  *   - CTA « Tout générer » → `dispatchGenerateMissing` (manquants pré-formation)
  *   - une ligne LISIBLE par doc/stagiaire (CONVENTION · CONVOCATION · AGEFICE ·
- *     ANALYSE_BESOIN · ASSIDUITE_AGEFICE) → `dispatchGenerateDoc({ docType, participantId })`.
+ *     ANALYSE_BESOIN) → `dispatchGenerateDoc({ docType, participantId })`.
  *     « Régénérer » = même action avec `force: true`.
+ *
+ * L'attestation d'assiduité AGEFICE a quitté cet onglet le 2026-09-10 : elle
+ * est classée « après la formation » (`doc-phase.ts`) et l'onglet Après la
+ * porte désormais entièrement — affichage, génération et archive.
  *
  * Le MOTEUR (server actions) est CONSERVÉ ; on ne déplace que l'UI.
  *
@@ -33,6 +37,11 @@ import {
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { LearnerPhaseActions } from '../learner-phase-actions';
 import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
+import {
+  SignedDocDropZone,
+  type DropZoneParticipant,
+} from '../qualiopi-matrix/signed-doc-drop-zone';
+import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
 
 interface Props {
   sessionId: string;
@@ -40,17 +49,54 @@ interface Props {
   items: DocDockItem[];
   /** RBAC : ADMIN/MANAGER/COMMERCIAL peuvent générer. */
   canGenerate: boolean;
+  /**
+   * Lot A signature (spec 2026-09-04 §5 A) — stagiaires, pour la zone de dépôt
+   * repliée : un doc pré-formation signé à la main (convention rendue papier,
+   * AGEFICE signé au stylo) revient ici en attendant la signature électronique
+   * (lot C).
+   */
+  dropZoneParticipants?: DropZoneParticipant[];
+  /**
+   * Ce que l'archive `?phase=avant` contiendra, apprenant par apprenant —
+   * dérivé de la table des phases, comme la route ZIP.
+   *
+   * Pourquoi ce n'est PAS `items` : les deux listes ne racontent pas la même
+   * chose. `items` porte les lignes à générer (une action par document) ;
+   * celle-ci porte les pièces à empaqueter, programme de formation compris —
+   * il est affiché une seule fois en haut de l'onglet, mais il part dans le
+   * dossier de CHAQUE apprenant, parce que l'OPCO le demande annexé.
+   */
+  avantGroups?: PhaseParticipantGroup[];
 }
+
+/** Docs pré-formation qui peuvent revenir signés à la main. */
+const AVANT_SIGNABLE_DOC_TYPES = [
+  { value: 'CONVENTION', label: 'Convention' },
+  { value: 'AGEFICE', label: 'Dossier AGEFICE' },
+  { value: 'CONVOCATION', label: 'Convocation' },
+];
 
 /** Ordre d'affichage des docs partagés produit/session en haut. */
 const SHARED_ORDER: string[] = ['PROGRAMME', 'DEROULE', 'CHECKLIST'];
 
-export function TabAvant({ sessionId, items, canGenerate }: Props) {
+export function TabAvant({
+  sessionId,
+  items,
+  canGenerate,
+  dropZoneParticipants,
+  avantGroups = [],
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
 
   const completion = docCompletion(items);
+
+  // Ce que le bouton « Télécharger » livrera, apprenant par apprenant. Indexé
+  // ici plutôt que recompté : la table des phases est l'autorité, l'onglet ne
+  // fait que la lire (c'est l'écart entre les deux qui a fait manquer
+  // l'attestation d'assiduité dans l'archive — bug remonté le 2026-09-10).
+  const archiveDeLaPhase = new Map(avantGroups.map((g) => [g.participantId, g]));
 
   // Partagés (produit/session) puis docs par stagiaire, regroupés par apprenant.
   const sharedItems = items
@@ -159,7 +205,7 @@ export function TabAvant({ sessionId, items, canGenerate }: Props) {
           <div>
             <h2 className="font-semibold text-base">Documents avant la formation</h2>
             <p className="text-sm text-muted-foreground">
-              Convention · Convocation · AGEFICE · Analyse de besoins · Assiduité AGEFICE
+              Convention · Convocation · AGEFICE · Analyse de besoins
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -215,7 +261,14 @@ export function TabAvant({ sessionId, items, canGenerate }: Props) {
                 participantId={group.participantId}
                 participantName={group.name}
                 phase="avant"
-                readyCount={group.items.filter((it) => it.state === 'generated').length}
+                readyCount={
+                  archiveDeLaPhase.get(group.participantId)?.readyCount ??
+                  group.items.filter((it) => it.state === 'generated').length
+                }
+                readyLabels={archiveDeLaPhase
+                  .get(group.participantId)
+                  ?.items.filter((it) => it.state === 'generated')
+                  .map((it) => it.label)}
                 missingCount={group.items.filter((it) => it.state === 'missing').length}
                 canGenerate={canGenerate}
                 onGenerateAll={() => handleGenerateAll(group.items)}
@@ -236,6 +289,20 @@ export function TabAvant({ sessionId, items, canGenerate }: Props) {
           ))}
         </DocLineSection>
       ))}
+
+      {/* Lot A signature — dépôt d'un doc pré-formation signé à la main.
+          Repliée par défaut : le cas courant avant la session reste la
+          génération, pas le dépôt d'un scan. */}
+      {canGenerate && dropZoneParticipants && dropZoneParticipants.length > 0 && (
+        <SignedDocDropZone
+          sessionId={sessionId}
+          docType="CONVENTION"
+          docLabel="documents"
+          participants={dropZoneParticipants}
+          defaultOpen={false}
+          docTypeOptions={AVANT_SIGNABLE_DOC_TYPES}
+        />
+      )}
 
       {items.length === 0 && (
         <p className="text-sm text-muted-foreground italic">

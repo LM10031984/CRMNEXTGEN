@@ -25,11 +25,11 @@ import archiver from 'archiver';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
-import { deriveCellState } from '@/lib/derive-cell-state';
 import { PED_KIND_TO_DOC_TYPE } from '@/lib/doc-scope';
 import { expandGroupConventions } from '@/lib/docs/convention-coverage';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
-import { PARTICIPANT_DOC_TYPES_BY_PHASE, DOC_PHASES, type DocPhase } from '@/lib/docs/doc-phase';
+import { DOC_PHASES, type DocPhase } from '@/lib/docs/doc-phase';
+import { resolveParticipantPhaseDocs } from '@/lib/sessions/participant-phase-items';
 import {
   buildSessionLearnerZipEntries,
   buildSessionLearnerZipFilename,
@@ -192,30 +192,33 @@ export async function buildSessionLearnerZip(
     for (const a of assets) if (!a.participantId && a.kind === 'ANALYSE_BESOIN') prendAsset(a);
   }
 
-  // Résolution : exactement la même fonction que chaque cellule de la matrice.
-  const docTypes = phase
-    ? PARTICIPANT_DOC_TYPES_BY_PHASE[phase]
-    : DOC_PHASES.flatMap((p) => PARTICIPANT_DOC_TYPES_BY_PHASE[p.id]);
-
-  const refs: LearnerDocRef[] = [];
-  for (const docType of docTypes) {
-    const cell = deriveCellState(
-      docType,
-      { docStatus: participant.docStatus as never },
-      participantDocMap,
-      productDocMap,
-      sessionDocMap,
-      assetMap,
-    );
-    if (cell.state !== 'GENERATED' && cell.state !== 'MANUAL_OK') continue;
-    const pdfRef = 'pdfRef' in cell ? cell.pdfRef : undefined;
-    if (!pdfRef) continue;
-    refs.push({
-      docType,
-      kind: pdfRef.kind === 'asset' ? 'asset' : 'document',
-      id: pdfRef.id,
-    });
-  }
+  // Résolution : `resolveParticipantPhaseDocs`, la MÊME fonction que le
+  // compteur du bouton « Télécharger (N) » et que les lignes des blocs
+  // nominatifs. C'est la garantie que le nombre annoncé est le nombre livré —
+  // avant le 2026-09-10, cette action avait sa propre liste et l'attestation
+  // d'assiduité manquait à l'archive sans que rien ne le dise.
+  //
+  // `isAgefice: true` n'est pas un raccourci : l'archive n'a pas à trancher
+  // l'éligibilité d'un inscrit. Une pièce qui EXISTE part avec son dossier ;
+  // une pièce absente n'a de toute façon rien à empaqueter.
+  const phasesAEmpaqueter = phase ? [phase] : DOC_PHASES.map((p) => p.id);
+  const refs: LearnerDocRef[] = phasesAEmpaqueter.flatMap((ph) =>
+    resolveParticipantPhaseDocs({
+      phase: ph,
+      isAgefice: true,
+      docStatus: participant.docStatus as Record<string, unknown> | null,
+      participantDocs: participantDocMap,
+      productDocs: productDocMap,
+      sessionDocs: sessionDocMap,
+      pedagogicalAssets: assetMap,
+    })
+      .filter((d) => d.pdfRef)
+      .map((d) => ({
+        docType: d.docType,
+        kind: (d.pdfRef!.kind === 'asset' ? 'asset' : 'document') as LearnerDocRef['kind'],
+        id: d.pdfRef!.id,
+      })),
+  );
 
   const entries = buildSessionLearnerZipEntries({
     refs,

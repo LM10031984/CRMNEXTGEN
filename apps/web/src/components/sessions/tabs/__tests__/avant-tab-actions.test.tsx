@@ -15,7 +15,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  *  - « Tout générer » → `dispatchGenerateMissing({ sessionId, items })` une fois,
  *    avec les docs pré-formation MANQUANTS.
  *  - chaque docType pré-formation (CONVENTION · CONVOCATION · AGEFICE ·
- *    ANALYSE_BESOIN · ASSIDUITE_AGEFICE) a un bouton « Générer » qui appelle
+ *    ANALYSE_BESOIN) a un bouton « Générer » qui appelle
  *    `dispatchGenerateDoc` avec le BON `docType` (+ participantId par stagiaire).
  *    L'assertion explicite sur `docType` est la branche que le test de
  *    puissance cassera (CONVOCATION→CONVENTION ⇒ rouge).
@@ -26,6 +26,13 @@ const dispatchGenerateMissing = vi.fn(
   async (..._args: unknown[]) => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] }),
 );
 const dispatchGenerateDoc = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
+vi.mock('@/server/actions/qualiopi-matrix', () => ({
+  // Lot A signature — l'onglet embarque `<SignedDocDropZone>`, qui importe la
+  // server action. Sans ce mock, la chaîne @/lib/rbac → @/lib/auth exécute
+  // `cache()` de React, indisponible en jsdom.
+  uploadSignedScans: vi.fn().mockResolvedValue({ ok: true, saved: 0, failures: [] }),
+}));
+
 vi.mock('@/server/actions/dispatch-generate-doc', () => ({
   dispatchGenerateMissing: (...args: unknown[]) => dispatchGenerateMissing(...args),
   dispatchGenerateDoc: (...args: unknown[]) => dispatchGenerateDoc(...args),
@@ -47,9 +54,12 @@ const SESSION_ID = 'sess-1';
 const P1 = 'part-1';
 
 /**
- * Items pré-formation. ASSIDUITE_AGEFICE explicitement présent (RESEARCH note
- * qu'il n'est couvert NI par les 4 cartes session NI par SessionOnlyDocsBlock).
- * Tous `missing` pour pouvoir cliquer « Générer ».
+ * Items pré-formation, tous `missing` pour pouvoir cliquer « Générer ».
+ *
+ * L'attestation d'assiduité AGEFICE n'y figure plus : depuis le 2026-09-10 elle
+ * vit dans l'onglet « Après » (`doc-phase.ts` la classe « après », et la garder
+ * ici faisait mentir le compteur de l'archive « avant »). Sa couverture est
+ * dans `apres-session-docs.test.tsx`.
  */
 const items: DocDockItem[] = [
   {
@@ -88,15 +98,6 @@ const items: DocDockItem[] = [
     section: 'ai',
     state: 'missing',
   },
-  {
-    key: `assiduite-${P1}`,
-    docType: 'ASSIDUITE_AGEFICE',
-    label: 'Assiduité AGEFICE — Jean DUPONT',
-    participantName: 'Jean DUPONT',
-    participantId: P1,
-    section: 'participant',
-    state: 'missing',
-  },
 ];
 
 beforeEach(() => {
@@ -116,31 +117,23 @@ describe('TabAvant — « Tout générer » (dispatchGenerateMissing)', () => {
       items: Array<{ docType: string; participantId?: string }>;
     };
     expect(arg.sessionId).toBe(SESSION_ID);
-    // 5 docs pré-formation manquants → 5 items passés au bulk.
-    expect(arg.items).toHaveLength(5);
+    // 4 docs pré-formation manquants → 4 items passés au bulk.
+    expect(arg.items).toHaveLength(4);
     const docTypes = arg.items.map((i) => i.docType);
     expect(docTypes).toEqual(
-      expect.arrayContaining([
-        'CONVENTION',
-        'CONVOCATION',
-        'AGEFICE',
-        'ANALYSE_BESOIN',
-        'ASSIDUITE_AGEFICE',
-      ]),
+      expect.arrayContaining(['CONVENTION', 'CONVOCATION', 'AGEFICE', 'ANALYSE_BESOIN']),
     );
   });
 });
 
 describe('TabAvant — une ligne par doc/stagiaire (dispatchGenerateDoc)', () => {
-  // Labels désambiguïsés : « AGEFICE » seul matcherait aussi « Assiduité
-  // AGEFICE ». On cible le label complet de chaque doc (rendu dans aria-label
+  // On cible le label complet de chaque doc (rendu dans aria-label
   // « Générer {label} »), ce qui reste un test comportemental sur la ligne.
   const cases: Array<{ docType: string; label: RegExp }> = [
     { docType: 'CONVENTION', label: /générer convention/i },
     { docType: 'CONVOCATION', label: /générer convocation/i },
     { docType: 'AGEFICE', label: /générer demande agefice/i },
     { docType: 'ANALYSE_BESOIN', label: /générer analyse besoin/i },
-    { docType: 'ASSIDUITE_AGEFICE', label: /générer assiduité agefice/i },
   ];
 
   for (const c of cases) {
