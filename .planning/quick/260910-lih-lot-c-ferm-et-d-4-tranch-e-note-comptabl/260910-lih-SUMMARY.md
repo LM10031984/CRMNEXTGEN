@@ -5,7 +5,7 @@
 
 ## Ce qui a été écrit
 
-**`.planning/docs/comptabilite/note-chronologie-factures-2026.md`** — la pièce à produire si
+**`docs/comptabilite/note-chronologie-factures-2026.md`** — la pièce à produire si
 la question est posée. Cinq sections : le constat chiffré (5 ruptures sur 31, tableau nominatif) ;
 la cause unique et datée (rattrapage des 4 et 7/09/2026 — les cinq pièces créées ces jours-là,
 et elles seules) ; ce qui n'est pas en cause (aucun montant, aucune TVA du fait de l'exonération

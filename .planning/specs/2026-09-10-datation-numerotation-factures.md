@@ -62,7 +62,7 @@ Séquence `AVO-` : 0 rupture. 0 pièce sans date, 0 hors format, numérotation c
 
 **Cause unique** : les cinq pièces ont toutes été créées les **4 ou 7 septembre 2026**, et elles seules — le rattrapage de mise en service de l'outil sur des formations réalisées entre février et juin. Ce n'est pas un défaut diffus, c'est un événement daté.
 
-Rapport brut conservé : `.planning/docs/comptabilite/audit-chronologie-2026-09-10.txt`.
+Rapport brut conservé : `docs/comptabilite/audit-chronologie-2026-09-10.txt`.
 
 ## 6. ~~La question pour Lagean~~ — NON POSÉE, décision prise en interne
 
@@ -73,7 +73,7 @@ numérotation continue. Rien à arbitrer par un tiers.
 Ce qui remplace la question : une **note opposable**, écrite et classée, qu'on produit si
 quelqu'un — expert-comptable, administration, auditeur Qualiopi — pose la question un jour.
 
-> `.planning/docs/comptabilite/note-chronologie-factures-2026.md`
+> `docs/comptabilite/note-chronologie-factures-2026.md`
 > (le constat, la cause, ce qui n'est pas en cause, la règle corrigée, et pourquoi le passé
 > n'est pas réécrit) + `audit-chronologie-2026-09-10.txt` en pièce jointe.
 
@@ -86,8 +86,8 @@ enjeu financier. Le remède serait pire que le mal. Jamais d'`UPDATE`, dans aucu
 | Lot | Contenu | Dépend de |
 |---|---|---|
 | **A — Mesurer** | `scripts/audit-invoice-chronology.ts` (lecture seule) + rapport joint au mail Lagean. Aucun changement de comportement. | rien |
-| **B — Corriger pour l'avenir** | `resolveInvoiceIssueDate` renvoie `now` ; la période de formation passe dans `InvoiceLine.label` (et dans le bloc session du gabarit) ; test d'invariante chronologique ; alerte douce UI ; commentaire d'en-tête de `invoice-dates.ts` réécrit (la décision du 13/08 est révisée, pas oubliée — dire pourquoi). | Lot A + lot 1 mergé (les lignes existent) |
-| ~~**C — Historique**~~ | **FERMÉ le 10/09/2026 par Laurent, sans passer par l'expert-comptable — pas reporté, fermé.** Aucune réécriture des 5 pièces en rupture. Motif : rien à corriger au fond (montants exacts, TVA non concernée par l'exonération 261-4-4°, même exercice, numérotation continue, chaque date portée correspond à une prestation réellement exécutée). La régularisation coûterait 10 pièces comptables — 5 avoirs + 5 refacturations — pour déplacer une date sans enjeu financier. Trace : `.planning/docs/comptabilite/note-chronologie-factures-2026.md` + son inventaire joint. | — |
+| **B — Corriger pour l'avenir** | `resolveInvoiceIssueDate` renvoie `now` ; la période de formation passe dans `InvoiceLine.label` (et dans le bloc session du gabarit) ; test d'invariante chronologique ; alerte douce UI ; commentaire d'en-tête de `invoice-dates.ts` réécrit (la décision du 13/08 est révisée, pas oubliée — dire pourquoi) ; **et mettre à jour l'encadré de statut de la note comptable** `docs/comptabilite/note-chronologie-factures-2026.md` §4 une fois le lot B **déployé** — la note dit aujourd'hui que la correction est planifiée et non déployée. Tant que ce n'est pas fait, la pièce qu'on produit à un tiers dit le contraire du réel. ⚠ « Déployé » = mergé sur `main` et parti en production, pas « commité sur une branche ». | Lot A + lot 1 mergé (les lignes existent) |
+| ~~**C — Historique**~~ | **FERMÉ le 10/09/2026 par Laurent, sans passer par l'expert-comptable — pas reporté, fermé.** Aucune réécriture des 5 pièces en rupture. Motif : rien à corriger au fond (montants exacts, TVA non concernée par l'exonération 261-4-4°, même exercice, numérotation continue, chaque date portée correspond à une prestation réellement exécutée). La régularisation coûterait 10 pièces comptables — 5 avoirs + 5 refacturations — pour déplacer une date sans enjeu financier. Trace : `docs/comptabilite/note-chronologie-factures-2026.md` + son inventaire joint. | — |
 
 Gates habituelles (`/quick`, `/livraison`). Le lot B touche le gabarit de facture : regarder un PDF produit, pas seulement les tests.
 
@@ -99,7 +99,7 @@ tient en une phrase — il n'y a rien à corriger au fond, et la seule voie lég
 (avoir + refacturation, le code de commerce interdisant de modifier une pièce émise) créerait
 dix pièces pour déplacer une date sans enjeu de montant ni de TVA.
 
-La trace opposable est écrite : `.planning/docs/comptabilite/note-chronologie-factures-2026.md`,
+La trace opposable est écrite : `docs/comptabilite/note-chronologie-factures-2026.md`,
 avec l'inventaire du 10/09/2026 en pièce jointe. C'est elle qu'on produit si la question est posée.
 
 **Plus aucune décision ouverte sur cette spec.** Reste le lot B à livrer.

@@ -227,11 +227,15 @@ Un lot = une PR, `/livraison` avant chaque commit, `pnpm test` vert (les 1 332 t
 
 | # | Question | Défaut proposé |
 |---|---|---|
-| D-1 | Confirmer Super PDP après lecture de la doc et création du compte (lot 0). Si l'API réelle est trop pauvre (pas de statuts, pas de webhook), basculer Iopole et demander un devis. | Super PDP |
+| ~~D-1~~ | ~~Confirmer Super PDP après lecture de la doc ?~~ **TRANCHÉE le 03/09/2026 : Super PDP confirmé**, après lecture de la documentation de l'API — relevé dans `docs/einvoice-superpdp.md`. L'API porte ce qu'il faut (statuts de cycle de vie, webhook, `POST /validation_reports` avant `POST /invoices`) : pas de bascule Iopole, pas de devis à demander. | Laurent, 03/09/2026 |
 | ~~D-2~~ | ~~Code VATEX à utiliser pour l'art. 261-4-4°a ?~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** catégorie **E** + texte + code **`VATEX-EU-132-1I`** (261-4-4°a CGI = transposition de l'art. 132-1-i directive TVA). BR-E-10 n'exige que l'un des deux, on met les deux. Repli si le validateur refuse le code au lot 2 : texte seul. | Laurent, 10/09/2026 |
 | ~~D-3~~ | ~~Y a-t-il des prestations **non exonérées** ?~~ **TRANCHÉE le 04/09/2026 : tout est exonéré.** L'émission reste une conformité anticipée, pas une obligation au 01/09/2027 ; le lot 3 ne devient pas prioritaire pour raison réglementaire. | Laurent, 04/09/2026 |
 | ~~D-4~~ | ~~Représentation EN 16931 d'un financeur en subrogation (`PayeeParty` ?)~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** **buyer = le client** ; le financeur (AGEFICE) figure **dans les conditions de règlement** (BT-20), **jamais en `PayeeParty`** — BG-10 ne désigne qu'un bénéficiaire différent du vendeur (affacturage), or ici l'argent va à Start Academy. **Le payee reste Start Academy**, le champ reste absent. Règle détaillée en §5.7, à appliquer au lot 2. | Laurent, 10/09/2026 |
-| D-5 | Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 (cascade de tarif) ? | Après — sinon on transmet des montants faux à une plateforme d'État |
+| ~~D-5~~ | ~~Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 ?~~ **SATISFAITE — le lot 0 de l'audit (cascade de tarif) a été fermé avant le lot 1**, qui a été mergé le 10/09/2026 (PR #32). L'ordre voulu a été tenu : on ne transmet pas de montants faux à une plateforme d'État. | Fait, 10/09/2026 |
+
+**Toutes les décisions D-1 à D-5 sont closes au 10/09/2026.**
+
+Le seul point encore ouvert qui engage cette spec n'est pas une décision « D » mais un écart de l'audit produit du 28/08 : **E-9 — `settleInvoiceForParticipant`** (`dossiers-opco.ts`), dont la règle métier ne reverse rien au dé-toggle. **À trancher avant le lot 3** (transmission) : une facture soldée à tort part vers une plateforme d'État avec un statut de règlement faux, et le cycle de vie renvoyé par la PA le contredirait.
 
 ---
 
