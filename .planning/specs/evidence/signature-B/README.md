@@ -8,7 +8,9 @@ Envoi DocuSeal **1619115**, instance **UE** (`api.docuseal.eu`), signé le
 | `1619115-convention-signee.pdf` | Le PDF final est **signé numériquement** : `/Type /Sig`, `/ByteRange[0 95960 135962 7900]`, `/SubFilter /adbe.pkcs7.detached`, `/AcroForm`. Ouvert dans Adobe Reader, le panneau de signature s'affiche et la signature est **valide après mise à jour AATL** (certificat **Netrust**). |
 | `1619115-certificat-de-signature.pdf` | Le certificat (audit log) que les AGEFICE réclament : ID d'enveloppe, SHA-256 du document avant et après signature, horodatage, puis par signataire l'email, l'adresse IP, l'ID de session, le user-agent, le fuseau horaire et l'image de la signature tracée. |
 
-Les deux pièces ont été servies par `docuseal.eu` — l'hébergement UE se lit sur
+| `1620067-dossier-agefice-case-signature.pdf` | Le **dossier AGEFICE** tel qu'il part en signature : formulaire officiel rempli par pdf-lib, page 3, case « Nom prénom et signature du demandeur » portant le nom du stagiaire imprimé et, invisible, l'ancre de signature. Placement validé par Laurent le 10/09/2026 (envoi 1620067). Le champ mesuré côté DocuSeal tombe à x=95, page 3, 180 × 60 pt — la case de l'OF commence à 365 pt, aucun chevauchement. Une seule partie signe : l'image de signature de l'OF est déjà apposée à droite. |
+
+Les deux premières pièces ont été servies par `docuseal.eu` — l'hébergement UE se lit sur
 l'URL de service, le texte du certificat ne citant aucun hôte.
 
 **Réserve de lecture** : sur cet envoi, les deux signatures **débordaient de leur

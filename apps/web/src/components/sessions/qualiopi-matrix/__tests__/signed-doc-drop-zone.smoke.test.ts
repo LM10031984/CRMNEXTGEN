@@ -62,3 +62,56 @@ describe('SignedDocDropZone smoke (lot A)', () => {
     expect(componentSrc).toMatch(/['"]@\/server\/actions\/qualiopi-matrix['"]/);
   });
 });
+
+/**
+ * Complément lot B (Laurent, 10/09/2026) — l'onglet Après ne dépose plus que
+ * des émargements.
+ *
+ * L'attestation d'assiduité se signe majoritairement **en présentiel**, en fin
+ * de session : c'est le cas courant, et il passe par le même geste que
+ * l'émargement — on ramasse les feuilles, on scanne, on dépose. L'envoi en
+ * signature électronique (lot C) restera l'exception, pour le distanciel.
+ *
+ * L'émargement reste le type par défaut : c'est le dépôt le plus fréquent, et
+ * le lot A l'avait câblé ainsi.
+ */
+describe('zone de dépôt — choix du type de document', () => {
+  const apresSrc = readFileSync(
+    path.join(__dirname, '..', '..', 'tabs', 'tab-apres.tsx'),
+    'utf-8',
+  );
+
+  it('l’onglet Après propose émargement ET assiduité', () => {
+    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
+    expect(bloc).toMatch(/docTypeOptions=/);
+    expect(bloc).toMatch(/EMARGEMENT/);
+    expect(bloc).toMatch(/ASSIDUITE/);
+  });
+
+  it('l’émargement reste le type par défaut', () => {
+    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
+    expect(bloc).toMatch(/docType="EMARGEMENT"/);
+  });
+
+  it('l’affectation reste participant par participant', () => {
+    // Règle métier n°1 : la fiche est individuelle, jamais un « signé » posé
+    // sur toute la session d'un coup.
+    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
+    expect(bloc).toMatch(/participants=\{dropZoneParticipants\}/);
+  });
+
+  it('les deux types proposés sont réellement acceptés côté serveur', async () => {
+    // Un sélecteur qui propose un type refusé par l'action serait un
+    // cul-de-sac : `persistSignedScan` ne reporterait le PDF signé sur aucun
+    // `Document`, et la cellule resterait muette.
+    const { DOCUMENT_DOC_TYPES } = await import('@/lib/doc-scope');
+    expect(DOCUMENT_DOC_TYPES).toContain('EMARGEMENT');
+    expect(DOCUMENT_DOC_TYPES).toContain('ASSIDUITE');
+  });
+
+  it('l’en-tête suit le type choisi, sinon il mentirait', () => {
+    // Sans ça, l'encadré annonce « Déposer les émargements signés » alors que
+    // l'admin a sélectionné l'attestation d'assiduité.
+    expect(componentSrc).toMatch(/docTypeOptions\?\.find\(/);
+  });
+});

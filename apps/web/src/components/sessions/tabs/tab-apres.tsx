@@ -276,6 +276,15 @@ export function TabApres({
           docType="EMARGEMENT"
           docLabel="émargements"
           participants={dropZoneParticipants}
+          // L'attestation d'assiduité se signe le plus souvent EN PRÉSENTIEL,
+          // en fin de session : même geste que l'émargement — on ramasse, on
+          // scanne, on dépose. L'envoi en signature électronique (lot C) sera
+          // l'exception, pour le distanciel. L'émargement reste le défaut,
+          // c'est le dépôt le plus fréquent.
+          docTypeOptions={[
+            { value: 'EMARGEMENT', label: 'Émargements' },
+            { value: 'ASSIDUITE', label: "Attestations d'assiduité" },
+          ]}
         />
       )}
 

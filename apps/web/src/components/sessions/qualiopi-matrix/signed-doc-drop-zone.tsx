@@ -68,6 +68,11 @@ export function SignedDocDropZone({
   const [splitMode, setSplitMode] = useState(false);
   const [order, setOrder] = useState<string[]>(participants.map((p) => p.id));
   const [selectedDocType, setSelectedDocType] = useState(docType);
+  // L'en-tête doit nommer le document RÉELLEMENT sélectionné : sinon l'encadré
+  // annonce « Déposer les émargements signés » alors que l'admin a choisi
+  // l'attestation d'assiduité.
+  const libelleCourant =
+    docTypeOptions?.find((o) => o.value === selectedDocType)?.label.toLowerCase() ?? docLabel;
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -172,7 +177,7 @@ export function SignedDocDropZone({
       >
         <span className="inline-flex items-center gap-2 text-sm font-semibold">
           <Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Déposer les {docLabel} signés
+          Déposer les {libelleCourant} signés
         </span>
         <ChevronDown
           className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
