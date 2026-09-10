@@ -408,8 +408,6 @@ ${renderOfPagedFooter(of)}
             name: 'Signature client',
             role: SIGNATURE_ROLES.CLIENT,
             type: 'signature',
-            width: 200,
-            height: 60,
           })
         : ''
     }
@@ -427,8 +425,6 @@ ${renderOfPagedFooter(of)}
           name: "Signature organisme de formation",
           role: SIGNATURE_ROLES.OF,
           type: 'signature',
-          width: 200,
-          height: 60,
         });
       }
       // Laurent 2026-06-04 : "ajoute ma signature sur la convention tu l'as déjà".

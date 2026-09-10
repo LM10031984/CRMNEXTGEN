@@ -149,7 +149,12 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    Le champ DocuSeal démarre à l'ancre et s'étend vers le bas : sans place réservée
 >    sous elle, il sort du cadre. Sur une pièce contractuelle destinée à un financeur,
 >    une signature à cheval entre les deux parties est contestable.
->    `renderSignatureAnchor` réserve désormais elle-même la hauteur déclarée.
+>    L'ancre est devenue une **zone dédiée** : 180 × 60 pt, alignée à droite sous
+>    « Date et signature : », marge de 8 pt sur les quatre côtés. Mesuré côté DocuSeal
+>    (envoi 1619503) : champs de 180 × 60 pt, bord droit à 525 pt pour un cadre qui
+>    s'arrête à ~545 pt, et 10 à 14 pt de garde sous chaque champ. Une seule taille de
+>    signature dans tout le corpus documentaire — les 3 gabarits ne portent plus de
+>    dimensions propres.
 
 - Migration §4.1 / §4.2 (`SignatureRequest.provider = "docuseal"`, `providerId` = id de submission DocuSeal).
 - Dépendance : aucune lib DocuSeal obligatoire (REST simple, `fetch`). `packages/shared` : `TenantSignatory` (nom, email, ordre) dans les paramètres tenant — **D-1**.

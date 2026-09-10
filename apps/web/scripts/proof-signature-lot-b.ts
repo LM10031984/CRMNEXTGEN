@@ -17,7 +17,12 @@ import { renderHtmlToPdfWeasy } from '../src/lib/pdf-render';
 import { extractTextFromPdf } from '../src/lib/pdf-extract';
 import { resolveOfConfig } from '../src/lib/of-config';
 import { createDryRunProvider } from '../src/lib/signature/dry-run';
-import { SIGNATURE_ROLES, signatureTag } from '../src/lib/signature/text-tags';
+import {
+  SIGNATURE_ROLES,
+  SIGNATURE_ZONE_HEIGHT_PT,
+  SIGNATURE_ZONE_WIDTH_PT,
+  signatureTag,
+} from '../src/lib/signature/text-tags';
 
 const OUT = process.env.PROOF_OUT ?? '/tmp/preuve-signature-lot-b';
 
@@ -60,19 +65,18 @@ async function main(): Promise<void> {
   writeFileSync(`${OUT}-convention-sans-ancres.pdf`, pdfNormal);
 
   const texte = (await extractTextFromPdf(pdfAncres)).text;
+  const dimensions = { width: SIGNATURE_ZONE_WIDTH_PT, height: SIGNATURE_ZONE_HEIGHT_PT };
   const tagClient = signatureTag({
     name: 'Signature client',
     role: SIGNATURE_ROLES.CLIENT,
     type: 'signature',
-    width: 200,
-    height: 60,
+    ...dimensions,
   });
   const tagOf = signatureTag({
     name: 'Signature organisme de formation',
     role: SIGNATURE_ROLES.OF,
     type: 'signature',
-    width: 200,
-    height: 60,
+    ...dimensions,
   });
 
   // Le texte extrait peut porter des césures d'espaces selon le moteur : on

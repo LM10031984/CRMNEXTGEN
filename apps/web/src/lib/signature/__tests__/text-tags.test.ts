@@ -70,17 +70,17 @@ describe('signatureTag — syntaxe DocuSeal', () => {
   });
 });
 
-describe('renderSignatureAnchor — ancre invisible dans le HTML WeasyPrint', () => {
+describe('renderSignatureAnchor — zone de signature dédiée, invisible', () => {
   const html = renderSignatureAnchor({
     name: 'Signature client',
     role: SIGNATURE_ROLES.CLIENT,
     type: 'signature',
-    width: 200,
-    height: 60,
   });
 
-  it('embarque le tag littéral', () => {
-    expect(html).toContain('{{Signature client;role=Client;type=signature;width=200;height=60}}');
+  it('embarque le tag littéral, dimensionné comme la zone', () => {
+    expect(html).toContain(
+      '{{Signature client;role=Client;type=signature;width=180;height=60}}',
+    );
   });
 
   it('est écrite en blanc (invisible à l’impression comme à l’écran)', () => {
@@ -100,23 +100,54 @@ describe('renderSignatureAnchor — ancre invisible dans le HTML WeasyPrint', ()
    * Constaté sur la première convention réellement signée (envoi EU 1619115,
    * 10/09/2026) : les deux signatures DÉBORDAIENT de leur cadre, celle du
    * client chevauchant la bordure et le libellé du bloc de l'OF. Le champ
-   * DocuSeal démarre à l'ancre et s'étend vers le BAS ; sans place réservée
-   * sous elle, il sort du cadre.
+   * DocuSeal démarre à l'ancre et s'étend vers le bas ET vers la droite ;
+   * posée en bas à gauche du cadre, l'ancre le faisait déborder deux fois.
    *
    * Sur une pièce contractuelle destinée à un financeur, une signature à
-   * cheval entre les deux parties est contestable. L'ancre réserve donc
-   * elle-même la hauteur du champ qu'elle déclare.
+   * cheval entre les deux parties est contestable. L'ancre est donc une ZONE
+   * dédiée : elle occupe elle-même la place du champ, à l'intérieur du cadre.
    */
-  it('réserve sous elle la hauteur du champ qu’elle déclare', () => {
+  it('rend une zone aux dimensions du champ (180 × 60 pt par défaut)', () => {
+    expect(html).toMatch(/width:\s*180pt/);
     expect(html).toMatch(/[^-]height:\s*60pt/);
   });
 
-  it('ne réserve rien quand aucune hauteur n’est déclarée', () => {
-    const sansHauteur = renderSignatureAnchor({
+  it('aligne la zone à droite du cadre', () => {
+    expect(html).toMatch(/margin-left:\s*auto/);
+  });
+
+  it('garde une marge : le dessin ne touche pas la bordure', () => {
+    expect(html).toMatch(/margin-right:\s*\d+pt/);
+    expect(html).toMatch(/margin-top:\s*\d+pt/);
+    expect(html).toMatch(/margin-bottom:\s*\d+pt/);
+  });
+
+  it('sait s’aligner à gauche quand la mise en page l’impose', () => {
+    const gauche = renderSignatureAnchor({
       name: 'Signature',
       role: SIGNATURE_ROLES.CLIENT,
       type: 'signature',
+      align: 'left',
     });
-    expect(sansHauteur).not.toMatch(/[^-]height:\s*\d+pt/);
+    expect(gauche).toMatch(/margin-right:\s*auto/);
+    expect(gauche).not.toMatch(/margin-left:\s*auto/);
+  });
+
+  it('respecte des dimensions explicites', () => {
+    const grand = renderSignatureAnchor({
+      name: 'Signature',
+      role: SIGNATURE_ROLES.OF,
+      type: 'signature',
+      width: 220,
+      height: 80,
+    });
+    expect(grand).toContain('width=220;height=80');
+    expect(grand).toMatch(/width:\s*220pt/);
+    expect(grand).toMatch(/[^-]height:\s*80pt/);
+  });
+
+  it('l’ancre reste en HAUT à gauche de sa zone : le champ s’étend vers le bas et la droite', () => {
+    const zone = html.slice(html.indexOf('>') + 1);
+    expect(zone.trimStart().startsWith('<span')).toBe(true);
   });
 });

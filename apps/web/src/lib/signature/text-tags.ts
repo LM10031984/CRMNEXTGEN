@@ -39,13 +39,33 @@ export interface SignatureTagOptions {
   name: string;
   role: string;
   type: SignatureTagType;
-  /** Largeur du champ en pixels — sinon DocuSeal prend celle du texte rendu. */
+  /** Largeur du champ — sinon DocuSeal prend celle du texte rendu. */
   width?: number;
-  /** Hauteur du champ en pixels. */
+  /** Hauteur du champ. */
   height?: number;
   /** Champ obligatoire par défaut côté DocuSeal. */
   required?: boolean;
 }
+
+/** Options de rendu de la zone qui accueille l'ancre. */
+export interface SignatureAnchorOptions extends SignatureTagOptions {
+  /** Côté du cadre où coller la zone. Défaut : droite. */
+  align?: 'left' | 'right';
+  /** Marge autour de la zone, en points. Défaut : 8. */
+  margin?: number;
+}
+
+/**
+ * Dimensions par défaut de la zone de signature, en points PDF.
+ *
+ * 180 × 60 pt ≈ 63 × 21 mm : de quoi accueillir un paraphe tracé à la souris
+ * ou au doigt sans qu'il déborde, tout en tenant dans un cadre de convention.
+ * Les unités `width`/`height` des text tags DocuSeal se comportent comme des
+ * points PDF (mesuré sur l'envoi 1619115), d'où l'égalité entre la taille
+ * déclarée au prestataire et la place réservée dans le gabarit.
+ */
+export const SIGNATURE_ZONE_WIDTH_PT = 180;
+export const SIGNATURE_ZONE_HEIGHT_PT = 60;
 
 /** `;` `{` `}` `=` cassent la grammaire du tag — mieux vaut échouer bruyamment. */
 const CARACTERES_INTERDITS = /[;{}=]/;
@@ -81,28 +101,37 @@ export function signatureTag(opts: SignatureTagOptions): string {
  * Le texte est bien présent dans le PDF (donc extractible par DocuSeal), mais
  * blanc, minuscule et insécable — invisible à l'écran comme à l'impression.
  */
-export function renderSignatureAnchor(opts: SignatureTagOptions): string {
-  const tag = signatureTag(opts);
-  const ancre =
-    '<span aria-hidden="true" style="color: #FFFFFF; font-size: 4pt; line-height: 1;' +
-    ' white-space: nowrap; letter-spacing: 0; user-select: none;">' +
-    tag +
-    '</span>';
+export function renderSignatureAnchor(opts: SignatureAnchorOptions): string {
+  const width = opts.width ?? SIGNATURE_ZONE_WIDTH_PT;
+  const height = opts.height ?? SIGNATURE_ZONE_HEIGHT_PT;
+  const align = opts.align ?? 'right';
+  const margin = opts.margin ?? 8;
 
-  // Le champ démarre à l'ancre et s'étend vers le BAS. Sans place réservée
-  // sous elle, la signature déborde du cadre : constaté sur la première
-  // convention réellement signée (envoi EU 1619115, 10/09/2026), où la
-  // signature du client chevauchait la bordure et le libellé du bloc de l'OF.
-  // Sur une pièce contractuelle destinée à un financeur, une signature à
-  // cheval entre les deux parties est contestable.
+  const tag = signatureTag({ ...opts, width, height });
+
+  // Une ZONE, pas un simple texte. Le champ DocuSeal démarre à l'ancre et
+  // s'étend vers le bas ET vers la droite : posée en bas à gauche du cadre,
+  // l'ancre le faisait déborder deux fois (constaté sur l'envoi EU 1619115,
+  // signé le 10/09/2026 — la signature du client chevauchait la bordure et le
+  // libellé du bloc de l'OF). La zone occupe donc elle-même la place du champ,
+  // à l'intérieur du cadre, avec une marge pour que le tracé ne touche jamais
+  // la bordure.
   //
-  // `height` est déclarée en unités DocuSeal, qui se comportent comme des
-  // points PDF (champ de 60 → 60 pt ≈ 21 mm, mesuré sur l'envoi 1619115) :
-  // on réserve donc la même valeur en `pt`.
-  const reserve =
-    opts.height === undefined
-      ? ''
-      : `<div aria-hidden="true" style="height: ${opts.height}pt;"></div>`;
+  // L'ancre est le PREMIER contenu de la zone, donc en haut à gauche : le
+  // champ se déploie exactement sur la zone réservée.
+  const marges =
+    align === 'right'
+      ? `margin-left: auto; margin-right: ${margin}pt;`
+      : `margin-right: auto; margin-left: ${margin}pt;`;
 
-  return ancre + reserve;
+  return (
+    `<div aria-hidden="true" style="width: ${width}pt; height: ${height}pt;` +
+    ` ${marges} margin-top: ${margin}pt; margin-bottom: ${margin}pt;` +
+    ' overflow: hidden;">' +
+    '<span style="color: #FFFFFF; font-size: 4pt; line-height: 1;' +
+    ' white-space: nowrap; letter-spacing: 0;">' +
+    tag +
+    '</span>' +
+    '</div>'
+  );
 }

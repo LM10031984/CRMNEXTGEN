@@ -385,8 +385,6 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
                   name: "Signature organisme de formation",
                   role: SIGNATURE_ROLES.OF,
                   type: 'signature',
-                  width: 180,
-                  height: 55,
                 })
               : ''
           }
@@ -401,8 +399,6 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
                 name: 'Signature stagiaire',
                 role: SIGNATURE_ROLES.STAGIAIRE,
                 type: 'signature',
-                width: 180,
-                height: 55,
               })
             : ''
         }</div>
