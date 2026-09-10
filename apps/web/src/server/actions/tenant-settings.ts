@@ -37,6 +37,8 @@ import {
   tenantBillingSchema,
   tenantEmailSchema,
   tenantLegalDocsSchema,
+  tenantSignatorySchema,
+  type TenantSignatoryInput,
   type TenantIdentityInput,
   type TenantAddressInput,
   type TenantLegalDocsInput,
@@ -258,6 +260,69 @@ export async function updateTenantLegalDocs(input: TenantLegalDocsInput): Promis
         reglementInterieurMarkdown: parsed.data.reglementInterieurMarkdown ?? null,
       },
       select: { cgvMarkdown: true, reglementInterieurMarkdown: true },
+    });
+
+    await logTenantSettingsChange({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'parameters.update',
+      diff: computeDiff(before as Record<string, unknown>, after as Record<string, unknown>),
+    });
+
+    revalidatePath('/app/parametres');
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+}
+
+// ─── 6. Signature électronique — signataire OF (spec 2026-09-04, D-1) ───
+/**
+ * Le signataire OF des conventions, dossiers AGEFICE et attestations
+ * d'assiduité (§3 : « toujours le même, configuré une fois »).
+ *
+ * Champs vides = retour au fallback ENV `OF_RESP_*` — c'est pour cela qu'on
+ * stocke `null` plutôt que la chaîne vide, comme `updateTenantEmail`. La
+ * résolution finale vit dans `lib/signature/signatory.ts`, qui refuse un
+ * signataire sans nom ou sans email plutôt que de deviner (règle métier n°4).
+ */
+export async function updateTenantSignatory(
+  input: TenantSignatoryInput,
+): Promise<ActionResult> {
+  try {
+    const user = await requireRole(['ADMIN']);
+
+    const parsed = tenantSignatorySchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: 'Validation échouée',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const select = {
+      signatoryName: true,
+      signatoryEmail: true,
+      signatoryTitle: true,
+      signatoryOrder: true,
+    } as const;
+
+    const before = await prisma.tenant.findUnique({ where: { id: user.tenantId }, select });
+    if (!before) return { ok: false, error: 'Tenant introuvable' };
+
+    const after = await prisma.tenant.update({
+      where: { id: user.tenantId },
+      data: {
+        signatoryName: parsed.data.signatoryName.trim() || null,
+        signatoryEmail: parsed.data.signatoryEmail.trim() || null,
+        signatoryTitle: parsed.data.signatoryTitle.trim() || null,
+        signatoryOrder: parsed.data.signatoryOrder,
+      },
+      select,
     });
 
     await logTenantSettingsChange({

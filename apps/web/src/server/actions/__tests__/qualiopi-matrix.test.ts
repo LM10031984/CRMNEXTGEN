@@ -38,6 +38,9 @@ vi.mock('@qualiof/db', () => ({
     },
     document: {
       deleteMany: vi.fn(),
+      // Le cœur partagé `persistSignedScan` porte le PDF signé sur le
+      // `Document` existant (spec signature §4.1) quand il y en a un.
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       // Lot 0 · 0.2 — lu par la garde « document engagé ».
       findFirst: vi.fn(),
     },
@@ -322,7 +325,10 @@ describe('uploadSignedDoc', () => {
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
     const uploadArgs = uploadFileMock.mock.calls[0]!;
     expect(uploadArgs[0]).toBe('qualiof-docs');
-    expect(uploadArgs[1]).toMatch(/^signed\//);
+    // Spec signature 2026-09-04 §4.4 — les NOUVEAUX écrits vont sous
+    // `sessions/{tenantId}/{sessionCode}/signed/…` (une session = un préfixe
+    // zippable). L'ancien préfixe `signed/{tenantId}/…` reste lisible.
+    expect(uploadArgs[1]).toMatch(/^sessions\/.+\/signed\//);
     expect(uploadArgs[1]).toContain('SES-0010');
     expect(uploadArgs[1]).toContain(VALID_PARTICIPANT_ID);
     expect(uploadArgs[1]).toContain('CONVENTION');
@@ -330,6 +336,74 @@ describe('uploadSignedDoc', () => {
     expect(executeRaw).toHaveBeenCalledTimes(1);
     expect(logDocumentEventMock).toHaveBeenCalledTimes(1);
     expect(logDocumentEventMock.mock.calls[0]![0].action).toBe('documents.upload_signed');
+  });
+});
+
+// ─── SQL brut : pas de cast ::uuid sur des colonnes TEXT ─────────────────
+
+/**
+ * Régression 04/09/2026 (relevée en montant la preuve du lot A signature).
+ *
+ * `SessionParticipant.id`, `TrainingSession.id` et `tenantId` sont des colonnes
+ * **TEXT** (cf. `0_init/migration.sql`). Les requêtes `jsonb_set` castaient le
+ * paramètre lié en `::uuid` → Postgres répondait
+ * « operator does not exist: text = uuid » et AUCUNE des trois actions
+ * (markDocStatus, uploadSignedDoc, deleteDocument) n'écrivait quoi que ce soit.
+ * Les mocks de `$executeRaw` rendaient le bug invisible : on vérifie donc ici
+ * le SQL lui-même.
+ */
+function rawSqlText(call: unknown): string {
+  const sql = call as { strings?: readonly string[] };
+  return (sql.strings ?? []).join(' ? ');
+}
+
+describe('SQL brut — identifiants TEXT, jamais castés en ::uuid', () => {
+  it('markDocStatus', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+
+    await markDocStatus({
+      participantId: VALID_PARTICIPANT_ID,
+      docType: 'CONVENTION',
+      state: 'MANUAL_OK',
+      markedOkWithoutUpload: true,
+    });
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
+  });
+
+  it('uploadSignedDoc', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+    const fd = makePdfFormData({ mime: 'application/pdf', size: 2048 });
+
+    await uploadSignedDoc(fd);
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
+  });
+
+  it('deleteDocument', async () => {
+    participantFindFirst.mockResolvedValueOnce({
+      id: VALID_PARTICIPANT_ID,
+      sessionId: VALID_SESSION_ID,
+      session: { code: 'SES-0010' },
+      docStatus: null,
+    });
+
+    await deleteDocument({ participantId: VALID_PARTICIPANT_ID, docType: 'CONVENTION' });
+
+    expect(executeRaw).toHaveBeenCalled();
+    expect(rawSqlText(executeRaw.mock.calls[0]![0])).not.toContain('::uuid');
   });
 });
 

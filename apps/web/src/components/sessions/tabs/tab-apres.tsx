@@ -34,6 +34,10 @@ import { generateDerouleForProduct } from '@/server/actions/deroule-product-gene
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
 import { generateSatisfactionSessionForSession } from '@/server/actions/generate-satisfaction-session';
+import {
+  SignedDocDropZone,
+  type DropZoneParticipant,
+} from '../qualiopi-matrix/signed-doc-drop-zone';
 
 type SessionDocKey = 'deroule' | 'grilleObs' | 'checklist' | 'satisfactionSession';
 
@@ -64,6 +68,12 @@ interface Props {
     doneDocs: number;
     errorDocs: number;
   } | null;
+  /**
+   * Lot A signature (spec 2026-09-04 §5 A) — stagiaires de la session, pour la
+   * zone de dépôt des émargements signés. L'émargement est signé à la main en
+   * salle (décision O-3) : le scan revient ici, participant par participant.
+   */
+  dropZoneParticipants?: DropZoneParticipant[];
   /** Slots pré-rendus côté serveur (nœuds React, pas de fonction client). */
   packCta?: React.ReactNode;
   pendantBlock?: React.ReactNode;
@@ -98,6 +108,7 @@ export function TabApres({
   sessionDocs,
   closureItems,
   batch,
+  dropZoneParticipants,
   packCta,
   pendantBlock,
   closureBlock,
@@ -186,6 +197,39 @@ export function TabApres({
     });
   }
 
+  /**
+   * L'attestation d'assiduité AGEFICE, seule, pour un apprenant.
+   *
+   * Elle a son générateur synchrone dédié (`ASSIDUITE_AGEFICE`) : elle ne fait
+   * pas partie du pack de fin de formation, donc « Tout générer » ne suffit pas
+   * à la REgénérer quand elle existe déjà. Ce bouton de ligne remplace celui
+   * qu'elle avait dans l'onglet « Avant », d'où elle vient d'être retirée
+   * (elle y faisait doublon et faussait le compteur de l'archive).
+   */
+  function handleGenerateAssiduite(participantId: string, fullName: string, force: boolean) {
+    setBusyParticipant(participantId);
+    startTransition(async () => {
+      try {
+        const r = await dispatchGenerateDoc({
+          sessionId,
+          docType: 'ASSIDUITE_AGEFICE',
+          participantId,
+          force,
+        });
+        if (r.ok) {
+          toast.success(
+            `${fullName} — attestation d'assiduité ${force ? 'régénérée' : 'générée'}`,
+          );
+          router.refresh();
+        } else {
+          toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+        }
+      } finally {
+        setBusyParticipant(null);
+      }
+    });
+  }
+
   function handleGenerate(key: SessionDocKey, label: string, force = false) {
     if (key === 'deroule') {
       if (!productId) {
@@ -253,7 +297,30 @@ export function TabApres({
         canWrite={canWrite}
         busyParticipant={busyParticipant}
         onGenerateAll={handleGenerateForLearner}
+        onGenerateAssiduite={handleGenerateAssiduite}
       />
+
+      {/* Lot A signature — dépôt des émargements signés à la main (O-3).
+          Le geste doit être visible ici, pas caché dans le menu d'une cellule.
+          Placé sous les lignes par apprenant : c'est le geste de masse qui les
+          complète, une fois les feuilles récupérées en salle. */}
+      {canWrite && dropZoneParticipants && dropZoneParticipants.length > 0 && (
+        <SignedDocDropZone
+          sessionId={sessionId}
+          docType="EMARGEMENT"
+          docLabel="émargements"
+          participants={dropZoneParticipants}
+          // L'attestation d'assiduité se signe le plus souvent EN PRÉSENTIEL,
+          // en fin de session : même geste que l'émargement — on ramasse, on
+          // scanne, on dépose. L'envoi en signature électronique (lot C) sera
+          // l'exception, pour le distanciel. L'émargement reste le défaut,
+          // c'est le dépôt le plus fréquent.
+          docTypeOptions={[
+            { value: 'EMARGEMENT', label: 'Émargements' },
+            { value: 'ASSIDUITE', label: "Attestations d'assiduité" },
+          ]}
+        />
+      )}
 
       {/* 4 docs niveau session — une ligne par doc, câblée sur SA server action. */}
       <section className="rounded-2xl border border-border bg-white p-5">
@@ -336,6 +403,7 @@ function PhaseLearnerBlocks({
   canWrite,
   busyParticipant,
   onGenerateAll,
+  onGenerateAssiduite,
 }: {
   phase: DocPhase;
   groups: PhaseParticipantGroup[];
@@ -343,6 +411,8 @@ function PhaseLearnerBlocks({
   canWrite: boolean;
   busyParticipant: string | null;
   onGenerateAll: (group: PhaseParticipantGroup, phase: DocPhase) => void;
+  /** Générateur dédié de l'attestation d'assiduité AGEFICE (hors pack). */
+  onGenerateAssiduite?: (participantId: string, fullName: string, force: boolean) => void;
 }) {
   if (groups.length === 0) return null;
 
@@ -369,6 +439,9 @@ function PhaseLearnerBlocks({
               participantName={group.fullName}
               phase={phase}
               readyCount={group.readyCount}
+              readyLabels={group.items
+                .filter((it) => it.state === 'generated')
+                .map((it) => it.label)}
               missingCount={group.missingCount}
               canGenerate={canWrite}
               onGenerateAll={() => onGenerateAll(group, phase)}
@@ -410,8 +483,28 @@ function PhaseLearnerBlocks({
                     </a>
                   </div>
                 )}
-                {!item.pdfUrl && (
+                {!item.pdfUrl && !(item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite) && (
                   <span className="text-xs text-muted-foreground shrink-0">À générer</span>
+                )}
+                {item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onGenerateAssiduite(group.participantId, group.fullName, !!item.pdfUrl)
+                    }
+                    disabled={busyParticipant === group.participantId}
+                    aria-label={`${item.pdfUrl ? 'Régénérer' : 'Générer'} l'attestation d'assiduité de ${group.fullName}`}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold shrink-0 transition-colors disabled:opacity-60 disabled:cursor-wait shadow-sm bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    {busyParticipant === group.participantId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : item.pdfUrl ? (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {item.pdfUrl ? 'Régénérer' : 'Générer'}
+                  </button>
                 )}
               </li>
             ))}

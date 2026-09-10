@@ -1211,10 +1211,17 @@ export async function generateProposalQuotes(
 /**
  * Marquer la proposition remise au client.
  *
- * ⚠ L'envoi par email n'est pas branché ici : le mailer est gelé jusqu'au
- * 10/09/2026 (décision Laurent, chantier stand MLS). Cette action enregistre
- * la remise — le commercial transmet le PDF ou le lien par son propre canal,
- * ce que la spec prévoit explicitement (§9.1, « OU par le canal du commercial »).
+ * Cette action enregistre la REMISE, pas un envoi : la proposition se présente
+ * en rendez-vous, c'est là qu'elle se vend (§9.1, « OU par le canal du
+ * commercial »). Le gel du mailer invoqué ici jusqu'au 10/09/2026 est levé,
+ * mais ce n'est pas ce qui manquait : le chemin d'envoi n'a jamais existé.
+ *
+ * ⚠ Le bouton « Envoyer par email » est tranché (**D-21**, 10/09/2026) et
+ * arrive avec le LOT F : déclenché par le commercial et jamais automatique,
+ * derrière une catégorie `TenantEmailSettings` fail-closed de plus, expédiant
+ * le lien de lecture public — jamais une fiche nominative en pièce jointe. Il
+ * appellera cette action pour tracer, afin qu'un envoi et une remise en main
+ * propre laissent la même trace. Les relances automatiques restent au lot H.
  */
 export async function markProposalSent(proposalId: string): Promise<ActionResult> {
   const g = await guard();

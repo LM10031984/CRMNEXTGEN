@@ -61,6 +61,14 @@ model Tenant {
   autoAssignLeads            Boolean           @default(true)
   notifyOnLeadAssignEmail    Boolean           @default(true)
   notifyOnLeadAssignBell     Boolean           @default(true)
+  // Spec signature 2026-09-04 D-1 — signataire OF des conventions / dossiers
+  // AGEFICE / attestations d'assiduité. Nullables : vide = fallback ENV
+  // `OF_RESP_*` via of-config (aucune double saisie).
+  signatoryName              String?
+  signatoryEmail             String?
+  signatoryTitle             String?
+  // D-3 : par défaut l'OF signe APRÈS le client.
+  signatoryOrder             SignatoryOrder    @default(AFTER)
   // ── Facturation électronique (spec 02/09/2026) ───────────────────────
   /// "SUPERPDP" | "IOPOLE" | "MOCK". Null = aucune plateforme raccordée.
   einvoiceProvider           String?
@@ -85,6 +93,12 @@ model Tenant {
   regulatoryWatches          RegulatoryWatch[]
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @default(now()) @updatedAt
+}
+
+/// Spec signature 2026-09-04 D-3 — l'OF signe avant ou après le client.
+enum SignatoryOrder {
+  BEFORE
+  AFTER
 }
 
 enum UserRole {
@@ -524,6 +538,7 @@ model TrainingSession {
   tasks                 Task[]
   comments              InternalComment[]
   calendarSyncs         SessionCalendarSync[]
+  signatureRequests     SignatureRequest[]
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
@@ -1110,6 +1125,9 @@ model Document {
   /// antérieur au 02/09/2026 ou type non couvert → verdict « inconnu », jamais
   /// « à jour ». Cf. `apps/web/src/lib/docs/source-fingerprint.ts`.
   sourceFingerprint String?
+  /// `generated` | `sent_for_signature` | `signed` | `declined` | `expired`.
+  /// Reste une String en v1 (spec signature 2026-09-04 §4.1) : colonne existante,
+  /// aucune reprise — les anciennes lignes gardent "generated".
   status            String              @default("generated")
   sessionId         String?
   session           TrainingSession?    @relation(fields: [sessionId], references: [id])
@@ -1117,8 +1135,75 @@ model Document {
   participant       SessionParticipant? @relation(fields: [participantId], references: [id])
   createdAt         DateTime            @default(now())
 
+  /// Spec signature 2026-09-04 §4.1 — trace du document signé (e-signature OU
+  /// scan manuel). Le PDF signé fait foi : /api/documents/[id] sert
+  /// `signedPdfUrl ?? pdfUrl`.
+  signedPdfUrl  String? // clé bucket du PDF signé (§4.4)
+  signedAt      DateTime?
+  signatureKind SignatureKind?
+
+  /// Spec signature 2026-09-04 §4.2 — lot B. Un envoi porte plusieurs
+  /// documents (D-4 : 1 envoi par organisation = convention + N AGEFICE), donc
+  /// la relation est many-to-one. La spec écrivait `@unique` sur cette colonne
+  /// tout en déclarant `documents Document[]` côté SignatureRequest : les deux
+  /// sont incompatibles, c'est le côté « plusieurs documents » qui porte le besoin.
+  signatureRequestId String?
+  signatureRequest   SignatureRequest? @relation(fields: [signatureRequestId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, signatureRequestId])
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, type])
+}
+
+/// Spec signature 2026-09-04 §4.1.
+/// E_SIGNATURE : retour d'un prestataire (DocuSeal, lot C).
+/// MANUAL_SCAN : scan d'un document signé à la main (émargement — lot A).
+enum SignatureKind {
+  E_SIGNATURE
+  MANUAL_SCAN
+}
+
+/// Spec signature 2026-09-04 §4.2 — une demande de signature envoyée à un
+/// prestataire (DocuSeal en v1, port `SignatureProvider` côté app pour pouvoir
+/// en changer). Un envoi porte 1..N documents et 1..N signataires ordonnés.
+model SignatureRequest {
+  id            String                 @id @default(uuid())
+  tenantId      String
+  /// Nom du provider ayant produit `providerId` — "docuseal" | "dry-run".
+  /// La spec §4.2 écrivait "yousign" : décision O-2 du 04/09, Yousign est écarté.
+  provider      String                 @default("docuseal")
+  /// Identifiant de la submission chez le provider. Clé de corrélation des
+  /// webhooks — unique tous tenants confondus.
+  providerId    String                 @unique
+  status        SignatureRequestStatus @default(DRAFT)
+  sessionId     String
+  session       TrainingSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  documents     Document[]
+  /// [{ role, name, email, providerSignerId, status, signedAt, signUrl }] —
+  /// contrat `signatureSignersSchema` dans @qualiof/shared.
+  signers       Json                   @default("[]")
+  sentAt        DateTime?
+  completedAt   DateTime?
+  expiresAt     DateTime?
+  /// Clé bucket du certificat de signature (audit log du provider). Pièce à
+  /// part entière : les AGEFICE le réclament (règle métier n°3).
+  auditTrailUrl String?
+  lastError     String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([tenantId, sessionId])
+  @@index([tenantId, status])
+}
+
+enum SignatureRequestStatus {
+  DRAFT
+  SENT
+  PARTIALLY_SIGNED
+  DONE
+  DECLINED
+  EXPIRED
+  CANCELED
 }
 
 // =====================================================
@@ -1502,6 +1587,12 @@ model AgeficePointAccueil {
   @@unique([postalCode, name]) // clé naturelle pour upsert idempotent
   @@index([department])
   @@index([city])
+  // L'index GIN existait dans la migration du 08/09 mais PAS ici : le schéma ne
+  // le connaissait donc pas, et le prochain `migrate dev` aurait généré un
+  // `DROP INDEX` silencieux — l'index qui sert la recherche « quels points
+  // couvrent ce département » serait tombé sans que rien ne le dise.
+  // Déclaré le 10/09 ; aucune migration à créer, l'index est déjà en base.
+  @@index([departmentsServed], type: Gin)
 }
 
 enum PedagogicalKind {
