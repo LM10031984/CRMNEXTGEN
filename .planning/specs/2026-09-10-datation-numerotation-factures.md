@@ -91,9 +91,19 @@ enjeu financier. Le remède serait pire que le mal. Jamais d'`UPDATE`, dans aucu
 
 Gates habituelles (`/quick`, `/livraison`). Le lot B touche le gabarit de facture : regarder un PDF produit, pas seulement les tests.
 
-### Checklist de déploiement du lot B
+### Checklist de déploiement du lot B — DÉROULÉE le 10/09/2026
 
-À faire **dans cet ordre**, une fois le lot mergé sur `main` et parti en production :
+Lot mergé sur `main` (PR #40, merge commit `10db4fa`), CI verte, `migrate deploy` sans migration
+en attente, déploiement de production réussi. Checklist déroulée dans la foulée :
+
+| Étape | État |
+|---|---|
+| 1. Facture réelle émise en production portant la date du jour | ⏳ **À faire par Laurent** — émettre une facture consomme un numéro de séquence de façon irréversible sur un vrai client ; ce n'est pas une vérification à prendre seul. |
+| 2. Inventaire relancé | ✅ **5 ruptures sur 32 pièces** — périmètre arrêté |
+| 3. Note comptable figée | ✅ périmètre définitif inscrit, encadré de statut supprimé, rapport joint remplacé |
+| 4. Veille quotidienne vérifiée | ✅ elle nomme les 5 ruptures ; muette une fois qu'elles auront disparu |
+
+Le détail de ce qui était à faire, conservé pour mémoire :
 
 1. **Vérifier qu'une facture émise en production porte la date du jour** (pas la fin de session).
 2. **Relancer l'inventaire** : `pnpm --filter @qualiof/web run invoices:audit-chronology`.

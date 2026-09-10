@@ -7,12 +7,12 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Invariante (spec §4) : number(n) > number(n-1) ⟹ issueDate(n) >= issueDate(n-1)
  Lecture seule — ce script ne modifie rien et ne peut rien modifier.
- Généré le 10 septembre 2026 à 13:56
+ Généré le 10 septembre 2026 à 18:11
 
-◆ Start Academy — 31 pièce(s)
+◆ Start Academy — 32 pièce(s)
 
 ── factures (FAC-) ─────────────────────────────────────────────
-   30 pièce(s) dans la chaîne · 5 rupture(s)
+   31 pièce(s) dans la chaîne · 5 rupture(s)
 
    Numéro       │ Statut     │ Date d'émission │ Date de création │ Antidatée de │ Précédent    │ Émis le    │ Recul / préc.
    ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@
 ━━━ RÉSUMÉ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Séquence                                             │ Examinées   │ Ruptures   │ Sans date   │ Hors format 
   ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Start Academy · factures (FAC-)                      │ 30          │ 5          │ 0           │ 0           
+  Start Academy · factures (FAC-)                      │ 31          │ 5          │ 0           │ 0           
   Start Academy · avoirs (AVO-)                        │ 1           │ 0          │ 0           │ 0           
 
   Pour joindre ce rapport au mail, rediriger la sortie dans un fichier :
@@ -37,5 +37,5 @@
 
   À recopier tel quel dans la question posée à l'expert-comptable (spec §6) :
 
-      5 ruptures sur 31 pièces
+      5 ruptures sur 32 pièces
 
