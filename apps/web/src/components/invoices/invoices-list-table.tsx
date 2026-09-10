@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { InvoiceRow } from '@/server/actions/invoices-list';
+import { SortableTh } from '@/components/ui/sortable-th';
 
 /**
  * Phase 11 Plan 11-08 Task 2 — Table flat avec badges statuts pastilles (D-20).
@@ -9,6 +10,12 @@ import type { InvoiceRow } from '@/server/actions/invoices-list';
  *  - Pastilles statuts (vert PAID / orange PARTIAL / rouge OVERDUE / gris CANCELLED).
  *  - Badge "AVO" inline + lien vers facture originale (D-07 cross-nav).
  *  - overflow-x-auto + -mx-4 sm:mx-0 pour responsive mobile (pattern Phase 3 listings).
+ *
+ * Tri (Laurent 2026-09-10) : Numéro · Date · Payeur · Montant TTC · Statut sont
+ * cliquables (`SortableTh`, état dans l'URL, cycle asc → desc → défaut). Le tri
+ * est fait par Postgres, pas ici : la liste est paginée, classer la page
+ * affichée mentirait dès la deuxième. « Reste » et « Relances » ne le sont pas —
+ * ce sont des valeurs calculées, pas des colonnes SQL.
  *
  * Empty state : "Aucune facture pour cette période" (D-Discretion / RESEARCH).
  * L'empty state "Aucun impayé 🎉" est géré par la page (filtre onlyUnpaid actif).
@@ -62,42 +69,29 @@ export function InvoicesListTable({ rows }: Props) {
       <table className="min-w-full divide-y divide-slate-200">
         <thead className="bg-slate-50">
           <tr>
-            <th
-              scope="col"
-              className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-600"
-            >
+            <SortableTh sortKey="numero" className="px-4 text-left text-slate-600">
               Numéro
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-600"
-            >
+            </SortableTh>
+            <SortableTh sortKey="date" className="px-4 text-left text-slate-600">
               Date
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-600"
-            >
+            </SortableTh>
+            <SortableTh sortKey="payeur" className="px-4 text-left text-slate-600">
               Payeur
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-600"
-            >
+            </SortableTh>
+            <SortableTh sortKey="montant" className="px-4 text-right text-slate-600">
               Montant TTC
-            </th>
+            </SortableTh>
+            {/* « Reste » et « Relances » restent fixes : valeurs calculées, pas
+                des colonnes que Postgres sait classer sans SQL brut. */}
             <th
               scope="col"
               className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-600"
             >
               Reste
             </th>
-            <th
-              scope="col"
-              className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-600"
-            >
+            <SortableTh sortKey="statut" className="px-4 text-left text-slate-600">
               Statut
-            </th>
+            </SortableTh>
             <th
               scope="col"
               className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-600"

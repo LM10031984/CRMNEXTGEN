@@ -23,7 +23,11 @@
  *  - `payerOrgId` exact match
  *  - `onlyUnpaid` override → force statuses = ISSUED+PARTIAL+OVERDUE
  *
- * Tri par défaut (D-Discretion) : `[{ issueDate: 'desc' }, { number: 'desc' }]`.
+ * Tri (2026-09-10) : colonne cliquable portée par l'URL (`?sort=&dir=`), validée
+ * et traduite en `orderBy` Prisma par `lib/invoices/list-sort.ts` — module pur,
+ * testable, et hors de ce fichier `'use server'` qui ne peut exporter que des
+ * fonctions asynchrones. Sans `sort`, le défaut reste la dernière facture émise
+ * en tête.
  *
  * RBAC :
  *  - `validateRequest()` pour scope tenantId multi-tenant.
@@ -35,6 +39,11 @@
 import { prisma } from '@qualiof/db';
 import type { InvoiceStatus } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import {
+  buildInvoicesOrderBy,
+  type InvoiceSortKey,
+  type SortDir,
+} from '@/lib/invoices/list-sort';
 
 export interface InvoicesListFilters {
   statuses?: InvoiceStatus[];
@@ -88,6 +97,9 @@ export async function getInvoicesListData(input: {
   filters: InvoicesListFilters;
   page: number;
   pageSize: number;
+  /** Colonne cliquée. `null`/absent = classement par défaut. */
+  sort?: InvoiceSortKey | null;
+  dir?: SortDir;
 }): Promise<{ kpis: InvoicesListKpis; rows: InvoiceRow[]; total: number }> {
   const { user } = await validateRequest();
   if (!user) {
@@ -169,7 +181,7 @@ export async function getInvoicesListData(input: {
         },
         originalInvoice: { select: { id: true, number: true } },
       },
-      orderBy: [{ issueDate: 'desc' }, { number: 'desc' }],
+      orderBy: buildInvoicesOrderBy(input.sort ?? null, input.dir ?? 'desc') as never,
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),
