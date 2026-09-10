@@ -18,12 +18,23 @@
  * `{ nom, email }` forcerait à élargir cette requête pour un besoin qui n'est
  * pas le sien.
  *
+ * LA CASCADE RÉELLE, celle du code, est courte : `Organization.representative`
+ * s'il est renseigné, sinon le PREMIER CONTACT PRINCIPAL (`isPrimary`, le plus
+ * ancien). `Contact.function` — l'intitulé de poste — n'y joue AUCUN rôle : il
+ * est saisi librement et ne prouve rien.
+ *
  * L'INVARIANT QUI COMPTE. Le NOM ne se résout QUE sur les contacts `isPrimary`.
- * Le moteur d'envoi, lui, charge TOUS les contacts pour trouver une adresse :
- * sans cet invariant, il finirait par désigner comme signataire un contact
- * secondaire que la convention n'imprime pas. Seul l'EMAIL peut venir d'ailleurs,
- * et sa provenance est alors NOMMÉE (`CONTACT_AUTRE`) pour être montrée à
- * l'admin plutôt que masquée.
+ * Le moteur d'envoi, lui, charge TOUS les contacts : sans cet invariant, il
+ * finirait par désigner comme signataire un contact secondaire que la convention
+ * n'imprime pas.
+ *
+ * AUCUN REPLI SUR UN AUTRE CONTACT (décision Laurent, 10/09/2026). L'email du
+ * signataire est celui du représentant résolu, ou rien. Envoyer le lien dans la
+ * boîte de B pour une pièce qui nomme A ferait enregistrer l'email et l'adresse
+ * IP de B dans le certificat de signature : la preuve serait inexploitable
+ * devant un financeur. La SEULE dérogation est une adresse saisie explicitement
+ * par l'admin au moment de l'envoi — décision humaine, jamais implicite, et
+ * journalisée par la server action.
  *
  * Module PUR : ni base, ni réseau, ni horloge. C'est ce qui rend les cas tordus
  * testables en une ligne.
@@ -38,8 +49,14 @@ export type SourceRepresentant =
   | 'APPRENANT_EI_SELF'
   | 'APPRENANT_REPLI';
 
-/** D'où vient l'EMAIL. `CONTACT_AUTRE` = un contact qui n'est pas le représentant nommé. */
-export type SourceEmailRepresentant = 'PERSON' | 'CONTACT_NOMME' | 'CONTACT_AUTRE';
+/**
+ * D'où vient l'EMAIL retenu.
+ * - `PERSON` : la fiche de l'apprenant, quand c'est lui qui signe.
+ * - `CONTACT_NOMME` : le contact qui PORTE le nom du représentant résolu.
+ * - `SAISI_PAR_ADMIN` : une adresse saisie à la main devant le récapitulatif
+ *   d'envoi. C'est la seule dérogation, et elle se journalise.
+ */
+export type SourceEmailRepresentant = 'PERSON' | 'CONTACT_NOMME' | 'SAISI_PAR_ADMIN';
 
 export interface ContactCandidat {
   firstName: string;
@@ -67,7 +84,8 @@ export type ResolutionRepresentant =
   | { ok: false; error: string };
 
 export type ResolutionEmailRepresentant =
-  | { ok: true; email: string; source: SourceEmailRepresentant }
+  /** `nom` est rendu avec l'email pour que l'appelant journalise le COUPLE retenu. */
+  | { ok: true; nom: string; email: string; source: SourceEmailRepresentant }
   | { ok: false; error: string };
 
 /** « Prénom NOM » — la forme que le PDF imprime déjà. */
@@ -103,13 +121,46 @@ function refusRepresentant(org: OrganisationRepresentee): string {
   );
 }
 
-/** Refus de l'EMAIL — même forme nominative : sans adresse, rien ne peut partir. */
-function refusEmail(org: OrganisationRepresentee): string {
+/**
+ * Refus de l'EMAIL côté entreprise — même forme nominative que le refus du nom.
+ * Il nomme la PERSONNE, pas seulement l'organisation, et dit pourquoi on ne se
+ * rabat pas sur un autre contact : c'est la question que l'admin va se poser.
+ */
+function refusEmailRepresentant(nom: string, org: OrganisationRepresentee): string {
   return (
-    `Aucun email de signataire pour « ${org.legalName} » : renseignez l'email du ` +
-    `représentant ou d'un contact sur la fiche entreprise ` +
-    `(/app/organisations/${org.id}). Sans adresse, la demande de signature ne peut partir.`
+    `Aucun email pour « ${nom} », représentant de « ${org.legalName} » : renseignez son ` +
+    `adresse sur la fiche entreprise (/app/organisations/${org.id}), ou saisissez ` +
+    `l'adresse à utiliser au moment de l'envoi. Le lien n'est jamais envoyé à un autre ` +
+    `contact : son email et son adresse IP figureraient dans le certificat de signature, ` +
+    `qui ne prouverait plus rien.`
   );
+}
+
+/** Refus de l'EMAIL quand c'est l'apprenant qui signe : sa fiche, pas l'entreprise. */
+function refusEmailApprenant(nom: string): string {
+  return (
+    `Aucun email pour « ${nom} » : renseignez son adresse sur sa fiche apprenant, ou ` +
+    `saisissez l'adresse à utiliser au moment de l'envoi. Sans adresse, la demande de ` +
+    `signature ne peut pas partir.`
+  );
+}
+
+/** Refus d'une saisie qui n'est pas une adresse — elle partirait vers nulle part. */
+function refusSaisie(nom: string, saisie: string): string {
+  return (
+    `« ${saisie} » n'est pas une adresse email valide (signataire « ${nom} ») : ` +
+    `corrigez-la avant l'envoi.`
+  );
+}
+
+/**
+ * Contrôle MINIMAL de forme. Le module ne prétend pas valider une adresse — il
+ * empêche seulement qu'un nom tapé dans le champ email parte chez le
+ * prestataire, où le dossier n'avancerait jamais sans que personne sache
+ * pourquoi. La validation de saisie complète appartient au schéma Zod de C.2b.
+ */
+function estUneAdresseEmail(valeur: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valeur);
 }
 
 /**
@@ -170,48 +221,55 @@ const SOURCES_APPRENANT: ReadonlySet<SourceRepresentant> = new Set<SourceReprese
 ]);
 
 /**
- * L'adresse à laquelle envoyer la demande de signature, dans le MÊME ordre de
- * priorité que le nom.
+ * L'adresse à laquelle envoyer la demande de signature : celle du REPRÉSENTANT
+ * résolu, ou rien.
  *
  * Appelée par le seul moteur d'envoi : la génération de convention n'en a pas
  * besoin et ne charge donc pas les emails.
  *
- * Aucune adresse résoluble ⇒ refus nominatif. Une demande de signature envoyée
- * « vers nulle part » ne produit pas d'erreur chez le prestataire : elle produit
- * un dossier qui n'avance jamais, et personne ne sait pourquoi.
+ * Aucune adresse résoluble ⇒ refus nominatif. Une demande envoyée « vers nulle
+ * part » ne produit pas d'erreur chez le prestataire : elle produit un dossier
+ * qui n'avance jamais, et personne ne sait pourquoi.
  */
 export function resoudreEmailRepresentant(a: {
   nom: string;
   source: SourceRepresentant;
   org: OrganisationRepresentee;
   apprenant?: Apprenant | null;
+  /**
+   * Adresse saisie par l'admin devant le récapitulatif d'envoi (C.2b). SEULE
+   * dérogation au « pas de repli » : une décision humaine, assumée, et que la
+   * server action journalise avec le nom retenu.
+   */
+  emailSaisi?: string | null;
 }): ResolutionEmailRepresentant {
-  if (SOURCES_APPRENANT.has(a.source)) {
-    const email = texteNonVide(a.apprenant?.email);
-    if (email !== null) return { ok: true, email, source: 'PERSON' };
-    return { ok: false, error: refusEmail(a.org) };
+  // 0) La saisie de l'admin l'emporte sur tout : elle a été faite en connaissance
+  //    de cause, devant le nom du signataire.
+  const saisi = texteNonVide(a.emailSaisi);
+  if (saisi !== null) {
+    if (!estUneAdresseEmail(saisi)) return { ok: false, error: refusSaisie(a.nom, saisi) };
+    return { ok: true, nom: a.nom, email: saisi, source: 'SAISI_PAR_ADMIN' };
   }
 
-  // 1) Le contact qui PORTE le nom du représentant résolu, où qu'il soit dans la
-  //    liste : c'est lui qui signe, son adresse prime sur toutes les autres.
+  // 1) Le signataire EST l'apprenant : son adresse est celle de sa fiche.
+  if (SOURCES_APPRENANT.has(a.source)) {
+    const email = texteNonVide(a.apprenant?.email);
+    if (email !== null) return { ok: true, nom: a.nom, email, source: 'PERSON' };
+    return { ok: false, error: refusEmailApprenant(a.nom) };
+  }
+
+  // 2) Le contact qui PORTE le nom du représentant résolu, où qu'il soit dans la
+  //    liste. Lui seul : pas de repli sur un autre contact, même joignable.
   const clefRepresentant = clefDeNom(a.nom);
   if (clefRepresentant.length > 0) {
     for (const contact of a.org.contacts) {
       const email = texteNonVide(contact.email);
       if (email === null) continue;
       if (clefDeNom(`${contact.firstName} ${contact.lastName}`) === clefRepresentant) {
-        return { ok: true, email, source: 'CONTACT_NOMME' };
+        return { ok: true, nom: a.nom, email, source: 'CONTACT_NOMME' };
       }
     }
   }
 
-  // 2) À défaut, le premier contact joignable — dans l'ordre donné par
-  //    l'appelant (`isPrimary` d'abord). La provenance est NOMMÉE : l'admin doit
-  //    pouvoir voir que l'adresse n'est pas celle du représentant.
-  for (const contact of a.org.contacts) {
-    const email = texteNonVide(contact.email);
-    if (email !== null) return { ok: true, email, source: 'CONTACT_AUTRE' };
-  }
-
-  return { ok: false, error: refusEmail(a.org) };
+  return { ok: false, error: refusEmailRepresentant(a.nom, a.org) };
 }
