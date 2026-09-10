@@ -15,11 +15,11 @@ import { loadOfConfig } from '@/lib/of-config';
 import { getNextInvoiceNumber, getNextCreditNoteNumber } from '@/lib/numbering';
 import { logInvoiceEvent } from '@/lib/invoice-audit';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
-import { resolveInvoiceIssueDate } from '@/lib/invoice-dates';
+import { resolveInvoiceIssueDate, resolveInvoiceDueDate } from '@/lib/invoice-dates';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
-import { MENTION_TVA } from '@/lib/catalogue-constants';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 import {
   buildBuyerParty,
   buildCreditNoteLine,
@@ -116,7 +116,7 @@ async function loadSellerSnapshot(
       city: of.addressVille || null,
       email: of.email || null,
     }),
-    vatExemptionText: tenant?.vatExemptionText?.trim() || MENTION_TVA,
+    vatExemptionText: tenant?.vatExemptionText?.trim() || MENTION_EXONERATION_TVA,
   };
 }
 
@@ -162,7 +162,13 @@ function nestedInvoiceWrites(lines: LineSnapshot[], parties: (PartySnapshot | nu
 
 export async function createInvoiceFromParticipant(
   input: CreateInvoiceInput,
-): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+): Promise<{
+  ok: boolean;
+  invoiceId?: string;
+  documentId?: string;
+  number?: string;
+  error?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
@@ -258,10 +264,17 @@ export async function createInvoiceFromParticipant(
     reglement: { iban: of.iban || null, bic: of.bic || null },
   });
 
-  // Création atomique : numéro + invoice + lignes + parties figées
+  // Les DEUX dates de la pièce partent du même instant (cf. `invoice-dates.ts`).
+  const emission = resolveInvoiceIssueDate();
+
+  // Création atomique : numéro + invoice + lignes + parties figées.
+  // La transaction rend un COUPLE plutôt que d'affecter une variable
+  // extérieure : une transaction peut être rejouée, une écriture hors de son
+  // périmètre ne se rejoue pas proprement.
   const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-    return tx.invoice.create({
+
+    const created = await tx.invoice.create({
       data: {
         tenantId: user.tenantId,
         number,
@@ -276,15 +289,19 @@ export async function createInvoiceFromParticipant(
         deliveryAddressJson:
           (deliveryAddressJson(delivery) as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
         ...nestedInvoiceWrites(lines, [seller, buyer, delivery]),
-        // Datée de la fin de formation (cf. resolveInvoiceIssueDate). Le délai
-        // de paiement, lui, court à partir du jour d'émission réel — sinon une
-        // facture rattrapée des mois plus tard naîtrait déjà en retard et le
-        // cron de relances partirait tout seul.
-        issueDate: resolveInvoiceIssueDate(session.endDate),
-        dueDate: new Date(Date.now() + dueDays * 86400000),
+        // La pièce se date du JOUR OÙ ON L'ÉTABLIT, pas de la fin de la
+        // prestation (lot B du 10/09/2026 — l'histoire de la décision du 13/08
+        // et de sa révision est dans `resolveInvoiceIssueDate`). La période
+        // réelle de formation, elle, est portée par les LIGNES
+        // (`buildTrainingLines`) et par le bloc désignation du gabarit.
+        // L'échéance court depuis cette même émission.
+        issueDate: emission,
+        dueDate: resolveInvoiceDueDate(dueDays, emission),
         notes: input.notes ?? null,
       },
     });
+
+    return created;
   });
 
   // Génération PDF
@@ -400,7 +417,12 @@ export async function createInvoiceFromParticipant(
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
 
-  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+  return {
+    ok: true,
+    invoiceId: invoice.id,
+    documentId: doc.id,
+    number: invoice.number,
+  };
 }
 
 /**
@@ -417,7 +439,13 @@ export async function createInvoiceForSponsorGroup(input: {
   vatRate?: number;
   dueDateDays?: number;
   notes?: string;
-}): Promise<{ ok: boolean; invoiceId?: string; documentId?: string; number?: string; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  invoiceId?: string;
+  documentId?: string;
+  number?: string;
+  error?: string;
+}> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
@@ -520,9 +548,13 @@ export async function createInvoiceForSponsorGroup(input: {
     reglement: { iban: of.iban || null, bic: of.bic || null },
   });
 
+  // Idem facture individuelle : les deux dates partent du même instant.
+  const emission = resolveInvoiceIssueDate();
+
   const invoice = await prisma.$transaction(async (tx) => {
     const number = await getNextInvoiceNumber(user.tenantId, tx);
-    return tx.invoice.create({
+
+    const created = await tx.invoice.create({
       data: {
         tenantId: user.tenantId,
         number,
@@ -540,13 +572,16 @@ export async function createInvoiceForSponsorGroup(input: {
         deliveryAddressJson:
           (deliveryAddressJson(delivery) as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
         ...nestedInvoiceWrites(invoiceLines, [seller, buyer, delivery]),
-        // Idem facture individuelle : datée de la fin de formation, échéance
-        // comptée depuis le jour d'émission réel.
-        issueDate: resolveInvoiceIssueDate(session.endDate),
-        dueDate: new Date(Date.now() + dueDays * 86400000),
+        // Idem facture individuelle : datée du jour où on l'établit, échéance
+        // ancrée sur cette émission. Sur une facture GROUPÉE, la période de
+        // formation est portée par chacune des lignes — une par stagiaire.
+        issueDate: emission,
+        dueDate: resolveInvoiceDueDate(dueDays, emission),
         notes: input.notes ?? null,
       },
     });
+
+    return created;
   });
 
   // Génération PDF multi-lignes
@@ -668,7 +703,12 @@ export async function createInvoiceForSponsorGroup(input: {
   revalidatePath('/app/dossiers-opco');
   revalidatePath(`/app/sessions/${session.id}`);
 
-  return { ok: true, invoiceId: invoice.id, documentId: doc.id, number: invoice.number };
+  return {
+    ok: true,
+    invoiceId: invoice.id,
+    documentId: doc.id,
+    number: invoice.number,
+  };
 }
 
 export async function recordInvoicePayment(input: {

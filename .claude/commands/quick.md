@@ -50,7 +50,8 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 ## 4. Migrations
 
 **`prisma db push` est INTERDIT** — sur `qualiof_test` comme sur n'importe quelle
-base (règle Laurent, 2026-09-10). Une seule voie :
+base (règle Laurent, 2026-09-10), y compris « juste pour aligner la base de test
+avant de lancer les tests ». Une seule voie :
 
 ```
 pnpm --filter @qualiof/db exec prisma migrate dev --name <slug>   # créer
@@ -61,7 +62,13 @@ Pourquoi : `db push` écrit le schéma dans la base **sans laisser de migration*
 L'historique et la base divergent alors en silence, et la production ne reçoit
 jamais le changement — le déploiement rejoue `migrations/`, pas le schéma. On ne
 s'en aperçoit qu'au premier `P2022` en prod, sur une colonne qui n'existe que sur
-la machine où le `db push` a été lancé.
+la machine où le `db push` a été lancé. Le chemin réellement utilisé en production
+(`migrate deploy`, lancé par `.github/workflows/deploy.yml` à chaque push `main`)
+n'est alors jamais exercé avant d'atteindre Supabase.
+
+Aggravant : `db push` réclame `--accept-data-loss` dès qu'une contrainte se
+resserre, et le réflexe est de l'ajouter pour « débloquer ». C'est une destruction
+silencieuse que personne ne relit.
 
 Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune base
 (il ne fait que régénérer le client TypeScript).
@@ -69,6 +76,12 @@ Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune bas
 Toute migration créée doit être appliquée (`migrate deploy`) avant d'écrire dans
 la base depuis une branche en avance — sinon l'`INSERT` part avec les défauts
 d'enum de la base, pas ceux du schéma.
+
+- La migration générée se **commit avec le code** qui en dépend, jamais après.
+- Base de test repartie de zéro : `prisma migrate reset`, qui rejoue l'historique —
+  c'est justement ce qu'on veut vérifier.
+- Ne jamais pointer une commande Prisma sur `DATABASE_URL` depuis le poste : c'est
+  Supabase de production. Les migrations partent par la CI, pas à la main.
 
 ## 5. Gates — les trois, dans cet ordre
 

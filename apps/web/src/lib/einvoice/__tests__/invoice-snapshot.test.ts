@@ -14,6 +14,10 @@ import {
   resolveSiren,
   vatCategoryFor,
 } from '../invoice-snapshot';
+import {
+  CODE_VATEX_EXONERATION_TVA,
+  MENTION_EXONERATION_TVA,
+} from '@/lib/tva-exoneration';
 
 /**
  * Lot 1 — ce qui est FIGÉ au moment de l'émission.
@@ -163,7 +167,7 @@ const LIGNES_INPUT = {
   endDate: new Date('2026-06-03T00:00:00Z'),
   dureeHeures: 21,
   vatRate: 0,
-  vatExemptionText: 'TVA non applicable, art. 261-4-4° du CGI.',
+  vatExemptionText: 'Mention propre à cet OF — override tenant',
 };
 
 describe('lignes de facture', () => {
@@ -194,7 +198,7 @@ describe('lignes de facture', () => {
     expect(line!.label).toContain('03/06/2026');
   });
 
-  it('exonéré ⇒ catégorie E et le texte de la mention, jamais un code inventé (D-2 ouverte)', () => {
+  it('exonéré ⇒ catégorie E, le CODE VATEX et le texte (D-2 tranchée le 10/09/2026)', () => {
     const [line] = buildTrainingLines({
       ...LIGNES_INPUT,
       participants: [
@@ -202,8 +206,31 @@ describe('lignes de facture', () => {
       ],
     });
     expect(line!.vatCategory).toBe('E');
-    expect(line!.vatExemptionReasonText).toBe('TVA non applicable, art. 261-4-4° du CGI.');
-    expect(line!.vatExemptionReasonCode).toBeNull();
+    expect(line!.vatExemptionReasonText).toBe('Mention propre à cet OF — override tenant');
+    expect(line!.vatExemptionReasonCode).toBe(CODE_VATEX_EXONERATION_TVA);
+    expect(line!.vatExemptionReasonCode).toBe('VATEX-EU-132-1I');
+  });
+
+  it("le code ne dépend PAS du texte : un override tenant ne le déplace pas", () => {
+    // D-J6 — le code est constant dans ce lot. C'est exactement ce qu'un futur
+    // « on le rendrait paramétrable ? » viendra tenter.
+    const [avecOverride] = buildTrainingLines({
+      ...LIGNES_INPUT,
+      vatExemptionText: 'Une mention maison totalement différente',
+      participants: [
+        { participantId: null, personFirstName: 'Jean', personLastName: 'Dupont', priceHT: 1500 },
+      ],
+    });
+    const [sansTexte] = buildTrainingLines({
+      ...LIGNES_INPUT,
+      vatExemptionText: null,
+      participants: [
+        { participantId: null, personFirstName: 'Jean', personLastName: 'Dupont', priceHT: 1500 },
+      ],
+    });
+    expect(avecOverride!.vatExemptionReasonCode).toBe(CODE_VATEX_EXONERATION_TVA);
+    expect(sansTexte!.vatExemptionReasonCode).toBe(CODE_VATEX_EXONERATION_TVA);
+    expect(sansTexte!.vatExemptionReasonText).toBeNull();
   });
 
   it('TVA non nulle ⇒ catégorie S et aucune mention d’exonération', () => {
@@ -216,6 +243,7 @@ describe('lignes de facture', () => {
     });
     expect(line!.vatCategory).toBe('S');
     expect(line!.vatExemptionReasonText).toBeNull();
+    expect(line!.vatExemptionReasonCode).toBeNull();
     expect(vatCategoryFor(20)).toBe('S');
     expect(vatCategoryFor(0)).toBe('E');
   });
@@ -260,6 +288,34 @@ describe('ligne d’avoir', () => {
     });
     expect(line.label).toContain('FAC-000123');
     expect(line.label).toContain('Annulation stagiaire');
+  });
+
+  it('exonéré ⇒ MÊME code et MÊME texte qu\u2019une ligne de facture', () => {
+    const line = buildCreditNoteLine({
+      originalNumber: 'FAC-000123',
+      motif: 'Annulation stagiaire',
+      amountHtToCredit: 500,
+      vatRate: 0,
+      vatExemptionText: MENTION_EXONERATION_TVA,
+      participantId: null,
+    });
+    expect(line.vatCategory).toBe('E');
+    expect(line.vatExemptionReasonCode).toBe(CODE_VATEX_EXONERATION_TVA);
+    expect(line.vatExemptionReasonText).toBe(MENTION_EXONERATION_TVA);
+  });
+
+  it('à TVA non nulle ⇒ ni code ni motif', () => {
+    const line = buildCreditNoteLine({
+      originalNumber: 'FAC-000123',
+      motif: 'Annulation stagiaire',
+      amountHtToCredit: 500,
+      vatRate: 20,
+      vatExemptionText: MENTION_EXONERATION_TVA,
+      participantId: null,
+    });
+    expect(line.vatCategory).toBe('S');
+    expect(line.vatExemptionReasonCode).toBeNull();
+    expect(line.vatExemptionReasonText).toBeNull();
   });
 });
 

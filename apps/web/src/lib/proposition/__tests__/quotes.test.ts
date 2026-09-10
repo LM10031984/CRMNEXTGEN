@@ -5,7 +5,9 @@ import type { ProposalPricing } from '@qualiof/shared';
 import type { FundingRuleValues } from '@/lib/financement/types';
 
 import { computePricing } from '../pricing';
-import { buildQuoteDrafts, quotesMatchProposal, VAT_EXEMPTION_NOTE } from '../quotes';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
+
+import { buildQuoteDrafts, quotesMatchProposal } from '../quotes';
 
 const RULES = Object.fromEntries(
   FUNDING_RULE_SEEDS.map((s) => [s.key, s.valueNumeric]),
@@ -122,7 +124,7 @@ describe('Ce que le devis dit — et ce qu’il ne retranche pas', () => {
   it('porte l’exonération de TVA et la réserve d’acceptation des financeurs', () => {
     const s = computePricing({ pricing, rules: RULES });
     const drafts = buildQuoteDrafts({ synthesis: s, proposalReference: 'PROP-0004', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
-    expect(drafts[0]!.notes).toContain(VAT_EXEMPTION_NOTE);
+    expect(drafts[0]!.notes).toContain(MENTION_EXONERATION_TVA);
     expect(drafts[0]!.notes).toContain('Aucune facturation avant accord de prise en charge');
     for (const d of drafts) for (const l of d.lines) expect(l.vatRate).toBe(0);
   });

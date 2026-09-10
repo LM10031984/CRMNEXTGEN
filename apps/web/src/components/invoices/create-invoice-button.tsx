@@ -2,6 +2,10 @@
 
 import { useState, useTransition } from 'react';
 import { Receipt, Loader2, Check, ExternalLink, AlertCircle } from 'lucide-react';
+// Ce bouton gère son état en local et n'affichait aucun toast. La sentinelle de
+// chronologie a besoin d'un canal : le `<Toaster />` est monté dans le layout
+// racine, `toast()` fonctionne donc depuis n'importe quel client component.
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { createInvoiceFromParticipant } from '@/server/actions/invoices';
 

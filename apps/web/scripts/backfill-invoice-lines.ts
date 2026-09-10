@@ -25,15 +25,19 @@
  *   pnpm invoices:backfill-lines --limit=50       # borne le lot
  *   pnpm invoices:backfill-lines --tenant=<uuid>  # un seul tenant
  *
- * Idempotent : ne touche que les factures à ZÉRO ligne. Relancé, il ne fait
+ * Idempotent : ne touche que les factures à ZÉRO ligne (`lines: { none: {} }`,
+ * l. 155). Ce script N'ÉCRIT JAMAIS SUR UNE LIGNE EXISTANTE — pas d'`update`,
+ * pas d'`updateMany` : une ligne déjà posée est l'instantané d'une pièce émise,
+ * elle ne se réécrit pas, même pour la « corriger ». Relancé, il ne fait
  * rien. Chaque écriture pose un `AuditLog` `invoices.lines_backfilled` dans la
  * MÊME transaction que la ligne — `userId: null`, convention « action système »
  * déjà en vigueur pour le worker de relances.
  */
 
 import { prisma, Prisma } from '@qualiof/db';
-import { MENTION_TVA } from '../src/lib/catalogue-constants';
+import { MENTION_EXONERATION_TVA } from '../src/lib/tva-exoneration';
 import { resolveSiren, vatCategoryFor } from '../src/lib/einvoice/invoice-snapshot';
+import { CODE_VATEX_EXONERATION_TVA } from '../src/lib/tva-exoneration';
 
 // ─── Arguments ────────────────────────────────────────────────────────────
 
@@ -197,7 +201,7 @@ async function main() {
     select: { id: true, vatExemptionText: true },
   });
   const mentionParTenant = new Map(
-    tenants.map((t) => [t.id, t.vatExemptionText?.trim() || MENTION_TVA]),
+    tenants.map((t) => [t.id, t.vatExemptionText?.trim() || MENTION_EXONERATION_TVA]),
   );
 
   const aEcrire: FactureAConvertir[] = candidates.map((f) => {
@@ -257,10 +261,10 @@ async function main() {
             unitPriceHT: f.amountHT,
             vatRate: f.vatRate,
             vatCategory,
-            // D-2 non tranchée : pas de code VATEX inventé.
-            vatExemptionReasonCode: null,
+            // D-2 tranchée le 10/09/2026 — cf. convention 3 de invoice-snapshot.ts.
+            vatExemptionReasonCode: vatCategory === 'E' ? CODE_VATEX_EXONERATION_TVA : null,
             vatExemptionReasonText:
-              vatCategory === 'E' ? (mentionParTenant.get(f.tenantId) ?? MENTION_TVA) : null,
+              vatCategory === 'E' ? (mentionParTenant.get(f.tenantId) ?? MENTION_EXONERATION_TVA) : null,
             participantId: f.participantId,
             totalHT: f.amountHT,
           },

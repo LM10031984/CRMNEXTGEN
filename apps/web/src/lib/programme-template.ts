@@ -10,6 +10,7 @@
 import { marked } from 'marked';
 
 import type { OfConfig } from './of-config';
+import { MENTION_EXONERATION_TVA } from './tva-exoneration';
 import { loadLogoColorDataUrl } from './closure/shared-template';
 import {
   OF_PAGED_FOOTER_STYLES,
@@ -538,7 +539,7 @@ ${renderOfPagedFooter(of)}
         ? 'pour l’ensemble des stagiaires inscrits'
         : 'par stagiaire'
     }
-    <span style="color:#64748B; font-size: 9.5pt;">— TVA non applicable en vertu de l'article 261-4-4° du CGI.</span>
+    <span style="color:#64748B; font-size: 9.5pt;">— ${MENTION_EXONERATION_TVA}.</span>
   </div>
 </section>
 

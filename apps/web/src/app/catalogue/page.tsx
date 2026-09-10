@@ -4,11 +4,8 @@ import { ShieldCheck, Mail, Phone, MapPin, GraduationCap } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { loadOfConfig } from '@/lib/of-config';
 import { getQualiopiBilan } from '@/lib/qualiopi-bilan-stats';
-import {
-  DELAI_ACCES,
-  ACCESSIBILITE_PSH,
-  MENTION_TVA,
-} from '@/lib/catalogue-constants';
+import { DELAI_ACCES, ACCESSIBILITE_PSH } from '@/lib/catalogue-constants';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 
 export const dynamic = 'force-dynamic';
 
@@ -323,7 +320,7 @@ export default async function CataloguePage() {
                           priceText
                         ) : (
                           <>
-                            {priceText} — <span className="text-slate-500">{MENTION_TVA}</span>
+                            {priceText} — <span className="text-slate-500">{MENTION_EXONERATION_TVA}.</span>
                           </>
                         )}
                       </dd>
@@ -382,7 +379,7 @@ export default async function CataloguePage() {
             {of.name} — SIRET {of.siret} — NDA {of.rnq}
           </div>
           <div>Certification Qualiopi N° CW202324-1795 — RNQ V9</div>
-          <div>{MENTION_TVA}</div>
+          <div>{MENTION_EXONERATION_TVA}.</div>
           <div>CGV disponibles sur demande</div>
         </div>
       </footer>
