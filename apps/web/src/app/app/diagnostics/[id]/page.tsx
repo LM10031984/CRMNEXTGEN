@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { ArrowRight, Stethoscope } from 'lucide-react';
+import { ArrowRight, Stethoscope, Users2 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -53,7 +53,11 @@ export default async function DiagnosticPage({
       r2PlannedAt: true,
       referentialVersion: true,
       lead: { select: { id: true, firstName: true, lastName: true, notes: true } },
+      organizationId: true,
       organization: { select: { legalName: true } },
+      // D-22 — la campagne s'ouvre depuis ici, et une seule par diagnostic
+      // (`diagnosticId` est unique) : si elle existe déjà, on y renvoie.
+      enrollmentBatch: { select: { id: true } },
       owner: { select: { firstName: true, lastName: true } },
       answers: { select: { questionId: true, value: true, isSkipped: true } },
       participants: {
@@ -150,13 +154,36 @@ export default async function DiagnosticPage({
           </span>
         }
         actions={
-          <Link
-            href={`/app/diagnostics/${id}/chapitre/${resume}` as Route}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
-          >
-            {progress.answeredCount === 0 ? 'Commencer' : 'Reprendre'}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              Le chemin qui manquait (relecture du 10/09/2026) : rien ne menait
+              du diagnostic à sa campagne, si bien que toutes naissaient sans
+              client. Il ne s'affiche pas tant qu'aucune agence n'est rattachée
+              au diagnostic — une campagne sans agence n'existe plus (D-22).
+            */}
+            {diagnostic.organizationId ? (
+              <Link
+                href={
+                  (diagnostic.enrollmentBatch
+                    ? `/app/campagnes/${diagnostic.enrollmentBatch.id}`
+                    : `/app/campagnes/nouvelle?diagnostic=${id}`) as Route
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-slate-50"
+              >
+                <Users2 className="h-4 w-4" />
+                {diagnostic.enrollmentBatch
+                  ? 'Voir les pré-inscriptions'
+                  : 'Organiser les pré-inscriptions'}
+              </Link>
+            ) : null}
+            <Link
+              href={`/app/diagnostics/${id}/chapitre/${resume}` as Route}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
+            >
+              {progress.answeredCount === 0 ? 'Commencer' : 'Reprendre'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         }
       />
 

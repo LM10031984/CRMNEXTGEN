@@ -49,12 +49,15 @@ const DATES = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireRole).mockResolvedValue(USER as never);
-  vi.mocked(prisma.$transaction).mockImplementation(async (fn: never) =>
-    (fn as unknown as (tx: unknown) => unknown)({
-      enrollmentBatch: { create: vi.fn().mockResolvedValue({ id: 'b1' }) },
-      auditLog: { create: vi.fn() },
-    }),
-  );
+  // Le mock joue la transaction en passant un `tx` minimal — seuls les deux
+  // modèles écrits par `createCampagne` y figurent.
+  (prisma.$transaction as unknown as { mockImplementation: (f: unknown) => void })
+    .mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn({
+        enrollmentBatch: { create: vi.fn().mockResolvedValue({ id: 'b1' }) },
+        auditLog: { create: vi.fn() },
+      }),
+    );
 });
 
 describe('createCampagne — l’agence est obligatoire (D-22)', () => {

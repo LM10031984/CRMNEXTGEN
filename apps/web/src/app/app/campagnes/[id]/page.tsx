@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { calculerAvancement, deadlineAdministrative, deadlineDepassee } from '@/lib/campagne/avancement';
 import { campagneLinkState } from '@/lib/campagne/lien';
+import { decrireCreneau, mesurerCreneau } from '@/lib/campagne/creneaux';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import { CampagneActions } from '@/components/campagne/campagne-actions';
 
@@ -77,6 +78,8 @@ export default async function CampagneDetailPage({
       usedCount: true,
       createdAt: true,
       product: { select: { title: true, durationHours: true } },
+      organization: { select: { id: true, legalName: true, brandName: true } },
+      lead: { select: { id: true, firstName: true, lastName: true } },
       diagnostic: { select: { id: true, reference: true } },
       dateOptions: {
         orderBy: { startsAt: 'asc' },
@@ -122,14 +125,58 @@ export default async function CampagneDetailPage({
     leadDaysMin: regles.values.AGEFICE_LEAD_DAYS_MIN,
   });
   const enRetard = deadlineDepassee(deadline, now);
+  const dateRetenue = c.dateOptions.find((d) => d.isRetained) ?? null;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={c.label}
-        subtitle={c.product?.title ?? 'Formation à préciser'}
+        title={c.organization.legalName}
+        subtitle={c.label}
         actions={<Badge variant={ETAT_META[etat].variant}>{ETAT_META[etat].label}</Badge>}
       />
+
+      {/*
+        D-22 — les trois faits qui gouvernent la campagne, ensemble et en tête :
+        pour qui, quoi, et jusqu'à quand. Auparavant l'écran n'affichait que le
+        libellé libre, et il fallait descendre pour trouver le reste.
+      */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <div className="text-xs text-muted-foreground">Agence</div>
+          <Link
+            href={`/app/organisations/${c.organization.id}` as Route}
+            className="mt-0.5 block font-medium hover:underline"
+          >
+            {c.organization.legalName}
+          </Link>
+          {c.organization.brandName && c.organization.brandName !== c.organization.legalName ? (
+            <div className="text-xs text-muted-foreground">{c.organization.brandName}</div>
+          ) : null}
+        </div>
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <div className="text-xs text-muted-foreground">Formation</div>
+          <div className="mt-0.5 font-medium">{c.product?.title ?? 'À préciser'}</div>
+          {dateRetenue ? (
+            <div className="text-xs text-muted-foreground">
+              Date retenue : {jourFmt.format(dateRetenue.startsAt)} ·{' '}
+              {decrireCreneau(mesurerCreneau(dateRetenue, regles.values))}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">Aucune date retenue pour l’instant</div>
+          )}
+        </div>
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <div className="text-xs text-muted-foreground">Pièces réunies avant le</div>
+          <div className={`mt-0.5 font-medium ${enRetard ? 'text-red-700' : ''}`}>
+            {deadline ? jourFmt.format(deadline) : '—'}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {deadline
+              ? `${regles.values.AGEFICE_LEAD_DAYS_MIN} j avant la date la plus proche`
+              : 'Ajoutez une date pour connaître le délai'}
+          </div>
+        </div>
+      </div>
 
       {deadline ? (
         <div
@@ -176,6 +223,7 @@ export default async function CampagneDetailPage({
         dateOptions={c.dateOptions.map((d) => ({
           id: d.id,
           texte: dateFmt.format(d.startsAt),
+          creneau: decrireCreneau(mesurerCreneau(d, regles.values)),
           label: d.label,
           isRetained: d.isRetained,
           voix: a.votesParDate.find((v) => v.dateOptionId === d.id)?.voix ?? 0,
@@ -217,14 +265,23 @@ export default async function CampagneDetailPage({
         </p>
       </section>
 
-      {c.diagnostic ? (
-        <p className="text-sm">
-          <Link
-            href={`/app/diagnostics/${c.diagnostic.id}` as Route}
-            className="text-primary hover:underline"
-          >
-            Diagnostic {c.diagnostic.reference}
-          </Link>
+      {c.diagnostic || c.lead ? (
+        <p className="text-sm text-muted-foreground">
+          Contexte :{' '}
+          {c.diagnostic ? (
+            <Link
+              href={`/app/diagnostics/${c.diagnostic.id}` as Route}
+              className="text-primary hover:underline"
+            >
+              diagnostic {c.diagnostic.reference}
+            </Link>
+          ) : null}
+          {c.diagnostic && c.lead ? ' · ' : null}
+          {c.lead ? (
+            <Link href={`/app/leads/${c.lead.id}` as Route} className="text-primary hover:underline">
+              lead {`${c.lead.firstName ?? ''} ${c.lead.lastName ?? ''}`.trim() || c.lead.id}
+            </Link>
+          ) : null}
         </p>
       ) : null}
     </div>

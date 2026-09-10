@@ -21,6 +21,8 @@ import {
 interface DateLigne {
   id: string;
   texte: string;
+  /** « 1 demi-journée · 4 h sur site · 8 h conventionnées » — même phrase partout. */
+  creneau: string;
   label: string | null;
   isRetained: boolean;
   voix: number;
@@ -159,6 +161,7 @@ export function CampagneActions({
               <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div>
                   <div className="text-sm font-medium capitalize">{d.texte}</div>
+                  <div className="text-xs text-muted-foreground tabular-nums">{d.creneau}</div>
                   {d.label ? (
                     <div className="text-xs text-muted-foreground">{d.label}</div>
                   ) : null}

@@ -264,6 +264,7 @@ model Organization {
   opcoSubmissions         OpcoSubmission[]
   diagnostics             Diagnostic[]
   proposals               Proposal[]
+  enrollmentBatches       EnrollmentBatch[]
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
 
@@ -841,6 +842,7 @@ model Lead {
   diagnosticSubmissions DiagnosticSubmission[]
   diagnostics           Diagnostic[]
   proposals             Proposal[]
+  enrollmentBatches     EnrollmentBatch[]
   tasks                 Task[]
   comments              InternalComment[]
   createdAt             DateTime               @default(now())
@@ -2199,8 +2201,17 @@ model EnrollmentBatch {
   tenantId       String
   /// "RDV OPTIMMO — R1 du 12/09"
   label          String
+  /// L'agence pour qui la campagne est ouverte — OBLIGATOIRE (D-22).
+  /// C'est le rattachement canonique : un seul champ à lire dans tous les
+  /// écrans et à la conversion, plutôt que trois liens facultatifs dont il
+  /// faudrait deviner lequel a été renseigné.
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  /// Contexte supplémentaire, jamais une alternative à l'agence (D-22).
   diagnosticId   String?           @unique
   diagnostic     Diagnostic?       @relation(fields: [diagnosticId], references: [id])
+  leadId         String?
+  lead           Lead?             @relation(fields: [leadId], references: [id])
   proposalId     String?
   /// Produit pressenti — pré-remplit les pré-inscriptions.
   productId      String?
@@ -2219,6 +2230,8 @@ model EnrollmentBatch {
   updatedAt      DateTime          @updatedAt
 
   @@index([tenantId, status])
+  @@index([organizationId])
+  @@index([leadId])
 }
 
 /// Date prévisionnelle proposée aux participants. La date retenue devient la

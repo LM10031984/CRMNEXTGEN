@@ -24,6 +24,7 @@ import {
 } from '@/lib/proposition/public-link';
 import { campagneLinkState, CAMPAGNE_LINK_MESSAGE } from '@/lib/campagne/lien';
 import { deadlineAdministrative } from '@/lib/campagne/avancement';
+import { decrireCreneau, formaterHeureLocale, mesurerCreneau } from '@/lib/campagne/creneaux';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import { RdvForm } from '@/components/campagne/rdv-form';
 
@@ -168,6 +169,12 @@ export default async function CampagnePage({
             id: d.id,
             label: d.label,
             texte: dateFmt.format(d.startsAt),
+            // Le participant ne voyait que le jour : il ne pouvait pas
+            // distinguer une matinée d'une journée entière, et arrivait donc
+            // sans savoir combien de temps bloquer. Il lit maintenant l'horaire
+            // et le nombre de demi-journées — les mêmes que la convention.
+            horaire: `${formaterHeureLocale(d.startsAt)} – ${formaterHeureLocale(d.endsAt)}`,
+            creneau: decrireCreneau(mesurerCreneau(d, regles.values)),
             isRetained: d.isRetained,
           }))}
         />

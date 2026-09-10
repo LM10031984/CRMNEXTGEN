@@ -67,7 +67,16 @@ const DateOptionSchema = z
 
 const CreateCampagneSchema = z.object({
   label: z.string().trim().min(3, 'Donnez un libellé reconnaissable').max(160),
+  /**
+   * D-22 — le rattachement canonique, et le seul obligatoire.
+   *
+   * Une campagne sans agence produisait des dossiers dont l'admin ne savait pas
+   * de quel client ils venaient. Le diagnostic et le lead ci-dessous restent
+   * facultatifs : ils ajoutent du contexte, ils ne remplacent jamais l'agence.
+   */
+  organizationId: z.string().uuid('Choisissez l’agence pour qui vous ouvrez cette campagne'),
   diagnosticId: z.string().uuid().optional().nullable(),
+  leadId: z.string().uuid().optional().nullable(),
   proposalId: z.string().uuid().optional().nullable(),
   productId: z.string().uuid().optional().nullable(),
   /** Sert à calculer le quota par défaut, et à afficher « X / Y » ensuite. */
@@ -100,8 +109,22 @@ export async function createCampagne(
   }
   const data = parsed.data;
 
-  // Scope tenant sur les rattachements : un diagnostic ou un produit d'un autre
-  // tenant ne doit pas pouvoir être accroché, même en forgeant l'identifiant.
+  // Scope tenant sur les rattachements : une agence, un diagnostic, un lead ou
+  // un produit d'un autre tenant ne doit pas pouvoir être accroché, même en
+  // forgeant l'identifiant.
+  const org = await prisma.organization.findFirst({
+    where: { id: data.organizationId, tenantId: g.user.tenantId },
+    select: { id: true },
+  });
+  if (!org) return { ok: false, error: 'Agence introuvable' };
+
+  if (data.leadId) {
+    const l = await prisma.lead.findFirst({
+      where: { id: data.leadId, tenantId: g.user.tenantId },
+      select: { id: true },
+    });
+    if (!l) return { ok: false, error: 'Lead introuvable' };
+  }
   if (data.diagnosticId) {
     const d = await prisma.diagnostic.findFirst({
       where: { id: data.diagnosticId, tenantId: g.user.tenantId },
@@ -126,6 +149,8 @@ export async function createCampagne(
       data: {
         tenantId: g.user.tenantId,
         label: data.label,
+        organizationId: data.organizationId,
+        leadId: data.leadId || null,
         diagnosticId: data.diagnosticId || null,
         proposalId: data.proposalId || null,
         productId: data.productId || null,
@@ -153,6 +178,9 @@ export async function createCampagne(
         action: 'campagne.create',
         diff: {
           label: data.label,
+          organizationId: data.organizationId,
+          leadId: data.leadId || null,
+          diagnosticId: data.diagnosticId || null,
           effectifAttendu: data.effectifAttendu,
           dates: data.dateOptions.length,
           expiresAt: expiresAt.toISOString(),

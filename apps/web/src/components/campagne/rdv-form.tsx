@@ -21,6 +21,10 @@ interface DateOption {
   id: string;
   label: string | null;
   texte: string;
+  /** « 09:00 – 13:00 » — ce que le participant doit bloquer dans son agenda. */
+  horaire: string;
+  /** « 1 demi-journée · 4 h sur site · 8 h conventionnées » — même phrase que côté admin. */
+  creneau: string;
   isRetained: boolean;
 }
 
@@ -79,7 +83,10 @@ export function RdvForm({ token, dateOptions }: { token: string; dateOptions: Da
                       : 'border-border bg-white hover:border-primary/40'
                   }`}
                 >
-                  <div className="font-medium capitalize">{d.texte}</div>
+                  <div className="font-medium capitalize">
+                    {d.texte} <span className="tabular-nums">· {d.horaire}</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground tabular-nums">{d.creneau}</div>
                   {d.label ? (
                     <div className="text-sm text-muted-foreground">{d.label}</div>
                   ) : null}

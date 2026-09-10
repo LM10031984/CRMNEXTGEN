@@ -44,6 +44,7 @@ export default async function CampagnesPage() {
       usedCount: true,
       createdAt: true,
       product: { select: { title: true } },
+      organization: { select: { id: true, legalName: true } },
       dateOptions: {
         select: { id: true, startsAt: true, label: true, isRetained: true, votes: true },
       },
@@ -85,9 +86,10 @@ export default async function CampagnesPage() {
         <div className="rounded-xl border border-border bg-white p-10 text-center">
           <Users2 className="h-8 w-8 mx-auto text-muted-foreground" />
           <p className="mt-3 font-medium">Aucune campagne pour l’instant</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Une campagne, c’est le lien que le dirigeant diffuse à son équipe après le rendez-vous.
-            Créez-la depuis un diagnostic, ou directement ici.
+          <p className="text-sm text-muted-foreground mt-1 max-w-lg mx-auto">
+            Une campagne, c’est le lien qu’une agence diffuse à son équipe après le rendez-vous :
+            chacun y constitue son dossier, et vous voyez d’un coup d’œil ce qui est complet.
+            Ouvrez-la depuis un diagnostic, ou ici en choisissant l’agence.
           </p>
         </div>
       ) : (
@@ -95,6 +97,7 @@ export default async function CampagnesPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
+                <th className="px-4 py-3 font-medium">Agence</th>
                 <th className="px-4 py-3 font-medium">Campagne</th>
                 <th className="px-4 py-3 font-medium">État</th>
                 <th className="px-4 py-3 font-medium">Dossiers</th>
@@ -122,8 +125,16 @@ export default async function CampagnesPage() {
                   <tr key={c.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3">
                       <Link
-                        href={`/app/campagnes/${c.id}` as Route}
+                        href={`/app/organisations/${c.organization.id}` as Route}
                         className="font-medium hover:underline"
+                      >
+                        {c.organization.legalName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/app/campagnes/${c.id}` as Route}
+                        className="hover:underline"
                       >
                         {c.label}
                       </Link>
