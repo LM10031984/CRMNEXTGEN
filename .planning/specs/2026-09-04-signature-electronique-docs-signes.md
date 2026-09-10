@@ -143,6 +143,13 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    échec silencieux. Le lot C doit refuser un envoi à zéro champ.
 > 7. **`/api/documents/[id]` sert `signedPdfUrl ?? pdfUrl`** (règle métier n°2) : c'était
 >    une boucle ouverte du lot A, qui écrivait `signedPdfUrl` sans que la route ne le serve.
+> 8. **L'ancre réserve la place du champ.** Sur la première convention réellement
+>    signée (envoi EU 1619115, 10/09/2026), les deux signatures **débordaient de leur
+>    cadre** — celle du client chevauchait la bordure et le libellé du bloc de l'OF.
+>    Le champ DocuSeal démarre à l'ancre et s'étend vers le bas : sans place réservée
+>    sous elle, il sort du cadre. Sur une pièce contractuelle destinée à un financeur,
+>    une signature à cheval entre les deux parties est contestable.
+>    `renderSignatureAnchor` réserve désormais elle-même la hauteur déclarée.
 
 - Migration §4.1 / §4.2 (`SignatureRequest.provider = "docuseal"`, `providerId` = id de submission DocuSeal).
 - Dépendance : aucune lib DocuSeal obligatoire (REST simple, `fetch`). `packages/shared` : `TenantSignatory` (nom, email, ordre) dans les paramètres tenant — **D-1**.
@@ -197,7 +204,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 | Lot | Statut | Détail |
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
-| **B** | ✅ **livré 04/09/2026** (reste la signature humaine du test d'acceptation) | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 gabarits · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Prouvé en sandbox** : submission 10869675, 2 champs signature créés depuis les ancres, `send_email=false` et `sent_at=jamais`. |
+| **B** | ✅ **livré 04/09/2026** (reste la signature humaine du test d'acceptation) | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 gabarits · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** sur l'instance **UE** (envoi 1619115, signé par les deux rôles) : PDF final signé numériquement (`/Type /Sig`, `/ByteRange`, `/SubFilter /adbe.pkcs7.detached` → panneau de signature Adobe Reader), certificat de signature complet (ID d'enveloppe, SHA-256 avant/après, horodatage, email, IP, user-agent, fuseau, image de la signature tracée par partie), certificat et document servis par `docuseal.eu`. `send_email=false` et `sent_at=jamais` sur les deux signataires : aucun email n'est parti de DocuSeal. |
 | **C** | ⬜ à faire | Pas de `/api/webhooks/`, pas de `sendForSignature`. |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 

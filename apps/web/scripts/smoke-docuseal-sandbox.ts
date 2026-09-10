@@ -125,21 +125,40 @@ async function relire(submissionId: string): Promise<void> {
   const attendus: Array<[string, RegExp]> = [
     ['adresse email du signataire', /@/],
     ['adresse IP', /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/],
-    ['horodatage', /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}/],
+    [
+      'horodatage',
+      /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}/,
+    ],
     ['identifiant d\'enveloppe', /[0-9a-f]{8,}|\b1619\d{3}\b/i],
   ];
   for (const [libelle, motif] of attendus) {
     console.log(`${motif.test(texte) ? '  OK  ' : ' ABSENT'} │ ${libelle}`);
   }
 
-  const mentionsUe = texte.match(/docuseal\.(eu|com)[^\s]*/gi) ?? [];
-  const horsUe = mentionsUe.filter((m) => /docuseal\.com/i.test(m));
-  console.log(`\n  hôtes cités dans le certificat : ${[...new Set(mentionsUe)].join(', ') || '(aucun)'}`);
+  const hoteCertificat = (etat.auditTrailUrl ?? '').match(/^https?:\/\/([^/]+)/)?.[1] ?? '(inconnu)';
+  const hotesDocuments = [
+    ...new Set(etat.documentUrls.map((u) => u.match(/^https?:\/\/([^/]+)/)?.[1] ?? '(inconnu)')),
+  ];
+  console.log(`\n  certificat servi par : ${hoteCertificat}`);
+  console.log(`  documents signés servis par : ${hotesDocuments.join(', ') || '(aucun)'}`);
+
+  const tousHotes = [hoteCertificat, ...hotesDocuments];
+  const horsUe = tousHotes.filter((h) => /docuseal\.com$/i.test(h));
+  const enUe = tousHotes.filter((h) => /docuseal\.eu$/i.test(h));
   console.log(
-    horsUe.length === 0
-      ? '✅ Aucune référence au serveur global : le certificat reste sur l\'instance UE.'
-      : `❌ ${horsUe.length} référence(s) au serveur global dans le certificat.`,
+    horsUe.length > 0
+      ? `❌ ${horsUe.length} pièce(s) servie(s) par le serveur global : ${horsUe.join(', ')}`
+      : enUe.length === tousHotes.length
+        ? '✅ Certificat et document signé servis par l\'instance UE.'
+        : `⚠ Hôtes inattendus : ${tousHotes.join(', ')} — à vérifier à la main.`,
   );
+
+  // Le texte du certificat ne cite aucun hôte : c'est normal, et c'est
+  // précisément pour ça que l'hébergement se lit sur l'URL de service.
+  const citesDansTexte = texte.match(/docuseal\.(eu|com)[^\s]*/gi) ?? [];
+  if (citesDansTexte.length > 0) {
+    console.log(`  (hôtes cités dans le texte : ${[...new Set(citesDansTexte)].join(', ')})`);
+  }
 
   console.log('\n--- Texte du certificat (300 premiers caractères) ---');
   console.log(texte.slice(0, 300).replace(/\s+/g, ' '));

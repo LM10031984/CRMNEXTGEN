@@ -95,4 +95,28 @@ describe('renderSignatureAnchor — ancre invisible dans le HTML WeasyPrint', ()
     expect(html).not.toContain('&#123;');
     expect(html).not.toContain('&lbrace;');
   });
+
+  /**
+   * Constaté sur la première convention réellement signée (envoi EU 1619115,
+   * 10/09/2026) : les deux signatures DÉBORDAIENT de leur cadre, celle du
+   * client chevauchant la bordure et le libellé du bloc de l'OF. Le champ
+   * DocuSeal démarre à l'ancre et s'étend vers le BAS ; sans place réservée
+   * sous elle, il sort du cadre.
+   *
+   * Sur une pièce contractuelle destinée à un financeur, une signature à
+   * cheval entre les deux parties est contestable. L'ancre réserve donc
+   * elle-même la hauteur du champ qu'elle déclare.
+   */
+  it('réserve sous elle la hauteur du champ qu’elle déclare', () => {
+    expect(html).toMatch(/[^-]height:\s*60pt/);
+  });
+
+  it('ne réserve rien quand aucune hauteur n’est déclarée', () => {
+    const sansHauteur = renderSignatureAnchor({
+      name: 'Signature',
+      role: SIGNATURE_ROLES.CLIENT,
+      type: 'signature',
+    });
+    expect(sansHauteur).not.toMatch(/[^-]height:\s*\d+pt/);
+  });
 });

@@ -83,10 +83,26 @@ export function signatureTag(opts: SignatureTagOptions): string {
  */
 export function renderSignatureAnchor(opts: SignatureTagOptions): string {
   const tag = signatureTag(opts);
-  return (
+  const ancre =
     '<span aria-hidden="true" style="color: #FFFFFF; font-size: 4pt; line-height: 1;' +
     ' white-space: nowrap; letter-spacing: 0; user-select: none;">' +
     tag +
-    '</span>'
-  );
+    '</span>';
+
+  // Le champ démarre à l'ancre et s'étend vers le BAS. Sans place réservée
+  // sous elle, la signature déborde du cadre : constaté sur la première
+  // convention réellement signée (envoi EU 1619115, 10/09/2026), où la
+  // signature du client chevauchait la bordure et le libellé du bloc de l'OF.
+  // Sur une pièce contractuelle destinée à un financeur, une signature à
+  // cheval entre les deux parties est contestable.
+  //
+  // `height` est déclarée en unités DocuSeal, qui se comportent comme des
+  // points PDF (champ de 60 → 60 pt ≈ 21 mm, mesuré sur l'envoi 1619115) :
+  // on réserve donc la même valeur en `pt`.
+  const reserve =
+    opts.height === undefined
+      ? ''
+      : `<div aria-hidden="true" style="height: ${opts.height}pt;"></div>`;
+
+  return ancre + reserve;
 }
