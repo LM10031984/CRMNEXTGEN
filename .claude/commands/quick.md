@@ -53,9 +53,21 @@ Implémente le minimum. Commit `feat(<slug>):` ou `fix(<slug>):`.
 base (règle Laurent, 2026-09-10). Une seule voie :
 
 ```
-pnpm --filter @qualiof/db exec prisma migrate dev --name <slug>   # créer
-pnpm --filter @qualiof/db exec prisma migrate deploy              # appliquer
+pnpm db:migrate            # créer  (alias de db:migrate:local)
+pnpm db:deploy             # appliquer (alias de db:deploy:local)
+pnpm db:seed               # seeder (alias de db:seed:local)
 ```
+
+⚠ **N'appelez jamais le CLI Prisma nu** (`pnpm --filter @qualiof/db exec prisma
+migrate dev`) : il ne charge pas `.env.local`, et le `.env` racine porte l'URL
+**Supabase de production**. Les scripts ci-dessus chargent `.env.local` en
+priorité. Un garde-fou (`scripts/assert-db-target.ts`) refuse désormais toute
+cible non locale et affiche la base visée — mais ne comptez pas dessus pour
+rattraper une commande écrite de travers : lisez la ligne `🛡` qu'il imprime.
+
+Une opération volontaire sur la production se nomme et s'assume :
+`SEED_ALLOW_PROD=1 pnpm db:deploy:prod`. Ne posez jamais `SEED_ALLOW_PROD` dans
+un fichier `.env` — elle vaut pour une commande, pas pour un environnement.
 
 Pourquoi : `db push` écrit le schéma dans la base **sans laisser de migration**.
 L'historique et la base divergent alors en silence, et la production ne reçoit
@@ -69,6 +81,52 @@ Ce que cette règle n'interdit pas : `prisma generate`, qui ne touche aucune bas
 Toute migration créée doit être appliquée (`migrate deploy`) avant d'écrire dans
 la base depuis une branche en avance — sinon l'`INSERT` part avec les défauts
 d'enum de la base, pas ceux du schéma.
+
+### Isolement — une base de données par worktree
+
+**Règle (Laurent, 2026-09-10) : un nouveau worktree = une nouvelle base, nommée
+`qualiof_dev_<worktree>`.**
+
+Pourquoi. Les worktrees partageaient tous `qualiof_dev`. Chacun y appliquait ses
+propres migrations, si bien que la base portait des migrations absentes des
+autres branches. Résultat : depuis n'importe quel worktree, `prisma migrate dev`
+constatait une dérive et proposait `We need to reset the "public" schema… All
+data will be lost` — un reset qui aurait détruit les données locales **et** le
+travail des autres worktrees. Constaté le 10/09/2026 sur `files-signature`, qui
+voyait deux migrations de `files-chaine`.
+
+Mise en place, à faire à la création du worktree :
+
+```bash
+# 1. créer la base et ses extensions (schema.prisma en déclare 4)
+docker exec qualiof_postgres psql -U qualiof -d postgres \
+  -c "CREATE DATABASE qualiof_dev_<worktree> OWNER qualiof"
+docker exec qualiof_postgres psql -U qualiof -d qualiof_dev_<worktree> \
+  -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto;
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+      CREATE EXTENSION IF NOT EXISTS unaccent;'
+
+# 2. pointer le .env.local DU WORKTREE dessus (DATABASE_URL et DIRECT_URL)
+#    .env.local est gitignoré : il reste propre au worktree, c'est voulu.
+
+# 3. amener le schéma et le référentiel
+pnpm db:deploy && pnpm db:seed
+
+# 4. vérifier
+cd packages/db && npx dotenv -e ../../.env.local -e ../../.env -- \
+  npx prisma migrate status     # attendu : « Database schema is up to date! »
+```
+
+Bases en service au 10/09/2026 : `qualiof_dev` (worktree `files/`),
+`qualiof_dev_signature` (`files-signature`). Les bases `qualiof_drift*` et
+`qualiof_shadow*` sont des jetables de contrôle, à ne pas viser.
+
+À savoir : une base fraîche ne contient que le seed (tenant, 6 financeurs,
+catalogue Qualiopi, règles de financement) — **aucune donnée métier**. Un
+scénario qui a besoin d'apprenants ou de sessions réels passe par les scripts
+`import:*`, qui visent `.env` : les lancer avec `.env.local` en tête, faute de
+quoi le garde-fou les arrête.
 
 ## 5. Gates — les trois, dans cet ordre
 
