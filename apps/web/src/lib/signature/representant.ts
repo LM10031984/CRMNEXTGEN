@@ -47,7 +47,14 @@ export type SourceRepresentant =
   | 'ORG_REPRESENTATIVE'
   | 'CONTACT_PRINCIPAL'
   | 'APPRENANT_EI_SELF'
-  | 'APPRENANT_REPLI';
+  | 'APPRENANT_REPLI'
+  /**
+   * Le RÉGIME désigne le stagiaire lui-même (dossier de financement,
+   * attestation d'assiduité). Distinct d'`APPRENANT_REPLI`, qui dit « faute de
+   * mieux » : ici, l'apprenant n'est pas un repli, c'est le signataire prévu.
+   * La distinction se lit dans l'AuditLog de l'envoi.
+   */
+  | 'APPRENANT_STAGIAIRE';
 
 /**
  * D'où vient l'EMAIL retenu.
@@ -214,10 +221,24 @@ export function resoudreRepresentantIndividuel(a: {
   return { ok: true, nom: nomAffiche(a.apprenant), source: 'APPRENANT_REPLI' };
 }
 
+/**
+ * Le stagiaire signe pour lui-même — dossier de financement, attestation
+ * d'assiduité (lot C.2a-2).
+ *
+ * Ne refuse jamais : le régime a déjà tranché que c'est lui qui signe, il n'y a
+ * pas de cascade à parcourir. La fonction existe malgré tout ici, et pas au fil
+ * de l'appelant, pour que TOUS les noms de signataires sortent du même module —
+ * c'est ce qui empêche qu'un jour l'un d'eux s'écrive « NOM Prénom ».
+ */
+export function resoudreStagiaire(apprenant: Apprenant): ResolutionRepresentant {
+  return { ok: true, nom: nomAffiche(apprenant), source: 'APPRENANT_STAGIAIRE' };
+}
+
 /** Les sources où le signataire EST l'apprenant : son email est celui de sa fiche. */
 const SOURCES_APPRENANT: ReadonlySet<SourceRepresentant> = new Set<SourceRepresentant>([
   'APPRENANT_EI_SELF',
   'APPRENANT_REPLI',
+  'APPRENANT_STAGIAIRE',
 ]);
 
 /**

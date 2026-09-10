@@ -359,7 +359,12 @@ describe('les modules purs du régime — la règle vient de la donnée, pas d�
   const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
   /** Les modules purs du régime de signature. En ajouter un = une ligne ici. */
-  const MODULES = ['regime.ts', 'plan-envoi.ts', 'representant.ts'] as const;
+  const MODULES = [
+    'regime.ts',
+    'plan-envoi.ts',
+    'representant.ts',
+    'envoi-contrats.ts',
+  ] as const;
 
   /** Retire commentaires de bloc, commentaires de ligne et littéraux de message. */
   function codeSeul(source: string): string[] {

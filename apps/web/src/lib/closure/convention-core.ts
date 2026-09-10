@@ -54,9 +54,15 @@ export async function generateConventionCore(
     force?: boolean;
     /** Date de signature saisie à la main (ISO `yyyy-mm-dd`). */
     dateSignature?: string | null;
+    /**
+     * Lot C.2a-2 — régénère la convention AVEC ses ancres de signature
+     * électronique, et donc SANS le tampon image de l'OF : c'est le gabarit qui
+     * arbitre (`convention-template.ts`), pas l'appelant. Faux par défaut : la
+     * convention destinée à une signature manuscrite reste inchangée.
+     */
+    signatureTags?: boolean;
   },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; personId?: string; skipped?: boolean }> {
-  void options;
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
   // même type avant de recréer (anti-doublons). Le paramètre `force` reste
   // accepté dans la signature pour compat appelants mais ne conditionne plus rien.
@@ -262,6 +268,7 @@ export async function generateConventionCore(
     produitPriceHTPerStagiaire: effectivePrice,
     // Phase 7 (Plan 07-03) — résolution logo uploadé via Paramètres
     tenantId,
+    signatureTags: options?.signatureTags === true,
   };
 
   let pdfBuffer: Buffer;
@@ -346,6 +353,8 @@ export async function generateConventionEntrepriseCore(
   sponsorOrgId: string,
   /** Date de signature saisie à la main (ISO `yyyy-mm-dd`), sinon la règle. */
   dateSignature?: string | null,
+  /** Lot C.2a-2 — cf. `generateConventionCore` : ancres oui, tampon non. */
+  options?: { signatureTags?: boolean },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; sessionId?: string; count?: number }> {
   const org = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId },
@@ -497,6 +506,7 @@ export async function generateConventionEntrepriseCore(
     produitPriceHTPerStagiaire: productPrice,
     prixGlobalHT,
     tenantId,
+    signatureTags: options?.signatureTags === true,
   };
 
   let pdfBuffer: Buffer;

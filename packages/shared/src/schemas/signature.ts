@@ -80,3 +80,64 @@ export function parseSignatureSigners(raw: unknown): SignatureSigner[] {
   }
   return out;
 }
+
+// ─── Moteur d'envoi en signature (lot C.2a-2) ────────────────────────────────
+
+/**
+ * Les deux moments d'envoi. AVANT la formation : convention + dossier de
+ * financement. APRÈS : attestation d'assiduité.
+ */
+export const SCOPES_ENVOI = ['BEFORE', 'AFTER'] as const;
+export type ScopeEnvoiInput = (typeof SCOPES_ENVOI)[number];
+
+/**
+ * Ouverture du récapitulatif d'envoi (décision Laurent, 10/09/2026).
+ *
+ * Cette action RÉGÉNÈRE : elle produit le PDF exact qui partira — avec ses
+ * ancres — et rend son `hashSha256`. Ce n'est donc pas une lecture, et son
+ * schéma vit ici comme celui d'une écriture.
+ */
+export const preparerEnvoiSignatureSchema = z.object({
+  sessionId: z.string().uuid(),
+  scope: z.enum(SCOPES_ENVOI),
+  /** Sous-ensemble d'envois à préparer. Absent = tout le plan du moment choisi. */
+  cles: z.array(z.string().min(1)).optional(),
+});
+export type PreparerEnvoiSignatureInput = z.infer<typeof preparerEnvoiSignatureSchema>;
+
+/**
+ * Une pièce confirmée par l'admin devant le récapitulatif.
+ *
+ * `hashConfirme` n'est PAS une commodité d'appel : c'est le contrôle qui rend
+ * vraie la promesse « le clic confirme CE PDF-là ». Deux admins en parallèle,
+ * ou une régénération déclenchée ailleurs entre l'aperçu et le clic, enverraient
+ * sinon autre chose que ce qui a été relu. L'envoi REFUSE quand le hash a bougé.
+ */
+export const cibleEnvoiSignatureSchema = z.object({
+  /** Clé stable du plan d'envoi : `CONVENTION:org-1`, `AGEFICE:part-3`. */
+  cle: z.string().min(1),
+  /** Le `Document.hashSha256` vu à l'aperçu — 64 caractères hexadécimaux. */
+  hashConfirme: z.string().min(1, 'Hash du document confirmé manquant'),
+  /**
+   * Adresse saisie à la main par l'admin quand le signataire n'en a pas.
+   * SEULE dérogation au « pas de repli sur un autre contact » : décision
+   * humaine, assumée, et journalisée avec le nom retenu.
+   */
+  emailSaisi: z.string().trim().email('Adresse email invalide').optional(),
+});
+export type CibleEnvoiSignature = z.infer<typeof cibleEnvoiSignatureSchema>;
+
+/**
+ * Envoi effectif. Les cibles portent chacune SON hash : des tableaux parallèles
+ * (`cles[]` + `hashes[]`) se désaligneraient un jour sans que rien ne le dise.
+ */
+export const sendForSignatureSchema = z.object({
+  sessionId: z.string().uuid(),
+  scope: z.enum(SCOPES_ENVOI),
+  cibles: z
+    .array(cibleEnvoiSignatureSchema)
+    .min(1, 'Aucune pièce sélectionnée : rouvrez le récapitulatif et cochez ce qui doit partir.'),
+  /** Réenvoyer une pièce déjà signée. Jamais implicite. */
+  force: z.boolean().optional().default(false),
+});
+export type SendForSignatureInput = z.infer<typeof sendForSignatureSchema>;

@@ -332,7 +332,10 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
       P_TNS,
       expect.objectContaining({ signatureTags: true }),
     );
-    expect(ageficeMock).toHaveBeenCalledWith(P_TNS, expect.objectContaining({ signatureTags: true }));
+    expect(ageficeMock).toHaveBeenCalledWith(
+      P_TNS,
+      expect.objectContaining({ signatureTags: true }),
+    );
     expect(assiduiteMock).toHaveBeenCalledWith(
       P_TNS,
       expect.objectContaining({ signatureTags: true }),
@@ -389,7 +392,10 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
     if (!r.ok) return;
     const envoi = r.envois[0]!;
     expect(envoi.empechements.map((e) => e.raison)).toEqual(['ENVOI_EN_COURS']);
-    expect(envoi.empechements[0]!.message).toMatch(/annuler/i);
+    // Le message doit proposer les DEUX gestes : annuler, puis relancer. Un
+    // refus qui ne dit qu'« impossible » fait recliquer sur le même bouton.
+    expect(envoi.empechements[0]!.message).toMatch(/annul/i);
+    expect(envoi.empechements[0]!.message).toMatch(/relanc/i);
     expect(envoi.document?.regenere).toBe(false);
   });
 
@@ -461,7 +467,12 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
           opcoCode: 'OPCO_EP',
           contacts: [
             // Un AUTRE contact a bien un email : il ne doit servir à rien.
-            { firstName: 'Sophie', lastName: 'Bernard', email: 'sophie@agence.fr', isPrimary: false },
+            {
+              firstName: 'Sophie',
+              lastName: 'Bernard',
+              email: 'sophie@agence.fr',
+              isPrimary: false,
+            },
           ],
         },
       }),
