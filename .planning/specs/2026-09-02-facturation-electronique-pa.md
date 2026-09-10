@@ -235,7 +235,16 @@ Un lot = une PR, `/livraison` avant chaque commit, `pnpm test` vert (les 1 332 t
 
 **Toutes les décisions D-1 à D-5 sont closes au 10/09/2026.**
 
-Le seul point encore ouvert qui engage cette spec n'est pas une décision « D » mais un écart de l'audit produit du 28/08 : **E-9 — `settleInvoiceForParticipant`** (`dossiers-opco.ts`), dont la règle métier ne reverse rien au dé-toggle. **À trancher avant le lot 3** (transmission) : une facture soldée à tort part vers une plateforme d'État avec un statut de règlement faux, et le cycle de vie renvoyé par la PA le contredirait.
+~~Le seul point encore ouvert…~~ **E-9 — `settleInvoiceForParticipant` : TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable.** Réversion **symétrique** : le dé-toggle défait ce que le toggle a fait.
+
+- `InvoicePayment.source` (`MANUAL` | `OPCO_SYNC`), migration **additive**, défaut `MANUAL` — les règlements antérieurs à la colonne ont une origine inconnue, donc humaine par précaution : se tromper dans ce sens ne fait que refuser une suppression, se tromper dans l'autre en efface une vraie.
+- **Toggle ON** : règlement `OPCO_SYNC` + facture `PAID` + `AuditLog` — l'aller n'en écrivait aucun.
+- **Toggle OFF** : suppression du seul règlement `OPCO_SYNC`, retour `ISSUED` (ou `PARTIAL` s'il reste quelque chose) + `AuditLog`.
+- **Règlement `MANUAL` coexistant** : refus explicite nommant la facture, **aucune écriture** — et le refus est vérifié AVANT d'écrire le participant, sinon on créerait la divergence qu'on corrige.
+
+Ce qui a invalidé le statu quo : son commentaire invoquait « un mouvement d'argent ne s'annule pas silencieusement », mais rien ne signalait jamais la correction à faire, et la bascule n'écrivait **aucun** `AuditLog`. L'argument défendait une trace qui n'existait pas. Elle existe désormais des deux côtés.
+
+**Plus aucun point ouvert sur cette spec.** Le lot 2 (Factur-X) peut démarrer.
 
 ---
 

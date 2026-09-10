@@ -947,16 +947,34 @@ model Invoice {
   @@index([originalInvoiceId])
 }
 
+/// Origine d'un règlement — E-9, tranché le 10/09/2026.
+///
+/// `OPCO_SYNC` : posé automatiquement par la bascule d'encaissement du dossier
+/// OPCO. C'est le SEUL que le dé-toggle a le droit de supprimer.
+/// `MANUAL` : saisi par un humain. Jamais supprimé automatiquement, sous aucun
+/// prétexte — on n'efface pas un fait comptable qu'on n'a pas produit.
+///
+/// Défaut `MANUAL` : les règlements antérieurs à cette colonne ont une origine
+/// inconnue, donc on les traite comme humains. Se tromper dans ce sens ne fait
+/// que refuser une suppression ; se tromper dans l'autre en effacerait une vraie.
+enum InvoicePaymentSource {
+  MANUAL
+  OPCO_SYNC
+}
+
 model InvoicePayment {
-  id         String   @id @default(uuid())
+  id         String               @id @default(uuid())
   invoiceId  String
-  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice    Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   method     String // "virement" | "cheque" | "cb" | "prelevement" | "especes"
-  amount     Decimal  @db.Decimal(10, 2)
+  amount     Decimal              @db.Decimal(10, 2)
   receivedAt DateTime
   reference  String?
   notes      String?
-  createdAt  DateTime @default(now())
+  source     InvoicePaymentSource @default(MANUAL)
+  createdAt  DateTime             @default(now())
+
+  @@index([invoiceId, source])
 }
 
 /// Devis commercial — workflow hybride : champs destinataire 100% libres
