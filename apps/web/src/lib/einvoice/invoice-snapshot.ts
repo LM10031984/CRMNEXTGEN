@@ -305,7 +305,7 @@ export interface TrainingLinesInput {
   endDate: Date | null;
   dureeHeures: number | null;
   vatRate: number;
-  /** `Tenant.vatExemptionText`, défaut applicatif `MENTION_TVA`. */
+  /** `Tenant.vatExemptionText`, défaut applicatif `MENTION_EXONERATION_TVA`. */
   vatExemptionText: string | null;
   participants: TrainingLineParticipant[];
 }

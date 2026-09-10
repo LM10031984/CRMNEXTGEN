@@ -8,5 +8,3 @@ export const DELAI_ACCES =
 
 export const ACCESSIBILITE_PSH =
   "Formation accessible aux personnes en situation de handicap. Référent handicap : Julien Lafitte — julien@start-academy.fr — Adaptations sur demande (matériel, rythme, supports). Réseau partenaires : Agefiph, Cap emploi 06, MDPH 06.";
-
-export const MENTION_TVA = "TVA non applicable, art. 261-4-4° du CGI.";

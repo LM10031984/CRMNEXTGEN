@@ -19,7 +19,7 @@ import { resolveInvoiceIssueDate } from '@/lib/invoice-dates';
 import { sendMail } from '@/lib/mailer';
 import { renderInvoiceReminderEmail } from '@/lib/mailer-templates/invoice-reminder';
 import { CreateCreditNoteSchema } from '@qualiof/shared';
-import { MENTION_TVA } from '@/lib/catalogue-constants';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 import {
   buildBuyerParty,
   buildCreditNoteLine,
@@ -116,7 +116,7 @@ async function loadSellerSnapshot(
       city: of.addressVille || null,
       email: of.email || null,
     }),
-    vatExemptionText: tenant?.vatExemptionText?.trim() || MENTION_TVA,
+    vatExemptionText: tenant?.vatExemptionText?.trim() || MENTION_EXONERATION_TVA,
   };
 }
 

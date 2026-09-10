@@ -27,6 +27,7 @@
  */
 
 import { formatIban } from './iban-format';
+import { MENTION_EXONERATION_TVA } from './tva-exoneration';
 import {
   loadLogoColorDataUrl,
   loadPaidStampDataUrl,
@@ -310,7 +311,7 @@ ${avoirMention}
 <div class="bottom">
   <div class="left">
     ${exonerationTva ? `
-    <div class="row">T.V.A. non applicable ou exonérée<br>TVA non applicable en vertu de l'article 261-4-4° du CGI</div>
+    <div class="row">T.V.A. non applicable ou exonérée<br>${MENTION_EXONERATION_TVA}</div>
     ` : ''}
     ${acq ? '' : `<div class="row"><strong>Date d'échéance:</strong>&nbsp;&nbsp;${fmtDate.format(d.dueDate)}</div>`}
     <div class="row"><strong>Mode de règlement:</strong> ${escapeHtml(d.paymentMethod)}</div>

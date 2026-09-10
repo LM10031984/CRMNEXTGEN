@@ -23,6 +23,7 @@ import type { PricingPayerResult, PricingSynthesis } from '../pricing';
 import { COVERAGE_STATE_LABEL } from '../pricing';
 import { PROPOSITION_STYLES } from './proposition-styles';
 import { renderDocumentPageRule } from '@/lib/docs/weasyprint-base';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 import type { PropositionData } from './proposition-data';
 
 /** Nombre de sections numérotées de la proposition — invariant. */
@@ -319,7 +320,7 @@ function renderPricingTable(data: PropositionData): string {
 
   const rows: string[] = [blocks];
   rows.push(
-    `<tr><td colspan="5"><b>Coût pédagogique total</b> <span class="muted">(TVA non applicable — article 261-4-4° a du CGI, activité de formation exonérée)</span></td><td class="num"><b>${money(pricing.totalHt)}</b></td></tr>`,
+    `<tr><td colspan="5"><b>Coût pédagogique total</b> <span class="muted">(${MENTION_EXONERATION_TVA})</span></td><td class="num"><b>${money(pricing.totalHt)}</b></td></tr>`,
   );
   if (pricing.totalCoverage > 0) {
     rows.push(

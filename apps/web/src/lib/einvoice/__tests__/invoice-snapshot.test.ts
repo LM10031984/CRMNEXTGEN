@@ -163,7 +163,7 @@ const LIGNES_INPUT = {
   endDate: new Date('2026-06-03T00:00:00Z'),
   dureeHeures: 21,
   vatRate: 0,
-  vatExemptionText: 'TVA non applicable, art. 261-4-4° du CGI.',
+  vatExemptionText: 'Mention propre à cet OF — override tenant',
 };
 
 describe('lignes de facture', () => {
@@ -202,7 +202,7 @@ describe('lignes de facture', () => {
       ],
     });
     expect(line!.vatCategory).toBe('E');
-    expect(line!.vatExemptionReasonText).toBe('TVA non applicable, art. 261-4-4° du CGI.');
+    expect(line!.vatExemptionReasonText).toBe('Mention propre à cet OF — override tenant');
     expect(line!.vatExemptionReasonCode).toBeNull();
   });
 

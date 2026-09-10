@@ -32,7 +32,7 @@
  */
 
 import { prisma, Prisma } from '@qualiof/db';
-import { MENTION_TVA } from '../src/lib/catalogue-constants';
+import { MENTION_EXONERATION_TVA } from '../src/lib/tva-exoneration';
 import { resolveSiren, vatCategoryFor } from '../src/lib/einvoice/invoice-snapshot';
 
 // ─── Arguments ────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ async function main() {
     select: { id: true, vatExemptionText: true },
   });
   const mentionParTenant = new Map(
-    tenants.map((t) => [t.id, t.vatExemptionText?.trim() || MENTION_TVA]),
+    tenants.map((t) => [t.id, t.vatExemptionText?.trim() || MENTION_EXONERATION_TVA]),
   );
 
   const aEcrire: FactureAConvertir[] = candidates.map((f) => {
@@ -260,7 +260,7 @@ async function main() {
             // D-2 non tranchée : pas de code VATEX inventé.
             vatExemptionReasonCode: null,
             vatExemptionReasonText:
-              vatCategory === 'E' ? (mentionParTenant.get(f.tenantId) ?? MENTION_TVA) : null,
+              vatCategory === 'E' ? (mentionParTenant.get(f.tenantId) ?? MENTION_EXONERATION_TVA) : null,
             participantId: f.participantId,
             totalHT: f.amountHT,
           },
