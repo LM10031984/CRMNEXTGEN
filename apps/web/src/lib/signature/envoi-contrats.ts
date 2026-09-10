@@ -172,10 +172,45 @@ export interface EnvoiEffectue {
   /** Le hash de ce qui est RÉELLEMENT parti — celui qui a été confirmé. */
   hash: string;
   signataire: { nom: string; email: string; source: SourceEmailRepresentant };
+  /**
+   * Le lien de signature du signataire côté bénéficiaire (lot C.2b-bis).
+   *
+   * Il était déjà PERSISTÉ dans `SignatureRequest.signers[]` depuis le lot B,
+   * mais aucun chemin de lecture ne l'exposait : DocuSeal partant en
+   * `send_email: false` (D-9) et QualiOF n'envoyant rien avant le lot C.2c,
+   * personne n'était prévenu et personne ne POUVAIT l'être. Le rendre ici, c'est
+   * ce qui permet à l'admin de communiquer le lien à la main en attendant C.2c.
+   *
+   * `null` si le prestataire n'en a pas rendu — un lot dry-run, par exemple.
+   */
+  signUrl: string | null;
 }
 
 export type SendForSignatureResult =
   | { ok: true; envoyes: EnvoiEffectue[]; refus: RefusEnvoi[] }
+  | { ok: false; error: string };
+
+// ─── Ce que rend l'annulation (lot C.2b-bis) ─────────────────────────────────
+
+/** Une pièce sortie du gel : ce qu'elle a retrouvé, et ce qu'elle n'a pas retrouvé. */
+export interface PieceRelachee {
+  documentId: string;
+  /** `Document.type` tel quel — la demande ne porte que des pièces signables. */
+  docType: string;
+  /** Le statut REMIS au document : celui que le journal lui connaissait avant l'envoi. */
+  statutRetabli: string;
+  /** Vrai si le PDF a été régénéré SANS ses ancres, symétriquement à l'envoi. */
+  regeneree: boolean;
+  /**
+   * Pourquoi la régénération n'a pas eu lieu, quand elle n'a pas eu lieu.
+   * JAMAIS `null` en même temps que `regeneree: false` : un document laissé
+   * dans sa version à ancres, et donc sans le tampon de l'OF, doit se dire.
+   */
+  raisonNonRegeneree: string | null;
+}
+
+export type AnnulerEnvoiSignatureResult =
+  | { ok: true; signatureRequestId: string; sessionId: string; pieces: PieceRelachee[] }
   | { ok: false; error: string };
 
 // ─── Messages ────────────────────────────────────────────────────────────────
@@ -237,6 +272,64 @@ export function messageAucunChampDeSignature(libelle: string): string {
 
 export function messageErreurPrestataire(libelle: string, cause: string): string {
   return `« ${libelle} » n'a pas pu être envoyée au prestataire de signature : ${cause}`;
+}
+
+/**
+ * Le refus d'annuler une demande qui n'est plus en cours.
+ *
+ * Il nomme l'état constaté : « déjà signée » et « déjà annulée » n'appellent pas
+ * le même geste, et un message unique ferait recliquer sur les deux.
+ */
+export function messageDemandeNonAnnulable(statut: string): string {
+  if (statut === 'CANCELED') {
+    return (
+      `Cet envoi est déjà annulé : rien de plus à faire. Si la pièce reste bloquée à ` +
+      `l'écran, rechargez la fiche session.`
+    );
+  }
+  return (
+    `Cet envoi ne peut plus être annulé : il est à l'état « ${statut} ». Une demande signée ` +
+    `porte une preuve — l'annuler la retirerait. Rien n'a été touché.`
+  );
+}
+
+/**
+ * L'annulation refusée par le prestataire. On le dit, et on dit surtout que
+ * RIEN n'a bougé en local : marquer la demande annulée pendant qu'elle reste
+ * ouverte chez lui laisserait quelqu'un signer une pièce que QualiOF croit
+ * annulée — et le webhook du lot C.3 apposerait cette signature sur un document
+ * entre-temps régénéré.
+ */
+export function messageAnnulationPrestataireImpossible(cause: string): string {
+  return (
+    `L'annulation a été refusée par le prestataire de signature : ${cause} Rien n'a été ` +
+    `modifié dans QualiOF — la demande reste ouverte chez lui, et l'annuler en local la ` +
+    `rendrait invisible sans l'arrêter.`
+  );
+}
+
+/**
+ * Pourquoi une pièce annulée n'a PAS été rendue à sa version sans ancres.
+ *
+ * Tous les générateurs commencent par un `deleteMany` : régénérer une pièce qui
+ * porte déjà une signature en effacerait la preuve. On s'abstient, et on le dit
+ * — un document laissé dans sa version à ancres est un document sans le tampon
+ * de l'OF, ce qui doit se savoir avant de le télécharger.
+ */
+export function messagePreuveConservee(): string {
+  return (
+    `Le PDF n'a pas été régénéré : ce document porte déjà un exemplaire signé, et le ` +
+    `régénérer l'effacerait. Il reste dans sa version à zones de signature — donc sans ` +
+    `le tampon de l'organisme.`
+  );
+}
+
+export function messageRegenerationApresAnnulationImpossible(cause: string): string {
+  return (
+    `Le PDF n'a pas pu être régénéré sans ses zones de signature : ${cause} Le document ` +
+    `reste dans sa version à ancres, et donc SANS le tampon de l'organisme : régénérez-le ` +
+    `depuis la fiche session avant de le remettre à qui que ce soit.`
+  );
 }
 
 export function messageCleInconnue(cle: string): string {

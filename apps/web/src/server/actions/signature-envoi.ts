@@ -44,6 +44,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import {
+  annulerEnvoiSignatureSchema,
   preparerEnvoiSignatureSchema,
   sendForSignatureSchema,
   signatureSignersSchema,
@@ -52,7 +53,10 @@ import {
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { DOCS_BUCKET, downloadFile } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
-import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
+import {
+  groupConventionAnyShapeWhere,
+  GROUP_CONVENTION_ENTITY_TYPE,
+} from '@/lib/docs/convention-coverage';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import {
   generateConventionCore,
@@ -67,7 +71,7 @@ import {
   type ParticipantPourEnvoi,
   type ScopeEnvoi,
 } from '@/lib/signature/plan-envoi';
-import type { DocTypeSignable } from '@/lib/signature/regime';
+import { DOC_TYPES_SIGNABLES, type DocTypeSignable } from '@/lib/signature/regime';
 import { chargerReglesSignature } from '@/lib/signature/catalogue-regime';
 import {
   codesFinanceursDe,
@@ -86,8 +90,12 @@ import { resolveTenantSignatory } from '@/lib/signature/signatory';
 import { getSignatureProvider, SignatureNotConfiguredError } from '@/lib/signature/provider';
 import type { SignatureSignerInput } from '@/lib/signature/port';
 import {
+  messageAnnulationPrestataireImpossible,
   messageAucunChampDeSignature,
   messageCleInconnue,
+  messageDemandeNonAnnulable,
+  messagePreuveConservee,
+  messageRegenerationApresAnnulationImpossible,
   messageDejaSigne,
   messageDocNonGenere,
   messageDocumentModifie,
@@ -97,9 +105,11 @@ import {
   ofSigneLaPiece,
   roleAncreClient,
   roleAncreOf,
+  type AnnulerEnvoiSignatureResult,
   type DocumentAEnvoyer,
   type Empechement,
   type EnvoiEffectue,
+  type PieceRelachee,
   type EnvoiPrepare,
   type PreparerEnvoiSignatureResult,
   type RefusEnvoi,
@@ -110,6 +120,25 @@ import {
 /** Statuts de `Document.status` qui interdisent de toucher au PDF. */
 const STATUT_SIGNE = 'signed';
 const STATUT_ENVOYE = 'sent_for_signature';
+/** L'état d'un document simplement produit — celui d'avant tout envoi. */
+const STATUT_GENERE = 'generated';
+
+/**
+ * Les états de demande qu'une annulation peut encore atteindre (lot C.2b-bis).
+ *
+ * `DONE` en est exclu : une demande signée porte une preuve, l'annuler la
+ * retirerait. `CANCELED` aussi : il n'y a rien à annuler deux fois. `DECLINED`
+ * et `EXPIRED` y sont, eux, parce qu'ils laissent le `Document` gelé en
+ * `sent_for_signature` : sans annulation, la pièce resterait bloquée pour un
+ * motif déjà clos.
+ */
+const DEMANDES_ANNULABLES: ReadonlySet<string> = new Set([
+  'DRAFT',
+  'SENT',
+  'PARTIALLY_SIGNED',
+  'DECLINED',
+  'EXPIRED',
+]);
 
 /**
  * Durée de validité d'une demande (spec §5 lot C, filet `signature-sync` :
@@ -336,30 +365,82 @@ type ResultatGenerateur = { ok: boolean; error?: string };
  * Qui régénère quoi. TABLE de données : brancher une pièce signable de plus se
  * fait ici, pas dans un `if` au milieu de la boucle.
  *
- * `signatureTags: true` est passé À L'IDENTIQUE aux trois gabarits : ce n'est
- * pas au moteur de savoir lequel garde son tampon. Le formulaire AGEFICE
- * conserve l'image de signature de l'OF (une seule partie y signe), la
- * convention et l'attestation la retirent — chaque gabarit tranche chez lui.
+ * `signatureTags` est passé À L'IDENTIQUE aux trois gabarits : ce n'est pas au
+ * moteur de savoir lequel garde son tampon. Le formulaire AGEFICE conserve
+ * l'image de signature de l'OF (une seule partie y signe), la convention et
+ * l'attestation la retirent — chaque gabarit tranche chez lui.
+ *
+ * Le drapeau est un PARAMÈTRE, pas une constante (lot C.2b-bis) : l'envoi
+ * régénère AVEC les ancres, l'annulation régénère SANS, par le même chemin.
+ * Deux chemins de régénération finiraient par diverger sur le tampon de l'OF.
  */
 const REGENERATION_PAR_PIECE: Record<
   DocTypeSignable,
-  (a: { tenantId: string; sessionId: string; forme: FormeDocument }) => Promise<ResultatGenerateur>
+  (a: {
+    tenantId: string;
+    sessionId: string;
+    forme: FormeDocument;
+    signatureTags: boolean;
+  }) => Promise<ResultatGenerateur>
 > = {
-  CONVENTION: async ({ tenantId, sessionId, forme }) =>
+  CONVENTION: async ({ tenantId, sessionId, forme, signatureTags }) =>
     forme.forme === 'GROUPE'
       ? generateConventionEntrepriseCore(tenantId, sessionId, forme.organizationId, null, {
-          signatureTags: true,
+          signatureTags,
         })
-      : generateConventionCore(tenantId, forme.participantId, { signatureTags: true }),
-  AGEFICE: async ({ forme }) =>
+      : generateConventionCore(tenantId, forme.participantId, { signatureTags }),
+  AGEFICE: async ({ forme, signatureTags }) =>
     forme.forme === 'INDIVIDUEL'
-      ? generateAgeficeForParticipant(forme.participantId, { signatureTags: true })
+      ? generateAgeficeForParticipant(forme.participantId, { signatureTags })
       : { ok: false, error: 'Un dossier AGEFICE est toujours nominatif.' },
-  ASSIDUITE: async ({ forme }) =>
+  ASSIDUITE: async ({ forme, signatureTags }) =>
     forme.forme === 'INDIVIDUEL'
-      ? generateAgeficeAttendanceForParticipant(forme.participantId, { signatureTags: true })
+      ? generateAgeficeAttendanceForParticipant(forme.participantId, { signatureTags })
       : { ok: false, error: "Une attestation d'assiduité est toujours nominative." },
 };
+
+/** Cette pièce fait-elle partie des trois qui partent en signature ? */
+function estPieceSignable(type: string): type is DocTypeSignable {
+  return (DOC_TYPES_SIGNABLES as readonly string[]).includes(type);
+}
+
+/**
+ * La forme d'un document DÉJÀ EN BASE, pour pouvoir le régénérer sans repasser
+ * par le plan d'envoi (lot C.2b-bis — l'annulation ne connaît que la demande).
+ *
+ * `null` pour la convention de groupe produite par les scripts `_gen-*`
+ * (`entityType='session'`) : elle ne porte aucun commanditaire, donc rien ne dit
+ * pour QUELLE organisation la régénérer. On préfère le dire plutôt que d'en
+ * régénérer une au hasard.
+ */
+function formeDuDocumentEnBase(doc: {
+  entityType: string;
+  entityId: string;
+  participantId: string | null;
+}): FormeDocument | null {
+  if (doc.participantId !== null) {
+    return { forme: 'INDIVIDUEL', participantId: doc.participantId };
+  }
+  if (doc.entityType === GROUP_CONVENTION_ENTITY_TYPE) {
+    return { forme: 'GROUPE', organizationId: doc.entityId };
+  }
+  return null;
+}
+
+/**
+ * Le statut que le journal connaissait au document AVANT son envoi.
+ *
+ * Lu dans le `diff` de `signature.sent`, qui écrit `status: { before, after }`.
+ * Sans cette relecture, un renvoi forcé d'une pièce déjà signée reviendrait à
+ * `generated` et perdrait la mention de sa signature.
+ */
+function statutAvantEnvoiDuJournal(diff: unknown): string | null {
+  if (typeof diff !== 'object' || diff === null) return null;
+  const statut = (diff as { status?: unknown }).status;
+  if (typeof statut !== 'object' || statut === null) return null;
+  const avant = (statut as { before?: unknown }).before;
+  return typeof avant === 'string' && avant.length > 0 ? avant : null;
+}
 
 // ─── Résolution du signataire côté bénéficiaire ──────────────────────────────
 
@@ -580,6 +661,7 @@ export async function preparerEnvoiSignature(
         tenantId: user.tenantId,
         sessionId,
         forme: forme.forme,
+        signatureTags: true,
       });
       const apres = resultat.ok
         ? await trouverDocument(user.tenantId, sessionId, envoi.docType, forme.forme)
@@ -808,6 +890,7 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
     }
 
     const signers: SignatureSignerInput[] = [];
+    const roleClient = roleAncreClient(envoi.docType);
     const roleOf = roleAncreOf(envoi.docType);
     if (roleOf !== null && !signataireOf.ok) {
       refuser('SIGNATAIRE_OF_INCOMPLET', signataireOf.error);
@@ -817,7 +900,7 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
     const ofAvant = signataireOf.ok && signataireOf.signatory.order === 'BEFORE';
     const rangClient = roleOf !== null && ofAvant ? 1 : 0;
     signers.push({
-      role: roleAncreClient(envoi.docType),
+      role: roleClient,
       name: client.signataire.nom,
       email: client.signataire.email,
       order: rangClient,
@@ -950,6 +1033,12 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
         email: client.signataire.email,
         source: client.signataire.sourceEmail,
       },
+      // D-9, lot C.2b-bis : le lien EXISTAIT déjà en base sans qu'aucun chemin
+      // ne l'expose. Le rendre ici est ce qui permet à l'admin de le
+      // communiquer à la main tant que l'envoi des emails (C.2c) n'est pas
+      // livré — sans lui, un clic « Envoyer » ne prévenait personne et ne
+      // POUVAIT prévenir personne.
+      signUrl: creation.signers.find((s) => s.role === roleClient)?.signUrl ?? null,
     });
   }
 
@@ -960,6 +1049,252 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
   }
 
   return { ok: true, envoyes, refus };
+}
+
+// ─── Action 3 — annuler un envoi en cours (lot C.2b-bis) ─────────────────────
+
+/**
+ * Annule une demande de signature et REND la pièce à l'état d'avant l'envoi.
+ *
+ * POURQUOI ELLE EXISTE. Un envoi réussi pose `Document.status =
+ * 'sent_for_signature'`. Dès lors `preparerEnvoiSignature` refuse de régénérer
+ * la pièce et `sendForSignature` refuse de la renvoyer (`ENVOI_EN_COURS`, que
+ * `force` ne lève pas). Le webhook qui lèverait ce statut est le lot C.3, et il
+ * ne se déclenchera pas tant que personne n'a reçu de lien (lot C.2c) : la
+ * pièce est GELÉE SANS RECOURS. `messageEnvoiEnCours` promettait d'ailleurs
+ * « Annulez l'envoi en cours », un geste qui n'existait nulle part.
+ *
+ * L'ORDRE N'EST PAS DÉCORATIF — LE PRESTATAIRE D'ABORD. Marquer `CANCELED` en
+ * local pendant que la demande reste ouverte chez DocuSeal laisserait quelqu'un
+ * signer une pièce que QualiOF croit annulée, et le webhook du lot C.3
+ * apposerait cette signature sur un document entre-temps régénéré. Un refus du
+ * prestataire n'écrit donc RIEN : fail-closed, et dit.
+ *
+ * LA RÉGÉNÉRATION EN SENS INVERSE (arbitrage Laurent, 10/09/2026). Après
+ * annulation, le document est resté dans sa version À ANCRES, et donc — pour la
+ * convention et l'attestation d'assiduité — SANS le tampon de l'organisme. Un
+ * admin qui le téléchargerait récupérerait une pièce non signée par l'OF :
+ * régression par rapport à l'état d'avant l'envoi. On régénère donc avec
+ * `signatureTags: false`, symétriquement, par LE MÊME chemin
+ * (`REGENERATION_PAR_PIECE`), avec sa trace.
+ *
+ * SAUF QUAND CE SERAIT DÉTRUIRE UNE PREUVE. Tous les générateurs commencent par
+ * un `deleteMany` : régénérer une pièce qui porte déjà un exemplaire signé
+ * (`signedPdfUrl`, ou un renvoi forcé d'un document `signed`) l'effacerait. On
+ * s'abstient alors, et `raisonNonRegeneree` le DIT — un document laissé à
+ * ancres est un document sans tampon, ce qui doit se savoir avant remise.
+ */
+export async function annulerEnvoiSignature(
+  input: unknown,
+): Promise<AnnulerEnvoiSignatureResult> {
+  let user;
+  try {
+    user = await requireRole(['ADMIN', 'MANAGER']);
+  } catch (e) {
+    if (e instanceof UnauthorizedError || e instanceof ForbiddenError) {
+      return { ok: false, error: e.message };
+    }
+    throw e;
+  }
+
+  const parsed = annulerEnvoiSignatureSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: `Demande d'annulation invalide : ${Object.values(parsed.error.flatten().fieldErrors)
+        .flat()
+        .join(', ')}`,
+    };
+  }
+  const { signatureRequestId } = parsed.data;
+
+  // Fail-closed, comme l'envoi : sans prestataire configuré, on ne « tente » pas
+  // une annulation qui laisserait la demande ouverte chez lui.
+  let provider;
+  try {
+    provider = getSignatureProvider();
+  } catch (e) {
+    if (e instanceof SignatureNotConfiguredError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const demande = await prisma.signatureRequest.findFirst({
+    where: { id: signatureRequestId, tenantId: user.tenantId },
+    select: {
+      id: true,
+      providerId: true,
+      status: true,
+      sessionId: true,
+      documents: {
+        select: {
+          id: true,
+          type: true,
+          entityType: true,
+          entityId: true,
+          sessionId: true,
+          participantId: true,
+          status: true,
+          signedPdfUrl: true,
+        },
+      },
+    },
+  });
+  if (demande === null) {
+    return {
+      ok: false,
+      error:
+        "Demande de signature introuvable dans cet espace : aucune annulation n'a été tentée " +
+        "pour une demande qui n'appartient pas à votre organisme.",
+    };
+  }
+
+  if (!DEMANDES_ANNULABLES.has(demande.status)) {
+    return { ok: false, error: messageDemandeNonAnnulable(demande.status) };
+  }
+
+  // Le statut d'AVANT, relu du journal, AVANT tout appel réseau : c'est lui
+  // qu'on remettra, et le lire après l'annulation ne changerait rien à sa
+  // valeur mais compliquerait la lecture du code.
+  const statutsAvant = new Map<string, string>();
+  for (const doc of demande.documents) {
+    const trace = await prisma.auditLog.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        entity: 'Document',
+        entityId: doc.id,
+        action: 'signature.sent',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { diff: true },
+    });
+    statutsAvant.set(doc.id, statutAvantEnvoiDuJournal(trace?.diff) ?? STATUT_GENERE);
+  }
+
+  try {
+    await provider.cancel(demande.providerId);
+  } catch (e) {
+    return { ok: false, error: messageAnnulationPrestataireImpossible(messageDe(e)) };
+  }
+
+  // Une seule transaction : la demande, les documents relâchés, et LA TRACE.
+  // Une trace écrite à côté pourrait manquer sur un outil dont un auditeur
+  // Qualiopi lit le journal.
+  await prisma.$transaction(async (tx) => {
+    await tx.signatureRequest.update({
+      where: { id: demande.id },
+      data: { status: 'CANCELED', lastError: null },
+    });
+
+    for (const doc of demande.documents) {
+      const statutRetabli = statutsAvant.get(doc.id) ?? STATUT_GENERE;
+      await tx.document.update({
+        where: { id: doc.id },
+        data: { status: statutRetabli, signatureRequestId: null },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: user.tenantId,
+          userId: user.id,
+          entity: 'Document',
+          entityId: doc.id,
+          action: 'signature.canceled',
+          diff: {
+            signatureRequestId: demande.id,
+            providerId: demande.providerId,
+            docType: doc.type,
+            motif:
+              "Envoi en signature annulé depuis QualiOF. La demande a d'abord été annulée " +
+              'chez le prestataire ; la pièce sort du gel et redevient régénérable.',
+            status: { before: doc.status, after: statutRetabli },
+            demande: { before: demande.status, after: 'CANCELED' },
+          },
+        },
+      });
+    }
+  });
+
+  // La régénération SANS ancres suit la transaction, sciemment : elle est faite
+  // par les générateurs, partagés avec cinq autres appelants (dette ouverte en
+  // lot H). C'est la même contrainte, et le même choix, qu'à la préparation.
+  const pieces: PieceRelachee[] = [];
+  for (const doc of demande.documents) {
+    const statutRetabli = statutsAvant.get(doc.id) ?? STATUT_GENERE;
+    const base = { docType: doc.type as string, statutRetabli };
+
+    if (doc.signedPdfUrl !== null || statutRetabli === STATUT_SIGNE) {
+      pieces.push({
+        ...base,
+        documentId: doc.id,
+        regeneree: false,
+        raisonNonRegeneree: messagePreuveConservee(),
+      });
+      continue;
+    }
+
+    const forme = formeDuDocumentEnBase(doc);
+    if (!estPieceSignable(doc.type) || forme === null) {
+      pieces.push({
+        ...base,
+        documentId: doc.id,
+        regeneree: false,
+        raisonNonRegeneree: messageRegenerationApresAnnulationImpossible(
+          "la forme de ce document ne dit pas pour qui le régénérer (convention de groupe " +
+            'sans commanditaire porté).',
+        ),
+      });
+      continue;
+    }
+
+    const sessionDuDocument = doc.sessionId ?? demande.sessionId;
+    const resultat = await REGENERATION_PAR_PIECE[doc.type]({
+      tenantId: user.tenantId,
+      sessionId: sessionDuDocument,
+      forme,
+      signatureTags: false,
+    });
+    if (!resultat.ok) {
+      pieces.push({
+        ...base,
+        documentId: doc.id,
+        regeneree: false,
+        raisonNonRegeneree: messageRegenerationApresAnnulationImpossible(
+          resultat.error ?? 'cause inconnue.',
+        ),
+      });
+      continue;
+    }
+
+    // Les générateurs REMPLACENT le Document : l'id change. On relit, sinon la
+    // trace et le lien rendus pointeraient une ligne supprimée.
+    const apres = await trouverDocument(user.tenantId, sessionDuDocument, doc.type, forme);
+    const idApres = apres?.id ?? doc.id;
+    pieces.push({ ...base, documentId: idApres, regeneree: true, raisonNonRegeneree: null });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'Document',
+        entityId: idApres,
+        action: 'document.regenerated_after_cancel',
+        diff: {
+          signatureRequestId: demande.id,
+          docType: doc.type,
+          motif:
+            "Régénération SANS zones de signature après annulation de l'envoi — symétrique " +
+            "de la régénération avec ancres faite à l'ouverture du récapitulatif. Sans elle, " +
+            "le document resterait sans le tampon de l'organisme.",
+          documentId: { before: doc.id, after: idApres },
+        },
+      },
+    });
+  }
+
+  revalidatePath(`/app/sessions/${demande.sessionId}`);
+  // La liste des sessions porte un filtre de signature : elle lit la même donnée.
+  revalidatePath('/app/sessions');
+
+  return { ok: true, signatureRequestId: demande.id, sessionId: demande.sessionId, pieces };
 }
 
 // ─── Petits utilitaires ──────────────────────────────────────────────────────

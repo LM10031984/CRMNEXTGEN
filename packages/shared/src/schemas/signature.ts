@@ -141,3 +141,23 @@ export const sendForSignatureSchema = z.object({
   force: z.boolean().optional().default(false),
 });
 export type SendForSignatureInput = z.infer<typeof sendForSignatureSchema>;
+
+/**
+ * Annulation d'un envoi en cours (lot C.2b-bis).
+ *
+ * POURQUOI CETTE ACTION EXISTE. Un envoi réussi pose `Document.status =
+ * 'sent_for_signature'`. Dès lors `preparerEnvoiSignature` refuse de régénérer
+ * la pièce et `sendForSignature` refuse de la renvoyer (`ENVOI_EN_COURS`, que
+ * `force` ne lève pas). Tant que le webhook du lot C.3 n'existe pas — et
+ * personne n'ayant reçu de lien avant le lot C.2c —, la pièce est GELÉE sans
+ * recours. `messageEnvoiEnCours` promettait d'ailleurs « Annulez l'envoi en
+ * cours », un geste qui n'existait nulle part.
+ *
+ * L'entrée porte l'identifiant de la DEMANDE, pas celui du document : c'est la
+ * demande qui est annulée chez le prestataire, et elle peut couvrir plusieurs
+ * documents.
+ */
+export const annulerEnvoiSignatureSchema = z.object({
+  signatureRequestId: z.string().uuid(),
+});
+export type AnnulerEnvoiSignatureInput = z.infer<typeof annulerEnvoiSignatureSchema>;
