@@ -14,6 +14,7 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:push": "node scripts/db-push-interdit.cjs",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset",
     "import:smartof": "dotenv -e ../../.env -- tsx scripts/import-smartof.ts",
