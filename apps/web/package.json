@@ -29,7 +29,8 @@
     "storage:migrate": "tsx scripts/migrate-storage.ts",
     "storage:purge-drafts": "dotenv -e ../../.env -- tsx scripts/purge-orphan-drafts.ts",
     "docs:empreintes": "dotenv -e ../../.env -- tsx scripts/coherence-empreintes.ts",
-    "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts"
+    "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts",
+    "invoices:backfill-lines": "dotenv -e ../../.env -- tsx scripts/backfill-invoice-lines.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {
