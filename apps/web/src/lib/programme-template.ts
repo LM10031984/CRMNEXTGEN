@@ -429,7 +429,7 @@ export function renderProgrammeHtml(data: ProgrammeData, of: OfConfig): string {
 ${STYLES}
 </head>
 <body>
-${renderOfPagedFooter()}
+${renderOfPagedFooter(of)}
 
 <header class="cover">
   ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<div style="font-size:18pt;font-weight:700;color:${BRAND_DARK};">${escapeHtml(of.name)}</div>`}

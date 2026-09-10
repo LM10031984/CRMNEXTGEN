@@ -2,13 +2,20 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
+import { invoiceDownloadFilename } from '@/lib/docs/invoice-filename';
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   const { user } = await validateRequest();
   if (!user) return new NextResponse('Unauthorized', { status: 401 });
   const { id } = await context.params;
 
-  const invoice = await prisma.invoice.findFirst({ where: { id, tenantId: user.tenantId } });
+  const invoice = await prisma.invoice.findFirst({
+    where: { id, tenantId: user.tenantId },
+    include: {
+      payerOrg: { select: { brandName: true, legalName: true } },
+      participant: { select: { person: { select: { firstName: true, lastName: true } } } },
+    },
+  });
   if (!invoice || !invoice.pdfUrl) return new NextResponse('Not found', { status: 404 });
 
   try {
@@ -17,7 +24,9 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${invoice.number}.pdf"`,
+        // « F-202601-214.pdf » ne dit pas de qui il s'agit : dans un dossier
+        // de dix factures, il faut ouvrir chacune pour trouver la bonne.
+        'Content-Disposition': `inline; filename="${invoiceDownloadFilename(invoice)}"`,
         'Cache-Control': 'private, max-age=3600',
       },
     });

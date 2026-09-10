@@ -14,6 +14,9 @@ export interface CreateSessionInput {
   endDate: string;
   modality: 'PRESENTIEL' | 'DISTANCIEL' | 'MIXTE' | 'ELEARNING';
   locationName?: string | null; // texte libre, on créera/réutilisera la Location
+  locationLegalName?: string | null; // raison sociale du lieu (mention AGEFICE)
+  locationStreet?: string | null;
+  locationPostalCode?: string | null;
   locationCity?: string | null;
   trainerPersonIds: string[]; // au moins 1
   capacityMax?: number;
@@ -150,13 +153,25 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     if (existingLoc) {
       locationId = existingLoc.id;
     } else {
+      // Adresse structurée {street, postalCode, city} — même forme que
+      // `createLocationAndAttachToSession` (sessions.ts) : c'est ce que
+      // lisent convention / émargement / AGEFICE (format-lieu.ts).
+      const address: Record<string, string> = {};
+      const street = input.locationStreet?.trim();
+      const postalCode = input.locationPostalCode?.trim();
+      const city = input.locationCity?.trim();
+      if (street) address.street = street;
+      if (postalCode) address.postalCode = postalCode;
+      if (city) address.city = city;
       const loc = await prisma.location.create({
         data: {
           tenantId: user.tenantId,
           name: input.locationName.trim(),
-          address: input.locationCity
-            ? { city: input.locationCity.trim(), country: 'France' }
-            : Prisma.JsonNull,
+          legalName: input.locationLegalName?.trim() || null,
+          address:
+            Object.keys(address).length > 0
+              ? { ...address, country: 'France' }
+              : Prisma.JsonNull,
         },
       });
       locationId = loc.id;

@@ -10,6 +10,7 @@ import {
   FileText,
   Loader2,
   Check,
+  Download,
 } from 'lucide-react';
 import { generateConventionEntreprise } from '@/server/actions/convention-generator';
 import { generateAnalyseBesoinEntreprise } from '@/server/actions/analyse-besoin-entreprise';
@@ -179,14 +180,25 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                     </span>
                   )}
                   {g.conventionDocId && (
-                    <a
-                      href={`/api/documents/${g.conventionDocId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-2 inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:no-underline"
-                    >
-                      <FileText className="h-3 w-3" /> Convention (PDF)
-                    </a>
+                    <>
+                      <a
+                        href={`/api/documents/${g.conventionDocId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-2 inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:no-underline"
+                      >
+                        <FileText className="h-3 w-3" /> Convention (PDF)
+                      </a>
+                      {/* `?dl=1` : la convention part au dossier OPCO sous son
+                          vrai nom, pas sous la clé technique de l'objet stocké. */}
+                      <a
+                        href={`/api/documents/${g.conventionDocId}?dl=1`}
+                        aria-label={`Télécharger la convention de ${g.sponsorName}`}
+                        className="ml-2 inline-flex items-center gap-1 text-muted-foreground underline underline-offset-2 hover:no-underline hover:text-foreground"
+                      >
+                        <Download className="h-3 w-3" /> Télécharger
+                      </a>
+                    </>
                   )}
                   {g.analyseAssetId && (
                     <a

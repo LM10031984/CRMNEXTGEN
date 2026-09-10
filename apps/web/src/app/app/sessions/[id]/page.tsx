@@ -19,6 +19,7 @@ import { StepCreation } from '@/components/sessions/step-creation';
 import { StepPendantFormation } from '@/components/sessions/step-pendant-formation';
 import { StepFacturation } from '@/components/sessions/step-facturation';
 import { buildDocDockItems } from '@/lib/sessions/doc-dock-items';
+import { buildParticipantPhaseGroups } from '@/lib/sessions/participant-phase-items';
 import { buildClosureCompletionItems } from '@/lib/sessions/build-closure-completion-items';
 import { SessionHeaderBar } from '@/components/sessions/session-header-bar';
 import { NextActionHero } from '@/components/sessions/next-action-hero';
@@ -760,6 +761,32 @@ export default async function SessionDetailPage({
     assiduites: closureStatus.assiduites,
   });
 
+  // Laurent 2026-09-10 — blocs NOMINATIFS des phases « pendant » et « après ».
+  // L'onglet Après n'en avait aucun : il n'y avait donc aucune ligne « nom
+  // d'apprenant » sur laquelle poser un bouton par apprenant. Dérivés avec le
+  // MÊME `deriveCellState` que la matrice, à partir des mêmes maps.
+  const phaseParticipantsInput = matrixParticipants.map((p) => ({
+    id: p.id,
+    fullName: p.fullName,
+    sponsorOrgLabel: p.sponsorOrgLabel,
+    isAgefice: p.isAgefice,
+    docStatus: p.docStatus,
+    participantDocs: p.participantDocs,
+    pedagogicalAssets: p.pedagogicalAssets,
+  }));
+  const pendantGroups = buildParticipantPhaseGroups({
+    phase: 'pendant',
+    participants: phaseParticipantsInput,
+    productDocs: productDocsMap,
+    sessionDocs: sessionDocsMap,
+  });
+  const apresGroups = buildParticipantPhaseGroups({
+    phase: 'apres',
+    participants: phaseParticipantsInput,
+    productDocs: productDocsMap,
+    sessionDocs: sessionDocsMap,
+  });
+
   // État des 4 docs niveau session pour les boutons unitaires de l'onglet Après.
   // grilleObs : proxy aligné sur la matrice (Document GRILLE_OBS_SESSION OU
   // ≥1 PedagogicalAsset GRILLE_OBS par participant — cf. grilleObsAssetCount).
@@ -1407,6 +1434,8 @@ export default async function SessionDetailPage({
             canWrite={canWrite}
             sessionDocs={apresSessionDocs}
             closureItems={closureItems}
+            pendantGroups={pendantGroups}
+            apresGroups={apresGroups}
             batch={
               latestBatch
                 ? {

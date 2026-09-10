@@ -7,6 +7,10 @@ import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { CLOSURE_DOC_KINDS, CLOSURE_DOC_KIND_LABELS } from '@/lib/closure/types';
+import {
+  buildDownloadFilename,
+  personFilenamePart,
+} from '@/lib/docs/download-filename';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateGrilleObsSessionForSession } from './generate-grille-obs-session';
@@ -488,10 +492,14 @@ export async function buildClosureZipBuffer(
       select: { id: true, person: { select: { firstName: true, lastName: true } } },
     }),
   ]);
+  // Dossier = le nom de l'apprenant, tel qu'il l'écrit (« Stephane-ROUSSEAU »),
+  // et plus un slug tout en minuscules.
+  const personById = new Map(participants.map((p) => [p.id, p.person]));
   const nameById = new Map(
     participants.map((p) => [
       p.id,
-      slugify(`${p.person.lastName}-${p.person.firstName}`),
+      personFilenamePart(p.person.firstName, p.person.lastName) ||
+        slugify(`${p.person.lastName}-${p.person.firstName}`),
     ]),
   );
   const docById = new Map(docs.map((d) => [d.id, d]));
@@ -515,7 +523,20 @@ export async function buildClosureZipBuffer(
 
     try {
       const buf = await downloadFile(DOCS_BUCKET, pdfKey);
-      const fname = `${slug}/${job.kind.toLowerCase()}.pdf`;
+      // Laurent 2026-09-10 : « tu devais renommer les documents pour qu'ils
+      // soient identifiables ». Le chantier du 08/09 n'avait touché que les
+      // routes de téléchargement unitaire ; décompressé, ce ZIP livrait encore
+      // `rousseau-stephane/certificat_realisation.pdf`. Chaque pièce porte
+      // désormais son type, son apprenant et sa session — donc reste lisible
+      // une fois sortie de son dossier, ce qui est exactement ce qui arrive
+      // quand on monte un dossier OPCO.
+      const person = personById.get(job.participantId);
+      const fname = `${slug}/${buildDownloadFilename({
+        docType: DOC_TYPE_BY_CLOSURE_KIND[job.kind] ?? job.kind,
+        firstName: person?.firstName,
+        lastName: person?.lastName,
+        sessionCode,
+      })}`;
       archive.append(buf, { name: fname });
     } catch (e) {
       console.error(`[closure-zip] skip ${job.id}: ${(e as Error).message}`);

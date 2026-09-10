@@ -278,7 +278,7 @@ export function renderConventionHtml(data: ConventionData, of: OfConfig): string
 ${STYLES}
 </head>
 <body>
-${renderOfPagedFooter()}
+${renderOfPagedFooter(of)}
 
 <header class="cover">
   ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="${escapeHtml(of.name)}" />` : `<strong style="color:${BRAND_DARK};">${escapeHtml(of.name)}</strong>`}

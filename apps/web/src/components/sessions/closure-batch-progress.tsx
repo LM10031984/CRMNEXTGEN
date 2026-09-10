@@ -286,18 +286,33 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
                       </button>
                     )}
                     {j.status === 'DONE' && (j.documentId || j.pedagogicalAssetId) && (
-                      <a
-                        href={
-                          j.documentId
-                            ? `/api/documents/${j.documentId}`
-                            : `/api/pedagogical-assets/${j.pedagogicalAssetId}`
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary hover:underline shrink-0"
-                      >
-                        Voir
-                      </a>
+                      <>
+                        <a
+                          href={
+                            j.documentId
+                              ? `/api/documents/${j.documentId}`
+                              : `/api/pedagogical-assets/${j.pedagogicalAssetId}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline shrink-0"
+                        >
+                          Voir
+                        </a>
+                        {/* « Voir » consulte, « Enregistrer » télécharge — et
+                            seul le second porte `?dl=1`, donc un nom parlant. */}
+                        <a
+                          href={
+                            j.documentId
+                              ? `/api/documents/${j.documentId}?dl=1`
+                              : `/api/pedagogical-assets/${j.pedagogicalAssetId}?dl=1`
+                          }
+                          aria-label="Télécharger ce document"
+                          className="text-muted-foreground hover:underline hover:text-foreground shrink-0"
+                        >
+                          Enregistrer
+                        </a>
+                      </>
                     )}
                     {j.status === 'ERROR' && (
                       <span className="text-red-600 shrink-0 truncate max-w-[120px]" title={j.errorMessage ?? ''}>

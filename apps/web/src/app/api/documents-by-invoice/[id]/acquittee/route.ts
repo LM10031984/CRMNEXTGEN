@@ -3,6 +3,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
+import { invoiceDownloadFilename } from '@/lib/docs/invoice-filename';
 
 /**
  * Quick 260813-efh — sert l'édition ACQUITTÉE d'une facture (duplicata
@@ -24,7 +25,13 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
   if (!user) return new NextResponse('Unauthorized', { status: 401 });
   const { id } = await context.params;
 
-  const invoice = await prisma.invoice.findFirst({ where: { id, tenantId: user.tenantId } });
+  const invoice = await prisma.invoice.findFirst({
+    where: { id, tenantId: user.tenantId },
+    include: {
+      payerOrg: { select: { brandName: true, legalName: true } },
+      participant: { select: { person: { select: { firstName: true, lastName: true } } } },
+    },
+  });
   if (!invoice) return new NextResponse('Not found', { status: 404 });
 
   const key = acquittedInvoiceKey(invoice.number);
@@ -35,7 +42,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${invoice.number}-acquittee.pdf"`,
+        'Content-Disposition': `inline; filename="${invoiceDownloadFilename(invoice, { acquittee: true })}"`,
         // Régénérable à tout moment (la clé est écrasée) → pas de cache long.
         'Cache-Control': 'private, no-store',
       },

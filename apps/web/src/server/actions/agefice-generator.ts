@@ -6,6 +6,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
+import { departmentOfPostalCode, pickPointAccueil } from '@/lib/agefice/select-point-accueil';
 import { buildDeroulementPedagogique } from '@/lib/pedagogy-templates';
 import {
   fillAgeficePdf,
@@ -173,12 +174,22 @@ export async function generateAgeficeForParticipant(
   };
   if (!pointAccueil) {
     const cp = personalAddress?.postalCode ?? orgAddress?.postalCode ?? null;
-    if (cp) {
-      const dept = cp.startsWith('97') || cp.startsWith('98') ? cp.slice(0, 3) : cp.slice(0, 2);
-      pointAccueil = await prisma.ageficePointAccueil.findFirst({
-        where: { department: dept },
-        orderBy: { city: 'asc' },
+    const dept = departmentOfPostalCode(cp);
+    if (dept) {
+      // Quick 260908-m1v — avant : `findFirst({ where: { department }, orderBy:
+      // { city: 'asc' } })`, soit le premier point d'accueil du département par
+      // ordre alphabétique de ville (Arles plutôt que Marseille), et RIEN du
+      // tout pour les 24 départements sans point implanté. On classe désormais
+      // sur la couverture officielle (cf. lib/agefice/select-point-accueil).
+      const candidates = await prisma.ageficePointAccueil.findMany({
+        where: { OR: [{ department: dept }, { departmentsServed: { has: dept } }] },
       });
+      const best = pickPointAccueil(candidates, {
+        department: dept,
+        city: personalAddress?.city ?? orgAddress?.city ?? null,
+        postalCode: cp,
+      });
+      pointAccueil = best ? (candidates.find((c) => c.id === best.id) ?? null) : null;
       if (!pointAccueil) {
         warnings.push(`Aucun PA AGEFICE trouvé pour le département ${dept} dans le référentiel.`);
       }
@@ -251,14 +262,26 @@ export async function generateAgeficeForParticipant(
         ]
           .filter(Boolean)
           .join(' — ');
-        const street = (session.location.address as any)?.street as string | null | undefined;
+        const addr = (session.location.address as any) ?? {};
+        const street = addr?.street as string | null | undefined;
+        const cpVille = [addr?.postalCode, addr?.city]
+          .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+          .join(' ');
         // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
         // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
         // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
-        // 2026-07). CP + Ville ont leurs propres champs Cerfa.
+        // 2026-07). Même règle pour « CP Ville ».
         const appendStreet =
           !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
-        return [nameLine, appendStreet ? street : null].filter(Boolean).join('\n');
+        const appendCpVille =
+          !!cpVille && !normalizeAddr(nameLine).includes(normalizeAddr(cpVille));
+        // Séparateur « , » et NON « \n » : le champ Cerfa « Nom et Adresse
+        // exacte du lieu de formation » est mono-ligne (Ff=2, police auto), et
+        // `sanitizeWinAnsi` strippe le 0x0A → la rue se collait au nom du lieu
+        // (« Agence Y12 rue Z », bug Laurent 2026-09-04).
+        return [nameLine, appendStreet ? street : null, appendCpVille ? cpVille : null]
+          .filter(Boolean)
+          .join(', ');
       })()
     : of.addressFull;
 
