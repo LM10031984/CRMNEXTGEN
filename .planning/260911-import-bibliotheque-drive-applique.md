@@ -41,7 +41,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 | Programme | Rayons en double |
 |---|---|
-| Face a face acheteurs | `BIB-D020` (`drive:020`) « Face a face acheteurs »<br>`BIB-D008` (`drive:008`) « Face à face acheteurs » |
+| Face à face acheteurs | `BIB-D008` (`drive:008`) « Face à face acheteurs »<br>`BIB-D020` (`drive:020`) « Face a face acheteurs » |
 
 ## Détail par rayon
 

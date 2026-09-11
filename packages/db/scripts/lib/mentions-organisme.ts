@@ -18,14 +18,30 @@
  * Mesuré sur l'instantané commité : 101 lignes dans 52 modules, dont 81 en fin
  * de module et 19 en plein milieu.
  *
+ * ── LA RÈGLE ────────────────────────────────────────────────────────────────
+ *
+ *   **Un déroulé de module porte des ÉTAPES D'ANIMATION, pas des mentions
+ *   d'organisme.**
+ *
+ * C'est la formulation finale (arbitrage du 11/09/2026), et elle fait foi. Elle
+ * s'est construite en trois temps — deux phrases nommées, puis « le bloc contigu
+ * part entier », puis ce principe — et les deux premières formulations n'en étaient
+ * que des cas particuliers. Le **titre de section orphelin est un COROLLAIRE** : si
+ * on retire ce qu'un titre introduisait, le titre part avec, sinon on crée
+ * sciemment un défaut. Ce n'est pas la règle.
+ *
+ * Le test qui tranche, pour une ligne donnée : **est-ce que ça se fait, à un moment
+ * de la séance ?** « Mise en situation : répondre aux objections courantes » se
+ * fait. « Présentation visuelle sur support Canva. » se constate — c'est un moyen
+ * de l'organisme, qui a sa rubrique ailleurs dans le programme composé.
+ *
  * ── Deux listes fermées, deux mécanismes ────────────────────────────────────
  *
  * • `MENTIONS_CANONIQUES` — des PHRASES, reconnues ligne à ligne. Une ligne qui
  *   est une mention et rien d'autre part, où qu'elle soit.
- * • `TITRES_GABARIT` — des TITRES de section, reconnus STRUCTURELLEMENT. Un titre
- *   part avec son bloc, ou il ne part pas : « partout où une mention d'organisme
- *   est précédée de son titre de section, le bloc part entier » (arbitrage du
- *   11/09/2026). Suivi de vraie pédagogie, le titre RESTE.
+ * • `TITRES_GABARIT` — des TITRES de section, reconnus STRUCTURELLEMENT, pour le
+ *   corollaire : un titre part avec son bloc, ou il ne part pas. Suivi de vraies
+ *   étapes d'animation, le titre RESTE.
  *
  * ── Pourquoi un ENSEMBLE FERMÉ, et jamais une recherche de sous-chaîne ───────
  *
@@ -63,15 +79,9 @@
  *   C'est un vrai moment de fin de session, pas de l'administratif d'organisme.
  *   Ce n'est plus « hors périmètre » : c'est tranché, et un test le verrouille.
  *
- * • Les voisines de la MÊME FAMILLE que les moyens pédagogiques de la famille 4,
- *   rencontrées dans drive:067#1, drive:068#1 et drive:069#1 : « Formation
- *   interactive orientée pratique. », « Présentation visuelle sur support
- *   Canva. », « Support pédagogique numérique remis à chaque participant. »,
- *   « Démonstrations en direct sur un outil d'intelligence artificielle. »,
- *   « Exercices guidés pas à pas sur la rédaction de prompts. ». Laurent a nommé
- *   deux phrases, pas dix, et certaines de celles-là (démonstrations, exercices
- *   guidés) sont discutablement de la pédagogie. Les retirer serait élargir le
- *   périmètre tout seul. Elles restent, et elles sont SIGNALÉES pour le lot 2.
+ * • Les 3 LIGNES MIXTES sont le SEUL report. Les moyens pédagogiques de
+ *   drive:067#1, drive:068#1 et drive:069#1, un temps « laissés et signalés »,
+ *   sont PARTIS : ils relèvent de la règle générale (famille 5 plus bas).
  *
  * • TOUT le module `faros:SA-ADM-M001#1` « LIVRABLE 001 » (855 lignes) : il
  *   ENSEIGNE le montage du dossier AGEFICE/CFP, donc il parle légitimement
@@ -92,14 +102,16 @@
  */
 
 /**
- * Les DIX formes canoniques de MENTION — déjà normalisées, donc sans accent, sans
- * apostrophe courbe et sans ponctuation finale.
+ * Les DIX-HUIT formes canoniques de MENTION — déjà normalisées, donc sans accent,
+ * sans apostrophe courbe et sans ponctuation finale.
  *
  * Chacune couvre plusieurs écritures réelles : `normaliserLigne` absorbe les
  * variantes (les deux apostrophes, la présence ou l'absence de « d' », le point,
  * le point-virgule, les deux-points, les espaces surnuméraires, la puce
  * Markdown). Les 13 formes relevées dans l'instantané au lot 1 se replient sur
- * les sept premières ; la famille 4 en ajoute trois au lot 1 bis.
+ * les sept premières ; le lot 1 bis en ajoute trois (famille 4, le pied de
+ * document de drive:058#6) puis huit (famille 5, la tête de déroulé de
+ * drive:067#1, drive:068#1 et drive:069#1).
  *
  * Le TITRE de section du bloc de la famille 4 n'est PAS ici : un titre ne se
  * retire jamais à plat, il se retire avec son bloc. Voir `TITRES_GABARIT`.
@@ -167,6 +179,33 @@ const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   'la formation se deroule en presentiel',
   'les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des echanges sur les pratiques actuelles',
   'un livret de formation sera remis a chaque participant en debut de formation. le formateur deroulera sa formation avec une presentation canva projetee',
+
+  // ── Famille 5 — les MOYENS PÉDAGOGIQUES en TÊTE de déroulé (15 occurrences
+  //    dans drive:067#1, drive:068#1 et drive:069#1). Même arbitrage, appliqué à
+  //    la règle générale : ces lignes se CONSTATENT, elles ne se font pas.
+  //
+  // Ici le bloc avalé n'est pas en pied mais en TÊTE, et il est borné de façon
+  // nette : tout ce qui précède « PROGRAMME DÉTAILLÉ (…) » est du moyen
+  // d'organisme, tout ce qui suit est de la séance horodatée. C'est cette borne
+  // qui rend le retrait sûr — 067#1 passe de 32 à 26 puces, 068#1 et 069#1 de 41
+  // à 35, et la première puce devient « PROGRAMME DÉTAILLÉ (…) ».
+  //
+  // ⚠ CE QUE CE RETRAIT COÛTE, et c'est consigné parce que ça ouvre une question
+  // de modèle (D-29, ouverte le 11/09/2026) : plusieurs de ces lignes sont
+  // SPÉCIFIQUES au programme — « études de cas réels issus du marché immobilier »,
+  // « exercices guidés pas à pas sur la rédaction de prompts » —, alors que la
+  // rubrique « Moyens pédagogiques et techniques » du programme composé se remplit
+  // en GÉNÉRIQUE depuis l'organisme. On retire donc du spécifique qui n'a pas de
+  // point de chute. Le texte exact est conservé, programme par programme, dans
+  // `.planning/quick/260911-kwf-…/260911-kwf-SUMMARY-02.md`.
+  'presentation visuelle sur support canva',
+  'support pedagogique numerique remis a chaque participant',
+  'formation orientee pilotage et prise de decision manageriale',
+  'etudes de cas reels issus du marche immobilier',
+  "ateliers d'analyse guides avec des outils d'intelligence artificielle",
+  'formation interactive orientee pratique',
+  "demonstrations en direct sur un outil d'intelligence artificielle",
+  'exercices guides pas a pas sur la redaction de prompts',
 ]);
 
 /**
