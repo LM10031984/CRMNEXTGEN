@@ -71,6 +71,15 @@ import {
 } from '@/lib/signature/participants-regime';
 import { docTypesEnRegime } from '@/lib/signature/regime';
 import { planifierEnvoi } from '@/lib/signature/plan-envoi';
+// Correction n°4 (11/09/2026) — « qui signe, et à quelle adresse » sur la ligne
+// du bloc « Signature ». MÊME module que le moteur d'envoi : deux cascades pour
+// une question, c'est un écran qui annonce un signataire et un lien qui part
+// ailleurs.
+import {
+  formeDuDocument,
+  resoudreSignataireClient,
+  type ParticipantPourSignataire,
+} from '@/lib/signature/signataire-de-la-piece';
 // Bloc « Signature » des onglets Avant / Après (lot C.2b-2) : la VUE est
 // calculée ici, côté serveur, pour que « le bouton existe ou n'existe pas »
 // reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
@@ -156,6 +165,11 @@ export default async function SessionDetailPage({
               id: true,
               firstName: true,
               lastName: true,
+              // Correction n°4 (11/09/2026) : l'adresse du signataire se lit
+              // désormais SUR LA LIGNE du bloc « Signature ». Quand c'est
+              // l'apprenant qui signe (dossier de financement, attestation
+              // d'assiduité), c'est celle de sa fiche.
+              email: true,
               // Les liens juridiques ne servent PLUS à décider du régime
               // (dérivation élargie BUG-11 retirée le 10/09/2026, lot C.2b-1 :
               // c'est le financeur du commanditaire qui décide, et lui seul).
@@ -186,7 +200,16 @@ export default async function SessionDetailPage({
               // le représentant signe la convention et porte le recueil du
               // besoin ; à défaut, le contact principal en tient lieu.
               representative: true,
-              contacts: { where: { isPrimary: true }, take: 1, select: { id: true } },
+              // ⚠ ORDRE EXIGÉ PAR LE CONTRAT DE `representant.ts` : le contact
+              // principal d'abord, le plus ancien ensuite — la cascade ne
+              // rejoue pas ce tri, elle s'y fie. Le `where: { isPrimary }` de
+              // naguère ne servait qu'au garde-fou `aContactPrincipal` ; il
+              // empêchait de résoudre l'adresse du représentant, qui peut être
+              // portée par un contact non principal du MÊME nom.
+              contacts: {
+                orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+                select: { id: true, firstName: true, lastName: true, email: true, isPrimary: true },
+              },
             },
           },
         },
@@ -621,6 +644,70 @@ export default async function SessionDetailPage({
   );
 
   /**
+   * Les inscriptions dans la forme attendue par la résolution du signataire.
+   *
+   * `releveDeLaConvention` est appelé par `releveDeLaConventionPour`, le
+   * helper déjà présent en tête de ce fichier — la MÊME règle payeur du 12/08
+   * qui a décidé de la forme du document au moment de sa génération.
+   */
+  const participantsPourSignataire: ParticipantPourSignataire[] = session.participants.map((p) => ({
+    id: p.id,
+    nom: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+    apprenant: {
+      firstName: p.person.firstName,
+      lastName: p.person.lastName,
+      email: p.person.email,
+    },
+    org: {
+      id: p.sponsorOrg.id,
+      legalName: p.sponsorOrg.legalName,
+      representative: p.sponsorOrg.representative,
+      contacts: p.sponsorOrg.contacts.map((c) => ({
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        isPrimary: c.isPrimary,
+      })),
+    },
+    estEiSelfChezSponsor:
+      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role === 'EI_SELF',
+    relevantDeLaConvention: releveDeLaConventionPour(p),
+  }));
+  const participantPourSignataireParId = new Map(
+    participantsPourSignataire.map((p) => [p.id, p] as const),
+  );
+
+  /**
+   * Le couple nom + adresse de chaque pièce du plan.
+   *
+   * ⚠ AUCUNE RÈGLE ICI. On assemble les inscrits couverts, puis on appelle les
+   * DEUX fonctions du moteur (`formeDuDocument`, puis `resoudreSignataireClient`).
+   * Une pièce dont la cascade n'aboutit pas n'entre pas dans la map : la ligne
+   * dira « signataire à déterminer », et le récapitulatif rendra le refus
+   * nominatif complet au moment d'envoyer.
+   */
+  const signataireParCle = (plan: ReturnType<typeof planifierEnvoi>) => {
+    const parCle = new Map<string, { nom: string; email: string }>();
+    for (const envoi of plan.envois) {
+      const couverts = envoi.participantIds.flatMap((id) => {
+        const p = participantPourSignataireParId.get(id);
+        return p === undefined ? [] : [p];
+      });
+      const forme = formeDuDocument(envoi, couverts);
+      if (!forme.ok) continue;
+      const client = resoudreSignataireClient({
+        docType: envoi.docType,
+        forme: forme.forme,
+        envoi,
+        couverts,
+      });
+      if (!client.ok) continue;
+      parCle.set(envoi.cle, { nom: client.signataire.nom, email: client.signataire.email });
+    }
+    return parCle;
+  };
+
+  /**
    * La vue d'un scope. Le document d'une pièce est celui du PREMIER participant
    * couvert : `docsByParticipant` reporte déjà la convention de groupe sur
    * chaque salarié (`expandGroupConventions`), donc tous les couverts pointent
@@ -645,6 +732,7 @@ export default async function SessionDetailPage({
       docStatusParCle,
       canSign,
       contexteAvertissementParParticipant,
+      signataireParCle: signataireParCle(plan),
     });
   };
   const vueSignatureAvant = vuePourScope(planSignatureAvant);
@@ -1147,7 +1235,10 @@ export default async function SessionDetailPage({
           id: orgId,
           legalName: org.legalName,
           representative: org.representative,
-          aContactPrincipal: org.contacts.length > 0,
+          // ⚠ `.some(isPrimary)`, plus `.length > 0` : la requête charge
+          // désormais TOUS les contacts (cf. le `select`), donc compter les
+          // lignes ne dirait plus « il existe un contact principal ».
+          aContactPrincipal: org.contacts.some((c) => c.isPrimary),
         },
         participants: membres.map((p) => ({
           nom: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,

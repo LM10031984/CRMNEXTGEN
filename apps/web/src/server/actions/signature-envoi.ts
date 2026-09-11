@@ -86,6 +86,11 @@ import {
   resoudreStagiaire,
   type OrganisationRepresentee,
 } from '@/lib/signature/representant';
+import {
+  formeDuDocument,
+  resoudreSignataireClient,
+  type FormeDocument,
+} from '@/lib/signature/signataire-de-la-piece';
 import { resolveTenantSignatory } from '@/lib/signature/signatory';
 import { getSignatureProvider, SignatureNotConfiguredError } from '@/lib/signature/provider';
 import type { SignatureSignerInput } from '@/lib/signature/port';
@@ -287,40 +292,16 @@ async function chargerContexte(
 // ─── Quel Document porte cet envoi ───────────────────────────────────────────
 
 /**
- * Une convention prend deux formes selon la règle payeur du 12/08 : GROUPE
- * (l'entreprise commande pour ses salariés) ou INDIVIDUEL (l'apprenant se forme
- * à ses frais). On ne devine pas : on interroge `releveDeLaConvention`, la même
- * fonction qui a décidé de la forme AU MOMENT DE LA GÉNÉRATION.
+ * ⚠ `FormeDocument`, `formeDuDocument` et `resoudreSignataireClient` ONT
+ * DÉMÉNAGÉ dans `@/lib/signature/signataire-de-la-piece.ts` (correction n°4 du
+ * 11/09/2026) — extraction à comportement constant, pas réécriture.
+ *
+ * Motif : la fiche session doit afficher « qui signe, et à quelle adresse » sur
+ * la ligne du bloc « Signature », et un fichier `'use server'` ne peut exporter
+ * que des server actions. La seule alternative était de recopier la cascade
+ * dans `page.tsx` — donc une DEUXIÈME règle « qui signe », et un écran qui
+ * finirait par annoncer un signataire différent de celui qui reçoit le lien.
  */
-type FormeDocument =
-  | { forme: 'GROUPE'; organizationId: string }
-  | { forme: 'INDIVIDUEL'; participantId: string };
-
-function formeDuDocument(
-  envoi: EnvoiPlanifie,
-  couverts: ParticipantCharge[],
-): { ok: true; forme: FormeDocument } | { ok: false; error: string } {
-  if (envoi.cible.kind === 'PARTICIPANT') {
-    return { ok: true, forme: { forme: 'INDIVIDUEL', participantId: envoi.cible.participantId } };
-  }
-  if (couverts.some((p) => p.relevantDeLaConvention)) {
-    return { ok: true, forme: { forme: 'GROUPE', organizationId: envoi.cible.organizationId } };
-  }
-  // Aucun salarié : la pièce est un contrat individuel. Un seul inscrit ⇒ c'est
-  // le sien. Plusieurs ⇒ ils ont chacun le leur et une pièce unique ne peut pas
-  // les couvrir : on le DIT, plutôt que d'en envoyer une au hasard.
-  const premier = couverts[0];
-  if (couverts.length === 1 && premier !== undefined) {
-    return { ok: true, forme: { forme: 'INDIVIDUEL', participantId: premier.id } };
-  }
-  const noms = couverts.map((p) => p.nom).join(', ');
-  return {
-    ok: false,
-    error:
-      `${noms} se forment à leurs frais sous la même organisation : chacun a son propre ` +
-      `contrat de formation, aucune pièce unique ne peut les couvrir. Envoyez-les séparément.`,
-  };
-}
 
 interface DocumentCharge {
   id: string;
@@ -444,62 +425,10 @@ function statutAvantEnvoiDuJournal(diff: unknown): string | null {
 }
 
 // ─── Résolution du signataire côté bénéficiaire ──────────────────────────────
-
-function resoudreSignataireClient(a: {
-  docType: DocTypeSignable;
-  forme: FormeDocument;
-  envoi: EnvoiPlanifie;
-  couverts: ParticipantCharge[];
-  emailSaisi?: string | null;
-}): { ok: true; signataire: SignataireResolu } | { ok: false; error: string } {
-  const premier = a.couverts[0];
-  if (premier === undefined) {
-    return {
-      ok: false,
-      error: `Aucun inscrit rattaché à « ${a.envoi.libelle} » : rien à envoyer.`,
-    };
-  }
-
-  // Le Document EXISTANT décide de la cascade — pas une heuristique. Le
-  // signataire est ainsi, par construction, celui que le PDF nomme.
-  const org: OrganisationRepresentee = premier.org ?? {
-    id: a.envoi.cible.kind === 'ORGANISATION' ? a.envoi.cible.organizationId : premier.id,
-    legalName: a.envoi.libelle,
-    representative: null,
-    contacts: [],
-  };
-
-  const nomResolu =
-    a.docType === 'CONVENTION' && a.forme.forme === 'GROUPE'
-      ? resoudreRepresentantEntreprise(org)
-      : a.envoi.role === 'DIRIGEANT'
-        ? resoudreRepresentantIndividuel({
-            org,
-            apprenant: premier.apprenant,
-            estEiSelf: premier.estEiSelfChezSponsor,
-          })
-        : resoudreStagiaire(premier.apprenant);
-  if (!nomResolu.ok) return { ok: false, error: nomResolu.error };
-
-  const email = resoudreEmailRepresentant({
-    nom: nomResolu.nom,
-    source: nomResolu.source,
-    org,
-    apprenant: premier.apprenant,
-    emailSaisi: a.emailSaisi ?? null,
-  });
-  if (!email.ok) return { ok: false, error: email.error };
-
-  return {
-    ok: true,
-    signataire: {
-      nom: email.nom,
-      email: email.email,
-      sourceNom: nomResolu.source,
-      sourceEmail: email.source,
-    },
-  };
-}
+//
+// `resoudreSignataireClient` vit désormais dans `signataire-de-la-piece.ts`
+// (voir la note plus haut). Le signataire de l'ORGANISME, lui, reste ici : il
+// lit la base (`Tenant` + `of-config`), donc il n'est pas pur.
 
 async function resoudreSignataireOf(tenantId: string) {
   const [tenant, of] = await Promise.all([

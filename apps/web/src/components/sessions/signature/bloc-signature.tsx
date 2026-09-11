@@ -235,8 +235,34 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                     />
                   )}
 
-                  <span className="flex-1 min-w-0 text-sm font-medium truncate">
-                    {ligne.libelle}
+                  <span className="flex-1 min-w-0 text-sm">
+                    <span className="font-medium">{ligne.libelle}</span>
+                    {/* ⚠ QUI SIGNE, ET À QUELLE ADRESSE — sur la LIGNE, avant
+                        tout clic (correction n°4, Laurent 11/09/2026). Tant que
+                        l'information ne vivait que dans la modale de
+                        confirmation, une mauvaise adresse ne se découvrait
+                        qu'au moment d'envoyer.
+
+                        L'adresse peut être TRONQUÉE à l'affichage, mais elle
+                        est portée COMPLÈTE par `title` : une adresse coupée
+                        dont on ne lit plus le domaine ne permet justement pas
+                        de repérer l'erreur. */}
+                    {ligne.signataire === null ? (
+                      <span className="text-muted-foreground">
+                        {' · '}signataire à déterminer
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {' · '}signataire : {ligne.signataire.nom}
+                        {' · '}
+                        <span
+                          title={ligne.signataire.email}
+                          className="inline-block max-w-[18rem] align-bottom truncate"
+                        >
+                          {ligne.signataire.email}
+                        </span>
+                      </span>
+                    )}
                   </span>
 
                   <span

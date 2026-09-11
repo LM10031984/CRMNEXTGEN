@@ -68,6 +68,21 @@ export interface LigneSignature {
   signatureRequestId: string | null;
   /** Vrai ⇒ l'envoi est proposable. Faux pour `ENVOYE` et `SIGNE`. */
   envoyable: boolean;
+  /**
+   * QUI SIGNE, ET À QUELLE ADRESSE — lisible sur la ligne, avant tout clic
+   * (correction n°4, Laurent 11/09/2026 : « c'est ce qui permet de repérer une
+   * mauvaise adresse d'un coup d'œil »).
+   *
+   * ⚠ RÉSOLU AILLEURS, jamais ici : `signataire-de-la-piece.ts`, le module que
+   * le MOTEUR appelle aussi. Le résoudre dans la vue en ferait une seconde
+   * règle, et l'écran finirait par annoncer un signataire différent de celui
+   * qui reçoit le lien.
+   *
+   * `null` = la cascade n'a pas abouti (représentant inconnu, aucune adresse).
+   * La ligne le DIT ; elle n'invente pas un nom, et le récapitulatif rendra le
+   * refus nominatif complet.
+   */
+  signataire: { nom: string; email: string } | null;
 }
 
 /**
@@ -294,6 +309,11 @@ export function construireVueSignature(a: {
    * un appelant qui ne le calcule pas obtient un message plus court.
    */
   contexteAvertissementParParticipant?: ReadonlyMap<string, ContexteAvertissement>;
+  /**
+   * Le couple nom + adresse DÉJÀ RÉSOLU, par clé de pièce. Une clé absente vaut
+   * « non résolu » : la vue ne rattrape rien, elle transporte.
+   */
+  signataireParCle?: ReadonlyMap<string, { nom: string; email: string }>;
 }): VueSignature {
   const lignes: LigneSignature[] = a.plan.envois.map((envoi) => {
     const document = a.documentParCle.get(envoi.cle) ?? null;
@@ -312,6 +332,7 @@ export function construireVueSignature(a: {
       documentId: document?.id ?? null,
       signatureRequestId: document?.signatureRequestId ?? null,
       envoyable: etat === 'ABSENT' || etat === 'GENERE',
+      signataire: a.signataireParCle?.get(envoi.cle) ?? null,
     };
   });
 
