@@ -1137,17 +1137,19 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 
 ### Décisions restantes pour Laurent (à trancher au fil des lots, pas bloquantes pour A)
 
-> ⚠ **Une décision tranchée MIGRE vers le tableau du dessus le jour même où elle l'est.** Ce tableau-ci ne liste que ce qui attend encore un arbitrage de Laurent — ce n'est pas une archive, et y laisser une décision close la rend FAUSSE.
+> ⚠ **Une décision tranchée quitte ce tableau LE JOUR où elle est tranchée.** Ce tableau-ci ne liste que ce qui attend encore un arbitrage de Laurent — ce n'est pas une archive, et y laisser une décision close la rend FAUSSE.
 >
-> **Pourquoi c'est une règle et non une préférence de rangement.** Le 11/09/2026, deux décisions closes y figuraient encore : **D-6**, tranchée par Laurent avec sa source, et **D-8**, dont la cellule disait elle-même « ✅ tranchée avec D-11 ». Une session les a lues comme ouvertes et a construit, **de bonne foi**, un contre-argument contre une décision déjà prise ; il a fallu un arbitrage de Laurent pour le défaire. **Troisième cas de la semaine.** La cause racine est toujours la même : *une décision qui n'est pas dans la spec — ou qui y est au mauvais endroit — sera défaite de bonne foi par la session suivante.* C'est la spec qui vit, pas la conversation.
+> **Pourquoi c'est une règle, et non une préférence de rangement.** Le défaut du 11/09/2026 n'était **pas** qu'une décision manquait par écrit : c'est qu'une décision **réglée était restée rangée avec les questions ouvertes** — lisible, et trompeuse. **Le remède est le déplacement, pas l'écriture.** L'incident, en clair : **D-6**, tranchée par Laurent avec sa source, et **D-8**, dont la cellule disait elle-même « ✅ tranchée avec D-11 », figuraient encore ici. Une session les a lues comme ouvertes et a construit, **de bonne foi**, un contre-argument contre une décision déjà prise ; il a fallu un arbitrage de Laurent pour le défaire. **Troisième cas de la semaine.** La cause racine est toujours la même : *une décision qui n'est pas dans la spec — ou qui y est au mauvais endroit — sera défaite de bonne foi par la session suivante.* C'est la spec qui vit, pas la conversation. Le même défaut de rangement touchait **D-3, D-4, D-5, D-7 et D-10** : les sept sont dans le tableau du dessus depuis le 11/09/2026.
 >
 > **Et la seconde colonne porte un « défaut proposé », jamais un arbitrage.** Tant que Laurent n'a pas dit oui, ce qui y est écrit est une proposition de l'outil, pas une décision — ne jamais la citer comme tranchée.
+>
+> **Ce qui reste ici attend des DONNÉES RÉELLES, pas un avis** — c'est exactement ce qui distingue ces trois lignes des sept déjà tranchées. Chacune porte donc sa **condition de fermeture** en dernière colonne : on sait à quoi elle se ferme, et on ne la tranche pas avant de l'avoir.
 
-| # | Question | Défaut proposé |
-|---|---|---|
-| D-1 | Composition exacte du set LÉGER (§6.2) | La liste proposée, ajustée après 2 RDV réels |
-| D-2 | Benchmarks initiaux des ratios (seuils d'alerte) | Valeurs du référentiel v1.0 du repo diag |
-| D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D, calibré sur 3 audits réels puis figé/versionné |
+| # | Question | Défaut proposé | Se ferme quand |
+|---|---|---|---|
+| D-1 | Composition exacte du set LÉGER (§6.2) | La liste proposée, ajustée après 2 RDV réels | **Après 2 R1 RÉELS menés avec le set proposé.** Ce sont des données d'usage qui la ferment, pas un avis : avant d'avoir tenu deux rendez-vous avec ce set, on ne sait ni ce qui manque ni ce qui traîne. |
+| D-2 | Benchmarks initiaux des ratios (seuils d'alerte) | Valeurs du référentiel v1.0 du repo diag | **Avec D-9, pas avant** — même matière, même calibration : un seuil d'alerte et une pondération de score se règlent sur les mêmes audits réels. Les trancher séparément, c'est calibrer deux fois la même chose et finir par se contredire. |
+| D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D | **Se calibre sur 3 AUDITS RÉELS, puis se FIGE et se VERSIONNE.** Conséquence qu'on oublie, et qui doit donc être écrite ici : **tant que le barème n'est pas figé, aucun score n'est comparable d'un audit à l'autre** — deux dossiers notés sous deux barèmes successifs ne se comparent ni entre eux, ni dans le temps. D'où le versionnement, qui dit sous quel barème un score a été produit. |
 
 ---
 
