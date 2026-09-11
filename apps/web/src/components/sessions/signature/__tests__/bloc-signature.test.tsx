@@ -345,14 +345,24 @@ describe('PUISSANCE (c) — une pièce partie s’annule, et le dit', () => {
 });
 
 describe('PUISSANCE (d) — décision n°4 : coexistence, puis exclusion dès qu’un signé existe', () => {
-  it('pièce nominative prête : « Envoyer pour signature » ET « Déposer le scan » côte à côte', () => {
+  /**
+   * ⚠ CE TEST A ÉTÉ RETOURNÉ le 11/09/2026 (correction n°6), et c'est un
+   * changement de décision, pas un ajustement de test.
+   *
+   * Il exigeait la COEXISTENCE des deux gestes sur une pièce nominative non
+   * signée. Laurent tranche : « Déposer le scan » n'apparaissait que sur la
+   * ligne AGEFICE — incohérent — et il ne doit apparaître sur AUCUNE ligne. La
+   * zone de dépôt en dessous suffit, et elle traite tous les stagiaires d'un
+   * coup. Le geste d'envoi, lui, reste.
+   */
+  it('pièce nominative prête : « Envoyer pour signature », et AUCUN dépôt par ligne', () => {
     render(
       <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
     );
     expect(
       screen.queryAllByRole('button', { name: /envoyer pour signature/i }).length,
     ).toBeGreaterThan(0);
-    expect(screen.queryAllByRole('button', { name: /déposer le scan/i }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('button', { name: /déposer le scan/i })).toHaveLength(0);
   });
 
   it('pièce SIGNÉE : plus AUCUN des deux gestes — mais « Ouvrir » reste', () => {
@@ -415,8 +425,57 @@ describe('Le bloc se tait quand il n’a rien à dire', () => {
  * la matrice, lui, ne le sait pas — d'où le garde-fou serveur, qui refuse tout
  * dépôt non confirmé quel que soit le chemin d'entrée.
  */
-describe('PUISSANCE (e) — le dépôt sur une pièce PARTIE prévient qu’il annulera l’envoi', () => {
-  it('ligne ENVOYE : ouvrir « Déposer le scan » affiche l’avertissement d’annulation', () => {
+describe('PUISSANCE (e) — plus AUCUN dépôt par ligne (correction n°6, 11/09/2026)', () => {
+  /**
+   * ⚠ CE QUE CES DEUX TESTS REMPLACENT, ET POURQUOI JE LE DIS.
+   *
+   * Le lot C.2b-3 avait posé ici deux tests — « ligne ENVOYE : ouvrir
+   * "Déposer le scan" affiche l'avertissement d'annulation » et son pendant sur
+   * une ligne générée. Ils ne tenaient QUE par le bouton que la correction n°6
+   * retire : sans lui, `getByRole('button', { name: /déposer le scan/i })`
+   * lève, et le test tombe pour la mauvaise raison.
+   *
+   * LA RÈGLE DE C.2b-3 N'EST PAS CASSÉE POUR AUTANT, et elle n'est pas gardée
+   * ici : `persistSignedScan` reste le point de passage unique (fail-closed,
+   * `signature-depot-scan.test.ts`, 12 tests inchangés), et l'ÉTAPE de
+   * confirmation garde son propre fichier de test, sur le dialogue lui-même
+   * (`upload-signed-doc-dialog.confirmation.test.tsx`, 10 tests inchangés).
+   * Aucun des deux n'a été touché.
+   *
+   * CE QUI CHANGE RÉELLEMENT : le bloc n'a plus d'appelant qui passe
+   * `envoiEnAttente`. Un dépôt fait depuis la matrice sur une pièce partie sera
+   * donc REFUSÉ par le serveur au lieu de proposer la confirmation. Le recours
+   * est le bouton « Annuler l'envoi », qui vit sur cette même ligne — c'est ce
+   * que garde le second test.
+   */
+  it('aucune ligne ne propose de dépôt — ni générée, ni partie en signature', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [
+            ligne(),
+            ligne({
+              cle: 'AGEFICE:part-2',
+              docType: 'AGEFICE',
+              libelle: 'Dossier AGEFICE — Jean DUPONT',
+              etat: 'ENVOYE',
+              envoyable: false,
+              signatureRequestId: 'req-9',
+            }),
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryAllByRole('button', { name: /déposer le scan/i })).toHaveLength(0);
+    // La modale de dépôt n'est plus montée du tout : son avertissement — la
+    // constante IMPORTÉE du lot C.2b-3 — n'existe nulle part dans ce bloc.
+    expect(screen.queryAllByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toHaveLength(0);
+    expect(document.body.textContent).not.toContain('Téléverser le PDF signé');
+  });
+
+  it('sur une pièce PARTIE, le recours reste « Annuler l’envoi » — il n’a pas disparu avec le dépôt', () => {
     render(
       <BlocSignature
         sessionId={SESSION_ID}
@@ -426,23 +485,10 @@ describe('PUISSANCE (e) — le dépôt sur une pièce PARTIE prévient qu’il a
         })}
       />,
     );
-
-    fireEvent.click(screen.getByRole('button', { name: /déposer le scan/i }));
-
-    // Constante IMPORTÉE du composant de dépôt : si le bloc oubliait de passer
-    // `envoiEnAttente`, le scan partirait sans confirmation et annulerait
-    // l'envoi en silence — ou, pire, échouerait sans que rien ne l'explique.
-    expect(screen.getByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toBeDefined();
-  });
-
-  it('ligne GÉNÉRÉE (rien n’est parti) : aucun avertissement — on n’effraie pas pour rien', () => {
-    render(
-      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /déposer le scan/i }));
-
-    expect(screen.queryAllByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('button', { name: /annuler l’envoi/i }).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('button', { name: /déposer le scan/i })).toHaveLength(0);
   });
 });
 
