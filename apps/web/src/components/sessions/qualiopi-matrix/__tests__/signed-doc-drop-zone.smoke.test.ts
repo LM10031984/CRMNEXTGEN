@@ -115,3 +115,23 @@ describe('zone de dépôt — choix du type de document', () => {
     expect(componentSrc).toMatch(/docTypeOptions\?\.find\(/);
   });
 });
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — correction n°5.
+ *
+ * « Déposer les convention signés » : pluriel absent, accord masculin sur un
+ * nom féminin. La cause n'est pas une faute de frappe mais la CONCATÉNATION
+ * `Déposer les {libellé} signés`, qui porte l'accord en dur et en produira une
+ * au prochain type ajouté. Le titre vient désormais d'une table par `DocType`.
+ */
+describe('titre de la zone de dépôt — une table, pas une concaténation', () => {
+  it('le composant ne fabrique plus le titre par concaténation', () => {
+    expect(componentSrc).not.toMatch(/Déposer les \{/);
+    expect(componentSrc).not.toContain('signés\n');
+  });
+
+  it('le titre vient de `titreDepotSigne`, et SUIT le type sélectionné', () => {
+    expect(componentSrc).toMatch(/titreDepotSigne\(selectedDocType\)/);
+    expect(componentSrc).toMatch(/['"]@\/lib\/sessions\/titre-depot-signe['"]/);
+  });
+});
