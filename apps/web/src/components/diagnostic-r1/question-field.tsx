@@ -22,6 +22,15 @@ export interface QuestionFieldProps {
   value: unknown;
   isSkipped: boolean;
   disabled?: boolean;
+  /**
+   * Réponse tirée du compte rendu et pas encore relue (lot C, §6.4). Elle
+   * s'affiche comme les autres — c'est ici qu'on la corrige — mais elle se
+   * DIT : sans le badge, une valeur proposée par un modèle serait
+   * indiscernable d'une valeur dictée par le dirigeant.
+   */
+  aRelire?: boolean;
+  /** L'extrait du compte rendu qui la justifie. */
+  quote?: string | null;
   onChange: (value: unknown) => void;
   onSkipToggle: (skipped: boolean) => void;
 }
@@ -50,6 +59,8 @@ export function QuestionField({
   value,
   isSkipped,
   disabled,
+  aRelire = false,
+  quote = null,
   onChange,
   onSkipToggle,
 }: QuestionFieldProps) {
@@ -205,6 +216,11 @@ export function QuestionField({
         <label htmlFor={id} className="block text-sm font-medium leading-snug">
           {question.question}
           {question.required && <span className="text-red-600 ml-1">*</span>}
+          {aRelire && (
+            <span className="ml-2 inline-flex items-center rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 align-middle text-[11px] font-normal text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              à confirmer
+            </span>
+          )}
         </label>
         <button
           type="button"
@@ -232,6 +248,13 @@ export function QuestionField({
       )}
 
       {renderInput()}
+
+      {aRelire && quote ? (
+        <p className="mt-1.5 border-l-2 border-amber-300 pl-2 text-xs italic leading-relaxed text-muted-foreground">
+          Tiré du compte rendu : « {quote} » — modifier la valeur vaut
+          confirmation.
+        </p>
+      ) : null}
 
       {isSkipped && (
         <p className="text-xs text-muted-foreground mt-1">
