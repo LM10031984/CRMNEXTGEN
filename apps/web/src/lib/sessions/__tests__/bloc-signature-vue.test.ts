@@ -478,3 +478,49 @@ describe('construireVueSignature — les avertissements ressortent REGROUPÉS', 
     expect(vue.avertissements[0]!.docTypes).toEqual(['CONVENTION', 'AGEFICE']);
   });
 });
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — correction n°4.
+ *
+ * « Convention — Provence Immobilier (2 participants) · signataire : Paul
+ * DURAND · paul.durand@… », AVANT même de cliquer. Motif de Laurent : « c'est
+ * ce qui permet de repérer une mauvaise adresse d'un coup d'œil. »
+ *
+ * ⚠ LA VUE NE RÉSOUT RIEN. Elle reçoit le couple déjà résolu — par
+ * `signataire-de-la-piece.ts`, le module que le MOTEUR appelle aussi. Le
+ * résoudre ici en ferait une seconde règle, et l'écran finirait par annoncer un
+ * signataire différent de celui qui reçoit le lien.
+ */
+describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () => {
+  const SIGNATAIRE = { nom: 'Paul DURAND', email: 'paul.durand@agence-martin.fr' };
+  const conventionDuGroupe: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1', 'part-2'],
+    libelle: 'Convention — Provence Immobilier (2 participants)',
+  };
+
+  it('le couple traverse la vue jusqu’à la ligne, tel qu’il a été résolu', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map([[conventionDuGroupe.cle, SIGNATAIRE]]),
+    });
+    expect(vue.lignes[0]!.signataire).toEqual(SIGNATAIRE);
+  });
+
+  it('une pièce dont le signataire n’a PAS pu être résolu porte `null` — jamais un nom inventé', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map(),
+    });
+    expect(vue.lignes[0]!.signataire).toBeNull();
+  });
+});

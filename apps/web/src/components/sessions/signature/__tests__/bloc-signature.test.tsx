@@ -95,6 +95,7 @@ function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
     documentId: 'doc-1',
     signatureRequestId: null,
     envoyable: true,
+    signataire: null,
     ...over,
   };
 }
@@ -581,5 +582,59 @@ describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièce
     // Le message vient de la fonction IMPORTÉE, jamais d'une recopie : les
     // apostrophes typographiques en feraient sinon un test vert pour rien.
     expect(texte).toContain(avertissementRegroupe.message);
+  });
+});
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — correction n°4.
+ *
+ * « Convention — Provence Immobilier (2 participants) · signataire : Paul
+ * DURAND · paul.durand@… » — sur la LIGNE, avant même de cliquer. L'information
+ * n'existait que dans la modale de confirmation ; Laurent la veut ici, parce
+ * que « c'est ce qui permet de repérer une mauvaise adresse d'un coup d'œil ».
+ *
+ * L'adresse peut être TRONQUÉE à l'affichage, mais elle doit rester complète au
+ * survol ou dans un attribut : une adresse coupée dans laquelle on ne peut plus
+ * lire le domaine ne permet justement pas de repérer l'erreur.
+ */
+describe('PUISSANCE (g) — qui signe, et à quelle adresse, sur la LIGNE', () => {
+  const SIGNEE = ligne({
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    libelle: 'Convention — Provence Immobilier (2 participants)',
+    participantIds: ['part-1', 'part-2'],
+    participantIdUnique: null,
+    signataire: { nom: 'Paul DURAND', email: 'paul.durand@provence-immobilier.fr' },
+  });
+
+  it('la ligne nomme le signataire ET son adresse, sans qu’on ait rien ouvert', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="BEFORE" vue={vue({ lignes: [SIGNEE] })} />,
+    );
+    expect(preparerEnvoiSignature).not.toHaveBeenCalled();
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('Paul DURAND');
+    expect(texte).toContain('paul.durand@provence-immobilier.fr');
+  });
+
+  it('l’adresse COMPLÈTE reste lisible en attribut, même tronquée à l’écran', () => {
+    const { container } = render(
+      <BlocSignature sessionId={SESSION_ID} scope="BEFORE" vue={vue({ lignes: [SIGNEE] })} />,
+    );
+    const porteur = container.querySelector('[title="paul.durand@provence-immobilier.fr"]');
+    expect(porteur).not.toBeNull();
+  });
+
+  it('signataire non résolu : la ligne le DIT, elle n’invente pas un nom', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [ligne({ ...SIGNEE, signataire: null })] })}
+      />,
+    );
+    const texte = document.body.textContent ?? '';
+    expect(texte).not.toContain('Paul DURAND');
+    expect(texte).toContain('signataire à déterminer');
   });
 });
