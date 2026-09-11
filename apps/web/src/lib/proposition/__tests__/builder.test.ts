@@ -266,7 +266,7 @@ describe('Le planning suit les axes (défaut vu sur PROP-0001)', () => {
     why: 'un constat',
     halfDays: 3,
     periodLabel,
-    matchSource: 'manuel',
+    matchSource: 'manuel', modules: [],
   });
 
   it('repère une ligne de planning qui ne correspond plus à aucun axe', () => {

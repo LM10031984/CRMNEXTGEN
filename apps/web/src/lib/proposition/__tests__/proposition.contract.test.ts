@@ -69,7 +69,7 @@ function build(overrides: { discount?: ProposalPricing['discount'] } = {}): Prop
         why: 'Exclusivité à 20 % pour un repère à 30 %.',
         halfDays: 9,
         periodLabel: 'octobre',
-        matchSource: 'lexique',
+        matchSource: 'lexique', modules: [],
       },
     ],
     planning: [
