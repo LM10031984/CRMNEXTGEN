@@ -92,6 +92,16 @@ import {
   lienRenseignerFinanceur,
   retourVersOnglet,
 } from '@/lib/sessions/lien-renseigner-financeur';
+// Demande n°4 : les trois chaînes de la zone repliée. Importées, jamais
+// recopiées — leur VALEUR est gardée littéralement dans
+// `lib/sessions/__tests__/titre-depot-signe.test.ts`, donc l'assertion ici
+// garde « c'est bien ce texte-là qui s'affiche », pas « deux constantes sont
+// égales à elles-mêmes ».
+import {
+  AIDE_DEPOT_MANUEL,
+  MENTION_RETOUR_AUTOMATIQUE,
+  TITRE_DEPOT_MANUEL,
+} from '@/lib/sessions/titre-depot-signe';
 
 const SESSION_ID = 'sess-1';
 
@@ -754,5 +764,131 @@ describe('PUISSANCE (g) — qui signe, et à quelle adresse, sur la LIGNE', () =
     const texte = document.body.textContent ?? '';
     expect(texte).not.toContain('Paul DURAND');
     expect(texte).toContain('signataire à déterminer');
+  });
+});
+
+/**
+ * Demande n°4 de Laurent (11/09/2026) — UNE SEULE ZONE DE DÉPÔT, ICI.
+ *
+ * POURQUOI ELLE DÉMÉNAGE. La zone du lot A vivait à part dans les onglets
+ * Avant et Après. Les deux chemins vers la même preuve — faire signer à
+ * distance, rentrer le papier signé — se cherchaient donc dans deux endroits,
+ * alors qu'ils s'EXCLUENT (décision n°4 : un scan déposé sur une pièce partie
+ * en signature annule l'envoi, et `persistSignedScan` le refuse sans
+ * confirmation). Les mettre côte à côte, c'est ce qui rend cette exclusion
+ * lisible avant de la subir.
+ *
+ * LES QUATRE PROMESSES GARDÉES ICI :
+ *
+ *  (a) la section est DANS le bloc, sous les lignes, et REPLIÉE — le cas
+ *      courant reste l'envoi, pas le dépôt ;
+ *  (b) son titre est la question de Laurent, pas un titre de type de document ;
+ *  (c) l'aide dit les deux chemins de rattachement (nom de fichier, puis liste)
+ *      ET la troisième porte d'entrée (la cellule de la matrice) ;
+ *  (d) la mention dit que les pièces e-signées reviendront SEULES — sans quoi
+ *      un admin déposerait ici un scan de la pièce qu'il vient d'envoyer, et
+ *      annulerait son propre envoi.
+ */
+describe('Zone de dépôt — fusionnée dans le bloc Signature (demande n°4)', () => {
+  const PARTICIPANTS = [
+    { id: 'part-1', fullName: 'Jean DUPONT' },
+    { id: 'part-2', fullName: 'Marie MARTIN' },
+  ];
+
+  function avecDepot(over: Partial<VueSignature> = {}) {
+    return render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [ligne()], ...over })}
+        depotAutorise
+        depotParticipants={PARTICIPANTS}
+        depotDocType="EMARGEMENT"
+        depotDocTypeOptions={[
+          { value: 'EMARGEMENT', label: 'Émargements' },
+          { value: 'ASSIDUITE', label: "Attestations d'assiduité" },
+        ]}
+      />,
+    );
+  }
+
+  it('(a) la section est là, dans le bloc, et REPLIÉE par défaut', () => {
+    avecDepot();
+    const bouton = screen.getByRole('button', { name: /exemplaire signé à la main/i });
+    expect(bouton.getAttribute('aria-expanded')).toBe('false');
+    // Repliée ⇒ la zone de glisser-déposer n'est pas encore dans le DOM.
+    expect(screen.queryAllByLabelText(/type de document/i)).toHaveLength(0);
+  });
+
+  it('(b) dépliée, elle porte le titre, l’aide et la mention — au mot près', () => {
+    avecDepot();
+    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
+
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain(TITRE_DEPOT_MANUEL);
+    expect(texte).toContain(AIDE_DEPOT_MANUEL);
+    expect(texte).toContain(MENTION_RETOUR_AUTOMATIQUE);
+    // Le choix du type reste offert : l'onglet Après dépose émargements ET
+    // attestations d'assiduité (complément lot B).
+    expect(screen.getByLabelText(/type de document/i)).toBeTruthy();
+  });
+
+  it('(c) le bloc n’est plus MUET quand il n’a que la zone de dépôt à offrir', () => {
+    // Une session sans pièce e-signable garde la feuille d'émargement à
+    // rentrer. Renvoyer `null` ferait disparaître le seul endroit où la
+    // déposer — c'est-à-dire la régression que la fusion introduirait.
+    const { container } = render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [] })}
+        depotAutorise
+        depotParticipants={PARTICIPANTS}
+        depotDocType="EMARGEMENT"
+      />,
+    );
+    expect(container.textContent).toContain(TITRE_DEPOT_MANUEL);
+  });
+
+  it('(d) sans droit d’écriture, aucune zone — un dépôt refusé ne doit pas être proposé', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [ligne()] })}
+        depotAutorise={false}
+        depotParticipants={PARTICIPANTS}
+        depotDocType="EMARGEMENT"
+      />,
+    );
+    expect(screen.queryAllByRole('button', { name: /exemplaire signé à la main/i })).toHaveLength(
+      0,
+    );
+  });
+
+  it('(e) aucun participant : rien à rattacher, donc rien à proposer', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [ligne()] })}
+        depotAutorise
+        depotParticipants={[]}
+        depotDocType="EMARGEMENT"
+      />,
+    );
+    expect(screen.queryAllByRole('button', { name: /exemplaire signé à la main/i })).toHaveLength(
+      0,
+    );
+  });
+
+  it('(f) le dépôt reste NOMINATIF : un stagiaire par fichier, jamais la session d’un coup', () => {
+    avecDepot();
+    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
+    // Règle métier n°1 du lot A : la fiche est individuelle. Les deux inscrits
+    // sont proposés comme cibles de rattachement.
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('Jean DUPONT');
+    expect(texte).toContain('Marie MARTIN');
   });
 });

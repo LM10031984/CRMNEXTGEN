@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -76,28 +76,44 @@ describe('SignedDocDropZone smoke (lot A)', () => {
  * le lot A l'avait câblé ainsi.
  */
 describe('zone de dépôt — choix du type de document', () => {
+  /**
+   * ⚠ LA SOURCE LUE A CHANGÉ le 11/09/2026 (demande n°4). La zone ne vit plus
+   * dans `tab-apres.tsx` : elle est fusionnée dans le bloc « Signature
+   * électronique », en section repliée sous les lignes. Les promesses gardées
+   * ici sont les MÊMES — choix du type, émargement par défaut, affectation
+   * participant par participant — mais elles se vérifient à son nouveau
+   * domicile. Les laisser pointer l'ancien fichier les aurait rendues vertes
+   * en ne regardant plus rien.
+   */
   const apresSrc = readFileSync(
     path.join(__dirname, '..', '..', 'tabs', 'tab-apres.tsx'),
     'utf-8',
   );
+  const blocSrc = readFileSync(
+    path.join(__dirname, '..', '..', 'signature', 'bloc-signature.tsx'),
+    'utf-8',
+  );
 
   it('l’onglet Après propose émargement ET assiduité', () => {
-    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
-    expect(bloc).toMatch(/docTypeOptions=/);
+    const bloc = apresSrc.slice(apresSrc.indexOf('<BlocSignature'));
+    expect(bloc).toMatch(/depotDocTypeOptions=/);
     expect(bloc).toMatch(/EMARGEMENT/);
     expect(bloc).toMatch(/ASSIDUITE/);
   });
 
   it('l’émargement reste le type par défaut', () => {
-    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
-    expect(bloc).toMatch(/docType="EMARGEMENT"/);
+    const bloc = apresSrc.slice(apresSrc.indexOf('<BlocSignature'));
+    expect(bloc).toMatch(/depotDocType="EMARGEMENT"/);
   });
 
   it('l’affectation reste participant par participant', () => {
     // Règle métier n°1 : la fiche est individuelle, jamais un « signé » posé
     // sur toute la session d'un coup.
-    const bloc = apresSrc.slice(apresSrc.indexOf('<SignedDocDropZone'));
-    expect(bloc).toMatch(/participants=\{dropZoneParticipants\}/);
+    const bloc = apresSrc.slice(apresSrc.indexOf('<BlocSignature'));
+    expect(bloc).toMatch(/depotParticipants=\{dropZoneParticipants\}/);
+    // …et c'est bien le bloc qui les passe à la zone.
+    const zone = blocSrc.slice(blocSrc.indexOf('<SignedDocDropZone'));
+    expect(zone).toMatch(/participants=\{depotParticipants\}/);
   });
 
   it('les deux types proposés sont réellement acceptés côté serveur', async () => {
@@ -140,5 +156,67 @@ describe('titre de la zone de dépôt — une table, pas une concaténation', ()
   it('le titre vient de `titreDepotSigne`, et SUIT le type sélectionné', () => {
     expect(componentSrc).toMatch(/titreDepotSigne\(selectedDocType\)/);
     expect(componentSrc).toMatch(/['"]@\/lib\/sessions\/titre-depot-signe['"]/);
+  });
+});
+
+/**
+ * Demande n°4 de Laurent (11/09/2026) — « Une seule zone, une seule règle ».
+ *
+ * POURQUOI CE TEST EST UN BALAYAGE, ET PAS TROIS `expect` NOMMÉS. La promesse
+ * n'est pas « tab-avant n'en a plus » : c'est « il n'en reste NULLE PART
+ * ailleurs ». Un test qui nommerait les deux onglets d'aujourd'hui resterait
+ * vert le jour où un troisième écran en rajouterait une — et le dépôt
+ * redeviendrait un geste qu'on cherche à deux endroits, avec deux règles.
+ *
+ * Deux chemins vers la même preuve qui s'EXCLUENT (un scan déposé sur une
+ * pièce partie en signature annule l'envoi, décision n°4) ne peuvent pas vivre
+ * dans deux coins différents de l'écran : c'est là qu'on en déclenche un sans
+ * voir l'autre.
+ */
+describe('une seule zone de dépôt dans tout l’écran session', () => {
+  const racineSessions = path.join(__dirname, '..', '..');
+
+  function fichiersTsx(dossier: string): string[] {
+    const out: string[] = [];
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      if (entree.name === '__tests__') continue;
+      const complet = path.join(dossier, entree.name);
+      if (entree.isDirectory()) out.push(...fichiersTsx(complet));
+      else if (entree.name.endsWith('.tsx')) out.push(complet);
+    }
+    return out;
+  }
+
+  it('`<SignedDocDropZone>` n’est monté QUE par le bloc « Signature »', () => {
+    const monteurs = fichiersTsx(racineSessions).filter((f) => {
+      const src = readFileSync(f, 'utf-8');
+      // Le fichier qui la DÉFINIT ne la monte pas : son en-tête la cite, et
+      // une citation n'est pas un second endroit où déposer un scan.
+      if (/export\s+function\s+SignedDocDropZone/.test(src)) return false;
+      return src.includes('<SignedDocDropZone');
+    });
+    expect(monteurs.map((f) => path.relative(racineSessions, f))).toEqual([
+      path.join('signature', 'bloc-signature.tsx'),
+    ]);
+  });
+
+  it('les deux onglets ne l’importent plus — un import mort finit par se remonter', () => {
+    for (const onglet of ['tab-avant.tsx', 'tab-apres.tsx']) {
+      const src = readFileSync(path.join(racineSessions, 'tabs', onglet), 'utf-8');
+      expect(src).not.toMatch(/<SignedDocDropZone/);
+      expect(src).not.toMatch(/\bSignedDocDropZone\b/);
+    }
+  });
+
+  it('le bloc rend la section repliée, avec les trois chaînes partagées', () => {
+    const blocSrc = readFileSync(
+      path.join(racineSessions, 'signature', 'bloc-signature.tsx'),
+      'utf-8',
+    );
+    expect(blocSrc).toMatch(/TITRE_DEPOT_MANUEL/);
+    expect(blocSrc).toMatch(/AIDE_DEPOT_MANUEL/);
+    expect(blocSrc).toMatch(/MENTION_RETOUR_AUTOMATIQUE/);
+    // Repliée : le cas courant du bloc reste l'envoi en signature.
+    expect(blocSrc).toMatch(/defaultOpen=\{false\}/);
   });
 });

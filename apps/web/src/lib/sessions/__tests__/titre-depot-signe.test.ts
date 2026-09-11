@@ -61,3 +61,41 @@ describe('titreDepotSigne — l’accord vient de la table, jamais d’une conca
     }
   });
 });
+
+/**
+ * Demande n°4 de Laurent (11/09/2026) — UNE SEULE ZONE, UNE SEULE RÈGLE.
+ *
+ * La zone de dépôt vivait à part, dans les onglets Avant et Après. Elle
+ * rejoint le bloc « Signature électronique », en section repliée sous les
+ * lignes : les deux chemins vers la même preuve — faire signer à distance,
+ * rentrer le papier signé — se lisent au même endroit.
+ *
+ * Les trois chaînes sont ici, et testées LITTÉRALEMENT : elles sont importées
+ * par le composant, donc une assertion qui comparerait le DOM à la constante
+ * collapserait avec elle. C'est ce fichier qui tient la valeur.
+ */
+describe('Les mots de la zone repliée — demande n°4', () => {
+  it('le titre est une QUESTION : c’est ce qui dit à qui la section s’adresse', async () => {
+    const { TITRE_DEPOT_MANUEL } = await import('../titre-depot-signe');
+    expect(TITRE_DEPOT_MANUEL).toBe('Exemplaire signé à la main ?');
+  });
+
+  it('l’aide est celle dictée, AU MOT PRÈS', async () => {
+    const { AIDE_DEPOT_MANUEL } = await import('../titre-depot-signe');
+    expect(AIDE_DEPOT_MANUEL).toBe(
+      'Glissez le PDF : il sera rattaché au participant dont le nom figure dans le nom du ' +
+        'fichier, sinon vous choisissez dans la liste. Vous pouvez aussi le déposer ' +
+        'directement sur la cellule du participant dans la matrice.',
+    );
+  });
+
+  it('la mention explique POURQUOI cette zone ne sert qu’au papier', async () => {
+    const { MENTION_RETOUR_AUTOMATIQUE } = await import('../titre-depot-signe');
+    // Sans elle, un admin se demande s'il doit aussi déposer ici les pièces
+    // qu'il vient d'envoyer en signature — et finit par le faire, ce qui
+    // annulerait l'envoi (règle fail-closed de C.2b-3).
+    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('reviendront automatiquement');
+    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('C.3');
+    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('papier');
+  });
+});
