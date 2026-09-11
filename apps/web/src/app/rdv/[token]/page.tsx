@@ -151,9 +151,11 @@ export default async function CampagnePage({
           {/*
             Jamais « 36 h » tout court : la ligne dit de quelles heures il
             s'agit, exactement comme les dates juste en dessous. Et jamais
-            « h conventionnées » ici : c'est la valeur unique de la convention
-            et du dossier financeur (règle n°2), mais c'est une mécanique
-            interne — le participant ne lit que les heures sur place.
+            « h conventionnées » ici : c'est la valeur unique des surfaces que
+            nomme la ligne rouge du §8.1 — proposition, convention, émargement,
+            attestation d'assiduité, dossier financeur — dont cet écran ne fait
+            pas partie (D-23 / D-25, 11/09/2026). Son lecteur bloque son
+            agenda ; le lecteur des heures conventionnées est le payeur.
           */}
           {decrireDureeProduitParticipant(batch.product?.durationHours, regles.values) ? (
             <div className="text-sm text-muted-foreground tabular-nums">
