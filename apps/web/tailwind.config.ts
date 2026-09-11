@@ -15,6 +15,23 @@ const config: Config = {
         // Charte Start Academy (issue de Qualiopi Gen)
         primary: {
           DEFAULT: '#00527A',
+          /**
+           * ⚠ CETTE CLÉ MANQUAIT, ET C'EST UN BUG D'ACCESSIBILITÉ (Laurent,
+           * 11/09/2026).
+           *
+           * `text-primary-foreground` est une convention shadcn recopiée dans
+           * une douzaine de composants de ce dépôt, alors que le jeton n'y a
+           * jamais été défini. Tailwind la résout en
+           * `colors.primary.foreground` : le `foreground: '#0F172A'` ci-dessous
+           * est un FRÈRE de `primary`, jamais son enfant. La classe ne
+           * produisait donc AUCUNE règle CSS, et le texte des boutons primaires
+           * héritait du gris ardoise ambiant — 2,12:1 sur le bleu Start
+           * Academy, très en dessous du seuil AA de 4,5:1.
+           *
+           * Blanc sur #00527A = 8,44:1 (AAA). Définir la clé répare d'un coup
+           * tous les composants qui portent la classe, sans en toucher aucun.
+           */
+          foreground: '#FFFFFF',
           50: '#E6F0F5',
           100: '#CCE1EB',
           500: '#00527A',
