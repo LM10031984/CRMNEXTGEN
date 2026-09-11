@@ -5,41 +5,53 @@
 #
 #   bash scripts/_env-preview.sh
 #
-# ── CE QUE CE SCRIPT NE FAIT PAS, ET POURQUOI ────────────────────────────────
+# ── REJOUABLE. C'est la propriété principale de ce script ────────────────────
+#
+# La première version s'est arrêtée en cours de route et a laissé l'aperçu dans
+# un état PIRE qu'avant : `MAIL_DRY_RUN` retirée et jamais reposée. Deux causes,
+# corrigées ici :
+#
+#  1. **Les erreurs de `vercel env add` étaient masquées** (`2>&1 >/dev/null`),
+#     donc le message qui aurait tout expliqué n'a jamais été lu. Elles sont
+#     maintenant CAPTURÉES et AFFICHÉES.
+#  2. **Un seul échec tuait le script** (`set -e`), laissant les variables
+#     suivantes non posées et la précédente retirée. Chaque variable est
+#     désormais indépendante : un échec est compté, nommé, et on continue.
+#
+# Conséquence : le script peut être relancé autant de fois que nécessaire. Pour
+# chaque variable, `rm` (l'absence n'est pas une erreur) puis `add` — et le `rm`
+# de `MAIL_DRY_RUN` est collé à son `add`, jamais fait « pour plus tard ».
+#
+# ── CE QU'IL NE FAIT PAS ────────────────────────────────────────────────────
 #
 #  · Il ne touche JAMAIS `DATABASE_URL`, `DIRECT_URL` ni `AUTH_SECRET` en
-#    Preview. Elles sont déjà posées et pointent la base d'APERÇU
-#    (`oodxvrzpxdrggzyurlwl`, pooler `aws-1`) — vérifié le 11/09/2026. Les
-#    réécrire risquerait d'y mettre la production.
+#    Preview. Elles pointent la base d'APERÇU (`oodxvrzpxdrggzyurlwl`, pooler
+#    `aws-1`) — vérifié le 11/09/2026. Les réécrire risquerait d'y mettre la
+#    production.
 #  · Il ne lit JAMAIS `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` des fichiers
-#    `.env` : celles-là pointent la PRODUCTION. Le script les demande à la main,
-#    et REFUSE la référence de projet de production si elle est saisie.
-#  · Il n'écrit rien en scope `production` ni `development`. Chaque appel porte
-#    explicitement `preview`.
+#    `.env` : celles-là pointent la PRODUCTION. Saisie à la main, et REFUS de la
+#    référence de production.
+#  · Il ne redemande pas `DOCUSEAL_API_KEY` si elle est déjà posée.
+#  · Il n'écrit rien en scope `production` ni `development`.
 #
-# ── UN CHOIX ASSUMÉ : `printf`, PAS `echo` ──────────────────────────────────
+# ── `printf`, PAS `echo` ────────────────────────────────────────────────────
 #
 # `echo "$v" | vercel env add …` ajoute un SAUT DE LIGNE à la valeur. Sur
 # `SMTP_PASS` ou une clé d'API, ce caractère invisible fait échouer
-# l'authentification sans un message qui le dise. On pousse donc avec
-# `printf '%s'`.
+# l'authentification sans un message qui le dise.
 #
-set -euo pipefail
+set -uo pipefail   # PAS -e : un échec isolé ne doit pas laisser l'aperçu à moitié posé.
 
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_LOCAL="$ICI/../files/.env.local"
 ENV_PARTAGE="$ICI/../files/.env"
 
-# Référence du projet Supabase de PRODUCTION — celle qu'on refuse.
 REF_PROD="gntlqyscahbgjrmsbzil"
-# Celle de l'aperçu, pour confirmer plutôt que deviner.
 REF_APERCU="oodxvrzpxdrggzyurlwl"
 
 rouge() { printf '\033[31m%s\033[0m\n' "$*"; }
 vert()  { printf '\033[32m%s\033[0m\n' "$*"; }
 gras()  { printf '\033[1m%s\033[0m\n' "$*"; }
-
-# ── Garde-fous d'entrée ─────────────────────────────────────────────────────
 
 command -v vercel >/dev/null || { rouge "⛔ La CLI vercel est introuvable."; exit 1; }
 command -v openssl >/dev/null || { rouge "⛔ openssl est introuvable."; exit 1; }
@@ -50,19 +62,17 @@ command -v openssl >/dev/null || { rouge "⛔ openssl est introuvable."; exit 1;
 }
 [ -f "$ENV_PARTAGE" ] || { rouge "⛔ Introuvable : $ENV_PARTAGE"; exit 1; }
 
-gras "Préparation du scope PREVIEW — projet qualiof"
+gras "Préparation du scope PREVIEW — projet qualiof (rejouable)"
 echo "  source n°1 : $ENV_LOCAL"
 echo "  source n°2 : $ENV_PARTAGE  (uniquement pour ce que la n°1 ne porte pas)"
 echo
 
-# ── Lecture d'un fichier .env, sans l'exécuter ──────────────────────────────
-#
-# On ne « source » pas ces fichiers : un `$(…)` ou un backtick dans une valeur
-# s'exécuterait. On extrait la ligne, on retire les guillemets, point.
+# ── Lecture d'un .env SANS l'exécuter ───────────────────────────────────────
+# On ne « source » pas : un `$(…)` dans une valeur s'exécuterait.
 lire_var() {
   local fichier="$1" nom="$2" ligne valeur
   [ -f "$fichier" ] || return 1
-  ligne="$(grep -m1 -E "^[[:space:]]*(export[[:space:]]+)?${nom}=" "$fichier" || true)"
+  ligne="$(grep -m1 -E "^[[:space:]]*(export[[:space:]]+)?${nom}=" "$fichier" 2>/dev/null)"
   [ -n "$ligne" ] || return 1
   valeur="${ligne#*=}"
   valeur="${valeur%\"}"; valeur="${valeur#\"}"
@@ -71,18 +81,42 @@ lire_var() {
   printf '%s' "$valeur"
 }
 
-POUSSEES=(); MANQUANTES=(); DEPUIS_PARTAGE=()
+POUSSEES=(); MANQUANTES=(); DEPUIS_PARTAGE=(); ECHECS=(); IGNOREES=()
 
-# Pousse une valeur. `rm` d'abord : `vercel env add` refuse un nom déjà présent.
-pousser() {
-  local nom="$1" valeur="$2"
-  vercel env rm "$nom" preview --yes >/dev/null 2>&1 || true
-  printf '%s' "$valeur" | vercel env add "$nom" preview >/dev/null 2>&1
-  POUSSEES+=("$nom")
-  vert "  ✓ $nom"
+# L'inventaire des variables DÉJÀ posées.
+#
+# Relu UNE SEULE FOIS, avant la première écriture — et c'est volontaire : il ne
+# sert qu'à la section 4, qui interroge `DOCUSEAL_API_KEY` et les deux
+# `SUPABASE_*`. Aucune des sections 1 à 3 n'y touche, donc l'inventaire reste
+# juste pour ce qu'on lui demande. Le rafraîchir entre-temps coûterait un appel
+# réseau par variable pour aucune réponse différente.
+INVENTAIRE=""
+rafraichir_inventaire() {
+  INVENTAIRE="$(vercel env ls preview 2>/dev/null | awk '{print $1}')"
+}
+existe_deja() {
+  printf '%s\n' "$INVENTAIRE" | grep -qx "$1"
 }
 
-# Cherche dans .env.local, sinon dans .env, sinon signale le manque.
+# Pousse UNE variable, et n'abandonne jamais le reste du script.
+#
+# `rm` d'abord — `vercel env add` refuse un nom déjà présent, et c'est ce qui
+# rend le script rejouable. L'absence n'est pas une erreur : `|| true`.
+# `add` ensuite, stderr CAPTURÉ et affiché en cas d'échec : c'est le message
+# manquant qui a coûté la première tentative.
+pousser() {
+  local nom="$1" valeur="$2" sortie
+  vercel env rm "$nom" preview --yes >/dev/null 2>&1 || true
+  if sortie="$(printf '%s' "$valeur" | vercel env add "$nom" preview 2>&1)"; then
+    POUSSEES+=("$nom")
+    vert "  ✓ $nom"
+  else
+    ECHECS+=("$nom")
+    rouge "  ✗ $nom — vercel env add a échoué :"
+    printf '      %s\n' "$sortie" | head -5
+  fi
+}
+
 pousser_depuis_fichiers() {
   local nom="$1" valeur
   if valeur="$(lire_var "$ENV_LOCAL" "$nom")"; then
@@ -96,13 +130,19 @@ pousser_depuis_fichiers() {
   fi
 }
 
+rafraichir_inventaire
+
 # ── 1. Rendu PDF, SMTP, cron, identité de l'organisme ───────────────────────
+#
+# ⚠ `WEASYPRINT_URL` a été RETIRÉE de cette liste le 11/09/2026 : la production
+# n'en porte pas non plus. Le rendu passe par Gotenberg ; réclamer une variable
+# que personne ne pose ne produisait qu'un faux manque dans le bilan.
 
 gras "1. Valeurs reprises des fichiers .env"
 for nom in \
-  GOTENBERG_URL WEASYPRINT_URL \
+  GOTENBERG_URL \
   SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS \
-  MAIL_FROM MAIL_REPLY_TO \
+  MAIL_FROM \
   CRON_SECRET
 do
   pousser_depuis_fichiers "$nom"
@@ -123,15 +163,25 @@ gras "2. Valeurs fixées par la recette"
 pousser SIGNATURE_PROVIDER "docuseal"
 pousser DOCUSEAL_BASE_URL  "https://api.docuseal.eu"
 pousser STORAGE_PROVIDER   "supabase"
+# Absente des deux fichiers .env : posée en dur, sur décision du 11/09/2026.
+# Sans elle, « Répondez simplement à ce message » (gabarits C.2c) est FAUX.
+pousser MAIL_REPLY_TO      "formation@start-academy.fr"
+
 # ⚠ DÉROGATION CONSCIENTE à la règle du 10/09/2026 (« l'aperçu n'envoie jamais
-# de vrais emails »). La recette l'exige. À remettre à `true` juste après —
-# section 7 de RECETTE.md.
+# de vrais emails »). Le `rm` est DANS `pousser`, collé à son `add` : c'est ce
+# qui empêche de la laisser retirée si la suite échoue.
 pousser MAIL_DRY_RUN       "false"
-rouge "  ⚠ MAIL_DRY_RUN=false : l'aperçu enverra de VRAIS emails."
-rouge "    À remettre à true dès la recette terminée."
+if printf '%s\n' "${ECHECS[@]:-}" | grep -qx "MAIL_DRY_RUN"; then
+  rouge "  ⛔ MAIL_DRY_RUN a été RETIRÉE et n'a pas pu être reposée."
+  rouge "     À reposer À LA MAIN sans attendre :"
+  echo  "       printf '%s' 'true' | vercel env add MAIL_DRY_RUN preview"
+else
+  rouge "  ⚠ MAIL_DRY_RUN=false : l'aperçu enverra de VRAIS emails."
+  rouge "    À remettre à true dès la recette terminée."
+fi
 echo
 
-# ── 3. Le secret de webhook, généré ici ─────────────────────────────────────
+# ── 3. Le secret de webhook ─────────────────────────────────────────────────
 
 gras "3. Secret de webhook DocuSeal"
 WEBHOOK_SECRET="$(openssl rand -hex 32)"
@@ -141,49 +191,72 @@ gras "  ┌─ À RECOPIER DANS DOCUSEAL (Settings → Webhooks → Secret) ─�
 echo   "    $WEBHOOK_SECRET"
 gras "  └────────────────────────────────────────────────────────────────────┘"
 echo "  Il ne sera plus jamais affiché : Vercel le chiffre."
+echo "  ⚠ Rejouer ce script en GÉNÈRE UN NOUVEAU : il faudra le recopier à"
+echo "    nouveau dans DocuSeal, sinon les webhooks seront rejetés."
 echo
 
-# ── 4. Les trois valeurs saisies à la main ──────────────────────────────────
+# ── 4. Les valeurs saisies à la main ────────────────────────────────────────
 #
 # Elles ne transitent par aucun fichier lu par un agent : saisie masquée,
-# variables locales, jamais réaffichées.
+# variables locales, `unset` juste après.
 
-gras "4. Saisie manuelle — ces trois-là ne sont lues nulle part"
+gras "4. Saisie manuelle — ces valeurs ne sont lues nulle part"
 
-printf '  DOCUSEAL_API_KEY (saisie masquée) : '
-read -rs DOCUSEAL_API_KEY; echo
-[ -n "$DOCUSEAL_API_KEY" ] || { rouge "⛔ Vide — rien de plus n'a été poussé."; exit 1; }
-pousser DOCUSEAL_API_KEY "$DOCUSEAL_API_KEY"
-unset DOCUSEAL_API_KEY
+if existe_deja "DOCUSEAL_API_KEY"; then
+  IGNOREES+=("DOCUSEAL_API_KEY")
+  vert "  ↷ DOCUSEAL_API_KEY déjà posée — laissée telle quelle, rien n'est redemandé."
+else
+  printf '  DOCUSEAL_API_KEY (saisie masquée) : '
+  read -rs DOCUSEAL_API_KEY; echo
+  if [ -z "$DOCUSEAL_API_KEY" ]; then
+    ECHECS+=("DOCUSEAL_API_KEY")
+    rouge "  ✗ DOCUSEAL_API_KEY — saisie vide, non posée."
+  else
+    pousser DOCUSEAL_API_KEY "$DOCUSEAL_API_KEY"
+  fi
+  unset DOCUSEAL_API_KEY
+fi
 
-echo
-echo "  ⚠ Les DEUX suivantes viennent du projet Supabase d'APERÇU"
-echo "    (ref attendue : $REF_APERCU), JAMAIS de la production."
-printf '  SUPABASE_URL de l’aperçu : '
-read -r SUPABASE_URL
-case "$SUPABASE_URL" in
-  *"$REF_PROD"*)
-    rouge "⛔ C'est la référence de PRODUCTION ($REF_PROD)."
-    rouge "   Rien de plus n'a été poussé. Reprendre avec le projet d'aperçu."
-    exit 1 ;;
-  *"$REF_APERCU"*)
-    vert "  ✓ référence d'aperçu reconnue" ;;
-  "")
-    rouge "⛔ Vide — rien de plus n'a été poussé."; exit 1 ;;
-  *)
-    rouge "  ⚠ Référence inconnue — ni l'aperçu, ni la production."
-    printf '  Continuer quand même ? (tapez OUI) : '
-    read -r reponse
-    [ "$reponse" = "OUI" ] || { rouge "⛔ Interrompu."; exit 1; } ;;
-esac
-pousser SUPABASE_URL "$SUPABASE_URL"
-unset SUPABASE_URL
+if existe_deja "SUPABASE_URL" && existe_deja "SUPABASE_SERVICE_ROLE_KEY"; then
+  IGNOREES+=("SUPABASE_URL" "SUPABASE_SERVICE_ROLE_KEY")
+  vert "  ↷ SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY déjà posées — rien n'est redemandé."
+else
+  echo
+  echo "  ⚠ Les DEUX suivantes viennent du projet Supabase d'APERÇU"
+  echo "    (ref attendue : $REF_APERCU), JAMAIS de la production."
+  printf '  SUPABASE_URL de l’aperçu : '
+  read -r SUPABASE_URL
+  CONTINUER="oui"
+  case "$SUPABASE_URL" in
+    *"$REF_PROD"*)
+      rouge "  ⛔ C'est la référence de PRODUCTION ($REF_PROD). Non posée."
+      ECHECS+=("SUPABASE_URL"); CONTINUER="non" ;;
+    *"$REF_APERCU"*)
+      vert "  ✓ référence d'aperçu reconnue" ;;
+    "")
+      rouge "  ⛔ Vide. Non posée."
+      ECHECS+=("SUPABASE_URL"); CONTINUER="non" ;;
+    *)
+      rouge "  ⚠ Référence inconnue — ni l'aperçu, ni la production."
+      printf '  Continuer quand même ? (tapez OUI) : '
+      read -r reponse
+      [ "$reponse" = "OUI" ] || { rouge "  ⛔ Interrompu pour ces deux variables."; ECHECS+=("SUPABASE_URL"); CONTINUER="non"; } ;;
+  esac
 
-printf '  SUPABASE_SERVICE_ROLE_KEY de l’aperçu (saisie masquée) : '
-read -rs SUPABASE_SERVICE_ROLE_KEY; echo
-[ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { rouge "⛔ Vide."; exit 1; }
-pousser SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
-unset SUPABASE_SERVICE_ROLE_KEY
+  if [ "$CONTINUER" = "oui" ]; then
+    pousser SUPABASE_URL "$SUPABASE_URL"
+    printf '  SUPABASE_SERVICE_ROLE_KEY de l’aperçu (saisie masquée) : '
+    read -rs SUPABASE_SERVICE_ROLE_KEY; echo
+    if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+      ECHECS+=("SUPABASE_SERVICE_ROLE_KEY")
+      rouge "  ✗ SUPABASE_SERVICE_ROLE_KEY — saisie vide, non posée."
+    else
+      pousser SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
+    fi
+    unset SUPABASE_SERVICE_ROLE_KEY
+  fi
+  unset SUPABASE_URL
+fi
 echo
 
 # ── 5. Bilan ────────────────────────────────────────────────────────────────
@@ -193,7 +266,8 @@ vercel env ls preview
 echo
 
 gras "Bilan"
-echo "  ${#POUSSEES[@]} variables poussées."
+echo "  ${#POUSSEES[@]} poussées · ${#IGNOREES[@]} déjà là · ${#ECHECS[@]} en échec · ${#MANQUANTES[@]} introuvables"
+
 if [ "${#DEPUIS_PARTAGE[@]}" -gt 0 ]; then
   echo
   echo "  ⓘ Absentes de .env.local, reprises de $ENV_PARTAGE :"
@@ -203,16 +277,18 @@ if [ "${#MANQUANTES[@]}" -gt 0 ]; then
   echo
   rouge "  ⚠ INTROUVABLES dans les deux fichiers — à poser à la main :"
   printf '      %s\n' "${MANQUANTES[@]}"
-  echo
-  echo "    Ce que chacune coûte si elle reste absente :"
-  echo "      WEASYPRINT_URL  — un gabarit rendu par WeasyPrint échouera à la"
-  echo "                        régénération avec ancres, et rien ne partira."
-  echo "      MAIL_REPLY_TO   — « Répondez simplement à ce message » devient FAUX :"
-  echo "                        les réponses partiront vers MAIL_FROM, qui doit"
-  echo "                        alors être une boîte réellement lue."
-  echo
   echo "    Pour en poser une :  printf '%s' 'la-valeur' | vercel env add NOM preview"
 fi
+if [ "${#ECHECS[@]}" -gt 0 ]; then
+  echo
+  rouge "  ⛔ EN ÉCHEC — le message de vercel est affiché plus haut, à sa ligne :"
+  printf '      %s\n' "${ECHECS[@]}"
+  echo
+  echo "    Le script est REJOUABLE : corriger la cause puis le relancer."
+  echo "    ⚠ Une relance regénère DOCUSEAL_WEBHOOK_SECRET — à recopier dans DocuSeal."
+  exit 1
+fi
+
 echo
 gras "Ensuite"
 echo "  1. Deployment Protection → Protection Bypass for Automation → Generate Secret"
