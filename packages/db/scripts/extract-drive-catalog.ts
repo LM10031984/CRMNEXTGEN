@@ -31,6 +31,7 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from '
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { candidatsNxtCoach, premierEmplacementPorteur } from './lib/corpus-local.js';
 import { retirerMentionsOrganisme } from './lib/mentions-organisme.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -60,22 +61,20 @@ const PAQUET_FAROS = /^SA_[A-Z]{3}_M\d{3}_.*LIVRAISON/;
  * On ne se contente plus de l'existence : on cherche le premier emplacement qui
  * porte réellement un paquet de livraison. Un `FAROS_DIR` explicite reste
  * souverain — si on le pose, c'est qu'on sait ce qu'on fait.
+ *
+ * La recherche vit dans `lib/corpus-local.ts`, partagée avec
+ * `import-diag-catalog.ts` : deux copies de ce raisonnement finiraient par
+ * diverger, et c'est précisément une divergence muette qui a coûté deux
+ * programmes.
  */
 function trouverFaros(): string {
   const explicite = process.env.FAROS_DIR;
   if (explicite !== undefined && explicite.length > 0) return explicite;
-  const candidats = [
-    path.join(HOME, 'Projects/nxt-coach/Formation Faros'),
-    path.join(HOME, 'Documents/nxt-coach/Formation Faros'),
-  ];
-  const porteur = candidats.find((dir) => {
-    if (!existsSync(dir)) return false;
-    try {
-      return readdirSync(dir).some((f) => PAQUET_FAROS.test(f));
-    } catch {
-      return false;
-    }
-  });
+  const candidats = candidatsNxtCoach();
+  const porteur = premierEmplacementPorteur(candidats, (entrees) =>
+    entrees.some((f) => PAQUET_FAROS.test(f)),
+  );
+  // Repli sur le premier candidat : le message d'erreur doit nommer un chemin.
   return porteur ?? candidats[0]!;
 }
 
