@@ -21,6 +21,15 @@
 
 import type { AnomalieEnvoi, EnvoiPlanifie } from '@/lib/signature/plan-envoi';
 import { DOC_TYPES_SIGNABLES, type DocTypeSignable } from '@/lib/signature/regime';
+// L'ordre affiché est COMPOSÉ ailleurs, et il l'était déjà : `ordre-signataires.ts`
+// (lot C.2b-7) sert le récapitulatif et l'écran résultat. La vue l'appelle —
+// elle ne réécrit ni la composition, ni la règle « l'OF signe-t-il cette
+// pièce », qui reste `ofSigneLaPiece` / `ANCRES_PAR_PIECE`.
+import {
+  ordreSignatairesPrevu,
+  type SignataireAffiche,
+} from '@/lib/sessions/ordre-signataires';
+import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 
 /**
  * Où en est la pièce, du point de vue de la signature.
@@ -83,6 +92,27 @@ export interface LigneSignature {
    * refus nominatif complet.
    */
   signataire: { nom: string; email: string } | null;
+  /**
+   * L'ORDRE COMPLET DE SIGNATURE, numéroté — « 1. client · 2. OF » (Laurent,
+   * 11/09/2026, après relecture d'écran).
+   *
+   * POURQUOI SUR LA LIGNE, alors que le récapitulatif le disait déjà. Le
+   * récapitulatif s'atteint APRÈS avoir décidé d'envoyer ; le bloc est l'écran
+   * qu'on regarde AVANT de cliquer. Tant qu'il n'annonçait que le signataire
+   * client, un admin pouvait croire la convention close au premier paraphe,
+   * alors que le moteur y envoie DEUX signataires depuis le lot C.2a.
+   *
+   * ⚠ COMPOSÉ, PAS DÉCIDÉ. `ordreSignatairesPrevu` interroge
+   * `ofSigneLaPiece(docType)` — la table des ancres, lecture des gabarits. Une
+   * pièce sans ancre OF (le dossier AGEFICE, dont l'exemplaire officiel porte
+   * déjà l'image de signature de l'organisme) n'a qu'UN rang, et le composant
+   * n'a rien à en déduire.
+   *
+   * Vide ⇔ le signataire client n'a pas été résolu : la ligne le DIT (« signataire
+   * à déterminer ») plutôt que d'attribuer un « 1. » à l'organisme, ce qui
+   * contredirait le « signe en dernier » de la même phrase.
+   */
+  ordre: SignataireAffiche[];
 }
 
 /**
@@ -391,6 +421,15 @@ export function construireVueSignature(a: {
    * « non résolu » : la vue ne rattrape rien, elle transporte.
    */
   signataireParCle?: ReadonlyMap<string, { nom: string; email: string }>;
+  /**
+   * Le signataire de l'ORGANISME, résolu UNE fois par `resoudreSignataireOf`
+   * (`@/lib/signature/signataire-of`) — le même module que le moteur d'envoi.
+   *
+   * ⚠ La vue ne le résout pas et ne le devine pas : elle le transporte. Absent
+   * ou `null` ⇒ les lignes n'annoncent que le client, et l'empêchement
+   * `SIGNATAIRE_OF_INCOMPLET` du récapitulatif dira quel réglage manque.
+   */
+  signataireOf?: SignataireOfPrevu | null;
 }): VueSignature {
   const lignes: LigneSignature[] = a.plan.envois.map((envoi) => {
     const document = a.documentParCle.get(envoi.cle) ?? null;
@@ -398,6 +437,7 @@ export function construireVueSignature(a: {
       docStatusEtat: a.docStatusParCle.get(envoi.cle) ?? null,
       document,
     });
+    const signataire = a.signataireParCle?.get(envoi.cle) ?? null;
     return {
       cle: envoi.cle,
       docType: envoi.docType,
@@ -409,7 +449,12 @@ export function construireVueSignature(a: {
       documentId: document?.id ?? null,
       signatureRequestId: document?.signatureRequestId ?? null,
       envoyable: etat === 'ABSENT' || etat === 'GENERE',
-      signataire: a.signataireParCle?.get(envoi.cle) ?? null,
+      signataire,
+      ordre: ordreSignatairesPrevu({
+        docType: envoi.docType,
+        client: signataire,
+        of: a.signataireOf ?? null,
+      }),
     };
   });
 

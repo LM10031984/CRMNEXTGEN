@@ -61,6 +61,7 @@ import type {
 } from '@/lib/signature/envoi-contrats';
 import type { AnomalieEnvoi, ScopeEnvoi } from '@/lib/signature/plan-envoi';
 import {
+  LIBELLE_ORDRE_SIGNATURE,
   ordreSignatairesEnvoyes,
   ordreSignatairesPrevu,
   texteOrdreSignataires,
@@ -594,7 +595,7 @@ function PieceARelire({
       {envoi.signataire !== null && ordre.length > 0 && (
         <div className="mt-2 text-sm">
           <p>
-            Ordre de signature : <strong>{texteOrdreSignataires(ordre)}</strong>
+            {LIBELLE_ORDRE_SIGNATURE} : <strong>{texteOrdreSignataires(ordre)}</strong>
           </p>
           <p className="text-xs text-muted-foreground">
             {envoi.signataire.nom} — nom : {LIBELLE_SOURCE_NOM[envoi.signataire.sourceNom]} ·

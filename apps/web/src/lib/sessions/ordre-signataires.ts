@@ -60,8 +60,25 @@ export const QUALITE_OF = 'organisme de formation';
 export const MENTION_OF_DERNIER = 'signe en dernier depuis le CRM';
 export const MENTION_OF_PREMIER = 'signe en premier depuis le CRM';
 
-/** Le séparateur de la ligne d'ordre, dans la forme dictée par Laurent. */
-const SEPARATEUR_ORDRE = ' · ';
+/**
+ * Le séparateur de la ligne d'ordre, dans la forme dictée par Laurent.
+ *
+ * EXPORTÉ depuis le 11/09/2026 : le bloc « Signature » rend chaque rang dans
+ * son propre élément — l'adresse du client doit rester lisible en entier au
+ * survol, même quand la ligne est longue (correction n°4). Il lui faut donc le
+ * séparateur, et il le prend ICI plutôt que de réécrire ` · ` dans du JSX.
+ */
+export const SEPARATEUR_ORDRE = ' · ';
+
+/**
+ * Le libellé qui introduit l'ordre, écrit à UN seul endroit.
+ *
+ * Le récapitulatif l'affichait déjà ; le bloc l'affiche désormais aussi. Deux
+ * formulations pour la même information sur deux écrans, c'est exactement ce
+ * que ce lot est en train de corriger — autant ne pas le réintroduire par la
+ * porte du libellé.
+ */
+export const LIBELLE_ORDRE_SIGNATURE = 'Ordre de signature';
 
 export interface SignataireAffiche {
   /** 1, 2 — le rang RÉEL de signature. Jamais un index de tableau. */

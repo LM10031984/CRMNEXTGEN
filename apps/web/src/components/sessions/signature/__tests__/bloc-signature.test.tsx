@@ -784,7 +784,11 @@ describe('PUISSANCE (g) — qui signe, et à quelle adresse, sur la LIGNE', () =
       <BlocSignature
         sessionId={SESSION_ID}
         scope="BEFORE"
-        vue={vue({ lignes: [ligne({ ...SIGNEE, signataire: null })] })}
+        // ⚠ `ordre: []` EXPLICITE, parce que `...SIGNEE` traînerait l'ordre
+        // calculé pour le signataire qu'on vient justement de retirer. Que
+        // « client non résolu ⇒ aucun rang » soit bien ce que la VUE calcule,
+        // c'est `bloc-signature-vue.test.ts` qui le garde.
+        vue={vue({ lignes: [ligne({ ...SIGNEE, signataire: null, ordre: [] })] })}
       />,
     );
     const texte = document.body.textContent ?? '';

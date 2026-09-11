@@ -80,6 +80,12 @@ import {
   resoudreSignataireClient,
   type ParticipantPourSignataire,
 } from '@/lib/signature/signataire-de-la-piece';
+// L'ordre complet sur CHAQUE ligne du bloc « Signature » (Laurent, 11/09/2026).
+// ⚠ MÊME module que le moteur d'envoi : `resoudreSignataireOf` a quitté
+// `signature-envoi.ts` pour être appelable d'ici sans relire `Tenant.signatory*`
+// une seconde fois. Deux lectures de cette cascade divergeraient, et la ligne
+// annoncerait un organisme différent de celui qui reçoit le lien.
+import { resoudreSignataireOf, signataireOfPrevu } from '@/lib/signature/signataire-of';
 // Bloc « Signature » des onglets Avant / Après (lot C.2b-2) : la VUE est
 // calculée ici, côté serveur, pour que « le bouton existe ou n'existe pas »
 // reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
@@ -719,6 +725,20 @@ export default async function SessionDetailPage({
    * le même document — en lire un suffit, et en lire plusieurs inventerait un
    * arbitrage que le moteur ne fait pas.
    */
+  /**
+   * Le signataire de l'ORGANISME, résolu UNE fois pour les deux scopes.
+   *
+   * ⚠ AUCUNE RÈGLE ICI NON PLUS. On appelle la résolution du moteur et on en
+   * garde la projection d'affichage (`signataireOfPrevu`). Non résolu ⇒ `null`,
+   * et les lignes n'annoncent que le client : le récapitulatif rendra
+   * l'empêchement `SIGNATAIRE_OF_INCOMPLET`, qui nomme le réglage manquant.
+   *
+   * ⚠ « Cette pièce porte-t-elle une signature OF ? » n'est PAS tranché ici :
+   * `ordreSignatairesPrevu` interroge `ANCRES_PAR_PIECE` pièce par pièce, donc
+   * le dossier AGEFICE n'annoncera qu'un rang même avec cet objet sous la main.
+   */
+  const signataireOfDeLOrganisme = signataireOfPrevu(await resoudreSignataireOf(user.tenantId));
+
   const vuePourScope = (plan: ReturnType<typeof planifierEnvoi>): VueSignature => {
     const documentParCle = new Map<string, DocumentDeLaPiece>();
     const docStatusParCle = new Map<string, string | null>();
@@ -738,6 +758,7 @@ export default async function SessionDetailPage({
       canSign,
       contexteAvertissementParParticipant,
       signataireParCle: signataireParCle(plan),
+      signataireOf: signataireOfDeLOrganisme,
     });
   };
   const vueSignatureAvant = vuePourScope(planSignatureAvant);

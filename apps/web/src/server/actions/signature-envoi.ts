@@ -52,7 +52,6 @@ import {
 } from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { DOCS_BUCKET, downloadFile } from '@/lib/storage';
-import { loadOfConfig } from '@/lib/of-config';
 import {
   groupConventionAnyShapeWhere,
   GROUP_CONVENTION_ENTITY_TYPE,
@@ -90,7 +89,9 @@ import {
   resoudreSignataireClient,
   type FormeDocument,
 } from '@/lib/signature/signataire-de-la-piece';
-import { resolveTenantSignatory } from '@/lib/signature/signatory';
+// ⚠ LA résolution du signataire OF, et la SEULE : `signataire-of.ts` la porte
+// pour le moteur comme pour la fiche session (11/09/2026).
+import { resoudreSignataireOf, signataireOfPrevu } from '@/lib/signature/signataire-of';
 import { getSignatureProvider, SignatureNotConfiguredError } from '@/lib/signature/provider';
 import type { SignatureSignerInput } from '@/lib/signature/port';
 import {
@@ -427,30 +428,12 @@ function statutAvantEnvoiDuJournal(diff: unknown): string | null {
 // ─── Résolution du signataire côté bénéficiaire ──────────────────────────────
 //
 // `resoudreSignataireClient` vit désormais dans `signataire-de-la-piece.ts`
-// (voir la note plus haut). Le signataire de l'ORGANISME, lui, reste ici : il
-// lit la base (`Tenant` + `of-config`), donc il n'est pas pur.
-
-async function resoudreSignataireOf(tenantId: string) {
-  const [tenant, of] = await Promise.all([
-    prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: {
-        signatoryName: true,
-        signatoryEmail: true,
-        signatoryTitle: true,
-        signatoryOrder: true,
-      },
-    }),
-    loadOfConfig(tenantId),
-  ]);
-  if (!tenant) {
-    return {
-      ok: false as const,
-      error: 'Organisme introuvable : impossible de résoudre son signataire.',
-    };
-  }
-  return resolveTenantSignatory(tenant, of);
-}
+// (voir la note plus haut). Le signataire de l'ORGANISME, lui, a quitté ce
+// fichier le 11/09/2026 pour `@/lib/signature/signataire-of` : la fiche session
+// doit l'annoncer sur chaque ligne du bloc « Signature », et `'use server'`
+// interdit d'exporter d'ici autre chose qu'une server action. DÉPLACÉ, jamais
+// dupliqué — deux lectures de `Tenant.signatory*` divergeraient, et l'écran
+// finirait par annoncer un signataire différent de celui qui reçoit le lien.
 
 // ─── Action 1 — préparer (= régénérer + rendre l'aperçu) ─────────────────────
 
@@ -509,13 +492,7 @@ export async function preparerEnvoiSignature(
    * recalculer côté écran serait une seconde résolution, et le récapitulatif
    * finirait par annoncer un signataire différent de celui qui signe.
    */
-  const ofPourAffichage: SignataireOfPrevu | null = signataireOf.ok
-    ? {
-        nom: signataireOf.signatory.name,
-        email: signataireOf.signatory.email,
-        ordre: signataireOf.signatory.order,
-      }
-    : null;
+  const ofPourAffichage: SignataireOfPrevu | null = signataireOfPrevu(signataireOf);
   /** `null` dès que la pièce n'ouvre pas d'ancre OF — la table tranche. */
   const ofDeLaPiece = (docType: DocTypeSignable): SignataireOfPrevu | null =>
     ofSigneLaPiece(docType) ? ofPourAffichage : null;

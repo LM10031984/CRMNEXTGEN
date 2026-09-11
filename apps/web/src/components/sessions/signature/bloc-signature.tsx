@@ -81,6 +81,11 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { annulerEnvoiSignature } from '@/server/actions/signature-envoi';
 import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
+// ⚠ Le libellé et le séparateur viennent du MÊME module que le récapitulatif :
+// « Ordre de signature : 1. … · 2. … » doit se lire à l'identique sur les deux
+// écrans. Recopier ` · ` ou le libellé dans ce JSX rouvrirait la divergence que
+// ce lot ferme.
+import { LIBELLE_ORDRE_SIGNATURE, SEPARATEUR_ORDRE } from '@/lib/sessions/ordre-signataires';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
 import {
   AIDE_DEPOT_MANUEL,
@@ -354,30 +359,41 @@ export function BlocSignature({
 
                   <span className="flex-1 min-w-0 text-sm">
                     <span className="font-medium">{ligne.libelle}</span>
-                    {/* ⚠ QUI SIGNE, ET À QUELLE ADRESSE — sur la LIGNE, avant
-                        tout clic (correction n°4, Laurent 11/09/2026). Tant que
-                        l'information ne vivait que dans la modale de
-                        confirmation, une mauvaise adresse ne se découvrait
-                        qu'au moment d'envoyer.
+                    {/* ⚠ L'ORDRE COMPLET, SUR LA LIGNE (Laurent, 11/09/2026).
+                        La correction n°4 avait posé ici « signataire : Paul
+                        DURAND · paul@… » pour repérer une mauvaise adresse d'un
+                        coup d'œil. Elle ne disait qu'une moitié : le moteur
+                        envoie DEUX signataires sur la convention et
+                        l'attestation depuis le lot C.2a, et un admin pouvait
+                        croire la pièce close au premier paraphe. Le
+                        récapitulatif le disait déjà — mais il s'atteint APRÈS
+                        avoir décidé d'envoyer, et c'est ICI qu'on décide.
 
-                        L'adresse peut être TRONQUÉE à l'affichage, mais elle
-                        est portée COMPLÈTE par `title` : une adresse coupée
-                        dont on ne lit plus le domaine ne permet justement pas
-                        de repérer l'erreur. */}
-                    {ligne.signataire === null ? (
-                      <span className="text-muted-foreground">
-                        {' · '}signataire à déterminer
+                        ⚠ RIEN N'EST DÉCIDÉ NI COMPOSÉ ICI. `ligne.ordre` arrive
+                        calculé par `construireVueSignature`, donc par
+                        `ordreSignatairesPrevu`, donc par `ANCRES_PAR_PIECE` :
+                        le dossier AGEFICE n'a qu'un rang sans que ce JSX ait à
+                        le savoir. On rend `s.texte` tel quel — la phrase est
+                        celle du récapitulatif, au caractère près.
+
+                        UN ÉLÉMENT PAR RANG, et pas une chaîne unique : l'adresse
+                        de chaque signataire reste portée COMPLÈTE par `title`,
+                        y compris celle de l'organisme, qui n'apparaît nulle part
+                        dans le texte. Une adresse qu'on ne peut plus lire ne
+                        permet justement pas de repérer l'erreur. */}
+                    {ligne.ordre.length === 0 ? (
+                      <span className="block text-xs text-muted-foreground">
+                        signataire à déterminer
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">
-                        {' · '}signataire : {ligne.signataire.nom}
-                        {' · '}
-                        <span
-                          title={ligne.signataire.email}
-                          className="inline-block max-w-[18rem] align-bottom truncate"
-                        >
-                          {ligne.signataire.email}
-                        </span>
+                      <span className="block text-xs text-muted-foreground break-words">
+                        {LIBELLE_ORDRE_SIGNATURE} :{' '}
+                        {ligne.ordre.map((signataire, index) => (
+                          <span key={`${ligne.cle}-${signataire.partie}-${signataire.rang}`}>
+                            {index === 0 ? '' : SEPARATEUR_ORDRE}
+                            <span title={signataire.email}>{signataire.texte}</span>
+                          </span>
+                        ))}
                       </span>
                     )}
                   </span>
