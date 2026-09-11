@@ -470,6 +470,48 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 - Filet : cron quotidien `signature-sync` qui re-interroge DocuSeal pour les requêtes `SENT` > 1 h sans webhook (webhook perdu) et marque `EXPIRED` au-delà de `expiresAt` (30 j par défaut).
 - Tests : résolution des signataires (org / indépendant / sans email) ; webhook idempotent ; provider dry-run de bout en bout.
 
+#### C.3 — deux choses à ne pas découvrir en cours de route (11/09/2026)
+
+Écrites ici et pas dans un plan, parce que les deux se paient au moment du merge,
+pas au moment de l'écriture.
+
+**1. Déclarer les 3 crons dans `apps/web/vercel.json`.** Le fichier ne planifie
+**qu'une** route : `diagnostic-worker`, toutes les 5 minutes. Trois autres routes
+existent sous `apps/web/src/app/api/cron/` et **ne sont planifiées par rien** —
+elles attendent un déclencheur externe protégé par `CRON_SECRET` :
+`preinscription-reminders`, `opco-submission-reminders`, `closure-worker`. Le lot
+C.3 ajoute une quatrième route à ce tas (`signature-sync`, le filet des webhooks
+perdus), et le lot C.2c-2 une cinquième (`signature-reminders`). Tant que rien ne
+les planifie, un webhook perdu reste perdu et une relance ne part jamais : la
+fonctionnalité a l'air livrée et ne tourne pas.
+
+⚠ **Vérifier d'abord le plan Vercel du projet** (nombre de crons autorisés,
+fréquence minimale). Si la limite est atteinte, la bonne réponse est le
+déclencheur externe — pas un cron à 5 minutes qui mangerait le dernier slot.
+Détail et constat d'origine : DIV-6 du plan
+`.planning/quick/260911-c2c-signature-emails-relances/260911-c2c-PLAN.md`.
+
+**2. Tout nouveau champ de signataire est OPTIONNEL avec valeur par défaut,
+jamais requis.** `parseSignatureSigners` (`packages/shared/src/schemas/signature.ts`)
+est le seul point de lecture de la colonne Json `SignatureRequest.signers`, et il
+**écarte silencieusement** tout élément qui ne passe pas `signatureSignerSchema` —
+c'est délibéré : une fiche session ne doit pas tomber en erreur parce qu'un webhook
+a écrit une ligne inattendue.
+
+Le revers est un piège **silencieux**, et C.3 marche droit dessus puisqu'il
+enrichit les signataires (`signedAt`, `declinedAt`, `ip`, `auditTrailUrl`…) :
+ajouter un champ **requis** au schéma invalide d'un coup **toutes les lignes déjà
+en base**, écrites avant que le champ existe. Elles ne lèvent pas d'erreur, elles
+**disparaissent** — l'écran affiche un envoi sans aucun signataire, la relance ne
+trouve personne, et rien dans les logs ne le dit.
+
+**La règle** : `.optional()` **avec** `.default(...)`, jamais `.min(1)` nu sur un
+champ neuf. **Et la garde** : un test qui fait passer par `parseSignatureSigners`
+un signataire **de la forme réellement présente en base aujourd'hui** — les sept
+champs de C.2a, pas un de plus — et qui exige qu'il ressorte. Une fixture
+recopiée du nouveau schéma ne garderait rien : elle porte le champ neuf, donc
+elle passe quoi qu'il arrive.
+
 ### ⚠ Données de production à corriger AVANT le merge du lot C
 
 Inventaire joué **sur la base de production** le 11/09/2026, en lecture seule
@@ -556,7 +598,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
 | **B** | ✅ **livré — test d'acceptation passé le 10/09/2026** | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 documents — zones HTML pour la convention et l'assiduité, ancre **dessinée par pdf-lib** pour le formulaire AGEFICE officiel (corrigé le 10/09) · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** (envoi 1619115, instance UE, signé par les deux rôles) : Adobe Reader déclare la **signature valide après mise à jour AATL**, certificat **Netrust** ; certificat de signature complet ; les deux pièces servies par `docuseal.eu` ; `send_email=false` et `sent_at=jamais`, aucun email parti de DocuSeal. Pièces versées dans `.planning/specs/evidence/signature-B/`. Placement des signatures corrigé après ce test (zone dédiée 180 × 60 pt alignée à droite) et revérifié sur l'envoi 1619495. |
-| **C** | 🟨 en cours | **C.1** (régime : 3 colonnes `SignerRole` sur `OpcoCatalog`) et **C.2a** livrés le 10/09/2026 : `lib/signature/{representant,plan-envoi,envoi-contrats}.ts` (purs), `server/actions/signature-envoi.ts` (`preparerEnvoiSignature` + `sendForSignature`), `signatureTags` plombé dans les 4 générateurs. **C.2b** livré le 10/09/2026 (l'écran : bloc « Signature », récapitulatif, saisie d'adresse, annulation — C.2b-1/bis/2). **C.2b-3** (11/09/2026) : « une pièce, un seul chemin ouvert » — le dépôt d'un scan sur une pièce en attente annule l'envoi, après confirmation explicite, avec le motif `scan_deposited` dans la trace (amendement n°10). Restent **C.2c** (emails aux signataires, D-9/D-5) et **C.3** (webhook `POST /api/webhooks/docuseal`, cron `signature-sync`). |
+| **C** | 🟨 en cours | **C.1** (régime : 3 colonnes `SignerRole` sur `OpcoCatalog`) et **C.2a** livrés le 10/09/2026 : `lib/signature/{representant,plan-envoi,envoi-contrats}.ts` (purs), `server/actions/signature-envoi.ts` (`preparerEnvoiSignature` + `sendForSignature`), `signatureTags` plombé dans les 4 générateurs. **C.2b** livré le 10/09/2026 (l'écran : bloc « Signature », récapitulatif, saisie d'adresse, annulation — C.2b-1/bis/2). **C.2b-3** (11/09/2026) : « une pièce, un seul chemin ouvert » — le dépôt d'un scan sur une pièce en attente annule l'envoi, après confirmation explicite, avec le motif `scan_deposited` dans la trace (amendement n°10). **C.2b-10** (11/09/2026) : une pièce PARTIE en signature gèle le commanditaire de l'inscription — troisième refus nominatif de `lib/enrollment/verrou-financeur.ts`, nommé en dernier parce qu'il est le seul des trois qu'un clic fait tomber. Restent **C.2c** (emails aux signataires, D-9/D-5) et **C.3** (webhook `POST /api/webhooks/docuseal`, cron `signature-sync`) — pour C.3, lire d'abord le bloc « deux choses à ne pas découvrir en cours de route » du §5. |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 
 **Trouvé en montant la preuve du lot A** (corrigé dans la foulée, commit `fix(qualiopi-matrix)`) : le SQL brut de `markDocStatus`, `uploadSignedDoc` et `deleteDocument` castait des identifiants **TEXT** en `::uuid` → `operator does not exist: text = uuid`. Les trois actions échouaient à chaque appel depuis leur écriture ; les tests unitaires mockaient `$executeRaw` et ne pouvaient pas le voir.
