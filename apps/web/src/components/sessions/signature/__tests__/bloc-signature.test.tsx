@@ -661,6 +661,13 @@ describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièce
         retourVers: retourVersOnglet(SESSION_ID, 'avant'),
       }),
     );
+    // ⚠ L'ÉGALITÉ CI-DESSUS NE SUFFIT PAS : les deux côtés passent par la même
+    // fonction, donc un constructeur qui cesserait de poser le retour les
+    // ferait collapser ensemble — constaté en mutation. On exige donc AUSSI la
+    // destination, littéralement, comme le fait le test du cas B.
+    expect(lien.getAttribute('href')).toContain('/app/organisations/org-roussel');
+    expect(lien.getAttribute('href')).toContain('champ=financeur');
+    expect(lien.getAttribute('href')).toContain('from=%2Fapp%2Fsessions%2Fsess-1%3Ftab%3Davant');
   });
 
   it('PUISSANCE — le cas A ne propose PAS le lien du cas B (et réciproquement)', () => {
@@ -692,6 +699,7 @@ describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièce
         retourVers: retourVersOnglet(SESSION_ID, 'apres'),
       }),
     );
+    expect(lien.getAttribute('href')).toContain('from=%2Fapp%2Fsessions%2Fsess-1%3Ftab%3Dapres');
   });
 });
 
