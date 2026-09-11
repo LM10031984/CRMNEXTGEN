@@ -29,6 +29,18 @@ export async function updatePerson(input: {
   professionalExperience?: string | null;
   professionalStatus?: string | null;
   bpfDefaultStatus?: string | null;
+  /**
+   * Champs AFFICHÉS sur la fiche mais qui n'étaient éditables NULLE PART
+   * (« où est-ce que je mets le numéro de sécu ? », Laurent 11/09) : le n° de
+   * sécurité sociale et l'adresse du domicile ne se saisissaient qu'à la
+   * création, ou via une inscription en ligne / une préinscription. Or les
+   * deux sont exigés sur le Cerfa AGEFICE et arrivent souvent après coup.
+   * Même défaut, même remède que pour la fiche entreprise le 02/09.
+   */
+  socialSecurityNb?: string | null;
+  addressStreet?: string | null;
+  addressPostalCode?: string | null;
+  addressCity?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié.' };
@@ -57,7 +69,37 @@ export async function updatePerson(input: {
     data.professionalStatus = input.professionalStatus?.trim() || null;
   if (input.bpfDefaultStatus !== undefined) data.bpfDefaultStatus = input.bpfDefaultStatus?.trim() || null;
 
-  if (Object.keys(data).length === 0) return { ok: true };
+  // Adresse du domicile — recomposée en entier dès qu'un de ses trois morceaux
+  // est fourni : `personalAddress` est un Json, une écriture partielle
+  // l'écraserait silencieusement.
+  const adresseFournie =
+    input.addressStreet !== undefined ||
+    input.addressPostalCode !== undefined ||
+    input.addressCity !== undefined;
+  if (adresseFournie) {
+    data.personalAddress = {
+      street: input.addressStreet?.trim() || null,
+      postalCode: input.addressPostalCode?.trim() || null,
+      city: input.addressCity?.trim() || null,
+    };
+  }
+
+  // N° de sécurité sociale — table séparée (RGPD), d'où l'upsert : la ligne
+  // n'existe pas tant qu'aucune donnée sensible n'a été saisie. On n'écrit QUE
+  // ce champ, pour ne pas emporter la pièce d'identité déjà déposée.
+  if (input.socialSecurityNb !== undefined) {
+    const ssn = input.socialSecurityNb?.trim() || null;
+    await prisma.sensitiveData.upsert({
+      where: { personId: input.personId },
+      create: { personId: input.personId, socialSecurityNb: ssn },
+      update: { socialSecurityNb: ssn },
+    });
+  }
+
+  if (Object.keys(data).length === 0) {
+    revalidatePath(`/app/apprenants/${input.personId}`);
+    return { ok: true };
+  }
 
   await prisma.person.update({ where: { id: input.personId }, data });
   revalidatePath(`/app/apprenants/${input.personId}`);

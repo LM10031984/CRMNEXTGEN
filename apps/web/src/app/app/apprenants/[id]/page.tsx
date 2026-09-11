@@ -498,6 +498,8 @@ export default async function ApprenantDetailPage({
             phone: person.phone,
             educationLevel: person.educationLevel,
             diplomas: person.diplomas,
+            personalAddress: person.personalAddress,
+            socialSecurityNb: person.sensitiveData?.socialSecurityNb ?? null,
             professionalExperience: person.professionalExperience,
             professionalStatus: person.professionalStatus,
             bpfDefaultStatus: person.bpfDefaultStatus,
