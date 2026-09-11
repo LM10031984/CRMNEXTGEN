@@ -81,6 +81,10 @@ import {
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
 import type { DocTypeSignable } from '@/lib/signature/regime';
+import {
+  LIBELLE_LIEN_CORRIGER_FINANCEUR,
+  lienCorrigerFinanceur,
+} from '@/lib/sessions/lien-corriger-financeur';
 
 const SESSION_ID = 'sess-1';
 
@@ -257,6 +261,39 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
     const texte = alertes.map((n) => n.textContent ?? '').join(' ');
     expect(texte).toContain('Florent HAUSSWIRTH');
     expect(texte).toContain('Rien n’a été envoyé.');
+  });
+
+  it('porte le lien direct de correction, qui ramène sur l’onglet d’où l’on vient', () => {
+    // Décision Laurent, 11/09/2026 (point 7) : « un avertissement qui dit
+    // "corrigez" sans lien est un ticket, pas une aide. »
+    // L'URL n'est PAS recopiée ici : elle est comparée à ce que produit le
+    // contrat publié. Recopier la chaîne laisserait le test vert alors même que
+    // le lien mènerait ailleurs — l'erreur commise sept fois sur ce chantier.
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [], avertissements: [avertissement] })}
+      />,
+    );
+    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_FINANCEUR });
+    expect(lien.getAttribute('href')).toBe(
+      lienCorrigerFinanceur({ sessionId: SESSION_ID, participantId: 'part-3', retour: 'avant' }),
+    );
+  });
+
+  it('depuis l’onglet Après, le retour pointe sur Après — pas sur Avant', () => {
+    // `retour` suit le scope du bloc : le figer renverrait l'admin sur un autre
+    // onglet que celui qu'il a quitté.
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], avertissements: [avertissement] })}
+      />,
+    );
+    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_FINANCEUR });
+    expect(lien.getAttribute('href')).toContain('retour=apres');
   });
 
   it('l’avertissement ne déclenche AUCUN envoi : pas de ligne, pas de bouton', () => {
