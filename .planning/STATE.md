@@ -15,6 +15,59 @@ progress:
 
 # STATE — QualiOF
 
+## ⚠️ À savoir AVANT de toucher à `main` ou au catalogue
+
+Deux faits vérifiés le 11/09/2026, qui corrigent ce que le reste du dossier
+laissait croire. Les lire avant d'agir, pas après.
+
+### 1. Pousser sur `main` déploie en PROD, automatiquement
+
+`.github/workflows/deploy.yml` lance `prisma migrate deploy` sur la **prod
+Supabase** à **chaque push sur `main`**. Ce n'est **pas** une étape de checklist
+à faire à la main — les notes antérieures au 11/09 le présentaient ainsi, c'est
+faux.
+
+**Tout** push sur `main` déclenche un déploiement : un merge de fonctionnalité,
+un correctif, **et jusqu'à une ligne de notes dans ce fichier**. Il n'existe pas
+de push anodin sur `main`.
+
+Conséquence pratique : ne jamais fusionner vers `main` sans avoir dit d'abord à
+Laurent ce qui part en base, et sans avoir relevé une **référence des routes
+publiques AVANT** le merge — sinon il n'y a rien à quoi comparer après.
+Référence du 11/09, prod intacte : `/diagnostic` → 200, titre « Diagnostic
+express » ; `/catalogue` → 200, **32 codes `PROD-` distincts** (ce compte-là est
+le marqueur utile : un 200 prouve que la page répond, les codes prouvent qu'elle
+lit vraiment le catalogue en base).
+
+### 2. Le CONTENU de la bibliothèque n'est QUE local
+
+Les migrations de la pile I ont porté en prod le **schéma** qui accueillera la
+bibliothèque — `sourceRef`, `supersededByProductId`, `excludedFromClientOutputs`
+— **pas son contenu**.
+
+Vivent **uniquement** sur `qualiof_dev` : les **402 modules** du Drive et de
+Faros, les **74 rayons**, et les **liens de doublons** (D-19 bis et l'arbitrage
+`BIB-D008` / `BIB-D020`). Au 11/09, la prod porte toujours 51 produits et 86
+modules, et les trois colonnes neuves y sont vides partout.
+
+Les verser en prod demande **deux commandes explicites contre la prod** :
+
+```
+pnpm --filter @qualiof/db import:drive-catalog -- --apply
+pnpm --filter @qualiof/db import:diag-catalog  -- --apply
+```
+
+C'est un **geste séparé et délibéré, à redemander à Laurent** — et **pas avant
+que le programme composé de DIAG-0001 ait été relu et jugé propre**. Verser 402
+modules dans le catalogue de production sur la foi d'un composeur non validé
+serait le mauvais ordre.
+
+⚠️ Ne jamais écrire « la bibliothèque est en prod » sans préciser *schéma* ou
+*contenu* : l'ambiguïté trompe dans les deux sens.
+
+---
+
+
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-07-04)
