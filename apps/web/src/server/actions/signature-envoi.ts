@@ -122,7 +122,10 @@ import {
   type PreparerEnvoiSignatureResult,
   type RefusEnvoi,
   type SendForSignatureResult,
+  type ResultatNotification,
 } from '@/lib/signature/envoi-contrats';
+import { notifierSignataire } from '@/lib/signature/notifier';
+import { loadOfConfig } from '@/lib/of-config';
 
 /** Statuts de `Document.status` qui interdisent de toucher au PDF. */
 const STATUT_SIGNE = 'signed';
@@ -173,6 +176,8 @@ interface ParticipantCharge {
 interface ContexteEnvoi {
   sessionId: string;
   sessionCode: string;
+  /** Le titre du produit — les emails de signature le nomment (lot C.2c). */
+  formationTitre: string;
   participants: ParticipantCharge[];
   plan: ReturnType<typeof planifierEnvoi>;
 }
@@ -187,6 +192,9 @@ async function chargerContexte(
     select: {
       id: true,
       code: true,
+      // Lot C.2c : l'email nomme la formation, pour qu'un responsable qui
+      // reçoit trois demandes le même jour sache laquelle il ouvre.
+      product: { select: { title: true } },
       participants: {
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         select: {
@@ -285,6 +293,7 @@ async function chargerContexte(
   return {
     sessionId: session.id,
     sessionCode: session.code,
+    formationTitre: session.product.title,
     participants,
     plan: planifierEnvoi({ scope, participants: participants.map((p) => p.pourLePlan) }),
   };
@@ -750,6 +759,9 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
 
   const planParCle = new Map(contexte.plan.envois.map((e) => [e.cle, e]));
   const signataireOf = await resoudreSignataireOf(user.tenantId);
+  // UNE fois, hors de la boucle : une session de 8 dossiers AGEFICE ferait
+  // sinon 8 lectures identiques de la même configuration d'organisme.
+  const of = await loadOfConfig(user.tenantId);
 
   const envoyes: EnvoiEffectue[] = [];
   const refus: RefusEnvoi[] = [];
@@ -973,6 +985,43 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       };
     });
 
+    /**
+     * L'EMAIL — lot C.2c. APRÈS la transaction, jamais dedans : un `await`
+     * réseau SMTP dans un `prisma.$transaction` tiendrait la transaction
+     * ouverte le temps du timeout SMTP.
+     *
+     * Et enveloppé : un email qui échoue ne doit PAS faire tomber l'envoi. La
+     * demande est créée chez le prestataire ; l'annuler pour un SMTP en panne
+     * serait disproportionné, et le lien reste copiable à l'écran.
+     */
+    let notification: ResultatNotification;
+    try {
+      notification = await notifierSignataire({
+        tenantId: user.tenantId,
+        sessionId,
+        signatureRequestId,
+        documentId: doc.id,
+        libellePiece: envoi.libelle,
+        formationTitre: contexte.formationTitre,
+        sessionCode: contexte.sessionCode,
+        dateLimite: creation.expiresAt ?? expiresAt,
+        role: envoi.role,
+        signataires: signatairesEnvoyes,
+        of,
+      });
+    } catch (e) {
+      console.error(
+        `[signature] email non parti pour « ${envoi.libelle} » :`,
+        e instanceof Error ? e.message : e,
+      );
+      notification = {
+        envoye: false,
+        destinataire: signatairesEnvoyes[0]?.email ?? '',
+        partie: signatairesEnvoyes[0]?.partie ?? 'CLIENT',
+        motif: 'erreur-smtp',
+      };
+    }
+
     envoyes.push({
       cle: envoi.cle,
       docType: envoi.docType,
@@ -998,6 +1047,7 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       // même intention finiraient par diverger.
       signUrl: signatairesEnvoyes.find((s) => s.partie === 'CLIENT')?.signUrl ?? null,
       signataires: signatairesEnvoyes,
+      notification,
     });
   }
 

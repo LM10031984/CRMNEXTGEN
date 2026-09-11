@@ -42,6 +42,7 @@ import {
   EMAIL_CATEGORY_FIELD,
   EMAIL_CATEGORY_LABELS,
   type EmailCategory,
+  type EmailPolicySettings,
 } from '../email-policy';
 import { EmailSettingsSchema } from '@qualiof/shared';
 import { sendMail } from '../mailer';
@@ -192,7 +193,7 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
    * tautologique — il vérifierait que la map est cohérente avec elle-même,
    * jamais que `signature` pointe vers le BON champ.
    */
-  function tousCochesSaufSignature() {
+  function tousCochesSaufSignature(): EmailPolicySettings {
     return {
       emailsEnabled: true,
       invoiceRemindersEnabled: true,
@@ -206,7 +207,7 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
       preEnrollmentAlertsEnabled: true,
       signatureEmailsEnabled: false,
       testSessionIds: [] as string[],
-    } as Parameters<typeof resolveEmailPolicy>[0];
+    };
   }
 
   it('T1.1 — décochée alors que TOUT le reste est coché ⇒ suppress/category-off', () => {
@@ -229,12 +230,12 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
   });
 
   it('interrupteur général OFF + catégorie cochée + session témoin ⇒ send', () => {
-    const s = {
+    const s: EmailPolicySettings = {
       ...tousCochesSaufSignature(),
       emailsEnabled: false,
       signatureEmailsEnabled: true,
       testSessionIds: ['ses-temoin'],
-    } as Parameters<typeof resolveEmailPolicy>[0];
+    };
     expect(resolveEmailPolicy(s, { category: 'signature', sessionId: 'ses-temoin' })).toEqual({
       decision: 'send',
     });

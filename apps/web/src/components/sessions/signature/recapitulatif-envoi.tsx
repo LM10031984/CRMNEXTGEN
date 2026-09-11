@@ -53,6 +53,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { preparerEnvoiSignature, sendForSignature } from '@/server/actions/signature-envoi';
+import { messageNotification } from '@/lib/signature/envoi-contrats';
 import type {
   EnvoiEffectue,
   EnvoiPrepare,
@@ -124,14 +125,22 @@ const LIBELLE_SOURCE_EMAIL: Record<SignataireResolu['sourceEmail'], string> = {
   SAISI_PAR_ADMIN: 'adresse saisie à l’instant',
 };
 
-const BANDEAU_AUCUN_EMAIL =
-  'La demande est créée chez le prestataire, mais aucun email n’a été envoyé au signataire : ' +
-  'l’envoi automatique des emails arrive au lot C.2c. Copiez le lien de signature ci-dessous ' +
-  'pour le lui transmettre.';
-
-const BANDEAU_AUCUN_EMAIL_REVUE =
-  'Envoyer ne prévient personne : aucun email n’est expédié au signataire avant le lot C.2c. ' +
-  'Le lien de signature s’affichera ici après l’envoi, à copier et transmettre à la main.';
+/**
+ * ⚠ CE BANDEAU DISAIT L'INVERSE JUSQU'AU LOT C.2c — « Envoyer ne prévient
+ * personne ». C'était vrai, et c'est précisément pour ça qu'il ne se supprime
+ * pas : il se RETOURNE. Un écran qui cesse de parler de l'email laisserait
+ * l'admin recopier un lien déjà parti dans la boîte du signataire, et le
+ * signataire recevoir deux fois la même demande par deux canaux.
+ *
+ * Il dit ce qui VA se passer (un email part), à qui (celui dont c'est le tour),
+ * et la seule chose qui peut l'empêcher (la catégorie décochée) — parce que
+ * cette chose-là se corrige en deux clics, et qu'il vaut mieux la lire avant
+ * d'envoyer qu'après.
+ */
+const BANDEAU_EMAIL_REVUE =
+  'Envoyer expédie un email au signataire dont c’est le tour, avec son lien de signature ' +
+  'personnel. Si la catégorie « Signature électronique » est décochée dans Paramètres > ' +
+  'Envois d’emails, rien ne partira — l’écran le dira, et le lien restera copiable ici.'
 
 /** Un empêchement qui se corrige EN SAISISSANT une adresse, ici et maintenant. */
 function manqueUneAdresse(envoi: EnvoiPrepare): boolean {
@@ -283,7 +292,7 @@ export function RecapitulatifEnvoi({
                   qu'envoyer prévient qui que ce soit. */}
               <p className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
                 <MailWarning className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                <span>{BANDEAU_AUCUN_EMAIL_REVUE}</span>
+                <span>{BANDEAU_EMAIL_REVUE}</span>
               </p>
 
               {preparation.blocages.map((blocage) => (
@@ -359,13 +368,6 @@ export function RecapitulatifEnvoi({
 
           {etape === 'resultat' && resultat !== null && (
             <div className="mt-4 space-y-4">
-              {resultat.envoyes.length > 0 && (
-                <p className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-                  <MailWarning className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>{BANDEAU_AUCUN_EMAIL}</span>
-                </p>
-              )}
-
               {/* ⚠ L'ORDRE COMPLET, ET LE LIBELLÉ (demandes n°2 et n°3, Laurent
                   11/09/2026). Cet écran titrait chaque pièce par sa `cle` —
                   « CONVENTION:org-1 » — et n'annonçait qu'UN signataire, alors
@@ -382,6 +384,19 @@ export function RecapitulatifEnvoi({
                     <p className="flex items-center gap-2 font-medium text-emerald-900">
                       <Check className="h-4 w-4 shrink-0" strokeWidth={3} aria-hidden="true" />
                       {envoye.libelle} — envoyée en signature
+                    </p>
+
+                    {/* ⚠ PAR PIÈCE, PAS GLOBAL. Deux pièces d'un même lot
+                        peuvent avoir des sorts différents : l'une part, l'autre
+                        tombe sur un signataire sans lien. Un bandeau unique
+                        annoncerait le sort de la première pour toutes. */}
+                    <p
+                      className={`mt-1.5 flex items-start gap-2 text-xs ${
+                        envoye.notification.envoye ? 'text-emerald-800' : 'text-amber-900'
+                      }`}
+                    >
+                      <MailWarning className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden="true" />
+                      <span>{messageNotification(envoye.notification)}</span>
                     </p>
 
                     <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-emerald-900">

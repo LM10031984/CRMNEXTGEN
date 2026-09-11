@@ -214,6 +214,34 @@ export interface SignataireEnvoye {
   signedAt: string | null;
 }
 
+/**
+ * Pourquoi un email de signature n'est pas parti — lot C.2c.
+ *
+ * Quatre motifs, et pas un « échec » unique : ils n'appellent pas le même
+ * geste. Une catégorie décochée se recoche dans Paramètres ; un SMTP absent est
+ * normal en local ; un lien manquant vient du provider ; un refus SMTP se relit
+ * dans son message. Les confondre, c'est rendre l'écran inutile.
+ */
+export type MotifNonEnvoi = 'aucun-lien' | 'dry-run-env' | 'categorie-decochee' | 'erreur-smtp';
+
+/**
+ * Ce que l'email a fait. Jamais `null` sur un envoi réussi : une pièce partie
+ * produit TOUJOURS une tentative, même quand elle se solde par une suppression.
+ * Un champ optionnel laisserait « pas d'email » et « on n'a pas regardé » se
+ * ressembler à l'écran.
+ */
+export interface ResultatNotification {
+  envoye: boolean;
+  /**
+   * Le destinataire EN CLAIR. Destiné à l'ÉCRAN — l'admin doit pouvoir vérifier
+   * l'adresse d'un coup d'œil. Jamais à un `console.*` : le mailer logge masqué
+   * (D-17), et le notifier n'a rien à relogger.
+   */
+  destinataire: string;
+  partie: PartieSignataire;
+  motif: MotifNonEnvoi | null;
+}
+
 export interface EnvoiEffectue {
   cle: string;
   docType: DocTypeSignable;
@@ -257,6 +285,12 @@ export interface EnvoiEffectue {
    * sans signataire est refusé bien avant (`SIGNATAIRE_SANS_EMAIL`).
    */
   signataires: SignataireEnvoye[];
+  /**
+   * Ce que l'email a fait — lot C.2c. Obligatoire : sans lui, l'écran ne peut
+   * pas distinguer « prévenu » de « pas prévenu », et c'est exactement ce que
+   * le bandeau de C.2b promettait de dire.
+   */
+  notification: ResultatNotification;
 }
 
 export type SendForSignatureResult =
@@ -477,6 +511,62 @@ export function messageDepotAnnulationImpossible(cause: string): string {
     `Tant que la demande reste ouverte chez le prestataire, enregistrer le scan laisserait ` +
     `deux chemins ouverts sur la même pièce.`
   );
+}
+
+/**
+ * Ce que l'écran dit de l'email — lot C.2c.
+ *
+ * Cinq phrases, une par issue, et chacune dit la même chose dans le même ordre :
+ * ce qui s'est passé, ce qui n'a PAS eu lieu, le geste. Une phrase unique
+ * (« email non envoyé ») ferait recliquer sur Envoyer dans les quatre cas — or
+ * recliquer ferait un second envoi concurrent.
+ *
+ * Et toutes rappellent que LE LIEN RESTE COPIABLE : c'est le recours, et il est
+ * juste en dessous à l'écran.
+ */
+export function messageNotificationEnvoyee(destinataire: string): string {
+  return `Email envoyé à ${destinataire}.`;
+}
+
+export function messageNotificationSupprimee(): string {
+  return (
+    `Aucun email : la catégorie « Signature électronique » est décochée dans Paramètres > ` +
+    `Envois d'emails. La demande est bien créée chez le prestataire — personne n'a été ` +
+    `prévenu. Cochez la catégorie, ou copiez le lien ci-dessous pour le transmettre.`
+  );
+}
+
+export function messageNotificationDryRun(): string {
+  return (
+    `Aucun email : aucun serveur d'envoi n'est configuré (mode test). La demande est bien ` +
+    `créée chez le prestataire — personne n'a été prévenu. Copiez le lien ci-dessous pour ` +
+    `le transmettre.`
+  );
+}
+
+export function messageNotificationEchouee(cause: string): string {
+  return (
+    `Email non parti : ${cause} La demande, elle, est bien créée chez le prestataire — ` +
+    `elle n'a PAS été annulée. Copiez le lien ci-dessous pour le transmettre, ou réessayez ` +
+    `l'envoi plus tard.`
+  );
+}
+
+export function messageNotificationSansLien(): string {
+  return (
+    `Aucun email : le prestataire n'a rendu aucun lien de signature pour ce signataire. ` +
+    `Envoyer « signez ici » sans lien serait pire que ne rien envoyer. Vérifiez la demande ` +
+    `chez le prestataire avant de relancer.`
+  );
+}
+
+/** La phrase qui correspond à ce qui s'est réellement passé. */
+export function messageNotification(n: ResultatNotification): string {
+  if (n.envoye) return messageNotificationEnvoyee(n.destinataire);
+  if (n.motif === 'categorie-decochee') return messageNotificationSupprimee();
+  if (n.motif === 'aucun-lien') return messageNotificationSansLien();
+  if (n.motif === 'erreur-smtp') return messageNotificationEchouee('le serveur a refusé.');
+  return messageNotificationDryRun();
 }
 
 export function messageCleInconnue(cle: string): string {
