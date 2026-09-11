@@ -34,6 +34,10 @@ import {
   type SignatureDemandeInput,
 } from '@/lib/mailer-templates/signature-demande';
 import { renderSignatureExemplaire } from '@/lib/mailer-templates/signature-exemplaire';
+import {
+  renderSignatureRelance,
+  type RangRelance,
+} from '@/lib/mailer-templates/signature-relance';
 import type {
   Expediteur,
   QualiteSignataire,
@@ -360,4 +364,86 @@ export async function notifierExemplaireSigne(
     await tracer(args, signataire, resultat);
   }
   return resultats;
+}
+
+// ─── La relance (lot C.3, D-5) ───────────────────────────────────────────────
+
+export interface NotifierRelanceArgs extends NotifierSignataireArgs {
+  /** 1 = J+3, 2 = J+7 (dernier rappel). Au-delà, plus rien ne part. */
+  rang: RangRelance;
+  /** `SignatureRequest.sentAt` — la relance rappelle QUAND la demande est partie. */
+  envoyeeLe: Date;
+}
+
+/**
+ * Relance le signataire dont c'est le tour — même chemin, même catégorie, même
+ * trace que la demande initiale.
+ *
+ * ⚠ ELLE RENVOIE LE MÊME LIEN, jamais un lien régénéré : en fabriquer un second
+ * ouvrirait une seconde demande chez le prestataire, et le premier lien
+ * continuerait de vivre. Deux liens sur une pièce contractuelle, c'est deux
+ * preuves possibles.
+ */
+export async function notifierRelance(args: NotifierRelanceArgs): Promise<ResultatNotification> {
+  const signataire = args.signataires[0];
+  if (signataire === undefined) {
+    return { envoye: false, destinataire: '', partie: 'CLIENT', motif: 'aucun-lien' };
+  }
+  const lien = texteUtile(signataire.signUrl);
+  if (lien === null) {
+    const resultat: ResultatNotification = {
+      envoye: false,
+      destinataire: signataire.email,
+      partie: signataire.partie,
+      motif: 'aucun-lien',
+    };
+    await tracer(args, signataire, resultat);
+    return resultat;
+  }
+
+  const rendu = renderSignatureRelance(
+    {
+      signataireNom: signataire.nom,
+      qualiteSignataire: qualiteDe(signataire.partie, args.role),
+      piece: args.piece,
+      concerne: args.concerne,
+      organisation: args.organisation,
+      libellePiece: args.libellePiece,
+      formationTitre: args.formationTitre,
+      sessionCode: args.sessionCode,
+      signUrl: lien,
+      dateLimite: args.dateLimite,
+      expediteur: expediteurDe(args.of, args.signataireOfNom),
+      rang: args.rang,
+      envoyeeLe: args.envoyeeLe,
+    },
+    args.of,
+  );
+
+  const envoi = await sendMail({
+    to: signataire.email,
+    subject: rendu.subject,
+    html: rendu.html,
+    text: rendu.text,
+    context: {
+      tenantId: args.tenantId,
+      category: 'signature',
+      sessionId: args.sessionId,
+      relatedEntity: `signatureRequest:${args.signatureRequestId}`,
+    },
+  });
+
+  const resultat: ResultatNotification = {
+    envoye: envoi.ok === true && envoi.dryRun !== true,
+    destinataire: signataire.email,
+    partie: signataire.partie,
+    motif: null,
+  };
+  if (!resultat.envoye) {
+    if (envoi.ok !== true) resultat.motif = 'erreur-smtp';
+    else if (envoi.suppressed === true) resultat.motif = 'categorie-decochee';
+    else resultat.motif = 'dry-run-env';
+  }
+  await tracer(args, signataire, resultat);
+  return resultat;
 }

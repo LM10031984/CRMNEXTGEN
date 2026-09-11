@@ -1204,11 +1204,24 @@ model SignatureRequest {
   /// Nullable : les demandes créées avant le lot C.3 n'en portent pas.
   signerRole    SignerRole?
   lastError     String?
+  /// Lot C.3 — relances J+3/J+7 (D-5). Même couple que `PreEnrollment` et
+  /// `OpcoSubmission`, pas un second système.
+  ///
+  /// ⚠ Le compteur n'est consommé que sur un DÉPART RÉEL : un envoi en dry-run
+  /// ou supprimé par les réglages tenant ne doit pas « brûler » une relance,
+  /// sinon un parc en mode test épuiserait ses deux rappels sans qu'un seul
+  /// email soit parti (Pitfall 1 de la Phase 22, déjà appliqué aux deux crons
+  /// existants).
+  reminderCount      Int       @default(0)
+  lastReminderSentAt DateTime?
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 
   @@index([tenantId, sessionId])
   @@index([tenantId, status])
+  /// Le cron des relances et le filet `signature-sync` balaient tous deux par
+  /// statut + date d'envoi.
+  @@index([status, sentAt])
 }
 
 /// Lot C.3 — un événement de webhook DÉJÀ TRAITÉ.
