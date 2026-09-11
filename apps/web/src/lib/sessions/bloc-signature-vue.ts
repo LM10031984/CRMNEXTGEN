@@ -26,10 +26,12 @@ import { DOC_TYPES_SIGNABLES, type DocTypeSignable } from '@/lib/signature/regim
 // elle ne réécrit ni la composition, ni la règle « l'OF signe-t-il cette
 // pièce », qui reste `ofSigneLaPiece` / `ANCRES_PAR_PIECE`.
 import {
+  mentionAttentePiece,
+  ordreSignatairesEnvoyes,
   ordreSignatairesPrevu,
   type SignataireAffiche,
 } from '@/lib/sessions/ordre-signataires';
-import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
+import type { SignataireEnvoye, SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 
 /**
  * Où en est la pièce, du point de vue de la signature.
@@ -53,6 +55,28 @@ export interface DocumentDeLaPiece {
    * `messageEnvoiEnCours` continue de promettre « Annulez l'envoi en cours ».
    */
   signatureRequestId: string | null;
+  /**
+   * LES SIGNATAIRES RÉELS de cette demande — lot C.3, défaut D-C3-1.
+   *
+   * POURQUOI ILS REMONTENT JUSQU'ICI. Le webhook écrit `signedAt` et `signUrl`
+   * signataire par signataire depuis le lot C.3 ; la recette du 11/09/2026 l'a
+   * vérifié en base. Mais aucun chemin de lecture ne les amenait à la fiche
+   * session : la ligne restait « En attente de signature » même une fois le
+   * client passé, sans date, et **sans le lien « Signer maintenant »** de
+   * l'organisme — dont c'était pourtant le tour.
+   *
+   * ⚠ OBLIGATOIRE, comme `signataireOf` avant lui et pour la même raison
+   * mesurée au lot C.2b-8 : une prop optionnelle se perd en silence, et l'écran
+   * repart exactement comme avant sans qu'un test ne bouge. Un tableau VIDE
+   * reste légitime — un document qui n'est pas parti n'a pas de signataire, et
+   * une demande dont la colonne Json est illisible n'en a plus. Ce qu'on rend
+   * impossible, c'est l'OUBLI.
+   *
+   * ⚠ DÉJÀ RANGÉS DANS LEUR CAMP par `signatairesDeLaDemande`, le module que le
+   * webhook appelle aussi. La vue ne relit pas les noms d'ancre : deux lectures
+   * finiraient par ranger le même signataire dans deux camps différents.
+   */
+  signataires: SignataireEnvoye[];
 }
 
 export interface LigneSignature {
@@ -116,8 +140,24 @@ export interface LigneSignature {
    * Vide ⇔ le signataire client n'a pas été résolu : la ligne le DIT (« signataire
    * à déterminer ») plutôt que d'attribuer un « 1. » à l'organisme, ce qui
    * contredirait le « signe en dernier » de la même phrase.
+   *
+   * ⚠ PRÉVU AVANT L'ENVOI, RÉEL APRÈS (lot C.3, D-C3-1). Une pièce PARTIE lit
+   * les signataires de sa demande : eux seuls portent `signedAt` et le lien de
+   * signature de l'organisme. Continuer à afficher l'ordre PRÉVU sur une pièce
+   * partie, c'est afficher « personne n'a signé » quoi qu'il se soit passé chez
+   * le prestataire — le défaut constaté à l'étape 6 de la recette.
    */
   ordre: SignataireAffiche[];
+  /**
+   * CE QUE LA PIÈCE ATTEND, en une phrase — `null` si elle n'attend rien.
+   *
+   * ⚠ COMPOSÉE ICI, JAMAIS DANS LE JSX. C'est la phrase qui remplace
+   * `PHRASE_AUCUN_EMAIL` (« l'envoi automatique des emails … arrive au lot
+   * C.2c »), fausse depuis le 11/09/2026. Une phrase écrite dans le rendu n'est
+   * vérifiable qu'à l'œil — et c'est précisément à l'œil que celle-là a survécu
+   * à deux lots qui l'avaient rendue caduque.
+   */
+  attente: string | null;
 }
 
 /**
@@ -248,6 +288,24 @@ export interface VueSignature {
 function rempli(valeur: string | null | undefined): boolean {
   return (valeur ?? '').trim().length > 0;
 }
+
+/**
+ * Une pièce PARTIE dont la demande ne porte aucun signataire lisible.
+ *
+ * POURQUOI CE CAS A SA PHRASE. `parseSignatureSigners` écarte SANS BRUIT tout
+ * élément qui ne passe pas le contrat — c'est délibéré : une fiche session ne
+ * doit pas tomber en erreur parce qu'un webhook a écrit une ligne inattendue
+ * (règle n°2 du bloc C.3 de la spec). Le revers est qu'une demande peut se
+ * retrouver sans aucun signataire à l'écran. Sans cette phrase, la ligne dirait
+ * « en attente » de personne, et l'admin chercherait un nom qui n'existe pas.
+ *
+ * Elle nomme les DEUX recours, parce qu'aucun des deux n'est évident : suivre
+ * la demande chez le prestataire, ou l'annuler pour repartir proprement.
+ */
+export const PHRASE_DEMANDE_SANS_SIGNATAIRE =
+  'Cette pièce est partie en signature, mais la demande enregistrée ne porte aucun ' +
+  'signataire lisible : suivez-la chez le prestataire, ou annulez l’envoi pour la ' +
+  'renvoyer.';
 
 /**
  * Où en est cette pièce.
@@ -455,6 +513,25 @@ export function construireVueSignature(a: {
       document,
     });
     const signataire = a.signataireParCle?.get(envoi.cle) ?? null;
+
+    // ⚠ L'ORDRE RÉEL DÈS QUE LA PIÈCE EST PARTIE. `ordreSignatairesEnvoyes` est
+    // le module du récapitulatif : la vue l'APPELLE, elle ne recompose rien.
+    // Sur une pièce non partie — ou dont la demande ne porte aucun signataire
+    // lisible — on retombe sur l'ordre PRÉVU, qui reste la meilleure chose
+    // vraie à dire : voici qui signera, dans cet ordre.
+    const signataires = document?.signataires ?? [];
+    const ordre =
+      etat === 'ENVOYE' && signataires.length > 0
+        ? ordreSignatairesEnvoyes({ signataires })
+        : ordreSignatairesPrevu({
+            docType: envoi.docType,
+            client: signataire,
+            // Plus de `?? null` : la prop étant obligatoire, il n'y a plus
+            // d'absence à rattraper. Le repli aurait masqué l'oubli qu'on vient
+            // d'interdire.
+            of: a.signataireOf,
+          });
+
     return {
       cle: envoi.cle,
       docType: envoi.docType,
@@ -467,13 +544,16 @@ export function construireVueSignature(a: {
       signatureRequestId: document?.signatureRequestId ?? null,
       envoyable: etat === 'ABSENT' || etat === 'GENERE',
       signataire,
-      ordre: ordreSignatairesPrevu({
-        docType: envoi.docType,
-        client: signataire,
-        // Plus de `?? null` : la prop étant obligatoire, il n'y a plus d'absence
-        // à rattraper. Le repli aurait masqué l'oubli qu'on vient d'interdire.
-        of: a.signataireOf,
-      }),
+      ordre,
+      // ⚠ SEULE UNE PIÈCE PARTIE ATTEND QUELQUE CHOSE. Une pièce prête, ou déjà
+      // signée, n'a personne à attendre : y afficher une phrase d'attente
+      // ferait chercher un blocage qui n'existe pas.
+      attente:
+        etat !== 'ENVOYE'
+          ? null
+          : signataires.length === 0
+            ? PHRASE_DEMANDE_SANS_SIGNATAIRE
+            : mentionAttentePiece(ordre),
     };
   });
 

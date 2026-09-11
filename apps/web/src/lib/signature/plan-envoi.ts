@@ -53,6 +53,19 @@ const PIECES_PAR_SCOPE: Record<ScopeEnvoi, ReadonlySet<DocTypeSignable>> = {
 };
 
 /**
+ * À quel moment de la formation cette pièce se signe.
+ *
+ * Lecture de la MÊME table que le plan — jamais un second `if` sur le type de
+ * document. La cloche s'en sert pour ouvrir la fiche session sur le bon onglet
+ * (lot C.3, D-C3-2) : l'attestation d'assiduité vit dans « Après », et les
+ * panneaux d'onglet inactifs sont rendus `hidden`, donc mener au mauvais onglet
+ * rend la pièce réellement invisible.
+ */
+export function scopeDeLaPiece(docType: DocTypeSignable): ScopeEnvoi {
+  return PIECES_PAR_SCOPE.AFTER.has(docType) ? 'AFTER' : 'BEFORE';
+}
+
+/**
  * Comment chaque pièce se nomme : en titre d'envoi, et dans une phrase.
  * Les messages sont lus par l'admin — « Impossible de savoir qui signe la
  * convention » se comprend, « docType=CONVENTION » non.

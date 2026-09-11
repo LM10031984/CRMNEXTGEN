@@ -29,6 +29,7 @@
 
 import type { MotifAnnulationSignature, SignatoryOrder } from '@qualiof/shared';
 import { SIGNATURE_ROLES } from './text-tags';
+import { DOC_TYPES_SIGNABLES } from './regime';
 import type { DocTypeSignable, SignerRole } from './regime';
 import type { AnomalieEnvoi } from './plan-envoi';
 import type { SourceEmailRepresentant, SourceRepresentant } from './representant';
@@ -85,6 +86,63 @@ export function ofSigneLaPiece(docType: DocTypeSignable): boolean {
 /** Le nom de rôle de l'OF pour cette pièce, ou `null` s'il n'y signe pas. */
 export function roleAncreOf(docType: DocTypeSignable): string | null {
   return ANCRES_PAR_PIECE[docType].find((a) => a.partie === 'OF')?.role ?? null;
+}
+
+/**
+ * Cette pièce fait-elle partie des trois qui partent en signature ?
+ *
+ * ⚠ DÉPLACÉE ICI LE 11/09/2026 (lot C.3, D-C3-1), depuis `signature-relacher.ts`
+ * qui la gardait aux côtés de Prisma et des générateurs. La fiche session en a
+ * besoin pour relire les signataires d'une demande, et elle ne peut pas
+ * traîner la chaîne des générateurs dans son rendu. Le module d'origine la
+ * ré-exporte : aucun appelant ne bouge, et la définition reste unique.
+ */
+export function estPieceSignable(type: string): type is DocTypeSignable {
+  return (DOC_TYPES_SIGNABLES as readonly string[]).includes(type);
+}
+
+/**
+ * Les signataires d'une demande, tels que la colonne Json les porte, RANGÉS
+ * DANS LEUR CAMP.
+ *
+ * POURQUOI CETTE FONCTION EST PARTAGÉE, ET POURQUOI ELLE EST ICI. Elle
+ * existait — privée, dans `server/signature-retour.ts` — pour composer les
+ * destinataires des emails de retour. Le lot C.3 (défaut D-C3-1) en a besoin
+ * une seconde fois, côté écran, pour dire QUI a signé et QUI est attendu. La
+ * recopier ferait deux réponses à « ce signataire est-il l'organisme ? », et
+ * l'écran finirait par désigner un camp différent de celui des emails.
+ *
+ * ⚠ LE CAMP SE LIT SUR LE NOM D'ANCRE, jamais sur le régime. C'est la règle de
+ * l'amendement n°6 du lot C : le gabarit de convention n'écrit que `Client`, y
+ * compris quand c'est un indépendant qui signe pour lui-même. `ANCRES_PAR_PIECE`
+ * est la seule autorité, et `roleAncreOf` la lit.
+ *
+ * Une pièce non signable — ou dont l'ancre OF n'existe pas (le dossier AGEFICE)
+ * — n'a que des signataires côté bénéficiaire. C'est voulu : y ranger quelqu'un
+ * du côté « OF » ferait attendre une signature qui ne viendra jamais.
+ */
+export interface SignataireMemorise {
+  role: string;
+  name: string;
+  email: string;
+  signedAt: string | null;
+  signUrl: string | null;
+}
+
+export function signatairesDeLaDemande(a: {
+  signers: readonly SignataireMemorise[];
+  /** `Document.type` tel quel — String en base, pas forcément une pièce signable. */
+  docType: string;
+}): SignataireEnvoye[] {
+  const roleOf = estPieceSignable(a.docType) ? roleAncreOf(a.docType) : null;
+  return a.signers.map((s) => ({
+    partie: roleOf !== null && s.role === roleOf ? 'OF' : 'CLIENT',
+    role: s.role,
+    nom: s.name,
+    email: s.email,
+    signUrl: s.signUrl,
+    signedAt: s.signedAt,
+  }));
 }
 
 // ─── Refus, nommés ───────────────────────────────────────────────────────────

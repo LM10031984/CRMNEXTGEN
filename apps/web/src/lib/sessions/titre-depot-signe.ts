@@ -92,11 +92,14 @@ export const AIDE_DEPOT_MANUEL =
  * (décision n°4, garde fail-closed de C.2b-3) : le geste le mieux intentionné
  * défait le précédent.
  *
- * Elle est écrite au FUTUR et nomme le lot : le retour automatique n'existe pas
- * encore. Promettre au présent ce que le webhook n'apporte pas ferait attendre
- * un signé qui ne remontera pas.
+ * ⚠ ÉCRITE AU PRÉSENT DEPUIS LE 11/09/2026. Elle promettait le retour
+ * automatique « dès que le retour du prestataire sera branché (lot C.3) ». Il
+ * l'est, et la recette l'a constaté sans rien faire : le PDF signé et son
+ * certificat sont revenus, la cellule est passée au vert. Laisser la promesse au
+ * futur fait exactement ce que la phrase cherche à éviter — déposer ici un scan
+ * de ce qui allait revenir tout seul, et annuler l'envoi au passage.
  */
 export const MENTION_RETOUR_AUTOMATIQUE =
-  'Les pièces envoyées en signature électronique n’ont pas à passer par ici : elles ' +
-  'reviendront automatiquement une fois signées, dès que le retour du prestataire sera ' +
-  'branché (lot C.3). Cette zone ne sert qu’au papier.';
+  'Les pièces envoyées en signature électronique n’ont pas à passer par ici : une fois ' +
+  'signées, le PDF signé et son certificat de signature reviennent automatiquement sur ' +
+  'la pièce. Cette zone ne sert qu’au papier.';

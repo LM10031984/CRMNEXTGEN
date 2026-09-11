@@ -197,3 +197,32 @@ export const annulerEnvoiSignatureSchema = z.object({
   motif: z.enum(MOTIFS_ANNULATION_SIGNATURE).optional().default('user_requested'),
 });
 export type AnnulerEnvoiSignatureInput = z.infer<typeof annulerEnvoiSignatureSchema>;
+
+/* ── La cloche — une pièce signée par TOUS (lot C.3, défaut D-C3-2) ────────── */
+
+/**
+ * Le payload de `Notification.payload` pour `type = 'signature.completed'`.
+ *
+ * Écrit par `prevenirAdmins` (`server/signature-retour.ts`) quand le webhook
+ * `submission.completed` a ramené le PDF signé ET son certificat ; relu par
+ * `getNotifications()` pour composer la ligne de la cloche. UNE source pour les
+ * deux côtés : c'est ce qui évite le drift d'une colonne Json sans schéma.
+ *
+ * ⚠ MÊME RÈGLE QUE `signatureSignerSchema` : tout champ ajouté après coup est
+ * OPTIONNEL avec valeur par défaut. Les lignes déjà en base ont été écrites
+ * avant, et un lecteur qui les refuse ne lève pas d'erreur — il rend une cloche
+ * vide. `sessionId` et `docType` font exception : sans eux la notification n'a
+ * ni destination ni libellé, et l'écarter est le bon comportement.
+ */
+export const SignatureCompletedPayloadSchema = z.object({
+  sessionId: z.string().uuid(),
+  /**
+   * `Document.type` tel quel — String et non enum : la table des pièces
+   * signables vit côté application (`DOC_TYPES_SIGNABLES`), et une valeur
+   * inconnue doit produire un libellé neutre, pas une notification écartée.
+   */
+  docType: z.string().min(1),
+  /** Le code affiché à l'admin (« SES-0048 »). Absent ⇒ la phrase s'arrête. */
+  sessionCode: z.string().min(1).nullable().optional().default(null),
+});
+export type SignatureCompletedPayload = z.infer<typeof SignatureCompletedPayloadSchema>;

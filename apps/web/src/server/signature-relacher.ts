@@ -37,9 +37,10 @@ import {
 } from '@/lib/closure/convention-core';
 import { generateAgeficeForParticipant } from '@/server/actions/agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from '@/server/actions/agefice-attendance-generator';
-import { DOC_TYPES_SIGNABLES, type DocTypeSignable } from '@/lib/signature/regime';
+import { type DocTypeSignable } from '@/lib/signature/regime';
 import type { FormeDocument } from '@/lib/signature/signataire-de-la-piece';
 import {
+  estPieceSignable,
   messagePreuveConservee,
   messageRegenerationApresAnnulationImpossible,
   type PieceRelachee,
@@ -84,10 +85,15 @@ export const REGENERATION_PAR_PIECE: Record<
       : { ok: false, error: "Une attestation d'assiduité est toujours nominative." },
 };
 
-/** Cette pièce fait-elle partie des trois qui partent en signature ? */
-export function estPieceSignable(type: string): type is DocTypeSignable {
-  return (DOC_TYPES_SIGNABLES as readonly string[]).includes(type);
-}
+/**
+ * Cette pièce fait-elle partie des trois qui partent en signature ?
+ *
+ * ⚠ RÉ-EXPORT depuis le 11/09/2026 (lot C.3, D-C3-1) : la DÉFINITION vit
+ * désormais dans `lib/signature/envoi-contrats.ts`, module pur. La fiche
+ * session en a besoin et ne peut pas traîner Prisma ni les générateurs que ce
+ * fichier importe. Les appelants existants ne bougent pas.
+ */
+export { estPieceSignable };
 
 /**
  * La forme d'un document DÉJÀ EN BASE, pour pouvoir le régénérer sans repasser

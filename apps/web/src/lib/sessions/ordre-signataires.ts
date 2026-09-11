@@ -22,11 +22,18 @@
  *
  * ⚠ CE QU'IL NE PEUT PAS SAVOIR, ET QU'IL DIT. « Dès que le client a signé »
  * suppose de SAVOIR qu'il a signé. Cette information vient du webhook du
- * prestataire, livré au lot C.3 : d'ici là `SignatureRequest.signers[].signedAt`
- * reste nul et `status` reste `SENT`. Le lien « Signer maintenant » est donc
- * adossé à la DONNÉE (`signedAt` du signataire CLIENT), jamais au fait d'avoir
- * envoyé — et quand il manque, `mentionAttenteOf` dit pourquoi, sans promettre
- * que l'écran se mettra à jour tout seul.
+ * prestataire — livré au lot C.3, et prouvé sur l'aperçu le 11/09/2026. Le lien
+ * « Signer maintenant » reste adossé à la DONNÉE (`signedAt` du signataire
+ * CLIENT), jamais au fait d'avoir envoyé ; et quand il manque, `mentionAttenteOf`
+ * dit pourquoi.
+ *
+ * ⚠ LES PHRASES NE PROMETTENT PLUS UN LOT À VENIR (défaut D-C3-1 de la recette).
+ * Elles annonçaient « le retour du prestataire, branché au lot C.3 : tant qu'il
+ * ne l'est pas, cet état ne changera pas tout seul ». Il l'est. Laisser cette
+ * phrase ferait attendre ce qui fonctionne — et déposer des scans dont personne
+ * n'a besoin. Ce qui reste VRAI, et que les phrases disent : cet écran est rendu
+ * côté serveur, il ne se met pas à jour tout seul dans un onglet ouvert. Le
+ * geste est donc de recharger, pas d'attendre.
  *
  * POURQUOI `signedAt` DU CLIENT ET PAS LE STATUT `PARTIALLY_SIGNED`. Les deux
  * disent presque la même chose, mais pas tout à fait : si l'organisme signe en
@@ -91,6 +98,19 @@ export interface SignataireAffiche {
   /** Le lien de signature de CE signataire, quand le prestataire en a rendu un. */
   signUrl: string | null;
   aSigne: boolean;
+  /**
+   * QUAND ce signataire a signé — chaîne ISO, telle que la colonne Json la
+   * porte (lot C.3, défaut D-C3-1).
+   *
+   * ⚠ TRANSPORTÉE BRUTE, jamais formatée ici. `ordreSignatairesEnvoyes` est
+   * appelé depuis un composant CLIENT (le récapitulatif) comme depuis le rendu
+   * serveur (le bloc) : une date mise en forme au moment de la composition
+   * s'écrirait dans deux fuseaux différents selon l'écran. `mentionSignatureFaite`
+   * fixe `Europe/Paris` une fois pour toutes.
+   *
+   * `null` sur l'ordre PRÉVU : rien n'est signé avant d'être envoyé.
+   */
+  signedAt: string | null;
   /**
    * Vrai ⇔ le lien « Signer maintenant » doit être rendu pour ce signataire.
    * Faux pour le client : lui reçoit son lien, il ne signe pas depuis le CRM.
@@ -163,6 +183,7 @@ export function ordreSignatairesPrevu(a: {
       // création de la demande.
       signUrl: null,
       aSigne: false,
+      signedAt: null,
       signerMaintenant: false,
       attente: null,
     });
@@ -178,6 +199,7 @@ export function ordreSignatairesPrevu(a: {
     texte: texteClient(rangClient, a.client.nom, a.client.email),
     signUrl: null,
     aSigne: false,
+    signedAt: null,
     signerMaintenant: false,
     attente: null,
   });
@@ -200,10 +222,9 @@ export function mentionAttenteOf(a: {
 }): string | null {
   if (!a.clientASigne) {
     return (
-      `Le lien « Signer maintenant » s’ouvrira ici quand ${a.nomClient} aura signé. ` +
-      `QualiOF n’apprend une signature que par le retour du prestataire, branché au ` +
-      `lot C.3 : tant qu’il ne l’est pas, cet état ne changera pas tout seul sur cet ` +
-      `écran — c’est chez le prestataire qu’il se constate.`
+      `Le lien « Signer maintenant » s’ouvrira ici dès que ${a.nomClient} aura signé. ` +
+      `QualiOF l’apprend par le retour du prestataire : rechargez la fiche session pour ` +
+      `voir l’état du moment.`
     );
   }
   if ((a.signUrlOf ?? '').trim().length === 0) {
@@ -243,6 +264,7 @@ export function ordreSignatairesEnvoyes(a: {
         texte: texteClient(rang, signataire.nom, signataire.email),
         signUrl: signataire.signUrl,
         aSigne,
+        signedAt: signataire.signedAt,
         // Le client ne signe pas depuis le CRM : il reçoit un lien à ouvrir.
         signerMaintenant: false,
         attente: null,
@@ -262,6 +284,7 @@ export function ordreSignatairesEnvoyes(a: {
       texte: texteOf(rang, signataire.nom, apresLeClient ? MENTION_OF_DERNIER : MENTION_OF_PREMIER),
       signUrl: signataire.signUrl,
       aSigne,
+      signedAt: signataire.signedAt,
       // ⚠ LA CONDITION, ET SES TROIS TERMES. Le client a signé (donc la
       // séquence est arrivée à l'organisme), l'organisme n'a pas encore signé
       // (sinon il n'a plus rien à faire), et le prestataire a rendu un lien
@@ -276,4 +299,95 @@ export function ordreSignatairesEnvoyes(a: {
           }),
     };
   });
+}
+
+/* ── Lot C.3 (D-C3-1) — où en est la pièce, signataire par signataire ─────── */
+
+/**
+ * QUAND ce signataire a signé, en toutes lettres — « a signé le 11/09/2026 à 18:01 ».
+ *
+ * POURQUOI LA DATE, ET PAS SEULEMENT « a signé ». C'est la seule question que
+ * l'admin se pose devant une pièce partie : attend-on depuis une heure, ou
+ * depuis trois semaines ? Sans elle, le premier cas et le second se lisent
+ * pareil, et la relance ne se décide jamais.
+ *
+ * ⚠ FUSEAU FIXÉ À `Europe/Paris`, même motif que `dateEnToutesLettres` dans les
+ * gabarits d'email : la même signature se lirait « 16:01 » sur un serveur en
+ * UTC et « 18:01 » sur le Mac. Une heure de signature est une donnée de preuve —
+ * elle ne doit pas dépendre de l'endroit d'où on regarde.
+ *
+ * `null` quand la date manque ou ne se lit pas : on n'écrit pas « a signé le — ».
+ */
+export function mentionSignatureFaite(signedAt: string | null | undefined): string | null {
+  const brut = (signedAt ?? '').trim();
+  if (brut.length === 0) return null;
+  const date = new Date(brut);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const jour = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Europe/Paris',
+  }).format(date);
+  const heure = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Paris',
+  }).format(date);
+
+  return `a signé le ${jour} à ${heure}`;
+}
+
+/**
+ * QUI la pièce attend — le premier rang qui n'a pas encore signé.
+ *
+ * L'ordre d'entrée est celui du moteur (`signers` trié par `order` avant
+ * l'appel au prestataire) : « le premier non signé » est donc bien le prochain,
+ * et non « un non signé au hasard ». Le retrier ici serait une seconde décision
+ * sur l'ordre de signature, que le moteur a déjà prise.
+ *
+ * `null` quand tout le monde a signé — ou quand la demande ne porte aucun
+ * signataire lisible, cas que l'appelant nomme lui-même.
+ */
+export function prochainSignataire(
+  ordre: readonly SignataireAffiche[],
+): SignataireAffiche | null {
+  return ordre.find((s) => !s.aSigne) ?? null;
+}
+
+/**
+ * CE QUE LA PIÈCE ATTEND, en une phrase — remplace la phrase périmée du bloc.
+ *
+ * LE DÉFAUT QU'ELLE CORRIGE (D-C3-1). Le bloc « Signature » affichait sur toute
+ * pièce partie : « Le lien de signature n'a encore été communiqué à personne :
+ * l'envoi automatique des emails aux signataires arrive au lot C.2c. » C'était
+ * faux deux fois depuis le 11/09/2026 — les emails partent (C.2c), et le retour
+ * du prestataire est branché (C.3). Une phrase fausse sur un écran d'admin ne
+ * se corrige pas toute seule : elle fait prendre des gestes inutiles, comme
+ * déposer un scan de ce qui allait revenir signé.
+ *
+ * DEUX FORMULATIONS, parce que deux situations n'appellent pas le même regard :
+ * on attend quelqu'un d'EXTÉRIEUR (rien à faire, sinon relancer), ou on
+ * s'attend SOI-MÊME (il y a un geste à faire, et le lien est juste à côté).
+ *
+ * `null` quand tout le monde a signé : la preuve est en route, ce n'est plus une
+ * attente. Et `null` aussi sur une liste vide — l'appelant sait, lui, si c'est
+ * parce que la pièce n'est pas partie ou parce que la demande est illisible.
+ */
+export function mentionAttentePiece(ordre: readonly SignataireAffiche[]): string | null {
+  const prochain = prochainSignataire(ordre);
+  if (prochain === null) return null;
+
+  if (prochain.partie === 'OF') {
+    return (
+      `Il ne manque plus que la signature de ${prochain.nom} pour l’${QUALITE_OF}. ` +
+      `Dès qu’elle sera faite, le PDF signé et son certificat de signature reviendront ici ` +
+      `automatiquement.`
+    );
+  }
+  return (
+    `En attente de la signature de ${prochain.nom}. Dès que tous les signataires auront ` +
+    `signé, le PDF signé et son certificat de signature reviendront ici automatiquement.`
+  );
 }

@@ -83,8 +83,7 @@ describe('fiche session — les signataires de la demande remontent jusqu’au b
   it('la requête CHARGE les signataires : sans eux, il n’y a rien à afficher', () => {
     // La colonne Json `SignatureRequest.signers`, jointe au document — pas une
     // requête de plus : `sessionDocs` charge déjà tous les documents utiles.
-    expect(pageSrc).toMatch(/signatureRequest: \{/);
-    expect(pageSrc).toMatch(/signers: true,/);
+    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{ signers: true \} \}/);
   });
 
   it('ils sont RELUS par le contrat partagé, jamais castés à la main', () => {

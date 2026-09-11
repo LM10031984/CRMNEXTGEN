@@ -33,7 +33,7 @@ import { loadOfConfig } from '@/lib/of-config';
 import { resoudreSignataireOf } from '@/lib/signature/signataire-of';
 import { notifierExemplaireSigne, notifierSignataire } from '@/lib/signature/notifier';
 import { NOM_DE_PIECE } from '@/lib/mailer-templates/signature-email-commun';
-import { roleAncreOf } from '@/lib/signature/envoi-contrats';
+import { signatairesDeLaDemande } from '@/lib/signature/envoi-contrats';
 import type { SignataireEnvoye } from '@/lib/signature/envoi-contrats';
 import type { DocTypeSignable } from '@/lib/signature/regime';
 import type { SignatureEvent, SignatureProvider } from '@/lib/signature/port';
@@ -154,17 +154,16 @@ async function premierPassage(a: {
   }
 }
 
-/** `SignataireEnvoye` — les signataires avec leur CAMP, pour les gabarits. */
+/**
+ * `SignataireEnvoye` — les signataires avec leur CAMP, pour les gabarits.
+ *
+ * ⚠ LE CORPS A DÉMÉNAGÉ dans `lib/signature/envoi-contrats.ts` le 11/09/2026
+ * (lot C.3, D-C3-1) : la fiche session en a besoin pour dire qui a signé et qui
+ * est attendu. Deux implémentations auraient fini par ranger le même signataire
+ * dans deux camps différents — l'écran d'un côté, les emails de l'autre.
+ */
 function signatairesDe(signers: SignatureSigner[], docType: string): SignataireEnvoye[] {
-  const roleOf = estPieceSignable(docType) ? roleAncreOf(docType) : null;
-  return signers.map((s) => ({
-    partie: roleOf !== null && s.role === roleOf ? 'OF' : 'CLIENT',
-    role: s.role,
-    nom: s.name,
-    email: s.email,
-    signUrl: s.signUrl,
-    signedAt: s.signedAt,
-  }));
+  return signatairesDeLaDemande({ signers, docType });
 }
 
 function nomAffiche(p: { firstName: string; lastName: string }): string {

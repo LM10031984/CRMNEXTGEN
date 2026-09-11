@@ -21,10 +21,19 @@
  *     nomme déjà la personne, la pièce, ce qui n'a PAS eu lieu et le geste à
  *     faire. Les reformuler ou les résumer en toast perdrait exactement ce qui
  *     fait qu'un admin corrige au lieu de recliquer.
- *  3. **Aucun lien « Relancer ».** Il suppose un email (lot C.2c) et une action
- *     `provider.remind` sans appelant. Un lien qui ne relance rien est le
- *     « bouton qui laisse croire qu'il manque un réglage » que la décision n°3
- *     interdit — amendement n°8 de la spec.
+ *  3. **Aucun lien « Relancer ».** La relance est un CRON (`signature-reminders`,
+ *     J+3/J+7, lot C.3), pas un bouton : `provider.remind` n'a toujours aucun
+ *     appelant. Un lien qui ne relance rien est le « bouton qui laisse croire
+ *     qu'il manque un réglage » que la décision n°3 interdit — amendement n°8.
+ *
+ * ⚠ CE QUE LA RECETTE DU 11/09/2026 A TROUVÉ ICI (défaut D-C3-1), et qui est
+ * corrigé : une pièce partie n'affichait RIEN de ce qui s'était passé chez le
+ * prestataire. Le client avait signé — le webhook l'avait écrit, l'Historique le
+ * montrait — et la ligne disait toujours « En attente de signature », sans date,
+ * **sans le lien « Signer maintenant »** dont c'était pourtant le tour. Le
+ * calcul existait et était testé (`ordreSignatairesEnvoyes`) ; il ne servait
+ * qu'au récapitulatif, c'est-à-dire à l'écran qu'on ne revoit jamais. Ce
+ * fichier REND désormais l'état rang par rang — sans rien décider de plus.
  *
  * ⚠ CE QUE LE RETRAIT DU DÉPÔT PAR LIGNE A EMPORTÉ AVEC LUI (correction n°6,
  * Laurent 11/09/2026), et qu'il faut savoir avant le premier envoi réel.
@@ -75,6 +84,7 @@ import {
   FileSignature,
   Loader2,
   OctagonAlert,
+  PenLine,
   Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -85,7 +95,11 @@ import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/blo
 // « Ordre de signature : 1. … · 2. … » doit se lire à l'identique sur les deux
 // écrans. Recopier ` · ` ou le libellé dans ce JSX rouvrirait la divergence que
 // ce lot ferme.
-import { LIBELLE_ORDRE_SIGNATURE, SEPARATEUR_ORDRE } from '@/lib/sessions/ordre-signataires';
+import {
+  LIBELLE_ORDRE_SIGNATURE,
+  SEPARATEUR_ORDRE,
+  mentionSignatureFaite,
+} from '@/lib/sessions/ordre-signataires';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
 import {
   AIDE_DEPOT_MANUEL,
@@ -117,17 +131,6 @@ export interface BlocSignatureProps {
   /** Les types que ce moment de la formation accepte en dépôt. */
   depotDocTypeOptions?: Array<{ value: string; label: string }>;
 }
-
-/**
- * La phrase honnête, répétée partout où une pièce est partie.
- *
- * Sans elle, l'écran laisse croire qu'un clic prévient quelqu'un. DocuSeal part
- * en `send_email: false` (D-9) et QualiOF n'envoie rien avant le lot C.2c : le
- * lien de signature existe, mais personne ne l'a reçu.
- */
-const PHRASE_AUCUN_EMAIL =
-  'Le lien de signature n’a encore été communiqué à personne : l’envoi automatique des ' +
-  'emails aux signataires arrive au lot C.2c.';
 
 const PASTILLE: Record<EtatPiece, { texte: string; classe: string }> = {
   ABSENT: { texte: 'À générer', classe: 'bg-amber-50 border-amber-200 text-amber-800' },
@@ -388,12 +391,26 @@ export function BlocSignature({
                     ) : (
                       <span className="block text-xs text-muted-foreground break-words">
                         {LIBELLE_ORDRE_SIGNATURE} :{' '}
-                        {ligne.ordre.map((signataire, index) => (
-                          <span key={`${ligne.cle}-${signataire.partie}-${signataire.rang}`}>
-                            {index === 0 ? '' : SEPARATEUR_ORDRE}
-                            <span title={signataire.email}>{signataire.texte}</span>
-                          </span>
-                        ))}
+                        {ligne.ordre.map((signataire, index) => {
+                          // ⚠ COMPOSÉE AILLEURS (`mentionSignatureFaite`), fuseau
+                          // de Paris fixé. « a signé » sans date ne dit pas si
+                          // l'on attend depuis une heure ou depuis trois
+                          // semaines — et c'est la seule question qui décide
+                          // d'une relance.
+                          const signeLe = mentionSignatureFaite(signataire.signedAt);
+                          return (
+                            <span key={`${ligne.cle}-${signataire.partie}-${signataire.rang}`}>
+                              {index === 0 ? '' : SEPARATEUR_ORDRE}
+                              <span title={signataire.email}>{signataire.texte}</span>
+                              {signeLe !== null && (
+                                <span className="font-medium text-emerald-700">
+                                  {' '}
+                                  · {signeLe}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                   </span>
@@ -463,20 +480,62 @@ export function BlocSignature({
                   )}
                 </div>
 
-                {/* Une pièce partie : ce qui l'attend, et ce qui n'a PAS eu lieu.
-                    Aucun lien « Relancer » — voir l'en-tête de fichier. */}
+                {/* ── UNE PIÈCE PARTIE : OÙ ELLE EN EST, ET LE GESTE QUI RESTE ──
+                    Aucun lien « Relancer » — voir l'en-tête de fichier.
+
+                    ⚠ LE LIEN « SIGNER MAINTENANT » DE L'ORGANISME (défaut
+                    D-C3-1). C'est le geste que la recette a cherché en vain :
+                    le client venait de signer, l'email « à votre tour » était
+                    parti, et QualiOF n'offrait AUCUN moyen de signer depuis le
+                    CRM. Il n'est ni grisé ni masqué — `signerMaintenant` est
+                    adossé au `signedAt` du client, donc il n'existe pas tant
+                    que le tour n'est pas venu. Et quand il n'existe pas,
+                    `attente` dit pourquoi. */}
                 {ligne.etat === 'ENVOYE' && (
-                  <p className="mt-1 pl-7 text-xs text-muted-foreground">
-                    {PHRASE_AUCUN_EMAIL}
+                  <div className="mt-1 pl-7 space-y-1">
+                    {ligne.ordre
+                      .filter((s) => s.signerMaintenant && s.signUrl !== null)
+                      .map((signataire) => (
+                        <a
+                          key={`${ligne.cle}-signer-${signataire.rang}`}
+                          href={signataire.signUrl ?? ''}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary-600 transition-colors shadow-sm"
+                        >
+                          <PenLine className="h-3.5 w-3.5" aria-hidden="true" /> Signer maintenant
+                        </a>
+                      ))}
+
+                    {/* La phrase de la ligne, COMPOSÉE côté serveur : elle nomme
+                        qui est attendu et promet le retour automatique du PDF
+                        signé et de son certificat. Elle remplace la phrase
+                        « … arrive au lot C.2c », fausse depuis le 11/09/2026. */}
+                    {ligne.attente !== null && (
+                      <p className="text-xs text-muted-foreground">{ligne.attente}</p>
+                    )}
+
+                    {/* Pourquoi le lien de l'ORGANISME n'est pas là — jamais une
+                        absence muette, qui passerait pour une panne. */}
+                    {ligne.ordre
+                      .filter((s) => s.partie === 'OF' && s.attente !== null)
+                      .map((signataire) => (
+                        <p
+                          key={`${ligne.cle}-attente-${signataire.rang}`}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {signataire.attente}
+                        </p>
+                      ))}
+
                     {ligne.signatureRequestId === null && (
-                      <>
-                        {' '}
+                      <p className="text-xs text-muted-foreground">
                         Cet envoi n’est rattaché à aucune demande enregistrée : il n’est pas
                         annulable depuis cet écran. Rechargez la fiche session ; si l’état
                         persiste, la pièce doit être débloquée côté prestataire.
-                      </>
+                      </p>
                     )}
-                  </p>
+                  </div>
                 )}
 
                 {refus && (

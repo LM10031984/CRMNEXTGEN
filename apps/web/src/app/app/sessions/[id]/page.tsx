@@ -86,6 +86,13 @@ import {
 // une seconde fois. Deux lectures de cette cascade divergeraient, et la ligne
 // annoncerait un organisme différent de celui qui reçoit le lien.
 import { resoudreSignataireOf, signataireOfPrevu } from '@/lib/signature/signataire-of';
+// Lot C.3 (D-C3-1) — l'état par signataire d'une pièce PARTIE. Le contrat de
+// lecture de la colonne Json vient du paquet partagé ; le rangement par camp
+// vient du module que le webhook appelle aussi. Aucune des deux règles n'est
+// recopiée ici : une seconde lecture de « qui est l'organisme » ferait diverger
+// l'écran des emails de retour.
+import { parseSignatureSigners } from '@qualiof/shared';
+import { signatairesDeLaDemande } from '@/lib/signature/envoi-contrats';
 // Bloc « Signature » des onglets Avant / Après (lot C.2b-2) : la VUE est
 // calculée ici, côté serveur, pour que « le bouton existe ou n'existe pas »
 // reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
@@ -266,6 +273,13 @@ export default async function SessionDetailPage({
             status: true,
             signedPdfUrl: true,
             signatureRequestId: true,
+            // Lot C.3 (D-C3-1) — les SIGNATAIRES de la demande en cours. Sans
+            // eux, une pièce partie affiche « En attente de signature » même
+            // une fois le client passé : pas de date, et surtout aucun lien
+            // « Signer maintenant » pour l'organisme, dont c'est le tour.
+            // JOINTURE, pas une requête de plus : ce `findMany` charge déjà
+            // tous les documents de la session.
+            signatureRequest: { select: { signers: true } },
           },
         }),
         prisma.pedagogicalAsset.findMany({
@@ -626,6 +640,14 @@ export default async function SessionDetailPage({
   const canSign = ['ADMIN', 'MANAGER'].includes(user.role);
 
   // L'état de signature de chaque document déjà chargé, indexé par id.
+  //
+  // ⚠ LES SIGNATAIRES SONT RELUS PAR LE CONTRAT PARTAGÉ, puis rangés dans leur
+  // camp par le MÊME module que le webhook (`signatairesDeLaDemande`).
+  // `parseSignatureSigners` écarte sans bruit une ligne mal formée — c'est le
+  // seul point de lecture autorisé de cette colonne Json (règle du lot C.3) — et
+  // `signatairesDeLaDemande` lit le camp sur le nom d'ancre, jamais sur le
+  // régime. Recopier l'un ou l'autre ici ferait dire à l'écran autre chose qu'aux
+  // emails de retour.
   const etatDocParId = new Map<string, DocumentDeLaPiece>(
     sessionDocs.map((d) => [
       d.id,
@@ -634,6 +656,10 @@ export default async function SessionDetailPage({
         status: d.status,
         signedPdfUrl: d.signedPdfUrl,
         signatureRequestId: d.signatureRequestId,
+        signataires: signatairesDeLaDemande({
+          signers: parseSignatureSigners(d.signatureRequest?.signers),
+          docType: d.type,
+        }),
       },
     ]),
   );

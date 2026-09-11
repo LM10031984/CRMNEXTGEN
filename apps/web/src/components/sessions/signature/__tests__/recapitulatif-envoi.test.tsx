@@ -607,9 +607,10 @@ describe('Contraste — le bouton de confirmation écrit sa couleur de texte', (
  * pièce n'est pas close au premier paraphe.
  *
  * ⚠ LA CONTRAINTE TRAITÉE, PAS CONTOURNÉE. « Dès que le client a signé »
- * suppose de SAVOIR qu'il a signé. Cet état vient du webhook (lot C.3) :
- * `signers[].signedAt` reste nul d'ici là. Le lien est donc adossé à la DONNÉE,
- * et l'écran DIT que l'état ne bougera pas tout seul.
+ * suppose de SAVOIR qu'il a signé. Cet état vient du webhook, livré au lot C.3
+ * et prouvé sur l'aperçu le 11/09/2026 : `signers[].signedAt` se remplit
+ * réellement. Le lien reste adossé à la DONNÉE, et l'écran DIT que cette page
+ * ne se rafraîchit pas toute seule — le geste est de recharger.
  */
 describe('L’ordre complet — au récapitulatif, AVANT le clic', () => {
   it('la ligne d’ordre est celle dictée, OF compris et numéroté', async () => {
@@ -679,9 +680,17 @@ describe('L’ordre complet — à l’écran RÉSULTAT, avec le lien de l’OF'
     expect(screen.queryAllByRole('button', { name: /signer maintenant/i })).toHaveLength(0);
     // …et l'écran DIT pourquoi, en nommant qui est attendu et d'où viendra
     // l'information. Sans cette phrase, l'absence du lien passe pour une panne.
+    //
+    // ⚠ LITTÉRAL, et la phrase ne nomme PLUS « le lot C.3 » : ce retour est
+    // branché depuis le 11/09/2026 (défaut D-C3-1 de la recette). Elle dit le
+    // geste — recharger — au lieu de promettre un branchement à venir.
     const texte = document.body.textContent ?? '';
-    expect(texte).toContain('Paul MARTIN');
-    expect(texte).toContain('lot C.3');
+    expect(texte).toContain(
+      'Le lien « Signer maintenant » s’ouvrira ici dès que Paul MARTIN aura signé. ' +
+        'QualiOF l’apprend par le retour du prestataire : rechargez la fiche session pour ' +
+        'voir l’état du moment.',
+    );
+    expect(texte).not.toContain('C.3');
   });
 
   it('client signé : le lien apparaît, et il pointe l’URL de l’OF — pas celle du client', async () => {
@@ -712,7 +721,7 @@ describe('L’ordre complet — à l’écran RÉSULTAT, avec le lien de l’OF'
     expect(lien.getAttribute('href')).toBe('https://docuseal.eu/s/le-lien-de-l-of');
     expect(lien.getAttribute('href')).not.toBe('https://docuseal.eu/s/le-lien-du-responsable');
     // Plus d'attente affichée : expliquer une absence qui n'existe plus fait douter.
-    expect(document.body.textContent).not.toContain('lot C.3 :');
+    expect(document.body.textContent).not.toContain('s’ouvrira ici dès que');
   });
 });
 
