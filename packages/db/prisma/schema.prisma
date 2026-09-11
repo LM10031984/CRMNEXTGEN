@@ -50,6 +50,20 @@ model Tenant {
   // Stockés en markdown, rendus en PDF via marked + paged footer.
   cgvMarkdown                String?           @db.Text
   reglementInterieurMarkdown String?           @db.Text
+  // ── Mentions Qualiopi du PROGRAMME (lot I-2, 11/09/2026) ─────────────────
+  // Elles appartiennent à l'ORGANISME, pas à un produit : recopier celles d'un
+  // programme voisin est ce qui a fait sortir « Public visé : professionnels du
+  // marketing digital » sur un parcours d'agence immobilière.
+  //
+  // Nullables comme le reste des paramètres OF — mais, contrairement aux autres,
+  // **elles ne peuvent jamais être vides à la sortie** : le repli n'est pas une
+  // variable d'environnement, c'est le texte standard de l'organisme
+  // (`lib/docs/qualiopi-mentions.ts`). Motif : l'accessibilité handicap est
+  // l'indicateur Qualiopi 26 — un programme qui la laisse blanche n'est pas un
+  // document incomplet, c'est une non-conformité.
+  qualiopiPedagogicalMethods String?           @db.Text
+  qualiopiEvaluationMethods  String?           @db.Text
+  qualiopiAccessibility      String?           @db.Text
   iban                       String?
   bic                        String?
   emailFrom                  String?

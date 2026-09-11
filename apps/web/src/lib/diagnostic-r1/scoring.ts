@@ -401,6 +401,40 @@ const RULES: readonly Rule[] = [
   },
 ];
 
+/**
+ * Le barème, décrit — les DOULEURS que le diagnostic sait détecter.
+ *
+ * Exporté pour qu'on puisse dresser la liste de ce qu'un diagnostic peut
+ * reprocher à une agence, et donc la liste de ce que le catalogue doit savoir
+ * traiter. C'est la matière du rapprochement douleur ↔ module (lot I-2) : sans
+ * elle, on rapproche des modules de chapitres, pas de problèmes réels.
+ *
+ * Lecture seule et purement descriptive : le calcul du score n'en dépend pas.
+ */
+export interface DiagnosticPainPoint {
+  ruleId: string;
+  chapter: DiagnosticChapter;
+  /** Le poids dans son chapitre — la hiérarchie d'importance de Laurent. */
+  weight: number;
+  /** Ce que la règle vérifie, en français. */
+  note: string;
+  /** La question notée, quand la règle en note une. */
+  questionId: string | null;
+  /** Le ratio noté, quand la règle en note un. */
+  ratioKey: string | null;
+}
+
+export function listDiagnosticPainPoints(): DiagnosticPainPoint[] {
+  return RULES.map((r) => ({
+    ruleId: r.id,
+    chapter: r.chapter,
+    weight: r.weight,
+    note: r.note,
+    questionId: 'questionId' in r.spec ? r.spec.questionId : null,
+    ratioKey: 'ratioKey' in r.spec ? r.spec.ratioKey : null,
+  }));
+}
+
 /** Le score d'une règle, entre 0 et 100. null = non évaluable. */
 function evaluate(rule: Rule, input: ScoringInput, benchmarks: Benchmarks): number | null {
   const { spec } = rule;

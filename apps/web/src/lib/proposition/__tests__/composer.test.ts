@@ -56,6 +56,7 @@ function candidat(
     matchedTerms: ['exclusivite'],
     isFoundation: false,
     durationMin,
+    targetProfile: null,
   };
 }
 

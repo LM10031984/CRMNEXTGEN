@@ -71,6 +71,8 @@ export interface ComposedModule {
   matchedSignals: string[];
   confidence: 'forte' | 'faible';
   isFoundation: boolean;
+  /** Le profil visé par ce module (« conseiller », « manager »…), s'il est connu. */
+  targetProfile: string | null;
 }
 
 export interface ComposedBlock {
@@ -285,6 +287,7 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
       matchedSignals: candidate.matchedSignals,
       confidence: candidate.confidence,
       isFoundation: candidate.isFoundation,
+      targetProfile: candidate.targetProfile,
     });
     block.onSiteMinutes += duree;
     if (!block.needCodes.includes(rec.need.code)) block.needCodes.push(rec.need.code);
@@ -432,6 +435,7 @@ export function compositionFromAxes(
       matchedSignals: m.signal ? [m.signal] : [],
       confidence: m.confidence,
       isFoundation: false,
+      targetProfile: null,
     }));
 
     return {

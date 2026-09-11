@@ -145,6 +145,8 @@ export interface ModuleCandidate {
   matchedTerms: string[];
   isFoundation: boolean;
   durationMin: number;
+  /** Le profil visé par le module — alimente le « Public visé » du programme composé. */
+  targetProfile: string | null;
 }
 
 export interface ModuleRecommendation {
@@ -497,6 +499,7 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
           matchedTerms: s.terms,
           isFoundation: m.isFoundation,
           durationMin: m.durationMin,
+          targetProfile: m.targetProfile,
         };
         return candidate;
       })

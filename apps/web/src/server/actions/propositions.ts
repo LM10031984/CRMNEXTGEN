@@ -58,6 +58,7 @@ import {
   buildComposedProgramme,
   type SourceProgrammeInfo,
 } from '@/lib/proposition/composed-programme';
+import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 import {
   compareSourceFingerprint,
   computeProposalFingerprint,
@@ -535,6 +536,10 @@ export interface ProposalWorkspace {
   composedModuleCount: number;
   /** Ce qui manque au programme Qualiopi avant qu'il soit remettable. */
   composedWarnings: string[];
+  /** `true` = remettable, `false` = à ne remettre à personne, `null` = rien de composé. */
+  composedRemittable: boolean | null;
+  /** Ce qui, précisément, empêche de le remettre. */
+  composedBlockers: string[];
 }
 
 async function buildWorkspace(
@@ -588,9 +593,22 @@ async function buildWorkspace(
    * l'état — et c'est exactement le genre de chose qu'on ne doit pas découvrir
    * après l'avoir envoyé au financeur.
    */
-  const composedWarnings = await (async () => {
+  const composedProgramme = await (async () => {
     const mods = content.axes.flatMap((a) => a.modules);
-    if (mods.length === 0) return [];
+    if (mods.length === 0) return null;
+    const tenantMentions = await prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: {
+        qualiopiPedagogicalMethods: true,
+        qualiopiEvaluationMethods: true,
+        qualiopiAccessibility: true,
+      },
+    });
+    const qualiopiMentions = resolveQualiopiMentions(tenantMentions, {
+      name: of.name,
+      email: of.email,
+      phone: of.phone,
+    });
     const codes = [...new Set(mods.map((m) => m.sourceCode).filter(Boolean))];
     const shelves = await prisma.trainingProduct.findMany({
       where: { tenantId, code: { in: codes } },
@@ -608,15 +626,17 @@ async function buildWorkspace(
       diagnosticReference: bundle.reference,
       sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
       fallback: {
-        prerequisites: null, targetAudience: null, pedagogicalMethods: null,
-        evaluationMethods: null, accessibility: null, trainerProfile: null,
-        pedagogicalSupport: null, accessConditions: null,
+        prerequisites: null,
+        trainerProfile: null,
+        pedagogicalSupport: null,
+        accessConditions: null,
       },
+      mentions: qualiopiMentions,
       moduleContent: new Map(shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.contentMd] as const))),
       moduleNeedIdentification: new Map(
         shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.needIdentification ?? ''] as const)),
       ),
-    }).warnings;
+    });
   })();
 
   const data: PropositionData = {
@@ -737,7 +757,10 @@ async function buildWorkspace(
     catalogueNotices: notices,
     composedProduct,
     composedModuleCount: content.axes.reduce((n, a) => n + a.modules.length, 0),
-    composedWarnings,
+    composedWarnings: composedProgramme?.warnings ?? [],
+    /** `null` quand rien n'est composé — il n'y a alors pas de verdict à rendre. */
+    composedRemittable: composedProgramme ? composedProgramme.remittable : null,
+    composedBlockers: composedProgramme?.blockers ?? [],
   };
 }
 
@@ -1414,6 +1437,18 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
     },
   });
 
+  const [of, tenantMentions] = await Promise.all([
+    loadOfConfig(g.user.tenantId),
+    prisma.tenant.findFirst({
+      where: { id: g.user.tenantId },
+      select: {
+        qualiopiPedagogicalMethods: true,
+        qualiopiEvaluationMethods: true,
+        qualiopiAccessibility: true,
+      },
+    }),
+  ]);
+
   const moduleContent = new Map<string, string>();
   const moduleNeedIdentification = new Map<string, string>();
   for (const shelf of shelves) {
@@ -1429,20 +1464,21 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
     agencyName: agencyNameOf(bundle),
     diagnosticReference: bundle.reference,
     sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
-    // L'organisme ne porte AUCUNE rubrique pédagogique par défaut : ces
-    // valeurs vivent sur les programmes. Quand aucun rayon source ne les
-    // renseigne, `buildComposedProgramme` remonte un avertissement — c'est
-    // préférable à un texte générique qui donnerait l'illusion de la conformité.
+    // Ce qu'un rayon peut encore léguer. Les trois mentions Qualiopi n'en font
+    // plus partie : elles viennent de l'ORGANISME et arrivent par `mentions`,
+    // non nullables — une section blanche sur l'accessibilité handicap est une
+    // non-conformité (indicateur 26), pas un document incomplet.
     fallback: {
       prerequisites: null,
-      targetAudience: null,
-      pedagogicalMethods: null,
-      evaluationMethods: null,
-      accessibility: null,
       trainerProfile: null,
       pedagogicalSupport: null,
       accessConditions: null,
     },
+    mentions: resolveQualiopiMentions(tenantMentions, {
+      name: of.name,
+      email: of.email,
+      phone: of.phone,
+    }),
     moduleContent,
     moduleNeedIdentification,
   });
