@@ -18,6 +18,7 @@ import {
   type AttestationType,
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
+import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -224,42 +225,38 @@ export async function generateAgeficeForParticipant(
   });
   // Format "Raison sociale — Nom du lieu\nadresse\nCP Ville" (cf demande Laurent
   // 2026-06-03 : Cerfa AGEFICE exige SARL X — Agence Y + adresse).
-  // Normalise une adresse pour comparaison tolérante (accents, ponctuation,
-  // abréviations FR courantes) — sert à détecter une rue déjà présente dans le
-  // libellé du lieu.
-  const normalizeAddr = (s: string): string =>
-    s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/\bav\b/g, 'avenue')
-      .replace(/\bbd\b|\bbld\b|\bboul\b/g, 'boulevard')
-      .replace(/\bimp\b/g, 'impasse')
-      .replace(/\bch\b|\bchem\b/g, 'chemin')
-      .replace(/\bpl\b/g, 'place')
-      .replace(/\brte\b/g, 'route')
-      .replace(/\bst\b/g, 'saint')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim();
-
-  const lieuAdresseComplete = session.location
-    ? (() => {
-        const nameLine = [
-          (session.location as { legalName?: string | null }).legalName,
-          session.location.name,
-        ]
-          .filter(Boolean)
-          .join(' — ');
-        const street = (session.location.address as any)?.street as string | null | undefined;
-        // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
-        // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
-        // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
-        // 2026-07). CP + Ville ont leurs propres champs Cerfa.
-        const appendStreet =
-          !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
-        return [nameLine, appendStreet ? street : null].filter(Boolean).join('\n');
-      })()
-    : of.addressFull;
+  // Composition déléguée à `formatLieuFormation`, la SOURCE UNIQUE partagée
+  // avec l'émargement, la convention et le pack de clôture. Ce générateur en
+  // était resté à une copie inline — sur le document qui part justement à
+  // l'AGEFICE, alors que c'est elle qui a motivé la règle (refus du 28/08/2026
+  // « raison sociale du lieu de formation » manquante).
+  //
+  // On ne lui passe que la RUE : le code postal et la ville ont leurs propres
+  // champs Cerfa (`lieuPostalCode` / `lieuVille`, plus bas), les répéter ici
+  // remplirait le champ deux fois.
+  //
+  // Sans lieu rattaché (coaching individuel, cas SES-0099), le repli porte la
+  // raison sociale de l'OF — « Start Academy, 12 avenue des Camélias… » — et
+  // non l'adresse nue, qui exposait au même motif de refus (Laurent 11/09).
+  const lieuAdresseComplete = formatLieuFormation(
+    session.location
+      ? {
+          legalName: (session.location as { legalName?: string | null }).legalName,
+          name: session.location.name,
+          address: { street: (session.location.address as { street?: string } | null)?.street },
+        }
+      : null,
+    fallbackLieuOf(of),
+  );
+  if (!session.location) {
+    // Le repli sur le siège est LÉGITIME quand la formation s'y tient, et FAUX
+    // sinon — or rien ne le distingue ici. La convocation, elle, affiche « à
+    // préciser » : sans cet avertissement, les deux documents d'un même dossier
+    // se contredisent sans que personne ne le voie (Laurent 11/09).
+    warnings.push(
+      `Aucun lieu n'est rattaché à cette session : le formulaire porte l'adresse du siège (${fallbackLieuOf(of)}). Rattachez le lieu réel sur la fiche session si la formation se tient ailleurs, puis régénérez.`,
+    );
+  }
 
   // ── Conformité Cerfa (Section C/D) ───────────────────────────
   // Lit les valeurs depuis TrainingProduct si renseignées, sinon fallback

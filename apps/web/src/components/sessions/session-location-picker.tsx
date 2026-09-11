@@ -3,7 +3,7 @@
 /**
  * BUG-19 + audit 2026-05-22 — Picker inline pour définir/changer le lieu d'une
  * session. Trois modes :
- *  - sélectionner un Location existant (select natif)
+ *  - rechercher puis sélectionner un Location existant (combobox filtrante)
  *  - créer un nouveau Location à la volée (saisie libre)
  *  - compléter le Location déjà rattaché (mentions AGEFICE manquantes)
  *
@@ -19,9 +19,9 @@
  * date (aucun n'a de raison sociale).
  */
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Loader2, MapPin, Pencil, Plus, X } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, Pencil, Plus, Search, X } from 'lucide-react';
 import {
   listLocations,
   updateSessionLocation,
@@ -29,7 +29,9 @@ import {
   updateLocationDetails,
 } from '@/server/actions/sessions';
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
+import { filtrerLieux } from '@/lib/locations/filtrer-lieux';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 interface LocationLite {
   id: string;
@@ -60,6 +62,12 @@ export function SessionLocationPicker({ sessionId, currentLocation }: Props) {
   const router = useRouter();
   const [locations, setLocations] = useState<LocationLite[]>([]);
   const [selected, setSelected] = useState('');
+  // Recherche : 59 lieux en base au 11/09/2026, le déroulé natif était
+  // devenu impraticable (« la petite loupe », Laurent 11/09).
+  const [recherche, setRecherche] = useState('');
+  const [ouvert, setOuvert] = useState(false);
+  const [surligne, setSurligne] = useState(0);
+  const blocRecherche = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'pick' | 'create' | 'edit'>('pick');
   const [newName, setNewName] = useState('');
   const [newLegalName, setNewLegalName] = useState('');
@@ -78,6 +86,56 @@ export function SessionLocationPicker({ sessionId, currentLocation }: Props) {
       .then((r) => setLocations(r as LocationLite[]))
       .finally(() => setLoading(false));
   }, []);
+
+  const resultats = useMemo(() => filtrerLieux(locations, recherche), [locations, recherche]);
+  const lieuSelectionne = locations.find((l) => l.id === selected) ?? null;
+
+  // Un clic hors du bloc referme la liste sans rien choisir.
+  useEffect(() => {
+    if (!ouvert) return;
+    function auClic(e: MouseEvent) {
+      if (!blocRecherche.current?.contains(e.target as Node)) setOuvert(false);
+    }
+    document.addEventListener('mousedown', auClic);
+    return () => document.removeEventListener('mousedown', auClic);
+  }, [ouvert]);
+
+  function libelle(l: LocationLite): string {
+    const ville = champAdresse(l.address, 'city');
+    return `${l.name}${ville ? ` — ${ville}` : ''}`;
+  }
+
+  function choisir(l: LocationLite) {
+    setSelected(l.id);
+    setRecherche(libelle(l));
+    setOuvert(false);
+  }
+
+  /** Flèches pour parcourir, Entrée pour choisir, Échap pour refermer. */
+  function auClavier(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!ouvert) {
+        setOuvert(true);
+        return;
+      }
+      const pas = e.key === 'ArrowDown' ? 1 : -1;
+      setSurligne((i) => {
+        if (resultats.length === 0) return 0;
+        return (i + pas + resultats.length) % resultats.length;
+      });
+      return;
+    }
+    if (e.key === 'Enter') {
+      const cible = resultats[surligne];
+      if (ouvert && cible) {
+        e.preventDefault();
+        choisir(cible);
+      }
+      return;
+    }
+    if (e.key === 'Escape') setOuvert(false);
+  }
 
   function ouvrirEdition() {
     if (!currentLocation) return;
@@ -271,27 +329,99 @@ export function SessionLocationPicker({ sessionId, currentLocation }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         {locations.length > 0 ? (
           <>
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              disabled={pending}
-              className="h-9 rounded-md border border-border px-2 text-sm bg-white"
-            >
-              <option value="">— Choisir un lieu existant —</option>
-              {locations.map((l) => {
-                const city = champAdresse(l.address, 'city');
-                // ⚠ = lieu incomplet : sélectionnable, mais à compléter avant
-                // de générer le pack.
-                const incomplet = mentionsLieuManquantes(l).length > 0;
-                return (
-                  <option key={l.id} value={l.id}>
-                    {incomplet ? '⚠ ' : ''}
-                    {l.name}
-                    {city ? ` — ${city}` : ''}
-                  </option>
-                );
-              })}
-            </select>
+            <div ref={blocRecherche} className="relative">
+              <Search
+                className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                type="text"
+                role="combobox"
+                aria-expanded={ouvert}
+                aria-controls="liste-lieux"
+                aria-autocomplete="list"
+                autoComplete="off"
+                value={recherche}
+                disabled={pending}
+                placeholder="Rechercher un lieu (nom, ville, code postal…)"
+                onChange={(e) => {
+                  setRecherche(e.target.value);
+                  // Taper invalide le choix précédent : on ne veut pas
+                  // « Définir » un lieu qui n'est plus celui affiché.
+                  setSelected('');
+                  setSurligne(0);
+                  setOuvert(true);
+                }}
+                onFocus={() => setOuvert(true)}
+                onKeyDown={auClavier}
+                className="h-9 w-72 rounded-md border border-border bg-white pl-7 pr-7 text-sm"
+              />
+              {recherche && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecherche('');
+                    setSelected('');
+                    setOuvert(true);
+                  }}
+                  aria-label="Effacer la recherche"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {ouvert && (
+                <ul
+                  id="liste-lieux"
+                  role="listbox"
+                  className="absolute z-20 mt-1 max-h-64 w-96 max-w-[80vw] overflow-y-auto rounded-md border border-border bg-white py-1 shadow-lg"
+                >
+                  {resultats.length === 0 ? (
+                    <li className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Aucun lieu ne correspond — utilisez « Nouveau lieu ».
+                    </li>
+                  ) : (
+                    resultats.map((l, i) => {
+                      const ville = champAdresse(l.address, 'city');
+                      const cp = champAdresse(l.address, 'postalCode');
+                      // ⚠ = lieu incomplet : sélectionnable, mais à compléter
+                      // avant de générer le pack.
+                      const incomplet = mentionsLieuManquantes(l).length > 0;
+                      return (
+                        <li key={l.id} role="option" aria-selected={l.id === selected}>
+                          <button
+                            type="button"
+                            // mousedown, pas click : le blur de l'input
+                            // refermerait la liste avant que le clic n'arrive.
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              choisir(l);
+                            }}
+                            onMouseEnter={() => setSurligne(i)}
+                            className={cn(
+                              'flex w-full flex-col items-start px-2 py-1.5 text-left text-sm hover:bg-muted',
+                              i === surligne && 'bg-muted',
+                            )}
+                          >
+                            <span className="font-medium text-foreground">
+                              {incomplet && (
+                                <span title="Lieu incomplet — à compléter avant le pack de clôture">⚠ </span>
+                              )}
+                              {l.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {[l.legalName, [cp, ville].filter(Boolean).join(' ')]
+                                .filter(Boolean)
+                                .join(' · ') || 'Adresse à compléter'}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleSave}
