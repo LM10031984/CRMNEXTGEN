@@ -25,6 +25,18 @@
  *     `provider.remind` sans appelant. Un lien qui ne relance rien est le
  *     « bouton qui laisse croire qu'il manque un réglage » que la décision n°3
  *     interdit — amendement n°8 de la spec.
+ *
+ * ⚠ CE QUE LE RETRAIT DU DÉPÔT PAR LIGNE A EMPORTÉ AVEC LUI (correction n°6,
+ * Laurent 11/09/2026), et qu'il faut savoir avant le premier envoi réel.
+ *
+ * Ce bloc était le SEUL appelant à passer `envoiEnAttente` à
+ * `<UploadSignedDocDialog>` — l'autre, le menu de la matrice, ne l'a jamais
+ * su. L'ÉTAPE de confirmation « le dépôt annule l'envoi » (lot C.2b-3) n'a donc
+ * plus d'appelant : un scan déposé depuis la matrice sur une pièce partie en
+ * signature sera REFUSÉ par `persistSignedScan` (fail-closed, inchangé), avec
+ * le message qui renvoie ici. Le recours est le bouton « Annuler l'envoi » de
+ * cette ligne, puis le dépôt. La RÈGLE de C.2b-3 tient donc toujours — c'est
+ * son raccourci en un geste qui disparaît.
  */
 
 import { useState, useTransition } from 'react';
@@ -39,14 +51,12 @@ import {
   Loader2,
   OctagonAlert,
   Send,
-  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { annulerEnvoiSignature } from '@/server/actions/signature-envoi';
 import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
-import { UploadSignedDocDialog } from '../qualiopi-matrix/upload-signed-doc-dialog';
 import { RecapitulatifEnvoi } from './recapitulatif-envoi';
 
 export interface BlocSignatureProps {
@@ -83,8 +93,6 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
   const [annulationEnCours, setAnnulationEnCours] = useState<string | null>(null);
   /** Le refus d'annulation, rendu TEL QUEL sur la ligne concernée. */
   const [refusAnnulation, setRefusAnnulation] = useState<Record<string, string>>({});
-  /** La ligne dont le dépôt de scan est ouvert (`cle`), ou `null`. */
-  const [depotOuvert, setDepotOuvert] = useState<string | null>(null);
   /**
    * Les clés que le récapitulatif doit préparer. `cles: undefined` = tout le
    * plan du moment ; une seule clé = l'envoi d'une ligne.
@@ -251,12 +259,18 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                     </a>
                   )}
 
-                  {/* ── Les deux gestes de la décision n°4 ──────────────────
-                      Ils COEXISTENT sur une pièce nominative non signée, et
-                      s'excluent TOUS LES DEUX dès qu'un signé existe — scan
-                      manuel comme e-signature. Une pièce signée ne se resigne
-                      pas : `sendForSignature` la refuserait (`DEJA_SIGNE`), et
-                      déposer un second scan remplacerait une preuve. */}
+                  {/* ── LE geste de la ligne : l'envoi, et lui seul ─────────
+                      La décision n°4 faisait COEXISTER ici « Envoyer » et
+                      « Déposer le scan ». Laurent la révise le 11/09/2026
+                      (correction n°6) : le dépôt par ligne n'apparaissait que
+                      sur la ligne AGEFICE — incohérent — et il ne doit
+                      apparaître sur AUCUNE. La zone de dépôt en dessous suffit,
+                      et elle traite tous les stagiaires d'un coup.
+
+                      L'exclusion, elle, ne bouge pas : une pièce signée ne se
+                      resigne pas (`sendForSignature` la refuserait,
+                      `DEJA_SIGNE`), et `ligne.envoyable` est faux dès qu'un
+                      signé existe — quelle qu'en soit l'origine. */}
                   {vue.canSign && ligne.envoyable && (
                     <button
                       type="button"
@@ -265,17 +279,6 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                       className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold shrink-0 transition-colors shadow-sm bg-primary text-white hover:bg-primary-600"
                     >
                       <Send className="h-3.5 w-3.5" aria-hidden="true" /> Envoyer
-                    </button>
-                  )}
-
-                  {vue.canSign && ligne.participantIdUnique !== null && ligne.etat !== 'SIGNE' && (
-                    <button
-                      type="button"
-                      onClick={() => setDepotOuvert(ligne.cle)}
-                      aria-label={`Déposer le scan signé — ${ligne.libelle}`}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium shrink-0 border border-border hover:bg-muted transition-colors"
-                    >
-                      <Upload className="h-3.5 w-3.5" aria-hidden="true" /> Déposer le scan
                     </button>
                   )}
 
@@ -324,21 +327,6 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                   >
                     {refus}
                   </p>
-                )}
-
-                {ligne.participantIdUnique !== null && (
-                  <UploadSignedDocDialog
-                    open={depotOuvert === ligne.cle}
-                    onOpenChange={(ouvert) => setDepotOuvert(ouvert ? ligne.cle : null)}
-                    participantId={ligne.participantIdUnique}
-                    docType={ligne.docType}
-                    /* « Une pièce, un seul chemin ouvert » (lot C.2b-3). Cette
-                       ligne est la SEULE à savoir qu'un envoi est en cours : le
-                       menu de la matrice l'ignore, et c'est pour ça que le
-                       garde-fou vit aussi côté serveur. Ici, il permet à la
-                       modale de POSER LA QUESTION au lieu d'échouer. */
-                    envoiEnAttente={ligne.etat === 'ENVOYE'}
-                  />
                 )}
               </li>
             );
