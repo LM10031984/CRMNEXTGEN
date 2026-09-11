@@ -402,17 +402,17 @@ describe('Famille 6 — idempotence', () => {
 // Famille 7 — LOT 1 BIS : le BLOC CONTIGU de pied de document part entier
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Arbitrage du 11/09/2026, en deux temps.
+// LA RÈGLE, dans sa formulation finale (arbitrage du 11/09/2026) :
 //
-// D'abord, Laurent a nommé deux phrases de `drive:058#6` (« Les formateurs
-// proposeront… », « Un livret de formation sera remis… ») : « une mention
-// d'organisme au mauvais endroit, exactement comme le QCM ».
+//   **Un déroulé de module porte des ÉTAPES D'ANIMATION, pas des mentions
+//   d'organisme.**
 //
-// Puis il a demandé que la RÈGLE soit généralisée, pas seulement le cas :
-// « partout où une mention d'organisme est précédée de son titre de section, le
-// bloc part entier. Un défaut créé sciemment est pire que celui qu'on
-// corrigeait. » Les quatre lignes de `drive:058#6` forment en effet UN SEUL BLOC
-// CONTIGU en fin de module, introduit par son propre titre :
+// Elle s'est construite en trois temps — deux phrases nommées, puis le bloc
+// contigu, puis le principe — et c'est la formulation ci-dessus qui fait foi. Le
+// titre de section orphelin n'est qu'un COROLLAIRE : si on retire ce qu'un titre
+// introduisait, le titre part avec. `drive:058#6` en est l'illustration : ses
+// quatre lignes forment UN SEUL BLOC CONTIGU en fin de module, introduit par son
+// propre titre :
 //
 //   6. - LES MOYENS PÉDAGOGIQUES ET TECHNIQUES      ← TITRE de gabarit
 //   7. - La formation se déroule en présentiel.      ← modalité → mention
@@ -445,6 +445,38 @@ const MENTIONS_058 = [
 
 /** Le bloc entier, dans l'ordre où l'instantané du lot 1 le portait. */
 const BLOC_058 = [TITRE_GABARIT_058, ...MENTIONS_058] as const;
+
+/**
+ * Les 8 MOYENS PÉDAGOGIQUES de drive:067#1, drive:068#1 et drive:069#1
+ * (15 occurrences), retirés par l'arbitrage du 11/09/2026 — le même que celui de
+ * drive:058#6, appliqué à la règle générale : **un déroulé de module porte des
+ * étapes d'ANIMATION, pas des mentions d'organisme.**
+ *
+ * Toutes sont situées AVANT « PROGRAMME DÉTAILLÉ (…) », qui borne le bloc de façon
+ * nette — c'est ce qui rend le retrait sûr.
+ */
+const MOYENS_067_069 = [
+  'Présentation visuelle sur support Canva.',
+  'Support pédagogique numérique remis à chaque participant.',
+  'Formation orientée pilotage et prise de décision managériale.',
+  'Études de cas réels issus du marché immobilier.',
+  'Ateliers d’analyse guidés avec des outils d’intelligence artificielle.',
+  'Formation interactive orientée pratique.',
+  'Démonstrations en direct sur un outil d’intelligence artificielle.',
+  'Exercices guidés pas à pas sur la rédaction de prompts.',
+] as const;
+
+/** Leurs formes canoniques, dans le même ordre. */
+const CANONIQUES_MOYENS_067_069 = [
+  'presentation visuelle sur support canva',
+  'support pedagogique numerique remis a chaque participant',
+  'formation orientee pilotage et prise de decision manageriale',
+  'etudes de cas reels issus du marche immobilier',
+  "ateliers d'analyse guides avec des outils d'intelligence artificielle",
+  'formation interactive orientee pratique',
+  "demonstrations en direct sur un outil d'intelligence artificielle",
+  'exercices guides pas a pas sur la redaction de prompts',
+] as const;
 
 /** Les formes canoniques attendues, dans le même ordre que BLOC_058. */
 const CANONIQUES_BLOC = [
@@ -509,17 +541,33 @@ describe('Famille 7 — lot 1 bis : les 3 phrases du bloc sont des mentions', ()
     },
   );
 
-  // Les voisines de la MÊME FAMILLE dans d'autres modules : elles ne sont pas
-  // dans l'arbitrage et on n'y touche pas. Elles encadrent le périmètre.
+  it.each(MOYENS_067_069)(
+    'un déroulé porte des ÉTAPES D’ANIMATION, pas des moyens d’organisme : « %s » part',
+    (ligne) => {
+      expect(estMentionOrganisme(ligne)).toBe(true);
+    },
+  );
+
+  it.each(
+    MOYENS_067_069.map((l, i) => ({ ligne: l, attendu: CANONIQUES_MOYENS_067_069[i]! })),
+  )('normaliserLigne ramène « $ligne » à sa forme canonique', ({ ligne, attendu }) => {
+    expect(normaliserLigne(ligne)).toBe(attendu);
+  });
+
   it.each([
-    'Formation interactive orientée pratique.',
-    'Présentation visuelle sur support Canva.',
-    'Support pédagogique numérique remis à chaque participant.',
-    'Formation orientée pilotage et prise de décision managériale.',
-    'Démonstrations en direct sur un outil d’intelligence artificielle.',
-    'Exercices guidés pas à pas sur la rédaction de prompts.',
-  ])('hors de l’arbitrage du 11/09 — signalée, pas retirée : « %s »', (ligne) => {
-    expect(estMentionOrganisme(ligne)).toBe(false);
+    'Présentation visuelle sur support Canva',
+    '- Présentation visuelle sur support Canva ;',
+    "Ateliers d'analyse guidés avec des outils d'intelligence artificielle.",
+    '* Études de cas réels issus du marché immobilier',
+    '  Exercices   guidés pas à pas sur la rédaction de prompts.  ',
+  ])('variante tolérée d’un moyen pédagogique : « %s »', (ligne) => {
+    expect(estMentionOrganisme(ligne)).toBe(true);
+  });
+
+  it('aucun des 8 moyens n’est un TITRE de gabarit — ce sont des phrases', () => {
+    for (const ligne of MOYENS_067_069) {
+      expect(estTitreGabarit(ligne), ligne).toBe(false);
+    }
   });
 
   it('« QUIZZ Final : (0h30) » reste — une activité de séance avec sa durée', () => {
@@ -532,11 +580,11 @@ describe('Famille 7 — lot 1 bis : les 3 phrases du bloc sont des mentions', ()
 // Famille 8 — lot 1 bis au niveau DONNÉES, sur l'instantané régénéré
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// « La formation se déroule en présentiel. » n'est PAS propre à drive:058#6 :
-// elle ouvre le même bloc de moyens pédagogiques avalé dans drive:067#1,
-// drive:068#1 et drive:069#1. Un ensemble fermé agit sur tout le corpus — ces
-// trois modules perdent donc cette ligne aussi, et c'est cohérent avec la
-// décision. Aucun ne se vide : ils portaient 32, 41 et 41 lignes.
+// Les trois modules drive:067#1, drive:068#1 et drive:069#1 portaient le MÊME bloc
+// de moyens pédagogiques avalé, en TÊTE de déroulé cette fois : une ligne de
+// modalité puis 5 moyens, avant « PROGRAMME DÉTAILLÉ (…) » qui borne le bloc de
+// façon nette. Les 6 lignes partent, les 8 formes distinctes (15 occurrences) sont
+// dans l'ensemble fermé. Aucun module ne se vide : 32/41/41 → 26/35/35.
 
 describe('Famille 8 — l’instantané après le lot 1 bis', () => {
   it('le compte ne bouge pas : 76 programmes, 402 modules', () => {
@@ -555,18 +603,31 @@ describe('Famille 8 — l’instantané après le lot 1 bis', () => {
   });
 
   it.each(['drive:067#1', 'drive:068#1', 'drive:069#1'])(
-    '%s ne porte plus la ligne de modalité, et garde tout le reste',
+    '%s ne porte plus un seul moyen pédagogique d’organisme',
     (ref) => {
       const m = moduleDe(ref);
       expect(m.contentMd).not.toContain('La formation se déroule en présentiel');
-      expect(m.contentMd).toContain('Présentation visuelle sur support Canva.');
+      for (const moyen of MOYENS_067_069) {
+        expect(m.contentMd, `${ref} porte encore « ${moyen} »`).not.toContain(
+          moyen.replace(/\.$/, ''),
+        );
+      }
     },
   );
 
-  it('drive:067#1 / 068#1 / 069#1 gardent 31, 40 et 40 lignes', () => {
-    expect(moduleDe('drive:067#1').contentMd.split('\n')).toHaveLength(31);
-    expect(moduleDe('drive:068#1').contentMd.split('\n')).toHaveLength(40);
-    expect(moduleDe('drive:069#1').contentMd.split('\n')).toHaveLength(40);
+  it.each(['drive:067#1', 'drive:068#1', 'drive:069#1'])(
+    '%s commence désormais par « PROGRAMME DÉTAILLÉ » — le bloc était borné net',
+    (ref) => {
+      expect(moduleDe(ref).contentMd.split('\n')[0]).toMatch(
+        /^- PROGRAMME DÉTAILLÉ \(\d heures\)$/,
+      );
+    },
+  );
+
+  it('drive:067#1 garde 26 puces, drive:068#1 et drive:069#1 en gardent 35', () => {
+    expect(moduleDe('drive:067#1').contentMd.split('\n')).toHaveLength(26);
+    expect(moduleDe('drive:068#1').contentMd.split('\n')).toHaveLength(35);
+    expect(moduleDe('drive:069#1').contentMd.split('\n')).toHaveLength(35);
   });
 
   // LE garde-fou du « 5ᵉ fantôme » : 33 modules ont un déroulé vide dans
@@ -578,12 +639,12 @@ describe('Famille 8 — l’instantané après le lot 1 bis', () => {
     expect(vides.map((m) => m.sourceRef)).not.toContain('drive:058#6');
   });
 
-  it('le total des lignes de déroulé passe de 3117 à 3110 — 7 lignes, pas une de plus', () => {
+  it('le total des lignes de déroulé passe de 3117 à 3095 — 22 lignes, pas une de plus', () => {
     const total = TOUS_LES_MODULES.reduce(
       (n, m) => n + (m.contentMd.trim().length === 0 ? 0 : m.contentMd.split('\n').length),
       0,
     );
-    expect(total).toBe(3110);
+    expect(total).toBe(3095);
   });
 
   it('le compte de warnings ne bouge pas : 64 — aucun module nouvellement vidé', () => {
