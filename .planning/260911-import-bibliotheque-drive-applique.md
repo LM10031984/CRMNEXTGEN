@@ -1,6 +1,6 @@
 # Import de la bibliothèque de modules — Drive + Faros (lot I-1)
 
-_**APPLIQUÉ** le 2026-09-11 · instantané du 2026-09-10 · tenant « Start Academy »._
+_**APPLIQUÉ** le 2026-09-11 · instantané du 2026-09-11 · tenant « Start Academy »._
 
 ## En un coup d’œil
 
@@ -32,6 +32,17 @@ Pour ces modules, le document Drive ne porte aucun déroulé alors que la base e
 Motif : un import qui VIDE un contenu ne peut pas avoir raison ; un import qui le REMPLACE par autre chose, si. Le jour où le document Drive portera le déroulé, il reprendra la main sans rien de plus à faire.
 
 - `drive:047#20` « Atelier pratique : Simulation de réponse aux avis  » — le Drive n'a pas de déroulé, la base en a un : **contenu conservé**. Le reste du module est mis à jour normalement.
+
+## Déroulés vidés — la base ne portait que du boilerplate de gabarit
+
+Pour ces modules, la base portait un déroulé, mais **uniquement des mentions d'organisme** du gabarit Qualiopi (« QCM évaluation des acquis », « Questionnaire de satisfaction et clôture de la formation »). L'extraction les retire depuis le lot 1 du 11/09/2026 ; la garde « un import ne vide jamais un contenu écrit » **ne s'applique donc pas** : elle protège la pédagogie, pas le boilerplate.
+
+**Rien de pédagogique n'a été perdu.** Ces modules sont des fantômes nés du pied de page — leur titre est en réalité le dernier objectif de la liste précédente, et leur découpage est un chantier à part (lot 3). Le composeur les écarte déjà des sorties client, faute de déroulé.
+
+- `drive:010#2` « Apprendre à réévaluer régulièrement le plan d'acti » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
+- `drive:014#4` « Analyser et comprendre les besoins et les attentes » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
+- `drive:027#2` « Mettre en œuvre des changements pour accroître la  » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
+- `drive:038#3` « Mettre en place un suivi régulier et des récompens » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
 
 ## ⚠️ À trancher — le même programme importé deux fois
 
@@ -137,6 +148,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:010` — Accélérez votre succès en immobilier de la théorie à la
 
+- `drive:010#2` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 2 module(s) sans durée lisible — défaut appliqué à l'import.
 - 2 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -152,6 +164,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:014` — Boostez, animez et fidélisez les performances de votre équ
 
+- `drive:014#4` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 4 module(s) sans durée lisible — défaut appliqué à l'import.
 - 4 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -183,6 +196,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:027` — Gestion stratégique des objectifs en immobilier
 
+- `drive:027#2` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 2 module(s) sans durée lisible — défaut appliqué à l'import.
 - 2 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -217,6 +231,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:038` — Transformez votre recrutement en un jeu gagnant
 
+- `drive:038#3` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 3 module(s) sans durée lisible — défaut appliqué à l'import.
 - 3 module(s) à 60 min par défaut (D-17/D-20).
 
