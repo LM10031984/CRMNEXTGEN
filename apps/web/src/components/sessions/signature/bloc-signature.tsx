@@ -37,6 +37,20 @@
  * le message qui renvoie ici. Le recours est le bouton « Annuler l'envoi » de
  * cette ligne, puis le dépôt. La RÈGLE de C.2b-3 tient donc toujours — c'est
  * son raccourci en un geste qui disparaît.
+ *
+ * ⚠ LA ZONE DE DÉPÔT VIT DÉSORMAIS ICI (demande n°4, Laurent 11/09/2026).
+ *
+ * Elle vivait à part, dans les onglets Avant et Après. Les DEUX chemins vers la
+ * même preuve — faire signer à distance, rentrer le papier signé — se
+ * cherchaient donc à deux endroits, alors qu'ils s'EXCLUENT : un scan déposé
+ * sur une pièce partie en signature annule l'envoi chez le prestataire, et
+ * `persistSignedScan` le REFUSE sans confirmation explicite. Les mettre côte à
+ * côte, c'est ce qui rend cette exclusion lisible avant de la subir.
+ *
+ * Conséquence assumée sur le silence du bloc : il ne se tait plus dès que le
+ * plan est vide. Une session 100 % OPCO n'a rien à faire e-signer, mais elle a
+ * des feuilles d'émargement à rentrer — renvoyer `null` ferait disparaître le
+ * seul endroit où les déposer.
  */
 
 import { useState, useTransition } from 'react';
@@ -68,12 +82,35 @@ import { cn } from '@/lib/utils';
 import { annulerEnvoiSignature } from '@/server/actions/signature-envoi';
 import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
+import {
+  AIDE_DEPOT_MANUEL,
+  MENTION_RETOUR_AUTOMATIQUE,
+  TITRE_DEPOT_MANUEL,
+} from '@/lib/sessions/titre-depot-signe';
+import {
+  SignedDocDropZone,
+  type DropZoneParticipant,
+} from '../qualiopi-matrix/signed-doc-drop-zone';
 import { RecapitulatifEnvoi } from './recapitulatif-envoi';
 
 export interface BlocSignatureProps {
   sessionId: string;
   scope: ScopeEnvoi;
   vue: VueSignature;
+  /**
+   * Le droit d'ÉCRIRE un scan — `canWrite` côté onglets, qui inclut COMMERCIAL.
+   *
+   * ⚠ SURTOUT PAS `vue.canSign`, qui vaut `ADMIN | MANAGER` : le dépôt d'un
+   * scan n'est pas un envoi en signature, et le réduire aux deux rôles de
+   * l'envoi retirerait à un commercial un geste qu'il faisait hier.
+   */
+  depotAutorise?: boolean;
+  /** Les inscrits auxquels rattacher un scan. Vide ⇒ aucune zone rendue. */
+  depotParticipants?: DropZoneParticipant[];
+  /** Le type proposé par défaut : CONVENTION avant, EMARGEMENT après. */
+  depotDocType?: string;
+  /** Les types que ce moment de la formation accepte en dépôt. */
+  depotDocTypeOptions?: Array<{ value: string; label: string }>;
 }
 
 /**
@@ -97,7 +134,15 @@ const PASTILLE: Record<EtatPiece, { texte: string; classe: string }> = {
   SIGNE: { texte: 'Signé', classe: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
 };
 
-export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
+export function BlocSignature({
+  sessionId,
+  scope,
+  vue,
+  depotAutorise = false,
+  depotParticipants,
+  depotDocType,
+  depotDocTypeOptions,
+}: BlocSignatureProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   /** La demande en cours d'annulation — une ligne à la fois. */
@@ -117,10 +162,28 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
     cles?: string[];
   } | null>(null);
 
+  /**
+   * La zone de dépôt est-elle proposable ? Trois conditions, aucune devinée :
+   * l'appelant l'a câblée (`depotDocType`), le rôle autorise l'écriture, et il
+   * y a quelqu'un à qui rattacher un scan.
+   */
+  const depotDisponible =
+    depotAutorise &&
+    depotDocType !== undefined &&
+    depotParticipants !== undefined &&
+    depotParticipants.length > 0;
+
   // Le bloc se tait quand il n'a rien à dire : une section vide, titrée
   // « Signature électronique », ferait chercher ce qu'il manque.
+  //
+  // ⚠ « Rien à dire » inclut désormais « rien à déposer » (demande n°4). Une
+  // session sans pièce e-signable garde ses feuilles d'émargement à rentrer :
+  // se taire lui retirerait le seul endroit où le faire.
   const muet =
-    vue.lignes.length === 0 && vue.avertissements.length === 0 && vue.blocages.length === 0;
+    vue.lignes.length === 0 &&
+    vue.avertissements.length === 0 &&
+    vue.blocages.length === 0 &&
+    !depotDisponible;
   if (muet) return null;
 
   function handleAnnuler(ligne: LigneSignature) {
@@ -412,6 +475,36 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
             );
           })}
         </ul>
+      )}
+
+      {/* ── L'AUTRE CHEMIN VERS LA MÊME PREUVE ───────────────────────────
+          Repliée : le cas courant du bloc reste l'envoi en signature, pas le
+          dépôt. Sous les lignes, parce qu'elle les COMPLÈTE — c'est le geste
+          de masse qui rentre les feuilles ramassées en salle.
+
+          `docType` par défaut et options viennent de l'appelant : c'est le
+          moment de la formation qui sait quelles pièces peuvent revenir
+          signées à la main, pas ce composant. */}
+      {depotDisponible && depotDocType !== undefined && depotParticipants !== undefined && (
+        <div className="mt-4">
+          <SignedDocDropZone
+            sessionId={sessionId}
+            docType={depotDocType}
+            participants={depotParticipants}
+            defaultOpen={false}
+            titre={TITRE_DEPOT_MANUEL}
+            aide={
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <p>{AIDE_DEPOT_MANUEL}</p>
+                {/* ⚠ CE QUI ÉVITE LE GESTE QUI DÉFAIT LE PRÉCÉDENT. Sans cette
+                    phrase, l'admin qui vient d'envoyer une convention dépose
+                    aussi son scan ici — et annule son propre envoi. */}
+                <p>{MENTION_RETOUR_AUTOMATIQUE}</p>
+              </div>
+            }
+            {...(depotDocTypeOptions === undefined ? {} : { docTypeOptions: depotDocTypeOptions })}
+          />
+        </div>
       )}
 
       {/* Le récapitulatif : monté SEULEMENT quand une demande existe, pour que

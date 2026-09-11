@@ -882,13 +882,37 @@ describe('Zone de dépôt — fusionnée dans le bloc Signature (demande n°4)',
     );
   });
 
-  it('(f) le dépôt reste NOMINATIF : un stagiaire par fichier, jamais la session d’un coup', () => {
+  it('(f) le dépôt reste NOMINATIF : un fichier, un stagiaire — jamais la session d’un coup', () => {
+    const { container } = avecDepot();
+    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
+
+    // Règle métier n°1 du lot A : la fiche est individuelle. Un PDF déposé
+    // ouvre UNE affectation, et les deux inscrits y sont proposés.
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const pdf = new File(['%PDF'], 'dupont-emargement.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [pdf] } });
+
+    const affectation = screen.getByLabelText(/stagiaire pour dupont-emargement\.pdf/i);
+    expect(affectation.tagName).toBe('SELECT');
+    const options = Array.from((affectation as HTMLSelectElement).options).map((o) => o.text);
+    expect(options.join(' · ')).toContain('Jean DUPONT');
+    expect(options.join(' · ')).toContain('Marie MARTIN');
+    // …et la pré-affectation par nom de fichier a fait son travail.
+    expect((affectation as HTMLSelectElement).value).toBe('part-1');
+  });
+
+  it('(g) la zone nomme la pièce attendue, et ce titre SUIT le type choisi', () => {
+    // Le titre par type (correction n°5, C.2b-6) n'est PAS défait par la
+    // question de l'en-tête : il descend là où les fichiers atterrissent.
+    // « Déposer les convention signés » ne doit pas revenir par cette porte.
     avecDepot();
     fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
-    // Règle métier n°1 du lot A : la fiche est individuelle. Les deux inscrits
-    // sont proposés comme cibles de rattachement.
-    const texte = document.body.textContent ?? '';
-    expect(texte).toContain('Jean DUPONT');
-    expect(texte).toContain('Marie MARTIN');
+    expect(document.body.textContent).toContain('Déposer les feuilles d’émargement signées');
+
+    fireEvent.change(screen.getByLabelText(/type de document/i), {
+      target: { value: 'ASSIDUITE' },
+    });
+    expect(document.body.textContent).toContain('Déposer les attestations d’assiduité signées');
+    expect(document.body.textContent).not.toContain('Déposer les feuilles d’émargement signées');
   });
 });
