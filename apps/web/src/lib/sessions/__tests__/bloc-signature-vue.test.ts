@@ -989,6 +989,15 @@ describe('LigneSignature.ordre — une pièce PARTIE lit les signataires RÉELS'
     // QualiOF, de signer à son tour — il doit retrouver son email.
     expect(ligne.ordre[1]!.signerMaintenant).toBe(true);
     expect(ligne.ordre[1]!.signUrl).toBe('https://docuseal.eu/s/of');
+
+    // ⚠ LA PHRASE CHANGE DE MAIN, et c'est la seconde façon de voir la même
+    // mutation : sur l'ordre PRÉVU, personne n'a jamais signé, donc l'écran
+    // continuerait d'attendre le CLIENT alors que c'est à l'organisme de jouer.
+    expect(ligne.attente).toBe(
+      'Il ne manque plus que la signature de Laurent MARX pour l’organisme de formation. ' +
+        'Dès qu’elle sera faite, le PDF signé et son certificat de signature reviendront ici ' +
+        'automatiquement.',
+    );
   });
 
   it('PUISSANCE — sans signataires réels, la ligne retomberait sur l’ordre PRÉVU, qui ne signe jamais', () => {
