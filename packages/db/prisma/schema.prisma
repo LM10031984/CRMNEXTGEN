@@ -135,6 +135,12 @@ model User {
   role             UserRole         @default(LECTEUR)
   // Phase 8 — soft-delete + métadonnées invitation (D-03 CONTEXT.md)
   disabledAt       DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
+  // Compte de service (robot) : reste ACTIF — Playwright se connecte à `e2e@` —
+  // mais n'est JAMAIS destinataire d'un email interne. Sans ce drapeau, chaque
+  // alerte partait aussi aux comptes sans boîte et revenait en bounce sur
+  // `formation@` (constat du 11/09/2026). Détourner `disabledAt` aurait cassé
+  // la suite E2E : d'où un champ distinct.
+  isServiceAccount Boolean          @default(false)
   lastLoginAt      DateTime? // mis à jour dans loginAction sur succès
   invitedAt        DateTime? // null = créé manuellement (seed)
   invitedBy        String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)

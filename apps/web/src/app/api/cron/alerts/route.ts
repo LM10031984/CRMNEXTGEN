@@ -26,7 +26,7 @@ import {
   grouperAlertesSubmission,
   type SubmissionSnapshot,
 } from '@/lib/alertes/preinscription-digest';
-import { alerterLeadDormant, alerterPreinscriptionsDeposees } from '@/lib/alertes/notifier';
+import { alerterLeadsDormants, alerterPreinscriptionsDeposees } from '@/lib/alertes/notifier';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +68,10 @@ export async function GET(req: Request) {
     },
   });
 
-  let leadsAlertes = 0;
+  // On décide d'abord pour TOUS, on envoie ensuite : c'est ce qui permet le
+  // digest. Envoyer dans la boucle produisait un email par lead — trente le
+  // lendemain d'un salon (11/09/2026).
+  const aAlerter = new Map<string, { tenantId: string; hoursIdle: number }>();
   for (const lead of candidats) {
     // La requête ci-dessus est un pré-filtre de performance ; c'est la fonction
     // pure qui décide. Dupliquer la règle en SQL la ferait diverger du test.
@@ -83,12 +86,26 @@ export async function GET(req: Request) {
       now,
     );
     if (!decision.alert) continue;
-    await alerterLeadDormant({
-      tenantId: lead.tenantId,
-      leadId: lead.id,
-      hoursIdle: decision.hoursIdle,
-    });
-    leadsAlertes += 1;
+    aAlerter.set(lead.id, { tenantId: lead.tenantId, hoursIdle: decision.hoursIdle });
+  }
+
+  // Un envoi par tenant — mono-tenant en pratique, mais la boucle coûte une
+  // ligne et évite d'avoir à y revenir.
+  const parTenantLeads = new Map<string, string[]>();
+  const hoursIdleParLead: Record<string, number> = {};
+  for (const [leadId, { tenantId, hoursIdle }] of aAlerter) {
+    hoursIdleParLead[leadId] = hoursIdle;
+    const liste = parTenantLeads.get(tenantId);
+    if (liste) liste.push(leadId);
+    else parTenantLeads.set(tenantId, [leadId]);
+  }
+
+  let leadsAlertes = 0;
+  let envoisLeads = 0;
+  for (const [tenantId, leadIds] of parTenantLeads) {
+    const r = await alerterLeadsDormants({ tenantId, leadIds, hoursIdleParLead });
+    leadsAlertes += r.leadsAlertes;
+    envoisLeads += r.envois;
   }
 
   // ── A-3 — les dossiers déposés, regroupés ─────────────────────────────────
@@ -146,6 +163,9 @@ export async function GET(req: Request) {
     ok: true,
     at: now.toISOString(),
     leadsDormantsAlertes: leadsAlertes,
+    // Combien d'emails ont RÉELLEMENT été envoyés pour ces leads : c'est le
+    // chiffre qui dit si le digest tient sa promesse.
+    leadsDormantsEnvois: envoisLeads,
     leadsExamines: candidats.length,
     alertesDossiers,
     dossiersAnnonces: deposes.length,
