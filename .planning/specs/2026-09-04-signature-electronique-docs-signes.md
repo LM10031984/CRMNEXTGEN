@@ -356,6 +356,54 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >      elle s'abstient et le dit. Le bouton qui l'appelle vit dans le bloc « Signature » des
 >      onglets Avant / Après (lot C.2b-2).
 
+>
+> 10. **« UNE PIÈCE, UN SEUL CHEMIN OUVERT » — déposer un scan sur une pièce en attente de
+>     signature ANNULE l'envoi** (Laurent, 11/09/2026 — lot C.2b-3). Tranche l'écart n°6 du
+>     SUMMARY-2 de C.2b-2, laissé « à confirmer par Laurent ».
+>
+>     L'écran livré en C.2b-2 proposait « Déposer le scan » **à côté** d'« Annuler l'envoi »
+>     sur une ligne `sent_for_signature` : deux chemins ouverts sur la même pièce. Or les deux
+>     mènent à la MÊME preuve. Les laisser coexister, c'est accepter qu'un scan arrive pendant
+>     qu'une signature électronique aboutit chez le prestataire — **deux preuves concurrentes
+>     sur une pièce contractuelle destinée à un financeur**, et rien dans le journal pour dire
+>     laquelle fait foi. L'argument de C.2b-2 (« le scan papier peut revenir pendant que la
+>     demande dort ») décrit exactement le risque, il ne le lève pas.
+>
+>     **La règle** : le dépôt ferme l'autre chemin. `provider.cancel(providerId)` est appelé,
+>     la demande passe en `CANCELED`, le document retrouve son statut d'avant l'envoi et est
+>     régénéré **sans** ses ancres — tout cela par `annulerEnvoiSignature` (C.2b-bis), **réutilisée
+>     et non réécrite** : une seconde annulation aurait divergé de la première au premier
+>     changement.
+>
+>     **Trois points qui ne se négocient pas :**
+>
+>     - **Le motif entre dans la trace.** `annulerEnvoiSignatureSchema` porte un champ `motif`
+>       **énuméré** (`user_requested` par défaut, `scan_deposited` pour le dépôt), et
+>       `AuditLog signature.canceled` écrit le **code** (pour interroger) *et* la **phrase**
+>       (pour lire). Sans lui, une annulation volontaire et une annulation provoquée par un
+>       dépôt produisent la même ligne — or c'est la première question qu'un auditeur pose
+>       devant deux preuves d'une même pièce. Énuméré, et non du texte libre : un journal doit
+>       rester interrogeable.
+>     - **Jamais en silence.** Le dépôt ne s'exécute qu'après une **confirmation explicite** :
+>       `<UploadSignedDocDialog>` affiche l'avertissement dès l'ouverture, puis impose une
+>       **étape** (et non une case à cocher — une case se coche sans lire) dont le bouton
+>       **nomme l'annulation**. Le drapeau envoyé au serveur suit la CONFIRMATION, jamais la
+>       prop `envoiEnAttente` : si l'étape disparaissait, le drapeau disparaîtrait avec elle et
+>       le serveur refuserait — l'échec serait visible, jamais silencieux.
+>     - **Le garde-fou vit dans `persistSignedScan`**, seul point par lequel passent TOUS les
+>       dépôts (modale de cellule, cellule cible de drop, zone de dépôt de la fiche session).
+>       Posé dans un seul écran, il aurait laissé les autres rouvrir le second chemin. Et
+>       l'**ordre** n'est pas décoratif : on annule d'abord, on écrit ensuite — la régénération
+>       sans ancres commence par un `deleteMany` qui effacerait un `signedPdfUrl` posé trop tôt,
+>       et une annulation refusée par le prestataire ne doit rien laisser derrière elle.
+>
+>     **Limite assumée — la zone de dépôt multi-fichiers ne confirme jamais.** Elle traite N
+>     fichiers pour N stagiaires : elle ne peut pas montrer, pièce par pièce, ce qu'une
+>     annulation coûterait, et une confirmation globale « oui, annulez ce qu'il faut » serait
+>     précisément la confirmation aveugle que cette règle interdit. Une pièce partie y ressort
+>     donc en `failures`, avec le message qui renvoie au bloc « Signature » — les autres
+>     fichiers du lot passent.
+
 - Server actions `preparerEnvoiSignature({ sessionId, scope, cles? })` puis `sendForSignature({ sessionId, scope, cibles, force? })` — chaque cible porte `{ cle, hashConfirme, emailSaisi? }` (amendement n°5) :
   - **Un envoi porte UN document** (D-4 amendé, amendement n°1 ci-dessus).
     - `BEFORE` : une `SignatureRequest` par **organisation bénéficiaire** portant la **seule convention** (signée par son représentant) ; une `SignatureRequest` **par participant** pour son dossier AGEFICE (signé par le stagiaire seul, l'OF ayant déjà son image apposée).
@@ -434,7 +482,7 @@ A (1-1,5 jour) → B (1-2 jours, sandbox DocuSeal) → C (2 jours) → D (1 jour
 |---|---|---|
 | **A** | ✅ **livré 04/09/2026** | Migration `20260904170000_signature_document_signed_fields` (Document.signedPdfUrl / signedAt / signatureKind + enum `SignatureKind`) · `persistSignedScan` partagé entre `uploadSignedDoc` et la nouvelle `uploadSignedScans` · `<SignedDocDropZone>` dans Après (émargement, déplié) et Avant (replié, docType au choix) · pré-affectation par nom de fichier · A.2 découpage multipage · cellule de matrice cible de drop · AuditLog `document.signed_scan_uploaded`. Chemins §4.4 pour les nouveaux écrits. |
 | **B** | ✅ **livré — test d'acceptation passé le 10/09/2026** | Migration `20260904190000_signature_request_docuseal` (`SignatureRequest` + `SignatureRequestStatus`, `Document.signatureRequestId`, `Tenant.signatory*` + `SignatoryOrder`) · `lib/signature/` : `port.ts`, `docuseal.ts`, `dry-run.ts`, `provider.ts` (fail-closed), `signatory.ts`, `text-tags.ts` · ancres optionnelles `signatureTags` sur les 3 documents — zones HTML pour la convention et l'assiduité, ancre **dessinée par pdf-lib** pour le formulaire AGEFICE officiel (corrigé le 10/09) · section « Signataire de l'organisme » dans Paramètres (D-1) · env `SIGNATURE_PROVIDER` / `DOCUSEAL_*` en remplacement des `YOUSIGN_*`. **Test d'acceptation passé le 10/09/2026** (envoi 1619115, instance UE, signé par les deux rôles) : Adobe Reader déclare la **signature valide après mise à jour AATL**, certificat **Netrust** ; certificat de signature complet ; les deux pièces servies par `docuseal.eu` ; `send_email=false` et `sent_at=jamais`, aucun email parti de DocuSeal. Pièces versées dans `.planning/specs/evidence/signature-B/`. Placement des signatures corrigé après ce test (zone dédiée 180 × 60 pt alignée à droite) et revérifié sur l'envoi 1619495. |
-| **C** | 🟨 en cours | **C.1** (régime : 3 colonnes `SignerRole` sur `OpcoCatalog`) et **C.2a** livrés le 10/09/2026 : `lib/signature/{representant,plan-envoi,envoi-contrats}.ts` (purs), `server/actions/signature-envoi.ts` (`preparerEnvoiSignature` + `sendForSignature`), `signatureTags` plombé dans les 4 générateurs. Restent **C.2b** (l'UI : bouton, récapitulatif, saisie d'adresse), **C.2c** (emails aux signataires, D-9/D-5) et **C.3** (webhook `POST /api/webhooks/docuseal`, cron `signature-sync`). |
+| **C** | 🟨 en cours | **C.1** (régime : 3 colonnes `SignerRole` sur `OpcoCatalog`) et **C.2a** livrés le 10/09/2026 : `lib/signature/{representant,plan-envoi,envoi-contrats}.ts` (purs), `server/actions/signature-envoi.ts` (`preparerEnvoiSignature` + `sendForSignature`), `signatureTags` plombé dans les 4 générateurs. **C.2b** livré le 10/09/2026 (l'écran : bloc « Signature », récapitulatif, saisie d'adresse, annulation — C.2b-1/bis/2). **C.2b-3** (11/09/2026) : « une pièce, un seul chemin ouvert » — le dépôt d'un scan sur une pièce en attente annule l'envoi, après confirmation explicite, avec le motif `scan_deposited` dans la trace (amendement n°10). Restent **C.2c** (emails aux signataires, D-9/D-5) et **C.3** (webhook `POST /api/webhooks/docuseal`, cron `signature-sync`). |
 | **D** | ⬜ à faire | `opco-submission.ts` ignore `signedPdfUrl` ; le ZIP du pack n'a pas de sous-dossier `signes/` ; pas d'alerte J-15. |
 
 **Trouvé en montant la preuve du lot A** (corrigé dans la foulée, commit `fix(qualiopi-matrix)`) : le SQL brut de `markDocStatus`, `uploadSignedDoc` et `deleteDocument` castait des identifiants **TEXT** en `::uuid` → `operator does not exist: text = uuid`. Les trois actions échouaient à chaque appel depuis leur écriture ; les tests unitaires mockaient `$executeRaw` et ne pouvaient pas le voir.
