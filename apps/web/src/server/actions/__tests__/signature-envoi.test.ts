@@ -423,6 +423,10 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
     });
 
     const appel = createRequestMock.mock.calls[0]![0] as { signers: unknown[] };
+    // EXACTEMENT un. Le compte est asserté séparément de son contenu : un second
+    // signataire glissé sur cette pièce doit rougir ici même si son contenu est
+    // par ailleurs plausible.
+    expect(appel.signers).toHaveLength(1);
     expect(appel.signers).toEqual([
       {
         role: 'Stagiaire',
@@ -431,6 +435,10 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
         order: 0,
       },
     ]);
+    // L'OF ne figure NULLE PART : son exemplaire porte déjà l'image de sa
+    // signature (`applyOfSignature`), il n'a pas à re-signer.
+    expect(JSON.stringify(appel.signers)).not.toContain('Organisme de formation');
+    expect(JSON.stringify(appel.signers)).not.toContain('laurent@start-academy.fr');
   });
 
   it('la convention porte DEUX signataires, le client puis l’OF (D-3)', async () => {
@@ -452,6 +460,7 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
     });
 
     const appel = createRequestMock.mock.calls[0]![0] as { signers: unknown[] };
+    expect(appel.signers).toHaveLength(2);
     expect(appel.signers).toEqual([
       { role: 'Client', name: 'Paul MARTIN', email: 'paul@agence.fr', order: 0 },
       {
@@ -463,6 +472,47 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
     ]);
     // La salariée ne signe RIEN : sa convention est celle de son employeur.
     expect(JSON.stringify(appel.signers)).not.toContain('marie@agence.fr');
+  });
+
+  /**
+   * ⚠ CE TEST COMBLE UN TROU RÉEL, mesuré le 11/09/2026 (demande n°1 de Laurent).
+   *
+   * Retirer `{ partie: 'OF' }` de `ANCRES_PAR_PIECE.ASSIDUITE` laissait la
+   * suite web ENTIÈREMENT VERTE : 277 fichiers, 2760 tests, pas une assertion
+   * pour dire que l'organisme signe l'attestation d'assiduité. La convention et
+   * le dossier AGEFICE étaient gardés, l'assiduité non — et c'est précisément
+   * la pièce que le lot B vient de brancher.
+   *
+   * Elle part avec le même ordre que la convention (client 0, OF 1), mais avec
+   * le nom de rôle de SON gabarit : `Stagiaire`, pas `Client`. Déduire le nom du
+   * rôle du régime enverrait un signataire que le PDF ne réclame pas, et le
+   * champ resterait non attribué.
+   */
+  it('l’attestation d’assiduité porte DEUX signataires : le stagiaire, puis l’OF', async () => {
+    sessionAvec([tnsViaSonEi()]);
+    docs = [doc({ id: 'doc-assi', type: 'ASSIDUITE', participantId: P_TNS, entityId: P_TNS })];
+
+    const r = await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'AFTER',
+      cibles: [{ cle: `ASSIDUITE:${P_TNS}`, hashConfirme: 'hash-doc-assi' }],
+    });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.refus).toEqual([]);
+
+    const appel = createRequestMock.mock.calls[0]![0] as { signers: unknown[] };
+    expect(appel.signers).toHaveLength(2);
+    expect(appel.signers).toEqual([
+      { role: 'Stagiaire', name: 'Florent HAUSSWIRTH', email: 'florent@ei.fr', order: 0 },
+      {
+        role: 'Organisme de formation',
+        name: 'Laurent MARX',
+        email: 'laurent@start-academy.fr',
+        order: 1,
+      },
+    ]);
   });
 
   it('écrit dans UNE transaction : SignatureRequest + Document + AuditLog `signature.sent`', async () => {
