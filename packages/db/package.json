@@ -38,7 +38,9 @@
     "db:reset:local": "pnpm run guard:local && dotenv -e ../../.env.local -e ../../.env -- prisma migrate reset",
     "db:deploy:prod": "pnpm run guard:prod && dotenv -e ../../.env -- prisma migrate deploy",
     "db:seed:prod": "dotenv -e ../../.env -- tsx prisma/seed.ts",
-    "db:studio:prod": "pnpm run guard:prod && dotenv -e ../../.env -- prisma studio"
+    "db:studio:prod": "pnpm run guard:prod && dotenv -e ../../.env -- prisma studio",
+    "db:query:prod": "dotenv -e ../../.env -- tsx scripts/run-readonly-sql.ts",
+    "db:query:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/run-readonly-sql.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "5.22.0",
