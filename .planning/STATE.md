@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Lot C (transcript) construit sur `chaine/lot-c-transcript` — moteurs purs, revue par exception, filtre « rien de non confirmé ne sort », purge J+90. PAS fusionné, et le « fini quand » attend un transcript réel de Laurent.
-last_updated: "2026-09-10T19:50:00.000Z"
+stopped_at: Lot C (transcript) livré et fusionné — critère d'acceptance réécrit le 11/09 : le bloquant est l'exactitude et l'ancrage, le taux de pré-remplissage se constate. À remesurer sur le premier vrai R1.
+last_updated: "2026-09-11T08:30:00.000Z"
 last_activity: "2026-09-10 (arbitrages) - TRACFIN ramené à UNE demi-journée (4 h sur site, 8 h conv.) dans le jeu de démo. **D-25 précisée** : le ×2 est une règle de TARIFICATION, la convention n'a pas à nommer deux formateurs — et **D-25 bis** pose la conséquence juste en dessous, pour que les deux se lisent ensemble : ce même facteur fixe le nombre d'heures DÉCLARÉ au financeur, qui s'imprime sur la convention et l'attestation. **D-6 reformulée en toutes lettres** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » — réponse ET source à consigner dès que Laurent les a ; non bloquant pour le lot F, qui ne produit aucun document conventionnel. **D-26 posée, hors lot F** : Laurent anime parfois SEUL, donc le nombre de formateurs doit être corrigeable PAR SESSION avant émission des documents (heures conventionnées dérivées, émargement cohérent) — à planifier après F. 2026-09-10 (2e tour) - **D-25** : `TrainingProduct.durationHours` porte les heures CONVENTIONNÉES, tranché sur preuve (journées Faros FRM-0004..0007 = 336 € pour durationHours 8, et le champ alimente convention + attestation AGEFICE). La page publique affichait « 36 h » nu ; elle nomme désormais les deux valeurs via `decrireDureeProduit`. **Le seed de démo se trompait** — il y avait mis les heures sur site, la convention aurait déclaré 36 h là où le financeur en attend 72 ; les produits se déclarent maintenant en demi-journées. **D-24** : quatre tuiles exclusives et totalisantes (Non rendu · Pièces manquantes · Rejeté · Bon), somme = effectif attendu ; « en cours de vérification » passe en sous-libellé. **Dates** : `lib/dates-fr.ts` créé, la classe Tailwind `capitalize` retirée des trois écrans (elle majusculait chaque mot). Gates : lint, tsc, 2467 tests. 2026-09-10 (soir) - Relecture du lot F sur l'aperçu Vercel, trois points traités. **D-22** : une campagne porte TOUJOURS une agence (`organizationId` non-null) ; le diagnostic et le lead redeviennent du contexte. Le défaut était plus large que constaté — aucun écran ne menait au formulaire pré-rattaché, donc 100 % des campagnes naissaient orphelines : bouton « Organiser les pré-inscriptions » posé sur la fiche diagnostic. **D-23** : les créneaux se comptent en demi-journées (défaut matin, préréglages Matin/Après-midi/Journée 2×4 h), chaque date annonce ses heures conventionnées dérivées de `conventionedHoursPerHalfDay` — une seule source, ligne rouge §8.1 tenue. **Défaut trouvé en relisant l'aperçu** : la page publique annonçait « 07:00 – 11:00 » un créneau de 09:00, le rendu serveur tournant en UTC ; les heures se formatent désormais en Europe/Paris et les tests passent sous trois fuseaux. **Aperçu** : `seed-demo.ts` (3 produits, 2 agences, 1 lead, DEMO-DIAG-0001 avec 37 réponses et 4 indés, 1 campagne + 4 dossiers en quatre états) — la fixture canonique tombe juste, 9 demi-journées / 72 h / 12 000 € / 96 € d'écart. Migration `20260910170000_campagne_agence_obligatoire` appliquée à la base d'aperçu SEULEMENT, pas à la prod. Gates : lint, tsc, 2446 tests verts. 2026-09-10 - D-19/D-20 consignées (le catalogue est une bibliothèque de modules, l'unité de vente est le bloc de 8 h), lot I créé en §13, garde-fou de la ligne rouge posé dans l'import ; lot F à reprendre en session fraîche. 04/09 - Catalogue diagnostic corrigé (durées par profil, D-17) et appliqué en local, recommandation rejouée sans programme hors domaine (D-18) ; lot E : éditeur de proposition, PDF conforme à la maquette, lien public sans PII et devis générés au centime depuis DIAG-0001 ; socle de rendu WeasyPrint extrait en module partagé ; six défauts trouvés en jouant le parcours, PDF relu page par page"
 progress:
   total_phases: 6
@@ -346,7 +346,7 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ## Last session
 
-**Lot C — transcript — construit le 10/09/2026, branche `chaine/lot-c-transcript`, PAS fusionnée.**
+**Lot C — transcript — construit le 10/09/2026, FUSIONNÉ le 11/09/2026.**
 Constaté dans le code avant de commencer : A, B, D, E livrés, **F mergé** (#38 est dans
 `origin/main`), G bloqué (pas de `SessionPricing`), I-1 en cours dans `files-chaine` (arbre sale,
 autre session) — donc C était bien le premier lot non livré, et il n'entre en collision avec I-1
@@ -369,12 +369,28 @@ choisir explicitement. Vérifié en mutation : retirer le filtre de l'audit fait
 est rempli à l'écran) mais ne pèse sur AUCUN chiffre. Le bandeau de la fiche le dit dans ces
 termes ; ouvrir un diagnostic en attente de relecture mène à la revue, pas au chapitre 1.
 
+🔬 **Premier vrai transcript passé le 11/09 — et il a trouvé un bug que 55 tests n'avaient pas
+vu.** Taux mesuré : **3 %**. Sept propositions sur huit écartées pour « citation absente », alors
+que le modèle n'avait rien inventé. Cause : dans un compte rendu diarisé, le dirigeant répond au
+tour de parole SUIVANT la question ; le modèle cite les deux ensemble, fidèlement, mais le texte
+source intercale `00:17:19 Speaker 3` entre les deux. **Le garde-fou mordait la main du modèle
+honnête, sur le format même que la fonctionnalité vise.** Corrigé en `1d7a55e`
+(`depouillerTranscript`), 5 cas de test tirés du transcript réel, mutation vérifiée. Après
+correction : **19 % (7/37)**, et surtout **7 retenues sur 7 exactes**.
+
+📐 **Critère d'acceptance réécrit le 11/09 (décision de Laurent)** : le taux de pré-remplissage
+**mesure la conversation, pas le moteur** — il se constate, il ne bloque pas. Le BLOQUANT devient :
+zéro réponse fausse, ancrage tenant sur le diarisé comme sur la reformulation, rien de non confirmé
+dans un document client. Les chapitres 3 à 8 sont à 0/17 parce que le RDV Optimmo du 11/08 est un
+**entretien commercial, pas un R1** — c'est le cas OPTIMO. Sur les chapitres réellement abordés :
+41 %. À REMESURER sur le premier vrai R1 mené avec la trame, sans que ça bloque.
+
 Gates : `pnpm lint` vert (2 warnings préexistants), `tsc --noEmit` vert, `next build` vert (les deux
-nouvelles routes apparaissent), **2608 tests** (275 fichiers, +72).
+nouvelles routes apparaissent), **2613 tests** (275 fichiers, +77).
 
 **Ce qui reste à faire à la main, et que je ne peux pas faire :**
-1. Le « fini quand » du lot C exige **un transcript RÉEL** — ≥ 60 % de pré-remplissage mesuré. Le
-   taux s'affiche à l'écran, il n'y a rien à calculer à la main ; il faut juste un vrai compte rendu.
+1. ~~Le « fini quand » exige un transcript réel~~ — **fait le 11/09**, et il a payé : il a révélé le
+   bug d'ancrage. Reste à remesurer sur un vrai R1, **sans que ça bloque**.
 2. Vérifier que `AI_PROVIDER`/`OPENROUTER_API_KEY` sont posés là où tourne l'extraction (tier
    `quality`).
 3. **Amender le registre des traitements** : le lot C crée un stockage de données personnelles
