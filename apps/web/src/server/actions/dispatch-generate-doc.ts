@@ -198,6 +198,13 @@ export async function dispatchGenerateDoc(
 export async function dispatchGenerateMissing(input: {
   sessionId: string;
   items: Array<{ docType: DispatchableDocType; participantId?: string }>;
+  /**
+   * Refaire les documents DÉJÀ produits — sans lui, chaque générateur saute ce
+   * qui existe et l'appel ne produit rien. Sert au « Tout regénérer » par
+   * apprenant (Laurent 11/09) ; les documents engagés restent protégés par
+   * `checkDocumentReplacement`, en aval.
+   */
+  force?: boolean;
 }): Promise<{ ok: boolean; total: number; success: number; failed: number; errors: string[] }> {
   const results = await Promise.allSettled(
     input.items.map((it) =>
@@ -205,6 +212,7 @@ export async function dispatchGenerateMissing(input: {
         sessionId: input.sessionId,
         docType: it.docType,
         participantId: it.participantId,
+        force: input.force,
       }),
     ),
   );
