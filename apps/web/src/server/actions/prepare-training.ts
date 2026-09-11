@@ -26,6 +26,7 @@ import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
+import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
 
 /**
  * Règle payeur des conventions : le routeur vit désormais dans
@@ -427,19 +428,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
       ? await prisma.sessionParticipant.findMany({
           where: {
             sessionId,
-            OR: [
-              { sponsorOrg: { opcoCode: 'AGEFICE' } },
-              {
-                person: {
-                  legalLinks: {
-                    some: {
-                      role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] },
-                      organization: { ageficeProfile: { isNot: null } },
-                    },
-                  },
-                },
-              },
-            ],
+            OR: OU_AGEFICE,
           },
           select: {
             id: true,
@@ -792,19 +781,7 @@ export async function getSessionPreparationStatus(
       ? prisma.sessionParticipant.findMany({
           where: {
             sessionId: session.id,
-            OR: [
-              { sponsorOrg: { opcoCode: 'AGEFICE' } },
-              {
-                person: {
-                  legalLinks: {
-                    some: {
-                      role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] },
-                      organization: { ageficeProfile: { isNot: null } },
-                    },
-                  },
-                },
-              },
-            ],
+            OR: OU_AGEFICE,
           },
           select: { id: true },
         })
