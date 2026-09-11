@@ -42,7 +42,17 @@ interface Props {
 /** Champs booleans du formulaire (testSessionIds géré à part en state). */
 type EmailSettingsFormFields = Omit<EmailSettingsInput, 'testSessionIds'>;
 
-const CATEGORY_FIELDS: Array<{
+/**
+ * Les lignes du tableau de cases, ÉCRITES EN DUR et EXPORTÉES.
+ *
+ * En dur : le dériver de `EMAIL_CATEGORY_FIELD` rendrait le test de câblage
+ * tautologique — il vérifierait la cohérence de la map avec elle-même, jamais
+ * que la case existe à l'écran.
+ * Exportées : sans export, rien ne garde le fil entre une catégorie connue du
+ * moteur et une case que l'admin peut réellement cocher. Une catégorie sans
+ * ligne ici reste `false` pour toujours, en silence.
+ */
+export const CATEGORY_FIELDS: Array<{
   field: keyof EmailSettingsFormFields;
   category: EmailCategory;
   hint: string;
@@ -94,6 +104,11 @@ const CATEGORY_FIELDS: Array<{
     category: 'preenrollment_submitted',
     hint: 'Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l\'écran de validation.',
   },
+  {
+    field: 'signatureEmailsEnabled',
+    category: 'signature',
+    hint: 'Destinataire : le signataire dont c\'est le tour (responsable de l\'organisation, stagiaire, ou vous). Demandes de signature, relances J+3/J+7 et envoi de l\'exemplaire signé. Décochée, aucun signataire n\'est prévenu — le lien reste copiable depuis la fiche session.',
+  },
 ];
 
 export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Props) {
@@ -112,6 +127,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
       newLeadAlertsEnabled: initial.newLeadAlertsEnabled,
       preEnrollmentAlertsEnabled: initial.preEnrollmentAlertsEnabled,
+      signatureEmailsEnabled: initial.signatureEmailsEnabled,
     },
   });
 

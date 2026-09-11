@@ -25,7 +25,8 @@ export type EmailCategory =
   | 'user_invitation'
   | 'diagnostic_program'
   | 'new_lead'
-  | 'preenrollment_submitted';
+  | 'preenrollment_submitted'
+  | 'signature';
 
 /**
  * Snapshot structurel des réglages — compatible avec le model Prisma
@@ -43,6 +44,7 @@ export interface EmailPolicySettings {
   diagnosticProgramsEnabled: boolean;
   newLeadAlertsEnabled: boolean;
   preEnrollmentAlertsEnabled: boolean;
+  signatureEmailsEnabled: boolean;
   testSessionIds: string[];
 }
 
@@ -67,6 +69,7 @@ export const EMAIL_CATEGORY_FIELD: Record<EmailCategory, keyof Omit<EmailPolicyS
   diagnostic_program: 'diagnosticProgramsEnabled',
   new_lead: 'newLeadAlertsEnabled',
   preenrollment_submitted: 'preEnrollmentAlertsEnabled',
+  signature: 'signatureEmailsEnabled',
 };
 
 /** Libellés FR pour l'UI Paramètres organisme (section « Envois d'emails »). */
@@ -80,6 +83,7 @@ export const EMAIL_CATEGORY_LABELS: Record<EmailCategory, string> = {
   diagnostic_program: 'Programme du diagnostic express (stand)',
   new_lead: 'Alertes nouveaux leads (équipe)',
   preenrollment_submitted: 'Alertes pré-inscriptions (admin)',
+  signature: 'Signature électronique (demandes, relances, exemplaires signés)',
 };
 
 /**

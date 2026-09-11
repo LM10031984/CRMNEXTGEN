@@ -129,7 +129,7 @@ export const tenantLegalDocsSchema = z.object({
 /**
  * Phase 22 Plan 22-11 (D-06) — Réglages d'envoi d'emails par tenant.
  *
- * 8 booleans (interrupteur général + 7 catégories, tous default false =
+ * 12 booleans (interrupteur général + 11 catégories, tous default false =
  * fail-closed) + sessions autorisées en mode test (UUIDs, cap 20).
  * Consommé par `updateEmailSettings` (server action) et le formulaire
  * Paramètres organisme « Envois d'emails ».
@@ -147,6 +147,10 @@ export const EmailSettingsSchema = z.object({
   /// A-3 « nouvelle pré-inscription ». Défaut false : fail-closed.
   newLeadAlertsEnabled: z.boolean().default(false),
   preEnrollmentAlertsEnabled: z.boolean().default(false),
+  /// Lot C.2c (D-9) — la chaîne de signature électronique : demande de
+  /// signature, « à votre tour », relances J+3/J+7, exemplaire signé. Défaut
+  /// false : fail-closed, comme les dix autres.
+  signatureEmailsEnabled: z.boolean().default(false),
   testSessionIds: z
     .array(z.string().uuid('Identifiant de session invalide'))
     .max(20, 'Maximum 20 sessions de test')
