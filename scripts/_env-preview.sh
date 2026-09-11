@@ -5,7 +5,23 @@
 #
 #   bash scripts/_env-preview.sh
 #
-# ── REJOUABLE. C'est la propriété principale de ce script ────────────────────
+# ── ON NE CROIT PLUS LE CODE RETOUR : ON RELIT ──────────────────────────────
+#
+# Tentative du 11/09/2026 : le script a annoncé « 28 poussées · 0 en échec », et
+# `vercel env ls preview` n'en montrait AUCUNE. Les `add` rendaient 0 et
+# affichaient « ✓ Added » sans que rien ne soit écrit.
+#
+# ⚠ LA CAUSE N'EST PAS ÉTABLIE. Reproduction tentée trois fois — commande seule,
+# séquence `rm` puis `add`, et fonction identique dans un script avec les mêmes
+# `set` : les trois ONT écrit. Ne pouvant pas nommer le défaut, on cesse de faire
+# confiance au canal qui a menti : après CHAQUE écriture, le script relit
+# `vercel env ls preview` et ne compte « poussée » que si le nom y FIGURE
+# VRAIMENT. Une tentative est retentée une fois, puis déclarée en échec.
+#
+# C'est plus lent (un appel de relecture par variable) et c'est le prix d'un
+# bilan qui décrit l'état réel plutôt que ses propres intentions.
+#
+# ── REJOUABLE ───────────────────────────────────────────────────────────────
 #
 # La première version s'est arrêtée en cours de route et a laissé l'aperçu dans
 # un état PIRE qu'avant : `MAIL_DRY_RUN` retirée et jamais reposée. Deux causes,
@@ -82,6 +98,7 @@ lire_var() {
 }
 
 POUSSEES=(); MANQUANTES=(); DEPUIS_PARTAGE=(); ECHECS=(); IGNOREES=()
+DERNIERE_SORTIE=""
 
 # L'inventaire des variables DÉJÀ posées.
 #
@@ -98,23 +115,45 @@ existe_deja() {
   printf '%s\n' "$INVENTAIRE" | grep -qx "$1"
 }
 
-# Pousse UNE variable, et n'abandonne jamais le reste du script.
+# Le nom figure-t-il VRAIMENT dans le scope preview, maintenant ?
 #
-# `rm` d'abord — `vercel env add` refuse un nom déjà présent, et c'est ce qui
-# rend le script rejouable. L'absence n'est pas une erreur : `|| true`.
-# `add` ensuite, stderr CAPTURÉ et affiché en cas d'échec : c'est le message
-# manquant qui a coûté la première tentative.
-pousser() {
-  local nom="$1" valeur="$2" sortie
+# Relecture fraîche à chaque appel : c'est tout l'intérêt. Un inventaire mis en
+# cache reproduirait exactement le défaut qu'on cherche à attraper.
+est_pose() {
+  vercel env ls preview 2>/dev/null | awk '{print $1}' | grep -qx "$1"
+}
+
+# Une tentative d'écriture : `rm` puis `add`. Rend 0 si le nom est ENSUITE
+# présent — pas si la commande a dit qu'elle avait réussi.
+tenter_ecriture() {
+  local nom="$1" valeur="$2"
+  # `rm` d'abord : `vercel env add` refuse un nom déjà présent, et c'est ce qui
+  # rend le script rejouable. L'absence n'est pas une erreur.
   vercel env rm "$nom" preview --yes >/dev/null 2>&1 || true
-  if sortie="$(printf '%s' "$valeur" | vercel env add "$nom" preview 2>&1)"; then
-    POUSSEES+=("$nom")
-    vert "  ✓ $nom"
-  else
-    ECHECS+=("$nom")
-    rouge "  ✗ $nom — vercel env add a échoué :"
-    printf '      %s\n' "$sortie" | head -5
+  DERNIERE_SORTIE="$(printf '%s' "$valeur" | vercel env add "$nom" preview 2>&1)"
+  est_pose "$nom"
+}
+
+# Pousse UNE variable, VÉRIFIE, retente une fois, et n'abandonne jamais le reste.
+pousser() {
+  local nom="$1" valeur="$2"
+  DERNIERE_SORTIE=""
+
+  if tenter_ecriture "$nom" "$valeur"; then
+    POUSSEES+=("$nom"); vert "  ✓ $nom"; return 0
   fi
+
+  rouge "  ↻ $nom — annoncée écrite mais ABSENTE à la relecture. Seconde tentative…"
+  sleep 1
+  if tenter_ecriture "$nom" "$valeur"; then
+    POUSSEES+=("$nom"); vert "  ✓ $nom (à la seconde tentative)"; return 0
+  fi
+
+  ECHECS+=("$nom")
+  rouge "  ✗ $nom — TOUJOURS absente après deux tentatives."
+  rouge "      Ce que vercel a répondu la dernière fois :"
+  printf '      %s\n' "$DERNIERE_SORTIE" | grep -vE '^[[:space:]]*$' | head -6
+  return 1
 }
 
 pousser_depuis_fichiers() {
@@ -244,7 +283,17 @@ else
   esac
 
   if [ "$CONTINUER" = "oui" ]; then
-    pousser SUPABASE_URL "$SUPABASE_URL"
+    # ⚠ NORMALISATION — saisie le 11/09/2026 avec « /rest/v1/ » à la fin.
+    # `@supabase/supabase-js` compose lui-même ses chemins : une URL qui porte
+    # déjà `/rest/v1/` produit `/rest/v1/rest/v1/…` et des 404 sur CHAQUE appel
+    # de stockage, donc un PDF signé qui ne s'écrit jamais. On ne garde que le
+    # schéma et l'hôte.
+    SUPABASE_RACINE="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')"
+    if [ "$SUPABASE_RACINE" != "$SUPABASE_URL" ]; then
+      echo "  ⓘ URL normalisée : tout ce qui suivait l'hôte a été retiré."
+      echo "     → $SUPABASE_RACINE"
+    fi
+    pousser SUPABASE_URL "$SUPABASE_RACINE"
     printf '  SUPABASE_SERVICE_ROLE_KEY de l’aperçu (saisie masquée) : '
     read -rs SUPABASE_SERVICE_ROLE_KEY; echo
     if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
@@ -255,7 +304,7 @@ else
     fi
     unset SUPABASE_SERVICE_ROLE_KEY
   fi
-  unset SUPABASE_URL
+  unset SUPABASE_URL SUPABASE_RACINE
 fi
 echo
 
@@ -263,6 +312,12 @@ echo
 
 gras "5. Ce qui est en scope preview (valeurs chiffrées, jamais affichées)"
 vercel env ls preview
+echo
+
+# Le compte réel, relu une dernière fois — indépendant de ce que le script
+# croit avoir fait.
+REELLES="$(vercel env ls preview 2>/dev/null | grep -cE 'Encrypted|Sensitive' || true)"
+echo "  → $REELLES variables réellement présentes en scope preview."
 echo
 
 gras "Bilan"
