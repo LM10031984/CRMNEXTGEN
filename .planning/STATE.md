@@ -125,6 +125,38 @@ ont pris leur place. Périmètre :
 modules sortent encore « déroulé à compléter » sur DIAG-0001 — c'est du contenu,
 donc le chantier de Laurent, et il est distinct de celui-ci.
 
+### Où chercher le contenu : les transcripts de réunion, pas les documents rangés
+
+Constat de Laurent, 11/09/2026. **Le gisement de contenu est dans ses
+transcripts de réunion hebdomadaire**, pas dans ses livrets et programmes
+classés. Les documents rangés portent la version écrite une fois ; la réunion
+porte la doctrine telle qu'elle se pratique, et elle a bougé depuis.
+
+Le cas qui l'a montré — la règle de demande d'avis :
+
+| Source | Ce qu'elle dit |
+|---|---|
+| le livret | demander l'avis **à chaud, à la remise des clés** |
+| la réunion | demander **au moment où le client verbalise sa satisfaction, y compris avant qu'il ait choisi son agence** |
+
+**Ce ne sont pas deux formulations de la même règle, ce sont deux doctrines** —
+la seconde déclenche sur un signal du client et non sur une étape du dossier,
+et elle s'applique à des gens qui ne sont pas encore clients. **C'est la seconde
+qui est la bonne.** Une extraction qui n'aurait lu que le livret aurait produit
+une règle fausse avec l'air d'être sourcée, ce qui est le pire des deux.
+
+**Conséquence pratique, à tenir quand on ira chercher du contenu** : pour les
+douleurs sans réponse, ne pas partir en premier des programmes du Drive —
+partir des transcripts. Et quand les deux sources se contredisent, **c'est la
+réunion qui fait foi**, pas le document.
+
+**Le lien avec ce qui existe déjà** : le lot C (transcript → diagnostic) a
+outillé la lecture d'un transcript pour pré-remplir un R1. C'est la même
+matière, pour un autre usage — et le même garde-fou vaut : rien de non confirmé
+ne sort. « Processus de collecte d'avis » fait partie des douleurs sans contenu
+(sa seule proposition automatique était fausse, barrée le 11/09) : c'est
+précisément une de celles dont la réponse est déjà dite en réunion.
+
 ---
 
 
