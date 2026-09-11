@@ -80,16 +80,50 @@ export interface ResultatNormalisation {
 }
 
 /**
- * Réduit un texte à ce qui permet de le comparer : minuscules, sans accents,
- * sans ponctuation, espaces écrasés.
+ * Retire l'échafaudage de diarisation : les lignes qui ne portent pas de parole
+ * mais disent QUI parle et QUAND.
  *
- * Ce qu'on tolère volontairement : la casse, les accents, la ponctuation et les
- * retours à la ligne — un transcript est découpé par tours de parole, un modèle
- * recolle les morceaux à sa façon. Ce qu'on ne tolère pas : un mot changé. La
- * reformulation, si commode soit-elle, n'est plus une citation.
+ * Sans ça, le contrôle de citation est inutilisable sur le format même que la
+ * fonctionnalité vise. Mesuré le 11/09/2026 sur un vrai compte rendu : 5 rejets
+ * sur 6 étaient dus à cela et à rien d'autre. Le dirigeant répond « 27-28 » au
+ * tour de parole suivant la question ; le modèle cite les deux ensemble, ce qui
+ * est fidèle ; mais le texte source intercale « 00:17:19 Speaker 3 » entre les
+ * deux, si bien que la citation n'y figure jamais telle quelle.
+ *
+ * Ce qu'on enlève est écrit par la machine qui a transcrit, jamais par un
+ * humain : horodatage en tête de ligne suivi d'un libellé court de locuteur,
+ * flèches de sous-titrage WebVTT, « Speaker 3 : » en début de ligne. La parole,
+ * elle, n'est pas touchée — un mot changé reste un mot changé.
+ */
+export function depouillerTranscript(texte: string): string {
+  return texte
+    .split(/\r?\n/)
+    .map((ligne) => {
+      const l = ligne.trim();
+      // Cue WebVTT : « 00:00:01.000 --> 00:00:05.000 ».
+      if (l.includes('-->') && /\d{1,2}:\d{2}/.test(l)) return '';
+      // « 00:17:19 Speaker 3 », « [00:17] laurent Marx » — horodatage puis un
+      // libellé court. Au-delà de huit mots, c'est de la parole : on garde.
+      const entete = l.match(/^\[?\d{1,3}:\d{2}(?::\d{2})?(?:[.,]\d+)?\]?\s*(.*)$/);
+      if (entete && (entete[1] ?? '').split(/\s+/).filter(Boolean).length <= 8) return '';
+      // « Speaker 3 : », « Laurent Marx : » en tête de ligne.
+      return l.replace(/^[A-Za-zÀ-ÿ0-9 .'-]{1,40}\s*:\s+/, '');
+    })
+    .join('\n');
+}
+
+/**
+ * Réduit un texte à ce qui permet de le comparer : minuscules, sans accents,
+ * sans ponctuation, espaces écrasés — et sans échafaudage de diarisation.
+ *
+ * Ce qu'on tolère volontairement : la casse, les accents, la ponctuation, les
+ * retours à la ligne et les changements de locuteur — un modèle recolle les
+ * morceaux d'un échange à sa façon, et c'est légitime. Ce qu'on ne tolère pas :
+ * un mot changé. La reformulation, si commode soit-elle, n'est plus une
+ * citation — et c'est bien ce qui reste rejeté après cette correction.
  */
 export function normaliserTexte(texte: string): string {
-  return texte
+  return depouillerTranscript(texte)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()

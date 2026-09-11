@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   citationAncree,
+  depouillerTranscript,
   normaliserExtraction,
   normaliserTexte,
   type PropositionIA,
@@ -65,6 +66,75 @@ describe('Ancrage de la citation dans le transcript', () => {
 
   it('refuse une citation trop courte pour prouver quoi que ce soit', () => {
     expect(citationAncree('720 000', normaliserTexte(TRANSCRIPT))).toBe(false);
+  });
+});
+
+/**
+ * Cas réels, relevés le 11/09/2026 sur un compte rendu de rendez-vous chez un
+ * groupe immobilier — premier vrai transcript passé dans la chaîne.
+ *
+ * Ce qu'ils ont révélé : le contrôle de citation rejetait 5 propositions sur 6
+ * pour une seule raison — un dirigeant répond au tour de parole SUIVANT la
+ * question, le modèle cite les deux ensemble (ce qui est fidèle), et le texte
+ * source intercale « 00:17:19 Speaker 3 » entre les deux. Le garde-fou mordait
+ * la main du modèle honnête.
+ *
+ * PROTOCOLE DE MUTATION (vérifié le 11/09/2026) : retirer `depouillerTranscript`
+ * de `normaliserTexte` fait virer ROUGE les deux tests d'enjambement, et laisse
+ * VERT celui de la reformulation — c'est exactement la frontière qu'on tient.
+ */
+describe('Transcript diarisé — la parole traverse les tours', () => {
+  const DIARISE = `00:17:08 laurent Marx
+On peut mettre combien de personnes en même temps ? Mais nous,
+00:17:19 Speaker 3
+On doit être.
+00:17:21 Speaker 1
+27-28. Si on le fait 2 fois 12, 2 fois 13, c'est bien.`;
+
+  it("ne garde que la parole, pas l'horodatage ni le locuteur", () => {
+    const nu = depouillerTranscript(DIARISE);
+    expect(nu).not.toContain('00:17:19');
+    expect(nu).not.toContain('Speaker 3');
+    expect(nu).toContain('27-28');
+  });
+
+  it('accepte une citation qui enjambe deux changements de locuteur', () => {
+    // Le cas exact qui échouait : la question et sa réponse sont séparées par
+    // deux en-têtes de diarisation.
+    expect(
+      citationAncree(
+        "On peut mettre combien de personnes en même temps ? Mais nous, On doit être. 27-28.",
+        normaliserTexte(DIARISE),
+      ),
+    ).toBe(true);
+  });
+
+  it('accepte le format WebVTT, dont les cues ne sont pas de la parole', () => {
+    const vtt = `00:00:01.000 --> 00:00:05.000
+Nous, avant, on était Agefis, mais ça n'existe plus aujourd'hui.
+00:00:05.000 --> 00:00:09.000
+Ah si, ça l'est toujours.`;
+    expect(
+      citationAncree("on était Agefis, mais ça n'existe plus aujourd'hui. Ah si, ça l'est toujours.", normaliserTexte(vtt)),
+    ).toBe(true);
+  });
+
+  it("rejette toujours une reformulation d'un seul mot", () => {
+    // Relevé le même jour : le transcript dit « l'on ne s'en sert pas », le
+    // modèle a écrit « l'on ne se sert pas ». Un mot de moins, donc rejet.
+    const source = `00:41:57 Speaker 1
+On a changé plusieurs fois et je reconnais que l'on ne s'en sert pas.`;
+    expect(
+      citationAncree("On a changé plusieurs fois et je reconnais que l'on ne se sert pas.", normaliserTexte(source)),
+    ).toBe(false);
+  });
+
+  it("ne prend pas une ligne de parole pour un en-tête, même si elle commence par une heure", () => {
+    const source = `00:14:57 laurent Marx
+9h30 est l'heure à laquelle vos clients reçoivent leur message d'anniversaire chaque matin.`;
+    expect(citationAncree("9h30 est l'heure à laquelle vos clients reçoivent leur message", normaliserTexte(source))).toBe(
+      true,
+    );
   });
 });
 
