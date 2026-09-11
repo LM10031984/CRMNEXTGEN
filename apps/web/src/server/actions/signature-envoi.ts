@@ -78,14 +78,13 @@ import {
   participantPourEnvoi,
   type ParticipantLu,
 } from '@/lib/signature/participants-regime';
-import {
-  nomAffiche,
-  resoudreEmailRepresentant,
-  resoudreRepresentantEntreprise,
-  resoudreRepresentantIndividuel,
-  resoudreStagiaire,
-  type OrganisationRepresentee,
-} from '@/lib/signature/representant';
+// ⚠ Les QUATRE cascades (`resoudreRepresentantEntreprise`,
+// `resoudreRepresentantIndividuel`, `resoudreStagiaire`,
+// `resoudreEmailRepresentant`) ne sont plus appelées ici : elles le sont par
+// `signataire-de-la-piece.ts`, qui a repris la résolution du signataire côté
+// bénéficiaire. Ce fichier ne garde que ce qu'il utilise encore — un import
+// mort finit par faire croire qu'une règle vit à deux endroits.
+import { nomAffiche, type OrganisationRepresentee } from '@/lib/signature/representant';
 import {
   formeDuDocument,
   resoudreSignataireClient,
@@ -120,7 +119,6 @@ import {
   type PreparerEnvoiSignatureResult,
   type RefusEnvoi,
   type SendForSignatureResult,
-  type SignataireResolu,
 } from '@/lib/signature/envoi-contrats';
 
 /** Statuts de `Document.status` qui interdisent de toucher au PDF. */
