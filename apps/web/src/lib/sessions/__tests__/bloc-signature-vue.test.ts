@@ -339,13 +339,31 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
 
 import {
   composerAvertissementRegime,
+  correctionAvertissement,
   regrouperAvertissements,
   type ContexteAvertissement,
 } from '../bloc-signature-vue';
 
+/**
+ * CAS A — le commanditaire est PLAUSIBLE, il lui manque son financeur.
+ * Camille ROUSSEL, Marion MAINO en production.
+ */
 const CONTEXTE_ROUSSEL: ContexteAvertissement = {
+  sponsorOrgId: 'org-roussel',
   sponsorOrgLabel: 'DEMO-SIG ROUSSEL Camille, EI',
   financeurSansRegime: true,
+  financeursRattaches: ['AGEFICE'],
+};
+
+/**
+ * CAS B — le commanditaire LUI-MÊME est incohérent avec les signaux.
+ * Clothilde MANUEL en production : commanditaire Sigma / OPCO_EP, mais
+ * l'apprenante est rattachée à une entreprise financée AGEFICE.
+ */
+const CONTEXTE_MANUEL: ContexteAvertissement = {
+  sponsorOrgId: 'org-sigma',
+  sponsorOrgLabel: 'Sigma',
+  financeurSansRegime: false,
   financeursRattaches: ['AGEFICE'],
 };
 
@@ -359,18 +377,63 @@ function avert(docType: 'CONVENTION' | 'AGEFICE' | 'ASSIDUITE'): AnomalieEnvoi {
 }
 
 describe('composerAvertissementRegime — la forme imposée par Laurent', () => {
-  it('le cas de Camille ROUSSEL, au mot près dans sa structure', () => {
+  it('CAS A — Camille ROUSSEL, au mot près : il manque un financeur à son commanditaire', () => {
     const message = composerAvertissementRegime({
       nomAffiche: 'Camille ROUSSEL',
       docTypes: ['CONVENTION', 'AGEFICE'],
       contexte: CONTEXTE_ROUSSEL,
     });
     expect(message).toBe(
-      'Camille ROUSSEL — son financeur d’inscription (DEMO-SIG ROUSSEL Camille, EI) n’a ' +
+      'Camille ROUSSEL — son organisation commanditaire (DEMO-SIG ROUSSEL Camille, EI) n’a ' +
         'aucun régime de financement, alors que son dossier est rattaché à une entreprise ' +
-        'financée AGEFICE. Corrigez le financeur de l’inscription. Pièces concernées : ' +
+        'financée AGEFICE. Renseignez le financeur de cette organisation. Pièces concernées : ' +
         'convention, dossier AGEFICE. Rien n’a été envoyé.',
     );
+  });
+
+  it('CAS B — Clothilde MANUEL, au mot près : c’est le commanditaire lui-même qui cloche', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Clothilde MANUEL',
+      docTypes: ['AGEFICE'],
+      contexte: CONTEXTE_MANUEL,
+    });
+    expect(message).toBe(
+      'Clothilde MANUEL — le financeur de son organisation commanditaire (Sigma) n’ouvre pas ' +
+        'ces pièces, alors que son dossier est rattaché à une entreprise financée AGEFICE. ' +
+        'Corrigez l’organisation commanditaire de l’inscription. Pièce concernée : ' +
+        'dossier AGEFICE. Rien n’a été envoyé.',
+    );
+  });
+
+  it('PUISSANCE — les deux cas n’appellent PAS le même geste', () => {
+    // C'est la moitié de la correction n°7 bis : jusqu'ici les deux disaient
+    // « corrigez le financeur de l'inscription », donc l'un des deux mentait.
+    const casA = composerAvertissementRegime({
+      nomAffiche: 'Camille ROUSSEL',
+      docTypes: ['AGEFICE'],
+      contexte: CONTEXTE_ROUSSEL,
+    });
+    const casB = composerAvertissementRegime({
+      nomAffiche: 'Clothilde MANUEL',
+      docTypes: ['AGEFICE'],
+      contexte: CONTEXTE_MANUEL,
+    });
+    expect(casA).toContain('Renseignez le financeur de cette organisation.');
+    expect(casA).not.toContain('Corrigez l’organisation commanditaire');
+    expect(casB).toContain('Corrigez l’organisation commanditaire de l’inscription.');
+    expect(casB).not.toContain('Renseignez le financeur');
+  });
+
+  it('PUISSANCE — plus aucun texte ne dit « financeur de l’inscription » (libellé trompeur)', () => {
+    for (const contexte of [CONTEXTE_ROUSSEL, CONTEXTE_MANUEL, undefined]) {
+      const message = composerAvertissementRegime({
+        nomAffiche: 'Camille ROUSSEL',
+        docTypes: ['CONVENTION'],
+        contexte,
+      });
+      expect(message).not.toContain('financeur de l’inscription');
+      expect(message).not.toContain('financeur d’inscription');
+    }
   });
 
   it('le nom de l’organisation vient de la DONNÉE — il n’est jamais codé en dur', () => {
@@ -378,6 +441,7 @@ describe('composerAvertissementRegime — la forme imposée par Laurent', () => 
       nomAffiche: 'Florent HAUSSWIRTH',
       docTypes: ['AGEFICE'],
       contexte: {
+        sponsorOrgId: 'org-imagimmo',
         sponsorOrgLabel: 'IMAGIMMO',
         financeurSansRegime: false,
         financeursRattaches: ['AGEFICE'],
@@ -460,8 +524,74 @@ describe('regrouperAvertissements — UN encart par participant, jamais un par p
     const groupes = regrouperAvertissements([avert('CONVENTION')], new Map());
     expect(groupes).toHaveLength(1);
     expect(groupes[0]!.message).toContain('Camille ROUSSEL');
-    expect(groupes[0]!.message).toContain('Corrigez le financeur de l’inscription.');
+    expect(groupes[0]!.message).toContain('Corrigez l’organisation commanditaire de l’inscription.');
     expect(groupes[0]!.message).toContain('Rien n’a été envoyé.');
+  });
+
+  it('chaque groupe porte SA correction — celle du cas A vise la fiche organisation', () => {
+    const groupes = regrouperAvertissements(
+      [avert('CONVENTION'), avert('AGEFICE')],
+      new Map([['part-c', CONTEXTE_ROUSSEL]]),
+    );
+    expect(groupes[0]!.correction).toEqual({
+      cible: 'ORGANISATION',
+      organizationId: 'org-roussel',
+      libelleOrganisation: 'DEMO-SIG ROUSSEL Camille, EI',
+    });
+  });
+});
+
+/**
+ * DEUX CAS, DEUX DESTINATIONS — correction n°7 bis (Laurent, 11/09/2026).
+ *
+ * L'avertissement envoyait TOUJOURS vers le formulaire d'inscription. C'est
+ * faux dans la moitié des cas : quand le commanditaire est le bon et qu'il lui
+ * manque simplement son code financeur (Camille ROUSSEL, Marion MAINO), il n'y
+ * a RIEN à corriger sur l'inscription.
+ *
+ * ⚠ LA DISTINCTION N'EST PAS INVENTÉE ICI. `financeurSansRegime` existe depuis
+ * la correction n°3 et sépare déjà « n'a aucun régime de financement » de
+ * « n'ouvre pas ces pièces ». Une seconde règle pour la même question serait
+ * exactement ce que le lot C.2b-1 vient de supprimer.
+ */
+describe('correctionAvertissement — où mène le lien, et pourquoi', () => {
+  it('CAS A — financeur absent : on va RENSEIGNER la fiche organisation', () => {
+    expect(correctionAvertissement(CONTEXTE_ROUSSEL)).toEqual({
+      cible: 'ORGANISATION',
+      organizationId: 'org-roussel',
+      libelleOrganisation: 'DEMO-SIG ROUSSEL Camille, EI',
+    });
+  });
+
+  it('CAS B — financeur présent mais incohérent : on va CORRIGER l’inscription', () => {
+    expect(correctionAvertissement(CONTEXTE_MANUEL)).toEqual({ cible: 'INSCRIPTION' });
+  });
+
+  it('PUISSANCE — `financeurSansRegime` est le SEUL discriminant', () => {
+    // Deux contextes identiques au booléen près : ils doivent diverger.
+    const a = correctionAvertissement({ ...CONTEXTE_ROUSSEL, financeurSansRegime: true });
+    const b = correctionAvertissement({ ...CONTEXTE_ROUSSEL, financeurSansRegime: false });
+    expect(a.cible).toBe('ORGANISATION');
+    expect(b.cible).toBe('INSCRIPTION');
+  });
+
+  it('sans contexte, on ne devine pas : l’inscription, comme avant', () => {
+    expect(correctionAvertissement(undefined)).toEqual({ cible: 'INSCRIPTION' });
+  });
+
+  it('PUISSANCE — sans id d’organisation, on ne fabrique pas un lien vers une fiche inconnue', () => {
+    expect(correctionAvertissement({ ...CONTEXTE_ROUSSEL, sponsorOrgId: null })).toEqual({
+      cible: 'INSCRIPTION',
+    });
+    expect(correctionAvertissement({ ...CONTEXTE_ROUSSEL, sponsorOrgId: '  ' })).toEqual({
+      cible: 'INSCRIPTION',
+    });
+  });
+
+  it('le libellé de l’organisation est transporté tel quel, vide compris', () => {
+    expect(
+      correctionAvertissement({ ...CONTEXTE_ROUSSEL, sponsorOrgLabel: null }),
+    ).toEqual({ cible: 'ORGANISATION', organizationId: 'org-roussel', libelleOrganisation: '' });
   });
 });
 

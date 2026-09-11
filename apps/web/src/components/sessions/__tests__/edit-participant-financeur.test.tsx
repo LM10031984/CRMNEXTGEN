@@ -1,16 +1,28 @@
 /* @vitest-environment jsdom */
 
 /**
- * Le champ « Financeur de l'inscription » dans le formulaire d'édition d'une
- * inscription — décision Laurent du 11/09/2026 (retours d'écran C.2b, point 7).
+ * Le champ « Organisation commanditaire » dans le formulaire d'édition d'une
+ * inscription — décision Laurent du 11/09/2026 (retours d'écran C.2b, point 7,
+ * puis correction n°7 bis après vérification d'écran).
+ *
+ * ⚠ CE CHAMP S'EST APPELÉ « Financeur de l'inscription », ET C'ÉTAIT TROMPEUR.
+ * Ce que l'on choisit ici est une ORGANISATION — celle qui porte l'inscription
+ * et figure sur la convention. Son financeur (OPCO, AGEFICE…) est une
+ * INFORMATION qu'elle porte, jamais un champ à part : il s'affiche entre
+ * parenthèses dans chaque option, pour que le choix se fasse en voyant ses
+ * conséquences.
  *
  * CE QUE CE FICHIER GARDE.
  *
  *  1. LE LIBELLÉ EXACT, et sa DISTINCTION d'avec « Mode de financement ». Les
- *     deux champs coexistent désormais dans la même modale, et ils ne disent pas
- *     la même chose : le mode dit COMMENT c'est financé, le financeur dit PAR
- *     QUI l'inscription est portée. Deux `<select>` voisins sans cette levée
- *     d'ambiguïté, c'est la garantie que quelqu'un corrigera le mauvais.
+ *     deux champs coexistent dans la même modale et ne disent pas la même
+ *     chose : le mode dit COMMENT c'est financé, le commanditaire dit QUI porte
+ *     l'inscription. Deux `<select>` voisins sans cette levée d'ambiguïté,
+ *     c'est la garantie que quelqu'un corrigera le mauvais.
+ *
+ *  1 bis. LE FINANCEUR DANS LES PARENTHÈSES. Sans lui, choisir entre
+ *     « Agence Provence Immobilier » et « ROUSSEL Camille, EI » ne dit rien des
+ *     pièces à signer — alors que c'est précisément ce que ce choix décide.
  *
  *  2. L'OUVERTURE PAR URL. Le lien qui pointera ce formulaire vit dans un AUTRE
  *     onglet : l'ouverture doit être pilotée par `?inscription=…&champ=financeur`,
@@ -70,9 +82,14 @@ vi.mock('sonner', () => ({
 }));
 
 import { EditParticipantButton } from '../edit-participant-button';
+import {
+  AIDE_CHAMP_COMMANDITAIRE,
+  LIBELLE_CHAMP_COMMANDITAIRE,
+  libelleOptionCommanditaire,
+} from '@/lib/sessions/commanditaire-libelles';
 
 const PARTICIPANT_ID = 'part-marion';
-const LIBELLE_FINANCEUR = "Financeur de l'inscription";
+const LIBELLE_FINANCEUR = LIBELLE_CHAMP_COMMANDITAIRE;
 const LIBELLE_MODE = 'Mode de financement';
 
 function monter(participantId = PARTICIPANT_ID) {
@@ -113,10 +130,18 @@ beforeEach(() => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('le champ existe, sous le bon nom, et ne se confond pas avec le mode', () => {
-  it('le libellé est EXACTEMENT « Financeur de l’inscription »', async () => {
+  it('le libellé est EXACTEMENT « Organisation commanditaire »', async () => {
     const champ = await ouvrirAuClic();
     expect(champ).toBeTruthy();
-    expect(screen.getByText(LIBELLE_FINANCEUR)).toBeTruthy();
+    expect(LIBELLE_CHAMP_COMMANDITAIRE).toBe('Organisation commanditaire');
+    expect(screen.getByText(LIBELLE_CHAMP_COMMANDITAIRE)).toBeTruthy();
+  });
+
+  it('PUISSANCE — l’ancien libellé trompeur a DISPARU de l’écran', async () => {
+    await ouvrirAuClic();
+    expect(screen.queryByLabelText("Financeur de l'inscription")).toBeNull();
+    expect(document.body.textContent ?? '').not.toContain("Financeur de l'inscription");
+    expect(document.body.textContent ?? '').not.toContain('Financeur de l’inscription');
   });
 
   it('PUISSANCE — les DEUX champs coexistent et sont des contrôles DISTINCTS', async () => {
@@ -129,10 +154,54 @@ describe('le champ existe, sous le bon nom, et ne se confond pas avec le mode', 
     expect((financeur as HTMLSelectElement).id).not.toBe((mode as HTMLSelectElement).id);
   });
 
-  it('l’écran lève l’ambiguïté : COMMENT (mode) vs PAR QUI (financeur)', async () => {
+  it('l’écran lève l’ambiguïté : COMMENT (mode) vs QUI PORTE (commanditaire)', async () => {
     await ouvrirAuClic();
     expect(screen.getByText(/COMMENT/)).toBeTruthy();
-    expect(screen.getByText(/PAR QUI/)).toBeTruthy();
+    // Le texte d'aide est imposé AU MOT PRÈS par Laurent : il dit ce qu'est
+    // l'organisation, puis pourquoi son financeur compte.
+    expect(AIDE_CHAMP_COMMANDITAIRE).toBe(
+      "L'organisation qui porte l'inscription et figure sur la convention. " +
+        'Son financeur (OPCO, AGEFICE…) détermine les pièces à signer.',
+    );
+    expect(screen.getByText(AIDE_CHAMP_COMMANDITAIRE)).toBeTruthy();
+  });
+
+  it('PUISSANCE — chaque option AFFICHE le financeur de l’organisation, entre parenthèses', async () => {
+    await ouvrirAuClic();
+    const options = [...document.querySelectorAll('option')].map((o) => o.textContent ?? '');
+    // Le code brut n'est jamais montré tel quel : `OPCO_EP` se lit « OPCO EP ».
+    expect(options).toContain('Sigma (OPCO EP)');
+    expect(options).toContain('MARION DELAUNAY EI (AGEFICE)');
+    expect(options.join(' | ')).not.toContain('OPCO_EP');
+  });
+
+  it('PUISSANCE — une organisation SANS financeur le dit, elle ne se tait pas', async () => {
+    listerFinanceursPossibles.mockResolvedValue({
+      ok: true,
+      financeurs: [
+        { id: 'org-ei', label: 'ROUSSEL Camille, EI', legalName: 'ROUSSEL Camille, EI', siret: null, opcoCode: null },
+      ],
+      financeurActuelId: 'org-ei',
+    } as never);
+
+    await ouvrirAuClic();
+    const options = [...document.querySelectorAll('option')].map((o) => o.textContent ?? '');
+    expect(options).toContain('ROUSSEL Camille, EI — aucun financeur');
+  });
+
+  it('le libellé d’option vient du module partagé, pas d’une recopie du JSX', async () => {
+    // Recopier la chaîne dans le test laisserait passer un JSX qui compose
+    // autrement : on compare à la fonction que le composant appelle.
+    expect(libelleOptionCommanditaire({ label: 'Sigma', opcoCode: 'OPCO_EP' })).toBe(
+      'Sigma (OPCO EP)',
+    );
+    expect(libelleOptionCommanditaire({ label: 'ROUSSEL Camille, EI', opcoCode: null })).toBe(
+      'ROUSSEL Camille, EI — aucun financeur',
+    );
+
+    await ouvrirAuClic();
+    const options = [...document.querySelectorAll('option')].map((o) => o.textContent ?? '');
+    expect(options).toContain(libelleOptionCommanditaire({ label: 'Sigma', opcoCode: 'OPCO_EP' }));
   });
 
   it('le financeur courant est présélectionné — l’écran ne ment pas sur l’état réel', async () => {

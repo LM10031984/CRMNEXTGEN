@@ -271,8 +271,8 @@ describe('planifierEnvoi — avertissement « régime incohérent » (cas Floren
           "Florent HAUSSWIRTH : le financeur rattaché à « AGENCE MARTIN » n'ouvre pas le " +
           'dossier AGEFICE, alors que le dossier de cet apprenant en porte les signaux ' +
           "(entreprise individuelle rattachée, ou autre organisation dont le financeur " +
-          "l'ouvre). Corrigez le financeur de l'inscription : rien n'a été envoyé pour " +
-          'cette pièce.',
+          "l'ouvre). Corrigez l'organisation commanditaire de l'inscription : rien n'a " +
+          "été envoyé pour cette pièce.",
       },
     ]);
   });

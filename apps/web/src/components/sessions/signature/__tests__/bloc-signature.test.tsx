@@ -77,14 +77,21 @@ import { BlocSignature } from '../bloc-signature';
 import { AVERTISSEMENT_DEPOT_ANNULE_ENVOI } from '../../qualiopi-matrix/upload-signed-doc-dialog';
 import {
   composerAvertissementRegime,
+  correctionAvertissement,
+  type ContexteAvertissement,
   type LigneSignature,
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
 import type { DocTypeSignable } from '@/lib/signature/regime';
 import {
-  LIBELLE_LIEN_CORRIGER_FINANCEUR,
+  LIBELLE_LIEN_CORRIGER_COMMANDITAIRE,
   lienCorrigerFinanceur,
 } from '@/lib/sessions/lien-corriger-financeur';
+import {
+  libelleLienRenseignerFinanceur,
+  lienRenseignerFinanceur,
+  retourVersOnglet,
+} from '@/lib/sessions/lien-renseigner-financeur';
 
 const SESSION_ID = 'sess-1';
 
@@ -234,18 +241,23 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
   // ⚠ Forme MISE À JOUR le 11/09/2026 (corrections n°2 et n°3) : la vue rend un
   // avertissement PAR PARTICIPANT, avec la liste de ses pièces, et le message
   // vient de `composerAvertissementRegime` — jamais d'une recopie.
+  // CAS B : le commanditaire IMAGIMMO a bien un financeur, mais il n'ouvre pas
+  // cette pièce — c'est le rattachement de l'inscription qui est à revoir.
+  const CONTEXTE_B: ContexteAvertissement = {
+    sponsorOrgId: 'org-imagimmo',
+    sponsorOrgLabel: 'IMAGIMMO',
+    financeurSansRegime: false,
+    financeursRattaches: ['AGEFICE'],
+  };
   const avertissement = {
     participantId: 'part-3',
     nomAffiche: 'Florent HAUSSWIRTH',
     docTypes: ['AGEFICE'] as DocTypeSignable[],
+    correction: correctionAvertissement(CONTEXTE_B),
     message: composerAvertissementRegime({
       nomAffiche: 'Florent HAUSSWIRTH',
       docTypes: ['AGEFICE'],
-      contexte: {
-        sponsorOrgLabel: 'IMAGIMMO',
-        financeurSansRegime: false,
-        financeursRattaches: ['AGEFICE'],
-      },
+      contexte: CONTEXTE_B,
     }),
   };
 
@@ -263,7 +275,7 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
     expect(texte).toContain('Rien n’a été envoyé.');
   });
 
-  it('porte le lien direct de correction, qui ramène sur l’onglet d’où l’on vient', () => {
+  it('CAS B — le lien mène au formulaire d’INSCRIPTION, et ramène sur l’onglet d’où l’on vient', () => {
     // Décision Laurent, 11/09/2026 (point 7) : « un avertissement qui dit
     // "corrigez" sans lien est un ticket, pas une aide. »
     // L'URL n'est PAS recopiée ici : elle est comparée à ce que produit le
@@ -276,7 +288,7 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
         vue={vue({ lignes: [], avertissements: [avertissement] })}
       />,
     );
-    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_FINANCEUR });
+    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_COMMANDITAIRE });
     expect(lien.getAttribute('href')).toBe(
       lienCorrigerFinanceur({ sessionId: SESSION_ID, participantId: 'part-3', retour: 'avant' }),
     );
@@ -292,7 +304,7 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
         vue={vue({ lignes: [], avertissements: [avertissement] })}
       />,
     );
-    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_FINANCEUR });
+    const lien = screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_COMMANDITAIRE });
     expect(lien.getAttribute('href')).toContain('retour=apres');
   });
 
@@ -577,18 +589,22 @@ describe('Contraste — les boutons d’envoi écrivent leur couleur de texte', 
  * unique qui ne nommerait pas les deux pièces passerait.
  */
 describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièces', () => {
+  // CAS A : le commanditaire est le bon, il lui manque son code financeur.
+  const CONTEXTE_A: ContexteAvertissement = {
+    sponsorOrgId: 'org-roussel',
+    sponsorOrgLabel: 'DEMO-SIG ROUSSEL Camille, EI',
+    financeurSansRegime: true,
+    financeursRattaches: ['AGEFICE'],
+  };
   const avertissementRegroupe = {
     participantId: 'part-c',
     nomAffiche: 'Camille ROUSSEL',
     docTypes: ['CONVENTION', 'AGEFICE'] as DocTypeSignable[],
+    correction: correctionAvertissement(CONTEXTE_A),
     message: composerAvertissementRegime({
       nomAffiche: 'Camille ROUSSEL',
       docTypes: ['CONVENTION', 'AGEFICE'],
-      contexte: {
-        sponsorOrgLabel: 'DEMO-SIG ROUSSEL Camille, EI',
-        financeurSansRegime: true,
-        financeursRattaches: ['AGEFICE'],
-      },
+      contexte: CONTEXTE_A,
     }),
   };
 
@@ -619,6 +635,63 @@ describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièce
     // Le message vient de la fonction IMPORTÉE, jamais d'une recopie : les
     // apostrophes typographiques en feraient sinon un test vert pour rien.
     expect(texte).toContain(avertissementRegroupe.message);
+  });
+
+  /**
+   * CAS A — LE LIEN NE MÈNE PAS AU MÊME ENDROIT, et c'est tout l'objet de la
+   * correction n°7 bis. Camille ROUSSEL n'a rien à corriger sur son
+   * inscription : son organisation est la bonne, il lui manque son financeur.
+   * L'envoyer sur le formulaire d'inscription, c'est l'envoyer changer un champ
+   * qui est déjà juste.
+   */
+  it('CAS A — le lien mène à la FICHE ORGANISATION, champ financeur, et la NOMME', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [], avertissements: [avertissementRegroupe] })}
+      />,
+    );
+    const lien = screen.getByRole('link', {
+      name: libelleLienRenseignerFinanceur('DEMO-SIG ROUSSEL Camille, EI'),
+    });
+    expect(lien.getAttribute('href')).toBe(
+      lienRenseignerFinanceur({
+        organizationId: 'org-roussel',
+        retourVers: retourVersOnglet(SESSION_ID, 'avant'),
+      }),
+    );
+  });
+
+  it('PUISSANCE — le cas A ne propose PAS le lien du cas B (et réciproquement)', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [], avertissements: [avertissementRegroupe] })}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: LIBELLE_LIEN_CORRIGER_COMMANDITAIRE })).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('CAS A depuis l’onglet Après : le retour ramène sur Après', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], avertissements: [avertissementRegroupe] })}
+      />,
+    );
+    const lien = screen.getByRole('link', {
+      name: libelleLienRenseignerFinanceur('DEMO-SIG ROUSSEL Camille, EI'),
+    });
+    expect(lien.getAttribute('href')).toBe(
+      lienRenseignerFinanceur({
+        organizationId: 'org-roussel',
+        retourVers: retourVersOnglet(SESSION_ID, 'apres'),
+      }),
+    );
   });
 });
 

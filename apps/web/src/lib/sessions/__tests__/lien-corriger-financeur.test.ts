@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * La FORME D'URL du lien « Corriger le financeur de l'inscription → ».
+ * La FORME D'URL du lien « Corriger l'organisation commanditaire → ».
  *
  * CE FICHIER EST LE CONTRAT ENTRE DEUX LOTS. Le formulaire cible est livré ici ;
  * le lien qui le pointe sera câblé séparément, dans le bloc Signature de
@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   CHAMP_FINANCEUR,
-  LIBELLE_LIEN_CORRIGER_FINANCEUR,
+  LIBELLE_LIEN_CORRIGER_COMMANDITAIRE,
   ONGLET_PORTEUR,
   lienCorrigerFinanceur,
   ongletDeRetour,
@@ -55,8 +55,12 @@ describe('lienCorrigerFinanceur — la forme d’URL publiée', () => {
     expect(new URLSearchParams(url.split('?')[1]).get('champ')).toBe(CHAMP_FINANCEUR);
   });
 
-  it('le libellé du lien est figé et lisible', () => {
-    expect(LIBELLE_LIEN_CORRIGER_FINANCEUR).toBe("Corriger le financeur de l'inscription →");
+  it('le libellé du lien est figé et lisible — et il ne dit plus « financeur »', () => {
+    // Correction n°7 bis (Laurent, 11/09/2026) : « financeur de l'inscription »
+    // est trompeur — c'est l'organisation COMMANDITAIRE que ce lien va changer.
+    // Le financeur, lui, est une information portée par cette organisation.
+    expect(LIBELLE_LIEN_CORRIGER_COMMANDITAIRE).toBe("Corriger l'organisation commanditaire →");
+    expect(LIBELLE_LIEN_CORRIGER_COMMANDITAIRE).not.toContain('financeur');
   });
 });
 

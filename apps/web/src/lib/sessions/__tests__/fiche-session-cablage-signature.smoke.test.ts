@@ -43,6 +43,15 @@ describe('fiche session — les deux props du bloc « Signature » sont branché
     expect(pageSrc).toMatch(/financeursRattaches:/);
   });
 
+  it('l’ID du commanditaire est transporté — sans lui, le cas A n’a aucune fiche à ouvrir', () => {
+    // Correction n°7 bis : le lien « Renseigner le financeur de {organisation} »
+    // mène à `/app/organisations/{id}`. L'id vient d'ici, et de nulle part
+    // ailleurs : oublié, le lien retomberait silencieusement sur le formulaire
+    // d'inscription — c'est-à-dire sur le comportement que la correction
+    // supprime.
+    expect(pageSrc).toMatch(/sponsorOrgId: lu\.sponsorOrgId,/);
+  });
+
   it('l’adresse du signataire est réellement chargée : sans elle, la ligne resterait muette', () => {
     // `person.email` et les contacts complets de l'organisation bénéficiaire.
     const selectPersonne = pageSrc.slice(pageSrc.indexOf('          person: {'));
