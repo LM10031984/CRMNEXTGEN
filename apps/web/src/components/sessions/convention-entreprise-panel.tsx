@@ -308,7 +308,7 @@ export function ConventionEntreprisePanel({ sessionId, groupes }: Props) {
                           value={repValue}
                           onChange={(e) => setRepValue(e.target.value)}
                           placeholder="Prénom NOM du représentant"
-                          aria-label="Représentant légal"
+                          aria-label="Responsable de l'organisation"
                           className="h-8 px-2 rounded-md border border-border bg-white text-xs flex-1 min-w-0"
                         />
                         <button

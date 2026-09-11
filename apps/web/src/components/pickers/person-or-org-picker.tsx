@@ -349,8 +349,8 @@ export function PersonOrOrgPicker({
               type="text"
               value={nouvelleOrgRepresentant}
               onChange={(e) => setNouvelleOrgRepresentant(e.target.value)}
-              placeholder="Représentant légal (signe la convention)"
-              aria-label="Représentant légal"
+              placeholder="Responsable (signe les conventions)"
+              aria-label="Responsable de l'organisation"
               className="w-full h-9 px-2 rounded-md border border-border text-sm"
             />
             <input

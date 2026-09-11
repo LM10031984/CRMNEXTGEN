@@ -100,7 +100,7 @@ describe('resoudreRepresentantEntreprise — la cascade du NOM (chemin groupe)',
     // Le message est celui qui part déjà en production depuis le 21/08 : il
     // nomme l'entreprise, donne le lien de la fiche, et dit POURQUOI on refuse.
     expect(res.error).toMatch(/EXPERTA/);
-    expect(res.error).toMatch(/représentant/i);
+    expect(res.error).toMatch(/responsable/i);
     expect(res.error).toMatch(/opposable/i);
     expect(res.error).toContain('/app/organisations/org-1');
   });

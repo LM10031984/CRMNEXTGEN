@@ -62,7 +62,7 @@ export function blocagesDocsEntreprise(input: BlocagesInput): BlocageDocEntrepri
   if (!representant && !input.org.aContactPrincipal) {
     blocages.push({
       key: 'representant_manquant',
-      label: `Aucun représentant légal pour « ${input.org.legalName} »`,
+      label: `Aucun responsable pour « ${input.org.legalName} »`,
       hint: 'Renseignez le représentant sur la fiche entreprise (ou désignez un contact principal) : c’est lui qui signe la convention et auprès de qui le besoin est recueilli.',
       href: `/app/organisations/${input.org.id}`,
       documents: ['convention', 'analyse'],

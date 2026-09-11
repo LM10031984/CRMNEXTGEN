@@ -119,10 +119,17 @@ function clefDeNom(nom: string): string {
  * Refus du NOM — repris MOT POUR MOT du refus posé le 21/08 sur la convention
  * EXPERTA (« Représentée par , » partie au portail OPCO EP). Il nomme
  * l'entreprise, donne le lien de sa fiche, et dit pourquoi on ne produit rien.
+ *
+ * « RESPONSABLE », pas « représentant légal » (Laurent, 11/09/2026) : la
+ * personne résolue ici est celle désignée sur la fiche de l'organisation —
+ * souvent un responsable d'agence, qui n'est PAS le représentant légal de
+ * l'enseigne. Ce message est rendu tel quel dans le bloc Signature, à côté d'une
+ * fiche dont le champ s'intitule « Responsable — signe les conventions » : deux
+ * mots pour la même personne enverraient l'admin chercher un second champ.
  */
 function refusRepresentant(org: OrganisationRepresentee): string {
   return (
-    `Représentant légal inconnu pour « ${org.legalName} » : renseignez le représentant ` +
+    `Responsable inconnu pour « ${org.legalName} » : renseignez le responsable ` +
     `sur la fiche entreprise (/app/organisations/${org.id}) ou désignez un contact ` +
     `principal. Une convention sans signataire n'est pas opposable.`
   );
@@ -135,7 +142,7 @@ function refusRepresentant(org: OrganisationRepresentee): string {
  */
 function refusEmailRepresentant(nom: string, org: OrganisationRepresentee): string {
   return (
-    `Aucun email pour « ${nom} », représentant de « ${org.legalName} » : renseignez son ` +
+    `Aucun email pour « ${nom} », responsable de « ${org.legalName} » : renseignez son ` +
     `adresse sur la fiche entreprise (/app/organisations/${org.id}), ou saisissez ` +
     `l'adresse à utiliser au moment de l'envoi. Le lien n'est jamais envoyé à un autre ` +
     `contact : son email et son adresse IP figureraient dans le certificat de signature, ` +
