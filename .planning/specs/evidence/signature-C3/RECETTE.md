@@ -36,10 +36,17 @@ n'envoie jamais de vrais emails). La recette l'exige — c'est une **dérogation
 consciente et temporaire**, à remettre à `true` juste après. Tant qu'elle dure,
 tout email déclenché depuis l'aperçu part pour de bon.
 
-⚠ **La base d'aperçu est `qualiof-apercu`** (compte `laurent@start-academy.fr`,
-pooler `aws-1-eu-west-1`), **jamais la production** (`gntlqyscahbgjrmsbzil`,
-compte `msn.com`, pooler `aws-0`). Les deux migrations du lot C.3 doivent y être
-appliquées avant la recette.
+✅ **VÉRIFIÉ le 11/09/2026 — l'aperçu ne touche PAS la production.** Le scope
+Preview porte `DATABASE_URL` vers le projet **`oodxvrzpxdrggzyurlwl`** sur
+`aws-1-eu-west-1.pooler.supabase.com` — c'est bien `qualiof-apercu` (compte
+`laurent@start-academy.fr`). La production est `gntlqyscahbgjrmsbzil` sur
+`aws-0` (compte `msn.com`). Deux projets, deux comptes, deux poolers : la
+recette peut donc se jouer sur des données réelles d'aperçu **sans aucun tenant
+de test dédié**, et sans risque pour la prod.
+
+⚠ Conséquence : cette base doit porter les **quatre migrations** du lot C.3 et
+un jeu de démonstration, sinon il n'y a pas de session à envoyer (cf. 1.3, et
+`packages/db/prisma/seed-demo.ts`).
 
 ---
 
