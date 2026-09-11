@@ -27,7 +27,7 @@
  * signerait. C'est le gabarit qui nomme.
  */
 
-import type { MotifAnnulationSignature } from '@qualiof/shared';
+import type { MotifAnnulationSignature, SignatoryOrder } from '@qualiof/shared';
 import { SIGNATURE_ROLES } from './text-tags';
 import type { DocTypeSignable, SignerRole } from './regime';
 import type { AnomalieEnvoi } from './plan-envoi';
@@ -139,6 +139,29 @@ export interface SignataireResolu {
   sourceEmail: SourceEmailRepresentant;
 }
 
+/**
+ * Le signataire de l'ORGANISME, tel que le récapitulatif doit l'ANNONCER —
+ * demande n°2 de Laurent (11/09/2026).
+ *
+ * ⚠ AJOUT D'AFFICHAGE, ASSUMÉ COMME TEL. Le moteur résolvait déjà ce signataire
+ * (`resoudreSignataireOf`) et l'envoyait au prestataire depuis le lot C.2a ; il
+ * ne le REMONTAIT à aucun écran. Sans ce champ, le récapitulatif ne peut pas
+ * dire « 2. Laurent MARX (organisme de formation) » : la vue n'a aucun autre
+ * chemin vers `Tenant.signatory*` + `of-config`, et le résoudre côté client
+ * serait une SECONDE résolution — donc un écran qui finirait par annoncer un
+ * signataire différent de celui qui reçoit le lien.
+ *
+ * `null` quand la pièce n'en porte pas (`ANCRES_PAR_PIECE`), ou quand la
+ * résolution n'a pas abouti : l'empêchement `SIGNATAIRE_OF_INCOMPLET` le dit
+ * alors nominativement, et la vue n'invente rien.
+ */
+export interface SignataireOfPrevu {
+  nom: string;
+  email: string;
+  /** D-3 — `AFTER` : l'organisme signe APRÈS le client. */
+  ordre: SignatoryOrder;
+}
+
 export interface EnvoiPrepare {
   cle: string;
   docType: DocTypeSignable;
@@ -148,6 +171,11 @@ export interface EnvoiPrepare {
   participantIds: string[];
   document: DocumentAEnvoyer | null;
   signataire: SignataireResolu | null;
+  /**
+   * Le signataire de l'organisme pour CETTE pièce, quand elle en porte un.
+   * Lecture seule, destinée à l'affichage de l'ordre complet (demande n°2).
+   */
+  signataireOf: SignataireOfPrevu | null;
   /** Vide ⇒ prêt à partir. Non vide ⇒ ce qui reste à corriger, nommé. */
   empechements: Empechement[];
 }
@@ -164,9 +192,41 @@ export type PreparerEnvoiSignatureResult =
 
 // ─── Ce que rend l'envoi ─────────────────────────────────────────────────────
 
+/**
+ * Un signataire réellement parti, dans l'ordre où il signera — demande n°2.
+ *
+ * Croisement de ce que QualiOF a ENVOYÉ (`signers`, déjà trié par `order`) et
+ * de ce que le prestataire a RENDU (`signUrl`, `signedAt`). C'est cette liste
+ * qui fait foi à l'écran résultat.
+ *
+ * `signedAt` est une chaîne ISO, comme dans `SignatureRequest.signers` : elle
+ * traverse la frontière serveur → client sans sérialisation maison. Elle reste
+ * `null` tant que le retour du prestataire (lot C.3) n'est pas branché — c'est
+ * ce fait, et lui seul, qui commande le lien « Signer maintenant » de l'organisme.
+ */
+export interface SignataireEnvoye {
+  partie: PartieSignataire;
+  /** Le nom de rôle EXACT de l'ancre — `Client`, `Stagiaire`, `Organisme de formation`. */
+  role: string;
+  nom: string;
+  email: string;
+  signUrl: string | null;
+  signedAt: string | null;
+}
+
 export interface EnvoiEffectue {
   cle: string;
   docType: DocTypeSignable;
+  /**
+   * Le libellé du plan — « Convention — AGENCE MARTIN (2 participants) ».
+   *
+   * ⚠ AJOUT D'AFFICHAGE (demande n°3). L'écran résultat titrait chaque pièce par
+   * sa `cle` (« CONVENTION:org-1 ») : une clé stable et idempotente, faite pour
+   * être cochée par l'UI et reçue par la server action — pas pour être lue. Le
+   * libellé existait déjà dans le plan et dans `EnvoiPrepare` ; il ne traversait
+   * simplement pas l'envoi.
+   */
+  libelle: string;
   signatureRequestId: string;
   providerId: string;
   documentId: string;
@@ -183,8 +243,20 @@ export interface EnvoiEffectue {
    * ce qui permet à l'admin de communiquer le lien à la main en attendant C.2c.
    *
    * `null` si le prestataire n'en a pas rendu — un lot dry-run, par exemple.
+   *
+   * ⚠ DEPUIS LA DEMANDE n°2, CE CHAMP EST UNE PROJECTION, PAS UNE SOURCE : il
+   * vaut `signataires.find(partie === 'CLIENT').signUrl`, calculé une seule fois
+   * côté moteur. Il reste exposé pour ne rien retirer à C.2b-bis ; les écrans,
+   * eux, lisent `signataires`. Deux champs remplis séparément finiraient par
+   * diverger — et c'est le lien de signature : on ne peut pas en afficher deux
+   * versions.
    */
   signUrl: string | null;
+  /**
+   * TOUS les signataires, dans l'ordre où ils signeront. Jamais vide : un envoi
+   * sans signataire est refusé bien avant (`SIGNATAIRE_SANS_EMAIL`).
+   */
+  signataires: SignataireEnvoye[];
 }
 
 export type SendForSignatureResult =

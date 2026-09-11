@@ -46,6 +46,7 @@ import {
   Loader2,
   MailWarning,
   OctagonAlert,
+  PenLine,
   RefreshCw,
   Send,
 } from 'lucide-react';
@@ -59,6 +60,11 @@ import type {
   SignataireResolu,
 } from '@/lib/signature/envoi-contrats';
 import type { AnomalieEnvoi, ScopeEnvoi } from '@/lib/signature/plan-envoi';
+import {
+  ordreSignatairesEnvoyes,
+  ordreSignatairesPrevu,
+  texteOrdreSignataires,
+} from '@/lib/sessions/ordre-signataires';
 
 export interface RecapitulatifEnvoiProps {
   open: boolean;
@@ -98,10 +104,18 @@ const LIBELLE_SOURCE_NOM: Record<SignataireResolu['sourceNom'], string> = {
   APPRENANT_STAGIAIRE: 'l’apprenant lui-même (stagiaire désigné par le régime)',
 };
 
-/** D'où vient l'ADRESSE retenue. La dérogation se lit, elle ne se devine pas. */
+/**
+ * D'où vient l'ADRESSE retenue. La dérogation se lit, elle ne se devine pas.
+ *
+ * ⚠ « contact portant ce nom » → « fiche du contact » (demande n°3, Laurent
+ * 11/09/2026). La première formule décrivait la MÉCANIQUE de la cascade — on a
+ * cherché un contact du même nom — là où les deux autres nomment un ENDROIT où
+ * aller vérifier. Trois provenances affichées côte à côte doivent répondre à la
+ * même question : « où est cette adresse, si je veux la corriger ? »
+ */
 const LIBELLE_SOURCE_EMAIL: Record<SignataireResolu['sourceEmail'], string> = {
   PERSON: 'fiche de la personne',
-  CONTACT_NOMME: 'contact portant ce nom',
+  CONTACT_NOMME: 'fiche du contact',
   SAISI_PAR_ADMIN: 'adresse saisie à l’instant',
 };
 
@@ -347,62 +361,126 @@ export function RecapitulatifEnvoi({
                 </p>
               )}
 
-              {resultat.envoyes.map((envoye) => (
-                <div
-                  key={envoye.cle}
-                  className="rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-sm"
-                >
-                  <p className="flex items-center gap-2 font-medium text-emerald-900">
-                    <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
-                    {envoye.cle} — envoyée en signature
-                  </p>
-                  <p className="mt-1 text-emerald-900">
-                    Signataire : <strong>{envoye.signataire.nom}</strong> —{' '}
-                    {envoye.signataire.email}{' '}
-                    <span className="text-muted-foreground">
-                      ({LIBELLE_SOURCE_EMAIL[envoye.signataire.source]})
-                    </span>
-                  </p>
-                  {envoye.signUrl === null ? (
-                    <p className="mt-1.5 text-xs text-amber-900">
-                      Le prestataire n’a rendu aucun lien de signature pour cette pièce : elle est
-                      bien créée chez lui, mais le lien devra y être récupéré à la main.
+              {/* ⚠ L'ORDRE COMPLET, ET LE LIBELLÉ (demandes n°2 et n°3, Laurent
+                  11/09/2026). Cet écran titrait chaque pièce par sa `cle` —
+                  « CONVENTION:org-1 » — et n'annonçait qu'UN signataire, alors
+                  que la convention et l'attestation en portent deux depuis le
+                  lot C.2a. L'ordre est composé par `ordreSignatairesEnvoyes` :
+                  ce composant met en page, il ne décide pas qui signe. */}
+              {resultat.envoyes.map((envoye) => {
+                const ordre = ordreSignatairesEnvoyes({ signataires: envoye.signataires });
+                return (
+                  <div
+                    key={envoye.cle}
+                    className="rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-sm"
+                  >
+                    <p className="flex items-center gap-2 font-medium text-emerald-900">
+                      <Check className="h-4 w-4 shrink-0" strokeWidth={3} aria-hidden="true" />
+                      {envoye.libelle} — envoyée en signature
                     </p>
-                  ) : (
-                    <div className="mt-2">
-                      <label
-                        htmlFor={`lien-${envoye.cle}`}
-                        className="block text-xs font-medium mb-1"
-                      >
-                        Lien de signature à transmettre
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`lien-${envoye.cle}`}
-                          readOnly
-                          value={envoye.signUrl}
-                          onFocus={(e) => e.currentTarget.select()}
-                          className="flex-1 min-w-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => copier(envoye.signUrl ?? '')}
-                          // ⚠ Ne PAS répéter « lien de signature » ici : le
-                          // <label> du champ le porte déjà, et deux nœuds
-                          // portant le même nom accessible rendent
-                          // `getByLabelText` ambigu — pour un lecteur d'écran
-                          // comme pour un test.
-                          aria-label={`Copier le lien — ${envoye.cle}`}
-                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border text-xs font-medium hover:bg-muted"
-                        >
-                          <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" /> Copier le
-                          lien
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-emerald-900">
+                      Ordre de signature
+                    </p>
+                    <ol className="mt-1 space-y-2.5">
+                      {ordre.map((signataire) => (
+                        <li key={`${envoye.cle}-${signataire.rang}`}>
+                          <p className="text-emerald-900">
+                            {signataire.texte}
+                            {signataire.partie === 'CLIENT' && (
+                              <span className="text-muted-foreground">
+                                {' '}
+                                (adresse : {LIBELLE_SOURCE_EMAIL[envoye.signataire.source]})
+                              </span>
+                            )}
+                            {signataire.aSigne && (
+                              <span className="ml-2 text-xs font-medium text-emerald-700">
+                                · a signé
+                              </span>
+                            )}
+                          </p>
+
+                          {/* Le client reçoit un lien : on le donne à copier.
+                              C'est l'unique moyen de le lui transmettre tant
+                              que l'envoi des emails (C.2c) n'est pas livré. */}
+                          {signataire.partie === 'CLIENT' &&
+                            !signataire.aSigne &&
+                            (signataire.signUrl === null ? (
+                              <p className="mt-1.5 text-xs text-amber-900">
+                                Le prestataire n’a rendu aucun lien de signature pour{' '}
+                                {signataire.nom} : la demande est bien créée chez lui, mais le
+                                lien devra y être récupéré à la main.
+                              </p>
+                            ) : (
+                              <div className="mt-1.5">
+                                <label
+                                  htmlFor={`lien-${envoye.cle}`}
+                                  className="block text-xs font-medium mb-1"
+                                >
+                                  Lien de signature à transmettre
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    id={`lien-${envoye.cle}`}
+                                    readOnly
+                                    value={signataire.signUrl}
+                                    onFocus={(e) => e.currentTarget.select()}
+                                    className="flex-1 min-w-0 rounded-md border border-border bg-white px-2 py-1 text-xs font-mono"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => copier(signataire.signUrl ?? '')}
+                                    // ⚠ Ne PAS répéter « lien de signature »
+                                    // ici : le <label> du champ le porte déjà,
+                                    // et deux nœuds portant le même nom
+                                    // accessible rendent `getByLabelText`
+                                    // ambigu — pour un lecteur d'écran comme
+                                    // pour un test. Le nom porte le LIBELLÉ de
+                                    // la pièce, plus sa clé technique
+                                    // (demande n°3) : « Copier le lien —
+                                    // CONVENTION:org-1 » ne se lit pas.
+                                    aria-label={`Copier le lien — ${envoye.libelle}`}
+                                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border text-xs font-medium hover:bg-muted shrink-0"
+                                  >
+                                    <ClipboardCopy className="h-3.5 w-3.5" aria-hidden="true" />{' '}
+                                    Copier le lien
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                          {/* ⚠ L'ORGANISME SIGNE DEPUIS LE CRM, mais seulement
+                              quand son tour est venu. `signerMaintenant` est
+                              adossé au `signedAt` du signataire client : tant
+                              que le retour du prestataire (lot C.3) n'est pas
+                              branché, il reste nul et ce lien n'existe PAS
+                              dans le DOM. Ce qui s'affiche à la place n'est
+                              pas un lien grisé : c'est la phrase qui dit qui
+                              est attendu, et d'où viendra l'information. */}
+                          {signataire.partie === 'OF' &&
+                            signataire.signerMaintenant &&
+                            signataire.signUrl !== null && (
+                              <a
+                                href={signataire.signUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary-600 transition-colors shadow-sm"
+                              >
+                                <PenLine className="h-3.5 w-3.5" aria-hidden="true" /> Signer
+                                maintenant
+                              </a>
+                            )}
+                          {signataire.partie === 'OF' && signataire.attente !== null && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {signataire.attente}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })}
 
               {/* RÈGLE n°2 — le message du moteur, TEL QUEL. Il dit ce qui a
                   changé, que rien n'est parti, et le geste. Le résumer ou le
@@ -459,6 +537,14 @@ function PieceARelire({
 }) {
   const bloquants = empechementsBloquants(envoi);
   const adresseAttendue = manqueUneAdresse(envoi);
+  // Qui signe, dans quel ordre. La table `ANCRES_PAR_PIECE` tranche : sur le
+  // dossier AGEFICE, l'organisme n'apparaît pas — son exemplaire porte déjà
+  // l'image de sa signature.
+  const ordre = ordreSignatairesPrevu({
+    docType: envoi.docType,
+    client: envoi.signataire,
+    of: envoi.signataireOf,
+  });
   const partira =
     envoi.document !== null &&
     bloquants.length === 0 &&
@@ -499,15 +585,22 @@ function PieceARelire({
         </>
       )}
 
-      {envoi.signataire !== null && (
-        <p className="mt-2 text-sm">
-          Signera : <strong>{envoi.signataire.nom}</strong> — {envoi.signataire.email}
-          <span className="text-muted-foreground">
-            {' '}
-            (nom : {LIBELLE_SOURCE_NOM[envoi.signataire.sourceNom]} · adresse :{' '}
-            {LIBELLE_SOURCE_EMAIL[envoi.signataire.sourceEmail]})
-          </span>
-        </p>
+      {/* ⚠ L'ORDRE COMPLET, AVANT LE CLIC (demande n°2). « Signera : Paul
+          MARTIN » laissait croire qu'une seule signature closait la pièce. La
+          convention et l'attestation en portent DEUX depuis le lot C.2a : le
+          dire ici, c'est ce qui évite de croire l'affaire réglée au premier
+          paraphe. La provenance du couple nom/adresse reste sur sa propre
+          ligne — elle concerne le CLIENT, pas la séquence. */}
+      {envoi.signataire !== null && ordre.length > 0 && (
+        <div className="mt-2 text-sm">
+          <p>
+            Ordre de signature : <strong>{texteOrdreSignataires(ordre)}</strong>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {envoi.signataire.nom} — nom : {LIBELLE_SOURCE_NOM[envoi.signataire.sourceNom]} ·
+            adresse : {LIBELLE_SOURCE_EMAIL[envoi.signataire.sourceEmail]}
+          </p>
+        </div>
       )}
 
       {/* Les empêchements qui ne se corrigent pas ici : rendus TELS QUELS. */}

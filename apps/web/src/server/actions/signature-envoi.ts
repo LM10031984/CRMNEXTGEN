@@ -116,6 +116,8 @@ import {
   type EnvoiEffectue,
   type PieceRelachee,
   type EnvoiPrepare,
+  type SignataireEnvoye,
+  type SignataireOfPrevu,
   type PreparerEnvoiSignatureResult,
   type RefusEnvoi,
   type SendForSignatureResult,
@@ -499,6 +501,25 @@ export async function preparerEnvoiSignature(
       : contexte.plan.envois.filter((e) => cles.includes(e.cle));
 
   const signataireOf = await resoudreSignataireOf(user.tenantId);
+  /**
+   * Ce que l'écran doit ANNONCER de l'organisme (demande n°2, 11/09/2026).
+   *
+   * ⚠ RÉSOLU UNE FOIS, ICI, et seulement PROJETÉ sur chaque pièce : c'est le
+   * même objet que celui que `sendForSignature` enverra au prestataire. Le
+   * recalculer côté écran serait une seconde résolution, et le récapitulatif
+   * finirait par annoncer un signataire différent de celui qui signe.
+   */
+  const ofPourAffichage: SignataireOfPrevu | null = signataireOf.ok
+    ? {
+        nom: signataireOf.signatory.name,
+        email: signataireOf.signatory.email,
+        ordre: signataireOf.signatory.order,
+      }
+    : null;
+  /** `null` dès que la pièce n'ouvre pas d'ancre OF — la table tranche. */
+  const ofDeLaPiece = (docType: DocTypeSignable): SignataireOfPrevu | null =>
+    ofSigneLaPiece(docType) ? ofPourAffichage : null;
+
   const envois: EnvoiPrepare[] = [];
   let auMoinsUneRegeneration = false;
 
@@ -516,6 +537,7 @@ export async function preparerEnvoiSignature(
         participantIds: envoi.participantIds,
         document: null,
         signataire: null,
+        signataireOf: ofDeLaPiece(envoi.docType),
         empechements: [{ raison: 'REGENERATION_IMPOSSIBLE', message: forme.error }],
       });
       continue;
@@ -677,6 +699,7 @@ export async function preparerEnvoiSignature(
       participantIds: envoi.participantIds,
       document,
       signataire: client.ok ? client.signataire : null,
+      signataireOf: ofDeLaPiece(envoi.docType),
       empechements,
     });
   }
@@ -949,9 +972,35 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       continue;
     }
 
+    /**
+     * L'ORDRE RÉELLEMENT PARTI — demande n°2 de Laurent (11/09/2026).
+     *
+     * Construit sur `signers` (ce que QualiOF a envoyé, DÉJÀ TRIÉ par `order`)
+     * et non sur `creation.signers` (ce que le prestataire a rendu, dans un
+     * ordre qui lui appartient). C'est l'ordre de signature qui est promis à
+     * l'écran : le lire chez le prestataire le ferait dépendre de son API.
+     *
+     * `partie` se déduit du nom de rôle que NOUS avons posé, pas d'une
+     * heuristique sur le libellé : `roleOf` vaut `null` quand la pièce n'ouvre
+     * pas d'ancre organisme, et la comparaison est alors toujours fausse.
+     */
+    const signatairesEnvoyes: SignataireEnvoye[] = signers.map((parti) => {
+      const rendu = creation.signers.find((s) => s.role === parti.role);
+      return {
+        partie: roleOf !== null && parti.role === roleOf ? 'OF' : 'CLIENT',
+        role: parti.role,
+        nom: parti.name,
+        email: parti.email,
+        signUrl: rendu?.signUrl ?? null,
+        signedAt: rendu?.signedAt?.toISOString() ?? null,
+      };
+    });
+
     envoyes.push({
       cle: envoi.cle,
       docType: envoi.docType,
+      // Demande n°3 : l'écran résultat nomme la pièce, il ne l'immatricule pas.
+      libelle: envoi.libelle,
       signatureRequestId,
       providerId: creation.providerId,
       documentId: doc.id,
@@ -966,7 +1015,12 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       // communiquer à la main tant que l'envoi des emails (C.2c) n'est pas
       // livré — sans lui, un clic « Envoyer » ne prévenait personne et ne
       // POUVAIT prévenir personne.
-      signUrl: creation.signers.find((s) => s.role === roleClient)?.signUrl ?? null,
+      //
+      // ⚠ PROJECTION, PLUS UNE SECONDE LECTURE : il vaut exactement le lien du
+      // signataire client de la liste ci-dessus. Deux `find` distincts sur la
+      // même intention finiraient par diverger.
+      signUrl: signatairesEnvoyes.find((s) => s.partie === 'CLIENT')?.signUrl ?? null,
+      signataires: signatairesEnvoyes,
     });
   }
 
