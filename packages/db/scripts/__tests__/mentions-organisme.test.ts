@@ -185,24 +185,15 @@ const LIGNES_A_PRESERVER: { ligne: string; pourquoi: string }[] = [
   { ligne: 'Feedback personnalisé du formateur', pourquoi: 'étape pédagogique' },
   { ligne: 'Partage des productions + coaching du formateur', pourquoi: 'étape pédagogique' },
   {
-    ligne:
-      'Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.',
-    pourquoi: 'MOYEN PÉDAGOGIQUE de drive:058#6 — hors des 3 familles de ce lot',
-  },
-  {
-    ligne:
-      'Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.',
-    pourquoi: 'MOYEN PÉDAGOGIQUE de drive:058#6 — hors des 3 familles de ce lot',
-  },
-  {
     ligne: 'Remise des attestations',
-    pourquoi: 'mention probable mais HORS des 3 familles nommées par Laurent — laissée et signalée',
+    pourquoi:
+      'un vrai moment de fin de session, pas de l’administratif — DÉCISION du 11/09/2026, verrouillée plus bas',
   },
   {
     ligne: 'Remise des attestations de formation',
-    pourquoi: 'idem — laissée et signalée',
+    pourquoi: 'idem — DÉCISION du 11/09/2026',
   },
-  { ligne: 'Remise de l’attestation.', pourquoi: 'idem — laissée et signalée' },
+  { ligne: 'Remise de l’attestation.', pourquoi: 'idem — DÉCISION du 11/09/2026' },
   {
     ligne: 'Clôture de la formation (30 min)',
     pourquoi: 'titre de bloc horodaté de drive:062#2 — porte une durée, donc de la pédagogie',
@@ -221,10 +212,14 @@ describe('Famille 2 — la pédagogie voisine survit', () => {
 });
 
 // Les 3 lignes MIXTES — la mention y est SOUDÉE à de la pédagogie dans la même
-// phrase. Les retirer en entier détruirait du contenu ; les réécrire serait un
-// arbitrage que Laurent n'a pas donné (il a dit : suppression pure, aucun
-// arbitrage nécessaire). Elles restent, et elles sont SIGNALÉES dans le compte
-// rendu. Le jour où ce test tombera, la raison doit se lire ici.
+// phrase. Les retirer en entier détruirait du contenu ; les réécrire est un
+// arbitrage de rédaction.
+//
+// DÉCISION du 11/09/2026 (lot 1 bis) : elles sont REPORTÉES AU LOT 2. Ce n'est
+// plus une question ouverte — c'est un report assumé, et sa raison est qu'au
+// lot 2 Laurent relit déjà du texte (les titres de modules). C'est là que la
+// phrase se coupe, avec un œil humain sur la coupe, pas ici.
+// Le jour où ce test tombera, la raison doit se lire ici.
 const LIGNES_MIXTES: { ligne: string; ou: string }[] = [
   {
     ligne: 'Clôture et questionnaire de satisfaction. Feedback et Questions/Réponses',
@@ -241,10 +236,13 @@ const LIGNES_MIXTES: { ligne: string; ou: string }[] = [
   },
 ];
 
-describe('Famille 2 bis — les 3 lignes mixtes sont laissées et signalées', () => {
-  it.each(LIGNES_MIXTES)('$ou : la mention soudée à de la pédagogie reste', ({ ligne }) => {
-    expect(estMentionOrganisme(ligne)).toBe(false);
-  });
+describe('Famille 2 bis — les 3 lignes mixtes sont reportées au lot 2 par arbitrage du 11/09', () => {
+  it.each(LIGNES_MIXTES)(
+    '$ou : la mention soudée à de la pédagogie reste — reportée au lot 2 (arbitrage du 11/09)',
+    ({ ligne }) => {
+      expect(estMentionOrganisme(ligne)).toBe(false);
+    },
+  );
 
   it('aucun des 3 modules mixtes ne perd de ligne', () => {
     for (const ref of ['drive:024#11', 'drive:028#6', 'drive:055#10']) {
@@ -396,5 +394,174 @@ describe('Famille 6 — idempotence', () => {
       expect(retirees, `${m.sourceRef} devrait déjà être filtré`).toEqual([]);
       expect(contentMd).toBe(m.contentMd);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Famille 7 — LOT 1 BIS : les MOYENS PÉDAGOGIQUES du pied de document sortent
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Arbitrage du 11/09/2026, après le lot 1. Laurent a nommé deux phrases de
+// `drive:058#6` (« Les formateurs proposeront… », « Un livret de formation sera
+// remis… ») : « une mention d'organisme au mauvais endroit, exactement comme le
+// QCM ».
+//
+// On en retire QUATRE, et c'est un élargissement assumé qu'il faut pouvoir
+// contredire. Les quatre lignes forment UN SEUL BLOC CONTIGU en fin de module,
+// introduit par son propre titre de section :
+//
+//   6. - LES MOYENS PÉDAGOGIQUES ET TECHNIQUES      ← le TITRE de la section
+//   7. - La formation se déroule en présentiel.      ← une modalité d'en-tête
+//   8. - Les formateurs proposeront des mises en situation…   ← nommée
+//   9. - Un livret de formation sera remis…                   ← nommée
+//
+// N'en retirer que deux laisserait, dans un déroulé qui part chez un financeur,
+// un titre de section ORPHELIN suivi d'une phrase isolée : on créerait sciemment
+// un défaut. La ligne 7 est une mention de modalité qui appartient à l'en-tête du
+// programme, pas au déroulé, et elle vit sous ce même titre.
+//
+// Les lignes 1 à 5 sont de la vraie pédagogie — Y COMPRIS « QUIZZ Final :
+// (0h30) », qui est une activité de séance avec sa durée et qui n'est dans aucune
+// forme canonique. Après retrait, le module garde 5 puces : il ne devient pas un
+// 5ᵉ module fantôme.
+
+/** Les 4 lignes, telles qu'elles figuraient dans l'instantané du lot 1. */
+const MOYENS_PEDAGOGIQUES_058 = [
+  '- LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
+  '- La formation se déroule en présentiel.',
+  '- Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.',
+  '- Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.',
+] as const;
+
+/** Les formes canoniques attendues, dans le même ordre. */
+const CANONIQUES_MOYENS = [
+  'les moyens pedagogiques et techniques',
+  'la formation se deroule en presentiel',
+  'les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des echanges sur les pratiques actuelles',
+  'un livret de formation sera remis a chaque participant en debut de formation. le formateur deroulera sa formation avec une presentation canva projetee',
+] as const;
+
+describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document', () => {
+  it.each(MOYENS_PEDAGOGIQUES_058)('« %s » → mention d’organisme', (ligne) => {
+    expect(estMentionOrganisme(ligne)).toBe(true);
+  });
+
+  it.each(MOYENS_PEDAGOGIQUES_058.map((l, i) => ({ ligne: l, attendu: CANONIQUES_MOYENS[i]! })))(
+    'normaliserLigne ramène « $ligne » à sa forme canonique',
+    ({ ligne, attendu }) => {
+      expect(normaliserLigne(ligne)).toBe(attendu);
+    },
+  );
+
+  // Les variantes que le filtre doit tolérer : sans puce, sans point final, avec
+  // des espaces surnuméraires. C'est ce test-là qui attrape une apostrophe ou un
+  // point INTERNE mal traité — la 4ᵉ ligne porte un point au milieu, qui doit
+  // SURVIVRE à la normalisation.
+  it.each([
+    'LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
+    '  -   LES MOYENS   PÉDAGOGIQUES ET TECHNIQUES  ',
+    '* LES MOYENS PÉDAGOGIQUES ET TECHNIQUES.',
+    'La formation se déroule en présentiel',
+    '- La formation se déroule en présentiel ;',
+    '  La formation   se déroule en présentiel.  ',
+    'Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles',
+    '- Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles ;',
+    'Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée',
+    '* Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.',
+  ])('variante tolérée : « %s »', (ligne) => {
+    expect(estMentionOrganisme(ligne)).toBe(true);
+  });
+
+  it('le point INTERNE de la 4ᵉ ligne survit — seule la ponctuation FINALE est coupée', () => {
+    expect(normaliserLigne(MOYENS_PEDAGOGIQUES_058[3])).toContain('debut de formation. le formateur');
+  });
+
+  // DÉCISION du 11/09/2026 : « Remise des attestations » RESTE.
+  it.each(['Remise des attestations', 'Remise des attestations de formation', 'Remise de l’attestation.'])(
+    'un vrai moment de fin de session, pas de l’administratif — décision du 11/09 : « %s » reste',
+    (ligne) => {
+      expect(estMentionOrganisme(ligne)).toBe(false);
+    },
+  );
+
+  // Les voisines de la MÊME FAMILLE dans d'autres modules : elles ne sont pas
+  // dans l'arbitrage et on n'y touche pas. Elles encadrent le périmètre.
+  it.each([
+    'Formation interactive orientée pratique.',
+    'Présentation visuelle sur support Canva.',
+    'Support pédagogique numérique remis à chaque participant.',
+    'Formation orientée pilotage et prise de décision managériale.',
+    'Démonstrations en direct sur un outil d’intelligence artificielle.',
+    'Exercices guidés pas à pas sur la rédaction de prompts.',
+  ])('hors de l’arbitrage du 11/09 — signalée, pas retirée : « %s »', (ligne) => {
+    expect(estMentionOrganisme(ligne)).toBe(false);
+  });
+
+  it('« QUIZZ Final : (0h30) » reste — une activité de séance avec sa durée', () => {
+    expect(estMentionOrganisme('- QUIZZ Final : (0h30)')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Famille 8 — lot 1 bis au niveau DONNÉES, sur l'instantané régénéré
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// « La formation se déroule en présentiel. » n'est PAS propre à drive:058#6 :
+// elle ouvre le même bloc de moyens pédagogiques avalé dans drive:067#1,
+// drive:068#1 et drive:069#1. Un ensemble fermé agit sur tout le corpus — ces
+// trois modules perdent donc cette ligne aussi, et c'est cohérent avec la
+// décision. Aucun ne se vide : ils portent 32, 41 et 41 lignes.
+
+describe('Famille 8 — l’instantané après le lot 1 bis', () => {
+  it('le compte ne bouge pas : 76 programmes, 402 modules', () => {
+    expect(instantane.programmes).toHaveLength(76);
+    expect(TOUS_LES_MODULES).toHaveLength(402);
+  });
+
+  it('drive:058#6 garde exactement ses 5 puces pédagogiques', () => {
+    const lignes = moduleDe('drive:058#6').contentMd.split('\n');
+    expect(lignes).toHaveLength(5);
+    expect(lignes[4]).toBe('- QUIZZ Final : (0h30)');
+  });
+
+  it.each(MOYENS_PEDAGOGIQUES_058)('drive:058#6 ne porte plus « %s »', (ligne) => {
+    expect(moduleDe('drive:058#6').contentMd).not.toContain(ligne.replace(/^- /, ''));
+  });
+
+  it.each(['drive:067#1', 'drive:068#1', 'drive:069#1'])(
+    '%s ne porte plus la ligne de modalité, et garde tout le reste',
+    (ref) => {
+      const m = moduleDe(ref);
+      expect(m.contentMd).not.toContain('La formation se déroule en présentiel');
+      expect(m.contentMd).toContain('Présentation visuelle sur support Canva.');
+    },
+  );
+
+  it('drive:067#1 / 068#1 / 069#1 gardent 31, 40 et 40 lignes', () => {
+    expect(moduleDe('drive:067#1').contentMd.split('\n')).toHaveLength(31);
+    expect(moduleDe('drive:068#1').contentMd.split('\n')).toHaveLength(40);
+    expect(moduleDe('drive:069#1').contentMd.split('\n')).toHaveLength(40);
+  });
+
+  // LE garde-fou du « 5ᵉ fantôme » : 33 modules ont un déroulé vide dans
+  // l'instantané (4 vidés par le filtre au lot 1, 29 sans déroulé au Drive).
+  // Ce compte ne doit PAS monter à 34.
+  it('toujours 33 déroulés vides — drive:058#6 n’est pas devenu un fantôme', () => {
+    const vides = TOUS_LES_MODULES.filter((m) => m.contentMd.trim().length === 0);
+    expect(vides).toHaveLength(33);
+    expect(vides.map((m) => m.sourceRef)).not.toContain('drive:058#6');
+  });
+
+  it('le total des lignes de déroulé passe de 3117 à 3110 — 7 lignes, pas une de plus', () => {
+    const total = TOUS_LES_MODULES.reduce(
+      (n, m) => n + (m.contentMd.trim().length === 0 ? 0 : m.contentMd.split('\n').length),
+      0,
+    );
+    expect(total).toBe(3110);
+  });
+
+  it('le compte de warnings ne bouge pas : 64 — aucun module nouvellement vidé', () => {
+    const warnings = instantane.programmes.reduce((n, p) => n + p.warnings.length, 0);
+    expect(warnings).toBe(64);
   });
 });
