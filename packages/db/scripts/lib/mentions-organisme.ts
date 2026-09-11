@@ -18,6 +18,15 @@
  * Mesuré sur l'instantané commité : 101 lignes dans 52 modules, dont 81 en fin
  * de module et 19 en plein milieu.
  *
+ * ── Deux listes fermées, deux mécanismes ────────────────────────────────────
+ *
+ * • `MENTIONS_CANONIQUES` — des PHRASES, reconnues ligne à ligne. Une ligne qui
+ *   est une mention et rien d'autre part, où qu'elle soit.
+ * • `TITRES_GABARIT` — des TITRES de section, reconnus STRUCTURELLEMENT. Un titre
+ *   part avec son bloc, ou il ne part pas : « partout où une mention d'organisme
+ *   est précédée de son titre de section, le bloc part entier » (arbitrage du
+ *   11/09/2026). Suivi de vraie pédagogie, le titre RESTE.
+ *
  * ── Pourquoi un ENSEMBLE FERMÉ, et jamais une recherche de sous-chaîne ───────
  *
  * C'est LA décision qui rend ce filtre sûr, et elle mérite d'être défendue ici
@@ -83,14 +92,17 @@
  */
 
 /**
- * Les ONZE formes canoniques — déjà normalisées, donc sans accent, sans
+ * Les DIX formes canoniques de MENTION — déjà normalisées, donc sans accent, sans
  * apostrophe courbe et sans ponctuation finale.
  *
  * Chacune couvre plusieurs écritures réelles : `normaliserLigne` absorbe les
  * variantes (les deux apostrophes, la présence ou l'absence de « d' », le point,
  * le point-virgule, les deux-points, les espaces surnuméraires, la puce
  * Markdown). Les 13 formes relevées dans l'instantané au lot 1 se replient sur
- * les sept premières ; la famille 4 en ajoute quatre au lot 1 bis.
+ * les sept premières ; la famille 4 en ajoute trois au lot 1 bis.
+ *
+ * Le TITRE de section du bloc de la famille 4 n'est PAS ici : un titre ne se
+ * retire jamais à plat, il se retire avec son bloc. Voir `TITRES_GABARIT`.
  */
 const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   // Famille 1 — le QCM du gabarit (46 occurrences, 5 écritures)
@@ -126,7 +138,7 @@ const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   // module. On retire par le FILTRE, qui agit ligne à ligne et se relit dans un
   // `git diff`.
   //
-  // POURQUOI QUATRE LIGNES ET PAS DEUX — élargissement assumé, à contredire.
+  // POURQUOI QUATRE LIGNES ET PAS DEUX — et pourquoi la RÈGLE, pas le cas.
   //
   // Laurent a nommé les deux dernières. Mais les quatre forment UN SEUL BLOC
   // CONTIGU en fin de module, introduit par son propre titre de section :
@@ -138,8 +150,13 @@ const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   //
   // N'en retirer que deux laisserait, dans un déroulé qui part chez un financeur,
   // un titre de section ORPHELIN suivi d'une phrase isolée : on créerait sciemment
-  // un défaut. Et la ligne de modalité appartient à l'en-tête du programme, pas au
-  // déroulé — elle vit sous ce même titre.
+  // un défaut — « un défaut créé sciemment est pire que celui qu'on corrigeait »
+  // (arbitrage du 11/09/2026). D'où la règle généralisée de `TITRES_GABARIT` plus
+  // bas : le titre ne se traite PAS à plat ici, il se traite structurellement.
+  //
+  // La ligne de modalité, elle, EST une mention à plat. Motif de Laurent, à
+  // consigner : « c'est une modalité : elle appartient aux mentions du programme,
+  // pas à un déroulé. »
   //
   // Ce que l'élargissement emporte AILLEURS, et c'est à savoir : un ensemble fermé
   // agit sur tout le corpus. « La formation se déroule en présentiel. » ouvre le
@@ -147,10 +164,76 @@ const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   // cette ligne aussi. Aucun ne se vide (32, 41 et 41 lignes). Les 5 autres lignes
   // de moyens pédagogiques de ces modules RESTENT — voir la liste des décisions en
   // tête de fichier.
-  'les moyens pedagogiques et techniques',
   'la formation se deroule en presentiel',
   'les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des echanges sur les pratiques actuelles',
   'un livret de formation sera remis a chaque participant en debut de formation. le formateur deroulera sa formation avec une presentation canva projetee',
+]);
+
+/**
+ * Les TITRES DE GABARIT — la seconde liste FERMÉE (lot 1 bis, 11/09/2026).
+ *
+ * ── La règle qu'ils servent ─────────────────────────────────────────────────
+ *
+ * « Partout où une mention d'organisme est précédée de son titre de section, le
+ * bloc part entier. » Un titre de gabarit est donc retiré quand TOUT ce qui le
+ * suit dans le module — jusqu'à la fin du module, ou jusqu'au titre de gabarit
+ * suivant — est soit une mention d'organisme, soit un autre titre de gabarit.
+ * **Sinon il RESTE**, et c'est le bon comportement : un titre suivi de vraie
+ * pédagogie n'est pas un pied de page, et on ne coupe pas du contenu pour faire
+ * propre. Voir `retirerMentionsOrganisme`.
+ *
+ * ── D'où vient ce vocabulaire ───────────────────────────────────────────────
+ *
+ * Il n'est PAS inventé : ce sont les intitulés du gabarit Qualiopi que
+ * l'extraction reconnaît déjà. `BODY_END` (`extract-drive-catalog.ts`) porte
+ * `encadrement de l'action`, `moyens d'evaluation`, `modalites d'inscription`,
+ * `accessibilite aux personnes`, `tarif`, `contact`, `delai d'acces` ; et
+ * `moyens pedagogiques et techniques` est le 4ᵉ motif de `BODY_START`. Les formes
+ * sont RECOPIÉES ici — on ne touche ni à `BODY_START` ni à `BODY_END`, dont le
+ * moindre changement déplacerait le découpage des 402 modules.
+ *
+ * ── ⛔ Pourquoi une liste FERMÉE, et jamais « une ligne en majuscules » ──────
+ *
+ * C'est LA décision qui rend cette règle sûre. Les modules Faros portent des
+ * lignes en CAPITALES qui sont du CONTENU légitime : `JEAN-GUY` (29×), `LAURENT`
+ * (28×), `APPRENANT` (17×), `SOURCES` (4×), `LIVRABLE 001`, `PROMESSE
+ * APPRENANT`, `RÉSULTAT OBSERVABLE`, `DÉCISION DE DIRECTION PÉDAGOGIQUE`,
+ * `SA-ADM-M001`… Une heuristique « majuscules = titre de gabarit » détruirait
+ * les 855 lignes de `faros:SA-ADM-M001#1`. Un test le verrouille ligne par ligne.
+ *
+ * Relevé sur le corpus (76 programmes, 402 modules, 11/09/2026) : la SEULE
+ * occurrence d'un titre de gabarit dans un déroulé est
+ * « LES MOYENS PÉDAGOGIQUES ET TECHNIQUES » dans `drive:058#6`. La règle ne
+ * change donc rien d'autre aujourd'hui — elle sert pour demain, le jour où un
+ * nouveau document du Drive ramènera son pied de page.
+ */
+const TITRES_GABARIT: ReadonlySet<string> = new Set([
+  // Le 4ᵉ motif de BODY_START — celui qui a créé le défaut de drive:058#6.
+  'les moyens pedagogiques et techniques',
+  'moyens pedagogiques et techniques',
+  'les moyens pedagogiques',
+  'moyens pedagogiques',
+  'les moyens techniques',
+  'moyens techniques',
+  // Les 7 motifs de BODY_END, en formes de LIGNE ENTIÈRE.
+  "l'encadrement de l'action",
+  "encadrement de l'action",
+  "les moyens d'encadrement de l'action",
+  "les moyens d'evaluation",
+  "moyens d'evaluation",
+  "les moyens d'evaluation de la formation",
+  "modalites d'inscription",
+  "les modalites d'inscription",
+  'accessibilite aux personnes en situation de handicap',
+  'accessibilite aux personnes handicapees',
+  'accessibilite aux personnes',
+  'tarif',
+  'tarifs',
+  'contact',
+  'contacts',
+  "delai d'acces",
+  "delais d'acces",
+  "les delais d'acces",
 ]);
 
 /** Apostrophes rencontrées dans les .docx : courbe, modificatrice, droite. */
@@ -194,6 +277,22 @@ export function estMentionOrganisme(ligne: string): boolean {
 }
 
 /**
+ * Cette ligne est-elle un TITRE DE GABARIT ?
+ *
+ * Appartenance à l'ensemble fermé `TITRES_GABARIT`, sur la ligne ENTIÈRE
+ * normalisée — exactement la même doctrine que `estMentionOrganisme`, et pour la
+ * même raison : une heuristique (« la ligne est en majuscules », « la ligne ne
+ * finit pas par un point ») détruirait du contenu Faros légitime.
+ *
+ * Un titre n'est PAS une mention : il ne se retire jamais seul, il se retire avec
+ * son bloc. C'est `retirerMentionsOrganisme` qui en décide.
+ */
+export function estTitreGabarit(ligne: string): boolean {
+  const n = normaliserLigne(ligne);
+  return n.length > 0 && TITRES_GABARIT.has(n);
+}
+
+/**
  * Retire les mentions d'un déroulé Markdown, et rend AUSSI ce qu'elle a retiré.
  *
  * La liste `retirees` n'est pas décorative : c'est elle qui alimente le warning de
@@ -208,11 +307,42 @@ export function retirerMentionsOrganisme(contentMd: string | null | undefined): 
     return { contentMd: '', retirees: [] };
   }
   const lignes = contentMd.split('\n');
+
+  // Passe 1 — les MENTIONS, ligne à ligne.
+  const aRetirer = new Set<number>();
+  for (let i = 0; i < lignes.length; i++) {
+    if (estMentionOrganisme(lignes[i]!)) aRetirer.add(i);
+  }
+
+  // Passe 2 — les TITRES DE GABARIT, structurellement : un titre part avec son
+  // bloc, ou il ne part pas. On regarde ce qu'il introduit, jusqu'au titre
+  // suivant ou jusqu'à la fin du module. Si tout y est du boilerplate, le titre
+  // n'introduit plus rien : il part. Sinon il RESTE — un titre suivi de vraie
+  // pédagogie n'est pas un pied de page.
+  //
+  // Le segment VIDE (titre en dernière ligne, ou titre immédiatement suivi d'un
+  // autre titre) compte comme « tout est du boilerplate » : un titre qui
+  // n'introduit rien est un résidu de pied de page.
+  for (let i = 0; i < lignes.length; i++) {
+    if (!estTitreGabarit(lignes[i]!)) continue;
+    let toutEstBoilerplate = true;
+    for (let j = i + 1; j < lignes.length; j++) {
+      const suivante = lignes[j]!;
+      if (estTitreGabarit(suivante)) break; // fin du segment : au suivant de décider
+      if (suivante.trim().length === 0) continue; // une ligne vide ne dit rien
+      if (!estMentionOrganisme(suivante)) {
+        toutEstBoilerplate = false;
+        break;
+      }
+    }
+    if (toutEstBoilerplate) aRetirer.add(i);
+  }
+
   const gardees: string[] = [];
   const retirees: string[] = [];
-  for (const ligne of lignes) {
-    if (estMentionOrganisme(ligne)) retirees.push(ligne);
-    else gardees.push(ligne);
+  for (let i = 0; i < lignes.length; i++) {
+    if (aRetirer.has(i)) retirees.push(lignes[i]!);
+    else gardees.push(lignes[i]!);
   }
   // Rien retiré ⇒ on rend la chaîne d'origine à l'identique, sans recomposition :
   // un module intact doit l'être au caractère près (cf. faros:SA-ADM-M001#1).
