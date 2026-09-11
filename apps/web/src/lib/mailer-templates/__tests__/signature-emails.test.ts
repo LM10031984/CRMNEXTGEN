@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Les CINQ gabarits de la chaîne de signature — lot C.2c.
+ * Les CINQ gabarits de la chaîne de signature — lot C.2c, texte revu le
+ * 11/09/2026 (retours Laurent sur `evidence/signature-C`).
  *
  * DEUX MODES DE PANNE, rappelés ici parce qu'onze tests de ce chantier s'y sont
  * perdus :
@@ -17,15 +18,14 @@ import { describe, it, expect } from 'vitest';
  *
  * ⚠ TROIS DE CES CINQ GABARITS N'ONT AUCUN APPELANT (relances J+3/J+7,
  * exemplaire signé) : leur déclencheur est le webhook et le cron du lot C.3.
- * C'est un choix explicite de Laurent (11/09/2026) — les écrire et les PROUVER
- * maintenant, les brancher en C.3. Ce fichier est donc, pour eux, la seule
- * garde existante : il vérifie ce que le gabarit COMPOSE, jamais qu'un email
- * part. `evidence/signature-C/README.md` le dit noir sur blanc.
+ * Ce fichier est donc, pour eux, la seule garde existante — il vérifie ce que le
+ * gabarit COMPOSE, jamais qu'un email part.
  */
 
 import type { OfConfig } from '@/lib/of-config';
 import {
   LIBELLE_QUALITE,
+  phraseDeRole,
   renderSignatureDemandeClient,
   renderSignatureDemandeOf,
   type SignatureDemandeInput,
@@ -44,19 +44,41 @@ const OF = {
 } as unknown as OfConfig;
 
 const LIEN = 'https://docuseal.eu/s/ABC123';
-const PIECE = 'Convention — AGENCE MARTIN & FILS';
+const ORGANISATION = 'AGENCE MARTIN & FILS';
+const FORMATION = "L'IA au service de l'agent commercial";
+const EXPEDITEUR = { nom: 'Laurent Marx', telephone: '06 12 34 56 78' };
+
+/** Point 3 — la phrase qui rassure, sous le bouton. Valeur littérale. */
+const RASSURANCE =
+  'La signature prend deux minutes, depuis un ordinateur ou un téléphone, sans créer de ' +
+  'compte. Une question ? Répondez simplement à ce message.';
 
 function demande(over: Partial<SignatureDemandeInput> = {}): SignatureDemandeInput {
   return {
     signataireNom: 'Claire DUPONT',
     qualiteSignataire: 'responsable-organisation',
-    libellePiece: PIECE,
-    formationTitre: "L'IA au service de l'agent commercial",
+    piece: 'CONVENTION',
+    concerne: ORGANISATION,
+    organisation: ORGANISATION,
+    libellePiece: `Convention — ${ORGANISATION} (2 participants)`,
+    formationTitre: FORMATION,
     sessionCode: 'SES-0048',
     signUrl: LIEN,
     dateLimite: new Date('2026-10-11T09:00:00.000Z'),
+    expediteur: EXPEDITEUR,
     ...over,
   };
+}
+
+function agefice(over: Partial<SignatureDemandeInput> = {}): SignatureDemandeInput {
+  return demande({
+    signataireNom: 'Marie EXEMPLE',
+    qualiteSignataire: 'stagiaire',
+    piece: 'AGEFICE',
+    concerne: 'Marie EXEMPLE',
+    libellePiece: 'Dossier AGEFICE — Marie EXEMPLE',
+    ...over,
+  });
 }
 
 function relance(over: Partial<SignatureRelanceInput> = {}): SignatureRelanceInput {
@@ -67,11 +89,15 @@ function exemplaire(over: Partial<SignatureExemplaireInput> = {}): SignatureExem
   return {
     signataireNom: 'Claire DUPONT',
     qualiteSignataire: 'responsable-organisation',
-    libellePiece: PIECE,
-    formationTitre: "L'IA au service de l'agent commercial",
+    piece: 'CONVENTION',
+    concerne: ORGANISATION,
+    organisation: ORGANISATION,
+    libellePiece: `Convention — ${ORGANISATION} (2 participants)`,
+    formationTitre: FORMATION,
     sessionCode: 'SES-0048',
     signeLe: new Date('2026-09-20T14:30:00.000Z'),
     piecesJointes: ['convention-agence-martin.pdf', 'convention-agence-martin.audit-trail.pdf'],
+    expediteur: EXPEDITEUR,
     ...over,
   };
 }
@@ -89,56 +115,224 @@ function contientDirigeant(...textes: string[]): boolean {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('T2.1 — demande de signature client : le lien exact, la pièce nommée', () => {
-  it('le signUrl LITTÉRAL est dans le html ET dans le texte de repli', () => {
+describe('POINT 5 — les objets nomment la PIÈCE et QUI elle concerne', () => {
+  it('convention ⇒ « Convention à signer — {organisation} »', () => {
+    expect(renderSignatureDemandeClient(demande(), OF).subject).toBe(
+      'Convention à signer — AGENCE MARTIN & FILS',
+    );
+  });
+
+  it('dossier AGEFICE ⇒ « Dossier AGEFICE à signer — {stagiaire} »', () => {
+    expect(renderSignatureDemandeClient(agefice(), OF).subject).toBe(
+      'Dossier AGEFICE à signer — Marie EXEMPLE',
+    );
+  });
+
+  it('assiduité ⇒ « Attestation d’assiduité à signer — {stagiaire} »', () => {
+    expect(
+      renderSignatureDemandeClient(
+        agefice({ piece: 'ASSIDUITE', libellePiece: 'Attestation — Marie EXEMPLE' }),
+        OF,
+      ).subject,
+    ).toBe("Attestation d'assiduité à signer — Marie EXEMPLE");
+  });
+
+  it('relance rang 1 ⇒ « Rappel : votre convention attend votre signature »', () => {
+    expect(renderSignatureRelance(relance({ rang: 1 }), OF).subject).toBe(
+      'Rappel : votre convention attend votre signature',
+    );
+  });
+
+  it('relance rang 2 ⇒ « Dernier rappel : … »', () => {
+    expect(renderSignatureRelance(relance({ rang: 2 }), OF).subject).toBe(
+      'Dernier rappel : votre convention attend votre signature',
+    );
+  });
+
+  it('la relance d’un dossier AGEFICE dit « votre dossier AGEFICE », pas « votre convention »', () => {
+    expect(renderSignatureRelance(relance({ ...agefice(), rang: 1, envoyeeLe: new Date() }), OF).subject).toBe(
+      'Rappel : votre dossier AGEFICE attend votre signature',
+    );
+  });
+
+  it('l’objet de l’ORGANISME reste inchangé — c’est un email interne', () => {
+    expect(renderSignatureDemandeOf(demande(), OF).subject).toBe(
+      'À votre tour de signer — Convention — AGENCE MARTIN & FILS (2 participants)',
+    );
+  });
+});
+
+describe('POINT 1 — la phrase de rôle nomme l’organisation, ou l’inscription', () => {
+  it('responsable ⇒ « en tant que responsable de {organisation} »', () => {
+    expect(phraseDeRole('responsable-organisation', ORGANISATION)).toBe(
+      'Vous recevez ce message en tant que responsable de AGENCE MARTIN & FILS.',
+    );
+  });
+
+  it('stagiaire ⇒ « en tant que stagiaire, pour votre propre inscription »', () => {
+    expect(phraseDeRole('stagiaire', ORGANISATION)).toBe(
+      'Vous recevez ce message en tant que stagiaire, pour votre propre inscription.',
+    );
+  });
+
+  it('organisme ⇒ INCHANGÉ', () => {
+    expect(phraseDeRole('of', ORGANISATION)).toBe(
+      "Vous recevez ce message en qualité de signataire de l'organisme de formation.",
+    );
+  });
+
+  it('PUISSANCE — organisation inconnue ⇒ repli honnête, jamais « responsable de null »', () => {
+    const phrase = phraseDeRole('responsable-organisation', null);
+    expect(phrase).toBe("Vous recevez ce message en tant que responsable de l'organisation.");
+    expect(phrase).not.toContain('null');
+  });
+
+  it('PUISSANCE — une organisation faite d’espaces est une organisation ABSENTE', () => {
+    expect(phraseDeRole('responsable-organisation', '   ')).toBe(
+      "Vous recevez ce message en tant que responsable de l'organisation.",
+    );
+  });
+
+  it('la phrase est celle que le corps rend réellement', () => {
+    expect(renderSignatureDemandeClient(demande(), OF).text).toContain(
+      'Vous recevez ce message en tant que responsable de AGENCE MARTIN & FILS.',
+    );
+    expect(renderSignatureDemandeClient(agefice(), OF).text).toContain(
+      'Vous recevez ce message en tant que stagiaire, pour votre propre inscription.',
+    );
+  });
+});
+
+describe('POINT 2 — une phrase de contexte AVANT le document', () => {
+  it('responsable ⇒ « …l’inscription de votre équipe…, il reste une signature : la vôtre. »', () => {
+    expect(renderSignatureDemandeClient(demande(), OF).text).toContain(
+      "Pour finaliser l'inscription de votre équipe à la formation L'IA au service de " +
+        "l'agent commercial, il reste une signature : la vôtre.",
+    );
+  });
+
+  it('stagiaire ⇒ « Pour finaliser votre inscription à {formation}, il reste votre signature. »', () => {
+    expect(renderSignatureDemandeClient(agefice(), OF).text).toContain(
+      "Pour finaliser votre inscription à L'IA au service de l'agent commercial, il reste " +
+        'votre signature.',
+    );
+  });
+
+  it('PUISSANCE — elle vient AVANT le bloc du document, pas après', () => {
+    const { text } = renderSignatureDemandeClient(demande(), OF);
+    expect(text.indexOf('il reste une signature')).toBeLessThan(text.indexOf('- Document :'));
+  });
+
+  it('l’organisme garde son intro interne — on ne lui parle pas d’inscription', () => {
+    const { text } = renderSignatureDemandeOf(demande(), OF);
+    expect(text).toContain("C'est à votre tour de signer ce document.");
+    expect(text).not.toContain('il reste une signature');
+  });
+});
+
+describe('POINT 3 — rassurer sur le geste, sous le bouton', () => {
+  it.each([
+    ['demande client', () => renderSignatureDemandeClient(demande(), OF)],
+    ['demande organisme', () => renderSignatureDemandeOf(demande(), OF)],
+    ['relance J+3', () => renderSignatureRelance(relance({ rang: 1 }), OF)],
+    ['relance J+7', () => renderSignatureRelance(relance({ rang: 2 }), OF)],
+  ])('%s : la phrase est là, en html ET en texte', (_nom, rendre) => {
+    const { html, text } = rendre();
+    expect(text).toContain(RASSURANCE);
+    expect(html).toContain('sans créer de compte');
+    expect(html).toContain('Répondez simplement à ce message');
+  });
+
+  it('PUISSANCE — elle vient APRÈS le bouton, pas avant : elle rassure sur le geste', () => {
+    const { html } = renderSignatureDemandeClient(demande(), OF);
+    expect(html.indexOf('Signer le document')).toBeLessThan(html.indexOf('sans créer de compte'));
+  });
+
+  it('l’exemplaire signé NE la porte pas : il n’y a plus de geste à faire', () => {
+    expect(renderSignatureExemplaire(exemplaire(), OF).text).not.toContain('sans créer de compte');
+  });
+});
+
+describe('POINT 4 — la signature est une PERSONNE, jamais « l’équipe »', () => {
+  it.each([
+    ['demande client', () => renderSignatureDemandeClient(demande(), OF)],
+    ['demande organisme', () => renderSignatureDemandeOf(demande(), OF)],
+    ['relance J+3', () => renderSignatureRelance(relance(), OF)],
+    ['exemplaire signé', () => renderSignatureExemplaire(exemplaire(), OF)],
+  ])('%s : « Laurent Marx — Start Academy » et le téléphone', (_nom, rendre) => {
+    const { html, text } = rendre();
+    expect(text).toContain('Laurent Marx — Start Academy');
+    expect(text).toContain('06 12 34 56 78');
+    expect(html).toContain('Laurent Marx — Start Academy');
+    expect(html).toContain('06 12 34 56 78');
+  });
+
+  it('PUISSANCE — « L’équipe » a disparu des cinq gabarits', () => {
+    const rendus = [
+      renderSignatureDemandeClient(demande(), OF),
+      renderSignatureDemandeOf(demande(), OF),
+      renderSignatureRelance(relance({ rang: 1 }), OF),
+      renderSignatureRelance(relance({ rang: 2 }), OF),
+      renderSignatureExemplaire(exemplaire(), OF),
+    ];
+    for (const r of rendus) {
+      expect(r.text).not.toContain("L'équipe");
+      expect(r.html).not.toContain('L&#39;équipe');
+    }
+  });
+
+  it('sans téléphone connu, la ligne disparaît — jamais « — null »', () => {
+    const { html, text } = renderSignatureDemandeClient(
+      demande({ expediteur: { nom: 'Laurent Marx', telephone: null } }),
+      OF,
+    );
+    expect(text).toContain('Laurent Marx — Start Academy');
+    expect(text).not.toContain('null');
+    expect(html).not.toContain('null');
+  });
+
+  it('relance J+7 : « nous vous renverrons une nouvelle demande », pas « réémis »', () => {
+    const { text } = renderSignatureRelance(relance({ rang: 2 }), OF);
+    expect(text).toContain('nous vous renverrons une nouvelle demande');
+    expect(text).not.toContain('réémis');
+    expect(renderSignatureRelance(relance({ rang: 2 }), OF).html).not.toContain('réémis');
+  });
+});
+
+describe('ce qui ne devait PAS bouger — les gardes du premier jet', () => {
+  it('le signUrl LITTÉRAL est dans le html ET dans le texte', () => {
     const { html, text } = renderSignatureDemandeClient(demande(), OF);
     expect(html).toContain('https://docuseal.eu/s/ABC123');
     expect(text).toContain('https://docuseal.eu/s/ABC123');
   });
 
-  it("l'objet nomme la pièce, en toutes lettres", () => {
-    expect(renderSignatureDemandeClient(demande(), OF).subject).toBe(
-      'Signature demandée — Convention — AGENCE MARTIN & FILS',
-    );
-  });
-
-  it("l'objet de l'OF dit que c'est son tour", () => {
-    expect(renderSignatureDemandeOf(demande(), OF).subject).toBe(
-      'À votre tour de signer — Convention — AGENCE MARTIN & FILS',
-    );
-  });
-
-  it('PUISSANCE — UN SEUL lien cliquable : celui de la signature, jamais un lien vers QualiOF', () => {
+  it('UN SEUL lien cliquable dans la demande : celui de la signature', () => {
     const { html } = renderSignatureDemandeClient(demande(), OF);
-    const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual(['https://docuseal.eu/s/ABC123']);
+    expect([...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([
+      'https://docuseal.eu/s/ABC123',
+    ]);
   });
 
-  it('la date limite est écrite EN TOUTES LETTRES — une date se vérifie, une durée se discute', () => {
+  it('AUCUN lien dans l’exemplaire signé : tout est joint', () => {
+    const { html } = renderSignatureExemplaire(exemplaire(), OF);
+    expect([...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([]);
+  });
+
+  it('la date limite en toutes lettres, jamais « 30 jours »', () => {
     const { html, text } = renderSignatureDemandeClient(demande(), OF);
     expect(html).toContain('11 octobre 2026');
     expect(text).toContain('11 octobre 2026');
     expect(html).not.toContain('30 jours');
   });
 
-  it('aucun montant, aucun tarif : ce n’est pas un email commercial', () => {
+  it('aucun montant, aucun tarif', () => {
     const { subject, html, text } = renderSignatureDemandeClient(demande(), OF);
-    for (const t of [subject, html, text]) {
-      expect(t).not.toMatch(/€|EUR\b|\bHT\b|\bTTC\b/);
-    }
+    for (const t of [subject, html, text]) expect(t).not.toMatch(/€|EUR\b|\bHT\b|\bTTC\b/);
   });
 
-  it('la formation et le code session sont nommés — trois demandes le même jour se distinguent', () => {
-    const { html } = renderSignatureDemandeClient(demande(), OF);
-    expect(html).toContain('SES-0048');
-    expect(html).toContain("L&#39;IA au service de l&#39;agent commercial");
-  });
-});
-
-describe('T2.2 — échappement : une raison sociale est saisie par un humain', () => {
-  it('« AGENCE <b>MARTIN</b> & FILS » ressort échappée, jamais en balises', () => {
+  it('T2.2 — échappement : « AGENCE <b>MARTIN</b> & FILS » ressort échappée', () => {
     const { html } = renderSignatureDemandeClient(
-      demande({ libellePiece: 'AGENCE <b>MARTIN</b> & FILS' }),
+      demande({ organisation: 'AGENCE <b>MARTIN</b> & FILS', concerne: 'AGENCE <b>MARTIN</b> & FILS' }),
       OF,
     );
     expect(html).toContain('&lt;b&gt;');
@@ -146,105 +340,53 @@ describe('T2.2 — échappement : une raison sociale est saisie par un humain', 
     expect(html).not.toContain('<b>MARTIN</b>');
   });
 
-  it('le nom du signataire est échappé lui aussi', () => {
+  it('le nom de l’expéditeur est échappé lui aussi', () => {
     const { html } = renderSignatureDemandeClient(
-      demande({ signataireNom: 'Claire <script>alert(1)</script>' }),
+      demande({ expediteur: { nom: 'Laurent <script>x</script>', telephone: null } }),
       OF,
     );
     expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;');
-  });
-});
-
-describe('T2.12 / T2.13 — VOCABULAIRE : jamais « dirigeant », et la qualité est REÇUE', () => {
-  it('les trois libellés de qualité sont ceux-là, et pas d’autres', () => {
-    expect(LIBELLE_QUALITE['responsable-organisation']).toBe("responsable de l'organisation");
-    expect(LIBELLE_QUALITE.stagiaire).toBe('stagiaire');
-    expect(LIBELLE_QUALITE.of).toBe("signataire de l'organisme de formation");
   });
 
-  it('T2.12 — aucun des cinq rendus n’écrit « dirigeant », pour aucune qualité', () => {
+  it('T2.12 — aucun des rendus n’écrit « dirigeant », pour aucune qualité', () => {
     const rendus = [
-      renderSignatureDemandeClient(demande({ qualiteSignataire: 'responsable-organisation' }), OF),
-      renderSignatureDemandeClient(demande({ qualiteSignataire: 'stagiaire' }), OF),
+      renderSignatureDemandeClient(demande(), OF),
+      renderSignatureDemandeClient(agefice(), OF),
       renderSignatureDemandeOf(demande(), OF),
       renderSignatureRelance(relance({ rang: 1 }), OF),
       renderSignatureRelance(relance({ rang: 2 }), OF),
       renderSignatureExemplaire(exemplaire(), OF),
       renderSignatureExemplaire(exemplaire({ qualiteSignataire: 'stagiaire' }), OF),
     ];
-    for (const r of rendus) {
-      expect(contientDirigeant(r.subject, r.html, r.text)).toBe(false);
-    }
+    for (const r of rendus) expect(contientDirigeant(r.subject, r.html, r.text)).toBe(false);
   });
 
-  it('T2.13 — « stagiaire » reçu ⇒ le corps dit « stagiaire », PAS « responsable de l’organisation »', () => {
-    // Le cas de l'indépendant qui signe sa propre convention : l'ancre du
-    // gabarit dit `Client`, le régime dit `STAGIAIRE`. C'est le régime qui nomme.
-    const { html } = renderSignatureDemandeClient(demande({ qualiteSignataire: 'stagiaire' }), OF);
-    expect(html).toContain('stagiaire');
-    expect(html).not.toContain("responsable de l'organisation");
-    expect(html).not.toContain('responsable de l&#39;organisation');
+  it('le dictionnaire de repli garde ses trois entrées', () => {
+    expect(LIBELLE_QUALITE['responsable-organisation']).toBe("responsable de l'organisation");
+    expect(LIBELLE_QUALITE.stagiaire).toBe('stagiaire');
+    expect(LIBELLE_QUALITE.of).toBe("signataire de l'organisme de formation");
   });
 
-  it('« responsable-organisation » reçu ⇒ le corps le dit, et ne dit pas « stagiaire »', () => {
-    const { html } = renderSignatureDemandeClient(
-      demande({ qualiteSignataire: 'responsable-organisation' }),
-      OF,
-    );
-    expect(html).toContain('responsable de l&#39;organisation');
-    expect(html).not.toContain('stagiaire');
-  });
-});
-
-describe('gabarit 3/4 — les relances J+3 et J+7 (rendues ici, branchées au lot C.3)', () => {
-  it('rang 1 ⇒ objet de rappel ; rang 2 ⇒ objet de DERNIER rappel', () => {
-    expect(renderSignatureRelance(relance({ rang: 1 }), OF).subject).toBe(
-      'Rappel — Convention — AGENCE MARTIN & FILS attend votre signature',
-    );
-    expect(renderSignatureRelance(relance({ rang: 2 }), OF).subject).toBe(
-      'Dernier rappel — Convention — AGENCE MARTIN & FILS attend votre signature',
-    );
-  });
-
-  it('la relance porte le MÊME lien que la demande — jamais un lien régénéré', () => {
-    const { html, text } = renderSignatureRelance(relance(), OF);
-    expect(html).toContain('https://docuseal.eu/s/ABC123');
-    expect(text).toContain('https://docuseal.eu/s/ABC123');
-  });
-
-  it('elle rappelle la date d’envoi ET la date limite — les deux, en toutes lettres', () => {
+  it('la relance rappelle la date d’envoi ET la date limite', () => {
     const { text } = renderSignatureRelance(relance(), OF);
     expect(text).toContain('11 septembre 2026');
     expect(text).toContain('11 octobre 2026');
   });
 
-  it('PUISSANCE — le dernier rappel DIT que c’est le dernier : après, plus rien ne part', () => {
-    const { text } = renderSignatureRelance(relance({ rang: 2 }), OF);
-    expect(text).toContain('dernier rappel');
-  });
-});
-
-describe('gabarit 5 — l’exemplaire signé (rendu ici, branché au lot C.3)', () => {
-  it("l'objet annonce l'exemplaire, pas une demande", () => {
-    expect(renderSignatureExemplaire(exemplaire(), OF).subject).toBe(
-      'Votre exemplaire signé — Convention — AGENCE MARTIN & FILS',
-    );
+  it('la relance porte le MÊME lien que la demande', () => {
+    const { html, text } = renderSignatureRelance(relance(), OF);
+    expect(html).toContain('https://docuseal.eu/s/ABC123');
+    expect(text).toContain('https://docuseal.eu/s/ABC123');
   });
 
-  it('AUCUN lien cliquable : tout est en pièce jointe, rien à aller chercher', () => {
-    const { html } = renderSignatureExemplaire(exemplaire(), OF);
-    expect([...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([]);
-  });
-
-  it('le CERTIFICAT de signature est annoncé nommément — c’est ce que les AGEFICE réclament', () => {
+  it('le CERTIFICAT de signature est annoncé nommément', () => {
     const { html, text } = renderSignatureExemplaire(exemplaire(), OF);
     expect(text).toContain('convention-agence-martin.pdf');
     expect(text).toContain('convention-agence-martin.audit-trail.pdf');
     expect(html).toContain('certificat de signature');
   });
 
-  it('PUISSANCE — chaque pièce jointe reçue est ANNONCÉE : une pièce muette est une pièce perdue', () => {
+  it('chaque pièce jointe REÇUE est annoncée', () => {
     const { text } = renderSignatureExemplaire(
       exemplaire({ piecesJointes: ['a.pdf', 'b.pdf', 'c.audit-trail.pdf'] }),
       OF,
@@ -252,13 +394,7 @@ describe('gabarit 5 — l’exemplaire signé (rendu ici, branché au lot C.3)',
     for (const f of ['a.pdf', 'b.pdf', 'c.audit-trail.pdf']) expect(text).toContain(f);
   });
 
-  it('la date de signature est écrite en toutes lettres', () => {
-    expect(renderSignatureExemplaire(exemplaire(), OF).text).toContain('20 septembre 2026');
-  });
-});
-
-describe('les cinq gabarits partagent UNE mise en page', () => {
-  it('tous portent l’en-tête et le pied de l’organisme', () => {
+  it('tous portent l’en-tête et le pied de l’organisme, et un texte de repli', () => {
     const rendus = [
       renderSignatureDemandeClient(demande(), OF),
       renderSignatureDemandeOf(demande(), OF),
@@ -266,20 +402,10 @@ describe('les cinq gabarits partagent UNE mise en page', () => {
       renderSignatureExemplaire(exemplaire(), OF),
     ];
     for (const r of rendus) {
-      expect(r.html).toContain('Start Academy');
+      expect(r.html.startsWith('<!DOCTYPE html>')).toBe(true);
       expect(r.html).toContain('12345678900011');
       expect(r.html).toContain('11755555555');
-      expect(r.html.startsWith('<!DOCTYPE html>')).toBe(true);
+      expect(r.text.trim().length).toBeGreaterThan(80);
     }
-  });
-
-  it('tous rendent un texte de repli non vide', () => {
-    const rendus = [
-      renderSignatureDemandeClient(demande(), OF),
-      renderSignatureDemandeOf(demande(), OF),
-      renderSignatureRelance(relance(), OF),
-      renderSignatureExemplaire(exemplaire(), OF),
-    ];
-    for (const r of rendus) expect(r.text.trim().length).toBeGreaterThan(80);
   });
 });

@@ -65,6 +65,11 @@ describe('planifierEnvoi — les 4 scénarios exigés', () => {
         cible: { kind: 'ORGANISATION', organizationId: 'org-agence' },
         participantIds: ['part-1'],
         libelle: 'Convention — AGENCE MARTIN (1 participant)',
+        // Lot C.2c — ce que l'OBJET de l'email nomme : l'organisation, SANS le
+        // compte de participants. « (1 participant) » est de la logistique
+        // interne, pas ce qu'on écrit à un responsable d'agence.
+        concerne: 'AGENCE MARTIN',
+        organisation: 'AGENCE MARTIN',
       },
     ]);
     expect(avant.blocages).toEqual([]);
@@ -107,6 +112,10 @@ describe('planifierEnvoi — les 4 scénarios exigés', () => {
       cible: { kind: 'PARTICIPANT', participantId: 'part-tns' },
       participantIds: ['part-tns'],
       libelle: 'Dossier AGEFICE — Florent HAUSSWIRTH',
+      // Pièce individuelle : c'est l'APPRENANT que l'objet nomme, pas son EI.
+      // L'organisation reste portée à côté — la phrase de rôle en a besoin.
+      concerne: 'Florent HAUSSWIRTH',
+      organisation: 'HAUSSWIRTH FLORENT EI',
     });
 
     const apres = planifierEnvoi({ scope: 'AFTER', participants });
@@ -139,6 +148,8 @@ describe('planifierEnvoi — les 4 scénarios exigés', () => {
         // Triés : l'ordre d'entrée ne doit pas transparaître dans le plan.
         participantIds: ['part-1', 'part-2'],
         libelle: 'Convention — AGENCE MARTIN (2 participants)',
+        concerne: 'AGENCE MARTIN',
+        organisation: 'AGENCE MARTIN',
       },
     ]);
 

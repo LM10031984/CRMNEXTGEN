@@ -19,9 +19,16 @@
  */
 
 import type { OfConfig } from '@/lib/of-config';
+import type { DocTypeSignable } from '@/lib/signature/regime';
 
 export const BRAND_DARK = '#00527A';
 export const BRAND_LIGHT_BG = '#F0F9FF';
+
+/** Une chaîne utile, ou `null`. Un champ rempli d'espaces est un champ vide. */
+export function texteUtile(v: string | null | undefined): string | null {
+  const t = (v ?? '').trim();
+  return t.length > 0 ? t : null;
+}
 
 export function escapeHtml(s: string | null | undefined): string {
   if (!s) return '';
@@ -42,11 +49,83 @@ export function escapeHtml(s: string | null | undefined): string {
  */
 export type QualiteSignataire = 'responsable-organisation' | 'stagiaire' | 'of';
 
+/**
+ * Le REPLI, quand l'organisation n'est pas connue. La phrase normale la NOMME
+ * (cf. `phraseDeRole`) — c'est le retour n°1 de Laurent du 11/09/2026 : « en
+ * qualité de responsable de l'organisation » est administratif, « en tant que
+ * responsable de AGENCE MARTIN » parle à quelqu'un.
+ */
 export const LIBELLE_QUALITE: Record<QualiteSignataire, string> = {
   'responsable-organisation': "responsable de l'organisation",
   stagiaire: 'stagiaire',
   of: "signataire de l'organisme de formation",
 };
+
+/**
+ * La phrase qui dit au destinataire POURQUOI il reçoit ce message.
+ *
+ * Une fonction, et non trois chaînes : les trois formes n'ont pas la même
+ * structure — l'une interpole l'organisation, l'autre parle d'inscription, la
+ * troisième est interne. Les aplatir en dictionnaire obligerait chaque gabarit
+ * à recomposer, et c'est précisément ce qui finit écrit de trois façons.
+ *
+ * ⚠ Organisation inconnue ⇒ repli sur `LIBELLE_QUALITE`. Jamais « responsable
+ * de null » dans un email que lira un financeur.
+ */
+export function phraseDeRole(qualite: QualiteSignataire, organisation: string | null): string {
+  if (qualite === 'of') {
+    return `Vous recevez ce message en qualité de ${LIBELLE_QUALITE.of}.`;
+  }
+  if (qualite === 'stagiaire') {
+    return 'Vous recevez ce message en tant que stagiaire, pour votre propre inscription.';
+  }
+  const org = texteUtile(organisation);
+  if (org === null) {
+    return `Vous recevez ce message en tant que ${LIBELLE_QUALITE['responsable-organisation']}.`;
+  }
+  return `Vous recevez ce message en tant que responsable de ${org}.`;
+}
+
+/**
+ * Le nom de la pièce, dans les DEUX formes dont les objets ont besoin.
+ *
+ * `titre` ouvre un objet (« Convention à signer — … ») ; `possessif` se glisse
+ * après « votre » (« Rappel : votre convention attend votre signature »). Deux
+ * formes parce que le français en a deux — les dériver l'une de l'autre par une
+ * minuscule marcherait pour « Convention » et casserait sur « Dossier AGEFICE ».
+ */
+export const NOM_DE_PIECE: Record<DocTypeSignable, { titre: string; possessif: string }> = {
+  CONVENTION: { titre: 'Convention', possessif: 'convention' },
+  AGEFICE: { titre: 'Dossier AGEFICE', possessif: 'dossier AGEFICE' },
+  ASSIDUITE: { titre: "Attestation d'assiduité", possessif: "attestation d'assiduité" },
+};
+
+/**
+ * Qui signe l'email — retour n°4 de Laurent (11/09/2026). Une personne, jamais
+ * « L'équipe » : le destinataire doit savoir à qui il répond, et pouvoir
+ * décrocher son téléphone.
+ *
+ * Le nom vient des réglages tenant (`Tenant.signatoryName`, sinon le
+ * responsable d'of-config) — le MÊME que celui qui signera le document. Deux
+ * résolutions divergeraient, et l'email serait signé par quelqu'un d'autre que
+ * le PDF.
+ */
+export interface Expediteur {
+  nom: string;
+  /** `null` quand aucun téléphone n'est configuré : la ligne disparaît. */
+  telephone: string | null;
+}
+
+/**
+ * La phrase qui rassure sur le GESTE — retour n°3 de Laurent (11/09/2026).
+ *
+ * ⚠ « Répondez simplement à ce message » n'est vrai que si l'expéditeur accepte
+ * les réponses. `MAIL_FROM` / `MAIL_REPLY_TO` doivent pointer une boîte lue.
+ * Une promesse d'email est aussi une promesse d'exploitation.
+ */
+export const RASSURANCE_SIGNATURE =
+  'La signature prend deux minutes, depuis un ordinateur ou un téléphone, sans créer de ' +
+  'compte. Une question ? Répondez simplement à ce message.';
 
 /**
  * Une date en toutes lettres. Fuseau FIXÉ à Europe/Paris : sans lui, le même
@@ -69,6 +148,14 @@ export interface CoquilleInput {
   corps: string;
   /** Le SEUL bouton de l'email, quand il y en a un. */
   bouton?: { href: string; libelle: string };
+  /**
+   * Ce qui se lit APRÈS le bouton — la rassurance sur le geste. Après, et pas
+   * avant : elle répond à la question qu'on se pose une fois le bouton vu.
+   */
+  apresBouton?: string;
+  /** Qui signe. Obligatoire : un email de signature sans expéditeur nommé
+   *  renvoie le destinataire vers personne. */
+  expediteur: Expediteur;
 }
 
 /**
@@ -88,6 +175,18 @@ export function coquilleHtml(input: CoquilleInput, of: OfConfig): string {
         </a>
       </div>`;
 
+  const apresBoutonHtml =
+    input.apresBouton === undefined
+      ? ''
+      : `      <p style="margin:0 0 16px 0; font-size:10pt; color:#475569;">${escapeHtml(input.apresBouton)}</p>`;
+
+  const telephone = texteUtile(input.expediteur.telephone);
+  const signatureHtml = `      <p style="margin:24px 0 0 0; font-size:10pt; color:#64748B;">
+        ${escapeHtml(input.expediteur.nom)} — ${escapeHtml(of.name)}${
+          telephone === null ? '' : `<br>${escapeHtml(telephone)}`
+        }
+      </p>`;
+
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -105,9 +204,8 @@ export function coquilleHtml(input: CoquilleInput, of: OfConfig): string {
       <h2 style="margin:0 0 16px 0; font-size:16pt; color:${BRAND_DARK};">${escapeHtml(titre)}</h2>
 ${corps}
 ${boutonHtml}
-      <p style="margin:24px 0 0 0; font-size:10pt; color:#64748B;">
-        L&#39;équipe ${escapeHtml(of.name)}
-      </p>
+${apresBoutonHtml}
+${signatureHtml}
     </div>
 
     <div style="background:#F8FAFC; padding:16px 32px; border-top:1px solid #E2E8F0; font-size:9pt; color:#64748B; text-align:center;">
@@ -128,6 +226,14 @@ export function encadrePiece(libellePiece: string, formationTitre: string, sessi
           <li>Session : ${escapeHtml(sessionCode)}</li>
         </ul>
       </div>`;
+}
+
+/** La signature, en texte brut. Mêmes lignes que la version HTML. */
+export function blocSignatureTexte(expediteur: Expediteur, of: OfConfig): string[] {
+  const telephone = texteUtile(expediteur.telephone);
+  const lignes = [`${expediteur.nom} — ${of.name}`];
+  if (telephone !== null) lignes.push(telephone);
+  return lignes;
 }
 
 /** Un paragraphe de corps, échappé. */

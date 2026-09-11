@@ -20,13 +20,16 @@
  */
 
 import type { OfConfig } from '@/lib/of-config';
+import type { DocTypeSignable } from '@/lib/signature/regime';
 import {
-  LIBELLE_QUALITE,
+  blocSignatureTexte,
   coquilleHtml,
   dateEnToutesLettres,
   encadrePiece,
   escapeHtml,
   paragraphe,
+  phraseDeRole,
+  type Expediteur,
   type QualiteSignataire,
 } from './signature-email-commun';
 import type { EmailRendu } from './signature-demande';
@@ -34,6 +37,11 @@ import type { EmailRendu } from './signature-demande';
 export interface SignatureExemplaireInput {
   signataireNom: string;
   qualiteSignataire: QualiteSignataire;
+  piece: DocTypeSignable;
+  /** Ce que l'objet nomme : l'organisation, ou l'apprenant. */
+  concerne: string;
+  /** L'organisation bénéficiaire, nommée dans la phrase de rôle. */
+  organisation: string | null;
   libellePiece: string;
   formationTitre: string;
   sessionCode: string;
@@ -45,6 +53,7 @@ export interface SignatureExemplaireInput {
    * optionnel, c'est la preuve opposable.
    */
   piecesJointes: string[];
+  expediteur: Expediteur;
 }
 
 export function renderSignatureExemplaire(
@@ -72,7 +81,7 @@ export function renderSignatureExemplaire(
     ),
     `      <ul style="margin:0 0 16px 0; padding-left:18px; font-size:10pt;">${listeHtml}</ul>`,
     paragraphe(
-      `Vous recevez ce message en qualité de ${LIBELLE_QUALITE[input.qualiteSignataire]}. ` +
+      `${phraseDeRole(input.qualiteSignataire, input.organisation)} ` +
         `Aucune action n'est attendue de votre part.`,
     ),
   ].join('\n');
@@ -93,11 +102,18 @@ export function renderSignatureExemplaire(
     `Le certificat de signature prouve qui a signé, quand, et depuis quelle adresse.`,
     `Conservez-le : un financeur peut le demander.`,
     ``,
-    `Vous recevez ce message en qualité de ${LIBELLE_QUALITE[input.qualiteSignataire]}.`,
+    phraseDeRole(input.qualiteSignataire, input.organisation),
     `Aucune action n'est attendue de votre part.`,
     ``,
-    `L'équipe ${of.name}`,
+    ...blocSignatureTexte(input.expediteur, of),
   ].join('\n');
 
-  return { subject, html: coquilleHtml({ subject, titre: 'Votre exemplaire signé', corps }, of), text };
+  return {
+    subject,
+    html: coquilleHtml(
+      { subject, titre: 'Votre exemplaire signé', corps, expediteur: input.expediteur },
+      of,
+    ),
+    text,
+  };
 }

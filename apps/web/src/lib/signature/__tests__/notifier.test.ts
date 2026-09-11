@@ -66,12 +66,16 @@ function args(over: Partial<Parameters<typeof notifierSignataire>[0]> = {}) {
     signatureRequestId: 'req-1',
     documentId: 'doc-1',
     libellePiece: 'Convention — AGENCE MARTIN (2 participants)',
+    piece: 'CONVENTION' as const,
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN' as string | null,
     formationTitre: "L'IA au service de l'agent commercial",
     sessionCode: 'SES-0048',
     dateLimite: new Date('2026-10-11T09:00:00.000Z'),
     role: 'DIRIGEANT' as const,
     signataires: [CLIENT, OF_SIGNATAIRE],
     of: OF,
+    signataireOfNom: 'Laurent Marx' as string | null,
     ...over,
   };
 }
@@ -122,11 +126,9 @@ describe('T2.4 — on prévient CELUI DONT C’EST LE TOUR (D-3/D-8)', () => {
     );
   });
 
-  it('…et « Signature demandée » pour le bénéficiaire', async () => {
+  it('…et « Convention à signer — {organisation} » pour le bénéficiaire', async () => {
     await notifierSignataire(args());
-    expect(envoiFait().subject).toBe(
-      'Signature demandée — Convention — AGENCE MARTIN (2 participants)',
-    );
+    expect(envoiFait().subject).toBe('Convention à signer — AGENCE MARTIN');
   });
 
   it('PUISSANCE — un seul email par pièce, jamais un par signataire', async () => {
@@ -218,16 +220,79 @@ describe('T2.13 — la qualité est REÇUE du régime, jamais devinée depuis l�
     expect(envoiFait().html).not.toContain('responsable de l&#39;organisation');
   });
 
-  it('role DIRIGEANT ⇒ « responsable de l’organisation », et jamais « dirigeant »', async () => {
+  it('role DIRIGEANT ⇒ « responsable de {organisation} », et jamais « dirigeant »', async () => {
     await notifierSignataire(args({ role: 'DIRIGEANT' }));
     const { subject, html, text } = envoiFait();
-    expect(html).toContain('responsable de l&#39;organisation');
+    expect(text).toContain('Vous recevez ce message en tant que responsable de AGENCE MARTIN.');
     for (const t of [subject, html, text]) expect(t.toLowerCase()).not.toContain('dirigeant');
   });
 
   it('côté ORGANISME, le régime ne décide rien : c’est le signataire de l’organisme', async () => {
     await notifierSignataire(args({ role: 'STAGIAIRE', signataires: [OF_SIGNATAIRE, CLIENT] }));
     expect(envoiFait().html).toContain('signataire de l&#39;organisme de formation');
+  });
+});
+
+describe('CÂBLAGE — les quatre valeurs qui traversent depuis le plan et les réglages', () => {
+  /**
+   * ⚠ CES QUATRE TESTS GARDENT LE FIL, pas le calcul. `piece`, `concerne`,
+   * `organisation` et `signataireOfNom` sont calculés ailleurs (plan d'envoi,
+   * résolution du signataire OF) et rendus ici. Chacun est OBLIGATOIRE dans la
+   * signature — `tsc` attrape l'oubli — mais `tsc` ne voit pas la SUBSTITUTION :
+   * passer `concerne: ''` compile parfaitement et produit un objet d'email
+   * tronqué. D'où des assertions sur la valeur RÉELLEMENT rendue.
+   */
+  it('`piece` décide de l’objet : AGEFICE ne dit pas « Convention »', async () => {
+    await notifierSignataire(args({ piece: 'AGEFICE', concerne: 'Marie EXEMPLE' }));
+    expect(envoiFait().subject).toBe('Dossier AGEFICE à signer — Marie EXEMPLE');
+  });
+
+  it('`piece` ASSIDUITE ⇒ « Attestation d’assiduité à signer — … »', async () => {
+    await notifierSignataire(args({ piece: 'ASSIDUITE', concerne: 'Marie EXEMPLE' }));
+    expect(envoiFait().subject).toBe("Attestation d'assiduité à signer — Marie EXEMPLE");
+  });
+
+  it('`concerne` est ce que l’objet nomme — pas le libellé du plan', async () => {
+    await notifierSignataire(args({ concerne: 'PROVENCE IMMOBILIER' }));
+    expect(envoiFait().subject).toBe('Convention à signer — PROVENCE IMMOBILIER');
+    // Le libellé du plan, lui, reste dans le CORPS : c'est là qu'il sert.
+    expect(envoiFait().text).toContain('Convention — AGENCE MARTIN (2 participants)');
+  });
+
+  it('`organisation` est ce que la phrase de rôle nomme', async () => {
+    await notifierSignataire(args({ organisation: 'PROVENCE IMMOBILIER' }));
+    expect(envoiFait().text).toContain(
+      'Vous recevez ce message en tant que responsable de PROVENCE IMMOBILIER.',
+    );
+  });
+
+  it('PUISSANCE — organisation inconnue ⇒ repli, jamais « responsable de null »', async () => {
+    await notifierSignataire(args({ organisation: null }));
+    const { text, html } = envoiFait();
+    expect(text).toContain("Vous recevez ce message en tant que responsable de l'organisation.");
+    expect(text).not.toContain('null');
+    expect(html).not.toContain('null');
+  });
+
+  it('`signataireOfNom` SIGNE l’email — la même personne que celle qui signe le PDF', async () => {
+    await notifierSignataire(args({ signataireOfNom: 'Laurent Marx' }));
+    expect(envoiFait().text).toContain('Laurent Marx — Start Academy');
+    expect(envoiFait().text).not.toContain("L'équipe");
+  });
+
+  it('PUISSANCE — sans signataire tenant, on retombe sur le responsable d’of-config', async () => {
+    const ofAvecResp = {
+      ...OF,
+      resp: { prenom: 'Jean-Guy', nom: 'BLANCHON', phone: '04 93 00 00 00' },
+    } as unknown as typeof OF;
+    await notifierSignataire(args({ signataireOfNom: null, of: ofAvecResp }));
+    expect(envoiFait().text).toContain('Jean-Guy BLANCHON — Start Academy');
+    expect(envoiFait().text).toContain('04 93 00 00 00');
+  });
+
+  it('PUISSANCE — sans personne nommable, l’organisme signe : jamais un email anonyme', async () => {
+    await notifierSignataire(args({ signataireOfNom: null }));
+    expect(envoiFait().text).toContain('Start Academy — Start Academy');
   });
 });
 

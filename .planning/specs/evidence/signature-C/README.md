@@ -13,15 +13,32 @@ recopiée ne prouve que la recopie. Il porte, pour chaque gabarit, le
 
 | Fichier | Ce qu'il prouve |
 |---|---|
-| `signature-demande-client-responsable.html` | Le gabarit **1**, branché. Un seul lien cliquable — celui de la signature —, la pièce et la formation nommées, la date limite en toutes lettres, aucun montant. Le destinataire est appelé **« responsable de l'organisation »**. |
-| `signature-demande-client-stagiaire.html` | **La pièce qui prouve le vocabulaire.** Même gabarit, même code, autre `qualiteSignataire` : le destinataire est appelé **« stagiaire »**. C'est le cas de l'indépendant qui signe sa propre convention — l'ancre du PDF dit `Client`, le régime dit `STAGIAIRE`, et c'est le **régime** qui nomme. |
-| `signature-demande-of.html` | Le gabarit **2**, branché. Cas `signatoryOrder = BEFORE` : l'organisme signe en premier, donc c'est LUI qu'on prévient au moment de l'envoi. Ton interne, et « signataire de l'organisme de formation ». |
-| `signature-relance-j3.html` | Le gabarit **3**. Rappelle la date d'envoi ET la date limite, et renvoie **le même lien** — jamais un lien régénéré, qui ouvrirait une seconde demande chez le prestataire. |
-| `signature-relance-j7.html` | Le gabarit **4**. Même gabarit, rang 2 : l'objet dit « Dernier rappel » et le corps dit que c'est le dernier. Après, plus rien ne part. |
+| `signature-demande-client-responsable.html` | Le gabarit **1**, branché. Objet « **Convention à signer — AGENCE MARTIN & FILS** ». Un seul lien cliquable — celui de la signature —, la date limite en toutes lettres, aucun montant. Le destinataire est nommé **« responsable de AGENCE MARTIN & FILS »**, pas « de l'organisation ». |
+| `signature-demande-client-stagiaire.html` | **La pièce qui prouve le vocabulaire.** Même gabarit, même code, autre `qualiteSignataire` : « **en tant que stagiaire, pour votre propre inscription** », et l'objet devient « Dossier AGEFICE à signer — Marie EXEMPLE ». C'est le cas de l'indépendant qui signe sa propre convention — l'ancre du PDF dit `Client`, le régime dit `STAGIAIRE`, et c'est le **régime** qui nomme. |
+| `signature-demande-of.html` | Le gabarit **2**, branché. Cas `signatoryOrder = BEFORE` : l'organisme signe en premier, donc c'est LUI qu'on prévient au moment de l'envoi. **Son objet n'a volontairement pas changé** — il arrive dans la boîte de Laurent, et le libellé complet du plan est ce qui lui permet de trier. |
+| `signature-relance-j3.html` | Le gabarit **3**. Objet « **Rappel : votre convention attend votre signature** ». Rappelle la date d'envoi ET la date limite, et renvoie **le même lien** — jamais un lien régénéré, qui ouvrirait une seconde demande chez le prestataire. |
+| `signature-relance-j7.html` | Le gabarit **4**. Même gabarit, rang 2 : « Dernier rappel », et la sortie est dite du côté de l'OF — « **nous vous renverrons une nouvelle demande** », pas « le document devra être réémis ». Personne, dehors, ne « réémet » un document. |
 | `signature-exemplaire-signe.html` | Le gabarit **5**. **Aucun lien cliquable** : tout est joint. Les deux pièces sont annoncées nommément, dont le **certificat de signature** (`.audit-trail.pdf`) — c'est lui que les AGEFICE réclament. |
 
-**Données fictives, et figées.** Organisme, noms, adresses, SIRET, NDA et dates
-sont inventés et constants. Aucune donnée de production n'entre dans un fichier
+## Texte revu le 11/09/2026 — les cinq retours de Laurent
+
+Le premier jet était juste et administratif. Ce qui a changé, et pourquoi :
+
+| # | Avant | Après |
+|---|---|---|
+| 1 | « en **qualité de** responsable de l'organisation » | « en **tant que** responsable de **{organisation}** » — on nomme l'entreprise. Stagiaire : « en tant que stagiaire, **pour votre propre inscription** ». L'organisme, lui, ne change pas. |
+| 2 | *(rien)* | Une phrase de contexte **avant** le bloc du document : « Pour finaliser l'inscription de votre équipe à la formation {formation}, il reste une signature : la vôtre. » On dit POURQUOI on écrit avant de dire QUOI signer. |
+| 3 | *(rien)* | Sous le bouton : « La signature prend deux minutes, depuis un ordinateur ou un téléphone, **sans créer de compte**. Une question ? Répondez simplement à ce message. » |
+| 4 | « L'équipe Start Academy » | « **Laurent Marx — Start Academy** » + téléphone, depuis `Tenant.signatoryName` et of-config. Le **même** signataire que celui qui signe le PDF — jamais une seconde résolution. |
+| 5 | « Signature demandée — Convention — AGENCE MARTIN (2 participants) » | « **Convention à signer — AGENCE MARTIN & FILS** ». L'objet nomme la pièce et qui elle concerne, sans le compte de participants : c'est de la logistique interne. |
+
+⚠ **Le point 3 est aussi une promesse d'exploitation.** « Répondez simplement à
+ce message » n'est vrai que si l'expéditeur accepte les réponses : `MAIL_FROM` /
+`MAIL_REPLY_TO` doivent pointer une boîte réellement lue. À vérifier avant le
+premier envoi réel.
+
+**Données fictives, et figées.** Organisme, noms, adresses, SIRET, NDA, téléphone
+et dates sont inventés et constants. Aucune donnée de production n'entre dans un fichier
 versionné, et la preuve ne change pas selon le `.env` de qui la régénère.
 
 **Le script refuse d'écrire** si l'un des rendus contient « dirigeant » (casse et

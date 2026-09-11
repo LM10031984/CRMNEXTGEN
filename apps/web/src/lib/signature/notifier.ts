@@ -33,9 +33,12 @@ import {
   renderSignatureDemandeOf,
   type SignatureDemandeInput,
 } from '@/lib/mailer-templates/signature-demande';
-import type { QualiteSignataire } from '@/lib/mailer-templates/signature-email-commun';
+import type {
+  Expediteur,
+  QualiteSignataire,
+} from '@/lib/mailer-templates/signature-email-commun';
 import type { ResultatNotification, SignataireEnvoye } from './envoi-contrats';
-import type { SignerRole } from './regime';
+import type { DocTypeSignable, SignerRole } from './regime';
 
 export type { MotifNonEnvoi, ResultatNotification } from './envoi-contrats';
 
@@ -46,6 +49,12 @@ export interface NotifierSignataireArgs {
   documentId: string;
   /** Le libellé du plan — « Convention — AGENCE MARTIN (2 participants) ». */
   libellePiece: string;
+  /** Le TYPE de pièce : décide de l'objet (« Convention à signer — … »). */
+  piece: DocTypeSignable;
+  /** QUI la pièce concerne : l'organisation pour une convention, l'apprenant sinon. */
+  concerne: string;
+  /** L'organisation bénéficiaire, nommée dans la phrase de rôle. `null` si inconnue. */
+  organisation: string | null;
   formationTitre: string;
   sessionCode: string;
   /** `SignatureRequest.expiresAt`. */
@@ -55,12 +64,40 @@ export interface NotifierSignataireArgs {
   /** DÉJÀ TRIÉE par ordre de signature. Le rang 0 est le destinataire. */
   signataires: readonly SignataireEnvoye[];
   of: OfConfig;
+  /**
+   * Le nom du signataire de l'ORGANISME, tel que `resoudreSignataireOf` l'a
+   * résolu pour cet envoi (`Tenant.signatoryName`, sinon le responsable
+   * d'of-config). `null` quand la pièce n'ouvre pas d'ancre organisme et que la
+   * résolution n'a donc pas eu lieu.
+   *
+   * ⚠ REÇU, jamais re-résolu ici. L'email doit être signé par la personne qui
+   * signe le document : deux résolutions de la même question finiraient par
+   * donner deux noms, et le destinataire verrait l'un dans sa boîte et l'autre
+   * dans le PDF.
+   */
+  signataireOfNom: string | null;
 }
 
 /** Une chaîne utile, ou `null`. Un lien fait d'espaces est un lien absent. */
 function texteUtile(v: string | null | undefined): string | null {
   const t = (v ?? '').trim();
   return t.length > 0 ? t : null;
+}
+
+/**
+ * Qui signe l'email — retour n°4 de Laurent (11/09/2026) : une personne, jamais
+ * « L'équipe ». Le nom vient des réglages tenant ; à défaut, du responsable
+ * d'of-config ; en dernier recours, du nom de l'organisme — un email doit
+ * toujours être signé par quelque chose de nommable.
+ */
+function expediteurDe(of: OfConfig, signataireOfNom: string | null): Expediteur {
+  const respNom = texteUtile(
+    `${texteUtile(of.resp?.prenom) ?? ''} ${texteUtile(of.resp?.nom) ?? ''}`.trim(),
+  );
+  return {
+    nom: texteUtile(signataireOfNom) ?? respNom ?? of.name,
+    telephone: texteUtile(of.resp?.phone) ?? texteUtile(of.phone),
+  };
 }
 
 /**
@@ -141,11 +178,15 @@ export async function notifierSignataire(
   const entree: SignatureDemandeInput = {
     signataireNom: signataire.nom,
     qualiteSignataire: qualiteDe(signataire.partie, args.role),
+    piece: args.piece,
+    concerne: args.concerne,
+    organisation: args.organisation,
     libellePiece: args.libellePiece,
     formationTitre: args.formationTitre,
     sessionCode: args.sessionCode,
     signUrl: lien,
     dateLimite: args.dateLimite,
+    expediteur: expediteurDe(args.of, args.signataireOfNom),
   };
   const rendu =
     signataire.partie === 'OF'

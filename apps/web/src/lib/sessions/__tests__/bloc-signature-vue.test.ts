@@ -118,6 +118,8 @@ describe('construireVueSignature — le bouton et les lignes', () => {
     cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
     participantIds: ['part-1', 'part-2'],
     libelle: 'Convention — AGENCE MARTIN (2 participants)',
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN',
   };
   const dossierNominatif: EnvoiPlanifie = {
     cle: 'AGEFICE:part-1',
@@ -126,6 +128,8 @@ describe('construireVueSignature — le bouton et les lignes', () => {
     cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
     participantIds: ['part-1'],
     libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
   };
 
   it('une ligne par envoi, dans l’ordre du plan, libellé du plan repris tel quel', () => {
@@ -352,6 +356,8 @@ const CONVENTION_POUR_TYPAGE: EnvoiPlanifie = {
   cible: { kind: 'ORGANISATION', organizationId: 'org-typage' },
   participantIds: ['part-1'],
   libelle: 'Convention — ORG TYPAGE (1 participant)',
+  concerne: 'ORG TYPAGE',
+  organisation: 'ORG TYPAGE',
 };
 
 describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté APRÈS', () => {
@@ -733,6 +739,8 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
     cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
     participantIds: ['part-1', 'part-2'],
     libelle: 'Convention — Provence Immobilier (2 participants)',
+    concerne: 'Provence Immobilier',
+    organisation: 'Provence Immobilier',
   };
 
   it('le couple traverse la vue jusqu’à la ligne, tel qu’il a été résolu', () => {
@@ -798,6 +806,8 @@ describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc
     cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
     participantIds: ['part-1', 'part-2'],
     libelle: 'Convention — AGENCE MARTIN (2 participants)',
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN',
   };
   const assiduite: EnvoiPlanifie = {
     cle: 'ASSIDUITE:part-1',
@@ -806,6 +816,8 @@ describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc
     cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
     participantIds: ['part-1'],
     libelle: 'Attestation d’assiduité — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
   };
   const agefice: EnvoiPlanifie = {
     cle: 'AGEFICE:part-1',
@@ -814,6 +826,8 @@ describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc
     cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
     participantIds: ['part-1'],
     libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
   };
 
   function vuePour(

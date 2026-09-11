@@ -6,8 +6,7 @@
  * `signature-reminders`, qui lit `SignatureRequest.sentAt` / `reminderCount` —
  * du lot C.3. Décision Laurent du 11/09/2026 : écrire et PROUVER les cinq
  * gabarits maintenant, en brancher deux, brancher les trois autres avec le
- * retour du prestataire. La preuve en dry-run
- * (`.planning/specs/evidence/signature-C/`) le dit explicitement.
+ * retour du prestataire.
  *
  * UN SEUL GABARIT POUR LES DEUX RELANCES, paramétré par le rang. Deux fichiers
  * auraient divergé au premier ajustement de ton, et le destinataire, lui, les
@@ -20,11 +19,14 @@
 
 import type { OfConfig } from '@/lib/of-config';
 import {
-  LIBELLE_QUALITE,
+  NOM_DE_PIECE,
+  RASSURANCE_SIGNATURE,
+  blocSignatureTexte,
   coquilleHtml,
   dateEnToutesLettres,
   encadrePiece,
   paragraphe,
+  phraseDeRole,
 } from './signature-email-commun';
 import type { EmailRendu, SignatureDemandeInput } from './signature-demande';
 
@@ -39,15 +41,23 @@ export interface SignatureRelanceInput extends SignatureDemandeInput {
 
 export function renderSignatureRelance(input: SignatureRelanceInput, of: OfConfig): EmailRendu {
   const dernier = input.rang === 2;
-  const prefixe = dernier ? 'Dernier rappel' : 'Rappel';
-  const subject = `${prefixe} — ${input.libellePiece} attend votre signature`;
+  const possessif = NOM_DE_PIECE[input.piece].possessif;
+  const subject = `${dernier ? 'Dernier rappel' : 'Rappel'} : votre ${possessif} attend votre signature`;
 
   const envoyee = dateEnToutesLettres(input.envoyeeLe);
   const limite = dateEnToutesLettres(input.dateLimite);
+  /**
+   * ⚠ « nous vous renverrons une nouvelle demande », et non « le document devra
+   * être réémis » (retour n°4 de Laurent, 11/09/2026). La seconde formule met
+   * la charge sur le destinataire et décrit une mécanique interne ; la première
+   * dit qui fait quoi. Personne, dehors, ne « réémet » un document.
+   */
   const cloture = dernier
-    ? `C'est notre dernier rappel automatique : passé le ${limite}, le lien expire et ` +
-      `le document devra être réémis.`
+    ? `C'est notre dernier rappel automatique : passé le ${limite}, le lien expire et nous ` +
+      `vous renverrons une nouvelle demande.`
     : `Si vous avez déjà signé, ce message ne vous concerne plus.`;
+
+  const role = phraseDeRole(input.qualiteSignataire, input.organisation);
 
   const corps = [
     paragraphe(`Bonjour ${input.signataireNom},`),
@@ -56,9 +66,7 @@ export function renderSignatureRelance(input: SignatureRelanceInput, of: OfConfi
         `signable jusqu'au ${limite}.`,
     ),
     encadrePiece(input.libellePiece, input.formationTitre, input.sessionCode),
-    paragraphe(
-      `Vous recevez ce message en qualité de ${LIBELLE_QUALITE[input.qualiteSignataire]}. ${cloture}`,
-    ),
+    paragraphe(`${role} ${cloture}`),
   ].join('\n');
 
   const text = [
@@ -71,15 +79,15 @@ export function renderSignatureRelance(input: SignatureRelanceInput, of: OfConfi
     `- Formation : ${input.formationTitre}`,
     `- Session : ${input.sessionCode}`,
     ``,
-    `Vous recevez ce message en qualité de ${LIBELLE_QUALITE[input.qualiteSignataire]}.`,
-    dernier
-      ? `C'est notre dernier rappel automatique : passé cette date, le lien expire.`
-      : `Si vous avez déjà signé, ce message ne vous concerne plus.`,
+    role,
+    cloture,
     ``,
     `Votre lien personnel de signature :`,
     input.signUrl,
     ``,
-    `L'équipe ${of.name}`,
+    RASSURANCE_SIGNATURE,
+    ``,
+    ...blocSignatureTexte(input.expediteur, of),
   ].join('\n');
 
   return {
@@ -90,6 +98,8 @@ export function renderSignatureRelance(input: SignatureRelanceInput, of: OfConfi
         titre: dernier ? 'Dernier rappel avant expiration' : 'Votre signature est attendue',
         corps,
         bouton: { href: input.signUrl, libelle: 'Signer le document' },
+        apresBouton: RASSURANCE_SIGNATURE,
+        expediteur: input.expediteur,
       },
       of,
     ),

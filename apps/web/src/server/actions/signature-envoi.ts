@@ -1002,12 +1002,18 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
         signatureRequestId,
         documentId: doc.id,
         libellePiece: envoi.libelle,
+        piece: envoi.docType,
+        concerne: envoi.concerne,
+        organisation: envoi.organisation,
         formationTitre: contexte.formationTitre,
         sessionCode: contexte.sessionCode,
         dateLimite: creation.expiresAt ?? expiresAt,
         role: envoi.role,
         signataires: signatairesEnvoyes,
         of,
+        // Le MÊME signataire que celui qui signe le document : jamais une
+        // seconde résolution, qui finirait par donner un autre nom.
+        signataireOfNom: signataireOf.ok ? signataireOf.signatory.name : null,
       });
     } catch (e) {
       console.error(

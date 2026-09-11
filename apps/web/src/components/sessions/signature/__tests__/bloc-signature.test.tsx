@@ -978,6 +978,8 @@ describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout cl
     cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
     participantIds: ['part-1', 'part-2'],
     libelle: 'Convention — Provence Immobilier (2 participants)',
+    concerne: 'Provence Immobilier',
+    organisation: 'Provence Immobilier',
   };
   const dossierAgefice: EnvoiPlanifie = {
     cle: 'AGEFICE:part-1',
@@ -986,6 +988,8 @@ describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout cl
     cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
     participantIds: ['part-1'],
     libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
   };
 
   function rendre(

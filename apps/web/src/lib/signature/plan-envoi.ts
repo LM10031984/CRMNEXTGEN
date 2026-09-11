@@ -92,6 +92,26 @@ export interface EnvoiPlanifie {
   participantIds: string[];
   /** « Convention — AGENCE MARTIN (3 participants) ». */
   libelle: string;
+  /**
+   * QUI cette pièce concerne, en un nom — lot C.2c, retour n°5 de Laurent
+   * (11/09/2026). L'organisation bénéficiaire pour une convention de groupe,
+   * l'apprenant sinon. C'est ce que l'OBJET de l'email nomme :
+   * « Convention à signer — AGENCE MARTIN », « Dossier AGEFICE à signer —
+   * Marie DUPONT ».
+   *
+   * ⚠ Séparé de `libelle`, et ce n'est pas de la redondance : `libelle` est un
+   * titre d'écran, avec son compte de participants entre parenthèses. Un objet
+   * d'email qui porterait « (2 participants) » parlerait de logistique interne
+   * à quelqu'un qui attend juste de savoir quoi signer.
+   */
+  concerne: string;
+  /**
+   * L'organisation bénéficiaire, quand elle est connue. NOMMÉE dans la phrase
+   * « Vous recevez ce message en tant que responsable de X ». `null` pour un
+   * inscrit sans organisation : la phrase retombe alors sur « responsable de
+   * l'organisation », jamais sur « responsable de null ».
+   */
+  organisation: string | null;
 }
 
 /** Un blocage ou un avertissement, toujours rattaché à QUELQU'UN. */
@@ -152,6 +172,18 @@ function libelleDe(envoi: EnvoiEnConstruction): string {
   const nombre = envoi.participantIds.length;
   const organisation = envoi.labelOrganisation ?? 'organisation sans nom';
   return `${titre} — ${organisation} (${nombre} participant${nombre > 1 ? 's' : ''})`;
+}
+
+/**
+ * QUI la pièce concerne, en un nom — sans compte de participants.
+ *
+ * Même découpage que `libelleDe`, autre usage : celui-ci va dans l'objet d'un
+ * email lu par quelqu'un d'extérieur. Une convention de groupe concerne
+ * l'ORGANISATION ; tout le reste concerne l'apprenant nommé.
+ */
+function concerneDe(envoi: EnvoiEnConstruction): string {
+  if (envoi.cible.kind === 'PARTICIPANT') return envoi.nomPremierParticipant;
+  return envoi.labelOrganisation ?? 'organisation sans nom';
 }
 
 /**
@@ -235,6 +267,8 @@ export function planifierEnvoi(a: { scope: ScopeEnvoi; participants: Participant
       // Trié : l'ordre d'entrée des inscrits ne doit pas transparaître.
       participantIds: [...envoi.participantIds].sort(),
       libelle: libelleDe(envoi),
+      concerne: concerneDe(envoi),
+      organisation: envoi.labelOrganisation,
     }))
     .sort((gauche, droite) => {
       const parPiece =

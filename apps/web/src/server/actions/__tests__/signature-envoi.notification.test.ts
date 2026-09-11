@@ -343,6 +343,87 @@ describe('T2.3 — LE FIL : un envoi réussi expédie un email, exactement un', 
   });
 });
 
+describe('CÂBLAGE du texte — l’objet et la signature viennent du PLAN et des RÉGLAGES', () => {
+  /**
+   * ⚠ Ce que ces tests gardent n'est PAS le texte — il est gardé dans
+   * `mailer-templates/__tests__/signature-emails.test.ts`. C'est le FIL :
+   * `concerne` et `organisation` sont calculés par `planifierEnvoi`, le nom de
+   * l'expéditeur par `resoudreSignataireOf`, et rien ne garantissait qu'ils
+   * arrivent jusqu'à l'email. Un objet composé sur le mauvais champ —
+   * « Convention à signer — Convention — AGENCE MARTIN (2 participants) » —
+   * compile parfaitement.
+   */
+  function sujetEnvoye() {
+    return (sendMailMock.mock.calls[0]![0] as { subject: string }).subject;
+  }
+  function corpsEnvoye() {
+    return (sendMailMock.mock.calls[0]![0] as { text: string }).text;
+  }
+
+  it('convention de groupe ⇒ « Convention à signer — {organisation} », sans le compte', async () => {
+    sessionAvec([salarieAgence()]);
+    docs = [
+      doc({ id: 'doc-conv', type: 'CONVENTION', entityType: 'organization', entityId: 'org-agence' }),
+    ];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: 'CONVENTION:org-agence', hashConfirme: 'hash-doc-conv' }],
+    });
+
+    expect(sujetEnvoye()).toBe('Convention à signer — Martin Immobilier');
+    expect(sujetEnvoye()).not.toContain('participant');
+  });
+
+  it('dossier AGEFICE ⇒ « Dossier AGEFICE à signer — {apprenant} »', async () => {
+    sessionAvec([tnsViaSonEi()]);
+    docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: `AGEFICE:${P_TNS}`, hashConfirme: 'hash-doc-age' }],
+    });
+
+    expect(sujetEnvoye()).toBe('Dossier AGEFICE à signer — Florent HAUSSWIRTH');
+  });
+
+  it('la phrase de rôle NOMME l’organisation bénéficiaire du plan', async () => {
+    sessionAvec([salarieAgence()]);
+    docs = [
+      doc({ id: 'doc-conv', type: 'CONVENTION', entityType: 'organization', entityId: 'org-agence' }),
+    ];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: 'CONVENTION:org-agence', hashConfirme: 'hash-doc-conv' }],
+    });
+
+    expect(corpsEnvoye()).toContain(
+      'Vous recevez ce message en tant que responsable de Martin Immobilier.',
+    );
+  });
+
+  it('l’email est signé par le SIGNATAIRE TENANT — le même que celui qui signe le PDF', async () => {
+    sessionAvec([salarieAgence()]);
+    docs = [
+      doc({ id: 'doc-conv', type: 'CONVENTION', entityType: 'organization', entityId: 'org-agence' }),
+    ];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: 'CONVENTION:org-agence', hashConfirme: 'hash-doc-conv' }],
+    });
+
+    // `tenantFindUnique` rend `signatoryName: 'Laurent MARX'`.
+    expect(corpsEnvoye()).toContain('Laurent MARX — Start Academy');
+    expect(corpsEnvoye()).not.toContain("L'équipe");
+  });
+});
+
 describe('T2.4 — D-3/D-8 jusqu’au bout : l’ordre décide du destinataire', () => {
   it('`signatoryOrder = AFTER` ⇒ l’email part au RESPONSABLE de l’organisation', async () => {
     sessionAvec([salarieAgence()]);

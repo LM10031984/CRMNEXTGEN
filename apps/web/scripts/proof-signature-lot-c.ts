@@ -44,25 +44,41 @@ const OF: OfConfig = {
   addressFull: '1 rue de la Preuve, 00000 Exemple',
 } as unknown as OfConfig;
 
+/**
+ * Qui signe les emails — retour n°4 de Laurent (11/09/2026) : une personne avec
+ * un téléphone, jamais « L'équipe ». En production, le nom vient de
+ * `Tenant.signatoryName` et le téléphone d'of-config ; ici il est fictif comme
+ * le reste.
+ */
+const EXPEDITEUR = { nom: 'Laurent Marx', telephone: '06 00 00 00 00' };
+
 /** Dates FIGÉES : une preuve qui bouge avec l'horloge n'est pas comparable. */
 const ENVOYEE_LE = new Date('2026-09-11T09:00:00.000Z');
 const DATE_LIMITE = new Date('2026-10-11T09:00:00.000Z');
 const SIGNEE_LE = new Date('2026-09-20T14:30:00.000Z');
 
+const ORGANISATION = 'AGENCE MARTIN & FILS';
+
 const CONVENTION: SignatureDemandeInput = {
   signataireNom: 'Claire DUPONT',
   qualiteSignataire: 'responsable-organisation',
-  libellePiece: 'Convention — AGENCE MARTIN & FILS (2 participants)',
+  piece: 'CONVENTION',
+  concerne: ORGANISATION,
+  organisation: ORGANISATION,
+  libellePiece: `Convention — ${ORGANISATION} (2 participants)`,
   formationTitre: "L'IA au service de l'agent commercial immobilier",
   sessionCode: 'SES-0000',
   signUrl: 'https://docuseal.eu/s/EXEMPLE-CLIENT',
   dateLimite: DATE_LIMITE,
+  expediteur: EXPEDITEUR,
 };
 
 const AGEFICE: SignatureDemandeInput = {
   ...CONVENTION,
   signataireNom: 'Marie EXEMPLE',
   qualiteSignataire: 'stagiaire',
+  piece: 'AGEFICE',
+  concerne: 'Marie EXEMPLE',
   libellePiece: 'Dossier AGEFICE — Marie EXEMPLE',
   signUrl: 'https://docuseal.eu/s/EXEMPLE-STAGIAIRE',
 };
@@ -132,7 +148,10 @@ const PIECES: Piece[] = [
       {
         signataireNom: 'Claire DUPONT',
         qualiteSignataire: 'responsable-organisation',
-        libellePiece: 'Convention — AGENCE MARTIN & FILS (2 participants)',
+        piece: 'CONVENTION',
+        concerne: ORGANISATION,
+        organisation: ORGANISATION,
+        libellePiece: `Convention — ${ORGANISATION} (2 participants)`,
         formationTitre: "L'IA au service de l'agent commercial immobilier",
         sessionCode: 'SES-0000',
         signeLe: SIGNEE_LE,
@@ -140,6 +159,7 @@ const PIECES: Piece[] = [
           'convention-agence-martin.pdf',
           'convention-agence-martin.audit-trail.pdf',
         ],
+        expediteur: EXPEDITEUR,
       },
       OF,
     ),
@@ -159,7 +179,7 @@ function contientDirigeant(texte: string): boolean {
 /** La phrase du corps qui NOMME le destinataire — ce que le README cite. */
 function phraseDeQualite(text: string): string {
   return (
-    text.split('\n').find((l) => l.includes('en qualité de'))?.trim() ??
+    text.split('\n').find((l) => l.startsWith('Vous recevez ce message'))?.trim() ??
     '(aucune phrase de qualité trouvée)'
   );
 }

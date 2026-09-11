@@ -60,6 +60,8 @@ function conventionDeGroupe(): EnvoiPlanifie {
     cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
     participantIds: ['part-1', 'part-2'],
     libelle: 'Convention — AGENCE MARTIN (2 participants)',
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN',
   };
 }
 
@@ -71,6 +73,8 @@ function dossierAgefice(): EnvoiPlanifie {
     cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
     participantIds: ['part-1'],
     libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
   };
 }
 
