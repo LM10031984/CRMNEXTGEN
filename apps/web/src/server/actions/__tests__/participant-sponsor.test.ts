@@ -302,6 +302,65 @@ describe('changerFinanceurInscription — REFUS 2 : pièce signée', () => {
   });
 });
 
+describe('changerFinanceurInscription — REFUS 3 : pièce partie en signature', () => {
+  it("status = 'sent_for_signature' → refus nominatif, et RIEN n’est écrit", async () => {
+    participantFindUnique.mockResolvedValue(
+      inscription({
+        agreementDocs: [
+          {
+            id: 'doc-1',
+            type: 'CONVENTION',
+            status: 'sent_for_signature',
+            signedPdfUrl: null,
+          },
+        ],
+      }),
+    );
+
+    const r = await changer();
+
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error('inatteignable');
+    expect(r.error).toContain('Marion DELAUNAY');
+    expect(r.error).toContain('Convention de formation');
+    expect(r.error).toContain("Annulez d'abord l'envoi en cours");
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(ecrituresTx.participantUpdate).not.toHaveBeenCalled();
+  });
+
+  it('CÂBLAGE — le `status` lu en base descend bien dans le verrou', async () => {
+    // Le refus n’existe que si `agreementDocs.status` traverse l’action. Une
+    // pièce ENVOYÉE et une pièce GÉNÉRÉE ne diffèrent QUE par ce champ : si
+    // l’action cessait de le passer, ce couple d’assertions rougirait.
+    participantFindUnique.mockResolvedValue(
+      inscription({
+        agreementDocs: [
+          { id: 'doc-1', type: 'AGEFICE', status: 'sent_for_signature', signedPdfUrl: null },
+        ],
+      }),
+    );
+    expect((await changer()).ok).toBe(false);
+
+    vi.clearAllMocks();
+    requireRoleMock.mockResolvedValue(ADMIN);
+    orgFindFirst.mockResolvedValue(orgCible());
+    transactionMock.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        sessionParticipant: { update: ecrituresTx.participantUpdate },
+        auditLog: { create: ecrituresTx.auditLogCreate },
+      }),
+    );
+    participantFindUnique.mockResolvedValue(
+      inscription({
+        agreementDocs: [
+          { id: 'doc-1', type: 'AGEFICE', status: 'generated', signedPdfUrl: null },
+        ],
+      }),
+    );
+    expect(await changer()).toEqual({ ok: true });
+  });
+});
+
 describe('changerFinanceurInscription — cloisonnement tenant', () => {
   it('l’inscription d’un autre tenant est introuvable, point', async () => {
     participantFindUnique.mockResolvedValue(

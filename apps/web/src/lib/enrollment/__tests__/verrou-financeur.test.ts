@@ -6,9 +6,16 @@ import { describe, it, expect } from 'vitest';
  * CE QUE CE FICHIER GARDE, ET POURQUOI ÇA COMPTE. Le commanditaire d'une
  * inscription devient éditable (décision Laurent 11/09/2026). Le risque n'est
  * pas qu'on ne puisse pas le changer, c'est qu'on le change APRÈS qu'un tiers
- * l'ait lu : un dossier parti chez l'AGEFICE, une convention signée. Ces deux
- * situations doivent produire un refus NOMINATIF — qui nomme l'apprenant et la
- * pièce en cause — jamais un refus muet.
+ * l'ait lu : un dossier parti chez l'AGEFICE, une convention signée, ou — depuis
+ * le 11/09/2026 — une pièce PARTIE en signature électronique et pas encore
+ * revenue. Ces trois situations doivent produire un refus NOMINATIF — qui nomme
+ * l'apprenant et la pièce en cause — jamais un refus muet.
+ *
+ * ⚠ L'ORDRE DES TROIS REFUS EST TESTÉ, et ce n'est pas cosmétique. La pièce
+ * envoyée est le SEUL des trois murs qu'un clic fait tomber (« Annuler
+ * l'envoi »). Le nommer en premier enverrait l'admin annuler un envoi pour
+ * découvrir, juste après, une convention signée que rien ne lève : un mur
+ * derrière l'autre. On nomme donc toujours le refus le plus dur en premier.
  *
  * ⚠ LE TEST DE PUISSANCE de ce fichier est la LISTE NON BLOQUANTE :
  * `DRAFT` / `REJECTED` / `CANCELED` doivent laisser passer. Un dossier refusé
@@ -22,6 +29,7 @@ import {
   STATUTS_OPCO_BLOQUANTS,
   STATUTS_OPCO_NON_BLOQUANTS,
   dossierEstParti,
+  pieceEstPartieEnSignature,
   pieceEstSignee,
   verrouChangementFinanceur,
   type DossierFinanceurLu,
@@ -147,6 +155,64 @@ describe('verrouChangementFinanceur — pièce signée', () => {
   });
 });
 
+describe('verrouChangementFinanceur — pièce PARTIE en signature électronique', () => {
+  it("status = 'sent_for_signature' → REFUS, motif PIECE_ENVOYEE, pièce NOMMÉE en clair", () => {
+    const r = verrou({ pieces: [piece({ type: 'CONVENTION', status: 'sent_for_signature' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.motif).toBe('PIECE_ENVOYEE');
+    expect(r.message).toContain('Marion DELAUNAY');
+    expect(r.message).toContain('Convention de formation');
+    expect(r.message).not.toContain('CONVENTION');
+  });
+
+  it("le refus dit LE geste : « Annulez d'abord l'envoi en cours »", () => {
+    const r = verrou({ pieces: [piece({ status: 'sent_for_signature' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    // Valeur LITTÉRALE (règle n°2) : c'est la promesse faite à l'admin, pas le
+    // retour d'une constante que le moteur pourrait renommer avec le test.
+    expect(r.message).toContain("Annulez d'abord l'envoi en cours");
+  });
+
+  it('PUISSANCE — une pièce ENVOYÉE noyée dans des pièces seulement générées est quand même vue', () => {
+    const r = verrou({
+      pieces: [
+        piece({ id: 'a', type: 'PROGRAMME' }),
+        piece({ id: 'b', type: 'AGEFICE', status: 'sent_for_signature' }),
+        piece({ id: 'c', type: 'CONVOCATION' }),
+      ],
+    });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.motif).toBe('PIECE_ENVOYEE');
+    expect(r.message).toContain('Fiche AGEFICE');
+  });
+
+  it("PRIORITÉ — signée ET envoyée : c'est la SIGNÉE qui parle (annuler l'envoi ne lèverait pas l'autre mur)", () => {
+    const r = verrou({
+      pieces: [
+        piece({ id: 'a', type: 'CONVOCATION', status: 'sent_for_signature' }),
+        piece({ id: 'b', type: 'CONVENTION', signedPdfUrl: 'k/convention-signee.pdf' }),
+      ],
+    });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.motif).toBe('PIECE_SIGNEE');
+    expect(r.message).toContain('Convention de formation');
+  });
+
+  it('PRIORITÉ — un dossier déjà parti prime sur une pièce envoyée', () => {
+    const r = verrou({
+      dossiers: [dossier({ status: 'SENT' })],
+      pieces: [piece({ status: 'sent_for_signature' })],
+    });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.motif).toBe('DOSSIER_PARTI');
+  });
+});
+
 describe('prédicats unitaires + sanité des listes', () => {
   it('dossierEstParti ne reconnaît QUE les quatre statuts bloquants', () => {
     for (const s of STATUTS_OPCO_BLOQUANTS) expect(dossierEstParti(s)).toBe(true);
@@ -167,5 +233,13 @@ describe('prédicats unitaires + sanité des listes', () => {
     expect(pieceEstSignee(piece({ status: 'signed' }))).toBe(true);
     expect(pieceEstSignee(piece({ status: 'sent_for_signature' }))).toBe(false);
     expect(pieceEstSignee(piece())).toBe(false);
+  });
+
+  it('pieceEstPartieEnSignature : le statut d’envoi, et lui seul', () => {
+    expect(pieceEstPartieEnSignature(piece({ status: 'sent_for_signature' }))).toBe(true);
+    expect(pieceEstPartieEnSignature(piece({ status: 'generated' }))).toBe(false);
+    expect(pieceEstPartieEnSignature(piece({ status: 'signed' }))).toBe(false);
+    // Les deux prédicats ne se recouvrent jamais : une pièce est dans UN état.
+    expect(pieceEstPartieEnSignature(piece({ signedPdfUrl: 'k.pdf' }))).toBe(false);
   });
 });
