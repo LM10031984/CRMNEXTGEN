@@ -42,6 +42,20 @@
  *     convention signée que rien ne lève : un mur derrière l'autre. On nomme
  *     toujours le refus le plus dur en premier.
  *
+ * LE MOT — « commanditaire », jusque dans l'ouverture des trois refus (Laurent,
+ * 11/09/2026). Le champ s'appelle « Organisation commanditaire » à l'écran depuis
+ * la correction n°7 bis ; les refus ouvraient encore sur « Financeur non
+ * modifiable », donc ne nommaient pas le champ que l'admin venait d'éditer.
+ * Les trois ouvrent désormais sur « Commanditaire non modifiable pour X ».
+ *
+ * ⚠ « financeur » n'est PAS banni pour autant, et ce n'est pas un oubli : le
+ * refus n°1 finit sur « ne désigneraient plus le même financeur » — là, il s'agit
+ * bien de l'OPCO destinataire du dossier, pas du champ. Le mot juste dépend de ce
+ * qu'on désigne. Le nom du fichier, celui de l'action et ceux des symboles ne
+ * bougent pas : `changerFinanceurInscription` change bien le financeur DE FAIT,
+ * en changeant l'organisation qui le porte. Renommage TEXTUEL, jamais structurel.
+ * Garde exécutable : le describe « LE MOT » de `__tests__/verrou-financeur.test.ts`.
+ *
  * PUR : ni Prisma, ni réseau, ni horloge. L'action `changerFinanceurInscription`
  * lit la base et lui passe ce qu'elle a lu. Le refus est TOUJOURS nominatif —
  * jamais un `return { ok: false }` muet : l'admin doit savoir QUI est bloqué,
@@ -162,7 +176,7 @@ export function verrouChangementFinanceur(input: {
       bloque: true,
       motif: 'DOSSIER_PARTI',
       message:
-        `Financeur non modifiable pour ${nom} : son dossier de prise en charge ${chez} ` +
+        `Commanditaire non modifiable pour ${nom} : son dossier de prise en charge ${chez} ` +
         `est déjà parti (statut « ${statut} »). Faites annuler ou refuser ce dossier ` +
         `(statut Annulé ou Refusé) avant de re-rattacher l'inscription — sinon le dossier ` +
         `et l'inscription ne désigneraient plus le même financeur.`,
@@ -176,9 +190,9 @@ export function verrouChangementFinanceur(input: {
       bloque: true,
       motif: 'PIECE_SIGNEE',
       message:
-        `Financeur non modifiable pour ${nom} : la pièce « ${libelle} » est déjà signée ` +
+        `Commanditaire non modifiable pour ${nom} : la pièce « ${libelle} » est déjà signée ` +
         `et nomme l'entreprise bénéficiaire — la changer maintenant la ferait mentir. ` +
-        `Désinscrivez puis réinscrivez ${nom} avec le bon financeur, ou faites annuler ` +
+        `Désinscrivez puis réinscrivez ${nom} avec le bon commanditaire, ou faites annuler ` +
         `cette signature, avant de corriger.`,
     };
   }
@@ -193,10 +207,10 @@ export function verrouChangementFinanceur(input: {
       bloque: true,
       motif: 'PIECE_ENVOYEE',
       message:
-        `Financeur non modifiable pour ${nom} : la pièce « ${libelle} » est partie en ` +
+        `Commanditaire non modifiable pour ${nom} : la pièce « ${libelle} » est partie en ` +
         `signature électronique et le document que le signataire a sous les yeux nomme ` +
         `déjà l'entreprise bénéficiaire. Annulez d'abord l'envoi en cours, depuis le bloc ` +
-        `« Signature » de la fiche session, puis corrigez le financeur et renvoyez.`,
+        `« Signature » de la fiche session, puis corrigez le commanditaire et renvoyez.`,
     };
   }
 

@@ -213,6 +213,71 @@ describe('verrouChangementFinanceur — pièce PARTIE en signature électronique
   });
 });
 
+describe('LE MOT — « commanditaire », jusque dans l’ouverture des trois refus', () => {
+  /**
+   * Le champ s'appelle « Organisation commanditaire » à l'écran depuis le
+   * 11/09/2026 (correction n°7 bis). Les trois refus, eux, ouvraient encore sur
+   * « Financeur non modifiable » : l'admin lisait un refus qui ne nommait pas le
+   * champ qu'il venait d'éditer. Décision Laurent du 11/09/2026.
+   *
+   * ⚠ Assertions LITTÉRALES (règle n°2), et sur la PHRASE ENTIÈRE d'ouverture,
+   * pas sur le seul mot : c'est la promesse faite à l'admin. Un test qui
+   * comparerait au retour du moteur bougerait avec lui et ne garderait rien.
+   *
+   * ⚠ « financeur » N'EST PAS banni du corps des messages, et c'est délibéré :
+   * le refus n°1 finit sur « ne désigneraient plus le même financeur » — là, il
+   * s'agit bien de l'OPCO destinataire du dossier, pas du champ. Le mot juste
+   * dépend de ce qu'on désigne, pas d'un chercher-remplacer.
+   */
+  const OUVERTURE = 'Commanditaire non modifiable pour Marion DELAUNAY : ';
+
+  it('refus n°1 — dossier déjà parti', () => {
+    const r = verrou({ dossiers: [dossier({ status: 'APPROVED' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.message.startsWith(OUVERTURE)).toBe(true);
+  });
+
+  it('refus n°2 — pièce signée', () => {
+    const r = verrou({ pieces: [piece({ signedPdfUrl: 'k/convention-signee.pdf' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.message.startsWith(OUVERTURE)).toBe(true);
+  });
+
+  it('refus n°3 — pièce partie en signature', () => {
+    const r = verrou({ pieces: [piece({ status: 'sent_for_signature' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.message.startsWith(OUVERTURE)).toBe(true);
+  });
+
+  it('aucun des trois ne rouvre sur « Financeur non modifiable »', () => {
+    const messages = [
+      verrou({ dossiers: [dossier({ status: 'SENT' })] }),
+      verrou({ pieces: [piece({ status: 'signed' })] }),
+      verrou({ pieces: [piece({ status: 'sent_for_signature' })] }),
+    ].map((r) => (r.bloque ? r.message : ''));
+    expect(messages).toHaveLength(3);
+    for (const m of messages) expect(m).not.toContain('Financeur non modifiable');
+  });
+
+  it('le champ à corriger est NOMMÉ « commanditaire » dans les deux refus qui disent quoi faire', () => {
+    const signee = verrou({ pieces: [piece({ status: 'signed' })] });
+    const partie = verrou({ pieces: [piece({ status: 'sent_for_signature' })] });
+    if (!signee.bloque || !partie.bloque) throw new Error('inatteignable');
+    expect(signee.message).toContain('avec le bon commanditaire');
+    expect(partie.message).toContain('corrigez le commanditaire');
+  });
+
+  it('PUISSANCE — le refus n°1 garde « le même financeur » : là, c’est bien l’OPCO', () => {
+    const r = verrou({ dossiers: [dossier({ status: 'SENT' })] });
+    expect(r.bloque).toBe(true);
+    if (!r.bloque) throw new Error('inatteignable');
+    expect(r.message).toContain('ne désigneraient plus le même financeur');
+  });
+});
+
 describe('prédicats unitaires + sanité des listes', () => {
   it('dossierEstParti ne reconnaît QUE les quatre statuts bloquants', () => {
     for (const s of STATUTS_OPCO_BLOQUANTS) expect(dossierEstParti(s)).toBe(true);

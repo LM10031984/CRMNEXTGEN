@@ -268,7 +268,7 @@ describe('enregistrement', () => {
 
   it('PUISSANCE — refus serveur : le message NOMINATIF s’affiche ET rien d’autre n’est enregistré', async () => {
     const REFUS =
-      'Financeur non modifiable pour Marion DELAUNAY : son dossier de prise en charge chez ' +
+      'Commanditaire non modifiable pour Marion DELAUNAY : son dossier de prise en charge chez ' +
       'AGEFICE Grand Est est déjà parti (statut « accord de prise en charge reçu »).';
     changerFinanceurInscription.mockResolvedValue({ ok: false, error: REFUS } as never);
 
