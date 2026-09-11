@@ -211,7 +211,20 @@ describe('construireVueSignature — le bouton et les lignes', () => {
     expect(vue.boutonVisible).toBe(false);
   });
 
-  it('blocages et avertissements traversent la vue TELS QUELS — ils sont déjà nominatifs', () => {
+  /**
+   * ⚠ MIS À JOUR le 11/09/2026 (correction n°2). Les BLOCAGES traversent
+   * toujours tels quels — ils nomment déjà la personne, la pièce et le geste.
+   * Les AVERTISSEMENTS, eux, sont désormais REGROUPÉS par participant et
+   * RÉÉCRITS : le moteur en rend un par pièce, et l'écran en affichait deux
+   * pour une seule correction à faire.
+   */
+  it('les blocages traversent TELS QUELS, les avertissements sont regroupés', () => {
+    const blocage: AnomalieEnvoi = {
+      participantId: 'part-4',
+      nomAffiche: 'Marie LEROY',
+      docType: 'CONVENTION',
+      message: 'Marie LEROY : aucune organisation bénéficiaire rattachée à cette inscription.',
+    };
     const avertissement: AnomalieEnvoi = {
       participantId: 'part-3',
       nomAffiche: 'Florent HAUSSWIRTH',
@@ -219,12 +232,23 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       message: 'Florent HAUSSWIRTH : … rien n’a été envoyé pour cette pièce.',
     };
     const vue = construireVueSignature({
-      plan: { envois: [], blocages: [], avertissements: [avertissement] },
+      plan: { envois: [], blocages: [blocage], avertissements: [avertissement] },
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
     });
-    expect(vue.avertissements).toEqual([avertissement]);
+    expect(vue.blocages).toEqual([blocage]);
+    expect(vue.avertissements).toEqual([
+      {
+        participantId: 'part-3',
+        nomAffiche: 'Florent HAUSSWIRTH',
+        docTypes: ['AGEFICE'],
+        message: composerAvertissementRegime({
+          nomAffiche: 'Florent HAUSSWIRTH',
+          docTypes: ['AGEFICE'],
+        }),
+      },
+    ]);
     // Un avertissement ne planifie RIEN : il n'ajoute aucune ligne, donc aucun bouton.
     expect(vue.lignes).toHaveLength(0);
     expect(vue.boutonVisible).toBe(false);

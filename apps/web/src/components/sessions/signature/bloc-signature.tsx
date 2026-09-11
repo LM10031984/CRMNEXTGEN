@@ -187,10 +187,16 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
           Ils n'ajoutent AUCUNE ligne et ne rendent AUCUN bouton : ils invitent à
           corriger la donnée. C'est la contrepartie visible du changement de
           règle du lot C.2b-1 — sans eux, un apprenant perdrait son dossier
-          AGEFICE sans qu'aucun message ne le dise. */}
+          AGEFICE sans qu'aucun message ne le dise.
+
+          ⚠ UN ENCART PAR PARTICIPANT (Laurent, 11/09/2026). Le moteur en rend
+          un PAR PIÈCE — juste de son point de vue, chaque pièce ayant son sort —
+          et Camille ROUSSEL se retrouvait affichée deux fois pour UNE seule
+          correction à faire. `construireVueSignature` regroupe et compose ; ce
+          composant, lui, continue de rendre le message TEL QUEL. */}
       {vue.avertissements.map((avertissement) => (
         <p
-          key={`avert-${avertissement.participantId}-${avertissement.docType}`}
+          key={`avert-${avertissement.participantId}`}
           role="alert"
           className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >

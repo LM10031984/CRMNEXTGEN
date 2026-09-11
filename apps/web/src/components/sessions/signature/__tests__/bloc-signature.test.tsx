@@ -80,6 +80,7 @@ import {
   type LigneSignature,
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
+import type { DocTypeSignable } from '@/lib/signature/regime';
 
 const SESSION_ID = 'sess-1';
 
@@ -225,14 +226,22 @@ describe('Le bouton OUVRE quelque chose — il ne fait pas semblant', () => {
 });
 
 describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit et se lit', () => {
+  // ⚠ Forme MISE À JOUR le 11/09/2026 (corrections n°2 et n°3) : la vue rend un
+  // avertissement PAR PARTICIPANT, avec la liste de ses pièces, et le message
+  // vient de `composerAvertissementRegime` — jamais d'une recopie.
   const avertissement = {
     participantId: 'part-3',
     nomAffiche: 'Florent HAUSSWIRTH',
-    docType: 'AGEFICE' as const,
-    message:
-      'Florent HAUSSWIRTH : le financeur rattaché à « IMAGIMMO » n’ouvre pas le dossier ' +
-      'AGEFICE, alors que le dossier de cet apprenant en porte les signaux. Corrigez le ' +
-      'financeur de l’inscription : rien n’a été envoyé pour cette pièce.',
+    docTypes: ['AGEFICE'] as DocTypeSignable[],
+    message: composerAvertissementRegime({
+      nomAffiche: 'Florent HAUSSWIRTH',
+      docTypes: ['AGEFICE'],
+      contexte: {
+        sponsorOrgLabel: 'IMAGIMMO',
+        financeurSansRegime: false,
+        financeursRattaches: ['AGEFICE'],
+      },
+    }),
   };
 
   it('l’avertissement est dans un `role="alert"`, nomme l’apprenant et dit que rien n’est parti', () => {
@@ -246,7 +255,7 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
     const alertes = screen.getAllByRole('alert');
     const texte = alertes.map((n) => n.textContent ?? '').join(' ');
     expect(texte).toContain('Florent HAUSSWIRTH');
-    expect(texte).toContain('rien n’a été envoyé');
+    expect(texte).toContain('Rien n’a été envoyé.');
   });
 
   it('l’avertissement ne déclenche AUCUN envoi : pas de ligne, pas de bouton', () => {
@@ -487,7 +496,7 @@ describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièce
   const avertissementRegroupe = {
     participantId: 'part-c',
     nomAffiche: 'Camille ROUSSEL',
-    docTypes: ['CONVENTION', 'AGEFICE'] as const,
+    docTypes: ['CONVENTION', 'AGEFICE'] as DocTypeSignable[],
     message: composerAvertissementRegime({
       nomAffiche: 'Camille ROUSSEL',
       docTypes: ['CONVENTION', 'AGEFICE'],

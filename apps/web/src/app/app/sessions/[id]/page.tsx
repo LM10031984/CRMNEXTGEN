@@ -76,6 +76,7 @@ import { planifierEnvoi } from '@/lib/signature/plan-envoi';
 // reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
 import {
   construireVueSignature,
+  type ContexteAvertissement,
   type DocumentDeLaPiece,
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
@@ -506,6 +507,42 @@ export default async function SessionDetailPage({
     scope: 'AFTER',
     participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
   });
+  /**
+   * Ce que l'avertissement « régime incohérent » doit DIRE, et que
+   * `AnomalieEnvoi` ne transporte pas (correction n°3, Laurent 11/09/2026) :
+   * l'organisation de l'inscription, et les financeurs des organisations
+   * rattachées à l'apprenant.
+   *
+   * AUCUNE RÈGLE ICI — la décision « cette pièce est incohérente » reste
+   * entièrement dans `regime.ts`. On recopie trois faits déjà chargés, sans
+   * reconnaître aucun code financeur au passage : ce sont les codes tels que le
+   * catalogue les porte qui ressortent à l'écran.
+   */
+  const contexteAvertissementParParticipant = new Map<string, ContexteAvertissement>(
+    participantsLus.map((lu) => {
+      const codesRattaches = [
+        ...new Set(
+          lu.liens
+            .filter((lien) => lien.organizationId !== lu.sponsorOrgId)
+            .map((lien) => (lien.organization?.opcoCode ?? '').trim())
+            .filter((code) => code.length > 0),
+        ),
+      ];
+      return [
+        lu.participantId,
+        {
+          sponsorOrgLabel: lu.sponsorOrgLabel,
+          // `regle === null` = financeur absent ou hors catalogue : aucune
+          // pièce en régime. C'est ce qui distingue « n'a aucun régime de
+          // financement » de « n'ouvre pas ces pièces ».
+          financeurSansRegime:
+            (regimeParParticipant.get(lu.participantId)?.pourLePlan.regle ?? null) === null,
+          financeursRattaches: codesRattaches,
+        },
+      ] as const;
+    }),
+  );
+
   const avertissementsRegimeAvant = planSignatureAvant.avertissements;
   const participantsAvertisAgefice = new Set(
     avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
@@ -602,7 +639,13 @@ export default async function SessionDetailPage({
       const manuel = docStatusParParticipant.get(premier)?.[envoi.docType] ?? null;
       docStatusParCle.set(envoi.cle, manuel);
     }
-    return construireVueSignature({ plan, documentParCle, docStatusParCle, canSign });
+    return construireVueSignature({
+      plan,
+      documentParCle,
+      docStatusParCle,
+      canSign,
+      contexteAvertissementParParticipant,
+    });
   };
   const vueSignatureAvant = vuePourScope(planSignatureAvant);
   const vueSignatureApres = vuePourScope(planSignatureApres);

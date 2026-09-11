@@ -20,7 +20,7 @@
  */
 
 import type { AnomalieEnvoi, EnvoiPlanifie } from '@/lib/signature/plan-envoi';
-import type { DocTypeSignable } from '@/lib/signature/regime';
+import { DOC_TYPES_SIGNABLES, type DocTypeSignable } from '@/lib/signature/regime';
 
 /**
  * Où en est la pièce, du point de vue de la signature.
@@ -70,10 +70,50 @@ export interface LigneSignature {
   envoyable: boolean;
 }
 
+/**
+ * Ce que la VUE doit savoir d'un participant pour ÉCRIRE son avertissement.
+ *
+ * Rien ici n'est une règle : ce sont trois faits que la page a déjà sous la
+ * main (le commanditaire de l'inscription, son financeur, les financeurs des
+ * organisations rattachées). La DÉCISION « cette pièce est incohérente » reste
+ * entièrement dans `regime.ts` ; on se contente de nommer les choses que
+ * `AnomalieEnvoi` ne transporte pas.
+ */
+export interface ContexteAvertissement {
+  /** `brandName ?? legalName` du commanditaire de CETTE inscription. */
+  sponsorOrgLabel: string | null;
+  /**
+   * Vrai quand le financeur du commanditaire n'ouvre AUCUNE pièce — financeur
+   * absent, ou hors catalogue. C'est ce qui distingue « n'a aucun régime de
+   * financement » de « n'ouvre pas ces pièces », et les deux phrases n'appellent
+   * pas la même correction.
+   */
+  financeurSansRegime: boolean;
+  /** Codes financeurs des AUTRES organisations rattachées à l'apprenant. */
+  financeursRattaches: string[];
+}
+
+/**
+ * UN encart, UN participant — retour d'écran Laurent du 11/09/2026.
+ *
+ * Le moteur rend une `AnomalieEnvoi` PAR PIÈCE, et c'est juste de son point de
+ * vue : chaque pièce a son sort. À l'écran, c'est la même anomalie racontée
+ * deux fois, pour une seule correction à faire.
+ */
+export interface AvertissementParticipant {
+  participantId: string;
+  nomAffiche: string;
+  /** Dans l'ordre de `DOC_TYPES_SIGNABLES`, sans doublon. */
+  docTypes: DocTypeSignable[];
+  /** Composé par `composerAvertissementRegime`. Rendu tel quel par le bloc. */
+  message: string;
+}
+
 export interface VueSignature {
   lignes: LigneSignature[];
+  /** UN par participant, pièces listées — jamais un par pièce (correction n°2). */
+  avertissements: AvertissementParticipant[];
   /** Rendus TELS QUELS : leurs messages sont déjà nominatifs et complets. */
-  avertissements: AnomalieEnvoi[];
   blocages: AnomalieEnvoi[];
   /**
    * Le RBAC, décidé une fois côté serveur. Le composant ne le re-dérive pas :
@@ -122,6 +162,119 @@ export function etatDeLaPiece(a: {
   return 'GENERE';
 }
 
+/* ── L'avertissement « régime incohérent », tel qu'il se lit ──────────────── */
+
+/**
+ * Comment chaque pièce se nomme DANS UNE ÉNUMÉRATION.
+ *
+ * Distinct des libellés du plan (« Convention — AGENCE MARTIN (3 participants) »)
+ * et de ses désignations (« la convention ») : ici on écrit une liste, et une
+ * liste ne porte pas d'articles. Table de DONNÉES — une pièce de plus = une
+ * ligne, jamais une concaténation qui finirait par produire une faute d'accord.
+ */
+const PIECE_EN_LISTE: Record<DocTypeSignable, string> = {
+  CONVENTION: 'convention',
+  AGEFICE: 'dossier AGEFICE',
+  ASSIDUITE: 'attestation d’assiduité',
+};
+
+/**
+ * L'avertissement « régime incohérent », dans la forme imposée par Laurent le
+ * 11/09/2026.
+ *
+ * DEUX PHRASES : **le problème**, puis **l'action**. Puis les pièces, puis la
+ * réassurance. Le texte précédent (45 mots, « n'ouvre pas la convention »,
+ * « en porte les signaux ») décrivait la mécanique du moteur ; celui-ci dit ce
+ * qui cloche dans la donnée et le geste qui le corrige.
+ *
+ * ⚠ LE NOM DE L'ORGANISATION ET LE FINANCEUR RATTACHÉ VIENNENT DE LA DONNÉE.
+ * Aucun code financeur n'est reconnu ici : `financeursRattaches` est recopié tel
+ * qu'il sort du catalogue. Un `if (code === 'AGEFICE')` dans cette fonction
+ * serait la septième règle en dur que `regime.ts` a supprimée.
+ *
+ * Le contexte est OPTIONNEL : un appelant qui ne sait pas le calculer obtient
+ * un message plus court, mais jamais un message faux. Inventer « (organisation
+ * inconnue) » ferait chercher une organisation qui n'existe pas.
+ */
+export function composerAvertissementRegime(a: {
+  nomAffiche: string;
+  docTypes: readonly DocTypeSignable[];
+  contexte?: ContexteAvertissement | undefined;
+}): string {
+  const organisation = (a.contexte?.sponsorOrgLabel ?? '').trim();
+  const manque =
+    a.contexte?.financeurSansRegime === true
+      ? 'n’a aucun régime de financement'
+      : 'n’ouvre pas ces pièces';
+
+  const probleme =
+    `${a.nomAffiche} — son financeur d’inscription` +
+    `${organisation.length > 0 ? ` (${organisation})` : ''} ${manque}`;
+
+  // Le « alors que » n'existe QUE s'il repose sur un fait. Sans contexte, on
+  // s'arrête au problème : une demi-phrase vraie vaut mieux qu'une phrase
+  // complète qui suppose un rattachement dont on ne sait rien.
+  const codes = a.contexte?.financeursRattaches ?? [];
+  const rattachement =
+    a.contexte === undefined
+      ? ''
+      : codes.length === 0
+        ? ', alors que son dossier est rattaché à une entreprise individuelle'
+        : codes.length === 1
+          ? `, alors que son dossier est rattaché à une entreprise financée ${codes[0]}`
+          : `, alors que son dossier est rattaché à des entreprises financées ${codes.join(', ')}`;
+
+  const pieces = DOC_TYPES_SIGNABLES.filter((docType) => a.docTypes.includes(docType));
+  const liste = pieces.map((docType) => PIECE_EN_LISTE[docType]).join(', ');
+  const entete = pieces.length > 1 ? 'Pièces concernées' : 'Pièce concernée';
+
+  return (
+    `${probleme}${rattachement}. Corrigez le financeur de l’inscription. ` +
+    `${entete} : ${liste}. Rien n’a été envoyé.`
+  );
+}
+
+/**
+ * Les avertissements du moteur, REGROUPÉS par participant.
+ *
+ * L'ordre des participants est celui de leur première apparition — celui du
+ * plan, donc celui de la liste des inscrits. L'ordre des pièces, lui, est celui
+ * du référentiel : deux plans successifs ne doivent pas faire clignoter la
+ * phrase « convention, dossier AGEFICE ».
+ */
+export function regrouperAvertissements(
+  avertissements: readonly AnomalieEnvoi[],
+  contexteParParticipant: ReadonlyMap<string, ContexteAvertissement> = new Map(),
+): AvertissementParticipant[] {
+  const groupes = new Map<string, { nomAffiche: string; docTypes: Set<DocTypeSignable> }>();
+
+  for (const anomalie of avertissements) {
+    const existant = groupes.get(anomalie.participantId);
+    if (existant === undefined) {
+      groupes.set(anomalie.participantId, {
+        nomAffiche: anomalie.nomAffiche,
+        docTypes: new Set([anomalie.docType]),
+      });
+      continue;
+    }
+    existant.docTypes.add(anomalie.docType);
+  }
+
+  return [...groupes.entries()].map(([participantId, groupe]) => {
+    const docTypes = DOC_TYPES_SIGNABLES.filter((docType) => groupe.docTypes.has(docType));
+    return {
+      participantId,
+      nomAffiche: groupe.nomAffiche,
+      docTypes,
+      message: composerAvertissementRegime({
+        nomAffiche: groupe.nomAffiche,
+        docTypes,
+        contexte: contexteParParticipant.get(participantId),
+      }),
+    };
+  });
+}
+
 /**
  * Croise le plan d'envoi avec l'état réel des documents.
  *
@@ -135,6 +288,12 @@ export function construireVueSignature(a: {
   documentParCle: ReadonlyMap<string, DocumentDeLaPiece>;
   docStatusParCle: ReadonlyMap<string, string | null>;
   canSign: boolean;
+  /**
+   * Ce que `AnomalieEnvoi` ne transporte pas et que l'avertissement doit dire :
+   * le commanditaire de l'inscription et les financeurs rattachés. Optionnel —
+   * un appelant qui ne le calcule pas obtient un message plus court.
+   */
+  contexteAvertissementParParticipant?: ReadonlyMap<string, ContexteAvertissement>;
 }): VueSignature {
   const lignes: LigneSignature[] = a.plan.envois.map((envoi) => {
     const document = a.documentParCle.get(envoi.cle) ?? null;
@@ -160,7 +319,10 @@ export function construireVueSignature(a: {
 
   return {
     lignes,
-    avertissements: a.plan.avertissements,
+    avertissements: regrouperAvertissements(
+      a.plan.avertissements,
+      a.contexteAvertissementParParticipant ?? new Map(),
+    ),
     blocages: a.plan.blocages,
     canSign: a.canSign,
     boutonVisible: a.canSign && nbEnvoyables > 0,
