@@ -16,9 +16,15 @@ import path from 'node:path';
  *
  * CE QUE LA MUTATION DOIT CASSER, et c'est vérifié : retirer `signataireOf:` de
  * l'appel de `page.tsx` fait disparaître l'organisme de TOUTES les lignes en
- * production, sans qu'aucun test de comportement ne bouge — `signataireOf` étant
- * optionnel, la vue continuerait de se construire sans lui. C'est exactement le
+ * production, sans qu'aucun test de comportement ne bouge. C'est exactement le
  * trou que ce fichier ferme.
+ *
+ * ⚠ CE FICHIER N'EST PLUS SEUL DEPUIS LE 11/09/2026 (demande n°2 de Laurent).
+ * `signataireOf` est devenu une prop OBLIGATOIRE de `construireVueSignature` :
+ * l'omettre est désormais une erreur `tsc`, et c'est la garde forte. Ce test de
+ * source garde ce que le typeur ne peut pas voir — que la valeur passée est
+ * bien CELLE QUI A ÉTÉ RÉSOLUE (`signataireOfDeLOrganisme`), et non un `null`
+ * de complaisance qui compilerait tout aussi bien.
  *
  * ⚠ Les chemins sont assertés en LITTÉRAL. Comparer au résultat d'un helper de
  * chemin ferait bouger les deux côtés ensemble.
@@ -61,9 +67,11 @@ describe('Le signataire OF est résolu UNE fois, par le module que le moteur uti
 
 describe('Le fil jusqu’aux LIGNES du bloc « Signature »', () => {
   it('la fiche session passe `signataireOf` à `construireVueSignature`', () => {
-    // Sans cette ligne, l'organisme disparaît de toutes les lignes en
-    // production — et aucun test de comportement ne bouge, `signataireOf` étant
-    // optionnel côté vue.
+    // ⚠ CE QUE `tsc` NE VOIT PAS. Depuis que la prop est obligatoire, l'oublier
+    // ne compile plus — mais écrire `signataireOf: null` compile parfaitement,
+    // et fait disparaître l'organisme de toutes les lignes en production sans
+    // qu'aucun test de comportement ne bouge. C'est CETTE substitution que
+    // l'assertion littérale ci-dessous attrape.
     expect(pageSession).toContain('signataireOf: signataireOfDeLOrganisme');
   });
 

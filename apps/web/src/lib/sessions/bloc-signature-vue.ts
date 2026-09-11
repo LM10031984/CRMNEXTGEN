@@ -430,11 +430,23 @@ export function construireVueSignature(a: {
    * Le signataire de l'ORGANISME, résolu UNE fois par `resoudreSignataireOf`
    * (`@/lib/signature/signataire-of`) — le même module que le moteur d'envoi.
    *
-   * ⚠ La vue ne le résout pas et ne le devine pas : elle le transporte. Absent
-   * ou `null` ⇒ les lignes n'annoncent que le client, et l'empêchement
+   * ⚠ La vue ne le résout pas et ne le devine pas : elle le transporte. `null`
+   * ⇒ les lignes n'annoncent que le client, et l'empêchement
    * `SIGNATAIRE_OF_INCOMPLET` du récapitulatif dira quel réglage manque.
+   *
+   * ⚠ OBLIGATOIRE — et c'est une décision, pas une rigueur de style (Laurent,
+   * 11/09/2026). Optionnelle, elle se serait perdue en silence : le lot C.2b-8
+   * a mesuré que retirer `signataireOf:` de l'appel de `page.tsx` faisait
+   * disparaître l'organisme de TOUTES les lignes en production, **95 tests
+   * restant verts**, sans la moindre erreur `tsc`. Un admin aurait alors lu
+   * « 1. Paul DURAND » et cru la convention close au premier paraphe, alors que
+   * le moteur y envoie deux signataires depuis C.2a.
+   *
+   * `null` reste une valeur légitime (Paramètres organisme incomplets) : ce
+   * qu'on rend impossible, c'est **l'oubli**, pas **l'absence d'organisme**.
+   * Un appelant qui ne sait pas quoi passer doit l'écrire, pas l'omettre.
    */
-  signataireOf?: SignataireOfPrevu | null;
+  signataireOf: SignataireOfPrevu | null;
 }): VueSignature {
   const lignes: LigneSignature[] = a.plan.envois.map((envoi) => {
     const document = a.documentParCle.get(envoi.cle) ?? null;
@@ -458,7 +470,9 @@ export function construireVueSignature(a: {
       ordre: ordreSignatairesPrevu({
         docType: envoi.docType,
         client: signataire,
-        of: a.signataireOf ?? null,
+        // Plus de `?? null` : la prop étant obligatoire, il n'y a plus d'absence
+        // à rattraper. Le repli aurait masqué l'oubli qu'on vient d'interdire.
+        of: a.signataireOf,
       }),
     };
   });
