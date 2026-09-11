@@ -298,7 +298,16 @@ export async function updateParticipant(input: {
   participantId: string;
   priceHT?: number;
   enrollmentStatus?: keyof typeof EnrollmentStatus;
-  sponsorOrgId?: string;
+  // ⚠ PAS de `sponsorOrgId` ICI, et ce n'est pas un oubli (lot C.2b-5, 11/09/2026).
+  // Le financeur de l'inscription a désormais sa propre action,
+  // `changerFinanceurInscription` (@/server/actions/participant-sponsor), parce
+  // qu'il porte deux REFUS que cette action-ci n'a jamais opposés : dossier de
+  // prise en charge déjà parti chez le financeur, et pièce déjà signée. La
+  // branche `sponsorOrgId` qui vivait ici était du code mort — aucun appelant ne
+  // la passait — mais un code mort qui contourne un garde-fou n'attend qu'un
+  // appelant. Elle porterait en plus un RBAC plus large (COMMERCIAL inclus) que
+  // celui du champ (`ADMIN | MANAGER`).
+  // Gardé par `__tests__/update-participant-sponsor-verrouille.test.ts`.
   // Date de dépôt du dossier de financement (ex: dossier AGEFICE). Détermine
   // l'année à laquelle s'applique le budget consommé. cf
   // feedback_budget_agefice_annee_dossier. ISO yyyy-mm-dd ou null pour effacer.
@@ -349,15 +358,8 @@ export async function updateParticipant(input: {
     before.enrollmentStatus = part.enrollmentStatus;
     after.enrollmentStatus = input.enrollmentStatus;
   }
-  if (input.sponsorOrgId && input.sponsorOrgId !== part.sponsorOrgId) {
-    const sponsor = await prisma.organization.findFirst({
-      where: { id: input.sponsorOrgId, tenantId: user.tenantId },
-    });
-    if (!sponsor) return { ok: false, error: 'Organisation sponsor introuvable.' };
-    data.sponsorOrg = { connect: { id: input.sponsorOrgId } };
-    before.sponsorOrgId = part.sponsorOrgId;
-    after.sponsorOrgId = input.sponsorOrgId;
-  }
+  // (Le financeur de l'inscription se change par `changerFinanceurInscription`
+  // — cf. le commentaire sur la signature ci-dessus.)
   if (input.financingRequestDate !== undefined) {
     let newDate: Date | null;
     if (input.financingRequestDate === null || input.financingRequestDate === '') {
