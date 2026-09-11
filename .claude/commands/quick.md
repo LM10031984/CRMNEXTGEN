@@ -151,6 +151,43 @@ recommencerait à faire confiance à un `tsc` qui ne regarde pas.
 (`src/server/proposition-library.ts`). Dupliquer un mapping dans un dossier non
 vérifié, c'est se garantir une divergence muette.
 
+## 4 ter. Un test qui n'a jamais rougi n'est pas un test
+
+**Un test qui n'a jamais rougi n'est pas un test, c'est une décoration.**
+
+Même famille que §4 bis — un garde-fou auquel on fait confiance et qui ne garde
+rien —, et le troisième cas est arrivé le 11/09/2026, sur le départage des
+modules à égalité de score.
+
+Le défaut : une égalité de score se tranchait à l'ORDRE ALPHABÉTIQUE des titres,
+et ça avait changé le module programmé en demi-journée 5 d'un dossier réel.
+L'assertion naïve, celle qui vient spontanément :
+
+```ts
+// à égalité de score, BIB-D017#3 sort premier
+expect(axe.candidates[0]!.moduleId).toBe('m-d017');
+```
+
+**Elle passait déjà sur le code cassé.** Le repli alphabétique place
+« Convaincre le vendeur… » avant « Gérer les objections… » : le test mesurait
+l'alphabet en croyant mesurer la règle. Il serait resté vert en cachant le bug,
+et il serait resté vert si on avait supprimé la correction.
+
+Ce qui donne sa valeur au test, c'est la **variante discriminante** : les mêmes
+modules, les mêmes signaux, mais les titres ÉCHANGÉS, de sorte que le module
+qu'on veut voir sortir premier porte le titre alphabétiquement dernier. Là, le
+test rougit contre le code non corrigé — donc il prouve quelque chose.
+
+**La règle** : pour tout test de contrat, exécute-le contre le code NON corrigé
+avant d'écrire le correctif, et consigne le nombre d'échecs. En TDD c'est
+mécanique (le commit `test(...): … — tests RED` porte ce compte) ; hors TDD,
+c'est à faire à la main. Si un test passe avant la correction, ce n'est pas une
+bonne nouvelle : c'est qu'il ne teste pas ce qu'on croit.
+
+Corollaire, pour les tests bâtis sur une égalité : **ASSERTE l'égalité**, ne la
+suppose pas. Un départage testé sur deux candidats qu'on croyait à égalité, et
+qui ne l'étaient pas, ne teste aucun départage.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
