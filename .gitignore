@@ -73,6 +73,15 @@ secrets/
 .vercel
 .env*
 
+# Bloc NOM=valeur à coller à la main dans Vercel (scope Preview), faute de
+# `vercel env add` utilisable — il pose « Git branch ? » en interactif et
+# n'écrit rien. SECRETS EN CLAIR : à supprimer une fois les variables posées.
+# Déjà couvert par `.env*` ci-dessus ; nommé pour que ça reste vrai si cette
+# règle est un jour resserrée.
+.env.preview.paste
+# Tiré par scripts/recette-apercu-seed.sh (vercel env pull), effacé en fin de script.
+.env.apercu
+
 # Sorties de prévisualisation PDF (scripts _preview-*.ts) — jamais commitées
 .preview-facture/
 
