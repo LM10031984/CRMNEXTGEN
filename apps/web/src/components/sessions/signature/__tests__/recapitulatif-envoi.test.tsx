@@ -57,7 +57,12 @@ vi.mock('sonner', () => ({
 }));
 
 import { RecapitulatifEnvoi } from '../recapitulatif-envoi';
-import { messageDocumentModifie, type EnvoiPrepare } from '@/lib/signature/envoi-contrats';
+import {
+  messageDocumentModifie,
+  type EnvoiEffectue,
+  type EnvoiPrepare,
+  type SignataireEnvoye,
+} from '@/lib/signature/envoi-contrats';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -79,7 +84,54 @@ const CONVENTION: EnvoiPrepare = {
     sourceNom: 'ORG_REPRESENTATIVE',
     sourceEmail: 'PERSON',
   },
+  // Demande n°2 (11/09/2026) : le récapitulatif annonce l'ordre COMPLET. Le
+  // moteur envoie l'OF depuis C.2a ; l'écran ne le montrait nulle part.
+  signataireOf: {
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    ordre: 'AFTER',
+  },
   empechements: [],
+};
+
+/**
+ * ⚠ TYPÉE `EnvoiEffectue`, le contrat RÉEL du moteur — pas un objet libre.
+ * Un champ ajouté ou renommé côté `envoi-contrats.ts` fait rougir `tsc` ici, au
+ * lieu de laisser l'écran résultat lire une forme qui n'existe plus.
+ */
+const CLIENT_ENVOYE: SignataireEnvoye = {
+  partie: 'CLIENT',
+  role: 'Client',
+  nom: 'Paul MARTIN',
+  email: 'paul@agence-martin.fr',
+  signUrl: 'https://docuseal.eu/s/le-lien-du-dirigeant',
+  signedAt: null,
+};
+
+const OF_ENVOYE: SignataireEnvoye = {
+  partie: 'OF',
+  role: 'Organisme de formation',
+  nom: 'Laurent MARX',
+  email: 'laurent@start-academy.fr',
+  signUrl: 'https://docuseal.eu/s/le-lien-de-l-of',
+  signedAt: null,
+};
+
+const ENVOYE: EnvoiEffectue = {
+  cle: 'CONVENTION:org-1',
+  docType: 'CONVENTION',
+  libelle: 'Convention — AGENCE MARTIN (2 participants)',
+  signatureRequestId: 'req-1',
+  providerId: 'sub-1',
+  documentId: 'doc-conv',
+  hash: 'HASH-A',
+  signataire: {
+    nom: 'Paul MARTIN',
+    email: 'paul@agence-martin.fr',
+    source: 'PERSON',
+  },
+  signUrl: 'https://docuseal.eu/s/le-lien-du-dirigeant',
+  signataires: [CLIENT_ENVOYE, OF_ENVOYE],
 };
 
 function preparationOk(over: EnvoiPrepare[] = [CONVENTION]) {
@@ -373,21 +425,6 @@ describe('PUISSANCE (c) — un refus DOCUMENT_MODIFIE se comprend au lieu de se 
 });
 
 describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', () => {
-  const ENVOYE = {
-    cle: 'CONVENTION:org-1',
-    docType: 'CONVENTION' as const,
-    signatureRequestId: 'req-1',
-    providerId: 'sub-1',
-    documentId: 'doc-conv',
-    hash: 'HASH-A',
-    signataire: {
-      nom: 'Paul MARTIN',
-      email: 'paul@agence-martin.fr',
-      source: 'PERSON' as const,
-    },
-    signUrl: 'https://docuseal.eu/s/le-lien-du-dirigeant',
-  };
-
   it('affiche le nom et l’adresse retenus, et le bandeau honnête « aucun email »', async () => {
     sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
     ouvrir();
@@ -416,7 +453,16 @@ describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', 
   it('un prestataire qui ne rend AUCUN lien le dit, au lieu d’afficher un champ vide', async () => {
     sendForSignature.mockResolvedValue({
       ok: true,
-      envoyes: [{ ...ENVOYE, signUrl: null }],
+      envoyes: [
+        {
+          ...ENVOYE,
+          signUrl: null,
+          // `EnvoiEffectue.signUrl` n'est qu'une PROJECTION du signataire
+          // client : le vider seul laisserait la liste rendre un champ que le
+          // prestataire n'a pas rempli.
+          signataires: [{ ...CLIENT_ENVOYE, signUrl: null }, OF_ENVOYE],
+        },
+      ],
       refus: [],
     });
     ouvrir();
@@ -488,5 +534,210 @@ describe('Contraste — le bouton de confirmation écrit sa couleur de texte', (
     expect(bouton.className).toContain('text-white');
     expect(bouton.className).toContain('bg-primary');
     expect(bouton.className).not.toContain('text-primary-foreground');
+  });
+});
+
+/**
+ * Demande n°2 de Laurent (11/09/2026) — L'ORDRE COMPLET, AUX DEUX ÉCRANS.
+ *
+ * L'OF signe la convention et l'attestation depuis le lot C.2a ; aucun des deux
+ * écrans ne le montrait. Un admin qui relit un récapitulatif ne pouvait pas
+ * savoir qu'une seconde signature suivrait la première — donc pas savoir que la
+ * pièce n'est pas close au premier paraphe.
+ *
+ * ⚠ LA CONTRAINTE TRAITÉE, PAS CONTOURNÉE. « Dès que le client a signé »
+ * suppose de SAVOIR qu'il a signé. Cet état vient du webhook (lot C.3) :
+ * `signers[].signedAt` reste nul d'ici là. Le lien est donc adossé à la DONNÉE,
+ * et l'écran DIT que l'état ne bougera pas tout seul.
+ */
+describe('L’ordre complet — au récapitulatif, AVANT le clic', () => {
+  it('la ligne d’ordre est celle dictée, OF compris et numéroté', async () => {
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    const texte = document.body.textContent ?? '';
+    // LITTÉRAL : la forme exacte de l'énoncé, séparateur compris.
+    expect(texte).toContain(
+      '1. Paul MARTIN — paul@agence-martin.fr · ' +
+        '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
+  });
+
+  it('une pièce à un seul signataire n’invente pas de second rang', async () => {
+    preparerEnvoiSignature.mockResolvedValue(
+      preparationOk([
+        {
+          ...CONVENTION,
+          cle: 'AGEFICE:part-1',
+          docType: 'AGEFICE',
+          libelle: 'Dossier AGEFICE — Jean DUPONT',
+          role: 'STAGIAIRE',
+          signataire: {
+            nom: 'Jean DUPONT',
+            email: 'jean@dupont.fr',
+            sourceNom: 'APPRENANT_STAGIAIRE',
+            sourceEmail: 'PERSON',
+          },
+        },
+      ]),
+    );
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('1. Jean DUPONT — jean@dupont.fr');
+    // La table des ancres tranche : l'exemplaire AGEFICE porte déjà l'image de
+    // signature de l'organisme, il n'y re-signe pas.
+    expect(texte).not.toContain('2. Laurent MARX');
+    expect(texte).not.toContain('organisme de formation),');
+  });
+});
+
+describe('L’ordre complet — à l’écran RÉSULTAT, avec le lien de l’OF', () => {
+  it('les deux signataires sont numérotés, dans l’ordre d’envoi', async () => {
+    sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() => expect(document.body.textContent).toContain('1. Paul MARTIN'));
+
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('1. Paul MARTIN — paul@agence-martin.fr');
+    expect(texte).toContain(
+      '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
+  });
+
+  it('PUISSANCE — « Signer maintenant » n’est PAS dans le DOM tant que le client n’a pas signé', async () => {
+    sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() => expect(document.body.textContent).toContain('1. Paul MARTIN'));
+
+    // Ni lien, ni bouton : absent, pas grisé.
+    expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /signer maintenant/i })).toHaveLength(0);
+    // …et l'écran DIT pourquoi, en nommant qui est attendu et d'où viendra
+    // l'information. Sans cette phrase, l'absence du lien passe pour une panne.
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('Paul MARTIN');
+    expect(texte).toContain('lot C.3');
+  });
+
+  it('client signé : le lien apparaît, et il pointe l’URL de l’OF — pas celle du client', async () => {
+    sendForSignature.mockResolvedValue({
+      ok: true,
+      envoyes: [
+        {
+          ...ENVOYE,
+          signataires: [
+            { ...CLIENT_ENVOYE, signedAt: '2026-09-11T09:30:00.000Z' },
+            OF_ENVOYE,
+          ],
+        },
+      ],
+      refus: [],
+    });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /signer maintenant/i })).toBeTruthy(),
+    );
+
+    const lien = screen.getByRole('link', { name: /signer maintenant/i });
+    // ⚠ LITTÉRAL. Comparer au `signUrl` de la fixture passerait même si le
+    // composant rendait le lien du CLIENT : les deux côtés viendraient du même
+    // objet. On écrit l'URL attendue en toutes lettres.
+    expect(lien.getAttribute('href')).toBe('https://docuseal.eu/s/le-lien-de-l-of');
+    expect(lien.getAttribute('href')).not.toBe('https://docuseal.eu/s/le-lien-du-dirigeant');
+    // Plus d'attente affichée : expliquer une absence qui n'existe plus fait douter.
+    expect(document.body.textContent).not.toContain('lot C.3 :');
+  });
+});
+
+/**
+ * Demande n°3 de Laurent (11/09/2026) — DES LIBELLÉS, PAS DES IDENTIFIANTS.
+ *
+ * L'écran résultat titrait chaque pièce « CONVENTION:org-1 ». C'est la clé du
+ * plan : stable, idempotente, faite pour être cochée par l'UI et reçue par la
+ * server action — pas pour être lue. Le bloc, lui, sait dire « Convention —
+ * AGENCE MARTIN (2 participants) ».
+ */
+describe('Écran résultat — le libellé du bloc, jamais la clé du plan', () => {
+  it('l’en-tête porte le libellé, et l’identifiant technique a disparu du texte', async () => {
+    sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('envoyée en signature'),
+    );
+
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('Convention — AGENCE MARTIN (2 participants) — envoyée en signature');
+    expect(texte).not.toContain('CONVENTION:org-1');
+  });
+
+  it('le bouton de copie se NOMME par le libellé — un lecteur d’écran lit la même chose', async () => {
+    sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /copier le lien/i })).toBeTruthy(),
+    );
+
+    const bouton = screen.getByRole('button', { name: /copier le lien/i });
+    const nom = bouton.getAttribute('aria-label') ?? '';
+    expect(nom).toContain('Convention — AGENCE MARTIN (2 participants)');
+    expect(nom).not.toContain('CONVENTION:org-1');
+  });
+});
+
+describe('Provenance de l’adresse — « fiche du contact », pas « contact portant ce nom »', () => {
+  it('à la revue, la provenance se lit comme un endroit où aller vérifier', async () => {
+    preparerEnvoiSignature.mockResolvedValue(
+      preparationOk([
+        {
+          ...CONVENTION,
+          signataire: {
+            nom: 'Paul MARTIN',
+            email: 'paul@agence-martin.fr',
+            sourceNom: 'ORG_REPRESENTATIVE',
+            sourceEmail: 'CONTACT_NOMME',
+          },
+        },
+      ]),
+    );
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('adresse : fiche du contact');
+    expect(texte).not.toContain('contact portant ce nom');
+  });
+
+  it('au résultat aussi — les deux écrans épellent la provenance pareil', async () => {
+    sendForSignature.mockResolvedValue({
+      ok: true,
+      envoyes: [
+        {
+          ...ENVOYE,
+          signataire: {
+            nom: 'Paul MARTIN',
+            email: 'paul@agence-martin.fr',
+            source: 'CONTACT_NOMME' as const,
+          },
+        },
+      ],
+      refus: [],
+    });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() => expect(document.body.textContent).toContain('1. Paul MARTIN'));
+
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('adresse : fiche du contact');
+    expect(texte).not.toContain('contact portant ce nom');
   });
 });
