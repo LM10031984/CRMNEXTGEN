@@ -430,6 +430,40 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 - Filet : cron quotidien `signature-sync` qui re-interroge DocuSeal pour les requêtes `SENT` > 1 h sans webhook (webhook perdu) et marque `EXPIRED` au-delà de `expiresAt` (30 j par défaut).
 - Tests : résolution des signataires (org / indépendant / sans email) ; webhook idempotent ; provider dry-run de bout en bout.
 
+### ⚠ Données de production à corriger AVANT le merge du lot C
+
+Inventaire joué **sur la base de production** le 11/09/2026, en lecture seule
+(`pnpm --filter @qualiof/db run db:query:prod`, transaction `READ ONLY` close par
+un `ROLLBACK`). Requête conservée :
+`.planning/quick/260910-c2b-signature-lot-c2b-ecran-envoi/inventaire-bug11.sql`.
+
+Le passage de la règle élargie BUG-11 au régime de financement change l'affichage
+de **deux inscriptions**, et de deux seulement :
+
+| Session | Apprenant | Sponsor | Financeur | Autre rattachement | Dossier déjà généré | À trancher |
+|---|---|---|---|---|---|---|
+| SES-0048 | **Marion MAINO** | son EI « MAINO Marion » | *aucun* | AGEFICE | non | **sponsor → PTA AGEFICE** |
+| SES-0002 | **Clothilde MANUEL** | Sigma | OPCO_EP | AGEFICE | non | **salariée Sigma, ou TNS ?** |
+
+**Aucune des deux n'a de dossier AGEFICE généré** : rien ne disparaîtra de l'écran.
+Le garde-fou « colonne visible si un document existe » n'est sollicité par ni
+l'une ni l'autre — il reste le bon filet, il ne sert simplement pas ici.
+
+Depuis le lot C.2b-5, la correction se fait **dans l'application** : champ
+« Financeur de l'inscription » du formulaire d'édition, atteignable d'un clic
+depuis l'avertissement lui-même. Elle était impossible auparavant autrement qu'en
+supprimant puis recréant l'inscription.
+
+> **Le cas qui a motivé la règle élargie n'existe pas dans la donnée.** Le
+> commentaire BUG-11 de `page.tsx` invoquait « Florent HAUSSWIRTH / Imagimmo
+> OPCO_EP, aussi auto-entrepreneur AGEFICE en parallèle ». Vérifié le 11/09 en
+> production : il n'est **inscrit à aucune session**, et son seul rattachement est
+> `AGENT_COMMERCIAL / OPCO_EP` — **ni `EI_SELF`, ni organisation AGEFICE**. La
+> règle a donc été écrite pour une situation que la base ne porte pas (ou ne porte
+> plus), et elle en couvrait deux autres sans que personne le sache. À garder en
+> tête avant d'élargir une règle sur la foi d'un cas nominatif : vérifier qu'il
+> est encore dans la donnée.
+
 ### Lot D — Intégration financeur & audit
 
 **Attente Laurent (10/09) — « le dossier AGEFICE prêt à partir en un geste »** : quand conventions et dossiers AGEFICE sont signés, l'admin ouvre le dossier du participant et trouve un écran « Dossier prêt » : point d'accueil AGEFICE **résolu automatiquement depuis le département du stagiaire** (table `agefice_pta_departments_served` de main, 08/09), destinataire pré-rempli, objet et corps pré-composés (`OpcoSubmission` existant), pièces jointes = versions **signées** + certificats de signature, et **un seul bouton Envoyer**. Envoi depuis QualiOF avec l'expéditeur en copie (le mail arrive aussi dans sa boîte, avec les pièces) — pas de `mailto:` (ne joint pas de fichiers de façon fiable). Si une pièce manque ou n'est pas signée : bloquant nominatif, jamais d'envoi partiel silencieux.
