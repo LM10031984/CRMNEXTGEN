@@ -418,6 +418,9 @@ export function compositionFromAxes(
         fundingType: 'COEUR_METIER',
         isActive: false,
         supersededBy: null,
+        // Recomposition depuis le persisté : si ce module est là, il a déjà
+        // passé les filtres de sortie client au moment de la composition.
+        excludedFromClientOutputs: false,
       },
       need: { code: m.needLabel, label: m.needLabel },
       // Les citations enregistrées, relues comme des preuves de réponse : le

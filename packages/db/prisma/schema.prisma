@@ -468,6 +468,22 @@ model TrainingProduct {
   /// un contenu qui n'est pas celui que la convention et la page publique
   /// annoncent au client.
   ///
+  /// D-19 ter (relecture du 11/09/2026) — **un programme non diffusable ne sort
+  /// JAMAIS**, ni comme produit, ni par ses modules.
+  ///
+  /// Même sens que `TrainingModule.excludedFromClientOutputs` (la pige), posé
+  /// un cran au-dessus : c'est le PROGRAMME qui est interdit de sortie client,
+  /// donc tout ce qu'il contient l'est aussi — y compris les modules qu'on lui
+  /// ajouterait demain. Cas fondateur : « L'Agent Incomparable », parcours
+  /// v0.9 de pré-livraison dont le manifeste porte « trous 🔴/🟠 NON levés —
+  /// NE PAS DIFFUSER AUX APPRENANTS ».
+  ///
+  /// **À ne pas confondre avec `isActive`** : inactif est la NORME pour un
+  /// rayon de bibliothèque (81 sur 81), et le corollaire D-19 du 10/09 interdit
+  /// d'en faire un critère — filtrer sur `isActive` viderait la bibliothèque.
+  /// Non diffusable est une interdiction, pas un état de vente.
+  excludedFromClientOutputs Boolean @default(false)
+
   /// Le lien est POSÉ une fois et ne se défait jamais tout seul : c'est ce qui
   /// empêche un prochain import de réintroduire le doublon si le dossier Drive
   /// est renommé entre-temps. Le délier est une décision de catalogue.

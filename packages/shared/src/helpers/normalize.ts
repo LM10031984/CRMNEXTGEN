@@ -13,6 +13,37 @@ export function normalizeName(input: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * La clé d'égalité d'un TITRE de catalogue — programme, rayon, produit vendu.
+ *
+ * Distincte de `normalizeName`, qui sert à dédupliquer des PERSONNES et des
+ * ORGANISATIONS : un nom propre se compare tel quel, un titre de programme
+ * arrive de trois chaînes de production différentes et porte leurs scories.
+ *
+ * Ce qu'elle neutralise, et pourquoi chaque cas a été vu en vrai (11/09/2026) :
+ *
+ *   • **les accents, y compris décomposés.** macOS écrit les noms de dossier en
+ *     NFD : le Drive livre `activite\u0301` là où QualiOF a `activité`. Sans
+ *     décomposition préalable, ce sont deux chaînes différentes.
+ *   • **l'apostrophe typographique.** `L’Intelligence` (U+2019) contre
+ *     `L'Intelligence` (U+0027) : c'est ce seul caractère qui a fait rater le
+ *     doublon `BIB-D073` ↔ `PROD-0673`, alors que D-19 bis aurait dû l'écarter.
+ *   • **la ponctuation et les tirets**, typographiques ou non, et les espaces
+ *     insécables — ramenés à une simple espace.
+ *
+ * Volontairement plus agressive que `normalizeName` : elle ne sert qu'à dire
+ * « ces deux titres désignent le même programme », jamais à afficher.
+ */
+export function catalogueTitleKey(input: string | null | undefined): string {
+  if (!input) return '';
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
+    .toLowerCase()
+    .trim();
+}
+
 /** Normalise un email : trim, lowercase, supprime espaces parasites. */
 export function normalizeEmail(input: string | null | undefined): string {
   if (!input) return '';

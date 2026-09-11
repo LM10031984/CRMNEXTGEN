@@ -30,10 +30,11 @@
  *     une enveloppe. Un module sans justification n'a rien à faire dans une
  *     proposition.
  *
- * Ce que le moteur ne fait JAMAIS : proposer un module
- * `excludedFromClientOutputs` (la pige, interdite dans toute sortie client
- * depuis le 11/08/2026), ni inventer un module. La bibliothèque est la seule
- * source.
+ * Ce que le moteur ne fait JAMAIS : proposer un module interdit de sortie
+ * client — la pige (`LibraryModule.excludedFromClientOutputs`, depuis le
+ * 11/08/2026) ou un module dont le PROGRAMME est non diffusable
+ * (`source.excludedFromClientOutputs`, D-19 ter du 11/09/2026) — ni inventer un
+ * module. La bibliothèque est la seule source.
  */
 
 import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
@@ -76,6 +77,21 @@ export interface ModuleSourceProgramme {
    * inactif est la norme ; un rayon écarté est un doublon.
    */
   supersededBy: string | null;
+  /**
+   * D-19 ter (relecture du 11/09/2026) — **le programme est interdit de sortie
+   * client**, donc tout ce qu'il contient l'est aussi.
+   *
+   * Même interdiction que la pige, posée un cran au-dessus : sur le PROGRAMME
+   * plutôt que sur le module, parce qu'elle vaut aussi pour les modules qu'on
+   * lui ajouterait demain. Cas fondateur : « L'Agent Incomparable », parcours
+   * v0.9 dont le manifeste porte « NE PAS DIFFUSER AUX APPRENANTS » — il était
+   * proposé en tête de deux douleurs le 11/09, parce que le filtre « unités
+   * animables » écartait la pige et les doublons mais pas l'indiffusable.
+   *
+   * À ne pas confondre avec `isActive` (règle 1) : inactif est un état de
+   * vente et la norme pour un rayon ; non diffusable est une interdiction.
+   */
+  excludedFromClientOutputs: boolean;
 }
 
 /** Un module de la bibliothèque, vu par le moteur de recommandation. */
@@ -406,19 +422,26 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   // ── La bibliothèque ────────────────────────────────────────────────────────
   //
   // Aucun filtre sur `source.isActive` : c'est la règle 1, et le test « tous les
-  // conteneurs inactifs » la tient. Deux retraits seulement, et ils se
+  // conteneurs inactifs » la tient. Trois retraits seulement, et ils se
   // distinguent :
   //   • la PIGE, interdite en sortie client depuis le 11/08/2026 ;
+  //   • les programmes NON DIFFUSABLES (D-19 ter) — l'interdiction porte sur le
+  //     conteneur, donc sur tous ses modules, présents et à venir ;
   //   • les rayons en DOUBLON d'un produit vendu (D-19 bis) — la version vendue
   //     fait foi, et il n'y a rien de pire que deux versions du même programme
   //     dans la bibliothèque : on vendrait l'une et on animerait l'autre.
+  //
+  // L'ordre compte pour les notices, pas pour le résultat : un module peut
+  // relever de plusieurs retraits, on le compte dans le premier.
   const excluded = input.library.filter((m) => m.excludedFromClientOutputs);
-  const superseded = input.library.filter(
-    (m) => !m.excludedFromClientOutputs && m.source.supersededBy !== null,
+  const notDistributable = input.library.filter(
+    (m) => !m.excludedFromClientOutputs && m.source.excludedFromClientOutputs,
   );
-  const library = input.library.filter(
-    (m) => !m.excludedFromClientOutputs && m.source.supersededBy === null,
+  const usable = input.library.filter(
+    (m) => !m.excludedFromClientOutputs && !m.source.excludedFromClientOutputs,
   );
+  const superseded = usable.filter((m) => m.source.supersededBy !== null);
+  const library = usable.filter((m) => m.source.supersededBy === null);
 
   if (library.length === 0) {
     notices.push(
@@ -578,6 +601,13 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   if (excluded.length > 0) {
     notices.push(
       `${excluded.length} module(s) écarté(s) d’office : interdits en sortie client (pige). Ils restent au catalogue interne.`,
+    );
+  }
+
+  if (notDistributable.length > 0) {
+    const programmes = [...new Set(notDistributable.map((m) => m.source.code))];
+    notices.push(
+      `${notDistributable.length} module(s) écarté(s) d’office : leur programme est marqué NON DIFFUSABLE (${programmes.slice(0, 4).join(', ')}). Un parcours non relu ne part pas chez un client, quel que soit son score.`,
     );
   }
 

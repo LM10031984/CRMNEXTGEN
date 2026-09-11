@@ -201,7 +201,9 @@ function agencyNameOf(d: DiagnosticBundle): string {
  *     ici : le moteur les écarte lui-même et le DIT (D-19 bis). Les retirer en
  *     silence à la lecture rendrait la règle invisible au commercial ;
  *   • la **pige** reste marquée module par module : le moteur l'écarte aussi,
- *     et un module exclu n'influence rien — pas même par ses signaux.
+ *     et un module exclu n'influence rien — pas même par ses signaux ;
+ *   • les programmes **non diffusables** sont lus et transmis tels quels
+ *     (D-19 ter) : c'est le moteur qui refuse leurs modules, et qui le dit.
  */
 async function loadLibrary(tenantId: string): Promise<LibraryModule[]> {
   const products = await prisma.trainingProduct.findMany({
@@ -214,6 +216,7 @@ async function loadLibrary(tenantId: string): Promise<LibraryModule[]> {
       isActive: true,
       fundingType: true,
       supersededByProductId: true,
+      excludedFromClientOutputs: true,
       modules: {
         orderBy: { order: 'asc' },
         select: {
@@ -253,6 +256,7 @@ async function loadLibrary(tenantId: string): Promise<LibraryModule[]> {
         theme: p.theme,
         fundingType: p.fundingType,
         isActive: p.isActive,
+        excludedFromClientOutputs: p.excludedFromClientOutputs,
         supersededBy: p.supersededByProductId
           ? (codeById.get(p.supersededByProductId) ?? p.supersededByProductId)
           : null,

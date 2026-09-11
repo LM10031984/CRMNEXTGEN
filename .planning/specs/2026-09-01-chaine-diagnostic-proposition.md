@@ -443,6 +443,141 @@ jour où le composeur devra piocher dedans, il faudra créer les modules **sur l
 produit vendu lui-même**, à partir de son `programMd` — ce qui est un travail de
 catalogue, à faire les yeux ouverts, pas un import automatique.
 
+##### D-19 bis, suite — quand le doublon oppose **deux rayons**, c'est Laurent qui désigne (11/09/2026)
+
+D-19 bis tranche un rayon contre un produit **vendu** : la convention et la page
+publique font foi. **Entre deux RAYONS, la règle est muette** — ils ont le même
+statut, rien ne les départage. C'est ce qu'a montré `drive:008` « Face à face
+acheteurs » contre `drive:020` « Face a face acheteurs » : le même programme
+rangé sous deux numéros, invisible jusqu'ici parce que la détection ne comparait
+qu'aux produits vendus.
+
+**Arbitrage de Laurent** : garder `BIB-D008`, écarter `BIB-D020`. Motif — **008
+est le numéro de ce programme dans la numérotation catalogue de Laurent**
+(008 → 074) ; 020 est une copie rangée sous un autre numéro.
+
+**Comment la décision est tenue** :
+
+1. Elle est **déclarée dans le code**, datée et motivée (`RAYONS_TRANCHES` dans
+   `import-drive-catalog.ts`), pas passée une fois à la main sur une base. Un
+   arbitrage appliqué par un `UPDATE` manuel est perdu à la prochaine base.
+2. Elle se pose dans le **même champ** qu'un doublon D-19 bis
+   (`supersededByProductId`), donc elle hérite de la même garantie : **un lien
+   déjà posé n'est jamais recalculé**, et un dossier Drive renommé ne peut pas
+   réintroduire le doublon.
+3. Le rayon écarté **reste en base et reste consultable** — seuls ses modules
+   sortent de la composition. On ne supprime rien.
+4. **Le rapport le DIT** plutôt que de le faire disparaître : un doublon réglé
+   par la règle est une non-information, un doublon réglé par une **décision**
+   doit rester lisible, sinon quelqu'un la reprendra un jour depuis zéro.
+5. **Refus de sécurité** : si le rayon gardé est introuvable en base, aucun lien
+   n'est posé et le rapport le signale. Écarter au profit d'un gardien absent
+   retirerait du contenu de la reco sans rien mettre à la place.
+
+##### D-19 ter — un programme **NON DIFFUSABLE** ne sort jamais, ni lui ni ses modules (relecture du 11/09/2026)
+
+La liste de rattachement du 11/09 proposait **« L'Agent Incomparable » en tête
+de deux douleurs** — « rythme de suivi vendeur » (module M4) et « diversité des
+sources de contacts » (module M1). Or ce parcours est en **v0.9 de
+pré-livraison**, son manifeste porte « trous 🔴/🟠 NON levés — NE PAS DIFFUSER
+AUX APPRENANTS », et il a été importé inactif *pour cette raison*.
+
+**Pourquoi le filtre ne l'a pas retenu** : l'interdiction n'existait nulle part
+dans la donnée. Elle vivait dans un manifeste au fond d'un dossier et dans une
+phrase du `programMd`. Le seul champ qui en portait la trace était `isActive` —
+et c'est précisément le champ sur lequel le corollaire D-19 **interdit** de
+filtrer, puisque les 81 rayons importés sont inactifs par construction. Filtrer
+sur `isActive` aurait vidé la bibliothèque ; ne pas filtrer laissait passer le
+seul programme qu'il fallait arrêter.
+
+**La règle** : `TrainingProduct.excludedFromClientOutputs` — même sens et même
+nom que le champ de la pige sur `TrainingModule`, posé un cran au-dessus.
+L'interdiction porte sur le **programme**, donc sur **tout ce qu'il contient**,
+y compris les modules qu'on lui ajouterait après la relecture. Elle est posée
+par l'import (`import:diag-catalog`, à la création **et** en réparation d'une
+ligne existante), et tenue par le moteur : `recommendModules` écarte ces modules
+et le **dit** en notice, comme pour la pige et le doublon.
+
+⚠ **Trois notions, trois champs, à ne jamais confondre :**
+
+| Champ | Ce qu'il dit | Combien de produits |
+|---|---|---|
+| `isActive: false` | pas vendu tel quel — **la norme** pour un rayon de bibliothèque | 81 rayons sur 81 |
+| `supersededByProductId` | doublon d'un produit vendu, la version vendue fait foi (D-19 bis) | 4, bientôt 6 |
+| `excludedFromClientOutputs` | **interdit de sortie client** — une interdiction, pas un état de vente | 1 (`PROD-0681`) |
+
+**Test** : un module porteur du signal exact d'une douleur, marqué socle, venu
+d'un programme non diffusable, ne doit ressortir nulle part — et la règle vaut
+pour un module ajouté au programme sans être marqué lui-même. Le test jumeau
+vérifie qu'un rayon simplement inactif, lui, n'est pas écarté.
+
+##### D-27 — **deux mots pleins concordants, ou rien** (relecture du 11/09/2026)
+
+Le rapprochement lexical acceptait un mot unique s'il était rare dans le
+catalogue et long d'au moins 8 caractères. Rare et long n'est pas qualifiant :
+sur les 17 douleurs « couvertes » du 11/09, **six lignes venaient d'un seul
+mot**, et les six étaient fausses.
+
+| Le mot | Ce qu'il proposait | À quelle douleur |
+|---|---|---|
+| « formation » | un programme de **déontologie** | « le dirigeant connaît ses droits à formation » |
+| « collecte » | une **collecte d'e-mails** | « processus de collecte d'avis » |
+| « nécessaires » | la **synthèse d'une journée de tournage** | « nombre de visites nécessaires par vente » |
+| « contacts » | une formation aux **newsletters** | « transformation contacts → rendez-vous » |
+| « régulièrement » | réévaluer un **plan d'action** | « indicateurs suivis » |
+| « conseiller » | le **cadastre** | « trame d'appel commune » |
+
+**La règle** : un rapprochement fondé sur un seul mot commun n'est **pas proposé
+du tout**. Il faut deux mots pleins concordants — deux mots qui qualifient,
+c'est-à-dire dont le pouvoir discriminant mesuré sur la bibliothèque est non nul
+(D-18).
+
+**Le raisonnement, et il vaut au-delà de ce script** : une ligne fausse n'est
+pas neutre. Elle se lit, se comprend, se vérifie, se barre — elle coûte du temps
+de relecture, et elle **cache** la vérité utile, qui est que la douleur n'est
+pas couverte. Mieux vaut une douleur déclarée non couverte, qui dit à Laurent
+d'écrire du contenu, qu'une proposition qui lui fait croire le contraire.
+
+**Conséquence chiffrée, assumée** : le nombre de douleurs sans réponse **monte**
+de 17 à 21. C'est le chiffre vrai — les 4 douleurs hors champ en sortent (D-28),
+mais les 4 barrées et les 2 tombées y entrent.
+
+⚠ **Ce que D-27 ne recouvre PAS, et c'est définitif** : le moteur de recommandation
+(`recommendModules`) garde sa propre échelle — signaux, lexique, confiance
+`forte`/`faible`. **Laurent a tranché le 11/09 : on ne l'aligne pas.**
+
+Son motif, qui vaut plus que la règle elle-même : **le seuil lexical est une
+béquille de relecture, pas une doctrine de moteur.** Il sert à protéger un
+humain qui relit des rapprochements devinés. Une fois les rattachements écrits,
+le moteur ne devine plus — il suit les **étiquettes** posées sur les modules, et
+le lexical n'est plus qu'un filet de sécurité. Durcir un filet qu'on s'apprête à
+ne plus utiliser reviendrait à optimiser le mauvais chemin.
+
+**Quand rouvrir la question** : seulement si, après l'écriture des
+rattachements, le lexical sert encore — c'est-à-dire si des recommandations
+continuent de sortir en `source: 'lexique'` sur des dossiers réels. Si elles
+sortent toutes en `source: 'signaux'`, le sujet est clos pour de bon.
+
+##### D-28 — toutes les douleurs ne sont pas des besoins de **formation** (relecture du 11/09/2026)
+
+Quatre règles du barème sur trente-quatre notent un fait de **contexte** ou de
+**financement**, jamais une pratique qui s'apprend : « part de la transaction
+dans l'ancien », « le dirigeant connaît ses droits à formation », « au moins une
+action de formation sur 24 mois », « aucun refus de prise en charge à traiter ».
+Aucun module ne leur répondra jamais — la réponse est un dossier AGEFICE, une
+explication en rendez-vous ou un fait de marché.
+
+**La règle** : `Rule.answerableByTraining` dans le barème, exposé par
+`listDiagnosticPainPoints()`. Ces douleurs **restent notées** — savoir que le
+dirigeant ignore ses droits change le rendez-vous — mais elles **sortent de
+l'exercice de rattachement** : ni proposées, ni comptées comme « non couvertes ».
+
+**Pourquoi la décision vit dans le barème et pas dans le script qui en a
+besoin** : le composeur (I-2) et l'éditeur de proposition poseront la même
+question, et deux définitions de « douleur adressable par une formation »
+finiraient par diverger. Les compter comme non couvertes gonflait par ailleurs
+le nombre de douleurs à combler et décourageait pour rien.
+
 #### D-20 — l'unité de vente est le bloc de 8 h, pas la somme des modules
 
 Un programme composé est un **multiple du bloc de 8 h** = une demi-journée de
@@ -837,6 +972,8 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 
 | **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. **Corollaire du 10/09 : on n'active JAMAIS les conteneurs importés** — la reco et le composeur lisent les modules quel que soit l'`isActive` du conteneur, et c'est le produit composé qui porte l'état vendable. **Appliqué en I-1 le 10/09/2026** : `recommendModules` ne filtre nulle part sur `source.isActive`, et deux tests tiennent la règle — l'un joue la reco avec TOUS les conteneurs inactifs, l'autre vérifie que les activer ne change strictement rien au résultat. Cf. §5.3. | 04/09/2026 |
 | **D-19 bis** | Quatre rayons importés du Drive portent le même programme qu'un produit déjà vendu (`drive:055`↔`PROD-055`, `drive:053`↔`PROD-053`, `drive:046`↔`PROD-0671`, `drive:074`↔`PROD-0662`). Lequel fait foi ? | **La version VENDUE.** Le produit vendu ne bouge pas — ni sa durée, ni sa page publique « Programme détaillé », qui EST l'information préalable remise au client ; la modifier après coup crée un écart annoncé/réalisé, donc une réserve Qualiopi. C'est le RAYON qui s'efface : il reste consultable, mais **ses modules sortent du chemin de composition**. Motif : deux versions du même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en animer une autre. **Détection** : égalité de nom normalisée, à l'import uniquement, contre les seuls produits **vendus** (non importés ET actifs) ; le lien est **persisté** dans `TrainingProduct.supersededByProductId` et **jamais recalculé ni retiré** par un import — c'est ce qui empêche un dossier Drive renommé de réintroduire le doublon. Le moteur filtre en plus, et le dit en notice. **À ne pas confondre avec `isActive`** : inactif = la norme (81 rayons sur 81), écarté = doublon (4). **Conséquence assumée** : ces quatre produits ne portant aucun module, ils deviennent invisibles à la reco au niveau module — cf. §5.3. | 10/09/2026 |
+| **D-19 ter** | « L'Agent Incomparable » (`PROD-0681`), parcours v0.9 dont le manifeste porte « NE PAS DIFFUSER AUX APPRENANTS », était proposé en tête de deux douleurs sur la liste de rattachement du 11/09. Pourquoi le filtre ne l'a-t-il pas arrêté ? | **Parce que l'interdiction n'était nulle part dans la donnée** — elle vivait dans un manifeste et dans une phrase de `programMd`. Le seul champ qui en portait la trace, `isActive`, est précisément celui sur lequel le corollaire D-19 interdit de filtrer (81 rayons sur 81 sont inactifs). **Règle** : `TrainingProduct.excludedFromClientOutputs`, même sens et même nom que la pige sur `TrainingModule`, posé un cran au-dessus — l'interdiction porte sur le PROGRAMME, donc sur tous ses modules, **y compris ceux qu'on lui ajouterait demain**. Posée par l'import (création ET réparation), tenue par `recommendModules` qui écarte et le DIT en notice. **Trois notions, trois champs** : inactif = la norme (81), écarté = doublon (4), non diffusable = interdiction (1). Quatre tests, dont un qui vérifie qu'un rayon simplement inactif n'est PAS écarté. | 11/09/2026 |
+| **D-19 bis (suite)** | D-19 bis tranche un rayon contre un produit VENDU. Entre **deux rayons**, elle est muette : rien ne les départage. `drive:008` « Face à face acheteurs » et `drive:020` « Face a face acheteurs » sont le même programme sous deux numéros. | **C'est Laurent qui désigne, et la décision est déclarée dans le code** (`RAYONS_TRANCHES`), datée et motivée — jamais passée à la main sur une base, sinon elle est perdue à la prochaine. **Arbitrage du 11/09** : garder `BIB-D008`, écarter `BIB-D020` ; motif — **008 est le numéro de ce programme dans la numérotation catalogue de Laurent** (008 → 074), 020 est une copie rangée sous un autre numéro. Le lien se pose dans le même champ que D-19 bis, donc il **n'est jamais recalculé** : un prochain import du Drive ne peut pas réintroduire le doublon. Le rayon écarté **reste en base et consultable**, et le rapport le **dit** — un doublon réglé par une décision doit rester lisible, sinon quelqu'un la reprendra depuis zéro. Refus de sécurité si le rayon gardé est introuvable. | 11/09/2026 |
 | **D-20** | Le total d'un programme composé se déduit-il de la somme des durées de ses modules ? | **Non — l'unité de vente est le bloc de 8 h** (4 h sur site × 2 formateurs, cohérent avec 336 €/participant/demi-journée). Un programme composé est un multiple de ce bloc ; les durées de modules servent uniquement à savoir ce qui TIENT dans un bloc. Clôt le sujet des 16 modules à 1 h (D-17) : le défaut ne pilote plus aucun montant vendu. **Ligne rouge** : diagnostic et modules uniquement — interdiction de retoucher la durée d'un produit portant sessions ou conventions signées (journées Faros), sinon les documents émis ne correspondent plus. | 04/09/2026 |
 | **D-21** | La proposition doit-elle partir par email, et si oui automatiquement ? | **Elle se PRÉSENTE en rendez-vous — c'est là qu'elle se vend.** Mais le commercial doit pouvoir l'envoyer : bouton **« Envoyer par email », déclenché par lui, jamais automatique**. Trois garde-fous : ① une **catégorie d'email décochable de plus** dans `TenantEmailSettings`, fail-closed comme les autres (sans la case, rien ne part) ; ② on envoie le **lien de lecture public**, jamais une fiche nominative en pièce jointe — le lien porte déjà la règle « sans PII » du lot E ; ③ l'envoi est tracé comme une remise via `markProposalSent`, donc un envoi et une remise en main propre laissent la même trace et le statut ne ment pas. Livré **dans le lot F**, où le mailer est déjà touché. Les relances AUTOMATIQUES restent au **lot H** — ce sont deux sujets, et les mélanger ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer. | 10/09/2026 |
 | **D-22** | Une campagne de pré-inscription doit-elle porter un client, et lequel ? | **Elle porte TOUJOURS une agence — `organizationId` non-null sur `EnrollmentBatch`.** `diagnosticId` et `leadId` restent facultatifs, en contexte supplémentaire, jamais comme alternatives. **Motif** : un rattachement unique et obligatoire évite d'avoir à deviner, dans chaque écran et à la conversion des pré-inscriptions, lequel de trois liens facultatifs a été renseigné. Deux chemins de création, une seule règle : depuis la fiche diagnostic (bouton « Organiser les pré-inscriptions » — l'agence, le lead et le libellé se pré-remplissent), ou depuis la liste en choisissant l'agence dans le CRM, ce qui couvre le **client récurrent reformé sans nouveau R1** — l'interdire pousserait à saisir un faux diagnostic. **La création sans aucun client disparaît.** Aucune reprise de données : la fonctionnalité n'a jamais tourné en production. | 10/09/2026 |
@@ -845,6 +982,8 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-25** | Que compte `TrainingProduct.durationHours` — heures sur site ou heures conventionnées ? | **Heures CONVENTIONNÉES.** Preuve dans le catalogue réel : les journées Faros (FRM-0004..0007) valent 336 € HT — une demi-journée au tarif §8.1 — pour `durationHours = 8`. Et ce champ alimente `convention-template.ts` et `agefice-attendance-generator.ts`, donc la convention et le dossier financeur : c'est bien la valeur unique de la règle gravée n°2. **Conséquence d'écran** : aucun nombre d'heures ne s'affiche sans dire lequel il est. La page publique montrait « 36 h » nu sous le nom de la formation, juste au-dessus de dates qui, elles, distinguaient « h sur site » et « h conventionnées » ; elle affiche désormais les deux, dérivées par `decrireDureeProduit`. Un parcours de 9 demi-journées porte donc **72 h conventionnées / 36 h sur site**, le nombre même que verrouille le test de contrat de la proposition. **Précision de Laurent du 10/09/2026** : le facteur ×2 est une règle de **TARIFICATION** — il dit ce que vaut une demi-journée co-animée, pas ce que la convention doit raconter. **La convention n'a pas à nommer deux formateurs.** | 10/09/2026 |
 | **D-25 bis** | Conséquence directe de D-25, à lire avec elle | Ce même facteur de tarification fixe le **nombre d'heures déclaré au financeur** — 8 h pour 4 h sur site — et ce nombre-là **s'imprime sur la convention et sur l'attestation d'assiduité**. Autrement dit : on ne nomme pas deux formateurs, mais on déclare leurs heures. C'est exactement ce que **D-6** doit trancher, et sa question est désormais écrite en toutes lettres dans le tableau des décisions restantes. Tant que la réponse n'est pas là, le paramètre `TRAINER_COUNT_DEFAULT` reste actif et la valeur qu'il produit est la seule qui circule — aucun écran, aucun document n'en fabrique une deuxième. | 10/09/2026 |
 | **D-26** | Le nombre de formateurs est-il toujours de deux ? | **Non — Laurent anime rarement, mais parfois SEUL.** Deux formateurs restent le défaut, mais le nombre doit être **corrigeable SUR UNE SESSION, avant émission des documents** : sinon la convention et l'attestation déclarent le double de ce qui s'est réellement passé, ce qui est un faux en pièce financeur. À porter au modèle : **nombre de formateurs par session** (défaut = la règle du tenant), **heures conventionnées dérivées** de ce nombre et non plus de la seule règle, **émargement cohérent** avec lui. **À PLANIFIER APRÈS LE LOT F — pas dedans** (décision Laurent du 10/09/2026) : la campagne de RDV ne produit aucun document conventionnel, elle peut donc être fusionnée sans attendre. | 10/09/2026 |
+| **D-27** | Le rapprochement lexical acceptait un mot unique s'il était rare et long (≥ 8 caractères). Sur les 17 douleurs « couvertes » du 11/09, six lignes venaient d'un seul mot — et les six étaient fausses (« formation » → déontologie, « collecte » → e-mails, « nécessaires » → journée de tournage, « contacts » → newsletters, « régulièrement » → plan d'action, « conseiller » → cadastre). | **Deux mots pleins concordants, ou rien.** Un rapprochement fondé sur un seul mot commun n'est plus proposé du tout. Motif : une ligne fausse n'est pas neutre — elle se lit, se vérifie, se barre, et surtout elle **cache** la vérité utile, qui est que la douleur n'est pas couverte. Mieux vaut une douleur déclarée non couverte, qui dit d'écrire du contenu. **Conséquence chiffrée assumée** : les douleurs sans réponse montent de 17 à 21 — c'est le chiffre vrai. ⚠ **Ne recouvre PAS `recommendModules`** — **tranché par Laurent le 11/09 : on ne l'aligne pas.** Motif : le seuil lexical est une **béquille de relecture**, pas une doctrine de moteur ; une fois les rattachements écrits, le moteur suit les étiquettes et ne devine plus. À rouvrir seulement si des recommandations sortent encore en `source: 'lexique'` sur dossiers réels après l'écriture. | 11/09/2026 |
+| **D-28** | « Le dirigeant connaît ses droits à formation », « au moins une action de formation sur 24 mois », « part de la transaction dans l'ancien », « aucun refus de prise en charge à traiter » : quatre douleurs qui recevaient des propositions de modules, et qui en recevront toujours de mauvaises. | **Ce ne sont pas des besoins de formation.** Ce sont des faits de contexte ou de financement ; la réponse est un dossier AGEFICE, une explication en rendez-vous ou un fait de marché, jamais un programme. **Règle** : `Rule.answerableByTraining` dans le barème, exposé par `listDiagnosticPainPoints()`. Elles **restent notées** — savoir que le dirigeant ignore ses droits change le rendez-vous — mais sortent de l'exercice de rattachement : **ni proposées, ni comptées comme non couvertes**. La décision vit dans le barème et non dans le script, parce que le composeur (I-2) et l'éditeur de proposition poseront la même question. | 11/09/2026 |
 | **D-17** | Le catalogue diag déclare le même module pour trois profils (`conseiller`, `manager`, `assistant`) et ne porte la durée que sur `conseiller` — 30 modules sur 79 sortaient sans durée, et le conteneur « Usecases » à **0 h**. | **Deux étages, jamais zéro.** ① la durée déclarée pour le même module sous un autre profil (14 modules — c'est la vraie durée, simplement rangée ailleurs) ; ② 1 h par défaut pour les 16 restants, la durée la plus fréquente du catalogue déclaré, **choix conservateur** (surestimer des heures qui finiront sur une convention ou un dossier financeur est une non-conformité ; les sous-estimer n'est qu'un catalogue à affiner). Le rapport les liste une par une. Seul « L'Agent Incomparable » reste à 0 h : parcours v0.9 explicitement non diffusable, aucune durée connue — l'inventer serait pire. | 04/09/2026 |
 | **D-18** | La recommandation faisait remonter un programme « pour activité événementielle » sur l'e-réputation d'une agence immobilière. Faut-il un filtre de domaine ? | **Non — des mots-clés qui qualifient.** « marketing », « communication », « digital » sont du vocabulaire d'entreprise : ils matchent tout, donc ne qualifient rien. Le besoin e-réputation ne cherche plus que « avis », « réputation », « visible », « recommandation », « présence locale ». Et un besoin déclare désormais les **familles qu'il accepte, par ordre de préférence** : les sept besoins de la chaîne commerciale n'acceptent que `METIER` ; l'e-réputation accepte `METIER` puis `IA` (demander et suivre des avis est un sujet d'outillage autant que de méthode) — le métier passe devant, et servir une autre famille se DIT dans le rapport. | 04/09/2026 |
 | **D-15** | Le devis doit-il porter le reste à charge après remise, ou le coût pédagogique ? | **Le coût pédagogique**, et lui seul. Une remise en ligne négative sur le devis réduirait le coût déclaré, donc l'assiette des droits — le client financerait le geste qu'on lui fait. La prise en charge, le reste à charge et le geste commercial vivent dans les **notes** du devis. Σ lignes de devis = coût pédagogique de la proposition, au centime (test de contrat). Cf. §9.1. | 04/09/2026 |
