@@ -104,7 +104,7 @@ const CLIENT_ENVOYE: SignataireEnvoye = {
   role: 'Client',
   nom: 'Paul MARTIN',
   email: 'paul@agence-martin.fr',
-  signUrl: 'https://docuseal.eu/s/le-lien-du-dirigeant',
+  signUrl: 'https://docuseal.eu/s/le-lien-du-responsable',
   signedAt: null,
 };
 
@@ -130,8 +130,14 @@ const ENVOYE: EnvoiEffectue = {
     email: 'paul@agence-martin.fr',
     source: 'PERSON',
   },
-  signUrl: 'https://docuseal.eu/s/le-lien-du-dirigeant',
+  signUrl: 'https://docuseal.eu/s/le-lien-du-responsable',
   signataires: [CLIENT_ENVOYE, OF_ENVOYE],
+  notification: {
+    envoye: true,
+    destinataire: 'paul@agence-martin.fr',
+    partie: 'CLIENT',
+    motif: null,
+  },
 };
 
 function preparationOk(over: EnvoiPrepare[] = [CONVENTION]) {
@@ -430,7 +436,18 @@ describe('PUISSANCE (c) — un refus DOCUMENT_MODIFIE se comprend au lieu de se 
 });
 
 describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', () => {
-  it('affiche le nom et l’adresse retenus, et le bandeau honnête « aucun email »', async () => {
+  /**
+   * ⚠ CE TEST A ÉTÉ INVERSÉ AU LOT C.2c, jamais supprimé.
+   *
+   * Il gardait la promesse « aucun email n'est parti, copiez le lien ». Cette
+   * promesse est devenue FAUSSE le jour où `notifierSignataire` a été câblé —
+   * et un écran qui la répète fait recopier un lien déjà arrivé dans la boîte
+   * du signataire, qui reçoit alors deux fois la même demande par deux canaux.
+   * Un test supprimé ne garde plus rien ; un test inversé garde la nouvelle
+   * promesse. Il exige donc maintenant l'inverse, et interdit explicitement le
+   * retour de l'ancienne phrase.
+   */
+  it('T2.10 — affiche le nom, l’adresse, et DIT que l’email est parti (plus jamais « C.2c »)', async () => {
     sendForSignature.mockResolvedValue({ ok: true, envoyes: [ENVOYE], refus: [] });
     ouvrir();
     await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
@@ -439,8 +456,9 @@ describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', 
 
     const texte = document.body.textContent ?? '';
     expect(texte).toContain('paul@agence-martin.fr');
-    expect(texte).toContain('aucun email n’a été envoyé');
-    expect(texte).toContain('C.2c');
+    expect(texte).toContain('Email envoyé à paul@agence-martin.fr');
+    expect(texte).not.toContain('C.2c');
+    expect(texte).not.toContain('aucun email n’a été envoyé');
   });
 
   it('le `signUrl` est AFFICHÉ avec de quoi le copier — seul moyen de le communiquer avant C.2c', async () => {
@@ -451,7 +469,7 @@ describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', 
     await waitFor(() => expect(screen.getByLabelText(/lien de signature/i)).toBeTruthy());
 
     const champ = screen.getByLabelText(/lien de signature/i) as HTMLInputElement;
-    expect(champ.value).toBe('https://docuseal.eu/s/le-lien-du-dirigeant');
+    expect(champ.value).toBe('https://docuseal.eu/s/le-lien-du-responsable');
     expect(screen.getByRole('button', { name: /copier le lien/i })).toBeTruthy();
   });
 
@@ -509,14 +527,52 @@ describe('Résultat — ce qui est parti, et surtout ce qui n’est pas parti', 
   });
 });
 
-describe('Le bandeau « aucun email » est PERMANENT — à la revue comme au résultat', () => {
-  it('il est déjà là avant le clic : personne ne doit croire qu’un clic prévient quelqu’un', async () => {
+describe('Le bandeau de l’email est PERMANENT — à la revue comme au résultat', () => {
+  /** Inversé au lot C.2c (cf. le commentaire du test « T2.10 » ci-dessus). */
+  it('avant le clic, il annonce l’email ET la seule chose qui peut l’empêcher', async () => {
     ouvrir();
     await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
-    expect(document.body.textContent).toContain('C.2c');
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('Envoyer expédie un email au signataire dont c’est le tour');
+    expect(texte).toContain('Signature électronique');
+    expect(texte).not.toContain('C.2c');
   });
 
-  it('aucun lien « Relancer » — il n’a rien à relancer avant C.2c', async () => {
+  it.each([
+    [
+      { envoye: false, motif: 'categorie-decochee' as const },
+      'la catégorie « Signature électronique » est décochée',
+    ],
+    [{ envoye: false, motif: 'dry-run-env' as const }, "aucun serveur d'envoi n'est configuré"],
+    [{ envoye: false, motif: 'erreur-smtp' as const }, 'Email non parti'],
+    [
+      { envoye: false, motif: 'aucun-lien' as const },
+      "le prestataire n'a rendu aucun lien de signature pour ce signataire",
+    ],
+  ])('un email NON parti dit POURQUOI, et ne se tait pas (%#)', async (notification, phrase) => {
+    sendForSignature.mockResolvedValue({
+      ok: true,
+      envoyes: [
+        {
+          ...ENVOYE,
+          notification: {
+            ...ENVOYE.notification,
+            ...notification,
+          },
+        },
+      ],
+      refus: [],
+    });
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^envoyer/i }));
+    await waitFor(() => expect(document.body.textContent).toContain('Paul MARTIN'));
+    expect(document.body.textContent).toContain(phrase);
+    // Le recours, toujours : le lien reste copiable juste en dessous.
+    expect(screen.getByRole('button', { name: /copier le lien/i })).toBeTruthy();
+  });
+
+  it('aucun lien « Relancer » — C.2c relance par cron, pas par bouton', async () => {
     ouvrir();
     await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
     expect(screen.queryAllByRole('button', { name: /relancer/i })).toHaveLength(0);
@@ -654,7 +710,7 @@ describe('L’ordre complet — à l’écran RÉSULTAT, avec le lien de l’OF'
     // composant rendait le lien du CLIENT : les deux côtés viendraient du même
     // objet. On écrit l'URL attendue en toutes lettres.
     expect(lien.getAttribute('href')).toBe('https://docuseal.eu/s/le-lien-de-l-of');
-    expect(lien.getAttribute('href')).not.toBe('https://docuseal.eu/s/le-lien-du-dirigeant');
+    expect(lien.getAttribute('href')).not.toBe('https://docuseal.eu/s/le-lien-du-responsable');
     // Plus d'attente affichée : expliquer une absence qui n'existe plus fait douter.
     expect(document.body.textContent).not.toContain('lot C.3 :');
   });

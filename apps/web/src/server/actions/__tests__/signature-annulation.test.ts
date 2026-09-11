@@ -280,6 +280,7 @@ describe('sendForSignature — le lien de signature remonte jusqu’à l’appel
     sessionFindFirst.mockResolvedValue({
       id: SESSION_ID,
       code: 'SES-0010',
+      product: { title: "L'IA au service de l'agent commercial" },
       participants: [tnsViaSonEi()],
     });
     documentFindFirst.mockResolvedValue({

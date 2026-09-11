@@ -296,7 +296,12 @@ beforeEach(() => {
 });
 
 function sessionAvec(participants: unknown[]) {
-  sessionFindFirst.mockResolvedValue({ id: SESSION_ID, code: 'SES-0010', participants });
+  sessionFindFirst.mockResolvedValue({
+    id: SESSION_ID,
+    code: 'SES-0010',
+    product: { title: "L'IA au service de l'agent commercial" },
+    participants,
+  });
 }
 
 describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {

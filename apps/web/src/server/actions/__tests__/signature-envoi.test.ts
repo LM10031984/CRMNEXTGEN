@@ -229,7 +229,12 @@ function doc(over: Partial<DocRow> & { id: string; type: string }): DocRow {
 }
 
 function sessionAvec(participants: unknown[]) {
-  sessionFindFirst.mockResolvedValue({ id: SESSION_ID, code: 'SES-0010', participants });
+  sessionFindFirst.mockResolvedValue({
+    id: SESSION_ID,
+    code: 'SES-0010',
+    product: { title: "L'IA au service de l'agent commercial" },
+    participants,
+  });
 }
 
 /** Les écritures réellement passées par le `tx` de la transaction. */
@@ -530,7 +535,16 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
     expect(typeof transactionMock.mock.calls[0]![0]).toBe('function');
     expect(signatureRequestCreate).not.toHaveBeenCalled();
     expect(documentUpdate).not.toHaveBeenCalled();
-    expect(auditLogCreate).not.toHaveBeenCalled();
+
+    // ⚠ AJUSTÉ AU LOT C.2c, et l'ajustement est le sujet du test. L'AuditLog
+    // GLOBAL est désormais appelé — une fois, et une seule : c'est la trace de
+    // l'email, `signature.notified`, écrite APRÈS la transaction et hors
+    // d'elle. Un `await` réseau SMTP dans un `$transaction` tiendrait la
+    // transaction ouverte le temps du timeout. Ce que le test garde, c'est que
+    // `signature.sent` n'est JAMAIS passé par là.
+    expect(auditLogCreate).toHaveBeenCalledTimes(1);
+    const traceHorsTx = auditLogCreate.mock.calls[0]![0] as { data: { action: string } };
+    expect(traceHorsTx.data.action).toBe('signature.notified');
 
     const requete = ecrituresTx.signatureRequestCreate.mock.calls[0]![0] as {
       data: Record<string, unknown>;
@@ -542,7 +556,8 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
       status: 'SENT',
       sessionId: SESSION_ID,
     });
-    // D-9 : le lien de signature est PERSISTÉ ici ; aucun email n'est envoyé.
+    // D-9 : le lien est PERSISTÉ ici, et c'est CE lien que l'email du lot C.2c
+    // expédie — jamais un second fabriqué à l'envoi.
     expect(requete.data.signers).toEqual([
       expect.objectContaining({ signUrl: 'https://docuseal.eu/s/abc', providerSignerId: 'sg-1' }),
     ]);
