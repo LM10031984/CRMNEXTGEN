@@ -69,6 +69,10 @@ import {
   type ProgrammeFamily,
 } from '../src/lib/proposition/module-matcher';
 import { normalize } from '../src/lib/proposition/programme-matcher';
+import {
+  RATTACHEMENTS_IMPOSSIBLES,
+  RATTACHEMENTS_VALIDES,
+} from '../src/lib/proposition/rattachements-valides';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le tri de Laurent — relecture du 11/09/2026
@@ -100,90 +104,43 @@ type Arbitrage =
 
 const ARBITRAGES: Record<string, Arbitrage> = {
   // ── Gardées ───────────────────────────────────────────────────────────────
-  'compromis-vers-acte': {
-    verdict: 'retenu',
-    unites: [
-      { titre: 'Rédiger des compromis de vente efficaces', origine: 'BIB-D034' },
-      { titre: 'Gérer les objections et trouver des solutions de compromis', origine: 'BIB-D034' },
-    ],
-  },
-  'offres-vers-compromis': {
-    verdict: 'retenu',
-    unites: [
-      { titre: 'Rédiger des compromis de vente efficaces', origine: 'BIB-D034' },
-      { titre: 'Gérer les objections et trouver des solutions de compromis', origine: 'BIB-D034' },
-    ],
-  },
-  // Retouchée : un programme ACHETEURS ne peut pas être premier sur une douleur
-  // VENDEUR. La découverte vendeur (BIB-D017) remonte en tête.
-  decouverte: {
-    verdict: 'retenu',
-    unites: [
-      { titre: 'Maîtriser les techniques de découverte vendeur', origine: 'BIB-D017' },
+  //
+  // Elles ne sont PAS recopiées ici : elles viennent de
+  // `lib/proposition/rattachements-valides.ts`, le fichier que lit aussi
+  // l'écriture en base. Deux tables se seraient séparées au premier changement
+  // d'avis, et l'écart ne se serait vu qu'une fois une mauvaise proposition
+  // partie chez un client.
+  ...Object.fromEntries(
+    RATTACHEMENTS_VALIDES.map((r): [string, Arbitrage] => [
+      r.ruleId,
       {
-        titre: 'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
-        origine: 'BIB-D008',
+        verdict: 'retenu',
+        unites: r.cibles.map((c) => ({ titre: c.module, origine: c.programme })),
+        note: r.reserve,
       },
-    ],
-  },
-  'defense-du-prix': {
-    verdict: 'retenu',
-    unites: [{ titre: 'Convaincre le vendeur avec des arguments solides', origine: 'BIB-D017' }],
-  },
-  'decouverte-acquereur': {
-    verdict: 'retenu',
-    unites: [
+    ]),
+  ),
+  // Retenues par Laurent, mais impossibles à écrire : le produit vendu ne porte
+  // aucun module, et un signal se pose sur un module. Elles restent affichées
+  // comme rattachées — la décision est prise — avec l'obstacle en clair.
+  ...Object.fromEntries(
+    RATTACHEMENTS_IMPOSSIBLES.map((r): [string, Arbitrage] => [
+      r.ruleId,
       {
-        titre: 'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
-        origine: 'BIB-D008',
+        verdict: 'retenu',
+        unites: r.retenu.map((x) => {
+          const [code, ...reste] = x.split(' — ');
+          return { titre: reste.join(' — '), origine: code! };
+        }),
+        note: `⚠️ **Pas encore écrit en base.** ${r.obstacle}`,
       },
-      {
-        titre:
-          'Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :',
-        origine: 'BIB-D012',
-      },
-    ],
-  },
-  'prompts-communs': {
-    verdict: 'retenu',
-    unites: [
-      {
-        titre: "L'intelligence artificielle au service des conseillers immobiliers (72h)",
-        origine: 'PROD-0042',
-      },
-      {
-        titre: "L'intelligence artificielle au service des conseillers immobiliers - 16h",
-        origine: 'PROD-0066',
-      },
-      { titre: "L'IA au service des conseillers immobiliers (8h)", origine: 'PROD-0058' },
-    ],
-  },
-  // Retouchée : les deux autres pistes venaient du mot « régulier ».
-  coaching: {
-    verdict: 'retenu',
-    unites: [{ titre: 'Coaching Indiv', origine: 'PROD-c0c85e08' }],
-  },
-  // Validé le 11/09 avec une réserve explicite : la douleur porte sur le
-  // RITUEL de suivi, le module sur la PRÉPARATION du dossier. Ce n'est pas la
-  // même chose, et c'est retenu quand même — c'est le meilleur contenu qui
-  // existe aujourd'hui. Un des endroits où Laurent écrira une ligne plus tard.
-  'suivi-vendeur': {
-    verdict: 'retenu',
-    unites: [
-      { titre: 'Préparer un Excellent Dossier de Suivi Vendeur', origine: 'BIB-D037' },
-    ],
-    note:
-      'La douleur porte sur le **rituel** de suivi, le module sur la **préparation du dossier** — ce n’est pas tout à fait la même chose. Retenu parce que c’est le meilleur contenu existant, et repéré comme un endroit où écrire.',
-  },
-  // Retouchée : les deux autres pistes venaient du mot « conseiller ».
-  trame: {
-    verdict: 'retenu',
-    unites: [
-      { titre: 'Apprendre à vendre un rendez-vous découverte au téléphone', origine: 'BIB-D006' },
-    ],
-  },
+    ]),
+  ),
 
   // ── Barrées ───────────────────────────────────────────────────────────────
+  //
+  // Elles n'intéressent que ce rapport : on n'écrit rien pour une douleur dont
+  // la proposition était fausse.
   'contacts-vers-rdv': {
     verdict: 'ecarte',
     motif: 'le mot « contacts » menait à une formation aux newsletters',
