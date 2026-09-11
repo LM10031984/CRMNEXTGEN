@@ -33,6 +33,7 @@ import {
   renderSignatureDemandeOf,
   type SignatureDemandeInput,
 } from '@/lib/mailer-templates/signature-demande';
+import { renderSignatureExemplaire } from '@/lib/mailer-templates/signature-exemplaire';
 import type {
   Expediteur,
   QualiteSignataire,
@@ -121,8 +122,16 @@ function qualiteDe(partie: SignataireEnvoye['partie'], role: SignerRole): Qualit
  * ⚠ Le destinataire y est EN CLAIR, comme dans `signature.sent` : un journal
  * d'audit qui masquerait ne prouverait plus rien.
  */
+interface ContexteTrace {
+  tenantId: string;
+  sessionId: string;
+  signatureRequestId: string;
+  documentId: string;
+  libellePiece: string;
+}
+
 async function tracer(
-  args: NotifierSignataireArgs,
+  args: ContexteTrace,
   signataire: SignataireEnvoye,
   resultat: ResultatNotification,
 ): Promise<void> {
@@ -227,4 +236,128 @@ export async function notifierSignataire(
 
   await tracer(args, signataire, resultat);
   return resultat;
+}
+
+// ─── L'exemplaire signé (lot C.3) ────────────────────────────────────────────
+
+/** Un fichier réellement joint à l'email — nom ET octets. */
+export interface PieceJointeEnvoyee {
+  filename: string;
+  content: Buffer;
+}
+
+export interface NotifierExemplaireArgs {
+  tenantId: string;
+  sessionId: string;
+  signatureRequestId: string;
+  documentId: string;
+  piece: DocTypeSignable;
+  concerne: string;
+  organisation: string | null;
+  libellePiece: string;
+  formationTitre: string;
+  sessionCode: string;
+  signeLe: Date;
+  /**
+   * Le régime qui a décidé l'envoi, mémorisé sur la demande. `null` ⇒ on
+   * n'envoie RIEN : voir ci-dessous.
+   */
+  role: SignerRole | null;
+  /** TOUS les signataires de la pièce — et personne d'autre. */
+  destinataires: readonly SignataireEnvoye[];
+  of: OfConfig;
+  signataireOfNom: string | null;
+  piecesJointes: readonly PieceJointeEnvoyee[];
+}
+
+/**
+ * « Voici votre exemplaire signé » — un email par SIGNATAIRE de la pièce.
+ *
+ * AUX SEULS SIGNATAIRES, et c'est une règle, pas une limite. Une session de six
+ * salariés financés OPCO EP produit DEUX emails : un au responsable de
+ * l'organisation, un à l'organisme. Zéro aux six stagiaires — ils ne signent
+ * rien, leur information passe par la convocation, et leur envoyer la convention
+ * d'entreprise ferait entrer leur email dans un dossier qui nomme quelqu'un
+ * d'autre (amendement n°3 du lot C).
+ *
+ * ⚠ ICI, `documentIds` EST PASSÉ — contrairement à la demande de signature. Ce
+ * n'est pas une incohérence : un PDF quitte RÉELLEMENT la maison, et la ligne
+ * `EmailMessage` qui en résulte est la seule preuve que l'application en garde.
+ * C'est elle qui alimente ensuite la règle « document engagé ».
+ *
+ * ⚠ `role === null` ⇒ AUCUN EMAIL. Le régime est ce qui décide du mot employé
+ * pour nommer le destinataire ; sans lui, on l'appellerait « responsable de
+ * l'organisation » alors qu'il est peut-être le stagiaire qui signe sa propre
+ * convention. Une pièce lue par un financeur ne se devine pas. Le cas ne peut
+ * survenir que sur une demande créée avant la migration `signerRole`.
+ */
+export async function notifierExemplaireSigne(
+  args: NotifierExemplaireArgs,
+): Promise<ResultatNotification[]> {
+  if (args.role === null) {
+    return args.destinataires.map((s) => ({
+      envoye: false,
+      destinataire: s.email,
+      partie: s.partie,
+      motif: 'regime-inconnu' as const,
+    }));
+  }
+
+  const expediteur = expediteurDe(args.of, args.signataireOfNom);
+  const attachments = args.piecesJointes.map((f) => ({
+    filename: f.filename,
+    content: f.content,
+    contentType: 'application/pdf',
+  }));
+
+  const resultats: ResultatNotification[] = [];
+  for (const signataire of args.destinataires) {
+    const rendu = renderSignatureExemplaire(
+      {
+        signataireNom: signataire.nom,
+        qualiteSignataire: qualiteDe(signataire.partie, args.role),
+        piece: args.piece,
+        concerne: args.concerne,
+        organisation: args.organisation,
+        libellePiece: args.libellePiece,
+        formationTitre: args.formationTitre,
+        sessionCode: args.sessionCode,
+        signeLe: args.signeLe,
+        piecesJointes: args.piecesJointes.map((f) => f.filename),
+        expediteur,
+      },
+      args.of,
+    );
+
+    const envoi = await sendMail({
+      to: signataire.email,
+      subject: rendu.subject,
+      html: rendu.html,
+      text: rendu.text,
+      attachments,
+      context: {
+        tenantId: args.tenantId,
+        category: 'signature',
+        sessionId: args.sessionId,
+        documentIds: [args.documentId],
+        relatedEntity: `signatureRequest:${args.signatureRequestId}`,
+      },
+    });
+
+    const resultat: ResultatNotification = {
+      envoye: envoi.ok === true && envoi.dryRun !== true,
+      destinataire: signataire.email,
+      partie: signataire.partie,
+      motif: null,
+    };
+    if (!resultat.envoye) {
+      if (envoi.ok !== true) resultat.motif = 'erreur-smtp';
+      else if (envoi.suppressed === true) resultat.motif = 'categorie-decochee';
+      else resultat.motif = 'dry-run-env';
+    }
+    resultats.push(resultat);
+
+    await tracer(args, signataire, resultat);
+  }
+  return resultats;
 }

@@ -222,7 +222,18 @@ export interface SignataireEnvoye {
  * normal en local ; un lien manquant vient du provider ; un refus SMTP se relit
  * dans son message. Les confondre, c'est rendre l'écran inutile.
  */
-export type MotifNonEnvoi = 'aucun-lien' | 'dry-run-env' | 'categorie-decochee' | 'erreur-smtp';
+export type MotifNonEnvoi =
+  | 'aucun-lien'
+  | 'dry-run-env'
+  | 'categorie-decochee'
+  | 'erreur-smtp'
+  /**
+   * Lot C.3 — le régime qui a décidé l'envoi n'est pas mémorisé sur la demande.
+   * Sans lui, on ne peut pas NOMMER le destinataire sans deviner : on ne l'écrit
+   * donc pas. Ne peut survenir que sur une demande antérieure à la migration
+   * `signature_request_signer_role`.
+   */
+  | 'regime-inconnu';
 
 /**
  * Ce que l'email a fait. Jamais `null` sur un envoi réussi : une pièce partie
@@ -552,6 +563,15 @@ export function messageNotificationEchouee(cause: string): string {
   );
 }
 
+export function messageNotificationRegimeInconnu(): string {
+  return (
+    `Aucun email : cette demande de signature ne porte pas le régime de financement qui l'a ` +
+    `décidée, et sans lui le destinataire serait nommé au hasard — « responsable de ` +
+    `l'organisation » alors qu'il signe peut-être pour lui-même. Le document signé est bien ` +
+    `revenu ; seul l'envoi de l'exemplaire est suspendu.`
+  );
+}
+
 export function messageNotificationSansLien(): string {
   return (
     `Aucun email : le prestataire n'a rendu aucun lien de signature pour ce signataire. ` +
@@ -566,6 +586,7 @@ export function messageNotification(n: ResultatNotification): string {
   if (n.motif === 'categorie-decochee') return messageNotificationSupprimee();
   if (n.motif === 'aucun-lien') return messageNotificationSansLien();
   if (n.motif === 'erreur-smtp') return messageNotificationEchouee('le serveur a refusé.');
+  if (n.motif === 'regime-inconnu') return messageNotificationRegimeInconnu();
   return messageNotificationDryRun();
 }
 
