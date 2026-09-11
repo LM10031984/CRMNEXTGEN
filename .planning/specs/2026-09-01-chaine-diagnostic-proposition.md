@@ -499,7 +499,7 @@ Garde-fous : transcript jamais dans un lien public, jamais dans le rapport clien
 **Reste ouvert après le lot C :**
 
 - **Le seuil de 0,7 n'est pas encore réglable par tenant.** Il est un paramètre de `trierParException`, pas un champ de `TenantEmailSettings` : le rendre configurable demande une migration, à faire quand deux R1 réels auront dit si 0,7 est le bon nombre.
-- **Le registre des traitements ne connaît pas encore le transcript.** Le lot C crée un stockage de données personnelles (verbatim d'une conversation, propos nommés sur des salariés non informés) absent du registre art. 30. Amendement à porter, avec la durée de 90 jours et la base légale.
+- **Le registre des traitements connaît désormais le transcript** — `docs/rgpd/REGISTRE-TRAITEMENTS.md` v1.7, **Traitement 11**, amendé le 11/09/2026. Restent à contresigner par le responsable de traitement : la durée de 90 jours, la base d'intérêt légitime retenue pour les collaborateurs cités, et la **limite de l'art. 14** (point 5 des limites connues) — ces collaborateurs ne sont pas informés, et ne peuvent pas l'être individuellement tant qu'ils ne sont pas inscrits à une formation.
 - **L'import direct Plaud reste au lot H**, comme prévu : v1 = collage et dépôt de fichier (`.txt`, `.md`, `.vtt`, `.srt`).
 
 ---
