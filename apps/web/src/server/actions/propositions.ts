@@ -64,6 +64,7 @@ import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 import {
   compareSourceFingerprint,
   computeProposalFingerprint,
+  moduleMaterialOf,
   type FingerprintComparison,
 } from '@/lib/proposition/fingerprint';
 import { hashPublicToken, PUBLIC_TOKEN_BYTES } from '@/lib/proposition/public-link';
@@ -339,6 +340,7 @@ export async function createProposalFromDiagnostic(
     pricing,
     content,
     validUntil,
+    moduleMaterial: moduleMaterialOf(library),
   });
 
   const proposal = await prisma.$transaction(async (tx) => {
@@ -495,11 +497,15 @@ async function buildWorkspace(
     declaredEmployeeCount: audit.declaredEmployeeCount,
   });
 
+  // `library` est disponible dès la déstructuration d'`assembled` ci-dessus : ce
+  // calcul reste donc ICI, avant la requête `shelves` du bloc `composedProgramme`,
+  // qui n'a rien à voir avec l'empreinte.
   const currentFingerprint = computeProposalFingerprint({
     diagnostic: fingerprintInputOf(bundle, rules),
     pricing,
     content,
     validUntil: proposal.validUntil,
+    moduleMaterial: moduleMaterialOf(library),
   });
 
   const ownerLabel = [proposal.owner.firstName, proposal.owner.lastName]
@@ -741,7 +747,7 @@ async function persistAndReprint(args: {
 }): Promise<ActionResult> {
   const assembled = await assembleFromDiagnostic(args.diagnosticId, args.tenantId);
   if (!assembled) return { ok: false, error: 'Diagnostic introuvable' };
-  const { bundle, rules, audit } = assembled;
+  const { bundle, rules, audit, library } = assembled;
 
   const current = await prisma.proposal.findFirst({
     where: { id: args.proposalId, tenantId: args.tenantId },
@@ -764,6 +770,7 @@ async function persistAndReprint(args: {
     pricing,
     content,
     validUntil: current.validUntil,
+    moduleMaterial: moduleMaterialOf(library),
   });
 
   await prisma.$transaction(async (tx) => {

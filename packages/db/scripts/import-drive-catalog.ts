@@ -48,6 +48,10 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Module PUR (aucun accès base, réseau ni fichier) : un import statique est sans
+// risque ici, contrairement au client Prisma qui attend que l'env soit chargé.
+import { doitProtegerLeContenu } from './lib/mentions-organisme.js';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 loadEnv({ path: path.resolve(REPO_ROOT, '.env') });
@@ -272,6 +276,11 @@ interface Line {
 const report: Line[] = [];
 /** Les déroulés écrits en base qu'un Drive muet aurait effacés. */
 const contenusProteges: string[] = [];
+/**
+ * Les modules dont la base ne portait QUE du boilerplate de gabarit : la garde
+ * ne s'applique pas, l'écriture passe — mais jamais en silence.
+ */
+const boilerplateVide: string[] = [];
 const orphans: string[] = [];
 const collisions: string[] = [];
 const guarded: string[] = [];
@@ -440,15 +449,41 @@ for (const p of snapshot.programmes) {
           // Laurent : un seul d'entre eux portait encore son `sourceRef`, donc
           // un seul était exposé — mais la règle vaut pour tout contenu saisi
           // en base, aujourd'hui et demain.
-          const ecraserait =
-            (current.contentMd ?? '').trim().length > 0 && (m.contentMd ?? '').trim().length === 0;
-          if (ecraserait) {
+          //
+          // ── La nuance du lot 1 (11/09/2026) ─────────────────────────────
+          //
+          // Cette protection protège la PÉDAGOGIE, pas le BOILERPLATE.
+          //
+          // L'extraction retire désormais les mentions d'organisme du gabarit
+          // (« QCM évaluation des acquis », « Questionnaire de satisfaction et
+          // clôture de la formation »). Quatre modules n'avaient QUE ces deux
+          // lignes : leur déroulé entrant est donc vide. Avec l'ancien calcul,
+          // la garde aurait conservé en base le pied de page qu'on vient tout
+          // juste de retirer de la source — du garbage protégeant du garbage.
+          //
+          // `doitProtegerLeContenu` passe donc le contenu EN BASE par le même
+          // filtre : s'il n'en reste rien, il n'y a rien à protéger et
+          // l'écriture passe. L'import ne normalise rien en base et ne réécrit
+          // rien à la main — il DÉCIDE si la garde s'applique, c'est tout.
+          const proteger = doitProtegerLeContenu(current.contentMd, m.contentMd);
+          if (proteger) {
             const { contentMd: _ignore, ...sansContenu } = m;
             await tx.trainingModule.update({ where: { id: current.id }, data: sansContenu });
             contenusProteges.push(
               `\`${m.sourceRef}\` « ${m.title.slice(0, 50)} » — le Drive n'a pas de déroulé, la base en a un : **contenu conservé**. Le reste du module est mis à jour normalement.`,
             );
           } else {
+            // Là où l'ancien code protégeait, il faut désormais rendre compte :
+            // une écriture qui VIDE un contenu se nomme, même quand elle a
+            // raison de le faire.
+            if (
+              (current.contentMd ?? '').trim().length > 0 &&
+              (m.contentMd ?? '').trim().length === 0
+            ) {
+              boilerplateVide.push(
+                `\`${m.sourceRef}\` « ${m.title.slice(0, 50)} » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.`,
+              );
+            }
             await tx.trainingModule.update({ where: { id: current.id }, data: m });
           }
         } else {
@@ -551,6 +586,19 @@ if (contenusProteges.length > 0) {
     '',
   );
   for (const c of contenusProteges) lines.push(`- ${c}`);
+  lines.push('');
+}
+
+if (boilerplateVide.length > 0) {
+  lines.push(
+    "## Déroulés vidés — la base ne portait que du boilerplate de gabarit",
+    '',
+    "Pour ces modules, la base portait un déroulé, mais **uniquement des mentions d'organisme** du gabarit Qualiopi (« QCM évaluation des acquis », « Questionnaire de satisfaction et clôture de la formation »). L'extraction les retire depuis le lot 1 du 11/09/2026 ; la garde « un import ne vide jamais un contenu écrit » **ne s'applique donc pas** : elle protège la pédagogie, pas le boilerplate.",
+    '',
+    "**Rien de pédagogique n'a été perdu.** Ces modules sont des fantômes nés du pied de page — leur titre est en réalité le dernier objectif de la liste précédente, et leur découpage est un chantier à part (lot 3). Le composeur les écarte déjà des sorties client, faute de déroulé.",
+    '',
+  );
+  for (const c of boilerplateVide) lines.push(`- ${c}`);
   lines.push('');
 }
 

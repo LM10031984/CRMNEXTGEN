@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Lance QualiOF en local : Docker + Next.js + Worker + navigateur.
-# Invoqué par ~/Applications/QualiOF.app (double-clic).
+# Invoqué par /Applications/QualiOF.app (double-clic).
 #
 
 set -e
@@ -9,7 +9,37 @@ set -e
 # PATH explicite car invoqué hors shell login (Automator/osascript)
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-PROJECT_DIR="/Users/laurentmarx/Documents/CRM Next gen/files"
+# ── Le répertoire du projet, dérivé de l'EMPLACEMENT de ce script ──────────────
+#
+# Il était écrit en dur jusqu'au 11/09/2026 — un chemin absolu sous l'ancien
+# emplacement iCloud. Le dépôt est sorti d'iCloud, et l'ancien dossier EXISTE
+# toujours : iCloud y a laissé une coquille qui ne contient que `apps/`. Le `cd`
+# réussissait, puis tout échouait sans message utile.
+#
+# Le chemin n'est volontairement PAS recopié ici, même en commentaire : le garde
+# `apps/web/src/lib/__tests__/chemins-en-dur.test.ts` balaie aussi les
+# commentaires, et il a raison — un chemin mort recopié finit par être relu comme
+# une consigne.
+#
+# La dérivation donne aussi, gratuitement, le fonctionnement depuis n'importe quel
+# worktree — c'est le dépôt où VIT le script qui est lancé, pas un autre.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# La garde est la PREMIÈRE chose après le PATH, AVANT tout docker/osascript :
+# placée plus bas, elle ne garderait rien.
+if [ ! -f "$PROJECT_DIR/package.json" ]; then
+  echo "QualiOF : aucun package.json dans $PROJECT_DIR — le dépôt a bougé ou le script a été copié hors du dépôt." >&2
+  osascript -e 'display notification "Dépôt introuvable — voir /tmp/qualiof-launch.log" with title "QualiOF" sound name "Basso"' 2>/dev/null || true
+  exit 1
+fi
+
+# Mode de vérification : ce qui rend ce script testable sans démarrer Docker ni
+# tuer un processus.
+if [ "${QUALIOF_CHECK_ONLY:-}" = "1" ]; then
+  echo "$PROJECT_DIR"
+  exit 0
+fi
 
 cd "$PROJECT_DIR"
 
@@ -34,10 +64,12 @@ docker compose up -d
 QUALIOF_PORT=3010
 
 # 3. Lancer pnpm dev:full dans une fenêtre Terminal (pour visualiser les logs)
+# Le chemin contient une espace et traverse un heredoc AppleScript : on garde les
+# quotes SIMPLES autour de $PROJECT_DIR côté shell de la fenêtre Terminal.
 osascript <<APPLESCRIPT
 tell application "Terminal"
   activate
-  do script "cd '/Users/laurentmarx/Documents/CRM Next gen/files' && PORT=$QUALIOF_PORT pnpm dev:full"
+  do script "cd '$PROJECT_DIR' && PORT=$QUALIOF_PORT pnpm dev:full"
 end tell
 APPLESCRIPT
 

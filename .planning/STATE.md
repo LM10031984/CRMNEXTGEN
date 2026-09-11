@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Trou de couverture des types FERMÉ : 71 scripts écrivant en base sont désormais vérifiés (apps/web ET packages/db), 82 erreurs réelles corrigées dont plusieurs latentes, garde anti-récidive vérifié par mutation. Procédure de sortie d'iCloud PRÉPARÉE et non exécutée — attend le feu vert (piège : 3 worktrees à chemins absolus). RESTE : le chantier d'extraction (pieds de page, titres à faire relire, découpage des blocs), à prendre en session fraîche."
+stopped_at: "Sortie d'iCloud EXÉCUTÉE le 11/09/2026 : le dépôt vit sous ~/Projects/CRM Next gen, les 4 worktrees sont réparés (aucune métadonnée git ne porte plus l'ancien chemin, fsck propre) et le test de garde tva-exoneration repasse en local. Le corpus Faros a suivi vers ~/Projects/nxt-coach — l'ancien chemin existait encore mais VIDE, et l'extraction a perdu 2 programmes en silence avant correction. Chantier d'extraction, LOT 1 FAIT : les mentions d'organisme (QCM d'évaluation, questionnaire de satisfaction, états de service des formateurs) sortent des déroulés de modules à l'EXTRACTION — 101 lignes dans 52 modules, 4 modules fantômes vidés et nommés par un warning ; la garde de l'import protège désormais la PÉDAGOGIE et non le boilerplate (drive:047#20 conservé). DIAG-0001 ne porte plus aucune mention sous un module, « Modalités d'évaluation » intacte, chiffrage inchangé (6 demi-journées / 48 h / 8064.00 € HT / Σ = Σ). À ARBITRER PAR LAURENT : les 3 lignes mixtes laissées (drive:024#11, drive:028#6, drive:055#10), les « Remise des attestations » hors des 3 familles, et une substitution de module sur DIAG-0001 (BIB-D017#3 « Convaincre le vendeur » → BIB-D034#3 « Gérer les objections ») née du repesage automatique des mots-clés sur une bibliothèque de 298 modules au lieu de 302. RESTE : lot 2 (titres de modules, à PROPOSER avant d'appliquer) et lot 3 (découpage des modules-journées et des 4 fantômes), à prendre en session fraîche."
 last_updated: "2026-09-11T14:30:00.000Z"
 last_activity: "2026-09-11 (depilage) - Pile I fusionnee (#45, #46, #47) et DEPLOYEE : 5 migrations additives appliquees en prod Supabase, schema a jour, /diagnostic et /catalogue controles apres chaque push et identiques a la reference relevee avant le premier merge. Deux faits consignes en tete de ce fichier : tout push sur main declenche prisma migrate deploy en prod, et le CONTENU de la bibliotheque (402 modules) n est QUE local. Gates : lint, tsc, 2822 tests. 2026-09-11 (lot C) - Transcript : revue par exception, filtre « rien de non confirmé ne sort », purge J+90, Traitement 11 au registre. Premier vrai transcript : bug d'ancrage sur format diarisé trouvé et corrigé (3 % → 19 %, 7/7 exactes). Critère réécrit : le taux se constate, il ne bloque pas. Gates : lint, tsc, 2634 tests. 2026-09-11 - Gabarit du programme corrige (public vise derive de la composition et du client ; moyens pedagogiques, evaluation et accessibilite portes par l organisme et jamais vides, test de contrat ; objectifs plus jamais fabriques). Verdict remettable/blockers affiche en bandeau rouge dans l editeur. Liste de rattachement douleur -> module generee pour relecture : 34 douleurs, 17 sans aucune proposition. Gates : lint, tsc, 2603 tests. 2026-09-10 (lot I-2) - Composeur par blocs de 8 h conventionnees, programme Qualiopi du produit compose, editeur rebranche. Le chiffrage suit desormais la COMPOSITION et non l'enveloppe de droits. Verifie sur DIAG-0001 : 5 demi-journees, 4 programmes sources, somme devis = somme proposition au centime. Trouve : le catalogue diagnostic n'a aucun deroule pedagogique, le programme compose n'est pas remettable en l'etat (decision de catalogue). Gates : lint, tsc, 2596 tests. 2026-09-10 (lot I-1) - Bibliotheque de modules : 402 modules extraits du Drive et de Faros, reco promue au niveau MODULE, aucun conteneur active (D-19), tracabilite module vers reponse du diagnostic. 7 programmes sources sur DIAG-0001. Gates : lint, tsc, 2548 tests. Migration locale uniquement. 2026-09-10 (arbitrages) - TRACFIN ramené à UNE demi-journée (4 h sur site, 8 h conv.) dans le jeu de démo. **D-25 précisée** : le ×2 est une règle de TARIFICATION, la convention n'a pas à nommer deux formateurs — et **D-25 bis** pose la conséquence juste en dessous, pour que les deux se lisent ensemble : ce même facteur fixe le nombre d'heures DÉCLARÉ au financeur, qui s'imprime sur la convention et l'attestation. **D-6 reformulée en toutes lettres** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » — réponse ET source à consigner dès que Laurent les a ; non bloquant pour le lot F, qui ne produit aucun document conventionnel. **D-26 posée, hors lot F** : Laurent anime parfois SEUL, donc le nombre de formateurs doit être corrigeable PAR SESSION avant émission des documents (heures conventionnées dérivées, émargement cohérent) — à planifier après F. 2026-09-10 (2e tour) - **D-25** : `TrainingProduct.durationHours` porte les heures CONVENTIONNÉES, tranché sur preuve (journées Faros FRM-0004..0007 = 336 € pour durationHours 8, et le champ alimente convention + attestation AGEFICE). La page publique affichait « 36 h » nu ; elle nomme désormais les deux valeurs via `decrireDureeProduit`. **Le seed de démo se trompait** — il y avait mis les heures sur site, la convention aurait déclaré 36 h là où le financeur en attend 72 ; les produits se déclarent maintenant en demi-journées. **D-24** : quatre tuiles exclusives et totalisantes (Non rendu · Pièces manquantes · Rejeté · Bon), somme = effectif attendu ; « en cours de vérification » passe en sous-libellé. **Dates** : `lib/dates-fr.ts` créé, la classe Tailwind `capitalize` retirée des trois écrans (elle majusculait chaque mot). Gates : lint, tsc, 2467 tests. 2026-09-10 (soir) - Relecture du lot F sur l'aperçu Vercel, trois points traités. **D-22** : une campagne porte TOUJOURS une agence (`organizationId` non-null) ; le diagnostic et le lead redeviennent du contexte. Le défaut était plus large que constaté — aucun écran ne menait au formulaire pré-rattaché, donc 100 % des campagnes naissaient orphelines : bouton « Organiser les pré-inscriptions » posé sur la fiche diagnostic. **D-23** : les créneaux se comptent en demi-journées (défaut matin, préréglages Matin/Après-midi/Journée 2×4 h), chaque date annonce ses heures conventionnées dérivées de `conventionedHoursPerHalfDay` — une seule source, ligne rouge §8.1 tenue. **Défaut trouvé en relisant l'aperçu** : la page publique annonçait « 07:00 – 11:00 » un créneau de 09:00, le rendu serveur tournant en UTC ; les heures se formatent désormais en Europe/Paris et les tests passent sous trois fuseaux. **Aperçu** : `seed-demo.ts` (3 produits, 2 agences, 1 lead, DEMO-DIAG-0001 avec 37 réponses et 4 indés, 1 campagne + 4 dossiers en quatre états) — la fixture canonique tombe juste, 9 demi-journées / 72 h / 12 000 € / 96 € d'écart. Migration `20260910170000_campagne_agence_obligatoire` appliquée à la base d'aperçu SEULEMENT, pas à la prod. Gates : lint, tsc, 2446 tests verts. 2026-09-10 - D-19/D-20 consignées (le catalogue est une bibliothèque de modules, l'unité de vente est le bloc de 8 h), lot I créé en §13, garde-fou de la ligne rouge posé dans l'import ; lot F à reprendre en session fraîche. 04/09 - Catalogue diagnostic corrigé (durées par profil, D-17) et appliqué en local, recommandation rejouée sans programme hors domaine (D-18) ; lot E : éditeur de proposition, PDF conforme à la maquette, lien public sans PII et devis générés au centime depuis DIAG-0001 ; socle de rendu WeasyPrint extrait en module partagé ; six défauts trouvés en jouant le parcours, PDF relu page par page"
 progress:
@@ -65,50 +65,75 @@ serait le mauvais ordre.
 ⚠️ Ne jamais écrire « la bibliothèque est en prod » sans préciser *schéma* ou
 *contenu* : l'ambiguïté trompe dans les deux sens.
 
-### 3. Le dépôt vit sous iCloud, qui fabrique des copies de fichiers
+### 3. Le dépôt est SORTI d'iCloud — il vit sous `~/Projects`
 
-`~/Documents` est synchronisé par iCloud. La synchronisation duplique les
-fichiers **pendant qu'on les édite** : `tva-exoneration 2.ts` à côté de
-`tva-exoneration.ts`, byte pour byte. Relevé le 11/09/2026 : **83 copies**, dont
-plusieurs créées à la minute même où le fichier d'origine était écrit.
+Déplacé le **11/09/2026** de `~/Documents/CRM Next gen` vers
+**`~/Projects/CRM Next gen`**. Motif : `~/Documents` est synchronisé par iCloud,
+qui duplique les fichiers **pendant qu'on les édite** — `tva-exoneration 2.ts` à
+côté de `tva-exoneration.ts`, byte pour byte, **83 copies** relevées, dont
+plusieurs créées à la minute même où l'original était écrit. Le coût immédiat
+était des gates rouges ; le risque réel était `.git/`, qui est un répertoire de
+fichiers comme un autre.
 
-`.gitignore` porte déjà la règle `* [2-9].*` (posée le 02/09/2026) — le dépôt
-git reste donc propre et la CI est verte. **Mais un test de garde qui scanne le
-DISQUE et non l'index git tombe dessus** : c'est ce qui fait échouer
-`tva-exoneration.test.ts` en local alors que la même suite passe en CI. Le test
-n'a pas tort ; il regarde simplement un disque qui ment.
+**Les 4 worktrees pointent tous sur Projects**, chacun sur sa branche :
 
-**Pour aujourd'hui**, retirer les copies :
+| worktree | branche |
+|---|---|
+| `files` (dépôt principal, `.git/` répertoire) | `quick/260902-diagnostic-boucle` |
+| `files-assiduite` | `quick/260910-pilotage` |
+| `files-chaine` | `fix/260911-pieds-de-page-deroules` |
+| `files-signature` | `feat/signature-docs-signes` |
 
-```
-find apps packages -name "* [2-9].*" -not -path "*/node_modules/*" -delete
-```
+Les trois secondaires portent un `gitdir:` vers
+`/Users/laurentmarx/Projects/CRM Next gen/files/.git/worktrees/…`. **Aucune
+métadonnée git ne contient plus l'ancien chemin**, et `git fsck` sort propre
+(rien que des objets pendants, normaux après rebases).
 
-**Décision de Laurent (11/09)** : on **déplace le dépôt**, on ne décoche pas
-iCloud. Procédure complète, vérifiée et **non exécutée** :
-`.planning/260911-sortir-le-depot-d-icloud.md` — destination `~/dev/crm-next-gen`.
+Note : la procédure `.planning/260911-sortir-le-depot-d-icloud.md` listait un 5ᵉ
+worktree `wt-numsecu`. Il n'existe plus — `git worktree list` en rend **4**.
 
-⛔ **Bloquant à lever avant de bouger** : le dépôt principal (`files`) porte
-**31 fichiers modifiés et 1 commit non poussé**. Les quatre autres worktrees sont
-propres. ⚠ **Ne pas déplacer depuis le
-Finder** — trois worktrees portent des chemins ABSOLUS vers
-`files/.git/worktrees/…` et casseraient tous les trois. La procédure fait le
-déplacement puis `git worktree repair`, et vérifie que chacun retrouve son
-`.git`.
+**Ce qui reste vrai** : la règle `.gitignore` `* [2-9].*` (posée le 02/09/2026)
+garde le dépôt git propre ; et un test de garde scanne le **DISQUE** et non
+l'index git — c'est pour cela que
+`apps/web/src/lib/__tests__/tva-exoneration.test.ts` tombait en local alors que
+la CI passait. **Il passe maintenant** (vérifié le 11/09 : 6 tests verts).
 
-**Pour de bon — et c'est le vrai correctif : sortir le dépôt de la
-synchronisation iCloud** (le déplacer hors de `~/Documents`, ou décocher
-« Dossiers Bureau et Documents » dans iCloud Drive). Sinon les copies
-reviendront, et la prochaine fois ce ne sera peut-être pas un test qui tombe :
-**`.git/` est un répertoire de fichiers comme un autre.** Une copie `pack 2.idx`
-ou un `HEAD 2` au mauvais moment abîme l'historique, pas une suite de tests.
+**⚠ iCloud a aussi frappé les SOURCES, et ça a coûté deux programmes.** Le corpus
+Faros a suivi le dépôt, vers `~/Projects/nxt-coach/Formation Faros`. À l'ancien
+emplacement, `~/Documents/nxt-coach` porte désormais **deux dossiers vides** :
+l'original `Formation Faros`, vidé, et un sosie `Formation Faros 2`. Or
+`extract-drive-catalog.ts` pointait encore l'ancien chemin : `existsSync` y
+réussissait, `readdirSync` rendait zéro paquet, et l'extraction a rendu **74
+programmes au lieu de 76 sans un mot** (11/09, lot 1 des pieds de page). Corrigé
+le jour même — le script cherche le premier emplacement qui porte réellement un
+paquet de livraison, et **refuse d'écrire** un instantané dont une source entière
+est muette. Leçon générale : **tout chemin en dur vers `~/Documents` est
+suspect**, pas seulement ceux du dépôt.
 
-_Vérifié le 11/09/2026 : `.git/` est encore intact, aucune copie dedans. C'est
-une raison d'agir maintenant, pas de remettre._
+**Résidus, aucun dangereux** (vérifié le 11/09) : **46** copies « fichier 2.ext »
+subsistent sur le disque — 18 dans `apps/web/.next/` (artefacts de build), le
+reste dans `.planning/`, `docs/` et `.claude/commands/`. **Aucune suivie par git,
+aucune dans `.git/`, aucune sous `apps/*/src` ni `packages/*/src`.** Et **44**
+fichiers sont restés à l'ancien emplacement `~/Documents/CRM Next gen` (aucun
+dépôt git, aucune source). **Ne PAS les supprimer dans la foulée** : c'est du
+ménage optionnel, en attente du feu vert de Laurent.
 
 ---
 
 ## Chantiers identifiés, pas encore planifiés
+
+### OUVERTE (D-29) — un champ « moyens pédagogiques » au niveau du PRODUIT ?
+
+Posée le 11/09/2026 en retirant des déroulés les moyens pédagogiques d'organisme
+(lot 1 bis). Plusieurs lignes retirées étaient **spécifiques au programme**
+(« études de cas réels issus du marché immobilier », « exercices guidés pas à pas
+sur la rédaction de prompts ») alors que la rubrique du programme composé se remplit
+en **générique depuis l'organisme** : on a retiré du spécifique sans point de chute.
+
+**Décision de modèle, elle revient à Laurent, rien dans le code ne l'anticipe.**
+Détail : `.planning/specs/2026-09-01-chaine-diagnostic-proposition.md`, D-29. Le
+texte retiré est conservé mot pour mot, programme par programme, dans
+`.planning/quick/260911-kwf-lot-1-extraction-retirer-les-pieds-de-pa/260911-kwf-SUMMARY-02.md`.
 
 ### PLANIFIÉ — nettoyage de l'extraction Drive (arbitrage Laurent du 11/09/2026)
 

@@ -31,6 +31,9 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from '
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { candidatsNxtCoach, premierEmplacementPorteur } from './lib/corpus-local.js';
+import { retirerMentionsOrganisme } from './lib/mentions-organisme.js';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(HERE, 'data/drive-programmes-catalog.json');
 
@@ -41,8 +44,41 @@ const DRIVE_DIR =
     HOME,
     'Library/CloudStorage/GoogleDrive-laurent@start-academy.fr/Drive partagés/Start Academy Drive/Start Academy/Formations et programmes',
   );
-const FAROS_DIR =
-  process.env.FAROS_DIR ?? path.join(HOME, 'Documents/nxt-coach/Formation Faros');
+/** Un paquet de livraison Faros : `SA_<FAM>_M<NNN>_..._LIVRAISON_*`. */
+const PAQUET_FAROS = /^SA_[A-Z]{3}_M\d{3}_.*LIVRAISON/;
+
+/**
+ * Le corpus Faros — déplacé hors d'iCloud le 11/09/2026, comme le dépôt.
+ *
+ * `~/Documents` est synchronisé par iCloud, qui duplique les fichiers pendant
+ * qu'on les édite. Le dossier Faros a donc suivi le dépôt vers `~/Projects`.
+ *
+ * Le piège, vérifié le 11/09 : l'ANCIEN chemin existe toujours — iCloud y a
+ * laissé un dossier **vide** et un sosie « Formation Faros 2 ». Un simple
+ * `existsSync` y réussit donc et rend ZÉRO programme. C'est ainsi qu'une
+ * extraction a perdu `faros:SA-ADM-M001` et `faros:SA-ACQ-M003` sans un mot.
+ *
+ * On ne se contente plus de l'existence : on cherche le premier emplacement qui
+ * porte réellement un paquet de livraison. Un `FAROS_DIR` explicite reste
+ * souverain — si on le pose, c'est qu'on sait ce qu'on fait.
+ *
+ * La recherche vit dans `lib/corpus-local.ts`, partagée avec
+ * `import-diag-catalog.ts` : deux copies de ce raisonnement finiraient par
+ * diverger, et c'est précisément une divergence muette qui a coûté deux
+ * programmes.
+ */
+function trouverFaros(): string {
+  const explicite = process.env.FAROS_DIR;
+  if (explicite !== undefined && explicite.length > 0) return explicite;
+  const candidats = candidatsNxtCoach();
+  const porteur = premierEmplacementPorteur(candidats, (entrees) =>
+    entrees.some((f) => PAQUET_FAROS.test(f)),
+  );
+  // Repli sur le premier candidat : le message d'erreur doit nommer un chemin.
+  return porteur ?? candidats[0]!;
+}
+
+const FAROS_DIR = trouverFaros();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lecture .docx — un .docx est un ZIP, et `word/document.xml` en est le texte
@@ -517,14 +553,41 @@ function parseProgramme(
     warnings.push('Aucun découpage reconnu — importé en un seul module, à découper à la main.');
   }
 
-  const modules: ExtractedModule[] = sections.map((s, i) => ({
-    sourceRef: `${meta.sourceRef}#${i + 1}`,
-    order: i + 1,
-    title: s.title.slice(0, 200),
-    contentMd: s.content.map((l) => `- ${l}`).join('\n'),
-    durationMin: s.durationMin,
-    durationSource: s.durationSource,
-  }));
+  // Les MENTIONS D'ORGANISME sortent du déroulé, ici et nulle part ailleurs.
+  //
+  // Le gabarit Qualiopi se termine par « QCM évaluation des acquis » et
+  // « Questionnaire de satisfaction et clôture de la formation » ; typographiées
+  // comme le reste, elles ont été avalées comme des puces du déroulé. Elles ont
+  // déjà leur place légitime : la section « Modalités d'évaluation » du programme
+  // composé, portée par l'ORGANISME. Dans un déroulé remis à un financeur, c'est
+  // du doublon — et un financeur le lit.
+  //
+  // La normalisation se fait à l'EXTRACTION, JAMAIS par une correction en base :
+  // vérifié le 11/09/2026, un point final retiré à la main en base est revenu au
+  // premier `--apply`. Le filtre et son périmètre exact sont défendus dans
+  // `lib/mentions-organisme.ts`.
+  const modules: ExtractedModule[] = sections.map((s, i) => {
+    const sourceRef = `${meta.sourceRef}#${i + 1}`;
+    const brut = s.content.map((l) => `- ${l}`).join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    // Un module que le filtre vide ENTIÈREMENT ne part pas en silence : il se
+    // nomme. Ce sont des modules FANTÔMES nés du pied de page — leur « titre »
+    // est en réalité le dernier objectif de la liste précédente. Leur découpage
+    // est le lot 3, pas ici.
+    if (retirees.length > 0 && contentMd.trim().length === 0) {
+      warnings.push(
+        `\`${sourceRef}\` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).`,
+      );
+    }
+    return {
+      sourceRef,
+      order: i + 1,
+      title: s.title.slice(0, 200),
+      contentMd,
+      durationMin: s.durationMin,
+      durationSource: s.durationSource,
+    };
+  });
 
   const sansDuree = modules.filter((m) => m.durationMin === null).length;
   if (sansDuree > 0) {
@@ -675,7 +738,7 @@ function extractFaros(): ExtractedProgramme[] {
   }
   const out: ExtractedProgramme[] = [];
   for (const folder of readdirSync(FAROS_DIR).sort()) {
-    if (!/^SA_[A-Z]{3}_M\d{3}_.*LIVRAISON/.test(folder)) continue;
+    if (!PAQUET_FAROS.test(folder)) continue;
     const master = path.join(FAROS_DIR, folder, '01_MASTER');
     if (!existsSync(master)) continue;
     const files = docxIn(master).filter((f) => /MASTER_PRODUCTION/i.test(f));
@@ -711,6 +774,33 @@ function extractFaros(): ExtractedProgramme[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const programmes = [...extractDrive(), ...extractFaros()];
+
+// ── Un instantané TRONQUÉ ne s'écrit pas ────────────────────────────────────
+//
+// Ce fichier est commité, et le `git diff` sert de revue. Écrire un instantané
+// auquel une source entière manque, c'est proposer à la relecture un diff de
+// centaines de suppressions où il faudrait deviner lesquelles sont voulues.
+//
+// Le cas s'est produit le 11/09/2026 : le dossier Faros avait déménagé, l'ancien
+// chemin existait encore mais vide, et l'extraction a rendu 74 programmes au lieu
+// de 76 sans un avertissement. On refuse désormais d'écrire, plutôt que d'écrire
+// un mensonge plausible. L'import, lui, ne lit que ce JSON : une machine sans le
+// Drive reste capable d'importer, elle n'a simplement pas à ré-extraire.
+const parOrigine = {
+  drive: programmes.filter((p) => p.origin === 'drive').length,
+  faros: programmes.filter((p) => p.origin === 'faros').length,
+};
+if (parOrigine.drive === 0 || parOrigine.faros === 0) {
+  console.error(
+    `\n⛔ Instantané NON écrit — une source est muette (drive : ${parOrigine.drive} programme(s), faros : ${parOrigine.faros}).`,
+  );
+  console.error(`   Drive : ${DRIVE_DIR}`);
+  console.error(`   Faros : ${FAROS_DIR}`);
+  console.error(
+    `   Monter la source manquante (ou poser DRIVE_CATALOG_DIR / FAROS_DIR), puis relancer.\n`,
+  );
+  process.exit(1);
+}
 
 const snapshot = {
   extractedAt: new Date().toISOString(),

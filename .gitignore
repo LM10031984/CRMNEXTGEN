@@ -54,6 +54,13 @@ packages/*/tsconfig.tsbuildinfo
 # conflit à CHAQUE fusion, sur un contenu que personne ne relit et que `tsc`
 # régénère seul. Constat du 10/09/2026, en fusionnant le lot F.
 apps/*/tsconfig.tsbuildinfo
+# Et la même chose, exactement, pour le tsconfig des scripts : en ouvrant la
+# couverture `tsconfig.scripts.json` le 11/09/2026, son cache
+# `apps/web/tsconfig.scripts.tsbuildinfo` est entré dans git par le même oubli.
+# Il se salit à chaque `pnpm lint` et polluerait tous les diffs. Le motif couvre
+# désormais les deux, au lieu de nommer un fichier de plus.
+apps/*/tsconfig*.tsbuildinfo
+packages/*/tsconfig*.tsbuildinfo
 
 # Python (doc-engine)
 __pycache__/

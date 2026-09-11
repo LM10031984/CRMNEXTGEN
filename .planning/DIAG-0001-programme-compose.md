@@ -12,12 +12,12 @@ Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) s
 - Rédiger des compromis de vente efficaces
 - Installer un rythme de suivi vendeur qui tient jusqu'à la vente
 - Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
-- Convaincre le vendeur avec des arguments solides
+- Gérer les objections et trouver des solutions de compromis
 - Préparer un Excellent Dossier de Suivi Vendeur
 - Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
 - Faire des avis clients une source de mandats
 
-_Objectifs restant à rédiger pour : Atelier pratique : Simulation de réponse aux avis clients._
+_Objectifs restant à rédiger pour : Atelier pratique : Simulation de réponse aux avis clients.._
 
 ## Déroulé
 
@@ -80,7 +80,7 @@ _Répond au besoin : Qualifier et sécuriser les acquéreurs._
 
 _Source : Face à face acheteurs (BIB-D008)._
 
-#### Atelier pratique : Simulation de réponse aux avis clients
+#### Atelier pratique : Simulation de réponse aux avis clients.
 
 _Répond au besoin : Faire travailler la base et la réputation._
 
@@ -97,17 +97,15 @@ _Source : Pack Digital 60h (BIB-D047)._
 
 ### Demi-journée 5 — 4 h sur site (8 h conventionnées)
 
-#### Convaincre le vendeur avec des arguments solides
+#### Gérer les objections et trouver des solutions de compromis
 
 _Répond au besoin : Rentrer des mandats en exclusivité, au bon prix._
 
-- Élaborer : Construction d'argumentaires basés sur les données et l'estimation
-- Adapter : Personnalisation de la présentation en fonction du profil du vendeur
-- Répondre : Techniques pour gérer les objections et rassurer le vendeur
-- QCM évaluation des acquis
-- Questionnaire de satisfaction et clôture de la formation.
+- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
+- Répondre : Techniques pour répondre aux objections de manière constructive
+- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
 
-_Source : Découverte vendeur et estimation percutante (BIB-D017)._
+_Source : Négociation et compromis (BIB-D034)._
 
 #### Préparer un Excellent Dossier de Suivi Vendeur
 
@@ -118,6 +116,8 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 - Utiliser des outils modernes pour gérer et mettre à jour efficacement les dossiers de suivi
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
+
+### Demi-journée 6 — 4 h sur site (8 h conventionnées)
 
 #### Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
 
@@ -156,12 +156,8 @@ _Répond au besoin : Qualifier et sécuriser les acquéreurs._
 - Maintenir des contacts fréquents chaque semaine.
 - Effectuer de la prospection au nom du client.
 - Organiser des visites même en l'absence de biens à présenter aux clients de type A.
-- QCM évaluation des acquis ;
-- Questionnaire de satisfaction et clôture de la formation.
 
 _Source : Basic acheteur (BIB-D012)._
-
-### Demi-journée 6 — 4 h sur site (8 h conventionnées)
 
 #### Faire des avis clients une source de mandats
 
