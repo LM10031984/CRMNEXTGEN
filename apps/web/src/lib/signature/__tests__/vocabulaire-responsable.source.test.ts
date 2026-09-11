@@ -54,9 +54,53 @@ function sansJetonsEnum(source: string): string {
   return source.replace(/\bDIRIGEANT\b/g, '');
 }
 
+/**
+ * USAGE contre MENTION — et c'est la demande de Laurent qui l'impose.
+ *
+ * Il exige que le MOTIF du renommage soit écrit en commentaire (« "dirigeant"
+ * affirme une qualité juridique que la donnée ne porte pas »). Une garde qui
+ * bannirait la suite de lettres interdirait d'écrire le motif, et une règle
+ * sans son motif se fait oublier au premier lot pressé.
+ *
+ * La frontière retenue est celle de la typographie déjà employée partout dans ce
+ * dépôt : entre guillemets français, le mot est CITÉ ; ailleurs, il est EMPLOYÉ.
+ * Citer coûte deux caractères — et ces deux caractères sont exactement le geste
+ * qui fait relire la phrase avant de la réintroduire.
+ */
+function sansMentions(source: string): string {
+  return source.replace(/«\s*dirigeants?\s*»/gi, '');
+}
+
+/**
+ * Les LITTÉRAUX de chaîne d'un fichier — ce qui a une chance d'atteindre l'écran.
+ *
+ * Les commentaires sont retirés d'abord : eux ne s'affichent jamais, et leurs
+ * apostrophes fausseraient le découpage. Ce qui reste est grossier mais
+ * suffisant — on cherche un mot, pas à parser TypeScript.
+ */
+function litterauxDeChaine(source: string): string[] {
+  const sansCommentaires = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  return sansCommentaires.match(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g) ?? [];
+}
+
 describe('le MOT — « responsable de l’organisation » partout où l’écran nomme ce signataire', () => {
-  it.each(FICHIERS_ECRAN)('%s n’écrit plus « dirigeant »', (relatif) => {
-    expect(sansJetonsEnum(lire(relatif))).not.toMatch(/dirigeant/i);
+  it.each(FICHIERS_ECRAN)('%s n’EMPLOIE plus le mot proscrit', (relatif) => {
+    // Cité entre guillemets (le motif du renommage) : autorisé. Employé pour
+    // désigner ce signataire : interdit.
+    expect(sansMentions(sansJetonsEnum(lire(relatif)))).not.toMatch(/dirigeant/i);
+  });
+
+  it.each(FICHIERS_ECRAN)('%s ne le met dans AUCUN texte d’écran, pas même cité', (relatif) => {
+    // ⚠ ICI, PAS DE DÉROGATION. Un commentaire s'adresse au prochain
+    // développeur ; une chaîne s'affiche. Le mot ne revient jamais par la grande
+    // porte : il revient dans une phrase d'aide, un `title`, un libellé de
+    // badge — du texte que personne ne monte en jsdom, et qu'une relecture
+    // n'attrape pas deux mois plus tard.
+    for (const litteral of litterauxDeChaine(lire(relatif))) {
+      expect(sansJetonsEnum(litteral)).not.toMatch(/dirigeant/i);
+    }
   });
 
   it('le vocabulaire est figé à UN endroit, pas réécrit dans chaque fichier', () => {

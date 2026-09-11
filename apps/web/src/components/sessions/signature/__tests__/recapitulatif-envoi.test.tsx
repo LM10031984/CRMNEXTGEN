@@ -224,7 +224,12 @@ describe('Le couple qui signera — quel NOM, quelle ADRESSE, et d’où viennen
     expect(texte).toContain('Paul MARTIN');
     expect(texte).toContain('paul@agence-martin.fr');
     // La provenance en clair : « ORG_REPRESENTATIVE » ne se lit pas.
-    expect(texte).toContain('représentant de l’organisation');
+    // ⚠ « responsable », pas « dirigeant » ni « représentant légal » (demande
+    // n°1 de Laurent, 11/09/2026) : le champ dit qui signe les conventions,
+    // pas une qualité juridique. Valeur LITTÉRALE, jamais la constante du
+    // module rendu — les deux côtés bougeraient ensemble.
+    expect(texte).toContain('responsable de l’organisation');
+    expect(texte).not.toMatch(/dirigeant/i);
     expect(texte).toContain('fiche de la personne');
   });
 

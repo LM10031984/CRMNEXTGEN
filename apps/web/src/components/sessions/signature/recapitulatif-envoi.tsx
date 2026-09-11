@@ -60,6 +60,7 @@ import type {
   SignataireResolu,
 } from '@/lib/signature/envoi-contrats';
 import type { AnomalieEnvoi, ScopeEnvoi } from '@/lib/signature/plan-envoi';
+import { MOT_RESPONSABLE_ORGANISATION } from '@/lib/organisations/responsable-organisation';
 import {
   LIBELLE_ORDRE_SIGNATURE,
   ordreSignatairesEnvoyes,
@@ -98,10 +99,13 @@ interface Resultat {
 
 /** D'où vient le NOM retenu, en français. « ORG_REPRESENTATIVE » ne se lit pas. */
 const LIBELLE_SOURCE_NOM: Record<SignataireResolu['sourceNom'], string> = {
-  ORG_REPRESENTATIVE: 'représentant de l’organisation',
+  // « responsable », pas « représentant légal » ni « dirigeant » (Laurent,
+  // 11/09/2026) : `Organization.representative` dit qui signe les conventions,
+  // pas une qualité juridique. Pour un salarié, c'est le responsable d'agence.
+  ORG_REPRESENTATIVE: MOT_RESPONSABLE_ORGANISATION,
   CONTACT_PRINCIPAL: 'contact principal de l’organisation',
   APPRENANT_EI_SELF: 'l’apprenant lui-même (son entreprise individuelle)',
-  APPRENANT_REPLI: 'l’apprenant, faute de représentant connu',
+  APPRENANT_REPLI: 'l’apprenant, faute de responsable connu',
   APPRENANT_STAGIAIRE: 'l’apprenant lui-même (stagiaire désigné par le régime)',
 };
 

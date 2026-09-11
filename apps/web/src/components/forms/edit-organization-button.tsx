@@ -5,6 +5,7 @@ import type { Route } from 'next';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { EditModal } from './edit-modal';
 import { updateOrganization } from '@/server/actions/crud-edits';
+import { LIBELLE_RESPONSABLE_ORGANISATION } from '@/lib/organisations/responsable-organisation';
 import {
   LIBELLE_CHAMP_FINANCEUR_ORG,
   NOM_CHAMP_FINANCEUR_ORG,
@@ -126,10 +127,17 @@ export function EditOrganizationButton({
           // Placé juste après la forme juridique, et pas en bas de liste : c'est
           // LE champ dont l'absence fait refuser la convention d'entreprise
           // (« Représentée par , » n'est pas opposable).
+          //
+          // ⚠ « Responsable », PAS « Représentant légal » (Laurent, 11/09/2026).
+          // Le second affirme une qualité juridique que la donnée ne porte pas :
+          // pour un salarié, le signataire de la convention est le RESPONSABLE
+          // D'AGENCE, désigné ici, pas nécessairement le mandataire social. Le
+          // libellé vient du module de vocabulaire pour que la fiche et la
+          // modale ne puissent pas diverger.
           name: 'representative',
-          label: 'Représentant légal',
+          label: LIBELLE_RESPONSABLE_ORGANISATION,
           defaultValue: current.representative,
-          placeholder: 'Signe la convention — ex : Olivier MARTIN, gérant',
+          placeholder: 'Signe les conventions — ex : Olivier MARTIN, responsable d’agence',
         },
         { name: 'siret', label: 'SIRET', defaultValue: current.siret, placeholder: '14 chiffres' },
         { name: 'siren', label: 'SIREN', defaultValue: current.siren, placeholder: '9 chiffres' },

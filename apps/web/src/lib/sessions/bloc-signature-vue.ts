@@ -67,9 +67,14 @@ export interface LigneSignature {
    * « Déposer le scan » n'a de sens que sur la pièce d'UNE personne.
    *
    * ⚠ Se lit sur la CIBLE, pas sur `participantIds.length`. Une convention de
-   * groupe qui ne couvre qu'un salarié reste signée par le dirigeant de
-   * l'organisation : y proposer un dépôt de scan « pour cet apprenant » ferait
+   * groupe qui ne couvre qu'un salarié reste signée par le RESPONSABLE DE
+   * L'ORGANISATION : y proposer un dépôt de scan « pour cet apprenant » ferait
    * déposer la preuve sous le mauvais nom.
+   *
+   * ⚠ « responsable », pas « dirigeant » (Laurent, 11/09/2026). Le second
+   * affirme une qualité juridique que la donnée ne porte pas : le champ
+   * `representative` dit seulement qui représente l'organisation et signe ses
+   * conventions — souvent le responsable d'agence, salarié lui aussi.
    */
   participantIdUnique: string | null;
   etat: EtatPiece;

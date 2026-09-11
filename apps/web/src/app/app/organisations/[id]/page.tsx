@@ -6,6 +6,7 @@ import { formatAddress } from '@qualiof/shared';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { EditOrganizationButton } from '@/components/forms/edit-organization-button';
+import { ResponsableOrganisation } from '@/components/organisations/responsable-organisation';
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
@@ -66,6 +67,18 @@ export default async function OrgDetailPage({
     include: {
       ageficeProfile: true,
       opcoCatalog: true,
+      /**
+       * ⚠ L'ORDRE EST LA RÈGLE, PAS UNE COMMODITÉ D'AFFICHAGE.
+       * `resoudreRepresentantEntreprise` prend le PREMIER CONTACT PRINCIPAL
+       * quand `representative` est vide, et `resoudreEmailRepresentant` cherche
+       * parmi ces mêmes contacts celui qui porte le nom résolu. Servir la liste
+       * dans un autre ordre ferait afficher ici un responsable différent de
+       * celui à qui le moteur enverra le lien — exactement la divergence que
+       * l'extraction de `representant.ts` a supprimée.
+       */
+      contacts: {
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      },
       legalLinks: {
         orderBy: { isPrimary: 'desc' },
         include: { person: { select: { id: true, firstName: true, lastName: true, email: true } } },
@@ -151,6 +164,18 @@ export default async function OrgDetailPage({
               Identité juridique
             </h2>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+              {/* EN TÊTE DE FICHE, et pas en bas de liste : c'est le seul champ
+                  de cette section dont l'absence EMPÊCHE quelque chose — sans
+                  responsable joignable, aucune convention ne part en signature
+                  pour cette organisation (moteur C.2a, refus nominatif). */}
+              <ResponsableOrganisation
+                organisation={{
+                  id: org.id,
+                  legalName: org.legalName,
+                  representative: org.representative,
+                  contacts: org.contacts,
+                }}
+              />
               <Field label="SIRET" value={org.siret ? <code className="font-mono">{org.siret}</code> : '—'} />
               <Field label="SIREN" value={org.siren ? <code className="font-mono">{org.siren}</code> : '—'} />
               <Field label="Code NAF" value={org.naf ?? '—'} />

@@ -38,7 +38,7 @@ Le CRM génère conventions, dossiers AGEFICE, attestations d'assiduité et fich
 ```
 AVANT session (J-15 idéalement, cf. plan cloud §E)
   ├─ CONVENTION  : 1 doc par organisation payeuse (convention entreprise) ou par participant (indépendant)
-  │                signataires : dirigeant de l'entreprise (Contact / LegalLink)  +  OF (Laurent)
+  │                signataires : responsable de l'organisation bénéficiaire (Contact / LegalLink)  +  OF
   └─ AGEFICE     : 1 doc par participant AGEFICE — demande de prise en charge
                    FORMULAIRE OFFICIEL rempli par pdf-lib (pas un gabarit HTML) ;
                    ancre DESSINÉE dans la case « signature du demandeur ».
@@ -55,7 +55,7 @@ APRÈS session (clôture)
 
 | Participant | CONVENTION | AGEFICE | ASSIDUITE | EMARGEMENT |
 |---|---|---|---|---|
-| Salarié d'une entreprise (OPCO EP ou autre OPCO) | signée par le **dirigeant de l'entreprise** + OF — le salarié ne signe **rien** | — | **aucune** (l'attestation d'assiduité est une pièce AGEFICE, pas OPCO) | papier, en salle |
+| Salarié d'une entreprise (OPCO EP ou autre OPCO) | signée par le **responsable de l'organisation** + OF — le salarié ne signe **rien** | — | **aucune** (l'attestation d'assiduité est une pièce AGEFICE, pas OPCO) | papier, en salle |
 | Dirigeant TNS financé AGEFICE | s'il est lui-même l'entreprise bénéficiaire : il signe la convention ; s'il est salarié-dirigeant couvert par la convention entreprise : idem ligne 1 | signée par le **stagiaire-dirigeant** (OF = image) | stagiaire + OF | papier, en salle |
 | Indépendant hors AGEFICE / autofinancement | signée par lui-même + OF | — | — | papier, en salle |
 
@@ -67,7 +67,7 @@ Le découpage ci-dessus vaut pour un dossier AGEFICE. Il ne vaut pas pour tous.
 
 | Régime | Convention | Dossier AGEFICE | Assiduité |
 |---|---|---|---|
-| **Salarié financé OPCO** | signée par le **dirigeant** de l'entreprise | — | **aucune** |
+| **Salarié financé OPCO** | signée par le **responsable de l'organisation** | — | **aucune** |
 | | le salarié ne signe **rien** | | |
 | **TNS AGEFICE** | — | **oui**, par le stagiaire-dirigeant | **oui** |
 | **Indépendant** | **sa** convention, qu'il signe lui-même | selon éligibilité | selon éligibilité |
@@ -96,6 +96,44 @@ dans le moteur : c'est `OpcoCatalog` qui porte la règle, comme
 > `signatureMatrix: Json` de forme `{ CONVENTION: 'DIRIGEANT' | 'STAGIAIRE' | null,
 > AGEFICE: 'STAGIAIRE' | null, ASSIDUITE: 'STAGIAIRE' | null }`. **Décision à
 > prendre (D-10)**, avec reprise des 6 financeurs du catalogue.
+
+### 3 ter. Le MOT — « responsable de l'organisation », jamais « dirigeant » (Laurent, 11/09/2026)
+
+Précision métier, et elle change ce que l'écran doit écrire : pour un salarié, le
+signataire de la convention est le **responsable d'agence** — la personne désignée
+comme `Organization.representative` sur la fiche de l'organisation bénéficiaire.
+**Pas nécessairement le représentant légal.**
+
+- **« Dirigeant » est proscrit à l'écran et dans cette spec** partout où le mot
+  désigne ce signataire. Motif : « dirigeant » (comme « représentant légal »)
+  affirme une **qualité juridique que la donnée ne porte pas**. `representative`
+  est un champ libre ; il dit seulement **qui représente l'organisation et signe
+  ses conventions**. Le mot faux fait chercher un mandataire social, fait hésiter
+  à saisir le nom qui convient, et pousse à « corriger » une cascade qui est juste.
+- **La cascade ne change pas** : `Organization.representative`, sinon le **premier
+  contact principal** (`isPrimary`, le plus ancien) — `lib/signature/representant.ts`,
+  appelée par la génération de convention ET par le moteur d'envoi. Seul le
+  vocabulaire bouge.
+- **Le renommage est TEXTUEL, jamais structurel.** `SignerRole.DIRIGEANT`,
+  `LinkRole.DIRIGEANT`, la colonne `OpcoCatalog.conventionSigner` et les
+  migrations gardent leurs valeurs : elles sont en base, seedées et migrées.
+  Migrer des valeurs d'enum dans un lot de libellés ne se voit qu'en production.
+  Garde exécutable : `lib/signature/__tests__/vocabulaire-responsable.source.test.ts`
+  (le mot interdit dans les fichiers d'écran **et** la frontière des enums).
+- **`LinkRole.DIRIGEANT` garde son libellé « Dirigeant »** sur la fiche
+  organisation : il dit le rôle d'une PERSONNE dans une organisation, pas qui
+  signe. Aligner les deux mots ferait croire que le badge désigne le signataire.
+- **Sur la fiche organisation**, le champ s'appelle **« Responsable — signe les
+  conventions »**, affiche **son email**, et porte un **avertissement nominatif
+  quand l'adresse manque** : sans elle, aucune convention ne peut partir en
+  signature pour cette organisation (refus nominatif du moteur depuis C.2a).
+  L'admin l'apprenait jusqu'ici au moment d'envoyer, sur un autre écran, après
+  avoir préparé son dossier.
+
+> Reste volontairement « dirigeant » dans cette spec : **« stagiaire-dirigeant »**
+> et **« Dirigeant TNS »** (§3, §3 bis, lot B). Le mot y désigne le TNS
+> lui-même — celui qui signe son dossier AGEFICE via `Person.email` — et pas le
+> signataire résolu sur `representative`. Le remplacer y serait faux.
 
 Le signataire « OF » est toujours le même : un `TenantSignatory` (nom, email, rôle) configuré une fois dans les paramètres tenant, signé automatiquement en premier ou en dernier selon le réglage (par défaut : OF signe **après** le client, comme aujourd'hui).
 
@@ -255,12 +293,14 @@ Rappel métier (Laurent 04/09) : **la fiche d'émargement est individuelle** (1 
 >    portant la CONVENTION (+ les AGEFICE de ses participants) ». On sépare : une
 >    `SignatureRequest` par **organisation bénéficiaire** portant la **seule convention**, et
 >    une **par participant** pour son dossier AGEFICE. **Motif** : un dossier AGEFICE n'a
->    qu'UN signataire — le grouper ferait dépendre sa complétion de celle du dirigeant, et un
+>    qu'UN signataire — le grouper ferait dépendre sa complétion de celle du responsable de
+>    l'organisation, et un
 >    dossier prêt à partir resterait bloqué derrière une signature qui ne le concerne pas.
 >    Implémenté dans `lib/signature/plan-envoi.ts`, verrouillé par un test de puissance
 >    (fusionner AGEFICE dans la convention fait rougir la suite).
 > 2. **La cascade du signataire n'est pas celle décrite plus bas.** La spec proposait
->    « `Contact` de l'organisation avec `function` dirigeant / signataire ». Le code qui
+>    « `Contact` de l'organisation avec `function` dirigeant / signataire » — formulation d'origine,
+>    citée telle quelle. Le code qui
 >    imprime « Représentée par X » sur la convention depuis le 21/08 résout autrement :
 >    `Organization.representative`, sinon le **premier contact principal** (`isPrimary`, le
 >    plus ancien). **`Contact.function` n'y joue aucun rôle** — il est saisi librement et ne
