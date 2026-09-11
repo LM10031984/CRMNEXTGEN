@@ -28,6 +28,11 @@ import {
 } from '../bloc-signature-vue';
 import { planifierEnvoi, type AnomalieEnvoi, type EnvoiPlanifie } from '@/lib/signature/plan-envoi';
 import type { RegleSignatureFinanceur } from '@/lib/signature/regime';
+// L'ordre affiché est COMPOSÉ ailleurs — `ordre-signataires.ts`, le module du
+// récapitulatif. La vue l'appelle, elle ne le réécrit pas : deux compositions
+// pour la même phrase finiraient par diverger d'un écran à l'autre.
+import { texteOrdreSignataires } from '../ordre-signataires';
+import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 
 const AGEFICE: RegleSignatureFinanceur = {
   conventionSigner: 'DIRIGEANT',
@@ -654,5 +659,137 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
       signataireParCle: new Map(),
     });
     expect(vue.lignes[0]!.signataire).toBeNull();
+  });
+});
+
+/**
+ * Demande de Laurent du 11/09/2026, après relecture d'écran — L'ORDRE COMPLET
+ * SUR CHAQUE LIGNE DU BLOC.
+ *
+ * POURQUOI ICI, ET PAS SEULEMENT AU RÉCAPITULATIF. Le lot C.2b-7 a livré
+ * « 1. client · 2. OF » au récapitulatif et à l'écran résultat — deux écrans
+ * qu'on atteint APRÈS avoir décidé d'envoyer. Le bloc, lui, est celui qu'on
+ * regarde AVANT de cliquer, et il n'annonçait que le signataire client : un
+ * admin y lisait « signataire : Paul DURAND » et pouvait croire la pièce close
+ * au premier paraphe.
+ *
+ * ⚠ LA VUE NE DÉCIDE TOUJOURS PAS QUI SIGNE. Elle appelle
+ * `ordreSignatairesPrevu`, qui interroge `ofSigneLaPiece(docType)` —
+ * c'est-à-dire `ANCRES_PAR_PIECE`, lecture des gabarits. Aucune seconde table,
+ * aucun `if (docType === 'AGEFICE')` : la pièce qui ne porte pas d'ancre OF
+ * n'annonce pas un second signataire qui ne viendrait jamais.
+ *
+ * ⚠ VALEURS LITTÉRALES, jamais le retour de la fonction testée. Une assertion
+ * qui comparerait le texte au résultat d'un constructeur de texte collapserait
+ * avec lui — les deux côtés bougeraient ensemble et la mutation resterait
+ * verte. C'est le défaut trouvé sur `lienRenseignerFinanceur` au lot C.2b-6.
+ */
+describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc', () => {
+  const CLIENT = { nom: 'Paul DURAND', email: 'paul.durand@provence-immo.fr' };
+  const STAGIAIRE = { nom: 'Jean DUPONT', email: 'jean@dupont.fr' };
+  const OF: SignataireOfPrevu = {
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    ordre: 'AFTER',
+  };
+
+  const convention: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1', 'part-2'],
+    libelle: 'Convention — AGENCE MARTIN (2 participants)',
+  };
+  const assiduite: EnvoiPlanifie = {
+    cle: 'ASSIDUITE:part-1',
+    docType: 'ASSIDUITE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Attestation d’assiduité — Jean DUPONT',
+  };
+  const agefice: EnvoiPlanifie = {
+    cle: 'AGEFICE:part-1',
+    docType: 'AGEFICE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Dossier AGEFICE — Jean DUPONT',
+  };
+
+  function vuePour(
+    envois: EnvoiPlanifie[],
+    a: { of?: SignataireOfPrevu | null; client?: { nom: string; email: string } | null } = {},
+  ) {
+    const client = a.client === undefined ? CLIENT : a.client;
+    return construireVueSignature({
+      plan: { envois, blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle:
+        client === null ? new Map() : new Map(envois.map((e) => [e.cle, client] as const)),
+      signataireOf: a.of === undefined ? OF : a.of,
+    });
+  }
+
+  it('la convention porte DEUX rangs, dans la forme dictée — au mot près', () => {
+    const vue = vuePour([convention]);
+    const ordre = vue.lignes[0]!.ordre;
+
+    expect(ordre).toHaveLength(2);
+    expect(ordre[0]!.texte).toBe('1. Paul DURAND — paul.durand@provence-immo.fr');
+    expect(ordre[1]!.texte).toBe(
+      '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
+    expect(ordre[0]!.partie).toBe('CLIENT');
+    expect(ordre[1]!.partie).toBe('OF');
+  });
+
+  it('l’attestation d’assiduité aussi — c’est la pièce que le lot B vient de brancher', () => {
+    const ordre = vuePour([assiduite], { client: STAGIAIRE }).lignes[0]!.ordre;
+    expect(ordre).toHaveLength(2);
+    expect(ordre[0]!.texte).toBe('1. Jean DUPONT — jean@dupont.fr');
+    expect(ordre[1]!.texte).toBe(
+      '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
+  });
+
+  it('le dossier AGEFICE n’en porte QU’UN — son exemplaire a déjà la signature de l’OF', () => {
+    const ordre = vuePour([agefice], { client: STAGIAIRE }).lignes[0]!.ordre;
+    // ⚠ `toHaveLength` asserté SÉPARÉMENT du contenu : « exactement un » est la
+    // promesse, pas un effet de bord d'un `toEqual` sur un tableau.
+    expect(ordre).toHaveLength(1);
+    expect(ordre.map((s) => s.partie)).toEqual(['CLIENT']);
+    expect(ordre[0]!.texte).toBe('1. Jean DUPONT — jean@dupont.fr');
+  });
+
+  it('PUISSANCE — `BEFORE` inverse RÉELLEMENT les rangs de la ligne', () => {
+    const ordre = vuePour([convention], { of: { ...OF, ordre: 'BEFORE' } }).lignes[0]!.ordre;
+    expect(ordre[0]!.texte).toBe(
+      '1. Laurent MARX (organisme de formation), signe en premier depuis le CRM',
+    );
+    expect(ordre[1]!.texte).toBe('2. Paul DURAND — paul.durand@provence-immo.fr');
+  });
+
+  it('signataire OF non résolu : la ligne garde le client seul, elle n’invente pas d’organisme', () => {
+    const ordre = vuePour([convention], { of: null }).lignes[0]!.ordre;
+    expect(ordre).toHaveLength(1);
+    expect(ordre[0]!.partie).toBe('CLIENT');
+  });
+
+  it('signataire client non résolu : AUCUN rang — un « 1. » donné à l’OF mentirait', () => {
+    const ligne = vuePour([convention], { client: null }).lignes[0]!;
+    expect(ligne.ordre).toEqual([]);
+    expect(ligne.signataire).toBeNull();
+  });
+
+  it('la ligne s’écrit EXACTEMENT comme au récapitulatif — séparateur compris', () => {
+    const ordre = vuePour([convention]).lignes[0]!.ordre;
+    expect(texteOrdreSignataires(ordre)).toBe(
+      '1. Paul DURAND — paul.durand@provence-immo.fr · ' +
+        '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
   });
 });

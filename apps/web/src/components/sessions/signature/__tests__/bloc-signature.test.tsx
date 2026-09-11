@@ -78,11 +78,18 @@ import { AVERTISSEMENT_DEPOT_ANNULE_ENVOI } from '../../qualiopi-matrix/upload-s
 import {
   composerAvertissementRegime,
   correctionAvertissement,
+  construireVueSignature,
   type ContexteAvertissement,
   type LigneSignature,
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
 import type { DocTypeSignable } from '@/lib/signature/regime';
+// Demande du 11/09/2026 : l'ordre complet sur la LIGNE. Le fixture le dérive du
+// MÊME module que la vue — un `ordre` écrit à la main dans le fixture ferait
+// passer le test même si `construireVueSignature` cessait de le calculer.
+import { ordreSignatairesPrevu } from '@/lib/sessions/ordre-signataires';
+import type { EnvoiPlanifie } from '@/lib/signature/plan-envoi';
+import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 import {
   LIBELLE_LIEN_CORRIGER_COMMANDITAIRE,
   lienCorrigerFinanceur,
@@ -105,8 +112,15 @@ import {
 
 const SESSION_ID = 'sess-1';
 
+/** Le signataire de l'organisme, tel que `page.tsx` le résout et le passe. */
+const OF_FIXTURE: SignataireOfPrevu = {
+  nom: 'Laurent MARX',
+  email: 'laurent@start-academy.fr',
+  ordre: 'AFTER',
+};
+
 function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
-  return {
+  const base: Omit<LigneSignature, 'ordre'> = {
     cle: 'ASSIDUITE:part-1',
     docType: 'ASSIDUITE',
     libelle: "Attestation d'assiduité — Jean DUPONT",
@@ -118,6 +132,18 @@ function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
     envoyable: true,
     signataire: null,
     ...over,
+  };
+  return {
+    ...base,
+    // Dérivé, jamais recopié : le fixture reste cohérent avec le signataire
+    // qu'on lui donne, pièce par pièce (l'AGEFICE n'y gagne pas de second rang).
+    ordre:
+      over.ordre ??
+      ordreSignatairesPrevu({
+        docType: base.docType,
+        client: base.signataire,
+        of: OF_FIXTURE,
+      }),
   };
 }
 
@@ -914,5 +940,112 @@ describe('Zone de dépôt — fusionnée dans le bloc Signature (demande n°4)',
     });
     expect(document.body.textContent).toContain('Déposer les attestations d’assiduité signées');
     expect(document.body.textContent).not.toContain('Déposer les feuilles d’émargement signées');
+  });
+});
+
+/**
+ * PUISSANCE (h) — L'ORDRE COMPLET SUR CHAQUE LIGNE (Laurent, 11/09/2026).
+ *
+ * CE QUI MANQUAIT, ET POURQUOI ÇA COMPTE. Le lot C.2b-7 a livré
+ * « 1. client · 2. OF » au récapitulatif et à l'écran résultat. Le bloc, lui,
+ * n'annonçait que le signataire client — or c'est l'écran qu'on regarde AVANT
+ * de cliquer. « signataire : Paul DURAND » laissait croire qu'un seul paraphe
+ * closait la convention, alors que le moteur envoie DEUX signataires dessus
+ * depuis le lot C.2a.
+ *
+ * ⚠ LA VUE EST CONSTRUITE PAR LE VRAI CHEMIN, pas montée à la main : ces tests
+ * passent par `construireVueSignature`, donc par `ordreSignatairesPrevu`, donc
+ * par `ofSigneLaPiece` / `ANCRES_PAR_PIECE`. Un `ordre` écrit en dur dans le
+ * fixture rendrait ces tests verts même si la vue cessait de le calculer — le
+ * défaut exact des NEUF tests creux du chantier.
+ *
+ * ⚠ CHAÎNES LITTÉRALES. La ligne attendue est écrite en toutes lettres,
+ * séparateur ` · ` compris. La comparer à `texteOrdreSignataires(...)` ferait
+ * bouger les deux côtés ensemble.
+ */
+describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout clic', () => {
+  const CLIENT = { nom: 'Paul DURAND', email: 'paul.durand@provence-immobilier.fr' };
+  const STAGIAIRE = { nom: 'Jean DUPONT', email: 'jean@dupont.fr' };
+
+  const conventionDuGroupe: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1', 'part-2'],
+    libelle: 'Convention — Provence Immobilier (2 participants)',
+  };
+  const dossierAgefice: EnvoiPlanifie = {
+    cle: 'AGEFICE:part-1',
+    docType: 'AGEFICE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Dossier AGEFICE — Jean DUPONT',
+  };
+
+  function rendre(
+    envoi: EnvoiPlanifie,
+    a: { client?: { nom: string; email: string } | null; of?: SignataireOfPrevu | null } = {},
+  ) {
+    const client = a.client === undefined ? CLIENT : a.client;
+    const vueReelle = construireVueSignature({
+      plan: { envois: [envoi], blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: client === null ? new Map() : new Map([[envoi.cle, client]]),
+      signataireOf: a.of === undefined ? OF_FIXTURE : a.of,
+    });
+    return render(
+      <BlocSignature sessionId={SESSION_ID} scope="BEFORE" vue={vueReelle} />,
+    );
+  }
+
+  it('la ligne écrit les DEUX rangs, dans la forme du récapitulatif — au caractère près', () => {
+    rendre(conventionDuGroupe);
+    expect(document.body.textContent ?? '').toContain(
+      '1. Paul DURAND — paul.durand@provence-immobilier.fr · ' +
+        '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
+    );
+  });
+
+  it('le libellé de l’ordre est le MÊME qu’au récapitulatif — pas une seconde formulation', () => {
+    rendre(conventionDuGroupe);
+    expect(document.body.textContent ?? '').toContain('Ordre de signature :');
+  });
+
+  it('PUISSANCE — le dossier AGEFICE n’annonce QU’UN signataire sur sa ligne', () => {
+    rendre(dossierAgefice, { client: STAGIAIRE });
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('1. Jean DUPONT — jean@dupont.fr');
+    // Aucun second rang, et pas la moindre mention de l'organisme : son
+    // exemplaire porte déjà l'image de sa signature, il n'y re-signe pas.
+    expect(texte).not.toContain('2. ');
+    expect(texte).not.toContain('organisme de formation');
+    expect(texte).not.toContain('Laurent MARX');
+  });
+
+  it('l’adresse du client reste COMPLÈTE en attribut, même sur une ligne longue', () => {
+    const { container } = rendre(conventionDuGroupe);
+    expect(
+      container.querySelector('[title="paul.durand@provence-immobilier.fr"]'),
+    ).not.toBeNull();
+  });
+
+  it('signataire OF non résolu : le client reste seul, aucun organisme inventé', () => {
+    rendre(conventionDuGroupe, { of: null });
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('1. Paul DURAND — paul.durand@provence-immobilier.fr');
+    expect(texte).not.toContain('organisme de formation');
+    expect(texte).not.toContain('organisme inconnu');
+  });
+
+  it('signataire client non résolu : la ligne le DIT, et n’affiche aucun rang', () => {
+    rendre(conventionDuGroupe, { client: null });
+    const texte = document.body.textContent ?? '';
+    expect(texte).toContain('signataire à déterminer');
+    expect(texte).not.toContain('1. ');
+    expect(texte).not.toContain('Laurent MARX');
   });
 });
