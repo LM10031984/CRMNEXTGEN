@@ -147,13 +147,23 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
             Quand il n'y a rien à envoyer, l'élément n'existe pas dans le DOM :
             un bouton grisé laisse croire qu'il manque un réglage, et fait
             chercher un réglage qui n'existe pas. Verrouillé par le test
-            « aucun élément nommé /envoyer pour signature/i ». */}
+            « aucun élément nommé /envoyer pour signature/i ».
+
+            ⚠ `text-white`, ÉCRIT EXPLICITEMENT (Laurent, 11/09/2026). Ce bouton
+            portait `text-primary-foreground`, une classe qui ne produisait
+            aucune règle CSS faute de jeton — 2,12:1, échec WCAG. Le jeton est
+            désormais défini dans `tailwind.config.ts`, mais la classe explicite
+            reste : elle survit à une refonte du jeton, et c'est la forme
+            employée partout ailleurs dans le dépôt (`add-participant-dialog`,
+            `duplicate-session-button`). `hover:bg-primary-600` plutôt que
+            `bg-primary/90` pour la même raison — une couleur nommée, pas une
+            opacité qui dépend du fond derrière. */}
         {vue.boutonVisible && (
           <button
             type="button"
             onClick={() => setDemandeRecapitulatif({})}
             aria-label={`Envoyer pour signature (${vue.nbEnvoyables})`}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-600 transition-colors shadow-sm"
           >
             <Send className="h-4 w-4" aria-hidden="true" />
             Envoyer pour signature ({vue.nbEnvoyables})
@@ -246,7 +256,7 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                       type="button"
                       onClick={() => setDemandeRecapitulatif({ cles: [ligne.cle] })}
                       aria-label={`Envoyer pour signature — ${ligne.libelle}`}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold shrink-0 transition-colors shadow-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold shrink-0 transition-colors shadow-sm bg-primary text-white hover:bg-primary-600"
                     >
                       <Send className="h-3.5 w-3.5" aria-hidden="true" /> Envoyer
                     </button>
