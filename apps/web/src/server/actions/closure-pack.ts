@@ -20,6 +20,8 @@ import {
   ROUTABLE_PARTICIPANT_SELECT,
 } from '@/lib/closure/route-conventions';
 import { generateAgeficeForParticipant } from './agefice-generator';
+import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
+import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
 import { checkDocumentReplacement } from '@/lib/docs/replacement-guard';
 
 /**
@@ -188,19 +190,33 @@ export async function generateClosurePack(
   for (const e of conventionRouting.errors) {
     console.warn(`[closure-pack] convention non générée pour ${e.participantName} :`, e.message);
   }
+  // Pièces AGEFICE — éligibilité lue via `OU_AGEFICE`, la SOURCE UNIQUE que
+  // partagent la fiche session et « Préparer la formation ». Le pack utilisait
+  // jusqu'ici une règle plus étroite (le seul payeur), et ignorait donc le
+  // stagiaire lié à une structure portant un dossier AGEFICE — un agent
+  // commercial, cas courant en immobilier. Le compteur affiché annonçait des
+  // pièces que le générateur ne produisait pas.
+  const ageficeEligibles = await prisma.sessionParticipant.findMany({
+    where: {
+      id: { in: sessionParticipantList.map((p) => p.id) },
+      OR: OU_AGEFICE,
+    },
+    select: { id: true },
+  });
+
   await Promise.allSettled(
-    sessionParticipantList.flatMap((p) => {
-      const tasks: Promise<unknown>[] = [];
-      const isAgefice = p.sponsorOrg?.opcoCode === 'AGEFICE';
-      if (isAgefice) {
-        tasks.push(
-          generateAgeficeForParticipant(p.id).catch((e) => {
-            console.warn(`[closure-pack] AGEFICE non généré pour ${p.id} :`, e?.message ?? e);
-          }),
-        );
-      }
-      return tasks;
-    }),
+    ageficeEligibles.flatMap(({ id }) => [
+      generateAgeficeForParticipant(id).catch((e) => {
+        console.warn(`[closure-pack] AGEFICE non généré pour ${id} :`, e?.message ?? e);
+      }),
+      // L'attestation d'assiduité n'était générée NULLE PART dans le pack —
+      // seulement pièce par pièce depuis la matrice Qualiopi (constat Laurent
+      // sur SES-0112 : batch « Terminé », zéro attestation). C'est pourtant la
+      // pièce que l'AGEFICE réclame pour solder le dossier.
+      generateAgeficeAttendanceForParticipant(id).catch((e) => {
+        console.warn(`[closure-pack] assiduité AGEFICE non générée pour ${id} :`, e?.message ?? e);
+      }),
+    ]),
   );
 
   // En mode mono-participant : on liste les kinds déjà présents pour skipper.

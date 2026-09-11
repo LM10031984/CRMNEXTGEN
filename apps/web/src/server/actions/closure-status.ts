@@ -17,6 +17,7 @@
 
 import { prisma, type DocType, type PedagogicalKind } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
+import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
 
 export interface SessionClosureStatus {
   ok: boolean;
@@ -138,19 +139,7 @@ export async function getSessionClosureStatus(
         ? prisma.sessionParticipant.count({
             where: {
               sessionId: session.id,
-              OR: [
-                { sponsorOrg: { opcoCode: 'AGEFICE' } },
-                {
-                  person: {
-                    legalLinks: {
-                      some: {
-                        role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] },
-                        organization: { ageficeProfile: { isNot: null } },
-                      },
-                    },
-                  },
-                },
-              ],
+              OR: OU_AGEFICE,
             },
           })
         : Promise.resolve(0),
