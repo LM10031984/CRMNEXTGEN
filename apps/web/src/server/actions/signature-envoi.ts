@@ -61,8 +61,16 @@ import {
   generateConventionCore,
   generateConventionEntrepriseCore,
 } from '@/lib/closure/convention-core';
-import { generateAgeficeForParticipant } from './agefice-generator';
-import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
+import {
+  REGENERATION_PAR_PIECE,
+  STATUT_ENVOYE,
+  STATUT_GENERE,
+  STATUT_SIGNE,
+  estPieceSignable,
+  formeDuDocumentEnBase,
+  relacherPieces,
+  trouverDocument,
+} from '@/server/signature-relacher';
 import {
   planifierEnvoi,
   type AnomalieEnvoi,
@@ -126,12 +134,6 @@ import {
 } from '@/lib/signature/envoi-contrats';
 import { notifierSignataire } from '@/lib/signature/notifier';
 import { loadOfConfig } from '@/lib/of-config';
-
-/** Statuts de `Document.status` qui interdisent de toucher au PDF. */
-const STATUT_SIGNE = 'signed';
-const STATUT_ENVOYE = 'sent_for_signature';
-/** L'état d'un document simplement produit — celui d'avant tout envoi. */
-const STATUT_GENERE = 'generated';
 
 /**
  * Les états de demande qu'une annulation peut encore atteindre (lot C.2b-bis).
@@ -313,126 +315,7 @@ async function chargerContexte(
  * finirait par annoncer un signataire différent de celui qui reçoit le lien.
  */
 
-interface DocumentCharge {
-  id: string;
-  pdfUrl: string;
-  hashSha256: string;
-  status: string;
-}
-
-async function trouverDocument(
-  tenantId: string,
-  sessionId: string,
-  docType: DocTypeSignable,
-  forme: FormeDocument,
-): Promise<DocumentCharge | null> {
-  const select = { id: true, pdfUrl: true, hashSha256: true, status: true };
-
-  if (docType === 'CONVENTION' && forme.forme === 'GROUPE') {
-    // Les DEUX formes de stockage d'une convention de groupe — source unique
-    // `convention-coverage.ts`, jamais un filtre `entityType` écrit à la main.
-    return prisma.document.findFirst({
-      where: groupConventionAnyShapeWhere(tenantId, sessionId, forme.organizationId),
-      orderBy: { createdAt: 'desc' },
-      select,
-    });
-  }
-
-  return prisma.document.findFirst({
-    where: {
-      tenantId,
-      type: docType,
-      participantId: forme.forme === 'INDIVIDUEL' ? forme.participantId : undefined,
-    },
-    orderBy: { createdAt: 'desc' },
-    select,
-  });
-}
-
 // ─── Régénération avec ancres ────────────────────────────────────────────────
-
-type ResultatGenerateur = { ok: boolean; error?: string };
-
-/**
- * Qui régénère quoi. TABLE de données : brancher une pièce signable de plus se
- * fait ici, pas dans un `if` au milieu de la boucle.
- *
- * `signatureTags` est passé À L'IDENTIQUE aux trois gabarits : ce n'est pas au
- * moteur de savoir lequel garde son tampon. Le formulaire AGEFICE conserve
- * l'image de signature de l'OF (une seule partie y signe), la convention et
- * l'attestation la retirent — chaque gabarit tranche chez lui.
- *
- * Le drapeau est un PARAMÈTRE, pas une constante (lot C.2b-bis) : l'envoi
- * régénère AVEC les ancres, l'annulation régénère SANS, par le même chemin.
- * Deux chemins de régénération finiraient par diverger sur le tampon de l'OF.
- */
-const REGENERATION_PAR_PIECE: Record<
-  DocTypeSignable,
-  (a: {
-    tenantId: string;
-    sessionId: string;
-    forme: FormeDocument;
-    signatureTags: boolean;
-  }) => Promise<ResultatGenerateur>
-> = {
-  CONVENTION: async ({ tenantId, sessionId, forme, signatureTags }) =>
-    forme.forme === 'GROUPE'
-      ? generateConventionEntrepriseCore(tenantId, sessionId, forme.organizationId, null, {
-          signatureTags,
-        })
-      : generateConventionCore(tenantId, forme.participantId, { signatureTags }),
-  AGEFICE: async ({ forme, signatureTags }) =>
-    forme.forme === 'INDIVIDUEL'
-      ? generateAgeficeForParticipant(forme.participantId, { signatureTags })
-      : { ok: false, error: 'Un dossier AGEFICE est toujours nominatif.' },
-  ASSIDUITE: async ({ forme, signatureTags }) =>
-    forme.forme === 'INDIVIDUEL'
-      ? generateAgeficeAttendanceForParticipant(forme.participantId, { signatureTags })
-      : { ok: false, error: "Une attestation d'assiduité est toujours nominative." },
-};
-
-/** Cette pièce fait-elle partie des trois qui partent en signature ? */
-function estPieceSignable(type: string): type is DocTypeSignable {
-  return (DOC_TYPES_SIGNABLES as readonly string[]).includes(type);
-}
-
-/**
- * La forme d'un document DÉJÀ EN BASE, pour pouvoir le régénérer sans repasser
- * par le plan d'envoi (lot C.2b-bis — l'annulation ne connaît que la demande).
- *
- * `null` pour la convention de groupe produite par les scripts `_gen-*`
- * (`entityType='session'`) : elle ne porte aucun commanditaire, donc rien ne dit
- * pour QUELLE organisation la régénérer. On préfère le dire plutôt que d'en
- * régénérer une au hasard.
- */
-function formeDuDocumentEnBase(doc: {
-  entityType: string;
-  entityId: string;
-  participantId: string | null;
-}): FormeDocument | null {
-  if (doc.participantId !== null) {
-    return { forme: 'INDIVIDUEL', participantId: doc.participantId };
-  }
-  if (doc.entityType === GROUP_CONVENTION_ENTITY_TYPE) {
-    return { forme: 'GROUPE', organizationId: doc.entityId };
-  }
-  return null;
-}
-
-/**
- * Le statut que le journal connaissait au document AVANT son envoi.
- *
- * Lu dans le `diff` de `signature.sent`, qui écrit `status: { before, after }`.
- * Sans cette relecture, un renvoi forcé d'une pièce déjà signée reviendrait à
- * `generated` et perdrait la mention de sa signature.
- */
-function statutAvantEnvoiDuJournal(diff: unknown): string | null {
-  if (typeof diff !== 'object' || diff === null) return null;
-  const statut = (diff as { status?: unknown }).status;
-  if (typeof statut !== 'object' || statut === null) return null;
-  const avant = (statut as { before?: unknown }).before;
-  return typeof avant === 'string' && avant.length > 0 ? avant : null;
-}
 
 // ─── Résolution du signataire côté bénéficiaire ──────────────────────────────
 //
@@ -918,6 +801,11 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
             status: 'SENT',
             sessionId,
             signers: signersJson,
+            // Lot C.3 — le régime qui a décidé CET envoi. Le webhook en aura
+            // besoin des mois plus tard pour nommer le destinataire, et le
+            // recalculer alors dirait ce qu'on enverrait aujourd'hui, pas ce
+            // qui est parti.
+            signerRole: envoi.role,
             sentAt: new Date(),
             expiresAt: creation.expiresAt ?? expiresAt,
           },
@@ -1176,146 +1064,47 @@ export async function annulerEnvoiSignature(
     return { ok: false, error: messageDemandeNonAnnulable(demande.status) };
   }
 
-  // Le statut d'AVANT, relu du journal, AVANT tout appel réseau : c'est lui
-  // qu'on remettra, et le lire après l'annulation ne changerait rien à sa
-  // valeur mais compliquerait la lecture du code.
-  const statutsAvant = new Map<string, string>();
-  for (const doc of demande.documents) {
-    const trace = await prisma.auditLog.findFirst({
-      where: {
-        tenantId: user.tenantId,
-        entity: 'Document',
-        entityId: doc.id,
-        action: 'signature.sent',
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { diff: true },
-    });
-    statutsAvant.set(doc.id, statutAvantEnvoiDuJournal(trace?.diff) ?? STATUT_GENERE);
-  }
-
+  // L'ORDRE : LE PRESTATAIRE D'ABORD. Marquer `CANCELED` en local pendant que la
+  // demande reste ouverte chez lui laisserait quelqu'un signer une pièce que
+  // QualiOF croit annulée, et le webhook du lot C.3 apposerait cette signature
+  // sur un document entre-temps régénéré. Un refus n'écrit donc RIEN.
   try {
     await provider.cancel(demande.providerId);
   } catch (e) {
     return { ok: false, error: messageAnnulationPrestataireImpossible(messageDe(e)) };
   }
 
-  // Une seule transaction : la demande, les documents relâchés, et LA TRACE.
-  // Une trace écrite à côté pourrait manquer sur un outil dont un auditeur
-  // Qualiopi lit le journal.
-  await prisma.$transaction(async (tx) => {
-    await tx.signatureRequest.update({
-      where: { id: demande.id },
-      data: { status: 'CANCELED', lastError: null },
-    });
-
-    for (const doc of demande.documents) {
-      const statutRetabli = statutsAvant.get(doc.id) ?? STATUT_GENERE;
-      await tx.document.update({
-        where: { id: doc.id },
-        data: { status: statutRetabli, signatureRequestId: null },
-      });
-      await tx.auditLog.create({
-        data: {
-          tenantId: user.tenantId,
-          userId: user.id,
-          entity: 'Document',
-          entityId: doc.id,
-          action: 'signature.canceled',
-          diff: {
-            signatureRequestId: demande.id,
-            providerId: demande.providerId,
-            docType: doc.type,
-            // Le CODE pour interroger le journal, la PHRASE pour le lire. Les
-            // deux, parce qu'une annulation volontaire et une annulation
-            // provoquée par un dépôt de scan ne se distinguaient jusqu'ici par
-            // rien (lot C.2b-3).
-            motif,
-            motifTexte: texteMotifAnnulation(motif),
-            status: { before: doc.status, after: statutRetabli },
-            demande: { before: demande.status, after: 'CANCELED' },
-          },
-        },
-      });
-    }
+  // ⚠ LA PARTIE LOCALE EST PARTAGÉE avec le webhook du lot C.3 (refus et
+  // expiration relâchent la pièce de la MÊME façon). Trois implémentations
+  // auraient divergé à la première correction — et un document laissé dans sa
+  // version à ancres est un document sans le tampon de l'organisme.
+  const pieces = await relacherPieces({
+    tenantId: user.tenantId,
+    userId: user.id,
+    demande: {
+      id: demande.id,
+      providerId: demande.providerId,
+      status: demande.status,
+      sessionId: demande.sessionId,
+      documents: demande.documents,
+    },
+    statutDemande: 'CANCELED',
+    action: 'signature.canceled',
+    diff: {
+      // Le CODE pour interroger le journal, la PHRASE pour le lire. Les deux,
+      // parce qu'une annulation volontaire et une annulation provoquée par un
+      // dépôt de scan ne se distinguaient jusqu'ici par rien (lot C.2b-3).
+      motif,
+      motifTexte: texteMotifAnnulation(motif),
+    },
+    regeneration: {
+      action: 'document.regenerated_after_cancel',
+      motif:
+        "Régénération SANS zones de signature après annulation de l'envoi — symétrique " +
+        "de la régénération avec ancres faite à l'ouverture du récapitulatif. Sans elle, " +
+        "le document resterait sans le tampon de l'organisme.",
+    },
   });
-
-  // La régénération SANS ancres suit la transaction, sciemment : elle est faite
-  // par les générateurs, partagés avec cinq autres appelants (dette ouverte en
-  // lot H). C'est la même contrainte, et le même choix, qu'à la préparation.
-  const pieces: PieceRelachee[] = [];
-  for (const doc of demande.documents) {
-    const statutRetabli = statutsAvant.get(doc.id) ?? STATUT_GENERE;
-    const base = { docType: doc.type as string, statutRetabli };
-
-    if (doc.signedPdfUrl !== null || statutRetabli === STATUT_SIGNE) {
-      pieces.push({
-        ...base,
-        documentId: doc.id,
-        regeneree: false,
-        raisonNonRegeneree: messagePreuveConservee(),
-      });
-      continue;
-    }
-
-    const forme = formeDuDocumentEnBase(doc);
-    if (!estPieceSignable(doc.type) || forme === null) {
-      pieces.push({
-        ...base,
-        documentId: doc.id,
-        regeneree: false,
-        raisonNonRegeneree: messageRegenerationApresAnnulationImpossible(
-          "la forme de ce document ne dit pas pour qui le régénérer (convention de groupe " +
-            'sans commanditaire porté).',
-        ),
-      });
-      continue;
-    }
-
-    const sessionDuDocument = doc.sessionId ?? demande.sessionId;
-    const resultat = await REGENERATION_PAR_PIECE[doc.type]({
-      tenantId: user.tenantId,
-      sessionId: sessionDuDocument,
-      forme,
-      signatureTags: false,
-    });
-    if (!resultat.ok) {
-      pieces.push({
-        ...base,
-        documentId: doc.id,
-        regeneree: false,
-        raisonNonRegeneree: messageRegenerationApresAnnulationImpossible(
-          resultat.error ?? 'cause inconnue.',
-        ),
-      });
-      continue;
-    }
-
-    // Les générateurs REMPLACENT le Document : l'id change. On relit, sinon la
-    // trace et le lien rendus pointeraient une ligne supprimée.
-    const apres = await trouverDocument(user.tenantId, sessionDuDocument, doc.type, forme);
-    const idApres = apres?.id ?? doc.id;
-    pieces.push({ ...base, documentId: idApres, regeneree: true, raisonNonRegeneree: null });
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: user.tenantId,
-        userId: user.id,
-        entity: 'Document',
-        entityId: idApres,
-        action: 'document.regenerated_after_cancel',
-        diff: {
-          signatureRequestId: demande.id,
-          docType: doc.type,
-          motif:
-            "Régénération SANS zones de signature après annulation de l'envoi — symétrique " +
-            "de la régénération avec ancres faite à l'ouverture du récapitulatif. Sans elle, " +
-            "le document resterait sans le tampon de l'organisme.",
-          documentId: { before: doc.id, after: idApres },
-        },
-      },
-    });
-  }
 
   revalidatePath(`/app/sessions/${demande.sessionId}`);
   // La liste des sessions porte un filtre de signature : elle lit la même donnée.

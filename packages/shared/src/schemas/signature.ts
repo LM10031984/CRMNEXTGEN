@@ -60,6 +60,19 @@ export const signatureSignerSchema = z.object({
   status: z.string().min(1),
   signedAt: z.string().nullable(),
   signUrl: z.string().nullable(),
+  /**
+   * Lot C.3 — quand CE signataire a refusé de signer (`form.declined`).
+   *
+   * ⚠ OPTIONNEL AVEC DÉFAUT, et ce n'est pas un détail de style : c'est LA
+   * règle de cette colonne. `parseSignatureSigners` écarte sans bruit ce qui ne
+   * parse pas ; un champ REQUIS ajouté ici ferait disparaître, de tous les
+   * écrans, les signataires de toutes les demandes déjà en base — écrites avant
+   * que le champ existe. Sans erreur, sans log : juste un envoi qui n'a plus
+   * aucun signataire. Tout champ ajouté après lui suit la même règle, et
+   * `__tests__/signature.test.ts` garde le fait sur la forme à sept champs du
+   * lot C.2a.
+   */
+  declinedAt: z.string().nullable().optional().default(null),
 });
 
 export const signatureSignersSchema = z.array(signatureSignerSchema);
@@ -70,6 +83,11 @@ export type SignatureSigner = z.infer<typeof signatureSignerSchema>;
  * Relit la colonne Json en écartant — sans bruit — ce qui ne respecte pas le
  * contrat. Une fiche session ne doit jamais tomber en erreur parce qu'un
  * webhook a écrit une ligne inattendue.
+ *
+ * ⚠ C'est CE silence qui impose la règle du lot C.3 : tout champ ajouté à
+ * `signatureSignerSchema` est optionnel avec défaut. Requis, il ferait
+ * disparaître d'un coup toutes les lignes déjà en base — et le silence, ici,
+ * jouerait contre nous.
  */
 export function parseSignatureSigners(raw: unknown): SignatureSigner[] {
   if (!Array.isArray(raw)) return [];
