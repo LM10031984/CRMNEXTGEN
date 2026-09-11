@@ -701,6 +701,41 @@ Parcours : le commercial mène son R1 en conversation libre (enregistré, ex. Pl
 
 Garde-fous : transcript jamais dans un lien public, jamais dans le rapport client ; purge du `transcriptText` à J+90 (paramètre RGPD, aligné phase 22) ; l'extraction passe par le rate-limit et le monitoring IA existants ; job visible avec statut (pattern `AIGenerationJob`).
 
+**Tranché à la construction du lot C (10/09/2026) — ces points ne se renégocient plus :**
+
+1. **La citation fait foi, et son absence fait rejeter.** Une réponse dont le `quote` ne se retrouve pas dans le transcript (comparaison insensible à la casse, aux accents, à la ponctuation et aux retours à la ligne — mais pas à un mot changé) est ÉCARTÉE, pas rétrogradée en « confiance faible ». Motif : une citation inventée mais crédible est exactement ce qu'une relecture rapide ne rattrape pas — le relecteur la lit, elle sonne juste, il confirme. Le prompt l'interdit, `normalize.ts` le vérifie ; un prompt n'est pas un garde-fou.
+2. **Une extraction non confirmée compte dans la PROGRESSION, jamais dans un CHIFFRE.** Le champ est rempli à l'écran : prétendre le contraire serait faux. Mais synthèse financement, pipeline, snapshot, rapport d'audit et proposition lisent tous par `REPONSES_CONFIRMEES`. Le constat qui l'impose : avant le lot C, **personne ne lisait `confirmedAt`** — les six lecteurs auraient imprimé du non-relu. Un test de contrat lit désormais le code source pour qu'un septième lecteur ait à choisir explicitement.
+3. **Reprendre la main vaut confirmation.** Modifier une valeur extraite dans son chapitre la repasse en `origin=COMMERCIAL`, confirmée, `aiConfidence`/`aiQuote` effacées : il n'existe pas d'état « corrigée mais toujours douteuse ».
+4. **Rétention : 90 jours après la dernière preuve d'usage**, c'est-à-dire le plus récent de `meetingAt`, `prefillAt` et `createdAt` — et non la seule date de rendez-vous. Sinon un enregistrement qui a dormi trois mois dans un Plaud serait purgé la nuit de son dépôt. La purge efface le TEXTE seul ; les réponses confirmées survivent, ainsi que `prefillAt`/`prefillModel` (traçabilité Qualiopi, pas donnée personnelle). Greffée sur le worker quotidien, à côté de la purge des traces d'envoi.
+5. **Le mode se déduit, on ne le demande pas** : un questionnaire déjà entamé au clavier passe en `HYBRIDE`, un questionnaire vierge en `TRANSCRIPT`.
+6. **Aucune migration** : le lot A avait déjà posé `transcriptText`, `transcriptSource`, `prefillModel`, `prefillAt`, `AnswerOrigin.IA_TRANSCRIPT`, `aiConfidence`, `aiQuote`, `confirmedAt`, `confirmedById`.
+7. **L'échafaudage de diarisation n'est pas de la parole.** Le contrôle d'ancrage compare la citation au transcript **dépouillé** de ce qu'a écrit la machine qui a transcrit — horodatage suivi d'un libellé court de locuteur, cues WebVTT, « Speaker 3 : » en tête de ligne. Sans ça, toute citation enjambant un changement de tour est rejetée, ce qui condamne le format même que la fonctionnalité vise. La parole, elle, reste intouchée : un mot changé reste un rejet. Ligne rouge : une ligne qui commence par une heure mais poursuit en phrase est de la parole, pas un en-tête.
+
+**Première mesure sur un transcript réel — 11/09/2026, transcript Optimmo du 11/08 :**
+
+**19 % de pré-remplissage (7/37 du set léger)**, 7 réponses retenues sur 7 exactes, une seule écartée. Ce que la répartition par chapitre raconte :
+
+| Chapitre | Retenues |
+|---|---|
+| 1 · Identité | 1/5 |
+| 2 · Équipe & financement | 4/7 |
+| **3 à 8 · Prospection, RDV vendeur, mandats, suivi, acquéreurs, visites & offres** | **0/17** |
+| 9 · Base de données & e-réputation | 1/3 |
+| 10 · Outils & IA | 1/2 |
+| 11 · Management & vision | 0/3 |
+
+**Les chapitres 3 à 8 sont absents parce que le rendez-vous n'est pas un R1 de diagnostic : c'est l'entretien commercial qui l'accompagne** — le cas OPTIMO de l'annexe A. On y parle d'automatiser la location, du recouvrement, des sinistres et du budget OPCO ; jamais de prospection, de mandats, de visites ni d'offres. Le taux mesure donc ce que la conversation contenait, pas ce que l'extracteur sait faire. Sur les seuls chapitres réellement abordés, il est de **41 %**.
+
+Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui alimente le moteur budget, donc la moitié utile du R2 — est le mieux servi (4/7) ; et **la confiance est calibrée sans complaisance** (50 % sur un effectif qu'il a fallu reconstituer d'une énumération, 90 % sur un chiffre donné en clair).
+
+**Ce que cette mesure a corrigé dans le moteur** : avant `1d7a55e`, le taux tombait à **3 %** — sept propositions sur huit écartées pour « citation absente », alors que le modèle n'avait rien inventé. Dans un transcript diarisé, le dirigeant répond au tour de parole SUIVANT la question ; le modèle cite les deux ensemble, fidèlement, mais le texte source intercale `00:17:19 Speaker 3` entre les deux. Le garde-fou mordait la main du modèle honnête, sur le format même que la fonctionnalité vise. Cf. point 7 ci-dessus.
+
+**Reste ouvert après le lot C :**
+
+- **Le seuil de 0,7 n'est pas encore réglable par tenant.** Il est un paramètre de `trierParException`, pas un champ de `TenantEmailSettings` : le rendre configurable demande une migration, à faire quand deux R1 réels auront dit si 0,7 est le bon nombre.
+- **Le registre des traitements connaît désormais le transcript** — `docs/rgpd/REGISTRE-TRAITEMENTS.md` v1.7, **Traitement 11**, amendé le 11/09/2026. Restent à contresigner par le responsable de traitement : la durée de 90 jours, la base d'intérêt légitime retenue pour les collaborateurs cités, et la **limite de l'art. 14** (point 5 des limites connues) — ces collaborateurs ne sont pas informés, et ne peuvent pas l'être individuellement tant qu'ils ne sont pas inscrits à une formation.
+- **L'import direct Plaud reste au lot H**, comme prévu : v1 = collage et dépôt de fichier (`.txt`, `.md`, `.vtt`, `.srt`).
+
 ---
 
 ## 7. Le lien de pré-inscription par RDV (`EnrollmentBatch`)
@@ -939,7 +974,7 @@ En lot H : la couche `CoachBrainContext` du repo diag est posée telle quelle (c
 |---|---|---|---|
 | **A — Socle** | Modèles Prisma (§4) + seeds FundingRule + port questions/chapitres/light-set + tests de contrat référentiel + import catalogue (§5.3, avec M0→M6) | Aucune (après le 10/09) | M |
 | **B — Saisie R1** | Écrans diagnostic (léger/complet, page-par-chapitre, autosave, grille équipe, reprise) + synthèses financement & pipeline en direct (fonctions pures §8) | A | L |
-| **C — Transcript** | Collage/upload + job d'extraction + revue par exception | A, B | M |
+| **C — Transcript** | Collage/upload + job d'extraction + revue par exception. **Fini quand** : zéro réponse fausse parmi les retenues, ancrage de citation tenant sur le format diarisé comme sur la reformulation, et rien de non confirmé dans un document client. Le **taux** de pré-remplissage se constate et ne bloque pas (§14). | A, B | M |
 | **D — Audit** | Moteur ratios/alertes + rapport d'audit (PDF + écran) + DocType + fingerprint | A, B | M |
 | **E — Proposition** | Éditeur (modules, lignes par payeur, remise/OFFERT avec validation > 15 %), génération IA relue, PDF + lien public, envoi email, génération devis, fingerprint. **Rendu : réutilise le socle de compatibilité WeasyPrint de §9.5** — pas une seconde transposition à la main. Maquette `2026-09-01-maquette-proposition.html` = référence exacte. **Fini quand** : une proposition réelle générée depuis DIAG-0001, PDF **relu page par page**, Σ devis = Σ proposition **au centime**, heures conventionnées identiques partout, trois gates vertes. | A, B, D (utilisable sans C) | XL |
 | **F — Campagne RDV** | EnrollmentBatch + dates + page publique `/rdv/[token]` + écran d'avancement (réemploi PreEnrollment) + alertes A-1/A-2/A-3 (§11.1 — A-1/A-2 anticipables en `/quick`) **+ le bouton « Envoyer la proposition par email » (D-21)** : c'est ici que le mailer est déjà ouvert, donc ici que la catégorie fail-closed se pose, plutôt que dans un lot à part | A (parallèle à D/E) | M |
@@ -953,7 +988,9 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 
 - [ ] Un diagnostic LÉGER se fait en < 30 min au clavier, sans blocage réseau visible, et s'upgrade en COMPLET sans re-saisie.
 - [ ] La synthèse financement s'affiche < 1 s après la grille équipe, avec l'exemple canonique : 4 indés > 7 k€ → 36 demi-journées cumulées / 9 demi-journées de groupe / prise en charge 12 000 € (plafond) / écart de 96 € traité selon D-8.
-- [ ] Un transcript collé pré-remplit ≥ 60 % des questions du set avec justification (`quote`), et AUCUNE réponse pré-remplie non confirmée ne sort dans un document client.
+- [x] **Lot C — BLOQUANT, atteint le 11/09/2026** : ① **zéro réponse fausse** parmi les retenues — 7 sur 7 exactes sur le transcript Optimmo du 11/08, mesuré le 11/09 ; ② **l'ancrage de citation tient sur le format diarisé** (corrigé en `1d7a55e` : `depouillerTranscript` retire horodatages, libellés de locuteur et cues WebVTT, jamais la parole) **comme sur la reformulation** — « l'on ne s'en sert pas » cité « l'on ne se sert pas » reste rejeté, et un test de mutation le prouve ; ③ AUCUNE réponse pré-remplie non confirmée ne sort dans un document client (`REPONSES_CONFIRMEES` + test de contrat sur le code source).
+- [ ] **Lot C — CONSTATÉ, non bloquant** : le taux de pré-remplissage **mesure la conversation, pas le moteur**. Il se constate, il ne barre rien. Relevé du 11/09/2026 sur le transcript Optimmo : **19 % (7/37)** sur le set léger, **41 % sur les seuls chapitres abordés** (1 · Identité, 2 · Équipe & financement, 9 · Base & e-réputation, 10 · Outils & IA). Décision de Laurent du 11/09 : ce seuil ne conditionne plus la livraison du lot.
+- [ ] **Lot C — À REMESURER** sur le premier vrai R1 mené avec la trame, sans que le résultat bloque quoi que ce soit. C'est cette mesure-là qui dira ce que le mode transcript fait gagner ; celle du 11/09 dit seulement ce qu'un entretien commercial contient.
 - [ ] Rapport d'audit conforme à la maquette v2 : **≥ 15 pages**, restitution chapitre par chapitre des réponses, score global + scores par chapitre, page équipe alimentée par les fiches (objectifs + préconisations individuelles), enjeux chiffrés en €, valeur 3 000 € en couverture ; proposition conforme à sa maquette ; PDF via la chaîne existante.
 - [ ] La recommandation de programme propose au moins un programme MÉTIER pour chaque priorité métier détectée (test sur fixtures : exclusivité faible → 055/058 proposés, jamais un module IA seul).
 - [ ] Σ devis = Σ proposition ; heures conventionnées identiques proposition/convention/émargement (tests de contrat).

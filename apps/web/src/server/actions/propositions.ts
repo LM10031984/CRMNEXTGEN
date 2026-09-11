@@ -26,6 +26,7 @@ import {
 import { REFERENTIAL_VERSION } from '@qualiof/shared/diagnostic';
 import type { ProposalContent, ProposalPricing } from '@qualiof/shared';
 
+import { REPONSES_CONFIRMEES } from '@/lib/diagnostic-r1/transcript/confirmees';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { loadOfConfig } from '@/lib/of-config';
 import { loadFundingRules } from '@/lib/financement/load-rules';
@@ -157,7 +158,7 @@ async function loadDiagnosticBundle(diagnosticId: string, tenantId: string) {
       organizationId: true,
       organization: { select: { legalName: true, siret: true } },
       lead: { select: { firstName: true, lastName: true, notes: true, email: true } },
-      answers: { select: { questionId: true, value: true, isSkipped: true } },
+      answers: REPONSES_CONFIRMEES,
       participants: {
         orderBy: { createdAt: 'asc' },
         select: {

@@ -24,6 +24,7 @@ import {
   UpsertParticipantSchema,
 } from '@qualiof/shared';
 import { getQuestionsForVariant, REFERENTIAL_VERSION } from '@qualiof/shared/diagnostic';
+import { CONFIRMEE } from '@/lib/diagnostic-r1/transcript/confirmees';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import { computeSnapshot, resolveEmployeeCount } from '@/lib/diagnostic-r1/snapshot';
@@ -444,7 +445,9 @@ export async function recomputeDiagnosticSnapshot(
   try {
     const [answers, participants, { values: rules }] = await Promise.all([
       prisma.diagnosticAnswer.findMany({
-        where: { diagnosticId },
+        // Une extraction non relue ne pèse sur aucun calcul : le snapshot nourrit
+        // les synthèses montrées en rendez-vous et l'empreinte de l'audit.
+        where: { diagnosticId, ...CONFIRMEE },
         select: { questionId: true, value: true, isSkipped: true },
       }),
       prisma.diagnosticParticipant.findMany({
