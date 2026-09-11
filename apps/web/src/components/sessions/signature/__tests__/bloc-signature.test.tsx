@@ -72,6 +72,9 @@ vi.mock('sonner', () => ({
 }));
 
 import { BlocSignature } from '../bloc-signature';
+// Lot C.2b-3 : la phrase d'avertissement vient du composant de dépôt, jamais
+// d'une recopie — les apostrophes typographiques y sont un piège à test vert.
+import { AVERTISSEMENT_DEPOT_ANNULE_ENVOI } from '../../qualiopi-matrix/upload-signed-doc-dialog';
 import type { LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
 
 const SESSION_ID = 'sess-1';
@@ -383,5 +386,49 @@ describe('Le bloc se tait quand il n’a rien à dire', () => {
       <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [] })} />,
     );
     expect(container.textContent).toBe('');
+  });
+});
+
+/**
+ * Lot C.2b-3 — « Une pièce, un seul chemin ouvert » (Laurent, 11/09/2026).
+ *
+ * L'écart n°6 du SUMMARY-2 est TRANCHÉ : « Déposer le scan » reste offert sur
+ * une ligne partie en signature, mais il n'ouvre plus un second chemin — il
+ * ferme le premier. Le dépôt annule l'envoi chez le prestataire, après
+ * confirmation explicite.
+ *
+ * CE QUE CE BLOC DOIT FAIRE, ET LUI SEUL : dire au dépôt qu'un envoi est en
+ * cours. La ligne est la SEULE à le savoir (`etat === 'ENVOYE'`) ; le menu de
+ * la matrice, lui, ne le sait pas — d'où le garde-fou serveur, qui refuse tout
+ * dépôt non confirmé quel que soit le chemin d'entrée.
+ */
+describe('PUISSANCE (e) — le dépôt sur une pièce PARTIE prévient qu’il annulera l’envoi', () => {
+  it('ligne ENVOYE : ouvrir « Déposer le scan » affiche l’avertissement d’annulation', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [ligne({ etat: 'ENVOYE', envoyable: false, signatureRequestId: 'req-9' })],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /déposer le scan/i }));
+
+    // Constante IMPORTÉE du composant de dépôt : si le bloc oubliait de passer
+    // `envoiEnAttente`, le scan partirait sans confirmation et annulerait
+    // l'envoi en silence — ou, pire, échouerait sans que rien ne l'explique.
+    expect(screen.getByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toBeDefined();
+  });
+
+  it('ligne GÉNÉRÉE (rien n’est parti) : aucun avertissement — on n’effraie pas pour rien', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /déposer le scan/i }));
+
+    expect(screen.queryAllByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toHaveLength(0);
   });
 });

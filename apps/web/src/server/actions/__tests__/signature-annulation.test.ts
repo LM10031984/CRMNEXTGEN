@@ -424,3 +424,65 @@ describe('annulerEnvoiSignature — la pièce sort du gel', () => {
     expect(requireRoleMock).toHaveBeenCalledWith(['ADMIN', 'MANAGER']);
   });
 });
+
+/**
+ * Lot C.2b-3 — le MOTIF de l'annulation entre dans la trace.
+ *
+ * Une annulation volontaire (l'admin clique « Annuler l'envoi ») et une
+ * annulation provoquée par un dépôt de scan (« une pièce, un seul chemin
+ * ouvert », règle Laurent du 11/09/2026) produisaient exactement la même ligne
+ * de journal. Or c'est la question qu'un auditeur pose en premier devant deux
+ * preuves d'une même pièce : pourquoi l'envoi électronique s'est-il arrêté ?
+ *
+ * Le contrat de `annulerEnvoiSignature` est donc ÉTENDU — pas contourné : le
+ * motif est un champ d'entrée validé par Zod, avec une valeur par défaut qui
+ * préserve l'appelant existant (le bouton du bloc « Signature »).
+ */
+describe('annulerEnvoiSignature — le motif est porté par le contrat', () => {
+  it('sans motif fourni, la trace dit « demandé par l’utilisateur » — le bouton du bloc n’a pas à le préciser', async () => {
+    signatureRequestFindFirst.mockResolvedValue(demandeEnvoyee());
+
+    await annulerEnvoiSignature({ signatureRequestId: REQ_ID });
+
+    const trace = ecrituresTx.auditLogCreate.mock.calls
+      .map((c) => (c[0] as { data: { action: string; diff?: unknown } }).data)
+      .find((d) => d.action === 'signature.canceled');
+    expect((trace?.diff as { motif?: unknown }).motif).toBe('user_requested');
+  });
+
+  it('PUISSANCE — un motif fourni ressort TEL QUEL dans la trace, distinguable du cas volontaire', async () => {
+    signatureRequestFindFirst.mockResolvedValue(demandeEnvoyee());
+
+    await annulerEnvoiSignature({ signatureRequestId: REQ_ID, motif: 'scan_deposited' });
+
+    const trace = ecrituresTx.auditLogCreate.mock.calls
+      .map((c) => (c[0] as { data: { action: string; diff?: unknown } }).data)
+      .find((d) => d.action === 'signature.canceled');
+    expect((trace?.diff as { motif?: unknown }).motif).toBe('scan_deposited');
+  });
+
+  it('un motif inconnu est REFUSÉ — le journal ne prend pas du texte libre', async () => {
+    signatureRequestFindFirst.mockResolvedValue(demandeEnvoyee());
+
+    const r = await annulerEnvoiSignature({
+      signatureRequestId: REQ_ID,
+      motif: 'parce que voilà',
+    });
+
+    expect(r.ok).toBe(false);
+    expect(cancelMock).not.toHaveBeenCalled();
+  });
+
+  it('la trace garde AUSSI la phrase lisible, à côté du code', async () => {
+    signatureRequestFindFirst.mockResolvedValue(demandeEnvoyee());
+
+    await annulerEnvoiSignature({ signatureRequestId: REQ_ID, motif: 'scan_deposited' });
+
+    const trace = ecrituresTx.auditLogCreate.mock.calls
+      .map((c) => (c[0] as { data: { action: string; diff?: unknown } }).data)
+      .find((d) => d.action === 'signature.canceled');
+    const texte = (trace?.diff as { motifTexte?: unknown }).motifTexte;
+    expect(typeof texte).toBe('string');
+    expect(texte as string).toContain('scan');
+  });
+});
