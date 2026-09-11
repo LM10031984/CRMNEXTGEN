@@ -24,6 +24,7 @@ import { prisma } from '@qualiof/db';
 import { buildAuditData } from '../src/lib/diagnostic-r1/audit-builder';
 import { loadFundingRules } from '../src/lib/financement/load-rules';
 import { recommendModules, type LibraryModule } from '../src/lib/proposition/module-matcher';
+import { loadPropositionLibrary } from '../src/server/proposition-library';
 
 const ref = process.argv[2] ?? 'DIAG-0001';
 const d = await prisma.diagnostic.findFirst({
@@ -58,32 +59,11 @@ const products = await prisma.trainingProduct.findMany({
 
 const codeById = new Map(products.map((p) => [p.id, p.code]));
 
-const library: LibraryModule[] = products.flatMap((p) =>
-  p.modules.map((m) => ({
-    moduleId: m.id,
-    title: m.title,
-    family: m.family,
-    targetProfile: m.targetProfile,
-    signals: Array.isArray(m.diagnosticSignals)
-      ? (m.diagnosticSignals as unknown[]).map(String)
-      : [],
-    needIdentification: m.needIdentification,
-    isFoundation: m.isFoundation,
-    durationMin: m.durationMin,
-    excludedFromClientOutputs: m.excludedFromClientOutputs,
-    source: {
-      productId: p.id,
-      code: p.code,
-      title: p.title,
-      theme: p.theme,
-      fundingType: p.fundingType,
-      isActive: p.isActive,
-      supersededBy: p.supersededByProductId
-        ? (codeById.get(p.supersededByProductId) ?? p.supersededByProductId)
-        : null,
-    },
-  })),
-);
+// Le mapping vivait ici en double (puis en quadruple) : il vit désormais
+// dans `server/proposition-library.ts`, sous le regard de tsc — ce
+// dossier `scripts/` n'est PAS couvert par tsconfig, donc une
+// divergence y reste muette jusqu'à ce qu'un dossier réel la révèle.
+const library: LibraryModule[] = await loadPropositionLibrary(d.tenantId);
 
 const audit = buildAuditData({
   reference: d.reference, agencyName: 'sonde', generatedAt: new Date(), variant: d.variant,

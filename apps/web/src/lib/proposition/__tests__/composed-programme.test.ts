@@ -6,7 +6,7 @@ import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 
 import { buildComposedProgramme, type SourceProgrammeInfo } from '../composed-programme';
 import { composeProgramme } from '../composer';
-import { PROGRAMME_NEEDS } from '../module-matcher';
+import { PROGRAMME_NEEDS, recommendModules, type LibraryModule } from '../module-matcher';
 import type {
   DiagnosticEvidence,
   ModuleCandidate,
@@ -437,5 +437,142 @@ describe('deriveTargetAudience — le public visé se dérive, il ne se recopie 
   it('reste vrai et vérifiable quand aucun module ne déclare de profil', () => {
     const { programme } = programmeReel();
     expect(programme.targetAudience.toLowerCase()).toContain('conseillers immobiliers');
+  });
+});
+
+
+describe('CONTRAT — un programme composé ne contient JAMAIS un module sans déroulé', () => {
+  /**
+   * L'arbitrage de Laurent du 11/09/2026, vérifié de bout en bout : bibliothèque
+   * → recommandation → composition → programme rendu.
+   *
+   * Le cas réel qu'il ferme : « Suivi » (PROD-0680), module du catalogue
+   * diagnostic SANS déroulé mais riche en signaux, gagnait sa place et
+   * imprimait « Déroulé détaillé à compléter au catalogue » sur une pièce
+   * destinée au financeur — en occupant la place d'un module réel.
+   *
+   * Le test part d'une BIBLIOTHÈQUE, pas de candidats fabriqués : c'est le seul
+   * moyen de vérifier la garantie plutôt que la mise en forme.
+   */
+  const rayonDiag: ModuleSourceProgramme = {
+    productId: 'id-PROD-0680',
+    code: 'PROD-0680',
+    title: 'Catalogue diagnostic — Vendeur',
+    theme: null,
+    fundingType: 'COEUR_METIER',
+    isActive: false,
+    supersededBy: null,
+    excludedFromClientOutputs: false,
+  };
+
+  const SIGNAL = 'Mandat — Trop de mandats simples, exclusivité difficile à obtenir';
+
+  function librairie(): LibraryModule[] {
+    const base = {
+      family: 'METIER' as string | null,
+      targetProfile: null,
+      needIdentification: null,
+      isFoundation: false,
+      durationMin: 120,
+      excludedFromClientOutputs: false,
+    };
+    return [
+      // L'étiquette : tous les signaux, aucun contenu.
+      {
+        ...base,
+        moduleId: 'm-vide',
+        title: 'Suivi',
+        signals: [SIGNAL],
+        contentMd: null,
+        source: rayonDiag,
+      },
+      // Le module réel, moins bien doté en signaux.
+      {
+        ...base,
+        moduleId: 'm-reel',
+        title: 'Signer plus de mandats exclusifs',
+        signals: [SIGNAL],
+        contentMd: '- Techniques de closing\n- Traitement des objections',
+        source: VENDEUR,
+      },
+    ];
+  }
+
+  function chaineComplete(bibliotheque: LibraryModule[]) {
+    const reco = recommendModules({
+      library: bibliotheque,
+      chapterScores: [{ chapter: 5, score: 30, breakdown: [] }],
+      alerts: [
+        {
+          code: 'exclusivity_below_benchmark',
+          chapter: 5,
+          label: 'Exclusivité sous le repère',
+          severity: 'warning',
+          audience: 'client',
+          observed: 22,
+          threshold: 50,
+          questionIds: ['mandates-exclusivity-percent'],
+        },
+      ],
+      answers: [
+        {
+          questionId: 'mandates-exclusivity-percent',
+          label: 'Part de mandats en exclusivité',
+          value: '22 %',
+        },
+      ],
+    });
+    const composition = composeProgramme({
+      recommendations: reco.recommendations,
+      rules: RULES,
+      envelopeHalfDays: 6,
+    });
+    const contenus = new Map(
+      bibliotheque.filter((m) => m.contentMd).map((m) => [m.moduleId, m.contentMd!]),
+    );
+    return {
+      reco,
+      composition,
+      programme: buildComposedProgramme({
+        composition,
+        rules: RULES,
+        agencyName: 'Agence des Oliviers',
+        diagnosticReference: 'DIAG-0001',
+        sources: SOURCES,
+        fallback: FALLBACK,
+        mentions: MENTIONS,
+        moduleContent: contenus,
+      }),
+    };
+  }
+
+  it('le module sans déroulé n’apparaît nulle part, et le module réel prend sa place', () => {
+    const { composition, programme } = chaineComplete(librairie());
+    const programmes = composition.blocks.flatMap((b) => b.modules.map((m) => m.moduleId));
+    expect(programmes).not.toContain('m-vide');
+    expect(programmes).toContain('m-reel');
+    expect(programme.programMd).not.toContain('Déroulé détaillé à compléter');
+  });
+
+  it('aucun module composé ne sort sans contenu, quelle que soit la bibliothèque', () => {
+    // La garantie, énoncée telle quelle : on la vérifie sur le résultat, pas
+    // sur le chemin qui y mène.
+    const { composition, programme } = chaineComplete(librairie());
+    const contenus = new Map([['m-reel', '- Techniques de closing']]);
+    for (const b of composition.blocks) {
+      for (const m of b.modules) {
+        expect(contenus.has(m.moduleId)).toBe(true);
+      }
+    }
+    expect(programme.blockers.some((x) => x.includes('déroulé'))).toBe(false);
+  });
+
+  it('quand il ne reste QUE des étiquettes, le programme est vide et le dit', () => {
+    // Le point qui compte pour Laurent : la douleur rejoint honnêtement la
+    // liste de celles à écrire, au lieu d'être servie par une coquille.
+    const { reco, composition } = chaineComplete([librairie()[0]!]);
+    expect(composition.blocks.flatMap((b) => b.modules)).toEqual([]);
+    expect(reco.recommendations.some((r) => r.unmet)).toBe(true);
+    expect(reco.notices.some((n) => n.includes('aucun déroulé pédagogique'))).toBe(true);
   });
 });

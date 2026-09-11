@@ -1,6 +1,6 @@
 # Import de la bibliothèque de modules — Drive + Faros (lot I-1)
 
-_**APPLIQUÉ** le 2026-09-11 · instantané du 2026-09-10 · tenant « Start Academy »._
+_Simulation (dry-run) le 2026-09-11 · instantané du 2026-09-10 · tenant « Start Academy »._
 
 ## En un coup d’œil
 
@@ -24,14 +24,6 @@ Le lien est posé une fois et n’est jamais recalculé : un dossier Drive renom
 - `drive:055` reste écarté au profit de `PROD-055` (lien déjà posé, non recalculé).
 - `drive:073` reste écarté au profit de `PROD-0673` (lien déjà posé, non recalculé).
 - `drive:074` reste écarté au profit de `PROD-0662` (lien déjà posé, non recalculé).
-
-## Contenus conservés — un import ne vide jamais ce qui est écrit
-
-Pour ces modules, le document Drive ne porte aucun déroulé alors que la base en a un. **Le contenu en base a été conservé** ; tout le reste du module (titre, durée, ordre) a été mis à jour normalement.
-
-Motif : un import qui VIDE un contenu ne peut pas avoir raison ; un import qui le REMPLACE par autre chose, si. Le jour où le document Drive portera le déroulé, il reprendra la main sans rien de plus à faire.
-
-- `drive:047#20` « Atelier pratique : Simulation de réponse aux avis  » — le Drive n'a pas de déroulé, la base en a un : **contenu conservé**. Le reste du module est mis à jour normalement.
 
 ## ⚠️ À trancher — le même programme importé deux fois
 
