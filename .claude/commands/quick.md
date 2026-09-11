@@ -188,6 +188,14 @@ Corollaire, pour les tests bâtis sur une égalité : **ASSERTE l'égalité**, n
 suppose pas. Un départage testé sur deux candidats qu'on croyait à égalité, et
 qui ne l'étaient pas, ne teste aucun départage.
 
+### Le cas vécu, plus instructif que la formule
+
+La première tentative de mutation sur le garde des chemins en dur est restée
+**VERTE** — le fichier piégé avait été créé mais pas indexé, et le garde balaie
+`git ls-files`. Le garde avait raison, la mutation était une décoration. Refaite
+avec `git add -N`, elle a rougi en nommant le fichier, puis reverdi après retrait.
+**La leçon s'applique d'abord à celui qui l'écrit.**
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

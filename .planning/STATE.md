@@ -122,6 +122,19 @@ ménage optionnel, en attente du feu vert de Laurent.
 
 ## Chantiers identifiés, pas encore planifiés
 
+### OUVERTE (D-29) — un champ « moyens pédagogiques » au niveau du PRODUIT ?
+
+Posée le 11/09/2026 en retirant des déroulés les moyens pédagogiques d'organisme
+(lot 1 bis). Plusieurs lignes retirées étaient **spécifiques au programme**
+(« études de cas réels issus du marché immobilier », « exercices guidés pas à pas
+sur la rédaction de prompts ») alors que la rubrique du programme composé se remplit
+en **générique depuis l'organisme** : on a retiré du spécifique sans point de chute.
+
+**Décision de modèle, elle revient à Laurent, rien dans le code ne l'anticipe.**
+Détail : `.planning/specs/2026-09-01-chaine-diagnostic-proposition.md`, D-29. Le
+texte retiré est conservé mot pour mot, programme par programme, dans
+`.planning/quick/260911-kwf-lot-1-extraction-retirer-les-pieds-de-pa/260911-kwf-SUMMARY-02.md`.
+
 ### PLANIFIÉ — nettoyage de l'extraction Drive (arbitrage Laurent du 11/09/2026)
 
 Relevé le 11/09/2026 en régénérant le programme composé de DIAG-0001. Ces
