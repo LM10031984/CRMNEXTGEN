@@ -75,7 +75,11 @@ import { BlocSignature } from '../bloc-signature';
 // Lot C.2b-3 : la phrase d'avertissement vient du composant de dépôt, jamais
 // d'une recopie — les apostrophes typographiques y sont un piège à test vert.
 import { AVERTISSEMENT_DEPOT_ANNULE_ENVOI } from '../../qualiopi-matrix/upload-signed-doc-dialog';
-import type { LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
+import {
+  composerAvertissementRegime,
+  type LigneSignature,
+  type VueSignature,
+} from '@/lib/sessions/bloc-signature-vue';
 
 const SESSION_ID = 'sess-1';
 
@@ -464,5 +468,63 @@ describe('Contraste — les boutons d’envoi écrivent leur couleur de texte', 
     const bouton = screen.getByRole('button', { name: /envoyer pour signature — attestation/i });
     expect(bouton.className).toContain('text-white');
     expect(bouton.className).not.toContain('text-primary-foreground');
+  });
+});
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — corrections n°2 et n°3.
+ *
+ * Camille ROUSSEL apparaissait DEUX FOIS : un encart pour la convention, un
+ * autre pour le dossier AGEFICE. UNE anomalie — le financeur de son inscription
+ * — mais deux encarts, donc deux fois la même chose à lire et à corriger.
+ *
+ * ⚠ LA MUTATION QUI COMPTE ICI : réintroduire un encart par pièce (rendre
+ * `vue.avertissements` pièce par pièce au lieu du regroupement) doit faire
+ * rougir le premier test. Le second garde le CONTENU : sans lui, un encart
+ * unique qui ne nommerait pas les deux pièces passerait.
+ */
+describe('PUISSANCE (f) — UN SEUL encart par participant, qui liste ses pièces', () => {
+  const avertissementRegroupe = {
+    participantId: 'part-c',
+    nomAffiche: 'Camille ROUSSEL',
+    docTypes: ['CONVENTION', 'AGEFICE'] as const,
+    message: composerAvertissementRegime({
+      nomAffiche: 'Camille ROUSSEL',
+      docTypes: ['CONVENTION', 'AGEFICE'],
+      contexte: {
+        sponsorOrgLabel: 'DEMO-SIG ROUSSEL Camille, EI',
+        financeurSansRegime: true,
+        financeursRattaches: ['AGEFICE'],
+      },
+    }),
+  };
+
+  it('deux pièces incohérentes pour la même personne : UNE alerte, pas deux', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [], avertissements: [{ ...avertissementRegroupe, docTypes: ['CONVENTION', 'AGEFICE'] }] })}
+      />,
+    );
+    // Le nom ne doit apparaître QU'UNE FOIS dans tout le bloc.
+    const occurrences = (document.body.textContent ?? '').split('Camille ROUSSEL').length - 1;
+    expect(occurrences).toBe(1);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  it('l’encart unique NOMME les deux pièces — sinon il perdrait ce que les deux encarts disaient', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="BEFORE"
+        vue={vue({ lignes: [], avertissements: [{ ...avertissementRegroupe, docTypes: ['CONVENTION', 'AGEFICE'] }] })}
+      />,
+    );
+    const texte = screen.getByRole('alert').textContent ?? '';
+    expect(texte).toContain('Pièces concernées : convention, dossier AGEFICE.');
+    // Le message vient de la fonction IMPORTÉE, jamais d'une recopie : les
+    // apostrophes typographiques en feraient sinon un test vert pour rien.
+    expect(texte).toContain(avertissementRegroupe.message);
   });
 });

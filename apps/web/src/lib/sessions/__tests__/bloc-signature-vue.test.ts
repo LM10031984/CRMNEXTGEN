@@ -292,3 +292,165 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
     expect(vue.nbEnvoyables).toBe(0);
   });
 });
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — corrections n°2 et n°3.
+ *
+ * CE QUI CLOCHAIT À L'ÉCRAN. Camille ROUSSEL apparaissait DEUX FOIS dans le
+ * bloc « Signature » : un encart pour la convention, un autre pour le dossier
+ * AGEFICE. Deux encarts pour UNE anomalie — le financeur de son inscription —
+ * et un texte de 45 mots (« n'ouvre pas la convention », « en porte les
+ * signaux ») qui disait la mécanique du moteur au lieu de dire quoi corriger.
+ *
+ * LA FORME IMPOSÉE, et c'est elle que ces tests gardent : deux phrases — LE
+ * PROBLÈME, puis L'ACTION — puis les pièces, puis la réassurance. Le nom de
+ * l'organisation et le financeur rattaché viennent de la DONNÉE, jamais du code.
+ *
+ * ⚠ POURQUOI DANS LA VUE ET PAS DANS LE MOTEUR. `AnomalieEnvoi` est un contrat
+ * de `plan-envoi.ts` (lot C.2a), et il porte UNE pièce : le regrouper par
+ * participant y changerait le contrat que `preparerEnvoiSignature` rend aussi.
+ * Le regroupement est une décision d'AFFICHAGE, elle vit donc ici — pure, et
+ * testable sans écran.
+ */
+
+import {
+  composerAvertissementRegime,
+  regrouperAvertissements,
+  type ContexteAvertissement,
+} from '../bloc-signature-vue';
+
+const CONTEXTE_ROUSSEL: ContexteAvertissement = {
+  sponsorOrgLabel: 'DEMO-SIG ROUSSEL Camille, EI',
+  financeurSansRegime: true,
+  financeursRattaches: ['AGEFICE'],
+};
+
+function avert(docType: 'CONVENTION' | 'AGEFICE' | 'ASSIDUITE'): AnomalieEnvoi {
+  return {
+    participantId: 'part-c',
+    nomAffiche: 'Camille ROUSSEL',
+    docType,
+    message: 'message du moteur, une pièce à la fois',
+  };
+}
+
+describe('composerAvertissementRegime — la forme imposée par Laurent', () => {
+  it('le cas de Camille ROUSSEL, au mot près dans sa structure', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Camille ROUSSEL',
+      docTypes: ['CONVENTION', 'AGEFICE'],
+      contexte: CONTEXTE_ROUSSEL,
+    });
+    expect(message).toBe(
+      'Camille ROUSSEL — son financeur d’inscription (DEMO-SIG ROUSSEL Camille, EI) n’a ' +
+        'aucun régime de financement, alors que son dossier est rattaché à une entreprise ' +
+        'financée AGEFICE. Corrigez le financeur de l’inscription. Pièces concernées : ' +
+        'convention, dossier AGEFICE. Rien n’a été envoyé.',
+    );
+  });
+
+  it('le nom de l’organisation vient de la DONNÉE — il n’est jamais codé en dur', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Florent HAUSSWIRTH',
+      docTypes: ['AGEFICE'],
+      contexte: {
+        sponsorOrgLabel: 'IMAGIMMO',
+        financeurSansRegime: false,
+        financeursRattaches: ['AGEFICE'],
+      },
+    });
+    expect(message).toContain('(IMAGIMMO)');
+    expect(message).not.toContain('DEMO-SIG');
+    // Financeur RENSEIGNÉ mais qui n'ouvre pas la pièce : l'autre formulation.
+    expect(message).toContain('n’ouvre pas ces pièces');
+  });
+
+  it('une seule pièce se dit au singulier — « Pièce concernée »', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Florent HAUSSWIRTH',
+      docTypes: ['AGEFICE'],
+      contexte: CONTEXTE_ROUSSEL,
+    });
+    expect(message).toContain('Pièce concernée : dossier AGEFICE.');
+    expect(message).not.toContain('Pièces concernées');
+  });
+
+  it('aucun financeur rattaché connu : l’entreprise individuelle, pas un code inventé', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Camille ROUSSEL',
+      docTypes: ['AGEFICE'],
+      contexte: { ...CONTEXTE_ROUSSEL, financeursRattaches: [] },
+    });
+    expect(message).toContain('rattaché à une entreprise individuelle');
+  });
+
+  it('le texte reste COURT et sans jargon : ni « en porte les signaux », ni « n’ouvre pas la convention »', () => {
+    const message = composerAvertissementRegime({
+      nomAffiche: 'Camille ROUSSEL',
+      docTypes: ['CONVENTION', 'AGEFICE'],
+      contexte: CONTEXTE_ROUSSEL,
+    });
+    expect(message).not.toContain('en porte les signaux');
+    expect(message).not.toContain('n’ouvre pas la convention');
+    // La réassurance est la DERNIÈRE chose lue, et elle est brève.
+    expect(message.endsWith('Rien n’a été envoyé.')).toBe(true);
+  });
+});
+
+describe('regrouperAvertissements — UN encart par participant, jamais un par pièce', () => {
+  it('deux pièces d’un même apprenant ⇒ UNE entrée qui les liste toutes les deux', () => {
+    const groupes = regrouperAvertissements(
+      [avert('CONVENTION'), avert('AGEFICE')],
+      new Map([['part-c', CONTEXTE_ROUSSEL]]),
+    );
+    expect(groupes).toHaveLength(1);
+    expect(groupes[0]!.docTypes).toEqual(['CONVENTION', 'AGEFICE']);
+    expect(groupes[0]!.message).toContain('convention, dossier AGEFICE');
+  });
+
+  it('deux apprenants restent DEUX encarts — on ne fusionne que ce qui est à la même personne', () => {
+    const groupes = regrouperAvertissements(
+      [
+        avert('CONVENTION'),
+        { ...avert('AGEFICE'), participantId: 'part-f', nomAffiche: 'Florent HAUSSWIRTH' },
+      ],
+      new Map(),
+    );
+    expect(groupes.map((g) => g.participantId)).toEqual(['part-c', 'part-f']);
+  });
+
+  it('l’ordre des pièces est celui du référentiel, pas celui d’arrivée', () => {
+    const groupes = regrouperAvertissements(
+      [avert('AGEFICE'), avert('CONVENTION')],
+      new Map([['part-c', CONTEXTE_ROUSSEL]]),
+    );
+    expect(groupes[0]!.docTypes).toEqual(['CONVENTION', 'AGEFICE']);
+  });
+
+  it('une même pièce signalée deux fois ne se compte qu’une : pas de doublon dans la liste', () => {
+    const groupes = regrouperAvertissements([avert('AGEFICE'), avert('AGEFICE')], new Map());
+    expect(groupes[0]!.docTypes).toEqual(['AGEFICE']);
+  });
+
+  it('sans contexte pour ce participant, le message reste lisible — il ne s’effondre pas', () => {
+    const groupes = regrouperAvertissements([avert('CONVENTION')], new Map());
+    expect(groupes).toHaveLength(1);
+    expect(groupes[0]!.message).toContain('Camille ROUSSEL');
+    expect(groupes[0]!.message).toContain('Corrigez le financeur de l’inscription.');
+    expect(groupes[0]!.message).toContain('Rien n’a été envoyé.');
+  });
+});
+
+describe('construireVueSignature — les avertissements ressortent REGROUPÉS', () => {
+  it('la vue ne rend plus une entrée par pièce, mais une par participant', () => {
+    const vue = construireVueSignature({
+      plan: { ...planVide(), avertissements: [avert('CONVENTION'), avert('AGEFICE')] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      contexteAvertissementParParticipant: new Map([['part-c', CONTEXTE_ROUSSEL]]),
+    });
+    expect(vue.avertissements).toHaveLength(1);
+    expect(vue.avertissements[0]!.docTypes).toEqual(['CONVENTION', 'AGEFICE']);
+  });
+});
