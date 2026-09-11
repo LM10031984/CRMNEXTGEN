@@ -94,6 +94,7 @@ function rayon(code: string, title: string): ModuleSourceProgramme {
     fundingType: 'COEUR_METIER',
     // Le cas nominal depuis D-19 : les rayons ne sont jamais activés.
     isActive: false,
+    excludedFromClientOutputs: false,
     supersededBy: null,
   };
 }

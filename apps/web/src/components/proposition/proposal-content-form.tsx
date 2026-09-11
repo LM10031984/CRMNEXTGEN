@@ -25,6 +25,8 @@ export function ProposalContentForm({
   readOnly,
   catalogueNotices,
   composedWarnings,
+  composedRemittable,
+  composedBlockers,
   participantCount,
 }: {
   proposalId: string;
@@ -33,6 +35,9 @@ export function ProposalContentForm({
   catalogueNotices: string[];
   /** Ce qui manque au programme Qualiopi du parcours composé (lot I-2). */
   composedWarnings: string[];
+  /** `false` = ce programme ne se remet à personne. `null` = rien de composé. */
+  composedRemittable: boolean | null;
+  composedBlockers: string[];
   participantCount: number;
 }) {
   const router = useRouter();
@@ -88,11 +93,30 @@ export function ProposalContentForm({
         </div>
       )}
 
+      {composedRemittable === false && (
+        <div className="rounded-md border-2 border-red-400 bg-red-50 px-3 py-2.5 text-xs leading-relaxed dark:border-red-700 dark:bg-red-950/40">
+          <p className="mb-1 text-sm font-bold text-red-800 dark:text-red-200">
+            ⛔ Ce programme ne se remet à personne en l’état
+          </p>
+          <p className="mb-2">
+            Ni au client, ni au financeur, ni en pièce jointe d’une convention. Le catalogue ne
+            porte pas encore ce qu’il faudrait pour l’émettre :
+          </p>
+          <ul className="list-disc space-y-1 pl-4 font-medium">
+            {composedBlockers.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+          <p className="mt-2">
+            La proposition, elle, reste valable : c’est le PROGRAMME Qualiopi du parcours qui est
+            incomplet, pas le chiffrage ni les axes.
+          </p>
+        </div>
+      )}
+
       {composedWarnings.length > 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed dark:border-amber-800 dark:bg-amber-950/40">
-          <p className="mb-1 font-semibold">
-            Le programme Qualiopi de ce parcours n’est pas encore remettable
-          </p>
+          <p className="mb-1 font-semibold">Le détail, rubrique par rubrique</p>
           <ul className="list-disc space-y-1 pl-4">
             {composedWarnings.map((w) => (
               <li key={w}>{w}</li>

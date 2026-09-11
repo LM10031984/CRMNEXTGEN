@@ -31,6 +31,7 @@ function rayon(code: string, title: string): ModuleSourceProgramme {
     fundingType: 'COEUR_METIER',
     isActive: false,
     supersededBy: null,
+    excludedFromClientOutputs: false,
   };
 }
 
@@ -56,6 +57,7 @@ function candidat(
     matchedTerms: ['exclusivite'],
     isFoundation: false,
     durationMin,
+    targetProfile: null,
   };
 }
 

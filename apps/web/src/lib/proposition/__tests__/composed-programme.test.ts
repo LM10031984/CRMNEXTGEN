@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { FundingRuleValues } from '@/lib/financement/types';
 
+import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
+
 import { buildComposedProgramme, type SourceProgrammeInfo } from '../composed-programme';
 import { composeProgramme } from '../composer';
 import { PROGRAMME_NEEDS } from '../module-matcher';
@@ -26,6 +28,7 @@ function rayon(code: string, title: string): ModuleSourceProgramme {
     fundingType: 'COEUR_METIER',
     isActive: false,
     supersededBy: null,
+    excludedFromClientOutputs: false,
   };
 }
 
@@ -63,6 +66,7 @@ function candidat(
     matchedTerms: ['exclusivite'],
     isFoundation: false,
     durationMin,
+    targetProfile: null,
   };
 }
 
@@ -106,14 +110,17 @@ const SOURCES: SourceProgrammeInfo[] = [
 
 const FALLBACK = {
   prerequisites: null,
-  targetAudience: null,
-  pedagogicalMethods: null,
-  evaluationMethods: null,
-  accessibility: null,
   trainerProfile: null,
   pedagogicalSupport: null,
   accessConditions: null,
 };
+
+/** Les mentions de l'organisme — le tenant n'a rien saisi, donc le texte standard. */
+const MENTIONS = resolveQualiopiMentions(null, {
+  name: 'Julien LAFITTE',
+  email: 'julien@start-academy.fr',
+  phone: '06 22 80 65 09',
+});
 
 function programmeReel() {
   const composition = composeProgramme({
@@ -133,6 +140,7 @@ function programmeReel() {
       diagnosticReference: 'DIAG-0001',
       sources: SOURCES,
       fallback: FALLBACK,
+      mentions: MENTIONS,
       moduleContent: new Map([['m1', '- Techniques de closing\n- Traitement des objections']]),
     }),
   };
@@ -164,6 +172,7 @@ describe('buildComposedProgramme — D-25 : durationHours porte les heures CONVE
       diagnosticReference: 'DIAG-0001',
       sources: SOURCES,
       fallback: FALLBACK,
+      mentions: MENTIONS,
     });
     expect(programme.durationHours).toBe(composition.totalConventionedHours);
     expect(programme.durationHours).toBe(4);
@@ -185,7 +194,10 @@ describe('buildComposedProgramme — les objectifs viennent des modules retenus'
     expect(programme.objectives[1]).toBe('Pratiquer les visites en situation réelle');
   });
 
-  it('enveloppe un titre qui n’est pas un infinitif — et le dit', () => {
+  it('n’invente AUCUN objectif pour un titre qui ne dit pas ce qu’on sait faire', () => {
+    // « Maîtriser « Suivi acheteur » » n'est pas un objectif pédagogique : c'est
+    // une formule creuse qui donne l'illusion de la conformité. On recense, on
+    // ne comble pas.
     const composition = composeProgramme({
       recommendations: [reco('mandat_exclusivite', [candidat('m1', 'Suivi acheteur', 120, VENDEUR)])],
       rules: RULES,
@@ -198,10 +210,13 @@ describe('buildComposedProgramme — les objectifs viennent des modules retenus'
       diagnosticReference: 'DIAG-0001',
       sources: SOURCES,
       fallback: FALLBACK,
+      mentions: MENTIONS,
     });
 
-    expect(programme.objectives[0]).toBe('Maîtriser « Suivi acheteur »');
-    expect(programme.warnings.some((w) => w.includes('reformulés'))).toBe(true);
+    expect(programme.objectives).toEqual([]);
+    expect(programme.objectivesToWrite).toEqual(['Suivi acheteur']);
+    expect(programme.programMd).toContain('Objectifs restant à rédiger pour : Suivi acheteur');
+    expect(programme.warnings.some((w) => w.includes('restent À RÉDIGER'))).toBe(true);
   });
 });
 
@@ -239,7 +254,7 @@ describe('buildComposedProgramme — l’héritage des rubriques Qualiopi', () =
     expect(programme.evaluationMethods).toContain('QCM');
   });
 
-  it('signale une rubrique Qualiopi vide plutôt que d’émettre un programme troué', () => {
+  it('porte les mentions de l’organisme même quand AUCUNE source ne les déclare', () => {
     const muettes: SourceProgrammeInfo[] = [
       { ...SOURCES[1]!, code: 'BIB-D058', title: 'Booster vendeur' },
     ];
@@ -255,9 +270,12 @@ describe('buildComposedProgramme — l’héritage des rubriques Qualiopi', () =
       diagnosticReference: 'DIAG-0001',
       sources: muettes,
       fallback: FALLBACK,
+      mentions: MENTIONS,
     });
 
-    expect(programme.warnings.some((w) => w.includes('Rubrique Qualiopi vide'))).toBe(true);
+    expect(programme.pedagogicalMethods.trim().length).toBeGreaterThan(0);
+    expect(programme.evaluationMethods.trim().length).toBeGreaterThan(0);
+    expect(programme.accessibility.trim().length).toBeGreaterThan(0);
   });
 });
 
@@ -289,6 +307,7 @@ describe('buildComposedProgramme — la traçabilité suit le module', () => {
       diagnosticReference: 'DIAG-0001',
       sources: SOURCES,
       fallback: FALLBACK,
+      mentions: MENTIONS,
     });
 
     expect(programme.warnings.some((w) => w.includes('mots de leur intitulé'))).toBe(true);
@@ -307,9 +326,116 @@ describe('buildComposedProgramme — la traçabilité suit le module', () => {
       diagnosticReference: 'DIAG-0001',
       sources: SOURCES,
       fallback: FALLBACK,
+      mentions: MENTIONS,
     });
 
     expect(programme.durationHours).toBe(0);
     expect(programme.warnings.some((w) => w.includes('programme est vide'))).toBe(true);
+  });
+});
+
+describe('CONTRAT — un programme généré ne sort JAMAIS avec une rubrique d’organisme vide', () => {
+  /**
+   * La règle que ce fichier protège, et pourquoi elle vaut un test de contrat.
+   *
+   * L'accessibilité aux personnes en situation de handicap est l'**indicateur
+   * Qualiopi 26**. Une section blanche n'est pas un document incomplet qu'on
+   * corrigera plus tard : c'est une non-conformité le jour d'un audit. Les
+   * moyens pédagogiques et les modalités d'évaluation sont du même ordre.
+   *
+   * Le test balaie les cas où le trou apparaissait réellement : aucune source,
+   * des sources muettes, une composition vide.
+   */
+  const CAS: { nom: string; sources: SourceProgrammeInfo[]; modules: ModuleCandidate[] }[] = [
+    { nom: 'aucun programme source', sources: [], modules: [candidat('m1', 'Signer', 120, VENDEUR)] },
+    {
+      nom: 'des sources qui ne déclarent rien',
+      sources: [
+        {
+          code: 'BIB-D058', title: 'Booster vendeur', prerequisites: null, targetAudience: null,
+          pedagogicalMethods: null, evaluationMethods: null, accessibility: null,
+          trainerProfile: null, pedagogicalSupport: null, accessConditions: null,
+        },
+      ],
+      modules: [candidat('m1', 'Signer', 120, VENDEUR)],
+    },
+    { nom: 'une composition vide', sources: SOURCES, modules: [] },
+  ];
+
+  for (const cas of CAS) {
+    it(`reste conforme avec ${cas.nom}`, () => {
+      const composition = composeProgramme({
+        recommendations: cas.modules.length > 0 ? [reco('mandat_exclusivite', cas.modules)] : [],
+        rules: RULES,
+        envelopeHalfDays: 3,
+      });
+      const programme = buildComposedProgramme({
+        composition,
+        rules: RULES,
+        agencyName: 'Agence du Baou',
+        diagnosticReference: 'DIAG-0001',
+        sources: cas.sources,
+        fallback: FALLBACK,
+        mentions: MENTIONS,
+      });
+
+      for (const rubrique of ['pedagogicalMethods', 'evaluationMethods', 'accessibility'] as const) {
+        expect(programme[rubrique].trim(), `${rubrique} vide`).not.toBe('');
+      }
+      // Et le document rendu les porte réellement, pas seulement l'objet.
+      expect(programme.programMd).toContain('## Moyens pédagogiques et techniques');
+      expect(programme.programMd).toContain('## Modalités d’évaluation');
+      expect(programme.programMd).toContain(
+        '## Accessibilité aux personnes en situation de handicap',
+      );
+      for (const titre of [
+        'Moyens pédagogiques et techniques',
+        'Modalités d’évaluation',
+        'Accessibilité aux personnes en situation de handicap',
+      ]) {
+        const apres = programme.programMd.split(`## ${titre}`)[1] ?? '';
+        const corps = apres.split('\n##')[0]!.trim();
+        expect(corps.length, `section « ${titre} » blanche`).toBeGreaterThan(40);
+      }
+    });
+  }
+
+  it('nomme un référent joignable pour l’accessibilité (Qualiopi 26)', () => {
+    const { programme } = programmeReel();
+    expect(programme.accessibility).toContain('référent');
+    expect(programme.accessibility).toContain('@');
+  });
+});
+
+describe('deriveTargetAudience — le public visé se dérive, il ne se recopie pas', () => {
+  it('ne recopie JAMAIS le public visé d’un programme source', () => {
+    // Le défaut réel : le parcours de DIAG-0001 héritait du public d'un
+    // programme de marketing digital et l'annonçait à une agence immobilière.
+    const { programme } = programmeReel();
+    expect(programme.targetAudience).not.toContain('marketing');
+    expect(programme.targetAudience).not.toContain('Durée de la formation');
+    expect(programme.targetAudience).toContain('Agence des Oliviers');
+  });
+
+  it('utilise les profils que visent les modules retenus quand ils sont connus', () => {
+    const composition = composeProgramme({
+      recommendations: [
+        reco('mandat_exclusivite', [
+          { ...candidat('m1', 'Signer', 120, VENDEUR), targetProfile: 'manager' },
+        ]),
+      ],
+      rules: RULES,
+      envelopeHalfDays: 3,
+    });
+    const programme = buildComposedProgramme({
+      composition, rules: RULES, agencyName: 'Agence du Baou',
+      diagnosticReference: 'DIAG-0001', sources: SOURCES, fallback: FALLBACK, mentions: MENTIONS,
+    });
+    expect(programme.targetAudience.toLowerCase()).toContain('managers et responsables d’agence');
+  });
+
+  it('reste vrai et vérifiable quand aucun module ne déclare de profil', () => {
+    const { programme } = programmeReel();
+    expect(programme.targetAudience.toLowerCase()).toContain('conseillers immobiliers');
   });
 });

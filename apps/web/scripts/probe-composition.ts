@@ -21,7 +21,9 @@ import { prisma } from '@qualiof/db';
 
 import { buildAuditData } from '../src/lib/diagnostic-r1/audit-builder';
 import { loadFundingRules } from '../src/lib/financement/load-rules';
+import { loadOfConfig } from '../src/lib/of-config';
 import { seedContent, seedPricing, conventionedHoursOf } from '../src/lib/proposition/builder';
+import { resolveQualiopiMentions } from '../src/lib/docs/qualiopi-mentions';
 import { buildComposedProgramme } from '../src/lib/proposition/composed-programme';
 import { computePricing } from '../src/lib/proposition/pricing';
 import { buildQuoteDrafts } from '../src/lib/proposition/quotes';
@@ -41,7 +43,17 @@ const d = await prisma.diagnostic.findFirst({
 if (!d) throw new Error(`${ref} introuvable`);
 
 const { values: rules } = await loadFundingRules(d.tenantId);
-const tenant = await prisma.tenant.findFirst({ where: { id: d.tenantId }, select: { name: true } });
+const tenant = await prisma.tenant.findFirst({
+  where: { id: d.tenantId },
+  select: {
+    name: true,
+    qualiopiPedagogicalMethods: true,
+    qualiopiEvaluationMethods: true,
+    qualiopiAccessibility: true,
+  },
+});
+const tenantMentions = tenant;
+const of = await loadOfConfig(d.tenantId);
 
 const products = await prisma.trainingProduct.findMany({
   where: { tenantId: d.tenantId },
@@ -169,10 +181,14 @@ const programme = buildComposedProgramme({
     accessConditions: p.accessConditions,
   })),
   fallback: {
-    prerequisites: null, targetAudience: null, pedagogicalMethods: null,
-    evaluationMethods: null, accessibility: null, trainerProfile: null,
+    prerequisites: null, trainerProfile: null,
     pedagogicalSupport: null, accessConditions: null,
   },
+  mentions: resolveQualiopiMentions(tenantMentions, {
+    name: of.name,
+    email: of.email,
+    phone: of.phone,
+  }),
   moduleContent: new Map(products.flatMap((p) => p.modules.map((m) => [m.id, m.contentMd] as const))),
   moduleNeedIdentification: new Map(
     products.flatMap((p) =>
@@ -186,6 +202,10 @@ console.log(`  titre        : ${programme.title}`);
 console.log(`  durationHours: ${programme.durationHours} h CONVENTIONNÉES (${programme.onSiteHours} h sur site)`);
 console.log(`  objectifs    : ${programme.objectives.length}`);
 for (const o of programme.objectives) console.log(`    - ${o}`);
+if (programme.objectivesToWrite.length > 0) {
+  console.log(`  objectifs À RÉDIGER : ${programme.objectivesToWrite.length}`);
+  for (const o of programme.objectivesToWrite) console.log(`    ~ ${o}`);
+}
 for (const w of programme.warnings) console.log(`  ⚠ ${w}`);
 
 const out = path.resolve(process.cwd(), `../../.planning/${ref}-programme-compose.md`);

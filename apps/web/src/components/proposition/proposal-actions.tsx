@@ -50,6 +50,7 @@ export function ProposalActions({
   warnings,
   composedProductCode,
   composedModuleCount,
+  composedRemittable,
   freshness,
   hasPdf,
   documentId,
@@ -66,6 +67,8 @@ export function ProposalActions({
   composedProductCode: string | null;
   /** Combien de modules la proposition compose — 0 = rien à générer. */
   composedModuleCount: number;
+  /** `false` = le programme généré ne se remet à personne. `null` = rien de composé. */
+  composedRemittable: boolean | null;
   reviewedAt: string | null;
   blockers: string[];
   warnings: string[];
@@ -265,6 +268,14 @@ export function ProposalActions({
           {composedProductCode
             ? `Programme ${composedProductCode} — régénérer`
             : 'Générer le programme Qualiopi'}
+          {composedRemittable === false && (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800 dark:bg-red-900 dark:text-red-200"
+              title="Le programme se génère, mais il ne se remet ni au client ni au financeur tant que le catalogue n’a pas de déroulé ni d’objectifs pour ces modules."
+            >
+              à ne pas remettre
+            </span>
+          )}
         </button>
 
         {publicLinkActive ? (

@@ -27,7 +27,8 @@
  *     fusionnés avec lui : rattacher des modules à un produit actif changerait
  *     sa page publique « Programme détaillé », donc l'information préalable
  *     remise au client. **D-19 bis (arbitrage Laurent du 10/09/2026) : la
- *     version VENDUE fait foi.** Le rayon en doublon est donc créé, puis
+ *     version VENDUE fait foi** — et, entre deux RAYONS, l'arbitrage déclaré de
+ *     Laurent (`RAYONS_TRANCHES`). Le rayon en doublon est donc créé, puis
  *     `supersededByProductId` le pointe vers le produit vendu — il reste
  *     consultable, mais ses modules sortent du chemin de composition. Le lien
  *     est posé UNE fois et n'est jamais recalculé : si le dossier Drive est
@@ -53,7 +54,33 @@ loadEnv({ path: path.resolve(REPO_ROOT, '.env') });
 
 const { Modality, ProductFundingType } = await import('@prisma/client');
 const { prisma } = await import('../src/index.js');
-const { normalizeName } = await import('@qualiof/shared/helpers');
+const { catalogueTitleKey } = await import('@qualiof/shared/helpers');
+
+/**
+ * Les doublons RAYON ↔ RAYON tranchés par Laurent.
+ *
+ * D-19 bis sait trancher un rayon contre un produit VENDU — la version vendue
+ * fait foi. Entre deux RAYONS, aucune règle ne peut choisir : ils ont le même
+ * statut, il n'y a pas de convention ni de page publique qui départage. C'est
+ * donc une décision de catalogue, et elle se déclare ici, datée et motivée,
+ * plutôt que d'être passée une fois à la main sur une base.
+ *
+ * Le lien est posé dans `supersededByProductId`, exactement comme un doublon
+ * D-19 bis : le rayon écarté **reste en base et reste consultable**, seuls ses
+ * modules sortent du chemin de composition. Et comme tout lien déjà posé, il
+ * n'est **jamais recalculé** — c'est ce qui garantit qu'un prochain import du
+ * Drive ne réintroduira pas le doublon, même si le dossier est renommé.
+ *
+ * Clé : la source du rayon qui s'efface. Valeur : celle du rayon qui fait foi.
+ */
+const RAYONS_TRANCHES: Record<string, { garde: string; motif: string; date: string }> = {
+  'drive:020': {
+    garde: 'drive:008',
+    motif:
+      '008 est le numéro de ce programme dans la numérotation catalogue de Laurent (008 → 074) ; 020 est une copie rangée sous un autre numéro.',
+    date: '11/09/2026',
+  },
+};
 
 const APPLY = process.argv.includes('--apply');
 const TENANT_NAME = process.env.TENANT_DEFAULT_NAME ?? 'Start Academy';
@@ -206,8 +233,30 @@ const bySourceRef = new Map(
 const soldByTitle = new Map(
   existingProducts
     .filter((p) => p.sourceRef === null && p.isActive)
-    .map((p) => [normalizeName(p.title), p]),
+    .map((p) => [catalogueTitleKey(p.title), p]),
 );
+
+/**
+ * Les rayons DÉJÀ en base, par titre — pour voir les doublons rayon ↔ rayon.
+ *
+ * D-19 bis ne comparait un rayon qu'aux produits VENDUS. Deux dossiers Drive
+ * portant le même programme passaient donc tous les deux, et la liste de
+ * rattachement du 11/09 proposait deux fois le même module : `drive:008`
+ * « Face à face acheteurs » et `drive:020` « Face a face acheteurs ».
+ *
+ * On les SIGNALE, on ne les écarte pas : lequel des deux fait foi n'est pas
+ * une question d'import, c'est une décision de catalogue — et entre deux
+ * rayons il n'y a pas de « version vendue » pour trancher toute seule.
+ */
+const rayonsByTitle = new Map<string, { code: string; sourceRef: string; title: string }[]>();
+for (const p of existingProducts) {
+  if (p.sourceRef === null) continue;
+  const k = catalogueTitleKey(p.title);
+  rayonsByTitle.set(k, [
+    ...(rayonsByTitle.get(k) ?? []),
+    { code: p.code, sourceRef: p.sourceRef, title: p.title },
+  ]);
+}
 
 interface Line {
   ref: string;
@@ -257,8 +306,27 @@ for (const p of snapshot.programmes) {
     collisions.push(
       `\`${p.sourceRef}\` reste écarté au profit de \`${gardien?.code ?? '?'}\` (lien déjà posé, non recalculé).`,
     );
+  } else if (RAYONS_TRANCHES[p.sourceRef]) {
+    // Un doublon rayon ↔ rayon que Laurent a tranché. On cherche le rayon
+    // gardé par sa SOURCE et non par son titre : c'est justement le titre qui
+    // diffère entre deux exemplaires du même programme.
+    const arbitrage = RAYONS_TRANCHES[p.sourceRef]!;
+    const garde = existingProducts.find((x) => x.sourceRef === arbitrage.garde);
+    if (garde) {
+      supersededByProductId = garde.id;
+      collisions.push(
+        `\`${p.sourceRef}\` « ${p.title.slice(0, 50)} » est écarté au profit de \`${garde.code}\` (\`${arbitrage.garde}\`) — **arbitrage de Laurent du ${arbitrage.date}** : ${arbitrage.motif} Le rayon reste en base et reste consultable ; seuls ses modules sortent de la composition.`,
+      );
+      notes.push(`Écarté de la reco : doublon de \`${garde.code}\` (arbitrage du ${arbitrage.date}).`);
+    } else {
+      // Ne jamais écarter un rayon au profit d'un gardien introuvable : on
+      // retirerait du contenu de la reco sans rien mettre à la place.
+      collisions.push(
+        `⚠️ \`${p.sourceRef}\` devait être écarté au profit de \`${arbitrage.garde}\`, **introuvable en base** : aucun lien posé, le doublon reste entier.`,
+      );
+    }
   } else {
-    const twin = soldByTitle.get(normalizeName(p.title));
+    const twin = soldByTitle.get(catalogueTitleKey(p.title));
     if (twin) {
       supersededByProductId = twin.id;
       collisions.push(
@@ -371,6 +439,32 @@ for (const p of snapshot.programmes) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Doublons RAYON ↔ RAYON — signalés, jamais tranchés d'office
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// D-19 bis ne compare un rayon qu'aux produits VENDUS : entre deux rayons, il
+// n'y a pas de « version vendue » pour trancher. Deux dossiers Drive portant le
+// même programme passaient donc tous les deux — et la reco proposait deux fois
+// le même module, ce qu'a montré la liste de rattachement du 11/09/2026.
+//
+// Le choix appartient à Laurent : garder le dossier le mieux découpé, pas le
+// premier arrivé. On lui donne la paire et de quoi choisir.
+
+for (const p of snapshot.programmes) {
+  if (p.modules.length === 0) continue;
+  const k = catalogueTitleKey(p.title);
+  const deja = rayonsByTitle.get(k) ?? [];
+  if (!deja.some((r) => r.sourceRef === p.sourceRef)) {
+    rayonsByTitle.set(k, [
+      ...deja,
+      { code: shelfCode(p), sourceRef: p.sourceRef, title: p.title },
+    ]);
+  }
+}
+
+const jumeauxDeRayon = [...rayonsByTitle.values()].filter((g) => g.length > 1);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Rapport
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -387,7 +481,12 @@ const lines: string[] = [
   `- **${total} modules** entrent dans la bibliothèque`,
   `- **aucun rayon activé** — corollaire D-19 du 10/09/2026 : ce qui devient vendable est le programme COMPOSÉ (lot I-2), jamais le conteneur importé`,
   `- **aucun produit existant modifié** — les doublons écartent le RAYON, jamais le produit vendu (D-19 bis)`,
-  `- **${report.filter((l) => l.notes.some((n) => n.includes('D-19 bis'))).length}** rayon(s) écarté(s) de la reco pour doublon`,
+  `- **${report.filter((l) => l.notes.some((n) => n.includes('D-19 bis'))).length}** rayon(s) écarté(s) de la reco pour doublon d'un produit vendu (D-19 bis)`,
+  ...(jumeauxDeRayon.length > 0
+    ? [
+        `- ⚠️ **${jumeauxDeRayon.length}** programme(s) importé(s) DEUX FOIS depuis deux dossiers source — signalés plus bas, **rien n'a été écarté** : entre deux rayons, c'est une décision de catalogue`,
+      ]
+    : []),
   '',
 ];
 
@@ -407,6 +506,26 @@ if (collisions.length > 0) {
     '',
   );
   for (const c of collisions) lines.push(`- ${c}`);
+  lines.push('');
+}
+
+if (jumeauxDeRayon.length > 0) {
+  lines.push(
+    '## ⚠️ À trancher — le même programme importé deux fois',
+    '',
+    'Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dossiers source différents. D-19 bis ne sait pas les départager : il compare un rayon aux produits VENDUS, et entre deux rayons il n’y a pas de version vendue qui fasse foi.',
+    '',
+    '**Rien n’a été écarté.** Le choix t’appartient — garde le dossier le mieux découpé, pas le premier arrivé. Tant que les deux sont là, la recommandation propose deux fois le même module et mange deux places sur trois.',
+    '',
+    '| Programme | Rayons en double |',
+    '|---|---|',
+  );
+  for (const g of jumeauxDeRayon) {
+    const membres = g
+      .map((r) => `\`${r.code}\` (\`${r.sourceRef}\`) « ${r.title} »`)
+      .join('<br>');
+    lines.push(`| ${g[0]!.title.slice(0, 60)} | ${membres} |`);
+  }
   lines.push('');
 }
 

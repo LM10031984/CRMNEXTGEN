@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { computeRatios } from '../ratios';
-import { computeScoring, SCORING_VERSION } from '../scoring';
+import { computeScoring, listDiagnosticPainPoints, SCORING_VERSION } from '../scoring';
 
 /**
  * Un score se justifie ou n'existe pas. Ces tests protègent surtout une chose :
@@ -182,5 +182,37 @@ describe('Le détail qui justifie le score', () => {
 describe('Déterminisme', () => {
   it('deux calculs identiques donnent le même score', () => {
     expect(score(AGENCE_SAINE)).toEqual(score(AGENCE_SAINE));
+  });
+});
+
+describe('Champ du rattachement — toutes les douleurs ne sont pas des besoins de formation', () => {
+  /**
+   * Relevé à la relecture du 11/09/2026 : « Le dirigeant connaît ses droits à
+   * formation » recevait en proposition un programme de déontologie, accroché
+   * par le seul mot « formation ». Ce n'est pas un mauvais rapprochement, c'est
+   * un rapprochement impossible : la réponse à cette douleur est un dossier
+   * AGEFICE, pas un module.
+   */
+  const HORS_CHAMP = ['transaction-ancien', 'droits-connus', 'formations-24m', 'sans-refus'];
+
+  it('quatre douleurs — contexte et financement — ne peuvent recevoir aucun module', () => {
+    const horsChamp = listDiagnosticPainPoints()
+      .filter((p) => !p.answerableByTraining)
+      .map((p) => p.ruleId);
+    expect(horsChamp.sort()).toEqual([...HORS_CHAMP].sort());
+  });
+
+  it('toutes les autres restent dans le champ — la liste ne se referme pas sur elle-même', () => {
+    const dedans = listDiagnosticPainPoints().filter((p) => p.answerableByTraining);
+    expect(dedans.length).toBe(listDiagnosticPainPoints().length - HORS_CHAMP.length);
+    // Les chapitres 1 et 2 qualifient le contexte et le financement ; tout le
+    // reste décrit une pratique commerciale, donc quelque chose qui s'apprend.
+    expect(dedans.every((p) => p.chapter >= 3)).toBe(true);
+  });
+
+  it('sortir du champ ne sort pas du score — la douleur reste notée', () => {
+    // Sinon on perdrait la moitié de la lecture du chapitre 2 en rendez-vous.
+    const chapitres = new Set(score(AGENCE_SAINE).chapters.map((c) => c.chapter));
+    expect(chapitres.has(2)).toBe(true);
   });
 });
