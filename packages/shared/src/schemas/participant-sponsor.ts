@@ -1,5 +1,6 @@
 /**
- * Zod — « Financeur de l'inscription » (décision Laurent 11/09/2026).
+ * Zod — « Organisation commanditaire » (décision Laurent 11/09/2026, libellé
+ * rectifié le même jour par la correction n°7 bis).
  *
  * Le commanditaire d'une inscription (`SessionParticipant.sponsorOrgId`) n'était
  * posé qu'à la création. Une inscription rattachée à la mauvaise organisation

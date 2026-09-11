@@ -1,7 +1,13 @@
 'use server';
 
 /**
- * « Financeur de l'inscription » — corriger le commanditaire d'une inscription.
+ * « Organisation commanditaire » — corriger le commanditaire d'une inscription.
+ *
+ * ⚠ LE CHAMP S'EST APPELÉ « Financeur de l'inscription » jusqu'au 11/09/2026
+ * (correction n°7 bis) : trompeur, puisqu'on y choisit une ORGANISATION et que
+ * le financeur n'est qu'une information qu'elle porte. L'action, elle, n'a pas
+ * changé de nom — `changerFinanceurInscription` change bien le financeur DE
+ * FAIT, en changeant l'organisation qui le porte.
  * Décision Laurent du 11/09/2026 (retours d'écran C.2b, point 7).
  *
  * LE MANQUE QU'ELLE COMBLE. `SessionParticipant.sponsorOrgId` n'était posé qu'à
@@ -39,7 +45,7 @@ import { verrouChangementFinanceur } from '@/lib/enrollment/verrou-financeur';
 
 export type ResultatAction = { ok: true } | { ok: false; error: string };
 
-/** Une organisation proposée dans le sélecteur « Financeur de l'inscription ». */
+/** Une organisation proposée dans le sélecteur « Organisation commanditaire ». */
 export interface FinanceurPropose {
   id: string;
   /** `brandName ?? legalName` — ce que l'admin reconnaît à l'écran. */

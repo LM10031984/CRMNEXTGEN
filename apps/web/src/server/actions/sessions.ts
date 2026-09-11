@@ -299,7 +299,7 @@ export async function updateParticipant(input: {
   priceHT?: number;
   enrollmentStatus?: keyof typeof EnrollmentStatus;
   // ⚠ PAS de `sponsorOrgId` ICI, et ce n'est pas un oubli (lot C.2b-5, 11/09/2026).
-  // Le financeur de l'inscription a désormais sa propre action,
+  // L'organisation commanditaire de l'inscription a désormais sa propre action,
   // `changerFinanceurInscription` (@/server/actions/participant-sponsor), parce
   // qu'il porte deux REFUS que cette action-ci n'a jamais opposés : dossier de
   // prise en charge déjà parti chez le financeur, et pièce déjà signée. La
@@ -358,7 +358,7 @@ export async function updateParticipant(input: {
     before.enrollmentStatus = part.enrollmentStatus;
     after.enrollmentStatus = input.enrollmentStatus;
   }
-  // (Le financeur de l'inscription se change par `changerFinanceurInscription`
+  // (L'organisation commanditaire se change par `changerFinanceurInscription`
   // — cf. le commentaire sur la signature ci-dessus.)
   if (input.financingRequestDate !== undefined) {
     let newDate: Date | null;
