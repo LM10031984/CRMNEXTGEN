@@ -474,6 +474,45 @@ est le numéro de ce programme dans la numérotation catalogue de Laurent**
    n'est posé et le rapport le signale. Écarter au profit d'un gardien absent
    retirerait du contenu de la reco sans rien mettre à la place.
 
+##### Chantier identifié — nettoyage de l'extraction Drive (11/09/2026)
+
+Écrire les rattachements a fait entrer de vrais modules dans le programme
+composé de DIAG-0001, et **ce qu'ils ont remplacé masquait trois défauts de
+données**. Ils n'étaient pas visibles tant que les créneaux étaient tenus par
+des modules du catalogue diagnostic sans déroulé : une place vide ne montre
+rien. Ce n'est **pas** de l'écriture de contenu — c'est du travail de machine
+sur l'extraction, et il se planifie à part.
+
+1. **Les pieds de page de programme ont été avalés dans les déroulés de
+   modules.** « QCM évaluation des acquis », « Questionnaire de satisfaction et
+   clôture de la formation », et jusqu'aux états de service des formateurs
+   (« Tous les formateurs de l'équipe Start-Academy ont minimum 8 années
+   d'expérience… ») figurent comme des **puces du déroulé** de `BIB-D034` et de
+   `BIB-D012`. Ce sont des **mentions d'organisme** — elles ont leur section
+   dédiée depuis les trois colonnes `Tenant.qualiopi*`. Sur le programme de
+   DIAG-0001, « Gérer les objections » se termine donc par l'expérience des
+   formateurs présentée comme une étape pédagogique, et un financeur le lit.
+
+2. **Certains « modules » sont des journées entières.** `BIB-D012` « Pratiquer
+   une découverte acheteur… » porte **38 puces** et un « Après-midi : » en plein
+   milieu, pour une durée déclarée de **60 min**. L'extraction ne l'a pas
+   découpé : le rapport d'import du 10/09 le signalait déjà sous « 17 programmes
+   en bloc unique », et la conséquence se voit maintenant sur un document
+   client. Effet de bord à connaître : un tel module fausse le remplissage des
+   blocs de 8 h (D-20), puisqu'il annonce 60 min pour une journée de contenu.
+
+3. **Les titres ne sont pas présentables.** Deux-points final (« …besoins des
+   acheteurs : », 114 caractères), capitales erratiques (« Mettre en Pratique
+   des Situations de Découverte du Projet Acheteur-Vendeur »), titres muets pour
+   un client (« Suivi », « e réputation »). Le point qui aggrave : **les
+   objectifs pédagogiques dérivent des titres** — chaque défaut de titre devient
+   un défaut d'objectif sur la pièce remise au financeur.
+
+**Ce que ce chantier n'est PAS** : l'écriture des déroulés manquants. Trois
+modules sortent encore « déroulé à compléter » sur DIAG-0001 — c'est du contenu,
+c'est le chantier de Laurent, et le confondre avec celui-ci ferait attendre
+l'un pour l'autre.
+
 ##### D-19 ter — un programme **NON DIFFUSABLE** ne sort jamais, ni lui ni ses modules (relecture du 11/09/2026)
 
 La liste de rattachement du 11/09 proposait **« L'Agent Incomparable » en tête

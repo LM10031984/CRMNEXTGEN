@@ -37,7 +37,9 @@
     "docs:empreintes": "dotenv -e ../../.env -- tsx scripts/coherence-empreintes.ts",
     "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts",
     "invoices:backfill-lines": "dotenv -e ../../.env -- tsx scripts/backfill-invoice-lines.ts",
-    "invoices:audit-chronology": "dotenv -e ../../.env -- tsx scripts/audit-invoice-chronology.ts"
+    "invoices:audit-chronology": "dotenv -e ../../.env -- tsx scripts/audit-invoice-chronology.ts",
+    "ecrire:rattachements": "dotenv -e ../../.env -- tsx scripts/ecrire-rattachements.ts",
+    "ecrire:rattachements:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/ecrire-rattachements.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {

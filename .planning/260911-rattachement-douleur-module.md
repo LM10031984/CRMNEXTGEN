@@ -32,7 +32,7 @@ Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en ba
 | 2 | **Découverte vendeur formalisée**<br><small>ch. 4 — RDV vendeur, découverte & estimation</small> | tous | Maîtriser les techniques de découverte vendeur | BIB-D017 |
 | | _puis_ | | Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
 | 3 | **Rythme de suivi vendeur**<br><small>ch. 6 — Commercialisation & suivi vendeur</small> | tous | Préparer un Excellent Dossier de Suivi Vendeur | BIB-D037 |
-| | _ta réserve_ | | La douleur porte sur le **rituel** de suivi, le module sur la **préparation du dossier** — ce n’est pas tout à fait la même chose. Retenu parce que c’est le meilleur contenu existant, et repéré comme un endroit où écrire. | |
+| | _ta réserve_ | | La douleur porte sur le RITUEL de suivi, le module sur la PRÉPARATION du dossier. Retenu comme le meilleur contenu existant, et repéré comme un endroit où écrire. | |
 | 4 | **Transformation offres → compromis**<br><small>ch. 8 — Visites, offres & transformation</small> | tous | Rédiger des compromis de vente efficaces | BIB-D034 |
 | | _puis_ | | Gérer les objections et trouver des solutions de compromis | BIB-D034 |
 | 5 | **Les conseillers tiennent le prix de rentrée**<br><small>ch. 5 — Mandats & exclusivité</small> | complet seulement | Convaincre le vendeur avec des arguments solides | BIB-D017 |
@@ -41,7 +41,9 @@ Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en ba
 | 7 | **Modèles de prompts communs à l'équipe**<br><small>ch. 10 — Outils & IA</small> | complet seulement | L'intelligence artificielle au service des conseillers immobiliers (72h) | PROD-0042 |
 | | _puis_ | | L'intelligence artificielle au service des conseillers immobiliers - 16h | PROD-0066 |
 | | _puis_ | | L'IA au service des conseillers immobiliers (8h) | PROD-0058 |
+| | _ta réserve_ | | ⚠️ **Pas encore écrit en base.** Ces trois produits sont VENDUS et ne portent aucun module : leur programme vit dans `programMd`. Un signal se pose sur un module — il n’y a rien où le poser. | |
 | 8 | **Coaching individuel régulier**<br><small>ch. 11 — Management, pilotage & vision</small> | complet seulement | Coaching Indiv | PROD-c0c85e08 |
+| | _ta réserve_ | | ⚠️ **Pas encore écrit en base.** Même cas : produit vendu, aucun module, contenu dans `programMd`. | |
 | 9 | **Trame d'appel commune**<br><small>ch. 3 — Prospection & entrées vendeurs</small> | complet seulement | Apprendre à vendre un rendez-vous découverte au téléphone | BIB-D006 |
 
 ---
