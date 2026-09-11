@@ -324,6 +324,82 @@ describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)
     expect(line).toContain('a***@example.com');
   });
 
+  it('B1 bis. la chaîne SIGNATURE respecte MAIL_DRY_RUN comme les autres — rien ne part', async () => {
+    // La demande est créée chez le prestataire, mais en local rien ne doit
+    // sortir : c'est la couche env, PRIORITAIRE sur les réglages tenant. Un
+    // envoi de signature qui la contournerait enverrait un vrai lien à un vrai
+    // signataire depuis le Mac d'un développeur.
+    process.env.MAIL_DRY_RUN = 'true';
+    process.env.SMTP_HOST = 'ssl0.ovh.net';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toEqual({ ok: true, dryRun: true });
+    expect(settingsFindUnique).not.toHaveBeenCalled();
+    expect(smtpSendMail).not.toHaveBeenCalled();
+    const line = logSpy.mock.calls.map((c) => String(c[0])).find((l) => l.includes('dry-run'));
+    expect(line).toContain('category=signature');
+    // D-17 : jamais l'adresse complète dans un log.
+    expect(line).not.toContain('responsable@agence.fr');
+  });
+
+  it('B1 ter. SMTP_HOST vide ⇒ dry-run aussi, pour la signature comme pour le reste', async () => {
+    delete process.env.MAIL_DRY_RUN;
+    delete process.env.SMTP_HOST;
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toEqual({ ok: true, dryRun: true });
+    expect(smtpSendMail).not.toHaveBeenCalled();
+  });
+
+  it('B1 quater. SMTP configuré + catégorie signature DÉCOCHÉE ⇒ supprimé, tracé, jamais de throw', async () => {
+    process.env.MAIL_DRY_RUN = 'false';
+    process.env.SMTP_HOST = 'ssl0.ovh.net';
+    settingsFindUnique.mockResolvedValue({
+      emailsEnabled: true,
+      invoiceRemindersEnabled: true,
+      preinscriptionRemindersEnabled: true,
+      opcoRemindersEnabled: true,
+      opcoSubmissionsEnabled: true,
+      internalNotificationsEnabled: true,
+      userInvitationsEnabled: true,
+      diagnosticProgramsEnabled: true,
+      newLeadAlertsEnabled: true,
+      preEnrollmentAlertsEnabled: true,
+      signatureEmailsEnabled: false,
+      testSessionIds: [],
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toMatchObject({ ok: true, dryRun: true, suppressed: true });
+    expect(smtpSendMail).not.toHaveBeenCalled();
+    const line = logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.includes('suppressed-by-settings'));
+    expect(line).toBeDefined();
+    expect(line).not.toContain('responsable@agence.fr');
+  });
+
   it('B2. env OK mais settings null (fail-closed) → suppressed:true, jamais de throw, destinataire masqué', async () => {
     process.env.MAIL_DRY_RUN = 'false';
     process.env.SMTP_HOST = 'ssl0.ovh.net';
