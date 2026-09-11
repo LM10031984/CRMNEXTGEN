@@ -98,7 +98,13 @@ function readRows(): PARecord[] {
   // Le bundle xlsx CDN bloque l'accès direct au fs : on lit le buffer manuellement.
   const buffer = fs.readFileSync(FILE);
   const wb = XLSX.read(buffer, { type: 'buffer' });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  // Le classeur peut être vide : l'index [0] n'existe alors pas, et indexer
+  // `Sheets` avec `undefined` renverrait silencieusement `undefined` — puis
+  // `sheet_to_json` rendrait zéro ligne, donc « import réussi, 0 record ».
+  const premierOnglet = wb.SheetNames[0];
+  if (premierOnglet === undefined) throw new Error(`Classeur sans onglet : ${FILE}`);
+  const sheet = wb.Sheets[premierOnglet];
+  if (sheet === undefined) throw new Error(`Onglet « ${premierOnglet} » introuvable dans ${FILE}`);
   const raws = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: null });
 
   const records: PARecord[] = [];
@@ -138,7 +144,7 @@ function pickClosestPA(orgPostalCode: string | null | undefined, orgCity: string
   const dept = deptFromPostalCode(orgPostalCode);
   const candidates = pas.filter((p) => p.department === dept);
   if (candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0];
+  if (candidates.length === 1) return candidates[0] ?? null;
 
   if (orgCity) {
     const oCity = normalizeName(orgCity);
@@ -151,7 +157,7 @@ function pickClosestPA(orgPostalCode: string | null | undefined, orgCity: string
     if (prefix) return prefix;
   }
   // Fallback : 1er PA du département (ordre alpha de l'import)
-  return [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0];
+  return [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0] ?? null;
 }
 
 async function phase1ImportRefentiel(records: PARecord[]) {

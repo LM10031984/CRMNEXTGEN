@@ -191,7 +191,7 @@ for (const part of parts) {
     const effPrice = Number(part.priceHT) > 0 ? Number(part.priceHT) : Number(p.priceHT);
     const orgAddr = part.sponsorOrg.address as any;
     const convData: any = {
-      beneficiaireRaisonSociale: part.sponsorOrg.legalName ?? part.sponsorOrg.name,
+      beneficiaireRaisonSociale: part.sponsorOrg.legalName,
       beneficiaireSiret: part.sponsorOrg.siret ?? null,
       beneficiaireRcsVille: orgAddr?.city ?? null,
       beneficiaireRepresentantNom: repr,

@@ -163,7 +163,7 @@ async function main() {
   interface Plan {
     sessionId: string;
     sessionCode: string;
-    sessionName: string;
+    sessionName: string | null;
     formateurTableau: string;
     personIdToAssign: string;
     personNameToAssign: string;
@@ -294,7 +294,16 @@ async function main() {
         if (p.actionNeeded === 'NO_OP') continue;
         if (p.actionNeeded === 'CREATE') {
           await prisma.sessionTrainer.create({
-            data: { sessionId: p.sessionId, personId: p.personIdToAssign, isPrimary: true },
+            // `role` est OBLIGATOIRE au schéma et manquait : ces créations
+            // échouaient à l'exécution. La convention du reste du code est
+            // 'LEAD' pour le formateur principal, 'CO' pour les co-formateurs
+            // (cf. `sessions-create.ts`) — et c'est bien un principal ici.
+            data: {
+              sessionId: p.sessionId,
+              personId: p.personIdToAssign,
+              role: 'LEAD',
+              isPrimary: true,
+            },
           });
           nCreate++;
         } else if (p.actionNeeded === 'UPDATE_TO_PRIMARY') {
@@ -314,7 +323,16 @@ async function main() {
             data: { isPrimary: false },
           });
           await prisma.sessionTrainer.create({
-            data: { sessionId: p.sessionId, personId: p.personIdToAssign, isPrimary: true },
+            // `role` est OBLIGATOIRE au schéma et manquait : ces créations
+            // échouaient à l'exécution. La convention du reste du code est
+            // 'LEAD' pour le formateur principal, 'CO' pour les co-formateurs
+            // (cf. `sessions-create.ts`) — et c'est bien un principal ici.
+            data: {
+              sessionId: p.sessionId,
+              personId: p.personIdToAssign,
+              role: 'LEAD',
+              isPrimary: true,
+            },
           });
           nPromote++;
         }

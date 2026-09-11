@@ -89,3 +89,5 @@ for (const sp of check) {
   );
 }
 await prisma.$disconnect();
+
+export {};

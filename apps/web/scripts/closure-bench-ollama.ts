@@ -43,6 +43,9 @@ async function main() {
     anciennete: p.professionalExperience ?? null,
     diplomes: p.diplomas ?? null,
     professionalStatus: p.professionalStatus ?? null,
+    // `civilite` pilote l'accord en genre dans les prompts rédactionnels : la
+    // fixture du banc l'omettait, donc le banc ne mesurait pas le vrai prompt.
+    civilite: p.civility ?? null,
   };
 
   console.log('▶️  generate-qcm…');

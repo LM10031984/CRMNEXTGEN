@@ -51,7 +51,7 @@ async function main() {
   // ── Récupérations préalables ────────────────────────────────────────
   const session = await prisma.trainingSession.findFirst({
     where: { code: SESSION_CODE },
-    include: { product: true },
+    include: { product: true, _count: { select: { participants: true } } },
   });
   if (!session) throw new Error(`${SESSION_CODE} introuvable`);
 
@@ -73,7 +73,10 @@ async function main() {
   log(`État actuel SES-0086 :`);
   log(`  productId actuel`, `${session.product?.code} (attendu : ${CORRECT_PRODUCT_CODE})`);
   log(`  pricePerLearner actuel`, `${session.pricePerLearner}€ (attendu : ${CORRECT_PRICE_HT_PER_LEARNER}€)`);
-  log(`  participants`, session.participantsCount ?? '(non précisé)');
+  // `participantsCount` n'existe pas sur cette requête : le compte réel se lit
+  // sur la relation. Le champ inventé rendait `undefined`, donc « (non précisé) »
+  // en toutes circonstances — un diagnostic qui ne diagnostique rien.
+  log(`  participants`, session._count.participants);
   log(`  docs IA non-superseded (cert+conv)`, oldDocs.length);
   log(`  programMd PROD-0671 longueur`, correctProduct.programMd?.length ?? 0);
 

@@ -46,6 +46,7 @@ const asset = await prisma.pedagogicalAsset.findFirstOrThrow({
 });
 console.log(`PedagogicalAsset pdfUrl=${asset.pdfUrl} generatedAt=${asset.generatedAt.toISOString()}`);
 
+if (!asset.pdfUrl) throw new Error('PedagogicalAsset sans pdfUrl — rien à télécharger.');
 const pdf = await downloadFile(DOCS_BUCKET, asset.pdfUrl);
 const OUT = '/tmp/closure-day2/analyse-besoin-VIA-WORKER.pdf';
 fs.mkdirSync('/tmp/closure-day2', { recursive: true });

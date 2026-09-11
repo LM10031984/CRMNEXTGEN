@@ -14,6 +14,8 @@ if (sophie) {
   console.log('— Sophie Lasselin participations :', parts.map((p:any)=>p.session.code).join(', '));
 }
 // location Mandelieu existe ?
-const loc = await prisma.location.findMany({ where: { OR:[{ name:{ contains:'mandelieu', mode:'insensitive' } }, { address:{ contains:'mandelieu', mode:'insensitive' } }, { address:{ contains:'cannes', mode:'insensitive' } }] }, select:{ id:true, name:true, address:true } });
+const loc = await prisma.location.findMany({ where: { OR:[{ name:{ contains:'mandelieu', mode:'insensitive' } }, { address:{ string_contains:'andelieu' } }, { address:{ string_contains:'annes' } }] }, select:{ id:true, name:true, address:true } });
 console.log('— Locations Mandelieu/cannes —', JSON.stringify(loc));
 await prisma.$disconnect();
+
+export {};

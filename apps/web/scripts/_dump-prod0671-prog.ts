@@ -4,3 +4,5 @@ console.log('objectives:', JSON.stringify(p.objectives));
 console.log('\n===== programMd COMPLET =====\n');
 console.log(p.programMd);
 await prisma.$disconnect();
+
+export {};

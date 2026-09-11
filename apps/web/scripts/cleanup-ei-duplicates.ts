@@ -89,11 +89,22 @@ async function main() {
       continue;
     }
     const [a, b] = p.legalLinks.map((l) => l.organization);
+    // La garde au-dessus n'a laissé passer que les personnes à DEUX liens ; le
+    // compilateur ne le déduit pas d'un `.map()`. On le vérifie plutôt que de
+    // forcer : ce script SUPPRIME des organisations, une paire incomplète ici
+    // ferait fusionner n'importe quoi.
+    if (!a || !b) {
+      ambiguous.push(p);
+      continue;
+    }
     if (normalizeName(a.legalName) !== normalizeName(b.legalName)) {
       ambiguous.push(p);
       continue;
     }
-    const [aCount, bCount] = await Promise.all([countRelations(a.id), countRelations(b.id)]);
+    const [aCount = 0, bCount = 0] = await Promise.all([
+      countRelations(a.id),
+      countRelations(b.id),
+    ]);
     // Canonical = celle avec le plus de relations ; tie-break par plus ancienne
     const aWins = aCount > bCount || (aCount === bCount && a.createdAt < b.createdAt);
     const canonical = aWins

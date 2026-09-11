@@ -103,6 +103,54 @@ aussi en CI. S'il rougit, c'est le schéma ou la migration qui ment, pas lui.
   `DATABASE_URL`/`DIRECT_URL` sur la ligne de commande, jamais en lisant le `.env`
   du dépôt — qui, lui, pointe la production.
 
+## 4 bis. Les scripts sont du code de production — ils sont vérifiés
+
+**Un garde-fou qui ne garde pas est pire que pas de garde-fou, parce qu'on lui
+fait confiance.** C'est la même famille que l'index GIN et que le `db push` en
+CI, et le troisième cas est arrivé le 11/09/2026.
+
+`apps/web/scripts/**` n'était couvert par aucun `tsconfig` : `include` ne prenait
+que `src/**`. `packages/db/scripts/**` non plus. On lançait pourtant
+`tsc --noEmit` avant chaque livraison, et on croyait le dépôt vérifié — alors que
+**soixante-et-onze scripts écrivant en base** ne l'étaient pas, dont les deux
+imports qui construisent tout le catalogue.
+
+Ce que la couverture a révélé en s'ouvrant, en une seule passe :
+
+- une création `SessionTrainer` sans son champ obligatoire `role` — elle
+  échouait à l'exécution ;
+- un `Json` nullable passé à `null` au lieu de `Prisma.JsonNull` dans l'importeur
+  SmartOF — il aurait planté sur la première personne sans adresse ;
+- de l'arithmétique sur des `Decimal` dans un **rapprochement de trésorerie**,
+  qui « marchait » par coercition en chaîne ;
+- un classeur vide qui importait silencieusement zéro ligne en annonçant un
+  succès ;
+- deux assertions de type (`as never` sur les arguments, `as Array<…>` sur le
+  résultat) qui se neutralisaient en masquant une requête incomplète ;
+- et l'origine du signalement : un mapping en quatre exemplaires dont deux
+  avaient décroché, qui a fait rendre à une sonde **un parcours vide en
+  annonçant 9 demi-journées**, sur un dossier réel.
+
+Aucun de ces défauts n'était subtil. Ils étaient simplement hors de portée du
+seul outil qui les aurait vus.
+
+**La règle** : tout script qui écrit en base est couvert par un `tsconfig`.
+
+- `apps/web` : `tsconfig.scripts.json`, branché sur `pnpm lint` (il reste hors
+  du `tsconfig.json` du build — `next build` n'a pas à type-vérifier des scripts
+  Node, ça ralentirait sans rien protéger de plus).
+- `packages/db` : `scripts/**/*` est dans l'`include` du `tsconfig.json`.
+
+**Et le garde se garde lui-même** : `src/lib/__tests__/scripts-sous-tsc.test.ts`
+balaie le dépôt et échoue si un dossier de scripts écrivant en base apparaît hors
+couverture. Sans lui, la prochaine application naîtrait avec le même trou, et on
+recommencerait à faire confiance à un `tsc` qui ne regarde pas.
+
+**Corollaire, pour le jour où une duplication se présente** : le mapping
+« ligne Prisma → type du moteur » vit à UN seul endroit
+(`src/server/proposition-library.ts`). Dupliquer un mapping dans un dossier non
+vérifié, c'est se garantir une divergence muette.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

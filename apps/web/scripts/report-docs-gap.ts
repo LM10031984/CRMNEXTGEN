@@ -157,9 +157,13 @@ async function main(): Promise<void> {
     ClosureJob: missing.closureJob.length,
   };
   console.log('## Phase A — inventaire (lignes locales absentes du cloud)');
-  for (const [t, n] of Object.entries(counts)) console.log(`   ${t} : ${n} (borne ${VOLUME_BOUNDS[t]})`);
+  for (const [t, n] of Object.entries(counts))
+    console.log(`   ${t} : ${n} (borne ${VOLUME_BOUNDS[t] ?? 'non définie'})`);
 
-  const overflow = Object.entries(counts).filter(([t, n]) => n > VOLUME_BOUNDS[t]);
+  // `Object.entries` rend des clés `string` : rien ne garantit au compilateur
+  // qu'elles sont dans VOLUME_BOUNDS. Une borne absente vaut 0 — un garde-fou
+  // de volume qui laisse passer faute de borne ne garde rien.
+  const overflow = Object.entries(counts).filter(([t, n]) => n > (VOLUME_BOUNDS[t] ?? 0));
   if (overflow.length > 0) {
     console.error(`\n⛔ GARDE-FOU VOLUMES : ${overflow.map(([t, n]) => `${t}=${n}`).join(', ')} dépasse les bornes — STOP sans écrire.`);
     await local.$disconnect();

@@ -159,8 +159,14 @@ async function main() {
       personName: `${sp.person?.firstName ?? ''} ${sp.person?.lastName ?? ''}`.trim(),
       sessionCode: sp.session?.code ?? null,
       sessionStart: sp.session?.startDate ? new Date(sp.session.startDate).toISOString().slice(0, 10) : '',
-      priceHT: sp.priceHT,
-      amountCollected: sp.amountCollected,
+      // `Decimal` → `number` ICI, une fois, comme partout ailleurs dans le
+      // projet. Plus bas, `Math.abs(sp.priceHT - montant)` faisait de
+      // l'arithmétique sur un objet Decimal : ça « marche » par coercition en
+      // chaîne, jusqu'au jour où un montant à plus de 15 chiffres significatifs
+      // ou une notation exponentielle rend un écart faux — sur un
+      // rapprochement de trésorerie.
+      priceHT: sp.priceHT === null ? null : Number(sp.priceHT),
+      amountCollected: sp.amountCollected === null ? null : Number(sp.amountCollected),
       invoiceSent: sp.invoiceSent,
       paymentReceived: sp.paymentReceived,
       opcoApproved: sp.opcoApproved,
@@ -170,7 +176,7 @@ async function main() {
     if (finalCandidates.length > 1) {
       // Plusieurs candidats : vérifier si l'un correspond exactement au montant
       const exactMatch = finalCandidates.find(
-        (sp) => sp.priceHT !== null && Math.abs(sp.priceHT - (treso.montantTotal ?? 0)) < 0.01,
+        (sp) => sp.priceHT !== null && Math.abs(Number(sp.priceHT) - (treso.montantTotal ?? 0)) < 0.01,
       );
       if (exactMatch) {
         results.push({
@@ -194,7 +200,7 @@ async function main() {
 
     // 1 seul candidat : comparer montant
     const sp = finalCandidates[0]!;
-    const bdd = sp.priceHT ?? 0;
+    const bdd = sp.priceHT === null ? 0 : Number(sp.priceHT);
     const xls = treso.montantTotal ?? 0;
     if (Math.abs(bdd - xls) < 0.01) {
       results.push({

@@ -23,3 +23,5 @@ console.log('  total participants (somme) :', sessions.reduce((a,s)=>a+s._count.
 console.log('\n— échantillon (5 premières / 5 dernières) —');
 for (const s of [...sessions.slice(0,5), ...sessions.slice(-5)]) console.log(`  ${s.code} | ${s.startDate?.toISOString().slice(0,10)}→${s.endDate?.toISOString().slice(0,10)} | ${s.status} | ${s._count.participants} pers | ${s.product?.title?.slice(0,40)}`);
 await prisma.$disconnect();
+
+export {};

@@ -122,3 +122,5 @@ if (WRITE) {
 
 console.log(WRITE ? '\n✓ Alignement persisté.' : '\n(DRY — ajoute WRITE=1)');
 await prisma.$disconnect();
+
+export {};
