@@ -291,14 +291,16 @@ model BatchDateOption {
 | `AGEFICE_HOURLY_PRESENTIEL` | 42 | €/h pris en charge présentiel (vérifié 01/09/2026) |
 | `AGEFICE_HOURLY_DISTANCIEL` | 35 | €/h distanciel synchrone |
 | `AGEFICE_LEAD_DAYS_MIN` | 15 | Dépôt du dossier ≥ 15 jours calendaires avant démarrage |
-| `OPCO_EP_ENVELOPE_LT_11` | 2 500 | Enveloppe entreprise/an, < 11 salariés (« l'entreprise entière ») |
-| `OPCO_EP_ENVELOPE_11_TO_50` | 4 500 | Enveloppe entreprise/an, 11 à 50 salariés |
+| `OPCO_EP_ENVELOPE_LT_11` | 2 500 | Enveloppe entreprise/an, < 11 salariés (« l'entreprise entière ») — **palier de convention collective, IDCC 1527, cf. D-7** |
+| `OPCO_EP_ENVELOPE_11_TO_50` | 4 500 | Enveloppe entreprise/an, 11 à 50 salariés — **palier de convention collective, IDCC 1527, cf. D-7** |
 | `OPCO_EP_RATE_REGLEMENTAIRE` | 40 | €/h (UNIQUEMENT TRACFIN / non-discrimination / déontologie) |
 | `OPCO_EP_RATE_COEUR_METIER` | 30 | €/h (tout le reste — défaut) |
 | `PRICE_PER_HOUR_PER_PARTICIPANT` | 84 | Tarif de vente Start Academy tout compris, €/h/participant — PARAMÈTRE, la main de Laurent |
 | `CONSUMPTION_LEVER_PERCENT` | 30 | Sous ce taux de consommation 24 mois → levier « droits sous-utilisés » |
 | `DISCOUNT_WARNING_PERCENT` | 15 | Au-delà, remise à faire valider par un MANAGER/ADMIN (§8.3) |
 | `PROPOSAL_VALIDITY_DAYS` | 30 | Validité par défaut d'une proposition |
+
+⚠ **Note de branche (D-7)** : `OPCO_EP_ENVELOPE_LT_11` et `OPCO_EP_ENVELOPE_11_TO_50` portent les paliers de la **convention collective du client** — ici **IDCC 1527 (agences immobilières et syndics)**. Ce ne sont pas des constantes universelles : hors immobilier les montants changent, et au-delà de 50 salariés il n'y a pas de palier mais des **fonds conventionnels**. D'où le `FundingRule` modifiable, voulu comme tel — détail au §8.2 et en D-7.
 
 ⚠ **Note de réconciliation AGEFICE** (à écrire en commentaire du moteur) : en R1 prospect, on ne connaît pas la CFP → le seuil CA N-1 > 7 000 € sert d'**estimation commerciale**. Dès que le client existe au CRM avec `AgeficeProfile.lastCfpEligibleBudget`, c'est la **CFP réelle qui fait foi** (3 000 / 600 / 0) et l'UI passe le badge de « estimation déclarative » à « vérifié CRM » (§8.4). Une estimation n'est jamais affichée comme un droit acquis.
 
@@ -895,6 +897,8 @@ prise_en_charge_indé  = min(heures_conventionnées × 42 €, budget_indé)    
 prise_en_charge_sal   = min(Σ heures_conventionnées × taux_opco (30 ou 40 €/h), budget_entreprise)   [présentiel uniquement]
 reste_à_charge        = Σ prix_vente − Σ prises_en_charge   [UN seul montant consolidé présenté au dirigeant]
 ```
+
+⚠ **Nuance conventionnelle (D-7, tranchée le 11/09/2026)** : les paliers de `OPCO_EP_ENVELOPE` écrits ci-dessus — **2 500 € HT/an sous 11 salariés, 4 500 € HT/an de 11 à 50, fonds conventionnels au-delà de 50** — sont ceux de la **convention collective DU CLIENT**, ici **IDCC 1527, qui couvre les agences immobilières et les syndics**. C'est un **fait vérifié** (plafonds OPCO EP 2026), pas un arbitrage : le seed est juste, et le « ≈ 4 000 € » lu sur la proposition OPTIMO du 11/08 était une **erreur de saisie**, pas une seconde source. **Hors immobilier, le chiffre change** — c'est pourquoi ces paliers restent **modifiables dans Paramètres, à dessein** : ce n'est pas une constante du produit, c'est une **donnée de branche**. Un moteur qui les graverait en dur mentirait au premier client d'une autre convention collective.
 
 Règles conservées du PRD : régimes **séparés en calcul, consolidés en affichage** (mention obligatoire « deux dossiers administratifs distincts ») · un participant appartient à UN régime · surplus au-delà d'une enveloppe = reste à charge additionnel, **arbitrage humain, jamais automatique** · modules distanciels : alerte « non pris en charge OPCO EP » · > 50 salariés : blocage doux « à valider avec l'OPCO EP » · une projection (CA en cours) n'est JAMAIS un droit acquis · taux de consommation 24 mois affiché « Environ X % » — sous 30 % : levier « vos droits sont sous-utilisés ».
 
