@@ -34,6 +34,7 @@ import type { FundingRuleValues } from '@/lib/financement/types';
 import type { QualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 
 import type { ComposeOutput, ComposedModule } from './composer';
+import { isAnimable } from './module-matcher';
 
 /** Ce qu'un rayon source peut léguer au produit composé. */
 export interface SourceProgrammeInfo {
@@ -410,9 +411,14 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
       md.push(`_Répond au besoin : ${m.need.label}._`, '');
       // Un contenu qui n'est que les questions d'identification du besoin n'est
       // PAS un déroulé : on ne l'imprime pas, on signale le trou.
+      // Même définition qu'au moteur (règle 4), pas une deuxième : c'était la
+      // troisième copie de « ce module a-t-il un déroulé », et trois copies
+      // finissent par ne plus dire la même chose.
       const raw = content.get(m.moduleId)?.trim() ?? '';
-      const questions = needQuestions.get(m.moduleId)?.trim() ?? '';
-      const body = raw.length > 0 && (questions.length === 0 || norm(raw) !== norm(questions))
+      const body = isAnimable({
+        contentMd: raw,
+        needIdentification: needQuestions.get(m.moduleId) ?? null,
+      })
         ? raw
         : '';
       if (body) {

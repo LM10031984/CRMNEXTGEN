@@ -28,6 +28,7 @@ import type { ProposalContent, ProposalPricing } from '@qualiof/shared';
 
 import { REPONSES_CONFIRMEES } from '@/lib/diagnostic-r1/transcript/confirmees';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { loadPropositionLibrary } from '@/server/proposition-library';
 import { loadOfConfig } from '@/lib/of-config';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -190,81 +191,6 @@ function agencyNameOf(d: DiagnosticBundle): string {
   );
 }
 
-/**
- * La BIBLIOTHÈQUE DE MODULES vue par le moteur de recommandation (lot I-2).
- *
- * Trois choses à ne pas rater ici, et une seule requête pour les trois :
- *
- *   • **aucun filtre sur `isActive`** (corollaire D-19). Les rayons importés ne
- *     sont jamais activés — 81 sur 81 sont inactifs — et filtrer dessus viderait
- *     la bibliothèque de tout ce que l'import y a mis ;
- *   • **les rayons en doublon d'un produit vendu sont marqués**, pas retirés
- *     ici : le moteur les écarte lui-même et le DIT (D-19 bis). Les retirer en
- *     silence à la lecture rendrait la règle invisible au commercial ;
- *   • la **pige** reste marquée module par module : le moteur l'écarte aussi,
- *     et un module exclu n'influence rien — pas même par ses signaux ;
- *   • les programmes **non diffusables** sont lus et transmis tels quels
- *     (D-19 ter) : c'est le moteur qui refuse leurs modules, et qui le dit.
- */
-async function loadLibrary(tenantId: string): Promise<LibraryModule[]> {
-  const products = await prisma.trainingProduct.findMany({
-    where: { tenantId },
-    select: {
-      id: true,
-      code: true,
-      title: true,
-      theme: true,
-      isActive: true,
-      fundingType: true,
-      supersededByProductId: true,
-      excludedFromClientOutputs: true,
-      modules: {
-        orderBy: { order: 'asc' },
-        select: {
-          id: true,
-          title: true,
-          family: true,
-          targetProfile: true,
-          durationMin: true,
-          diagnosticSignals: true,
-          needIdentification: true,
-          isFoundation: true,
-          excludedFromClientOutputs: true,
-        },
-      },
-    },
-  });
-
-  const codeById = new Map(products.map((p) => [p.id, p.code]));
-
-  return products.flatMap((p) =>
-    p.modules.map((m) => ({
-      moduleId: m.id,
-      title: m.title,
-      family: m.family,
-      targetProfile: m.targetProfile,
-      signals: Array.isArray(m.diagnosticSignals)
-        ? (m.diagnosticSignals as unknown[]).map(String)
-        : [],
-      needIdentification: m.needIdentification,
-      isFoundation: m.isFoundation,
-      durationMin: m.durationMin,
-      excludedFromClientOutputs: m.excludedFromClientOutputs,
-      source: {
-        productId: p.id,
-        code: p.code,
-        title: p.title,
-        theme: p.theme,
-        fundingType: p.fundingType,
-        isActive: p.isActive,
-        excludedFromClientOutputs: p.excludedFromClientOutputs,
-        supersededBy: p.supersededByProductId
-          ? (codeById.get(p.supersededByProductId) ?? p.supersededByProductId)
-          : null,
-      },
-    })),
-  );
-}
 
 function fingerprintInputOf(
   bundle: DiagnosticBundle,
@@ -299,7 +225,7 @@ async function assembleFromDiagnostic(diagnosticId: string, tenantId: string) {
   const [{ values: rules }, of, library] = await Promise.all([
     loadFundingRules(tenantId),
     loadOfConfig(tenantId),
-    loadLibrary(tenantId),
+    loadPropositionLibrary(tenantId),
   ]);
 
   const participants = bundle.participants.map((p) => ({

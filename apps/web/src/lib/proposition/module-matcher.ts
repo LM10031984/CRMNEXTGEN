@@ -30,6 +30,14 @@
  *     une enveloppe. Un module sans justification n'a rien à faire dans une
  *     proposition.
  *
+ *  4. **Un module sans déroulé n'entre JAMAIS dans un programme composé**
+ *     (arbitrage Laurent du 11/09/2026). Peu importe le nombre de signaux qu'il
+ *     porte : une étiquette n'est pas un contenu. Un module vide qui gagne une
+ *     place produit « déroulé à compléter » sur une pièce qui part au financeur,
+ *     et il PREND la place d'un module réel. Mieux vaut une douleur déclarée non
+ *     couverte — Laurent saura qu'il doit écrire — qu'une douleur servie par une
+ *     étiquette. Les douleurs qui ne trouvent plus rien le DISENT en notice.
+ *
  * Ce que le moteur ne fait JAMAIS : proposer un module interdit de sortie
  * client — la pige (`LibraryModule.excludedFromClientOutputs`, depuis le
  * 11/08/2026) ou un module dont le PROGRAMME est non diffusable
@@ -109,7 +117,39 @@ export interface LibraryModule {
   durationMin: number;
   /** La pige : écartée par le moteur lui-même, pas seulement par l'appelant. */
   excludedFromClientOutputs: boolean;
+  /**
+   * Le déroulé pédagogique du module, tel qu'il est au catalogue.
+   *
+   * Le moteur en a besoin pour une seule chose, et c'est la règle 4 : savoir si
+   * ce module est ANIMABLE. Il ne lit jamais ce texte pour décider de QUOI il
+   * parle — c'est la leçon D-18, « vente », « client » et « suivi » sont partout
+   * dans un déroulé et ne qualifient rien.
+   */
+  contentMd: string | null;
   source: ModuleSourceProgramme;
+}
+
+/**
+ * Ce module est-il ANIMABLE — c'est-à-dire a-t-il un vrai déroulé ?
+ *
+ * **Définition unique.** La liste de rattachement s'en servait déjà pour ne
+ * proposer que des unités réelles ; le composeur s'en sert depuis le
+ * 11/09/2026. Deux définitions de « animable » auraient fini par diverger, et
+ * l'une des deux aurait laissé passer ce que l'autre écarte.
+ *
+ * Un contenu qui n'est que les **questions d'identification du besoin** n'est
+ * pas un déroulé : c'est la trame d'un rendez-vous commercial. Le catalogue
+ * diagnostic en est plein — l'import du lot A y avait rangé `needIdentification`
+ * faute de contenu dans la source.
+ */
+export function isAnimable(m: {
+  contentMd: string | null;
+  needIdentification: string | null;
+}): boolean {
+  const contenu = (m.contentMd ?? '').trim();
+  if (contenu.length === 0) return false;
+  const questions = (m.needIdentification ?? '').trim();
+  return normalize(contenu) !== normalize(questions);
 }
 
 /** Une réponse du diagnostic, telle qu'elle est restituée dans l'audit. */
@@ -441,7 +481,10 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
     (m) => !m.excludedFromClientOutputs && !m.source.excludedFromClientOutputs,
   );
   const superseded = usable.filter((m) => m.source.supersededBy !== null);
-  const library = usable.filter((m) => m.source.supersededBy === null);
+  const composable = usable.filter((m) => m.source.supersededBy === null);
+  // Règle 4 — une étiquette n'est pas un contenu.
+  const sansDeroule = composable.filter((m) => !isAnimable(m));
+  const library = composable.filter((m) => isAnimable(m));
 
   if (library.length === 0) {
     notices.push(
@@ -601,6 +644,12 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   if (excluded.length > 0) {
     notices.push(
       `${excluded.length} module(s) écarté(s) d’office : interdits en sortie client (pige). Ils restent au catalogue interne.`,
+    );
+  }
+
+  if (sansDeroule.length > 0) {
+    notices.push(
+      `${sansDeroule.length} module(s) écarté(s) : aucun déroulé pédagogique au catalogue. Ils portent des signaux, mais une étiquette n'est pas un contenu — les programmer produirait « déroulé à compléter » sur une pièce qui part au financeur, et prendrait la place d'un module réel.`,
     );
   }
 

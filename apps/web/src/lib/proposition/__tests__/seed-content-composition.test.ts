@@ -118,6 +118,7 @@ function mod(
     signals,
     needIdentification: null,
     isFoundation: false,
+    contentMd: '- Étape 1\n- Étape 2',
     durationMin,
     excludedFromClientOutputs: false,
     source,

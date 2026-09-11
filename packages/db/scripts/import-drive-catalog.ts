@@ -270,6 +270,8 @@ interface Line {
 }
 
 const report: Line[] = [];
+/** Les déroulés écrits en base qu'un Drive muet aurait effacés. */
+const contenusProteges: string[] = [];
 const orphans: string[] = [];
 const collisions: string[] = [];
 const guarded: string[] = [];
@@ -418,10 +420,40 @@ for (const p of snapshot.programmes) {
       for (const m of modulesData) {
         const current = await tx.trainingModule.findFirst({
           where: { productId: product.id, sourceRef: m.sourceRef },
-          select: { id: true },
+          select: { id: true, contentMd: true },
         });
-        if (current) await tx.trainingModule.update({ where: { id: current.id }, data: m });
-        else await tx.trainingModule.create({ data: { ...m, productId: product.id } });
+        if (current) {
+          // ── Un import ne VIDE jamais un contenu écrit ────────────────────
+          //
+          // La règle exacte n'est pas « ne jamais écraser » : ce serait faire
+          // du Drive une source morte, et une vraie mise à jour ne passerait
+          // plus. C'est : **ne jamais remplacer un contenu non vide par un
+          // contenu vide.**
+          //
+          // Le motif tient en une phrase : un import qui VIDE un contenu ne
+          // peut pas avoir raison ; un import qui le REMPLACE par autre chose,
+          // si. Le Drive extrait mal certains programmes (17 restent en bloc
+          // unique) et un déroulé écrit à la main en base vaut mieux qu'un
+          // trou — pendant que le document source, lui, n'a pas bougé.
+          //
+          // Posée le 11/09/2026 après l'écriture des trois modules rédigés par
+          // Laurent : un seul d'entre eux portait encore son `sourceRef`, donc
+          // un seul était exposé — mais la règle vaut pour tout contenu saisi
+          // en base, aujourd'hui et demain.
+          const ecraserait =
+            (current.contentMd ?? '').trim().length > 0 && (m.contentMd ?? '').trim().length === 0;
+          if (ecraserait) {
+            const { contentMd: _ignore, ...sansContenu } = m;
+            await tx.trainingModule.update({ where: { id: current.id }, data: sansContenu });
+            contenusProteges.push(
+              `\`${m.sourceRef}\` « ${m.title.slice(0, 50)} » — le Drive n'a pas de déroulé, la base en a un : **contenu conservé**. Le reste du module est mis à jour normalement.`,
+            );
+          } else {
+            await tx.trainingModule.update({ where: { id: current.id }, data: m });
+          }
+        } else {
+          await tx.trainingModule.create({ data: { ...m, productId: product.id } });
+        }
       }
     });
   }
@@ -506,6 +538,19 @@ if (collisions.length > 0) {
     '',
   );
   for (const c of collisions) lines.push(`- ${c}`);
+  lines.push('');
+}
+
+if (contenusProteges.length > 0) {
+  lines.push(
+    '## Contenus conservés — un import ne vide jamais ce qui est écrit',
+    '',
+    "Pour ces modules, le document Drive ne porte aucun déroulé alors que la base en a un. **Le contenu en base a été conservé** ; tout le reste du module (titre, durée, ordre) a été mis à jour normalement.",
+    '',
+    "Motif : un import qui VIDE un contenu ne peut pas avoir raison ; un import qui le REMPLACE par autre chose, si. Le jour où le document Drive portera le déroulé, il reprendra la main sans rien de plus à faire.",
+    '',
+  );
+  for (const c of contenusProteges) lines.push(`- ${c}`);
   lines.push('');
 }
 

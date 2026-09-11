@@ -58,6 +58,9 @@ function mod(
     isFoundation: false,
     durationMin: 90,
     excludedFromClientOutputs: false,
+    // Animable par défaut : c'est le cas nominal d'un module de catalogue, et
+    // le vide se déclare explicitement là où on veut le tester (règle 4).
+    contentMd: '- Étape 1\n- Étape 2',
     source,
     ...opts,
   };
@@ -545,5 +548,78 @@ describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort ja
     expect(out.notices.filter((n) => n.includes('pige')).length).toBe(1);
     expect(out.notices.filter((n) => n.includes('NON DIFFUSABLE')).length).toBe(1);
     expect(out.notices.filter((n) => n.includes('fait foi')).length).toBe(1);
+  });
+});
+
+
+describe('recommendModules — règle 4 : une étiquette n’est pas un contenu', () => {
+  /**
+   * Le cas réel du 11/09/2026 : « Suivi » (PROD-0680), module du catalogue
+   * diagnostic SANS déroulé, gagnait sa place sur « Piloter le stock et le
+   * suivi vendeur » grâce à ses signaux — et produisait « déroulé à compléter »
+   * sur le programme composé. Déplacer un signal ne suffisait pas : trois des
+   * sept qui restaient contiennent « vendeurs » ou « Négociation », qui sont
+   * aussi des mots-clés du besoin.
+   *
+   * L'arbitrage de Laurent ferme la question par le haut, sans chirurgie de
+   * signaux : un module sans déroulé n'entre jamais, quel que soit son score.
+   */
+  const args = {
+    chapterScores: [chapitre(5, 30)],
+    alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
+    answers: REPONSES,
+  };
+
+  const SIGNAL = 'Mandat — Trop de mandats simples, exclusivité difficile à obtenir';
+
+  it('n’entre jamais dans une recommandation, même porteur du signal exact', () => {
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        mod('m-vide', 'Suivi', VENDEUR, { signals: [SIGNAL], isFoundation: true, contentMd: null }),
+      ],
+    });
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.moduleId));
+    expect(tous).not.toContain('m-vide');
+    expect(out.notices.some((n) => n.includes('aucun déroulé pédagogique'))).toBe(true);
+  });
+
+  it('écarte aussi le module dont le « contenu » n’est que les questions du besoin', () => {
+    // Le piège du catalogue diagnostic : l'import du lot A y avait rangé
+    // `needIdentification` faute de contenu. Ce n'est pas un déroulé, c'est la
+    // trame d'un rendez-vous commercial.
+    const questions = 'À quelle fréquence suivez-vous vos vendeurs ?';
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        mod('m-questions', 'Suivi vendeur', VENDEUR, {
+          signals: [SIGNAL],
+          contentMd: questions,
+          needIdentification: questions,
+        }),
+      ],
+    });
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.moduleId));
+    expect(tous).not.toContain('m-questions');
+  });
+
+  it('la douleur qui ne trouve plus rien le DIT, au lieu d’être servie par une étiquette', () => {
+    // Une bibliothèque où le SEUL candidat du besoin est vide : le besoin doit
+    // ressortir non comblé, pas rempli d'une coquille.
+    const out = recommendModules({
+      ...args,
+      library: [mod('m-vide', 'Exclusivité', VENDEUR, { signals: [SIGNAL], contentMd: '' })],
+    });
+    expect(out.recommendations.every((r) => r.candidates.length === 0)).toBe(true);
+    expect(out.recommendations.some((r) => r.unmet)).toBe(true);
+    expect(out.notices.some((n) => n.includes('aucun déroulé pédagogique'))).toBe(true);
+  });
+
+  it('ne touche pas aux modules qui ont un vrai déroulé', () => {
+    const avant = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    expect(avant.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
+    expect(avant.recommendations.some((r) => r.candidates.length > 0)).toBe(true);
   });
 });

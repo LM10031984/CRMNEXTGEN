@@ -822,6 +822,36 @@ Le moteur propose le **nombre de demi-journées** qui consomme le budget mobilis
 
 Exemple canonique (validé par Laurent) : 4 agents commerciaux avec production N-1 > 7 000 € → 4 × 3 024 € (72 h conventionnées × 42 €) = **12 096 € de volume visé** → 12 096 / 336 = **36 demi-journées-participant** → le groupe de 4 avançant ensemble : **9 demi-journées de groupe**, prise en charge ≈ 100 %.
 
+> ### Observation du 11/09/2026 — enrichir le catalogue augmente le volume VENDU, à droits constants
+>
+> Constatée en écrivant trois modules réels au catalogue, sur DIAG-0001 : le
+> parcours composé est passé de **5 demi-journées à 6**, de 40 h à 48 h, et de
+> **6 720 € à 8 064 € HT**.
+>
+> **Ce n'est pas une dérive, c'est l'effet recherché — et le garde-fou §8.2 tient
+> toujours.** Le mécanisme : les modules retenus jusque-là étaient des étiquettes
+> du catalogue diagnostic, sans déroulé, qui occupaient 60 à 90 min. Les modules
+> réels qui les remplacent portent 120 à 240 min de contenu animable. **Le même
+> point de douleur justifie donc plus d'heures**, parce qu'il y a enfin de quoi
+> les remplir.
+>
+> Ce que §8.2 interdit reste interdit : **ajouter un module sans point de douleur
+> derrière**. Ici, aucun module n'a été ajouté sans justification — c'est le
+> contenu par douleur qui s'est étoffé.
+>
+> **À droits constants.** DIAG-0001 mobilise 12 096 € de droits ; 8 064 € reste
+> dessous. **Le reste à charge du dirigeant ne bouge pas**, et le client reçoit
+> une demi-journée de formation en plus. C'est exactement le renversement que
+> §8.2 décrit — on ne vend pas un prix, on convertit un budget — appliqué à la
+> profondeur du catalogue plutôt qu'au nombre d'agents.
+>
+> **La conséquence à connaître pour la suite** : chaque fois que Laurent écrira
+> un déroulé manquant, le volume justifié des dossiers concernés montera.
+> Tant que le total reste sous les droits mobilisables, c'est une bonne
+> nouvelle commerciale ; **le jour où il les dépasse, ce n'est plus une
+> conséquence automatique mais un arbitrage** — le surplus s'affiche déjà comme
+> tel, et il se présente au dirigeant.
+
 ⚠ **Nuance moteur (D-8)** : 72 h × 42 € = 3 024 € dépasse de 24 € le **plafond AGEFICE de 3 000 €/an** (vérifié le 01/09/2026). Le moteur retient toujours `min(heures × taux, plafond)` = 3 000 €/agent — l'écart (96 € pour 4 agents) apparaît explicitement en reste à charge, que le commercial facture, arrondit en réduisant le volume, ou offre (traçé comme remise). **Jamais un montant de prise en charge affiché au-dessus du plafond** — c'est exactement la « mention trompeuse de financement » que le référentiel Qualiopi 33 indicateurs sanctionne (leçon déjà payée sur l'email du stand MLS).
 
 ```

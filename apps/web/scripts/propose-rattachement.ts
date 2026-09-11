@@ -64,6 +64,7 @@ import { catalogueTitleKey } from '@qualiof/shared/helpers';
 import { listDiagnosticPainPoints } from '../src/lib/diagnostic-r1/scoring';
 import {
   PROGRAMME_NEEDS,
+  isAnimable,
   moduleFamilyOf,
   type LibraryModule,
   type ProgrammeFamily,
@@ -280,19 +281,17 @@ for (const p of products) {
       ecartesPige += 1;
       continue;
     }
-    const content = (m.contentMd ?? '').trim();
-    const questions = (m.needIdentification ?? '').trim();
-    // Un contenu qui n'est que les questions d'identification du besoin n'est
-    // pas un déroulé : ce module n'est pas animable en l'état.
-    const hasDeroule = content.length > 0 && normalize(content) !== normalize(questions);
-    if (!hasDeroule) {
+    // La définition d'« animable » vit dans le moteur, pas ici : depuis le
+    // 11/09/2026 le composeur applique la même, et deux définitions auraient
+    // fini par diverger.
+    if (!isAnimable(m)) {
       ecartesSansDeroule += 1;
       continue;
     }
     const lib: LibraryModule = {
       moduleId: m.id, title: m.title, family: m.family, targetProfile: m.targetProfile,
       signals: [], needIdentification: m.needIdentification, isFoundation: m.isFoundation,
-      durationMin: m.durationMin, excludedFromClientOutputs: false,
+      durationMin: m.durationMin, excludedFromClientOutputs: false, contentMd: m.contentMd,
       source: {
         productId: p.id, code: p.code, title: p.title, theme: p.theme,
         fundingType: p.fundingType, isActive: p.isActive, supersededBy: null,

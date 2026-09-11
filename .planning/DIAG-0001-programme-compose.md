@@ -10,13 +10,14 @@ Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) s
 
 - Maîtriser les techniques de découverte vendeur
 - Rédiger des compromis de vente efficaces
-- Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
-- Gérer les objections et trouver des solutions de compromis
 - Installer un rythme de suivi vendeur qui tient jusqu'à la vente
+- Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
+- Convaincre le vendeur avec des arguments solides
+- Préparer un Excellent Dossier de Suivi Vendeur
 - Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
 - Faire des avis clients une source de mandats
 
-_Objectifs restant à rédiger pour : Suivi, Atelier pratique : Simulation de réponse aux avis clients._
+_Objectifs restant à rédiger pour : Atelier pratique : Simulation de réponse aux avis clients._
 
 ## Déroulé
 
@@ -46,57 +47,6 @@ _Source : Négociation et compromis (BIB-D034)._
 
 ### Demi-journée 3 — 4 h sur site (8 h conventionnées)
 
-#### Suivi
-
-_Répond au besoin : Piloter le stock et le suivi vendeur._
-
-_Déroulé détaillé à compléter au catalogue._
-
-_Source : Catalogue diagnostic — Vendeur (PROD-0680)._
-
-#### Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
-
-_Répond au besoin : Qualifier et sécuriser les acquéreurs._
-
-- Pratiquer la vente d’un rendez vous découverte à un acheteur
-- Pratiquer la découverte acheteur
-- Faire face à une situation imprévue
-- Débriefing du passage avec axes d’améliorations
-
-_Source : Face à face acheteurs (BIB-D008)._
-
-### Demi-journée 4 — 4 h sur site (8 h conventionnées)
-
-#### Atelier pratique : Simulation de réponse aux avis clients
-
-_Répond au besoin : Faire travailler la base et la réputation._
-
-**Objectif.** À l'issue, le stagiaire est capable de formuler une demande d'avis adaptée à chaque moment de satisfaction rencontré dans son activité, et de rédiger puis publier une réponse à un avis — positif ou négatif — conforme au cadre légal et fidèle à sa voix.
-
-- **Rappel du cadre (10 min).** Ce qu'on ne fait jamais, et ce qu'on vérifie avant de publier : aucune donnée confidentielle, aucun ton défensif, jamais deux réponses identiques.
-- **Série 1 — demander (25 min).** Trois situations tirées de leur semaine réelle : un client qui vient de dire « vous avez fait un travail sérieux » en fin d'estimation, un acquéreur accompagné qui n'a rien acheté chez eux, un propriétaire en gestion depuis des années. Chacun écrit sa demande pour les trois, s'aide de ChatGPT, puis corrige pour que ça sonne comme lui.
-- **Série 2 — les avis positifs (25 min).** Trois avis réels de son agence. Réponse courte, personnalisée. Lecture croisée en binôme : on repère les tournures qui se répètent d'une réponse à l'autre.
-- **Série 3 — les avis négatifs (40 min).** Trois cas : le reproche fondé, le reproche injuste, et l'avis qui ne concerne pas le conseiller. Écriture, lecture à voix haute, correction collective. On travaille le passage en privé sans se justifier en public.
-- **Ce qui se publie (15 min).** Relecture croisée, puis publication accompagnée d'une réponse réelle pour chaque participant.
-- **Repartir avec son rituel (5 min).** Ses variantes enregistrées, et la règle qu'il se donne : qui répond, sous quel délai, qui relit.
-
-_Source : Pack Digital 60h (BIB-D047)._
-
-#### Gérer les objections et trouver des solutions de compromis
-
-_Répond au besoin : Rentrer des mandats en exclusivité, au bon prix._
-
-- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
-- Répondre : Techniques pour répondre aux objections de manière constructive
-- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
-- QCM évaluation des acquis ;
-- Questionnaire de satisfaction et clôture de la formation.
-- Tous les formateurs de l’équipe Start-Academy ont minimum 8 années d'expérience dans l'immobilier, notamment dans le domaine de la vente de biens, de formation d'agents et de coaching individuel.
-
-_Source : Négociation et compromis (BIB-D034)._
-
-### Demi-journée 5 — 4 h sur site (8 h conventionnées)
-
 #### Installer un rythme de suivi vendeur qui tient jusqu'à la vente
 
 _Répond au besoin : Piloter le stock et le suivi vendeur._
@@ -117,7 +67,57 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Demi-journée 6 — 4 h sur site (8 h conventionnées)
+### Demi-journée 4 — 4 h sur site (8 h conventionnées)
+
+#### Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
+
+_Répond au besoin : Qualifier et sécuriser les acquéreurs._
+
+- Pratiquer la vente d’un rendez vous découverte à un acheteur
+- Pratiquer la découverte acheteur
+- Faire face à une situation imprévue
+- Débriefing du passage avec axes d’améliorations
+
+_Source : Face à face acheteurs (BIB-D008)._
+
+#### Atelier pratique : Simulation de réponse aux avis clients
+
+_Répond au besoin : Faire travailler la base et la réputation._
+
+**Objectif.** À l'issue, le stagiaire est capable de formuler une demande d'avis adaptée à chaque moment de satisfaction rencontré dans son activité, et de rédiger puis publier une réponse à un avis — positif ou négatif — conforme au cadre légal et fidèle à sa voix.
+
+- **Rappel du cadre (10 min).** Ce qu'on ne fait jamais, et ce qu'on vérifie avant de publier : aucune donnée confidentielle, aucun ton défensif, jamais deux réponses identiques.
+- **Série 1 — demander (25 min).** Trois situations tirées de leur semaine réelle : un client qui vient de dire « vous avez fait un travail sérieux » en fin d'estimation, un acquéreur accompagné qui n'a rien acheté chez eux, un propriétaire en gestion depuis des années. Chacun écrit sa demande pour les trois, s'aide de ChatGPT, puis corrige pour que ça sonne comme lui.
+- **Série 2 — les avis positifs (25 min).** Trois avis réels de son agence. Réponse courte, personnalisée. Lecture croisée en binôme : on repère les tournures qui se répètent d'une réponse à l'autre.
+- **Série 3 — les avis négatifs (40 min).** Trois cas : le reproche fondé, le reproche injuste, et l'avis qui ne concerne pas le conseiller. Écriture, lecture à voix haute, correction collective. On travaille le passage en privé sans se justifier en public.
+- **Ce qui se publie (15 min).** Relecture croisée, puis publication accompagnée d'une réponse réelle pour chaque participant.
+- **Repartir avec son rituel (5 min).** Ses variantes enregistrées, et la règle qu'il se donne : qui répond, sous quel délai, qui relit.
+
+_Source : Pack Digital 60h (BIB-D047)._
+
+### Demi-journée 5 — 4 h sur site (8 h conventionnées)
+
+#### Convaincre le vendeur avec des arguments solides
+
+_Répond au besoin : Rentrer des mandats en exclusivité, au bon prix._
+
+- Élaborer : Construction d'argumentaires basés sur les données et l'estimation
+- Adapter : Personnalisation de la présentation en fonction du profil du vendeur
+- Répondre : Techniques pour gérer les objections et rassurer le vendeur
+- QCM évaluation des acquis
+- Questionnaire de satisfaction et clôture de la formation.
+
+_Source : Découverte vendeur et estimation percutante (BIB-D017)._
+
+#### Préparer un Excellent Dossier de Suivi Vendeur
+
+_Répond au besoin : Piloter le stock et le suivi vendeur._
+
+- Collecter de manière exhaustive toutes les informations pertinentes sur les biens immobiliers à vendre.
+- Créer des dossiers de suivi complets et personnalisés pour chaque vendeur, en mettant en avant leurs besoins et leurs objectifs spécifiques.
+- Utiliser des outils modernes pour gérer et mettre à jour efficacement les dossiers de suivi
+
+_Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
 #### Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
 
@@ -160,6 +160,8 @@ _Répond au besoin : Qualifier et sécuriser les acquéreurs._
 - Questionnaire de satisfaction et clôture de la formation.
 
 _Source : Basic acheteur (BIB-D012)._
+
+### Demi-journée 6 — 4 h sur site (8 h conventionnées)
 
 #### Faire des avis clients une source de mandats
 
