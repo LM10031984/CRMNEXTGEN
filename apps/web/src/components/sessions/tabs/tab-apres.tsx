@@ -326,7 +326,6 @@ export function TabApres({
         <SignedDocDropZone
           sessionId={sessionId}
           docType="EMARGEMENT"
-          docLabel="émargements"
           participants={dropZoneParticipants}
           // L'attestation d'assiduité se signe le plus souvent EN PRÉSENTIEL,
           // en fin de session : même geste que l'émargement — on ramasse, on

@@ -112,7 +112,12 @@ describe('zone de dépôt — choix du type de document', () => {
   it('l’en-tête suit le type choisi, sinon il mentirait', () => {
     // Sans ça, l'encadré annonce « Déposer les émargements signés » alors que
     // l'admin a sélectionné l'attestation d'assiduité.
-    expect(componentSrc).toMatch(/docTypeOptions\?\.find\(/);
+    //
+    // ⚠ ASSERTION MISE À JOUR le 11/09/2026 (correction n°5). Elle citait
+    // `docTypeOptions?.find(` — le mécanisme de CONCATÉNATION qui produisait
+    // « Déposer les convention signés ». La promesse gardée est la même (le
+    // titre suit la sélection), le mécanisme a changé.
+    expect(componentSrc).toMatch(/titreDepotSigne\(selectedDocType\)/);
   });
 });
 
@@ -126,8 +131,10 @@ describe('zone de dépôt — choix du type de document', () => {
  */
 describe('titre de la zone de dépôt — une table, pas une concaténation', () => {
   it('le composant ne fabrique plus le titre par concaténation', () => {
+    // Le gabarit fautif, dans le JSX : `Déposer les {libelleCourant} signés`.
     expect(componentSrc).not.toMatch(/Déposer les \{/);
-    expect(componentSrc).not.toContain('signés\n');
+    // Plus aucun libellé de type n'est passé en minuscules pour être recollé.
+    expect(componentSrc).not.toMatch(/\.label\.toLowerCase\(\)/);
   });
 
   it('le titre vient de `titreDepotSigne`, et SUIT le type sélectionné', () => {

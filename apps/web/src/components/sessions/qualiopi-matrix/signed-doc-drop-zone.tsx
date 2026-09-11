@@ -29,6 +29,7 @@ import {
   type MatchCandidate,
 } from '@/lib/signed-scan-match';
 import { uploadSignedScans } from '@/server/actions/qualiopi-matrix';
+import { titreDepotSigne } from '@/lib/sessions/titre-depot-signe';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -44,7 +45,6 @@ export interface SignedDocDropZoneProps {
   sessionId: string;
   /** Type de document déposé (EMARGEMENT dans l'onglet Après). */
   docType: string;
-  docLabel: string;
   participants: DropZoneParticipant[];
   /** Replié par défaut dans l'onglet Avant, déplié dans Après. */
   defaultOpen?: boolean;
@@ -57,7 +57,6 @@ type Row = { file: File; participantId: string | null };
 export function SignedDocDropZone({
   sessionId,
   docType,
-  docLabel,
   participants,
   defaultOpen = true,
   docTypeOptions,
@@ -68,11 +67,17 @@ export function SignedDocDropZone({
   const [splitMode, setSplitMode] = useState(false);
   const [order, setOrder] = useState<string[]>(participants.map((p) => p.id));
   const [selectedDocType, setSelectedDocType] = useState(docType);
-  // L'en-tête doit nommer le document RÉELLEMENT sélectionné : sinon l'encadré
-  // annonce « Déposer les émargements signés » alors que l'admin a choisi
-  // l'attestation d'assiduité.
-  const libelleCourant =
-    docTypeOptions?.find((o) => o.value === selectedDocType)?.label.toLowerCase() ?? docLabel;
+  /**
+   * L'en-tête nomme le document RÉELLEMENT sélectionné — sinon l'encadré
+   * annonce « Déposer les émargements signés » alors que l'admin a choisi
+   * l'attestation d'assiduité.
+   *
+   * ⚠ IL VIENT D'UNE TABLE, PLUS D'UNE CONCATÉNATION (Laurent, 11/09/2026).
+   * `Déposer les ${libellé} signés` produisait « Déposer les convention
+   * signés » : le pluriel et l'accord étaient écrits en dur dans le gabarit,
+   * donc faux dès que le libellé n'était ni masculin ni déjà au pluriel.
+   */
+  const titre = titreDepotSigne(selectedDocType);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -177,7 +182,7 @@ export function SignedDocDropZone({
       >
         <span className="inline-flex items-center gap-2 text-sm font-semibold">
           <Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Déposer les {libelleCourant} signés
+          {titre}
         </span>
         <ChevronDown
           className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}

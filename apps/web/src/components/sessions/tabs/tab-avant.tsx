@@ -313,7 +313,6 @@ export function TabAvant({
         <SignedDocDropZone
           sessionId={sessionId}
           docType="CONVENTION"
-          docLabel="documents"
           participants={dropZoneParticipants}
           defaultOpen={false}
           docTypeOptions={AVANT_SIGNABLE_DOC_TYPES}
