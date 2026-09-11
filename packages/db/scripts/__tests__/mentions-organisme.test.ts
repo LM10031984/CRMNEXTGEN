@@ -26,6 +26,7 @@ import { describe, it, expect } from 'vitest';
 import {
   normaliserLigne,
   estMentionOrganisme,
+  estTitreGabarit,
   retirerMentionsOrganisme,
   nEstQueDesMentions,
   doitProtegerLeContenu,
@@ -398,55 +399,72 @@ describe('Famille 6 — idempotence', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Famille 7 — LOT 1 BIS : les MOYENS PÉDAGOGIQUES du pied de document sortent
+// Famille 7 — LOT 1 BIS : le BLOC CONTIGU de pied de document part entier
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Arbitrage du 11/09/2026, après le lot 1. Laurent a nommé deux phrases de
-// `drive:058#6` (« Les formateurs proposeront… », « Un livret de formation sera
-// remis… ») : « une mention d'organisme au mauvais endroit, exactement comme le
-// QCM ».
+// Arbitrage du 11/09/2026, en deux temps.
 //
-// On en retire QUATRE, et c'est un élargissement assumé qu'il faut pouvoir
-// contredire. Les quatre lignes forment UN SEUL BLOC CONTIGU en fin de module,
-// introduit par son propre titre de section :
+// D'abord, Laurent a nommé deux phrases de `drive:058#6` (« Les formateurs
+// proposeront… », « Un livret de formation sera remis… ») : « une mention
+// d'organisme au mauvais endroit, exactement comme le QCM ».
 //
-//   6. - LES MOYENS PÉDAGOGIQUES ET TECHNIQUES      ← le TITRE de la section
-//   7. - La formation se déroule en présentiel.      ← une modalité d'en-tête
+// Puis il a demandé que la RÈGLE soit généralisée, pas seulement le cas :
+// « partout où une mention d'organisme est précédée de son titre de section, le
+// bloc part entier. Un défaut créé sciemment est pire que celui qu'on
+// corrigeait. » Les quatre lignes de `drive:058#6` forment en effet UN SEUL BLOC
+// CONTIGU en fin de module, introduit par son propre titre :
+//
+//   6. - LES MOYENS PÉDAGOGIQUES ET TECHNIQUES      ← TITRE de gabarit
+//   7. - La formation se déroule en présentiel.      ← modalité → mention
 //   8. - Les formateurs proposeront des mises en situation…   ← nommée
 //   9. - Un livret de formation sera remis…                   ← nommée
 //
-// N'en retirer que deux laisserait, dans un déroulé qui part chez un financeur,
-// un titre de section ORPHELIN suivi d'une phrase isolée : on créerait sciemment
-// un défaut. La ligne 7 est une mention de modalité qui appartient à l'en-tête du
-// programme, pas au déroulé, et elle vit sous ce même titre.
+// D'où DEUX mécanismes distincts, et c'est le cœur de ce qui est testé ici :
 //
-// Les lignes 1 à 5 sont de la vraie pédagogie — Y COMPRIS « QUIZZ Final :
-// (0h30) », qui est une activité de séance avec sa durée et qui n'est dans aucune
-// forme canonique. Après retrait, le module garde 5 puces : il ne devient pas un
-// 5ᵉ module fantôme.
+//   • les trois PHRASES sont des mentions d'organisme, reconnues ligne à ligne
+//     (`estMentionOrganisme`) — dont la modalité « La formation se déroule en
+//     présentiel. », parce qu'une modalité appartient aux mentions du programme,
+//     pas à un déroulé ;
+//   • le TITRE n'est pas une mention : c'est un titre de gabarit
+//     (`estTitreGabarit`), et il ne part que si tout ce qui le suit est du
+//     boilerplate. Un titre suivi de vraie pédagogie RESTE — voir Famille 9.
+//
+// Les lignes 1 à 5 sont de la vraie pédagogie, Y COMPRIS « QUIZZ Final :
+// (0h30) », une activité de séance avec sa durée. Après retrait, le module garde
+// 5 puces : il ne devient pas un 5ᵉ module fantôme.
 
-/** Les 4 lignes, telles qu'elles figuraient dans l'instantané du lot 1. */
-const MOYENS_PEDAGOGIQUES_058 = [
-  '- LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
+/** Le TITRE de section du gabarit — retiré structurellement, pas à plat. */
+const TITRE_GABARIT_058 = '- LES MOYENS PÉDAGOGIQUES ET TECHNIQUES';
+
+/** Les 3 PHRASES du bloc — des mentions d'organisme, reconnues ligne à ligne. */
+const MENTIONS_058 = [
   '- La formation se déroule en présentiel.',
   '- Les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des échanges sur les pratiques actuelles.',
   '- Un livret de formation sera remis à chaque participant en début de formation. Le formateur déroulera sa formation avec une présentation Canva projetée.',
 ] as const;
 
-/** Les formes canoniques attendues, dans le même ordre. */
-const CANONIQUES_MOYENS = [
+/** Le bloc entier, dans l'ordre où l'instantané du lot 1 le portait. */
+const BLOC_058 = [TITRE_GABARIT_058, ...MENTIONS_058] as const;
+
+/** Les formes canoniques attendues, dans le même ordre que BLOC_058. */
+const CANONIQUES_BLOC = [
   'les moyens pedagogiques et techniques',
   'la formation se deroule en presentiel',
   'les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des echanges sur les pratiques actuelles',
   'un livret de formation sera remis a chaque participant en debut de formation. le formateur deroulera sa formation avec une presentation canva projetee',
 ] as const;
 
-describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document', () => {
-  it.each(MOYENS_PEDAGOGIQUES_058)('« %s » → mention d’organisme', (ligne) => {
+describe('Famille 7 — lot 1 bis : les 3 phrases du bloc sont des mentions', () => {
+  it.each(MENTIONS_058)('« %s » → mention d’organisme', (ligne) => {
     expect(estMentionOrganisme(ligne)).toBe(true);
   });
 
-  it.each(MOYENS_PEDAGOGIQUES_058.map((l, i) => ({ ligne: l, attendu: CANONIQUES_MOYENS[i]! })))(
+  it('le titre de section n’est PAS une mention — il relève de la règle structurelle', () => {
+    expect(estMentionOrganisme(TITRE_GABARIT_058)).toBe(false);
+    expect(estTitreGabarit(TITRE_GABARIT_058)).toBe(true);
+  });
+
+  it.each(BLOC_058.map((l, i) => ({ ligne: l, attendu: CANONIQUES_BLOC[i]! })))(
     'normaliserLigne ramène « $ligne » à sa forme canonique',
     ({ ligne, attendu }) => {
       expect(normaliserLigne(ligne)).toBe(attendu);
@@ -455,12 +473,9 @@ describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document
 
   // Les variantes que le filtre doit tolérer : sans puce, sans point final, avec
   // des espaces surnuméraires. C'est ce test-là qui attrape une apostrophe ou un
-  // point INTERNE mal traité — la 4ᵉ ligne porte un point au milieu, qui doit
-  // SURVIVRE à la normalisation.
+  // point INTERNE mal traité — la dernière ligne porte un point au milieu, qui
+  // doit SURVIVRE à la normalisation.
   it.each([
-    'LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
-    '  -   LES MOYENS   PÉDAGOGIQUES ET TECHNIQUES  ',
-    '* LES MOYENS PÉDAGOGIQUES ET TECHNIQUES.',
     'La formation se déroule en présentiel',
     '- La formation se déroule en présentiel ;',
     '  La formation   se déroule en présentiel.  ',
@@ -472,8 +487,17 @@ describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document
     expect(estMentionOrganisme(ligne)).toBe(true);
   });
 
-  it('le point INTERNE de la 4ᵉ ligne survit — seule la ponctuation FINALE est coupée', () => {
-    expect(normaliserLigne(MOYENS_PEDAGOGIQUES_058[3])).toContain('debut de formation. le formateur');
+  it.each([
+    'LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
+    '  -   LES MOYENS   PÉDAGOGIQUES ET TECHNIQUES  ',
+    '* LES MOYENS PÉDAGOGIQUES ET TECHNIQUES.',
+    'Les moyens pédagogiques et techniques',
+  ])('variante tolérée d’un TITRE de gabarit : « %s »', (ligne) => {
+    expect(estTitreGabarit(ligne)).toBe(true);
+  });
+
+  it('le point INTERNE de la dernière ligne survit — seule la ponctuation FINALE est coupée', () => {
+    expect(normaliserLigne(MENTIONS_058[2])).toContain('debut de formation. le formateur');
   });
 
   // DÉCISION du 11/09/2026 : « Remise des attestations » RESTE.
@@ -481,6 +505,7 @@ describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document
     'un vrai moment de fin de session, pas de l’administratif — décision du 11/09 : « %s » reste',
     (ligne) => {
       expect(estMentionOrganisme(ligne)).toBe(false);
+      expect(estTitreGabarit(ligne)).toBe(false);
     },
   );
 
@@ -499,6 +524,7 @@ describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document
 
   it('« QUIZZ Final : (0h30) » reste — une activité de séance avec sa durée', () => {
     expect(estMentionOrganisme('- QUIZZ Final : (0h30)')).toBe(false);
+    expect(estTitreGabarit('- QUIZZ Final : (0h30)')).toBe(false);
   });
 });
 
@@ -510,7 +536,7 @@ describe('Famille 7 — lot 1 bis : les moyens pédagogiques du pied de document
 // elle ouvre le même bloc de moyens pédagogiques avalé dans drive:067#1,
 // drive:068#1 et drive:069#1. Un ensemble fermé agit sur tout le corpus — ces
 // trois modules perdent donc cette ligne aussi, et c'est cohérent avec la
-// décision. Aucun ne se vide : ils portent 32, 41 et 41 lignes.
+// décision. Aucun ne se vide : ils portaient 32, 41 et 41 lignes.
 
 describe('Famille 8 — l’instantané après le lot 1 bis', () => {
   it('le compte ne bouge pas : 76 programmes, 402 modules', () => {
@@ -524,7 +550,7 @@ describe('Famille 8 — l’instantané après le lot 1 bis', () => {
     expect(lignes[4]).toBe('- QUIZZ Final : (0h30)');
   });
 
-  it.each(MOYENS_PEDAGOGIQUES_058)('drive:058#6 ne porte plus « %s »', (ligne) => {
+  it.each(BLOC_058)('drive:058#6 ne porte plus « %s »', (ligne) => {
     expect(moduleDe('drive:058#6').contentMd).not.toContain(ligne.replace(/^- /, ''));
   });
 
@@ -563,5 +589,126 @@ describe('Famille 8 — l’instantané après le lot 1 bis', () => {
   it('le compte de warnings ne bouge pas : 64 — aucun module nouvellement vidé', () => {
     const warnings = instantane.programmes.reduce((n, p) => n + p.warnings.length, 0);
     expect(warnings).toBe(64);
+  });
+
+  it('plus aucun titre de gabarit dans un déroulé de l’instantané', () => {
+    const coupables: string[] = [];
+    for (const m of TOUS_LES_MODULES) {
+      for (const ligne of m.contentMd.split('\n')) {
+        if (estTitreGabarit(ligne)) coupables.push(`${m.sourceRef} : ${ligne}`);
+      }
+    }
+    expect(coupables).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Famille 9 — la RÈGLE STRUCTURELLE : un titre ne part qu'avec son bloc
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// « Un titre de gabarit est retiré quand TOUT ce qui le suit — jusqu'à la fin du
+// module ou jusqu'au titre de gabarit suivant — est soit une mention
+// d'organisme, soit un autre titre de gabarit. Sinon il RESTE. »
+//
+// C'est ce « sinon il reste » qui rend la règle sûre : un titre suivi de vraie
+// pédagogie n'est pas un pied de page, et on ne coupe pas du contenu pour faire
+// propre.
+
+const PEDAGOGIE = '- Atelier en binôme : rédiger trois accroches téléphoniques.';
+
+describe('Famille 9 — un titre de gabarit ne part qu’avec son bloc', () => {
+  it('titre + uniquement des mentions → le bloc ENTIER part', () => {
+    const brut = [PEDAGOGIE, ...BLOC_058].join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    expect(contentMd).toBe(PEDAGOGIE);
+    expect(retirees).toHaveLength(4);
+    expect(retirees[0]).toBe(TITRE_GABARIT_058);
+  });
+
+  it('titre + de la vraie PÉDAGOGIE → le titre RESTE', () => {
+    const brut = [TITRE_GABARIT_058, PEDAGOGIE].join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    expect(retirees).toEqual([]);
+    expect(contentMd).toBe(brut);
+  });
+
+  it('titre + mentions + pédagogie → le titre reste, seules les mentions partent', () => {
+    const brut = [TITRE_GABARIT_058, MENTIONS_058[0], PEDAGOGIE].join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    expect(retirees).toEqual([MENTIONS_058[0]]);
+    expect(contentMd).toBe([TITRE_GABARIT_058, PEDAGOGIE].join('\n'));
+  });
+
+  it('un titre SEUL en fin de module part — il n’introduit plus rien', () => {
+    const brut = [PEDAGOGIE, TITRE_GABARIT_058].join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    expect(retirees).toEqual([TITRE_GABARIT_058]);
+    expect(contentMd).toBe(PEDAGOGIE);
+  });
+
+  it('deux titres enchaînés : le premier part, le second reste s’il introduit de la pédagogie', () => {
+    const brut = ['- TARIF', TITRE_GABARIT_058, PEDAGOGIE].join('\n');
+    const { contentMd, retirees } = retirerMentionsOrganisme(brut);
+    expect(retirees).toEqual(['- TARIF']);
+    expect(contentMd).toBe([TITRE_GABARIT_058, PEDAGOGIE].join('\n'));
+  });
+
+  it('une ligne vide ne fait pas mentir le bloc', () => {
+    const brut = [PEDAGOGIE, TITRE_GABARIT_058, '', MENTIONS_058[1]].join('\n');
+    const { retirees } = retirerMentionsOrganisme(brut);
+    expect(retirees).toEqual([TITRE_GABARIT_058, MENTIONS_058[1]]);
+  });
+
+  it('le vocabulaire des titres vient du gabarit reconnu par l’extraction', () => {
+    for (const titre of [
+      'LES MOYENS PÉDAGOGIQUES ET TECHNIQUES',
+      'L’ENCADREMENT DE L’ACTION',
+      'LES MOYENS D’ÉVALUATION',
+      'MODALITÉS D’INSCRIPTION',
+      'ACCESSIBILITÉ AUX PERSONNES EN SITUATION DE HANDICAP',
+      'TARIF',
+      'CONTACT',
+      'DÉLAI D’ACCÈS',
+    ]) {
+      expect(estTitreGabarit(titre), titre).toBe(true);
+    }
+  });
+
+  // ⛔ LE DANGER à ne jamais réintroduire : une heuristique « ligne en
+  // majuscules = titre de gabarit » détruirait le contenu Faros, qui porte des
+  // lignes en capitales parfaitement légitimes — des noms de locuteurs, des
+  // étiquettes de livrable, des encadrés de décision. D'où la liste FERMÉE, même
+  // doctrine que pour les mentions.
+  const CAPITALES_FAROS = [
+    'JEAN-GUY',
+    'LAURENT',
+    'APPRENANT',
+    'SOURCES',
+    'LIVRABLE 001',
+    'LIVRABLE 003',
+    'PROMESSE APPRENANT',
+    'RÉSULTAT OBSERVABLE',
+    'DÉCISION DE DIRECTION PÉDAGOGIQUE',
+    'SA-ADM-M001',
+    'START ACADEMY · FORMATION & COACHING · IMMOBILIER',
+    'AGEFICE',
+    'PROMESSE',
+    'LIMITE',
+    'TOTAL',
+    'ÉQUILIBRE',
+    'REVUE',
+  ] as const;
+
+  it.each(CAPITALES_FAROS)('une ligne Faros en capitales n’est PAS un titre de gabarit : « %s »', (ligne) => {
+    expect(estTitreGabarit(ligne)).toBe(false);
+    expect(estMentionOrganisme(ligne)).toBe(false);
+  });
+
+  it('faros:SA-ADM-M001#1 reste intact, ses 855 lignes comprises', () => {
+    const faros = moduleDe('faros:SA-ADM-M001#1');
+    const { contentMd, retirees } = retirerMentionsOrganisme(faros.contentMd);
+    expect(retirees).toEqual([]);
+    expect(contentMd).toBe(faros.contentMd);
+    expect(contentMd.split('\n')).toHaveLength(855);
   });
 });
