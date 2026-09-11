@@ -84,8 +84,13 @@ n'a pas tort ; il regarde simplement un disque qui ment.
 find apps packages -name "* [2-9].*" -not -path "*/node_modules/*" -delete
 ```
 
-**Procédure préparée, à valider avant exécution** :
-`.planning/260911-sortir-le-depot-d-icloud.md`. ⚠ **Ne pas déplacer depuis le
+**Décision de Laurent (11/09)** : on **déplace le dépôt**, on ne décoche pas
+iCloud. Procédure complète, vérifiée et **non exécutée** :
+`.planning/260911-sortir-le-depot-d-icloud.md` — destination `~/dev/crm-next-gen`.
+
+⛔ **Bloquant à lever avant de bouger** : le dépôt principal (`files`) porte
+**31 fichiers modifiés et 1 commit non poussé**. Les quatre autres worktrees sont
+propres. ⚠ **Ne pas déplacer depuis le
 Finder** — trois worktrees portent des chemins ABSOLUS vers
 `files/.git/worktrees/…` et casseraient tous les trois. La procédure fait le
 déplacement puis `git worktree repair`, et vérifie que chacun retrouve son
