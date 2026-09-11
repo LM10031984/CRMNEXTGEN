@@ -6,16 +6,9 @@ Parcours composé à partir du diagnostic **DIAG-0001**, en 5 demi-journée(s) s
 
 ## Objectifs pédagogiques
 
-À l’issue de la formation, le stagiaire sera capable de :
+_Objectifs pédagogiques à rédiger._
 
-- Maîtriser « Suivi »
-- Maîtriser « Chatbot mandat »
-- Maîtriser « Suivi acheteur »
-- Maîtriser « e réputation »
-- Maîtriser « Estimation baromètre »
-- Maîtriser « Suivi automatisé »
-- Maîtriser « Suivi acheteur autonome »
-- Maîtriser « Atelier pratique : Simulation de réponse aux avis clients. »
+_Objectifs restant à rédiger pour : Suivi, Chatbot mandat, Suivi acheteur, e réputation, Estimation baromètre, Suivi automatisé, Suivi acheteur autonome, Atelier pratique : Simulation de réponse aux avis clients.._
 
 ## Déroulé
 
@@ -95,7 +88,7 @@ _Source : Pack Digital 60h (BIB-D047)._
 
 ## Public visé
 
-Professionnels du marketing, entrepreneurs, dirigeants et collaborateurs souhaitant maîtriser tous les aspects du marketing digital et de l’IA. Prérequis : Connaissances de base en informatique. Aucune compétence technique avancée requise. Durée de la formation :
+Conseillers immobiliers. Parcours composé pour Agence à partir de son diagnostic : il n’est pas transposable tel quel à une autre agence.
 
 ## Prérequis
 
@@ -103,13 +96,21 @@ Aucun prérequis.
 
 ## Moyens pédagogiques et techniques
 
-
+La formation se déroule en présentiel, dans les locaux de l’agence.
+Les formateurs proposent des mises en situation professionnelles sur les techniques de prospection, les discours et la posture, ainsi que des échanges sur les pratiques actuelles.
+Un livret de formation est remis à chaque participant en début de formation. Le formateur déroule sa formation avec une présentation projetée.
 
 ## Modalités d’évaluation
 
-
+- Un test de positionnement est réalisé en début de formation ;
+- Une liste d’émargement est signée à la demi-journée ;
+- Une évaluation sous forme de QCM a lieu en fin de formation ;
+- Un questionnaire de satisfaction est remis à chaud, puis à froid ;
+- Un certificat de réalisation est délivré à chaque participant à l’issue de la formation.
 
 ## Accessibilité aux personnes en situation de handicap
 
-
+La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l’accès à l’emploi des personnes en situation de handicap.
+Notre organisme donne à tous les mêmes chances d’accéder ou de maintenir l’emploi. Nous pouvons adapter certaines de nos modalités de formation : pour cela, nous étudions ensemble vos besoins.
+Pour toute question relative à une situation de handicap, contactez notre référent : Start Academy · formation@start-academy.fr · 0631056390.
 

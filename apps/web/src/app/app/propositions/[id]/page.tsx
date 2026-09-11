@@ -137,6 +137,7 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
         warnings={ws.warnings}
         composedProductCode={ws.composedProduct?.code ?? null}
         composedModuleCount={ws.composedModuleCount}
+        composedRemittable={ws.composedRemittable}
         freshness={ws.freshness}
         hasPdf={Boolean(ws.proposal.pdfKey)}
         documentId={document?.id ?? null}
@@ -217,6 +218,8 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
         readOnly={readOnly}
         catalogueNotices={ws.catalogueNotices}
         composedWarnings={ws.composedWarnings}
+        composedRemittable={ws.composedRemittable}
+        composedBlockers={ws.composedBlockers}
         participantCount={ws.pricing.payers.reduce((s, p) => s + p.participantCount, 0)}
       />
 

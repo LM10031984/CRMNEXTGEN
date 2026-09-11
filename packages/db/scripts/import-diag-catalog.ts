@@ -8,7 +8,8 @@
  *   M4 · crée les manquants sous des produits d'accueil INACTIFS, un par famille
  *   M5 · marque `excludedFromClientOutputs` les modules qui parlent de pige
  *   M6 · aligne `fundingType` sur REGLEMENTAIRE pour TRACFIN / déontologie / non-discrimination
- *   M7 · importe le parcours « L'Agent Incomparable » (M0→M6) en INACTIF
+ *   M7 · importe le parcours « L'Agent Incomparable » (M0→M6) en INACTIF et
+ *        NON DIFFUSABLE (D-19 ter — v0.9, « NE PAS DIFFUSER AUX APPRENANTS »)
  *   M8 · dépose un rapport d'import dans `.planning/` pour validation par Laurent
  *
  * Ce qu'il ne fait PAS, volontairement :
@@ -463,6 +464,9 @@ async function main() {
     say(`- ${created.repairedModules} module(s) dont la durée a été corrigée`);
     say(`- ${created.repairedProducts} conteneur(s) dont la durée totale a été recalculée`);
     say(`- ${created.reglementaires} produit(s) repassé(s) en fundingType REGLEMENTAIRE`);
+    say(
+      `- ${created.marquesNonDiffusables} produit(s) marqué(s) NON DIFFUSABLE (D-19 ter) — ni eux ni leurs modules ne peuvent plus sortir chez un client`,
+    );
   }
 
   // Le rapport de simulation et celui d'écriture ne portent PAS le même nom :
@@ -529,6 +533,7 @@ async function applyImport(
   let createdProducts = 0;
   let createdModules = 0;
   let repairedProducts = 0;
+  let marquesNonDiffusables = 0;
   let repairedModules = 0;
 
   for (const plan of familyPlan) {
@@ -546,6 +551,9 @@ async function applyImport(
             `> Conteneur d'import du catalogue diagnostic (famille « ${plan.family} »).\n` +
             '> Produit INACTIF : à découper en offres réelles avant toute mise en vente.\n',
           isActive: false,
+          // D-19 ter — l'interdiction porte sur le PROGRAMME, donc sur tous ses
+          // modules, y compris ceux qu'on lui ajouterait après la relecture.
+          excludedFromClientOutputs: true,
           ageficeEvaluations: [],
         },
       });
@@ -665,8 +673,21 @@ async function applyImport(
   if (parcours.length > 0) {
     const existing = await prisma.trainingProduct.findFirst({
       where: { tenantId, title: { contains: 'Agent Incomparable' } },
-      select: { id: true },
+      select: { id: true, excludedFromClientOutputs: true },
     });
+    // D-19 ter (11/09/2026) — le parcours est v0.9, son manifeste porte « NE PAS
+    // DIFFUSER AUX APPRENANTS ». `isActive: false` ne suffisait pas à le tenir
+    // hors des sorties client : inactif est la norme de TOUS les rayons
+    // importés, la reco ne filtre donc pas dessus (corollaire D-19), et ses
+    // modules M1 et M4 sont ressortis en tête de deux douleurs le 11/09.
+    // L'interdiction se pose sur la donnée, pas dans un manifeste.
+    if (existing && !existing.excludedFromClientOutputs) {
+      await prisma.trainingProduct.update({
+        where: { id: existing.id },
+        data: { excludedFromClientOutputs: true },
+      });
+      marquesNonDiffusables += 1;
+    }
     if (!existing) {
       const codes = (
         await prisma.trainingProduct.findMany({ where: { tenantId }, select: { code: true } })
@@ -710,6 +731,7 @@ async function applyImport(
     products: createdProducts,
     modules: createdModules,
     repairedProducts,
+    marquesNonDiffusables,
     repairedModules,
     reglementaires: aRequalifier.length,
   };

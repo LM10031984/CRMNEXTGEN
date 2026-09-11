@@ -87,6 +87,23 @@ interface Rule {
   weight: number;
   note: string;
   spec: RuleKind;
+  /**
+   * Cette douleur peut-elle recevoir une réponse de FORMATION ? Absent = oui.
+   *
+   * Quatre règles sur trente-quatre disent `false`, et c'est la seule chose
+   * qu'elles ont en commun avec les autres : elles notent un fait de CONTEXTE
+   * (la part de l'ancien dans la transaction) ou de FINANCEMENT (droits connus,
+   * formations sur 24 mois, refus de prise en charge). Elles comptent dans le
+   * score — savoir que le dirigeant ignore ses droits change le rendez-vous —
+   * mais aucun module n'y répondra jamais : la réponse est un dossier AGEFICE,
+   * pas un programme.
+   *
+   * Pourquoi le dire ici plutôt que dans le script qui en a besoin : les
+   * compter comme « non couvertes » gonflait le nombre de douleurs à combler
+   * (17 annoncées le 11/09/2026, 13 réelles) et décourageait pour rien. Un
+   * chiffre faux qui décourage coûte plus cher qu'un chiffre absent.
+   */
+  answerableByTraining?: boolean;
 }
 
 /**
@@ -98,6 +115,7 @@ const RULES: readonly Rule[] = [
   {
     chapter: 1,
     id: 'transaction-ancien',
+    answerableByTraining: false,
     weight: 1,
     note: "Part de la transaction dans l'ancien",
     spec: {
@@ -111,6 +129,7 @@ const RULES: readonly Rule[] = [
   {
     chapter: 2,
     id: 'droits-connus',
+    answerableByTraining: false,
     weight: 1,
     note: 'Le dirigeant connaît ses droits à formation',
     spec: { kind: 'yesno', questionId: 'funding-rights-known', goodAnswer: 'yes' },
@@ -118,6 +137,7 @@ const RULES: readonly Rule[] = [
   {
     chapter: 2,
     id: 'formations-24m',
+    answerableByTraining: false,
     weight: 1,
     note: 'Au moins une action de formation sur 24 mois',
     spec: { kind: 'yesno', questionId: 'funding-trainings-24m', goodAnswer: 'yes' },
@@ -125,6 +145,7 @@ const RULES: readonly Rule[] = [
   {
     chapter: 2,
     id: 'sans-refus',
+    answerableByTraining: false,
     weight: 1,
     note: 'Aucun refus de prise en charge à traiter',
     spec: { kind: 'yesno', questionId: 'funding-past-refusals', goodAnswer: 'no' },
@@ -400,6 +421,46 @@ const RULES: readonly Rule[] = [
     spec: { kind: 'yesno', questionId: 'exec-manager-reporting', goodAnswer: 'yes' },
   },
 ];
+
+/**
+ * Le barème, décrit — les DOULEURS que le diagnostic sait détecter.
+ *
+ * Exporté pour qu'on puisse dresser la liste de ce qu'un diagnostic peut
+ * reprocher à une agence, et donc la liste de ce que le catalogue doit savoir
+ * traiter. C'est la matière du rapprochement douleur ↔ module (lot I-2) : sans
+ * elle, on rapproche des modules de chapitres, pas de problèmes réels.
+ *
+ * Lecture seule et purement descriptive : le calcul du score n'en dépend pas.
+ */
+export interface DiagnosticPainPoint {
+  ruleId: string;
+  chapter: DiagnosticChapter;
+  /** Le poids dans son chapitre — la hiérarchie d'importance de Laurent. */
+  weight: number;
+  /** Ce que la règle vérifie, en français. */
+  note: string;
+  /** La question notée, quand la règle en note une. */
+  questionId: string | null;
+  /** Le ratio noté, quand la règle en note un. */
+  ratioKey: string | null;
+  /**
+   * Une formation peut-elle y répondre ? `false` pour les faits de contexte et
+   * de financement — ils se notent, ils ne se rattachent à aucun module.
+   */
+  answerableByTraining: boolean;
+}
+
+export function listDiagnosticPainPoints(): DiagnosticPainPoint[] {
+  return RULES.map((r) => ({
+    ruleId: r.id,
+    chapter: r.chapter,
+    weight: r.weight,
+    note: r.note,
+    questionId: 'questionId' in r.spec ? r.spec.questionId : null,
+    ratioKey: 'ratioKey' in r.spec ? r.spec.ratioKey : null,
+    answerableByTraining: r.answerableByTraining ?? true,
+  }));
+}
 
 /** Le score d'une règle, entre 0 et 100. null = non évaluable. */
 function evaluate(rule: Rule, input: ScoringInput, benchmarks: Benchmarks): number | null {

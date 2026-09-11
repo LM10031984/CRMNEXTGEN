@@ -23,6 +23,8 @@
     "probe:reco:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-recommandation.ts",
     "probe:composition": "dotenv -e ../../.env -- tsx scripts/probe-composition.ts",
     "probe:composition:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-composition.ts",
+    "propose:rattachement": "dotenv -e ../../.env -- tsx scripts/propose-rattachement.ts",
+    "propose:rattachement:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/propose-rattachement.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
     "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",

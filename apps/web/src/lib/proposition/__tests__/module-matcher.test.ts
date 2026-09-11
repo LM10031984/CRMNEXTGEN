@@ -30,6 +30,7 @@ function rayon(
     fundingType: 'COEUR_METIER',
     isActive: false,
     supersededBy: null,
+    excludedFromClientOutputs: false,
     ...opts,
   };
 }
@@ -453,6 +454,96 @@ describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
     // La bibliothèque utilisable n'a pas grandi : le module en doublon en sort.
     expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1);
     expect(out.notices.filter((n) => n.includes('pige')).length).toBe(1);
+    expect(out.notices.filter((n) => n.includes('fait foi')).length).toBe(1);
+  });
+});
+
+
+describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort jamais', () => {
+  /**
+   * Le cas réel, relevé le 11/09/2026 sur la liste de rattachement : « L'Agent
+   * Incomparable » (PROD-0681) était proposé en TÊTE de deux douleurs — suivi
+   * vendeur et sources de contacts. Son manifeste porte « v0.9, trous 🔴/🟠 non
+   * levés, NE PAS DIFFUSER AUX APPRENANTS », et il a été importé inactif « et
+   * il doit le rester ».
+   *
+   * Le filtre en place à ce moment-là écartait la pige et les rayons en
+   * doublon, mais pas l'indiffusable : l'interdiction vivait dans un manifeste
+   * et dans le `programMd`, nulle part dans la donnée. Elle y est désormais.
+   */
+  const PARCOURS_V09 = rayon('PROD-0681', "L'Agent Incomparable — parcours M0 → M6", {
+    excludedFromClientOutputs: true,
+  });
+
+  const args = {
+    chapterScores: [chapitre(5, 30)],
+    alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
+    answers: REPONSES,
+  };
+
+  it('ne propose jamais un module venu d’un programme non diffusable, même le mieux placé', () => {
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        // Volontairement le meilleur candidat possible : porteur du signal
+        // exact de la douleur, et module socle. S'il ressort, le filtre ne
+        // tient pas.
+        mod('m-v09', 'M2 — GAGNER LE MANDAT EN EXCLUSIVITÉ', PARCOURS_V09, {
+          isFoundation: true,
+          signals: ['Mandat — Trop de mandats simples, exclusivité difficile à obtenir'],
+        }),
+      ],
+    });
+
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.moduleId));
+    expect(tous).not.toContain('m-v09');
+    expect(out.notices.some((n) => n.includes('NON DIFFUSABLE') && n.includes('PROD-0681'))).toBe(
+      true,
+    );
+  });
+
+  it('n’écarte pas un rayon simplement inactif — non diffusable et inactif sont deux choses', () => {
+    // La confusion viderait la bibliothèque : TOUS les rayons sont inactifs
+    // (corollaire D-19), un seul programme est non diffusable.
+    expect(BIBLIOTHEQUE.every((m) => !m.source.isActive)).toBe(true);
+    expect(BIBLIOTHEQUE.every((m) => !m.source.excludedFromClientOutputs)).toBe(true);
+    const out = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
+  });
+
+  it('vaut pour TOUT ce que le programme contient, y compris un module ajouté demain', () => {
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        mod('m-v09-a', 'M1 — TROUVER VENDEURS', PARCOURS_V09),
+        mod('m-v09-b', 'M4 — SUIVI VENDEUR', PARCOURS_V09),
+        // Un module tout neuf, jamais marqué individuellement : l'interdiction
+        // porte sur le conteneur, elle n'a pas à être recopiée sur chacun.
+        mod('m-v09-neuf', 'M7 — SIGNER EN EXCLUSIVITÉ', PARCOURS_V09, {
+          signals: ['Mandat — Trop de mandats simples, exclusivité difficile à obtenir'],
+        }),
+      ],
+    });
+
+    const tous = out.recommendations.flatMap((r) => r.candidates.map((c) => c.moduleId));
+    expect(tous.filter((id) => id.startsWith('m-v09'))).toEqual([]);
+    // La bibliothèque utilisable n'a pas grandi d'un module.
+    expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1);
+  });
+
+  it('compte l’indiffusable à part de la pige et du doublon', () => {
+    const out = recommendModules({
+      ...args,
+      library: [
+        ...BIBLIOTHEQUE,
+        mod('m-v09', 'M2 — GAGNER LE MANDAT', PARCOURS_V09),
+        mod('m-doublon', 'Signer en exclusivité', rayon('BIB-D055', 'Maîtrise des techniques de vente immobilière', { supersededBy: 'PROD-055' })),
+      ],
+    });
+    expect(out.notices.filter((n) => n.includes('pige')).length).toBe(1);
+    expect(out.notices.filter((n) => n.includes('NON DIFFUSABLE')).length).toBe(1);
     expect(out.notices.filter((n) => n.includes('fait foi')).length).toBe(1);
   });
 });

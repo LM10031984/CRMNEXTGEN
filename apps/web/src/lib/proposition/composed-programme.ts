@@ -31,6 +31,8 @@
 
 import type { FundingRuleValues } from '@/lib/financement/types';
 
+import type { QualiopiMentions } from '@/lib/docs/qualiopi-mentions';
+
 import type { ComposeOutput, ComposedModule } from './composer';
 
 /** Ce qu'un rayon source peut léguer au produit composé. */
@@ -47,8 +49,19 @@ export interface SourceProgrammeInfo {
   accessConditions: string | null;
 }
 
-/** Les valeurs de l'OF, quand aucune source ne dit rien. */
-export type ProgrammeFallback = Omit<SourceProgrammeInfo, 'code' | 'title'>;
+/**
+ * Ce qu'un rayon source peut encore léguer, quand aucune source ne dit rien.
+ *
+ * Trois rubriques n'y figurent plus, et c'est le cœur de la correction du
+ * 11/09/2026 : les moyens pédagogiques, les modalités d'évaluation et
+ * l'accessibilité **n'appartiennent pas à un produit**. Elles viennent de
+ * l'organisme et arrivent par `mentions`, non nullables. Le « Public visé »,
+ * lui, ne s'hérite plus du tout : il se DÉRIVE de la composition et du client.
+ */
+export type ProgrammeFallback = Pick<
+  SourceProgrammeInfo,
+  'prerequisites' | 'trainerProfile' | 'pedagogicalSupport' | 'accessConditions'
+>;
 
 export interface ComposedProgrammeInput {
   composition: ComposeOutput;
@@ -58,6 +71,15 @@ export interface ComposedProgrammeInput {
   diagnosticReference: string;
   sources: readonly SourceProgrammeInfo[];
   fallback: ProgrammeFallback;
+  /**
+   * Les mentions Qualiopi de l'ORGANISME — garanties non vides par leur type.
+   *
+   * L'accessibilité aux personnes en situation de handicap est l'indicateur
+   * Qualiopi 26 : une section blanche n'est pas un document incomplet, c'est une
+   * non-conformité. Il n'existe donc aucun chemin, dans ce fichier, qui produise
+   * une de ces trois sections vide.
+   */
+  mentions: QualiopiMentions;
   /** Le contenu détaillé de chaque module, par `moduleId`. */
   moduleContent?: ReadonlyMap<string, string>;
   /**
@@ -95,11 +117,15 @@ export interface ComposedProgramme {
   onSiteHours: number;
   halfDays: number;
   objectives: string[];
-  prerequisites: string | null;
-  targetAudience: string | null;
-  pedagogicalMethods: string | null;
-  evaluationMethods: string | null;
-  accessibility: string | null;
+  /** Les modules dont l'objectif reste à écrire — comblés par personne. */
+  objectivesToWrite: string[];
+  prerequisites: string;
+  /** Dérivé de la composition et du client — jamais hérité d'un produit source. */
+  targetAudience: string;
+  /** Les trois rubriques de l'organisme — jamais vides, leur type l'interdit. */
+  pedagogicalMethods: string;
+  evaluationMethods: string;
+  accessibility: string;
   trainerProfile: string | null;
   pedagogicalSupport: string | null;
   accessConditions: string | null;
@@ -107,6 +133,18 @@ export interface ComposedProgramme {
   /** La traçabilité, module par module — pour la proposition et l'écran. */
   justifications: ModuleJustification[];
   warnings: string[];
+  /**
+   * Ce programme peut-il être remis à un client ou à un financeur ?
+   *
+   * `false` dès qu'il manque un déroulé ou un objectif. Ce n'est pas une nuance
+   * de présentation : un programme dont la moitié des séances annonce « déroulé
+   * à compléter » n'est pas un brouillon perfectible, c'est un document qui
+   * dessert l'organisme s'il sort. L'écran qui le génère doit le dire, et le
+   * dire à l'endroit où on clique — pas dans un journal.
+   */
+  remittable: boolean;
+  /** Ce qui, précisément, empêche de le remettre. Vide si `remittable`. */
+  blockers: string[];
 }
 
 /** Sans accents ni casse — pour dédoublonner des textes saisis à la main. */
@@ -164,12 +202,68 @@ function looksLikeInfinitive(title: string): boolean {
   return TITLE_VERBS.has(first);
 }
 
-function toObjective(title: string): { text: string; wrapped: boolean } {
+/**
+ * Un objectif, ou rien.
+ *
+ * On n'enveloppe plus les titres qui ne sont pas des verbes. « Maîtriser
+ * « Suivi » » n'est pas un objectif pédagogique : un objectif dit ce que le
+ * stagiaire SAIT FAIRE à l'issue de la formation, et un groupe nominal collé
+ * derrière un verbe passe-partout ne dit rien — ni au stagiaire, ni à
+ * l'auditeur. C'était une formule creuse qui donnait l'illusion de la
+ * conformité, ce qui est pire qu'un trou visible.
+ *
+ * Le module qui ne peut pas produire d'objectif est donc RECENSÉ, pas comblé :
+ * son objectif reste à rédiger, et le programme le dit.
+ */
+function toObjective(title: string): string | null {
   const clean = title.trim().replace(/\s+/g, ' ');
-  if (looksLikeInfinitive(clean)) {
-    return { text: clean.charAt(0).toLowerCase() + clean.slice(1), wrapped: false };
-  }
-  return { text: `maîtriser « ${clean} »`, wrapped: true };
+  if (!looksLikeInfinitive(clean)) return null;
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+/**
+ * Le « Public visé » — DÉRIVÉ de la composition et du client, jamais hérité.
+ *
+ * Hériter était le défaut : le parcours de DIAG-0001 recopiait le public d'un
+ * programme de marketing digital et annonçait, à une agence immobilière,
+ * « Professionnels du marketing, entrepreneurs… Durée de la formation : » —
+ * phrase tronquée d'extraction comprise. Un public visé recopié est faux par
+ * construction : il décrit les stagiaires d'une AUTRE formation.
+ *
+ * On le reconstruit donc à partir de ce qu'on sait vraiment : les profils que
+ * visent les modules retenus (`targetProfile`, posé par le catalogue), et le
+ * nom du client à qui ce parcours est vendu. Quand aucun module ne déclare de
+ * profil, on reste sur la population de l'organisme — vraie, et vérifiable.
+ */
+const PROFILE_LABELS: Record<string, string> = {
+  conseiller: 'conseillers immobiliers',
+  negociateur: 'négociateurs',
+  manager: 'managers et responsables d’agence',
+  directeur: 'directeurs d’agence',
+  assistant: 'assistants commerciaux',
+  dirigeant: 'dirigeants',
+};
+
+export function deriveTargetAudience(modules: readonly ComposedModule[], agencyName: string): string {
+  const profils = [
+    ...new Set(
+      modules
+        .map((m) => norm(m.targetProfile ?? ''))
+        .filter((p) => p.length > 0)
+        .map((p) => PROFILE_LABELS[p] ?? p),
+    ),
+  ];
+
+  const population =
+    profils.length > 0
+      ? profils.join(', ')
+      : 'conseillers immobiliers et responsables d’agence';
+
+  const capitalise = population.charAt(0).toUpperCase() + population.slice(1);
+  // Le nom du client vit dans sa PROPRE phrase : « de ${agencyName} » produit
+  // « de Agence du Baou » dès que le nom commence par une voyelle, et il n'y a
+  // pas de règle d'élision fiable sur une raison sociale.
+  return `${capitalise}. Parcours composé pour ${agencyName} à partir de son diagnostic : il n’est pas transposable tel quel à une autre agence.`;
 }
 
 /** La première valeur non vide parmi les sources, puis le repli de l'OF. */
@@ -229,21 +323,26 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
 
   // ── Objectifs — un par module retenu, dans l'ordre du déroulé ──────────────
   const objectives: string[] = [];
+  const objectivesToWrite: string[] = [];
   const seenObjective = new Set<string>();
-  let wrappedCount = 0;
   for (const m of modules) {
-    const { text, wrapped } = toObjective(m.title);
+    const text = toObjective(m.title);
+    if (text === null) {
+      if (!objectivesToWrite.includes(m.title)) objectivesToWrite.push(m.title);
+      continue;
+    }
     if (seenObjective.has(norm(text))) continue;
     seenObjective.add(norm(text));
-    objectives.push(text.charAt(0).toUpperCase() + text.slice(1));
-    if (wrapped) wrappedCount += 1;
+    objectives.push(text);
   }
-  if (wrappedCount > 0) {
+  if (objectivesToWrite.length > 0) {
     warnings.push(
-      `${wrappedCount} objectif(s) ont dû être reformulés : le titre du module n'est pas un infinitif et ne se lit pas après « le stagiaire sera capable de ». À reprendre au catalogue plutôt qu'à la main sur chaque proposition.`,
+      `${objectivesToWrite.length} objectif(s) pédagogique(s) restent À RÉDIGER : le titre du module ne dit pas ce que le stagiaire saura faire (${objectivesToWrite
+        .slice(0, 3)
+        .join(', ')}). Ils ne sont pas inventés — « Maîtriser « Suivi » » n'est pas un objectif, c'est une formule creuse qui donnerait l'illusion de la conformité.`,
     );
   }
-  if (objectives.length === 0) {
+  if (modules.length === 0) {
     warnings.push('Aucun module retenu : le programme est vide et ne peut pas être vendu.');
   }
 
@@ -284,9 +383,16 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
     '',
     '## Objectifs pédagogiques',
     '',
-    'À l’issue de la formation, le stagiaire sera capable de :',
-    '',
-    ...objectives.map((o) => `- ${o}`),
+    ...(objectives.length > 0
+      ? [
+          'À l’issue de la formation, le stagiaire sera capable de :',
+          '',
+          ...objectives.map((o) => `- ${o}`),
+        ]
+      : ['_Objectifs pédagogiques à rédiger._']),
+    ...(objectivesToWrite.length > 0
+      ? ['', `_Objectifs restant à rédiger pour : ${objectivesToWrite.join(', ')}._`]
+      : []),
     '',
     '## Déroulé',
     '',
@@ -318,27 +424,31 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
     }
   }
 
+  const targetAudience = deriveTargetAudience(modules, input.agencyName);
+  const prerequisites = mergePrerequisites(sources, input.fallback) ?? 'Aucun prérequis.';
+
   md.push(
     '## Public visé',
     '',
-    inherit(sources, 'targetAudience', input.fallback) ??
-      'Conseillers immobiliers et responsables d’agence.',
+    targetAudience,
     '',
     '## Prérequis',
     '',
-    mergePrerequisites(sources, input.fallback) ?? 'Aucun prérequis.',
+    prerequisites,
     '',
+    // Les trois rubriques de l'ORGANISME. Leur type interdit la chaîne vide :
+    // il n'y a donc volontairement aucune branche « sinon » ici.
     '## Moyens pédagogiques et techniques',
     '',
-    inherit(sources, 'pedagogicalMethods', input.fallback) ?? '',
+    input.mentions.pedagogicalMethods,
     '',
     '## Modalités d’évaluation',
     '',
-    inherit(sources, 'evaluationMethods', input.fallback) ?? '',
+    input.mentions.evaluationMethods,
     '',
     '## Accessibilité aux personnes en situation de handicap',
     '',
-    inherit(sources, 'accessibility', input.fallback) ?? '',
+    input.mentions.accessibility,
     '',
   );
 
@@ -350,12 +460,20 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
     );
   }
 
-  for (const key of ['pedagogicalMethods', 'evaluationMethods', 'accessibility'] as const) {
-    if (!inherit(sources, key, input.fallback)) {
-      warnings.push(
-        `Rubrique Qualiopi vide : « ${key} ». Aucun programme source ne la renseigne et l'organisme n'a pas de valeur par défaut — à compléter avant d'émettre la convention.`,
-      );
-    }
+
+  const blockers: string[] = [];
+  if (modules.length === 0) {
+    blockers.push('Aucun module composé.');
+  }
+  if (objectivesToWrite.length > 0) {
+    blockers.push(
+      `${objectivesToWrite.length} objectif(s) pédagogique(s) à rédiger — un objectif dit ce que le stagiaire saura faire, il ne se déduit pas d'un titre.`,
+    );
+  }
+  if (sansDeroule.length > 0) {
+    blockers.push(
+      `${sansDeroule.length} module(s) sans déroulé pédagogique au catalogue.`,
+    );
   }
 
   return {
@@ -365,16 +483,19 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
     onSiteHours: composition.totalOnSiteHours,
     halfDays: composition.totalHalfDays,
     objectives,
-    prerequisites: mergePrerequisites(sources, input.fallback),
-    targetAudience: inherit(sources, 'targetAudience', input.fallback),
-    pedagogicalMethods: inherit(sources, 'pedagogicalMethods', input.fallback),
-    evaluationMethods: inherit(sources, 'evaluationMethods', input.fallback),
-    accessibility: inherit(sources, 'accessibility', input.fallback),
+    objectivesToWrite,
+    prerequisites,
+    targetAudience,
+    pedagogicalMethods: input.mentions.pedagogicalMethods,
+    evaluationMethods: input.mentions.evaluationMethods,
+    accessibility: input.mentions.accessibility,
     trainerProfile: inherit(sources, 'trainerProfile', input.fallback),
     pedagogicalSupport: inherit(sources, 'pedagogicalSupport', input.fallback),
     accessConditions: inherit(sources, 'accessConditions', input.fallback),
     programMd: md.join('\n'),
     justifications,
     warnings,
+    remittable: blockers.length === 0,
+    blockers,
   };
 }
