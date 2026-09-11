@@ -25,6 +25,13 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 const { updateOrganizationMock } = vi.hoisted(() => ({ updateOrganizationMock: vi.fn() }));
 vi.mock('@/server/actions/crud-edits', () => ({ updateOrganization: updateOrganizationMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+// Depuis la correction n°7 bis (11/09/2026), la modale peut s'ouvrir par l'URL :
+// le composant lit `useSearchParams` / `useRouter`, indisponibles hors App Router.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
+  usePathname: () => '/app/organisations/org-1',
+}));
 
 const ACTUEL = {
   legalName: "AGENCE DE L'OLIVIER",

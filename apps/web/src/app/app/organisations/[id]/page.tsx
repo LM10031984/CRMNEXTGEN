@@ -39,10 +39,27 @@ const ROLE_LABEL: Record<string, string> = {
   FORMATEUR: 'Formateur',
 };
 
-export default async function OrgDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OrgDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  /**
+   * `from=` — le fil d'Ariane du dépôt, ici branché sur le retour du lien
+   * « Renseigner le financeur de {organisation} → » posé par le bloc
+   * « Signature » d'une fiche session (correction n°7 bis, 11/09/2026). Sans
+   * lui, corriger un financeur depuis une session laissait l'admin sur la liste
+   * des organisations, à retrouver sa session à la main.
+   *
+   * `champ=` est lu côté client par `<EditOrganizationButton>` : il ouvre la
+   * modale sur le champ financeur.
+   */
+  searchParams?: Promise<{ from?: string; champ?: string }>;
+}) {
   const { user } = await validateRequest();
   if (!user) return null;
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
 
   const org = await prisma.organization.findFirst({
     where: { id, tenantId: user.tenantId },
@@ -76,7 +93,11 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
         subtitle={org.legalForm + (org.opcoCode ? ` · ${formatFunderCode(org.opcoCode)}` : '')}
         href={`/app/organisations/${org.id}`}
       />
-      <BackToListLink fallbackHref="/app/organisations" label="Retour à la liste" />
+      <BackToListLink
+        fallbackHref="/app/organisations"
+        label="Retour à la liste"
+        from={sp.from}
+      />
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <PageHeader

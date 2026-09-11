@@ -95,6 +95,13 @@ export interface LigneSignature {
  * `AnomalieEnvoi` ne transporte pas.
  */
 export interface ContexteAvertissement {
+  /**
+   * L'id du commanditaire de CETTE inscription — la fiche à ouvrir dans le cas
+   * A. Sans lui, le lien n'aurait aucune destination et l'avertissement
+   * retomberait sur le formulaire d'inscription, c'est-à-dire sur le
+   * comportement que la correction n°7 bis supprime.
+   */
+  sponsorOrgId: string | null;
   /** `brandName ?? legalName` du commanditaire de CETTE inscription. */
   sponsorOrgLabel: string | null;
   /**
@@ -122,6 +129,62 @@ export interface AvertissementParticipant {
   docTypes: DocTypeSignable[];
   /** Composé par `composerAvertissementRegime`. Rendu tel quel par le bloc. */
   message: string;
+  /**
+   * OÙ VA LE LIEN — décidé ici, pas dans le JSX. Le composant se contente de
+   * choisir entre deux `<Link>` : la règle, elle, reste sous test unitaire.
+   */
+  correction: CorrectionAvertissement;
+}
+
+/**
+ * Les DEUX destinations de l'avertissement — correction n°7 bis (Laurent,
+ * 11/09/2026, après vérification d'écran).
+ *
+ * L'avertissement envoyait TOUJOURS vers le formulaire d'inscription. C'est
+ * faux dans la moitié des cas :
+ *
+ *  • **cas A** — le commanditaire est le BON, il lui manque son code financeur
+ *    (Camille ROUSSEL, Marion MAINO en production). Il n'y a RIEN à corriger
+ *    sur l'inscription : y envoyer l'admin, c'est lui faire changer un champ
+ *    déjà juste. Destination : la fiche organisation.
+ *  • **cas B** — le commanditaire LUI-MÊME est incohérent avec les signaux du
+ *    dossier (Clothilde MANUEL : commanditaire Sigma / OPCO_EP, apprenante
+ *    rattachée AGEFICE). Destination : le formulaire d'inscription, inchangé.
+ */
+export type CorrectionAvertissement =
+  | {
+      cible: 'ORGANISATION';
+      organizationId: string;
+      /** Peut être vide : le lien a alors une formulation de repli. */
+      libelleOrganisation: string;
+    }
+  | { cible: 'INSCRIPTION' };
+
+/**
+ * Laquelle des deux corrections, pour ce participant.
+ *
+ * ⚠ LE DISCRIMINANT EXISTE DÉJÀ, ON N'EN INVENTE PAS UN SECOND.
+ * `financeurSansRegime` a été posé par la correction n°3 pour distinguer « n'a
+ * aucun régime de financement » de « n'ouvre pas ces pièces » — c'est
+ * exactement la même frontière. Deux règles pour une question est précisément
+ * ce que le lot C.2b-1 vient de supprimer entre la fiche session et le moteur.
+ *
+ * Sans contexte, ou sans id d'organisation, on retombe sur l'inscription : on
+ * ne fabrique pas un lien vers une fiche qu'on ne sait pas nommer.
+ */
+export function correctionAvertissement(
+  contexte?: ContexteAvertissement | undefined,
+): CorrectionAvertissement {
+  if (contexte === undefined || contexte.financeurSansRegime !== true) {
+    return { cible: 'INSCRIPTION' };
+  }
+  const organizationId = (contexte.sponsorOrgId ?? '').trim();
+  if (organizationId.length === 0) return { cible: 'INSCRIPTION' };
+  return {
+    cible: 'ORGANISATION',
+    organizationId,
+    libelleOrganisation: (contexte.sponsorOrgLabel ?? '').trim(),
+  };
 }
 
 export interface VueSignature {
@@ -217,14 +280,24 @@ export function composerAvertissementRegime(a: {
   contexte?: ContexteAvertissement | undefined;
 }): string {
   const organisation = (a.contexte?.sponsorOrgLabel ?? '').trim();
-  const manque =
-    a.contexte?.financeurSansRegime === true
-      ? 'n’a aucun régime de financement'
-      : 'n’ouvre pas ces pièces';
+  const entreParentheses = organisation.length > 0 ? ` (${organisation})` : '';
 
-  const probleme =
-    `${a.nomAffiche} — son financeur d’inscription` +
-    `${organisation.length > 0 ? ` (${organisation})` : ''} ${manque}`;
+  // ⚠ DEUX PROBLÈMES DISTINCTS, DEUX PHRASES DISTINCTES, ET DEUX GESTES
+  // DISTINCTS (correction n°7 bis). Cas A : c'est l'organisation qui n'a pas de
+  // financeur — on va le RENSEIGNER sur sa fiche. Cas B : elle en a un, mais il
+  // n'ouvre pas ces pièces — c'est le rattachement de l'inscription qui est à
+  // revoir. Un texte unique pour les deux faisait mentir l'un des deux.
+  const casA = a.contexte?.financeurSansRegime === true;
+
+  const probleme = casA
+    ? `${a.nomAffiche} — son organisation commanditaire${entreParentheses} ` +
+      `n’a aucun régime de financement`
+    : `${a.nomAffiche} — le financeur de son organisation commanditaire${entreParentheses} ` +
+      `n’ouvre pas ces pièces`;
+
+  const action = casA
+    ? 'Renseignez le financeur de cette organisation.'
+    : 'Corrigez l’organisation commanditaire de l’inscription.';
 
   // Le « alors que » n'existe QUE s'il repose sur un fait. Sans contexte, on
   // s'arrête au problème : une demi-phrase vraie vaut mieux qu'une phrase
@@ -244,8 +317,7 @@ export function composerAvertissementRegime(a: {
   const entete = pieces.length > 1 ? 'Pièces concernées' : 'Pièce concernée';
 
   return (
-    `${probleme}${rattachement}. Corrigez le financeur de l’inscription. ` +
-    `${entete} : ${liste}. Rien n’a été envoyé.`
+    `${probleme}${rattachement}. ${action} ` + `${entete} : ${liste}. Rien n’a été envoyé.`
   );
 }
 
@@ -277,6 +349,7 @@ export function regrouperAvertissements(
 
   return [...groupes.entries()].map(([participantId, groupe]) => {
     const docTypes = DOC_TYPES_SIGNABLES.filter((docType) => groupe.docTypes.has(docType));
+    const contexte = contexteParParticipant.get(participantId);
     return {
       participantId,
       nomAffiche: groupe.nomAffiche,
@@ -284,8 +357,12 @@ export function regrouperAvertissements(
       message: composerAvertissementRegime({
         nomAffiche: groupe.nomAffiche,
         docTypes,
-        contexte: contexteParParticipant.get(participantId),
+        contexte,
       }),
+      // Le message et la destination sont tirés du MÊME contexte : un encart qui
+      // dirait « renseignez le financeur » en menant à l'inscription serait pire
+      // que l'ancien comportement.
+      correction: correctionAvertissement(contexte),
     };
   });
 }

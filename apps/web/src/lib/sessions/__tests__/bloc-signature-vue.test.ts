@@ -247,6 +247,8 @@ describe('construireVueSignature — le bouton et les lignes', () => {
           nomAffiche: 'Florent HAUSSWIRTH',
           docTypes: ['AGEFICE'],
         }),
+        // Sans contexte, on ne devine pas : l'inscription, comme avant.
+        correction: { cible: 'INSCRIPTION' },
       },
     ]);
     // Un avertissement ne planifie RIEN : il n'ajoute aucune ligne, donc aucun bouton.

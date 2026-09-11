@@ -554,6 +554,11 @@ export default async function SessionDetailPage({
       return [
         lu.participantId,
         {
+          // L'id, PAS seulement le libellé : c'est la fiche que le lien du cas A
+          // ouvre (`/app/organisations/{id}`). Sans lui, l'avertissement
+          // retomberait sur le formulaire d'inscription — le comportement que la
+          // correction n°7 bis supprime.
+          sponsorOrgId: lu.sponsorOrgId,
           sponsorOrgLabel: lu.sponsorOrgLabel,
           // `regle === null` = financeur absent ou hors catalogue : aucune
           // pièce en régime. C'est ce qui distingue « n'a aucun régime de

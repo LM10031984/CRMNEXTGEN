@@ -54,10 +54,7 @@ export const OPTION_AUCUN_COMMANDITAIRE = '— Aucune organisation commanditaire
  * se taire : c'est exactement le cas — Camille ROUSSEL, Marion MAINO — où il
  * manque quelque chose, et une option muette laisserait croire que tout va bien.
  */
-export function libelleOptionCommanditaire(o: {
-  label: string;
-  opcoCode: string | null;
-}): string {
+export function libelleOptionCommanditaire(o: { label: string; opcoCode: string | null }): string {
   const code = (o.opcoCode ?? '').trim();
   if (code.length === 0) return `${o.label} — aucun financeur`;
   return `${o.label} (${formatFunderCode(code)})`;

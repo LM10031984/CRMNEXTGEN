@@ -48,6 +48,11 @@ import {
   lienCorrigerFinanceur,
 } from '@/lib/sessions/lien-corriger-financeur';
 import {
+  libelleLienRenseignerFinanceur,
+  lienRenseignerFinanceur,
+  retourVersOnglet,
+} from '@/lib/sessions/lien-renseigner-financeur';
+import {
   AlertTriangle,
   Ban,
   Check,
@@ -217,25 +222,47 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
           <span className="min-w-0">
             {avertissement.message}{' '}
-            {/* Le lien qui tient la promesse du message. Sans lui, « Corrigez le
-                financeur de l'inscription » est une consigne sans destination :
-                l'admin doit deviner où aller, et le champ n'existait même pas
-                avant le lot C.2b-5. `retour` suit le scope pour le ramener ici. */}
-            <Link
-              // `typedRoutes` est actif : Link n'accepte pas une URL construite.
-              // `as Route` plutôt que `as any` — on échappe au typage des routes,
-              // pas au typage tout court (motif de `devis/page.tsx:209`).
-              href={
-                lienCorrigerFinanceur({
-                  sessionId,
-                  participantId: avertissement.participantId,
-                  retour: scope === 'BEFORE' ? 'avant' : 'apres',
-                }) as Route
-              }
-              className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
-            >
-              {LIBELLE_LIEN_CORRIGER_COMMANDITAIRE}
-            </Link>
+            {/* ⚠ DEUX DESTINATIONS, ET LE COMPOSANT NE CHOISIT PAS : il rend ce
+                que `correctionAvertissement` a décidé (correction n°7 bis,
+                Laurent 11/09/2026). Avant, le lien menait TOUJOURS au formulaire
+                d'inscription — faux dans la moitié des cas : quand le
+                commanditaire est le bon et qu'il lui manque son code financeur
+                (Camille ROUSSEL, Marion MAINO), il n'y a rien à y corriger.
+
+                `typedRoutes` est actif : Link n'accepte pas une URL construite.
+                `as Route` plutôt que `as any` — on échappe au typage des routes,
+                pas au typage tout court (motif de `devis/page.tsx:209`). */}
+            {avertissement.correction.cible === 'ORGANISATION' ? (
+              <Link
+                href={
+                  lienRenseignerFinanceur({
+                    organizationId: avertissement.correction.organizationId,
+                    // Le retour suit le scope, comme pour l'autre lien : l'admin
+                    // est reposé sur l'onglet qu'il a quitté.
+                    retourVers: retourVersOnglet(
+                      sessionId,
+                      scope === 'BEFORE' ? 'avant' : 'apres',
+                    ),
+                  }) as Route
+                }
+                className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
+              >
+                {libelleLienRenseignerFinanceur(avertissement.correction.libelleOrganisation)}
+              </Link>
+            ) : (
+              <Link
+                href={
+                  lienCorrigerFinanceur({
+                    sessionId,
+                    participantId: avertissement.participantId,
+                    retour: scope === 'BEFORE' ? 'avant' : 'apres',
+                  }) as Route
+                }
+                className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
+              >
+                {LIBELLE_LIEN_CORRIGER_COMMANDITAIRE}
+              </Link>
+            )}
           </span>
         </div>
       ))}
