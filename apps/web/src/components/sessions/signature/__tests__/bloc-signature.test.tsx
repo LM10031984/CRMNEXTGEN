@@ -87,9 +87,13 @@ import type { DocTypeSignable } from '@/lib/signature/regime';
 // Demande du 11/09/2026 : l'ordre complet sur la LIGNE. Le fixture le dérive du
 // MÊME module que la vue — un `ordre` écrit à la main dans le fixture ferait
 // passer le test même si `construireVueSignature` cessait de le calculer.
-import { ordreSignatairesPrevu } from '@/lib/sessions/ordre-signataires';
+import {
+  mentionAttentePiece,
+  ordreSignatairesEnvoyes,
+  ordreSignatairesPrevu,
+} from '@/lib/sessions/ordre-signataires';
 import type { EnvoiPlanifie } from '@/lib/signature/plan-envoi';
-import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
+import type { SignataireEnvoye, SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 import {
   LIBELLE_LIEN_CORRIGER_COMMANDITAIRE,
   lienCorrigerFinanceur,
@@ -120,7 +124,7 @@ const OF_FIXTURE: SignataireOfPrevu = {
 };
 
 function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
-  const base: Omit<LigneSignature, 'ordre'> = {
+  const base: Omit<LigneSignature, 'ordre' | 'attente'> = {
     cle: 'ASSIDUITE:part-1',
     docType: 'ASSIDUITE',
     libelle: "Attestation d'assiduité — Jean DUPONT",
@@ -144,7 +148,52 @@ function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
         client: base.signataire,
         of: OF_FIXTURE,
       }),
+    // Lot C.3 (D-C3-1) : la phrase de la ligne. Nulle par défaut — une pièce qui
+    // n'est pas partie n'attend personne.
+    attente: over.attente ?? null,
   };
+}
+
+/**
+ * Les signataires RÉELS d'une pièce partie — ce que `SignatureRequest.signers`
+ * porte, et que la recette C.3 a trouvé absent de cet écran (défaut D-C3-1).
+ */
+const SIGNATAIRES_ENVOYES: SignataireEnvoye[] = [
+  {
+    partie: 'CLIENT',
+    role: 'Stagiaire',
+    nom: 'Jean DUPONT',
+    email: 'jean@dupont.fr',
+    signUrl: 'https://docuseal.eu/s/stagiaire',
+    signedAt: null,
+  },
+  {
+    partie: 'OF',
+    role: 'Organisme de formation',
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    signUrl: 'https://docuseal.eu/s/of',
+    signedAt: null,
+  },
+];
+
+/**
+ * Une ligne PARTIE, composée par les MÊMES modules que la vue serveur.
+ *
+ * Le fixture ne recopie ni l'ordre ni la phrase : il les dérive, comme le fait
+ * `construireVueSignature`. Les VALEURS, elles, sont gardées littéralement —
+ * ici dans les assertions sur le DOM, et dans `bloc-signature-vue.test.ts` pour
+ * la vue.
+ */
+function lignePartie(signataires: SignataireEnvoye[] = SIGNATAIRES_ENVOYES): LigneSignature {
+  const ordre = ordreSignatairesEnvoyes({ signataires });
+  return ligne({
+    etat: 'ENVOYE',
+    envoyable: false,
+    signatureRequestId: 'req-9',
+    ordre,
+    attente: mentionAttentePiece(ordre),
+  });
 }
 
 function vue(over: Partial<VueSignature> = {}): VueSignature {
@@ -385,18 +434,22 @@ describe('PUISSANCE (b) — l’avertissement « régime incohérent » se voit 
 });
 
 describe('PUISSANCE (c) — une pièce partie s’annule, et le dit', () => {
-  const partie = ligne({
-    etat: 'ENVOYE',
-    envoyable: false,
-    signatureRequestId: 'req-9',
-  });
+  const partie = lignePartie();
 
-  it('la ligne dit « En attente de signature » et que personne n’a été prévenu (C.2c)', () => {
+  it('la ligne dit « En attente de signature » et NOMME qui est attendu (D-C3-1)', () => {
     render(
       <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [partie] })} />,
     );
     expect(screen.getByText(/en attente de signature/i)).toBeTruthy();
-    expect(document.body.textContent).toContain('C.2c');
+    // ⚠ La phrase de la ligne arrive CALCULÉE (`ligne.attente`) : le composant
+    // la rend, il ne la compose pas. Sa valeur est gardée littéralement dans
+    // `bloc-signature-vue.test.ts`.
+    expect(document.body.textContent).toContain('En attente de la signature de Jean DUPONT');
+    // ⚠ ET SURTOUT : plus aucune promesse d'un lot à venir. La phrase
+    // « l'envoi automatique des emails aux signataires arrive au lot C.2c »
+    // était fausse depuis le 11/09/2026 — les emails partent. C'est la moitié
+    // du défaut D-C3-1 de la recette.
+    expect(document.body.textContent).not.toContain('C.2c');
   });
 
   it('« Annuler l’envoi » appelle `annulerEnvoiSignature` avec l’identifiant de la DEMANDE', async () => {
@@ -409,7 +462,7 @@ describe('PUISSANCE (c) — une pièce partie s’annule, et le dit', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it('aucun lien « Relancer » n’existe — il n’a rien à relancer avant C.2c', () => {
+  it('aucun lien « Relancer » n’existe — la relance est un cron, pas un bouton', () => {
     render(
       <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [partie] })} />,
     );
@@ -1055,5 +1108,97 @@ describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout cl
     expect(texte).toContain('signataire à déterminer');
     expect(texte).not.toContain('1. ');
     expect(texte).not.toContain('Laurent MARX');
+  });
+});
+
+/* ── D-C3-1 — l'état PAR SIGNATAIRE, et le lien qui manquait ─────────────── */
+
+/**
+ * LE DÉFAUT, TEL QUE LA RECETTE DU 11/09/2026 L'A CONSTATÉ (étape 6).
+ *
+ * Le client avait signé — DocuSeal l'avait dit, le webhook l'avait écrit,
+ * l'Historique le montrait. Le bloc « Signature », lui, affichait toujours
+ * « En attente de signature », sans date, sans distinguer qui avait signé de
+ * qui restait attendu, et **sans le lien « Signer maintenant »** : l'admin
+ * devait retrouver l'email « à votre tour » pour signer depuis le CRM.
+ *
+ * Le calcul existait (`ordreSignatairesEnvoyes`) et était testé. Ce qui
+ * manquait, c'est que le composant le RENDE — exactement le trou que la règle
+ * n°1 du projet décrit : le calcul gardé, le rendu non.
+ */
+describe('PUISSANCE (e) — une pièce partie montre où elle en est, rang par rang', () => {
+  const CLIENT_A_SIGNE: SignataireEnvoye = {
+    ...SIGNATAIRES_ENVOYES[0]!,
+    signedAt: '2026-09-11T16:01:00.000Z',
+  };
+  const OF_ATTENDU = SIGNATAIRES_ENVOYES[1]!;
+
+  it('le rang du signataire qui a signé porte la DATE, pas seulement « a signé »', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [lignePartie([CLIENT_A_SIGNE, OF_ATTENDU])] })}
+      />,
+    );
+    // ⚠ LITTÉRAL, fuseau de Paris compris : 16:01 UTC = 18:01 à Paris. Sans la
+    // date, l'admin ne sait pas s'il attend depuis une heure ou trois semaines.
+    expect(document.body.textContent).toContain('a signé le 11/09/2026 à 18:01');
+  });
+
+  it('le lien « Signer maintenant » de l’organisme EXISTE, et pointe son lien à lui', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [lignePartie([CLIENT_A_SIGNE, OF_ATTENDU])] })}
+      />,
+    );
+    const lien = screen.getByRole('link', { name: /signer maintenant/i });
+    // ⚠ LITTÉRAL : le lien de l'ORGANISME, jamais celui du client. Les
+    // envoyer au même endroit ferait signer Laurent dans la session de Jean —
+    // et le certificat enregistrerait la mauvaise identité.
+    expect(lien.getAttribute('href')).toBe('https://docuseal.eu/s/of');
+  });
+
+  it('PUISSANCE — tant que le client n’a PAS signé, aucun lien « Signer maintenant »', () => {
+    // Il n'est ni grisé, ni masqué : il n'existe pas. `signerMaintenant` est
+    // adossé au `signedAt` du client (D-3, `order: AFTER`) — un lien ouvert
+    // trop tôt mènerait chez le prestataire sur une page qui refuse.
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [lignePartie()] })} />,
+    );
+    expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
+    // …et l'écran DIT pourquoi, en nommant la personne attendue.
+    expect(document.body.textContent).toContain(
+      'Le lien « Signer maintenant » s’ouvrira ici dès que Jean DUPONT aura signé.',
+    );
+  });
+
+  it('l’organisme a signé lui aussi : plus de lien, plus de phrase d’attente', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [
+            lignePartie([
+              CLIENT_A_SIGNE,
+              { ...OF_ATTENDU, signedAt: '2026-09-11T16:08:00.000Z' },
+            ]),
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
+    expect(document.body.textContent).toContain('a signé le 11/09/2026 à 18:08');
+  });
+
+  it('une pièce PRÊTE À PARTIR n’affiche ni date ni lien — rien n’a encore été envoyé', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+    expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
+    expect(document.body.textContent).not.toContain('a signé le');
   });
 });

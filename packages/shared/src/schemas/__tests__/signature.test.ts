@@ -19,6 +19,7 @@ import {
   signatureSignersSchema,
   parseSignatureSigners,
   signatureSignerSchema,
+  SignatureCompletedPayloadSchema,
 } from '../signature';
 
 describe('tenantSignatorySchema — signataire OF (D-1)', () => {
@@ -153,5 +154,53 @@ describe('signers — contrat de la colonne Json', () => {
     expect(parseSignatureSigners(null)).toEqual([]);
     expect(parseSignatureSigners({ role: 'Client' })).toEqual([]);
     expect(parseSignatureSigners('[]')).toEqual([]);
+  });
+});
+
+/* ── D-C3-2 — le payload de la cloche « pièce signée par tous » ───────────── */
+
+/**
+ * POURQUOI UN SCHÉMA, ET POURQUOI TOLÉRANT.
+ *
+ * `Notification.payload` est une colonne Json sans forme garantie : le lecteur
+ * (`getNotifications`) doit refuser ce qu'il ne comprend pas plutôt que de
+ * rendre une cloche qui pointe nulle part. Mais les lignes DÉJÀ ÉCRITES — sur
+ * l'aperçu du 11/09/2026 — portent exactement cinq champs : exiger un champ de
+ * plus les ferait disparaître en silence, la même mécanique que
+ * `parseSignatureSigners` (règle n°2 du bloc C.3 de la spec).
+ */
+describe('SignatureCompletedPayloadSchema — la forme réellement écrite en base', () => {
+  const REEL = {
+    signatureRequestId: '11111111-1111-4111-8111-111111111111',
+    sessionId: '22222222-2222-4222-8222-222222222222',
+    sessionCode: 'SES-0048',
+    documentId: '33333333-3333-4333-8333-333333333333',
+    docType: 'CONVENTION',
+  };
+
+  it('accepte la ligne écrite par `prevenirAdmins`, telle qu’elle est en base', () => {
+    const parsed = SignatureCompletedPayloadSchema.safeParse(REEL);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.sessionId).toBe(
+      '22222222-2222-4222-8222-222222222222',
+    );
+    expect(parsed.success && parsed.data.docType).toBe('CONVENTION');
+    expect(parsed.success && parsed.data.sessionCode).toBe('SES-0048');
+  });
+
+  it('le code de session est FACULTATIF : sans lui la cloche reste lisible', () => {
+    const { sessionCode: _omis, ...sansCode } = REEL;
+    const parsed = SignatureCompletedPayloadSchema.safeParse(sansCode);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.sessionCode).toBeNull();
+  });
+
+  it('sans session ni type de pièce : REFUSÉ — une cloche sans destination ne sert à rien', () => {
+    expect(SignatureCompletedPayloadSchema.safeParse({ docType: 'CONVENTION' }).success).toBe(
+      false,
+    );
+    expect(
+      SignatureCompletedPayloadSchema.safeParse({ sessionId: REEL.sessionId }).success,
+    ).toBe(false);
   });
 });

@@ -32,7 +32,7 @@ import type { RegleSignatureFinanceur } from '@/lib/signature/regime';
 // récapitulatif. La vue l'appelle, elle ne le réécrit pas : deux compositions
 // pour la même phrase finiraient par diverger d'un écran à l'autre.
 import { texteOrdreSignataires } from '../ordre-signataires';
-import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
+import type { SignataireEnvoye, SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 
 /**
  * « PAS D'ORGANISME RÉSOLU », écrit explicitement — demande n°2 de Laurent
@@ -66,6 +66,9 @@ function doc(over: Partial<DocumentDeLaPiece> = {}): DocumentDeLaPiece {
     status: 'generated',
     signedPdfUrl: null,
     signatureRequestId: null,
+    // Lot C.3 (D-C3-1) : les signataires RÉELS de la demande en cours. Vide par
+    // défaut — un document qui n'est pas parti n'en a aucun.
+    signataires: [],
     ...over,
   };
 }
@@ -903,5 +906,191 @@ describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc
       '1. Paul DURAND — paul.durand@provence-immo.fr · ' +
         '2. Laurent MARX (organisme de formation), signe en dernier depuis le CRM',
     );
+  });
+});
+
+/* ── D-C3-1 — une pièce PARTIE dit où elle en est, signataire par signataire ─ */
+
+/**
+ * LE DÉFAUT QUE CES TESTS FERMENT (recette C.3 du 11/09/2026, étape 6).
+ *
+ * Après la signature du client, la ligne restait « En attente de signature »,
+ * sans « Paul DURAND a signé le … », **sans le lien « Signer maintenant » de
+ * l'organisme**, et avec une phrase périmée annonçant l'envoi des emails « au
+ * lot C.2c ». Les briques existaient (`ordreSignatairesEnvoyes`,
+ * `mentionAttenteOf`) — elles ne servaient qu'au récapitulatif, c'est-à-dire à
+ * l'écran qu'on ne revoit jamais. Ce qui manquait n'était pas un calcul : c'est
+ * que `SignatureRequest.signers` ne remontait pas jusqu'ici.
+ *
+ * ⚠ `signataires` est OBLIGATOIRE sur `DocumentDeLaPiece`, pour la raison
+ * mesurée au lot C.2b-8 sur `signataireOf` : une prop optionnelle se perd en
+ * silence, et l'écran repart exactement comme avant sans qu'un test ne bouge.
+ */
+describe('LigneSignature.ordre — une pièce PARTIE lit les signataires RÉELS', () => {
+  const conventionPartie: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1'],
+    libelle: 'Convention — Provence Immobilier (2 participants)',
+    concerne: 'Provence Immobilier',
+    organisation: 'Provence Immobilier',
+  };
+  const PREVU = { nom: 'Paul DURAND', email: 'paul.durand@provence-immo.fr' };
+  const OF: SignataireOfPrevu = {
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    ordre: 'AFTER',
+  };
+  const CLIENT_SIGNE: SignataireEnvoye = {
+    partie: 'CLIENT',
+    role: 'Client',
+    nom: 'Paul DURAND',
+    email: 'paul.durand@provence-immo.fr',
+    signUrl: 'https://docuseal.eu/s/client',
+    signedAt: '2026-09-11T16:01:00.000Z',
+  };
+  const OF_EN_ATTENTE: SignataireEnvoye = {
+    partie: 'OF',
+    role: 'Organisme de formation',
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    signUrl: 'https://docuseal.eu/s/of',
+    signedAt: null,
+  };
+
+  function vuePartie(signataires: SignataireEnvoye[]) {
+    return construireVueSignature({
+      plan: { envois: [conventionPartie], blocages: [], avertissements: [] },
+      documentParCle: new Map([
+        [
+          'CONVENTION:org-1',
+          doc({ status: 'sent_for_signature', signatureRequestId: 'req-9', signataires }),
+        ],
+      ]),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map([['CONVENTION:org-1', PREVU]]),
+      signataireOf: OF,
+    });
+  }
+
+  it('le client a signé : son rang porte la DATE, et l’organisme porte son lien', () => {
+    const ligne = vuePartie([CLIENT_SIGNE, OF_EN_ATTENTE]).lignes[0]!;
+    expect(ligne.etat).toBe('ENVOYE');
+    expect(ligne.ordre).toHaveLength(2);
+
+    expect(ligne.ordre[0]!.aSigne).toBe(true);
+    expect(ligne.ordre[0]!.signedAt).toBe('2026-09-11T16:01:00.000Z');
+
+    // ⚠ LA PROMESSE DE D-C3-1 : le lien « Signer maintenant » de l'organisme.
+    // Sans lui, l'admin dont le client vient de signer n'a AUCUN moyen, depuis
+    // QualiOF, de signer à son tour — il doit retrouver son email.
+    expect(ligne.ordre[1]!.signerMaintenant).toBe(true);
+    expect(ligne.ordre[1]!.signUrl).toBe('https://docuseal.eu/s/of');
+  });
+
+  it('PUISSANCE — sans signataires réels, la ligne retomberait sur l’ordre PRÉVU, qui ne signe jamais', () => {
+    // C'est exactement l'état d'avant la correction : `ordreSignatairesPrevu`
+    // rend `aSigne: false` et `signUrl: null` pour tout le monde, quoi qu'il se
+    // soit passé chez le prestataire. La mutation qui rebranche l'ordre prévu
+    // sur une pièce PARTIE doit faire rougir ce test.
+    const ligne = vuePartie([]).lignes[0]!;
+    expect(ligne.ordre.every((s) => s.aSigne === false)).toBe(true);
+    expect(ligne.ordre.every((s) => s.signUrl === null)).toBe(true);
+  });
+
+  it('une pièce PRÊTE À PARTIR garde l’ordre prévu — rien n’a encore été envoyé', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [conventionPartie], blocages: [], avertissements: [] },
+      documentParCle: new Map([['CONVENTION:org-1', doc()]]),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map([['CONVENTION:org-1', PREVU]]),
+      signataireOf: OF,
+    });
+    const ligne = vue.lignes[0]!;
+    expect(ligne.etat).toBe('GENERE');
+    expect(ligne.ordre).toHaveLength(2);
+    expect(ligne.ordre.every((s) => s.signedAt === null)).toBe(true);
+  });
+});
+
+describe('LigneSignature.attente — la phrase de la ligne, qui remplace la périmée', () => {
+  const assiduitePartie: EnvoiPlanifie = {
+    cle: 'ASSIDUITE:part-1',
+    docType: 'ASSIDUITE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Attestation d’assiduité — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
+  };
+  const OF: SignataireOfPrevu = {
+    nom: 'Laurent MARX',
+    email: 'laurent@start-academy.fr',
+    ordre: 'AFTER',
+  };
+  const STAGIAIRE: SignataireEnvoye = {
+    partie: 'CLIENT',
+    role: 'Stagiaire',
+    nom: 'Jean DUPONT',
+    email: 'jean@dupont.fr',
+    signUrl: 'https://docuseal.eu/s/stagiaire',
+    signedAt: null,
+  };
+
+  function ligneAvec(a: {
+    status?: string;
+    signataires?: SignataireEnvoye[];
+    requestId?: string | null;
+  }) {
+    return construireVueSignature({
+      plan: { envois: [assiduitePartie], blocages: [], avertissements: [] },
+      documentParCle: new Map([
+        [
+          'ASSIDUITE:part-1',
+          doc({
+            status: a.status ?? 'sent_for_signature',
+            signatureRequestId: a.requestId === undefined ? 'req-9' : a.requestId,
+            signataires: a.signataires ?? [STAGIAIRE],
+          }),
+        ],
+      ]),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map([['ASSIDUITE:part-1', { nom: 'Jean DUPONT', email: 'jean@dupont.fr' }]]),
+      signataireOf: OF,
+    }).lignes[0]!;
+  }
+
+  it('elle NOMME qui est attendu et promet le retour — au caractère près', () => {
+    expect(ligneAvec({}).attente).toBe(
+      'En attente de la signature de Jean DUPONT. Dès que tous les signataires auront ' +
+        'signé, le PDF signé et son certificat de signature reviendront ici automatiquement.',
+    );
+  });
+
+  it('aucun signataire lisible sur la demande : on le DIT, on n’invente pas un nom', () => {
+    // `parseSignatureSigners` écarte SANS BRUIT ce qui ne parse pas (règle du
+    // lot C.3). Une ligne partie sans signataire lisible doit donc rester
+    // explicable : sinon l'écran affiche une pièce « en attente » de personne.
+    expect(ligneAvec({ signataires: [] }).attente).toBe(
+      'Cette pièce est partie en signature, mais la demande enregistrée ne porte aucun ' +
+        'signataire lisible : suivez-la chez le prestataire, ou annulez l’envoi pour la ' +
+        'renvoyer.',
+    );
+  });
+
+  it('une pièce qui n’est PAS partie n’a aucune attente à afficher', () => {
+    expect(ligneAvec({ status: 'generated', requestId: null }).attente).toBeNull();
+  });
+
+  it('la phrase ne parle plus d’un lot à venir — ni C.2c, ni C.3', () => {
+    const attente = ligneAvec({}).attente ?? '';
+    expect(attente).not.toContain('C.2c');
+    expect(attente).not.toContain('C.3');
   });
 });

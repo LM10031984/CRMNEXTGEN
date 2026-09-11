@@ -94,8 +94,17 @@ describe('Les mots de la zone repliée — demande n°4', () => {
     // Sans elle, un admin se demande s'il doit aussi déposer ici les pièces
     // qu'il vient d'envoyer en signature — et finit par le faire, ce qui
     // annulerait l'envoi (règle fail-closed de C.2b-3).
-    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('reviendront automatiquement');
-    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('C.3');
-    expect(MENTION_RETOUR_AUTOMATIQUE).toContain('papier');
+    //
+    // ⚠ ÉCRITE AU PRÉSENT DEPUIS LE 11/09/2026. Elle promettait le retour
+    // automatique « dès que le lot C.3 sera branché » : il l'est, et la recette
+    // l'a constaté (étape 8, cellule verte sans rien faire). Une promesse au
+    // futur sur une fonction livrée fait déposer des scans dont personne n'a
+    // besoin — la valeur littérale est gardée ci-dessous.
+    expect(MENTION_RETOUR_AUTOMATIQUE).toBe(
+      'Les pièces envoyées en signature électronique n’ont pas à passer par ici : une fois ' +
+        'signées, le PDF signé et son certificat de signature reviennent automatiquement sur ' +
+        'la pièce. Cette zone ne sert qu’au papier.',
+    );
+    expect(MENTION_RETOUR_AUTOMATIQUE).not.toContain('C.3');
   });
 });

@@ -15,10 +15,15 @@ import { describe, it, expect } from 'vitest';
  *      envoyé.** Le lien de l'OF n'a de sens qu'une fois le client passé
  *      (D-3, `order: AFTER`). Tant que `signedAt` du client est nul, le lien
  *      n'existe PAS dans le DOM — et l'écran DIT pourquoi.
- *  (c) **L'honnêteté sur le lot C.3.** `signedAt` ne se remplit que par le
- *      retour du prestataire, qui n'est pas branché. On ne simule pas, on ne
- *      laisse pas croire que l'écran se mettra à jour tout seul : la phrase
- *      d'attente le nomme.
+ *  (c) **L'honnêteté sur ce que cet écran sait.** `signedAt` ne se remplit que
+ *      par le retour du prestataire. Depuis le lot C.3 ce retour EXISTE — la
+ *      phrase d'attente ne promet plus un branchement à venir, elle dit d'où
+ *      vient l'information et ce qu'il faut faire pour la voir (recharger).
+ *      Une phrase qui nomme encore « le lot C.3 » ferait attendre ce qui est
+ *      déjà là : c'est le défaut D-C3-1 de la recette du 11/09/2026.
+ *  (d) **La date de signature est LISIBLE.** « a signé » sans date ne permet
+ *      pas de savoir si l'on attend depuis une heure ou depuis trois semaines —
+ *      et c'est la seule question que l'admin se pose devant une pièce partie.
  *
  * ⚠ VALEURS LITTÉRALES, jamais le retour de la fonction testée. Une assertion
  * qui comparerait `texte` au résultat d'un constructeur de texte collapserait
@@ -30,8 +35,11 @@ import { describe, it, expect } from 'vitest';
 import {
   QUALITE_OF,
   mentionAttenteOf,
+  mentionAttentePiece,
+  mentionSignatureFaite,
   ordreSignatairesEnvoyes,
   ordreSignatairesPrevu,
+  prochainSignataire,
   texteOrdreSignataires,
 } from '../ordre-signataires';
 import type { SignataireEnvoye } from '@/lib/signature/envoi-contrats';
@@ -149,9 +157,15 @@ describe('Envoyé — « Signer maintenant » ne s’ouvre QUE sur la donnée', 
     // ⚠ LA PROMESSE : le lien n'existe pas tant que le client n'a pas signé.
     expect(of.signerMaintenant).toBe(false);
     expect(of.attente).not.toBeNull();
-    // …et la phrase dit d'où viendra le changement d'état, sans le promettre.
-    expect(of.attente).toContain('Paul DURAND');
-    expect(of.attente).toContain('C.3');
+    // ⚠ LITTÉRAL, et la phrase ne nomme PLUS « le lot C.3 » : ce retour est
+    // branché depuis le 11/09/2026 (défaut D-C3-1 de la recette). Elle dit d'où
+    // vient l'information et le geste pour la voir — jamais un branchement à
+    // venir, qui ferait attendre ce qui est déjà là.
+    expect(of.attente).toBe(
+      'Le lien « Signer maintenant » s’ouvrira ici dès que Paul DURAND aura signé. ' +
+        'QualiOF l’apprend par le retour du prestataire : rechargez la fiche session pour ' +
+        'voir l’état du moment.',
+    );
   });
 
   it('client signé + lien rendu : le lien de l’OF s’ouvre, et l’attente disparaît', () => {
@@ -213,18 +227,23 @@ describe('Envoyé — « Signer maintenant » ne s’ouvre QUE sur la donnée', 
 });
 
 describe('La phrase d’attente — honnête sur ce que cet écran sait, et ne sait pas', () => {
-  it('client pas encore signé : elle nomme la personne attendue ET le lot qui branchera le retour', () => {
+  it('client pas encore signé : elle nomme la personne attendue ET d’où vient l’information', () => {
     const phrase = mentionAttenteOf({
       nomClient: 'Paul DURAND',
       clientASigne: false,
       signUrlOf: 'https://docuseal.eu/s/of',
     });
-    expect(phrase).not.toBeNull();
-    expect(phrase!).toContain('Paul DURAND');
-    expect(phrase!).toContain('lot C.3');
-    // ⚠ Elle ne doit PAS promettre une mise à jour automatique de cet écran :
-    // rien ne remplit `signedAt` avant le webhook.
-    expect(phrase!).toContain('prestataire');
+    // ⚠ LITTÉRAL : c'est la phrase que l'admin lit, au caractère près.
+    expect(phrase).toBe(
+      'Le lien « Signer maintenant » s’ouvrira ici dès que Paul DURAND aura signé. ' +
+        'QualiOF l’apprend par le retour du prestataire : rechargez la fiche session pour ' +
+        'voir l’état du moment.',
+    );
+    // ⚠ ELLE NE NOMME PLUS UN LOT À VENIR. Le retour du prestataire est branché
+    // depuis le 11/09/2026 ; laisser « arrive au lot C.3 » ferait attendre ce
+    // qui fonctionne déjà — défaut D-C3-1 de la recette.
+    expect(phrase!).not.toContain('C.3');
+    expect(phrase!).not.toContain('tant qu’il ne l’est pas');
   });
 
   it('tout est réuni : aucune phrase — un écran qui explique une absence inexistante fait douter', () => {
@@ -235,5 +254,83 @@ describe('La phrase d’attente — honnête sur ce que cet écran sait, et ne s
         signUrlOf: 'https://docuseal.eu/s/of',
       }),
     ).toBeNull();
+  });
+});
+
+/* ── D-C3-1 — l'état PAR SIGNATAIRE, tel que la recette l'a réclamé ───────── */
+
+describe('La date de signature — « a signé » sans date ne dit pas depuis quand', () => {
+  it('rend le jour ET l’heure, en fuseau de Paris', () => {
+    // 18:01 à Paris = 16:01 UTC en septembre (UTC+2). Le fuseau est FIXÉ :
+    // sans lui, la même signature se lirait « 16:01 » sur un serveur en UTC,
+    // et l'admin comparerait deux heures qui ne parlent pas de la même chose.
+    expect(mentionSignatureFaite('2026-09-11T16:01:00.000Z')).toBe(
+      'a signé le 11/09/2026 à 18:01',
+    );
+  });
+
+  it('pas de date : aucune mention — on n’écrit pas « a signé le — »', () => {
+    expect(mentionSignatureFaite(null)).toBeNull();
+    expect(mentionSignatureFaite('pas-une-date')).toBeNull();
+  });
+
+  it('l’ordre ENVOYÉ transporte `signedAt` tel quel : sans lui, rien à afficher', () => {
+    const ordre = ordreSignatairesEnvoyes({
+      signataires: [envoye({ signedAt: '2026-09-11T16:01:00.000Z' }), OF_ENVOYE],
+    });
+    expect(ordre[0]!.signedAt).toBe('2026-09-11T16:01:00.000Z');
+    expect(ordre[1]!.signedAt).toBeNull();
+  });
+
+  it('l’ordre PRÉVU n’en porte aucune : rien n’est signé avant d’être envoyé', () => {
+    const ordre = ordreSignatairesPrevu({ docType: 'CONVENTION', client: CLIENT, of: OF });
+    expect(ordre.map((s) => s.signedAt)).toEqual([null, null]);
+  });
+});
+
+describe('Qui est attendu — la phrase de la LIGNE, celle que D-C3-1 a trouvée fausse', () => {
+  it('personne n’a signé : c’est le client qu’on attend, nommé', () => {
+    const ordre = ordreSignatairesEnvoyes({ signataires: [envoye(), OF_ENVOYE] });
+    expect(prochainSignataire(ordre)?.nom).toBe('Paul DURAND');
+    expect(mentionAttentePiece(ordre)).toBe(
+      'En attente de la signature de Paul DURAND. Dès que tous les signataires auront ' +
+        'signé, le PDF signé et son certificat de signature reviendront ici automatiquement.',
+    );
+  });
+
+  it('le client a signé : c’est l’organisme qu’on attend, et la phrase change de main', () => {
+    const ordre = ordreSignatairesEnvoyes({
+      signataires: [envoye({ signedAt: '2026-09-11T16:01:00.000Z' }), OF_ENVOYE],
+    });
+    expect(prochainSignataire(ordre)?.partie).toBe('OF');
+    expect(mentionAttentePiece(ordre)).toBe(
+      'Il ne manque plus que la signature de Laurent MARX pour l’organisme de formation. ' +
+        'Dès qu’elle sera faite, le PDF signé et son certificat de signature reviendront ici ' +
+        'automatiquement.',
+    );
+  });
+
+  it('tout le monde a signé : AUCUNE phrase — la preuve est en route, pas en attente', () => {
+    const ordre = ordreSignatairesEnvoyes({
+      signataires: [
+        envoye({ signedAt: '2026-09-11T16:01:00.000Z' }),
+        { ...OF_ENVOYE, signedAt: '2026-09-11T16:08:00.000Z' },
+      ],
+    });
+    expect(prochainSignataire(ordre)).toBeNull();
+    expect(mentionAttentePiece(ordre)).toBeNull();
+  });
+
+  it('aucun signataire lisible : aucune phrase inventée', () => {
+    expect(prochainSignataire([])).toBeNull();
+    expect(mentionAttentePiece([])).toBeNull();
+  });
+
+  it('la phrase ne promet plus rien pour « plus tard » : le retour est branché', () => {
+    const ordre = ordreSignatairesEnvoyes({ signataires: [envoye({ role: 'Stagiaire' })] });
+    const phrase = mentionAttentePiece(ordre);
+    expect(phrase).not.toBeNull();
+    expect(phrase!).not.toContain('C.2c');
+    expect(phrase!).not.toContain('C.3');
   });
 });

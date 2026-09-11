@@ -66,3 +66,44 @@ describe('fiche session — les deux props du bloc « Signature » sont branché
     expect(pageSrc).not.toMatch(/aContactPrincipal: org\.contacts\.length > 0/);
   });
 });
+
+/* ── D-C3-1 — les signataires RÉELS traversent-ils la page ? ─────────────── */
+
+/**
+ * POURQUOI CE GARDE EXISTE, ET POURQUOI IL N'EST PAS REMPLAÇABLE PAR `tsc`.
+ *
+ * `DocumentDeLaPiece.signataires` est OBLIGATOIRE : l'oublier est une erreur de
+ * compilation. Mais `tsc` ne voit pas la SUBSTITUTION — `signataires: []`
+ * compile parfaitement et produit exactement l'écran d'avant la correction :
+ * une pièce partie qui n'affiche ni date de signature, ni lien « Signer
+ * maintenant ». C'est le trou mesuré au lot C.2b-8 sur `signataireOf`, à la
+ * lettre. Prop obligatoire ET assertion sur la valeur réellement passée.
+ */
+describe('fiche session — les signataires de la demande remontent jusqu’au bloc (D-C3-1)', () => {
+  it('la requête CHARGE les signataires : sans eux, il n’y a rien à afficher', () => {
+    // La colonne Json `SignatureRequest.signers`, jointe au document — pas une
+    // requête de plus : `sessionDocs` charge déjà tous les documents utiles.
+    expect(pageSrc).toMatch(/signatureRequest: \{/);
+    expect(pageSrc).toMatch(/signers: true,/);
+  });
+
+  it('ils sont RELUS par le contrat partagé, jamais castés à la main', () => {
+    // `parseSignatureSigners` écarte sans bruit une ligne mal formée : c'est le
+    // seul point de lecture autorisé de cette colonne (règle du lot C.3).
+    expect(pageSrc).toMatch(/parseSignatureSigners\(/);
+    expect(pageSrc).not.toMatch(/as SignatureSigner\[\]/);
+  });
+
+  it('le CAMP de chaque signataire vient du module partagé avec le webhook', () => {
+    // `signatairesDeLaDemande` est la MÊME fonction que celle qui compose les
+    // destinataires des emails de retour. Recopier ici « le rôle d'ancre OF
+    // désigne l'organisme » ferait une seconde règle, et l'écran finirait par
+    // désigner un camp différent de celui des emails.
+    expect(pageSrc).toMatch(/signatairesDeLaDemande\(/);
+  });
+
+  it('et ils sont PASSÉS à la vue : la substitution par un tableau vide doit rougir', () => {
+    expect(pageSrc).toMatch(/signataires: signatairesDeLaDemande\(/);
+    expect(pageSrc).not.toMatch(/signataires: \[\],/);
+  });
+});
