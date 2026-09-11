@@ -43,7 +43,24 @@ export interface ChapterScore {
   /** Part des règles du chapitre qui ont pu être évaluées, en %. */
   coverage: number;
   /** Le détail, pour pouvoir répondre à « pourquoi ce score ? ». */
-  breakdown: { rule: string; weight: number; earned: number | null; note: string }[];
+  breakdown: {
+    rule: string;
+    weight: number;
+    earned: number | null;
+    note: string;
+    /**
+     * La question notée par cette règle (lot I-1) — `null` pour les règles de
+     * ratio, qui portent sur plusieurs réponses à la fois et dont la source se
+     * lit sur l'alerte correspondante (`DiagnosticAlert.questionIds`).
+     *
+     * Sert à remonter du chapitre faible à LA réponse qui l'a fait décrocher :
+     * c'est ce qui permet de justifier un module recommandé par la phrase du
+     * client plutôt que par un numéro de chapitre.
+     */
+    questionId: string | null;
+    /** Le ratio noté, quand la règle en est une. */
+    ratioKey: string | null;
+  }[];
 }
 
 export interface ScoringOutput {
@@ -441,6 +458,8 @@ export function computeScoring(input: ScoringInput): ScoringOutput {
       weight: r.weight,
       earned: evaluate(r, input, benchmarks),
       note: r.note,
+      questionId: 'questionId' in r.spec ? r.spec.questionId : null,
+      ratioKey: 'ratioKey' in r.spec ? r.spec.ratioKey : null,
     }));
 
     // Normalisation sur les seules règles évaluables : une question sans

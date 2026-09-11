@@ -96,7 +96,7 @@ const CATALOGUE: CatalogueEntry[] = [
   },
 ];
 
-function alerte(code: string, chapter: number): DiagnosticAlert {
+function alerte(code: string, chapter: number, questionIds: string[] = []): DiagnosticAlert {
   return {
     code,
     chapter,
@@ -105,6 +105,7 @@ function alerte(code: string, chapter: number): DiagnosticAlert {
     audience: 'client',
     observed: 20,
     threshold: 30,
+    questionIds,
   };
 }
 
