@@ -8,7 +8,9 @@ import {
   CRENEAU_PRESETS,
   creneauDefaut,
   decrireCreneau,
+  decrireCreneauParticipant,
   decrireDureeProduit,
+  decrireDureeProduitParticipant,
   formaterHeureOf,
   mesurerCreneau,
   presetDuCreneau,
@@ -127,7 +129,7 @@ describe('CRENEAU_PRESETS — ce que l’écran propose', () => {
   });
 });
 
-describe('decrireCreneau — la phrase que lisent l’admin et le participant', () => {
+describe('decrireCreneau — la phrase que lit l’admin', () => {
   it('dit la demi-journée, les heures sur site et les heures conventionnées', () => {
     expect(decrireCreneau(mesurerCreneau(creneau('09:00', '13:00'), RULES))).toBe(
       '1 demi-journée · 4 h sur site · 8 h conventionnées',
@@ -144,6 +146,34 @@ describe('decrireCreneau — la phrase que lisent l’admin et le participant', 
     expect(decrireCreneau(mesurerCreneau(creneau('09:00', '11:30'), RULES))).toBe(
       '1 demi-journée · 2,5 h sur site · 8 h conventionnées',
     );
+  });
+});
+
+describe('decrireCreneauParticipant — la phrase que lit le participant', () => {
+  it('dit la demi-journée et les heures sur site, jamais les heures conventionnées', () => {
+    expect(decrireCreneauParticipant(mesurerCreneau(creneau('09:00', '13:00'), RULES))).toBe(
+      '1 demi-journée · 4 h sur site',
+    );
+    expect(decrireCreneauParticipant(mesurerCreneau(creneau('09:00', '17:00'), RULES))).toBe(
+      '2 demi-journées · 8 h sur site',
+    );
+  });
+
+  it('ne contient jamais le mot « conventionnées » — relecture du 11/09/2026', () => {
+    for (const [d, f] of [['09:00', '13:00'], ['09:00', '17:00'], ['09:00', '11:30']] as const) {
+      expect(decrireCreneauParticipant(mesurerCreneau(creneau(d, f), RULES))).not.toMatch(
+        /conventionn/,
+      );
+    }
+    expect(decrireDureeProduitParticipant(72, RULES)).toBe('36 h sur site');
+    expect(decrireDureeProduitParticipant(8, RULES)).toBe('4 h sur site');
+    expect(decrireDureeProduitParticipant(0, RULES)).toBeNull();
+    expect(decrireDureeProduitParticipant(null, RULES)).toBeNull();
+  });
+
+  it('la phrase admin est la phrase participant complétée — une seule source', () => {
+    const m = mesurerCreneau(creneau('09:00', '13:00'), RULES);
+    expect(decrireCreneau(m).startsWith(decrireCreneauParticipant(m))).toBe(true);
   });
 });
 

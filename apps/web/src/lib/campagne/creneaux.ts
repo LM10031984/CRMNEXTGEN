@@ -10,7 +10,8 @@
  *
  * Ce module ne corrige pas seulement un défaut : il rend le compte VISIBLE.
  * Chaque date affiche ce qu'elle vaut — demi-journées, heures sur site, heures
- * conventionnées — côté admin comme côté participant.
+ * conventionnées côté admin ; demi-journées et heures sur site seulement côté
+ * participant (les heures conventionnées sont une mécanique interne).
  *
  * ── Ligne rouge §8.1 ────────────────────────────────────────────────────────
  * Les heures conventionnées ne sont JAMAIS recalculées ici. Elles viennent de
@@ -179,13 +180,28 @@ export function formaterHeures(h: number): string {
 }
 
 /**
- * La phrase unique — même texte sur la fiche campagne, sur le formulaire de
- * création et sur la page publique. Trois formulations différentes du même
- * créneau, c'est trois occasions de se contredire.
+ * La phrase ADMIN — même texte sur la fiche campagne et sur le formulaire de
+ * création. Deux formulations différentes du même créneau, c'est deux
+ * occasions de se contredire.
  */
 export function decrireCreneau(m: CreneauMesure): string {
+  return `${decrireCreneauParticipant(m)} · ${formaterHeures(m.conventionedHours)} h conventionnées`;
+}
+
+/**
+ * La phrase PARTICIPANT — la page publique `/rdv/[token]`.
+ *
+ * Relecture du 11/09/2026 : « 8 h conventionnées » à côté de « 4 h sur site »
+ * est une mécanique interne (deux formateurs, assiette du financeur). Pour le
+ * client, c'est au mieux du jargon, au pire deux chiffres qui se contredisent
+ * pour le même créneau. Il ne lit que ce qu'il doit bloquer dans son agenda :
+ * la demi-journée et les heures sur place. Les heures conventionnées restent
+ * la valeur unique de la convention et du dossier financeur — elles n'ont
+ * simplement rien à faire sur un écran d'inscription.
+ */
+export function decrireCreneauParticipant(m: CreneauMesure): string {
   const dj = `${m.halfDays} demi-journée${m.halfDays > 1 ? 's' : ''}`;
-  return `${dj} · ${formaterHeures(m.onsiteHours)} h sur site · ${formaterHeures(m.conventionedHours)} h conventionnées`;
+  return `${dj} · ${formaterHeures(m.onsiteHours)} h sur site`;
 }
 
 /**
@@ -212,8 +228,22 @@ export function decrireDureeProduit(
   conventionedHours: number | null | undefined,
   rules: CreneauRules,
 ): string | null {
+  const participant = decrireDureeProduitParticipant(conventionedHours, rules);
+  if (!participant) return null;
+  return `${participant} · ${formaterHeures(conventionedHours as number)} h conventionnées`;
+}
+
+/**
+ * La durée du produit telle que la lit le PARTICIPANT : les heures sur place,
+ * et rien d'autre — même raison que `decrireCreneauParticipant`. Le nombre est
+ * dérivé des heures conventionnées (la valeur unique), jamais saisi à part.
+ */
+export function decrireDureeProduitParticipant(
+  conventionedHours: number | null | undefined,
+  rules: CreneauRules,
+): string | null {
   if (!conventionedHours || conventionedHours <= 0) return null;
   const formateurs = rules.TRAINER_COUNT_DEFAULT > 0 ? rules.TRAINER_COUNT_DEFAULT : 1;
   const onsite = conventionedHours / formateurs;
-  return `${formaterHeures(onsite)} h sur site · ${formaterHeures(conventionedHours)} h conventionnées`;
+  return `${formaterHeures(onsite)} h sur site`;
 }
