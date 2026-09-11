@@ -49,6 +49,13 @@ apps/web/playwright-report/
 
 # TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
 packages/*/tsconfig.tsbuildinfo
+# Même cache d'incrémental côté applications — il était suivi pour apps/web et
+# polluait chaque `git status` avec un binaire qui change à chaque `tsc`.
+apps/*/tsconfig.tsbuildinfo
+apps/*/*/tsconfig.tsbuildinfo
+# Traces des sessions Playwright pilotées par MCP : des captures et des logs de
+# débogage, jamais une preuve qu'on conserve.
+.playwright-mcp/
 
 # Python (doc-engine)
 __pycache__/
