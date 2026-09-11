@@ -432,3 +432,37 @@ describe('PUISSANCE (e) — le dépôt sur une pièce PARTIE prévient qu’il a
     expect(screen.queryAllByText(AVERTISSEMENT_DEPOT_ANNULE_ENVOI)).toHaveLength(0);
   });
 });
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — correction n°1, CONTRASTE.
+ *
+ * Les deux boutons d'envoi portaient `text-primary-foreground`, une classe qui
+ * ne produisait AUCUNE règle CSS dans ce projet (le jeton manquait sous
+ * `primary`). Ratio mesuré : 2,12:1, contre un seuil AA de 4,5:1.
+ *
+ * LE JETON EST RÉPARÉ EN CONFIG, ET `text-white` RESTE ÉCRIT ICI — exigence
+ * explicite de Laurent, et ce n'est pas une redondance : la classe explicite
+ * survit à une refonte future du jeton, et ce test garde le bouton
+ * INDÉPENDAMMENT de `tailwind.config.ts`. La mutation « retirer `text-white` »
+ * doit faire rougir ces deux tests.
+ */
+describe('Contraste — les boutons d’envoi écrivent leur couleur de texte', () => {
+  it('le bouton du bloc : `bg-primary text-white`, et plus la classe fantôme', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+    const bouton = screen.getByRole('button', { name: /^envoyer pour signature \(\d+\)$/i });
+    expect(bouton.className).toContain('text-white');
+    expect(bouton.className).toContain('bg-primary');
+    expect(bouton.className).not.toContain('text-primary-foreground');
+  });
+
+  it('le bouton de LIGNE porte lui aussi `text-white` — même fond, même exigence', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [ligne()] })} />,
+    );
+    const bouton = screen.getByRole('button', { name: /envoyer pour signature — attestation/i });
+    expect(bouton.className).toContain('text-white');
+    expect(bouton.className).not.toContain('text-primary-foreground');
+  });
+});

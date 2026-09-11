@@ -471,3 +471,22 @@ describe('Le bandeau « aucun email » est PERMANENT — à la revue comme au r�
     expect(screen.queryAllByRole('button', { name: /relancer/i })).toHaveLength(0);
   });
 });
+
+/**
+ * Retour d'écran Laurent, 11/09/2026 — correction n°1, CONTRASTE.
+ *
+ * Le bouton « Envoyer (n) » de la modale portait la même classe fantôme que
+ * ceux du bloc. Le jeton est réparé en config ; `text-white` reste écrit dans
+ * le composant, et c'est ce test qui le garde — la mutation « retirer
+ * `text-white` » doit le faire rougir.
+ */
+describe('Contraste — le bouton de confirmation écrit sa couleur de texte', () => {
+  it('« Envoyer (n) » : `bg-primary text-white`, et plus la classe fantôme', async () => {
+    ouvrir();
+    await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
+    const bouton = screen.getByRole('button', { name: /^envoyer \d+ pièce/i });
+    expect(bouton.className).toContain('text-white');
+    expect(bouton.className).toContain('bg-primary');
+    expect(bouton.className).not.toContain('text-primary-foreground');
+  });
+});
