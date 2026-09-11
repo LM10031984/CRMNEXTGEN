@@ -460,6 +460,8 @@ model TrainingProduct {
   supersededByProductId String?
   supersededBy         TrainingProduct?   @relation("CatalogueDoublon", fields: [supersededByProductId], references: [id], onDelete: SetNull)
   supersedes           TrainingProduct[]  @relation("CatalogueDoublon")
+  /// Les propositions dont ce produit est le programme composé (lot I-2).
+  composedForProposals Proposal[]         @relation("ProposalComposedProduct")
   modules              TrainingModule[]
   trainingSessions     TrainingSession[]
   leads                Lead[]
@@ -2226,6 +2228,14 @@ model Proposal {
   /// SHA-256 des données rendues → isDocumentStale() (leçon E-1).
   sourceFingerprint    String?
   quotes               Quote[]
+  /// Le PRODUIT COMPOSÉ généré depuis cette proposition (lot I-2, D-19).
+  ///
+  /// « Le programme composé devient le produit vendu à ce client » : c'est lui
+  /// qui portera la convention, le programme Qualiopi et les sessions du lot G.
+  /// Contrairement aux rayons de la bibliothèque, il naît **actif** — c'est une
+  /// offre réelle, pas une étagère.
+  composedProductId    String?
+  composedProduct      TrainingProduct? @relation("ProposalComposedProduct", fields: [composedProductId], references: [id], onDelete: SetNull)
   /// Session créée à l'acceptation (lot G).
   sessionId            String?
   /// Campagne de pré-inscription liée (§7).
@@ -2239,6 +2249,7 @@ model Proposal {
   @@index([tenantId, status])
   @@index([diagnosticId])
   @@index([leadId])
+  @@index([composedProductId])
 }
 
 enum BatchStatus {

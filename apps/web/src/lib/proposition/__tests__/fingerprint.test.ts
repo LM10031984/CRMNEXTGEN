@@ -68,7 +68,7 @@ const CONTENT: ProposalContent = {
       why: 'Exclusivité faible',
       halfDays: 9,
       periodLabel: '',
-      matchSource: 'lexique',
+      matchSource: 'lexique', modules: [],
     },
   ],
   axesIntro: '',

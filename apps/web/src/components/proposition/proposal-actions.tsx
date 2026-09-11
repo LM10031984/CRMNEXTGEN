@@ -13,6 +13,7 @@ import {
   Link2,
   Loader2,
   Mail,
+  BookOpen,
   Receipt,
   RefreshCw,
   Send,
@@ -22,6 +23,7 @@ import {
 
 import {
   approveProposalDiscount,
+  generateComposedProduct,
   generateProposalPdf,
   generateProposalQuotes,
   issueProposalPublicLink,
@@ -46,6 +48,8 @@ export function ProposalActions({
   reviewedAt,
   blockers,
   warnings,
+  composedProductCode,
+  composedModuleCount,
   freshness,
   hasPdf,
   documentId,
@@ -58,6 +62,10 @@ export function ProposalActions({
 }: {
   proposalId: string;
   status: string;
+  /** Le produit composé déjà généré depuis cette proposition, s'il existe. */
+  composedProductCode: string | null;
+  /** Combien de modules la proposition compose — 0 = rien à générer. */
+  composedModuleCount: number;
   reviewedAt: string | null;
   blockers: string[];
   warnings: string[];
@@ -228,6 +236,35 @@ export function ProposalActions({
         >
           <Receipt className="h-4 w-4" />
           {quoteNumbers.length > 0 ? `Devis : ${quoteNumbers.join(', ')}` : 'Générer les devis'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            start(async () => {
+              const r = await generateComposedProduct(proposalId);
+              if (r.ok) {
+                toast.success('Programme Qualiopi du parcours généré — à relire avant envoi.');
+                router.refresh();
+              } else {
+                toast.error(r.error);
+              }
+            })
+          }
+          disabled={pending || composedModuleCount === 0}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+          title={
+            composedModuleCount === 0
+              ? 'Aucun module composé : il n’y a pas de programme à générer.'
+              : composedProductCode
+                ? `Régénère ${composedProductCode} depuis les axes actuels. Refusé si le produit porte déjà des sessions.`
+                : 'Crée le produit sur mesure et son programme Qualiopi (objectifs, durées, prérequis, déroulé) depuis les modules composés.'
+          }
+        >
+          <BookOpen className="h-4 w-4" />
+          {composedProductCode
+            ? `Programme ${composedProductCode} — régénérer`
+            : 'Générer le programme Qualiopi'}
         </button>
 
         {publicLinkActive ? (
