@@ -34,6 +34,21 @@ import type { RegleSignatureFinanceur } from '@/lib/signature/regime';
 import { texteOrdreSignataires } from '../ordre-signataires';
 import type { SignataireOfPrevu } from '@/lib/signature/envoi-contrats';
 
+/**
+ * « PAS D'ORGANISME RÉSOLU », écrit explicitement — demande n°2 de Laurent
+ * (11/09/2026).
+ *
+ * `signataireOf` est devenu OBLIGATOIRE. `null` reste une valeur légitime — les
+ * Paramètres organisme peuvent être incomplets, et la vue doit alors n'annoncer
+ * que le client. C'est **l'absence** qui est devenue impossible : un futur
+ * appelant ne peut plus l'oublier sans erreur `tsc`.
+ *
+ * Cette constante est là pour que la différence se LISE. Un `signataireOf: null`
+ * nu dans quinze appels ressemble à du remplissage ; nommé, il dit que ce test
+ * ne parle pas du signataire de l'organisme — et qu'il ne prétend rien en garder.
+ */
+const SANS_OF: SignataireOfPrevu | null = null;
+
 const AGEFICE: RegleSignatureFinanceur = {
   conventionSigner: 'DIRIGEANT',
   ageficeSigner: 'STAGIAIRE',
@@ -119,6 +134,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes.map((l) => l.cle)).toEqual(['CONVENTION:org-1', 'AGEFICE:part-1']);
     expect(vue.lignes[0]!.libelle).toBe('Convention — AGENCE MARTIN (2 participants)');
@@ -130,6 +146,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes[0]!.participantIdUnique).toBeNull();
     expect(vue.lignes[1]!.participantIdUnique).toBe('part-1');
@@ -145,6 +162,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     // Le nombre d'inscrits ne dit rien du signataire : c'est le dirigeant de
     // l'organisation qui signe, pas le stagiaire. Déduire « nominatif » d'un
@@ -159,6 +177,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map([['CONVENTION:org-1', doc()]]),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes.map((l) => l.etat)).toEqual(['GENERE', 'ABSENT']);
     expect(vue.lignes.every((l) => l.envoyable)).toBe(true);
@@ -174,6 +193,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       ]),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes[0]!.etat).toBe('ENVOYE');
     expect(vue.lignes[0]!.envoyable).toBe(false);
@@ -189,6 +209,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       ]),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes[0]!.signatureRequestId).toBe('req-9');
   });
@@ -199,6 +220,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map([['AGEFICE:part-1', doc({ signedPdfUrl: 'docs/x.pdf' })]]),
       docStatusParCle: new Map([['CONVENTION:org-1', 'MANUAL_OK']]),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes.map((l) => l.etat)).toEqual(['SIGNE', 'SIGNE']);
     expect(vue.lignes.some((l) => l.envoyable)).toBe(false);
@@ -211,6 +233,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: false,
+      signataireOf: SANS_OF,
     });
     expect(vue.nbEnvoyables).toBe(1);
     expect(vue.boutonVisible).toBe(false);
@@ -241,6 +264,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.blocages).toEqual([blocage]);
     expect(vue.avertissements).toEqual([
@@ -261,6 +285,74 @@ describe('construireVueSignature — le bouton et les lignes', () => {
     expect(vue.boutonVisible).toBe(false);
   });
 });
+
+/**
+ * `signataireOf` EST OBLIGATOIRE — demande n°2 de Laurent, 11/09/2026.
+ *
+ * CE QUE LE LOT C.2b-8 AVAIT SIGNALÉ, ET QUE CE BLOC FERME. La prop était
+ * optionnelle. Un futur second appelant pouvait donc l'oublier **sans aucune
+ * erreur `tsc`** : la vue se serait rabattue sur `a.signataireOf ?? null`, toutes
+ * les lignes auraient perdu leur second rang (« 2. Laurent MARX (organisme de
+ * formation), signe en dernier depuis le CRM »), et l'admin aurait cru chaque
+ * pièce close au premier paraphe. Le seul garde-fou était un test de SOURCE
+ * (`signataire-of.source.test.ts`) qui ne protège QUE l'appelant existant.
+ *
+ * ⚠ `null` RESTE LÉGITIME : Paramètres organisme incomplet, aucun OF résolu — la
+ * vue n'annonce alors que le client, et le récapitulatif rend l'empêchement
+ * `SIGNATAIRE_OF_INCOMPLET` nominatif. C'est **« absent »** qui est devenu
+ * impossible, pas **« pas d'OF »**.
+ *
+ * ⚠ CE TEST NE ROUGIT PAS — IL NE COMPILE PLUS. Rendre la prop de nouveau
+ * optionnelle ne fait pas échouer une assertion : cela rend la directive
+ * `@ts-expect-error` inutile, et `tsc --noEmit` échoue sur
+ * « Unused '@ts-expect-error' directive ». C'est la bonne mécanique : une
+ * garantie de type se garde par le typeur, pas par un `expect`. La gate qui
+ * l'attrape est `pnpm --filter @qualiof/web exec tsc --noEmit`, pas `pnpm test`.
+ */
+describe('construireVueSignature — la prop `signataireOf` ne peut plus être oubliée', () => {
+  it('l’omettre est une erreur de TYPE (vérifié par `tsc`, pas par cette assertion)', () => {
+    const appel = () =>
+      construireVueSignature({
+        plan: planVide(),
+        documentParCle: new Map(),
+        docStatusParCle: new Map(),
+        canSign: true,
+        // @ts-expect-error — `signataireOf` est OBLIGATOIRE depuis le 11/09/2026.
+        // Si cette ligne cesse d'être une erreur, `tsc` échoue sur une directive
+        // inutilisée : c'est exactement le signal voulu.
+        signataireOf: undefined,
+      });
+    // L'appel reste exécutable : on garde qu'aucune valeur manquante ne fait
+    // lever la fonction — elle doit se dégrader, pas exploser.
+    expect(appel().lignes).toEqual([]);
+  });
+
+  it('`null` reste accepté, et n’annonce que le client', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [CONVENTION_POUR_TYPAGE], blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireParCle: new Map([
+        [CONVENTION_POUR_TYPAGE.cle, { nom: 'Paul DURAND', email: 'paul@agence.fr' }],
+      ]),
+      signataireOf: null,
+    });
+    // Valeur LITTÉRALE, jamais le retour du composeur de texte (règle n°2).
+    expect(vue.lignes[0]!.ordre.map((s) => s.texte)).toEqual([
+      '1. Paul DURAND — paul@agence.fr',
+    ]);
+  });
+});
+
+const CONVENTION_POUR_TYPAGE: EnvoiPlanifie = {
+  cle: 'CONVENTION:org-typage',
+  docType: 'CONVENTION',
+  role: 'DIRIGEANT',
+  cible: { kind: 'ORGANISATION', organizationId: 'org-typage' },
+  participantIds: ['part-1'],
+  libelle: 'Convention — ORG TYPAGE (1 participant)',
+};
 
 describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté APRÈS', () => {
   it('scope AFTER, financeur sans `assiduiteSigner` : plan vide ⇒ bouton invisible', () => {
@@ -283,6 +375,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes).toHaveLength(0);
     expect(vue.nbEnvoyables).toBe(0);
@@ -307,6 +400,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes.map((l) => l.cle)).toEqual(['ASSIDUITE:part-1']);
     expect(vue.boutonVisible).toBe(true);
@@ -318,6 +412,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
+      signataireOf: SANS_OF,
     });
     expect(vue.boutonVisible).toBe(false);
     expect(vue.nbEnvoyables).toBe(0);
@@ -610,6 +705,7 @@ describe('construireVueSignature — les avertissements ressortent REGROUPÉS', 
       docStatusParCle: new Map(),
       canSign: true,
       contexteAvertissementParParticipant: new Map([['part-c', CONTEXTE_ROUSSEL]]),
+      signataireOf: SANS_OF,
     });
     expect(vue.avertissements).toHaveLength(1);
     expect(vue.avertissements[0]!.docTypes).toEqual(['CONVENTION', 'AGEFICE']);
@@ -646,6 +742,7 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
       docStatusParCle: new Map(),
       canSign: true,
       signataireParCle: new Map([[conventionDuGroupe.cle, SIGNATAIRE]]),
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes[0]!.signataire).toEqual(SIGNATAIRE);
   });
@@ -657,6 +754,7 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
       docStatusParCle: new Map(),
       canSign: true,
       signataireParCle: new Map(),
+      signataireOf: SANS_OF,
     });
     expect(vue.lignes[0]!.signataire).toBeNull();
   });
