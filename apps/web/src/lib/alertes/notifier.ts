@@ -25,6 +25,8 @@ import { sendMail } from '@/lib/mailer';
 import { loadOfConfig } from '@/lib/of-config';
 import { renderAlerteInterne } from '@/lib/mailer-templates/alerte-interne';
 import { newLeadRecipients, leadStaleRecipients } from './lead-stale';
+import { grouperLeadsDormants } from './lead-stale-digest';
+import { EQUIPE_JOIGNABLE } from './destinataires';
 import { sujetAlerteSubmission, type AlerteSubmission } from './preinscription-digest';
 
 function appUrl(): string {
@@ -39,9 +41,19 @@ interface Destinataire {
   firstName: string | null;
 }
 
+/**
+ * L'équipe JOIGNABLE — le filtre est dans `EQUIPE_JOIGNABLE`, avec ses motifs.
+ *
+ * Sans lui, chaque alerte partait aussi aux comptes sans boîte (`e2e@`,
+ * `admin@`) et revenait en bounce sur `formation@`, l'expéditeur lui-même
+ * (constat Laurent du 11/09/2026). Filtrer ICI plutôt que dans `sendMail` :
+ * `sendMail` ne reçoit qu'une chaîne d'adresses, et sert aussi aux apprenants
+ * et aux financeurs, qui ne sont pas des `User`. La question « ce compte est-il
+ * joignable ? » se pose là où l'on constitue la liste, pas au moment de poster.
+ */
 async function equipe(tenantId: string): Promise<Destinataire[]> {
   return prisma.user.findMany({
-    where: { tenantId },
+    where: { tenantId, ...EQUIPE_JOIGNABLE },
     select: { id: true, role: true, email: true, firstName: true },
   });
 }
@@ -166,22 +178,33 @@ export async function alerterNouveauLead(args: {
 }
 
 /**
- * A-2 — ce lead dort depuis trop longtemps.
+ * A-2 — les leads qui dorment depuis trop longtemps, en UN envoi.
  *
- * Le marqueur `staleAlertedAt` est posé DANS la même opération, et c'est lui
- * qui garantit l'alerte unique. Le poser après l'envoi et non avant est
- * délibéré : si l'envoi échoue, le prochain passage du cron réessaiera. Un
- * marqueur posé d'avance transformerait un incident SMTP en silence définitif
- * sur ce lead — exactement le piège du compteur de relances « brûlé ».
+ * Avant le 11/09/2026, cette alerte partait lead par lead. Au premier passage
+ * sur un historique — ou le lendemain d'un salon, quand trente contacts sont
+ * entrés d'un coup — la boîte recevait trente emails en une minute. Une
+ * avalanche ne se lit pas : elle s'archive en bloc, et le lead qui méritait un
+ * rappel disparaît avec les autres.
+ *
+ * Le regroupement se fait par ensemble de destinataires (cf.
+ * `lead-stale-digest`), pour que personne ne reçoive les leads d'un autre.
+ *
+ * Les marqueurs `staleAlertedAt` sont posés APRÈS l'envoi et non avant, et
+ * c'est délibéré : si l'envoi échoue, le prochain passage du cron réessaiera.
+ * Un marqueur posé d'avance transformerait un incident SMTP en silence
+ * définitif sur ces leads — exactement le piège du compteur de relances
+ * « brûlé ».
  */
-export async function alerterLeadDormant(args: {
+export async function alerterLeadsDormants(args: {
   tenantId: string;
-  leadId: string;
-  hoursIdle: number;
-}): Promise<void> {
+  leadIds: string[];
+  /** Ancienneté calculée par le cron, indexée par `Lead.id`. */
+  hoursIdleParLead: Record<string, number>;
+}): Promise<{ envois: number; leadsAlertes: number }> {
+  if (args.leadIds.length === 0) return { envois: 0, leadsAlertes: 0 };
   try {
-    const lead = await prisma.lead.findFirst({
-      where: { id: args.leadId, tenantId: args.tenantId },
+    const leads = await prisma.lead.findMany({
+      where: { id: { in: args.leadIds }, tenantId: args.tenantId },
       select: {
         id: true,
         firstName: true,
@@ -190,42 +213,70 @@ export async function alerterLeadDormant(args: {
         phone: true,
         source: true,
         ownerUserId: true,
-        createdAt: true,
       },
     });
-    if (!lead) return;
+    if (leads.length === 0) return { envois: 0, leadsAlertes: 0 };
 
     const users = await equipe(args.tenantId);
-    const userIds = leadStaleRecipients({ ownerUserId: lead.ownerUserId, users });
-    const nom = `${lead.firstName ?? ''} ${lead.lastName ?? ''}`.trim() || 'Prospect sans nom';
 
-    await poser({
-      tenantId: args.tenantId,
-      type: 'lead.stale',
-      userIds,
-      payload: { leadId: lead.id, prospectName: nom, hoursIdle: args.hoursIdle },
-      destinataires: users,
-      category: 'new_lead',
-      subject: `Lead sans réponse depuis ${args.hoursIdle} h — ${nom}`,
-      titre: 'Un lead attend toujours',
-      intro: `Ce lead est arrivé il y a ${args.hoursIdle} h et aucune action n'a encore été enregistrée dessus.`,
-      vedette: nom,
-      details: [
-        ...(lead.source ? [{ label: 'Source', value: lead.source }] : []),
-        ...(lead.phone ? [{ label: 'Téléphone', value: lead.phone }] : []),
-        ...(lead.email ? [{ label: 'Email', value: lead.email }] : []),
-      ],
-      ctaLabel: 'Traiter le lead',
-      ctaUrl: `${appUrl()}/app/leads/${lead.id}`,
-      urgent: true,
-    });
+    const groupes = grouperLeadsDormants(
+      leads.map((l) => ({
+        id: l.id,
+        nom: `${l.firstName ?? ''} ${l.lastName ?? ''}`.trim() || 'Prospect sans nom',
+        hoursIdle: args.hoursIdleParLead[l.id] ?? 0,
+        source: l.source ?? null,
+        ownerUserId: l.ownerUserId,
+      })),
+      (lead) => leadStaleRecipients({ ownerUserId: lead.ownerUserId, users }),
+    );
 
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { staleAlertedAt: new Date() },
-    });
+    const alertes = new Set<string>();
+    for (const groupe of groupes) {
+      const n = groupe.leads.length;
+      const pluriel = n > 1;
+
+      await poser({
+        tenantId: args.tenantId,
+        type: 'lead.stale',
+        userIds: groupe.userIds,
+        payload: { leadIds: groupe.leads.map((l) => l.id), count: n },
+        destinataires: users,
+        category: 'new_lead',
+        subject: pluriel
+          ? `${n} leads sans réponse`
+          : `Lead sans réponse depuis ${groupe.leads[0]!.hoursIdle} h — ${groupe.leads[0]!.nom}`,
+        titre: pluriel ? 'Des leads attendent toujours' : 'Un lead attend toujours',
+        intro: pluriel
+          ? `${n} leads sont arrivés il y a plus de 24 h et aucune action n'a encore été enregistrée dessus. Le plus ancien est en tête.`
+          : `Ce lead est arrivé il y a ${groupe.leads[0]!.hoursIdle} h et aucune action n'a encore été enregistrée dessus.`,
+        vedette: pluriel ? `${n} leads sans réponse` : groupe.leads[0]!.nom,
+        // Un lead par ligne : le nom, depuis combien de temps, et d'où il vient.
+        details: groupe.leads.map((l) => ({
+          label: l.nom,
+          value: `${l.hoursIdle} h${l.source ? ` · ${l.source}` : ''}`,
+        })),
+        ctaLabel: pluriel ? 'Voir les leads' : 'Traiter le lead',
+        ctaUrl: pluriel
+          ? `${appUrl()}/app/leads`
+          : `${appUrl()}/app/leads/${groupe.leads[0]!.id}`,
+        urgent: true,
+      });
+
+      for (const l of groupe.leads) alertes.add(l.id);
+    }
+
+    if (alertes.size > 0) {
+      await prisma.lead.updateMany({
+        where: { id: { in: [...alertes] } },
+        data: { staleAlertedAt: new Date() },
+      });
+    }
+    return { envois: groupes.length, leadsAlertes: alertes.size };
   } catch (e) {
-    console.error('[alertes] A-2 lead dormant', e);
+    // Prévenir est un effet de bord : un lead doit exister même si l'alerte
+    // échoue. On trace, on ne propage pas.
+    console.error('[alertes] A-2 leads dormants', e);
+    return { envois: 0, leadsAlertes: 0 };
   }
 }
 
