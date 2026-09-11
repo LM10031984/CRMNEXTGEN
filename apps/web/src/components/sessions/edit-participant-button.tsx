@@ -17,6 +17,12 @@ import {
   PARAM_INSCRIPTION,
   queryApresEdition,
 } from '@/lib/sessions/lien-corriger-financeur';
+import {
+  AIDE_CHAMP_COMMANDITAIRE,
+  LIBELLE_CHAMP_COMMANDITAIRE,
+  OPTION_AUCUN_COMMANDITAIRE,
+  libelleOptionCommanditaire,
+} from '@/lib/sessions/commanditaire-libelles';
 
 interface EditParticipantButtonProps {
   participantId: string;
@@ -47,15 +53,18 @@ const FINANCING_OPTIONS = [
 
 /**
  * ⚠ DEUX CHAMPS VOISINS QUI NE DISENT PAS LA MÊME CHOSE (Laurent, 11/09/2026).
- * Le MODE dit COMMENT l'inscription est financée ; le FINANCEUR dit PAR QUI elle
- * est portée. Sans ces deux phrases à l'écran, quelqu'un corrigera le mauvais
- * champ — et c'est le financeur, pas le mode, dont dépend le régime de signature
- * (`sponsorOrg.opcoCode`, cf. `lib/signature/participants-regime.ts`).
+ * Le MODE dit COMMENT l'inscription est financée ; l'ORGANISATION COMMANDITAIRE
+ * dit QUI la porte. Sans ces deux phrases à l'écran, quelqu'un corrigera le
+ * mauvais champ — et c'est le commanditaire, pas le mode, dont dépend le régime
+ * de signature (`sponsorOrg.opcoCode`, cf. `lib/signature/participants-regime.ts`).
+ *
+ * ⚠ CE CHAMP S'EST APPELÉ « Financeur de l'inscription », ET C'ÉTAIT TROMPEUR
+ * (correction n°7 bis, après vérification d'écran). Le financeur n'est pas ce
+ * qu'on choisit : c'est ce que porte l'organisation choisie — d'où les
+ * parenthèses dans chaque option, et d'où le fait qu'on le RENSEIGNE sur la
+ * fiche organisation, jamais ici.
  */
 const AIDE_MODE = "COMMENT l'inscription est financée (OPCO, CPF, entreprise, autofinancement…).";
-const AIDE_FINANCEUR =
-  "PAR QUI l'inscription est portée : l'organisation commanditaire, celle qui apparaît sur la " +
-  'convention et dont dépend le régime de signature.';
 
 function toIsoDate(d: Date | string | null | undefined): string {
   if (!d) return '';
@@ -76,7 +85,7 @@ export function EditParticipantButton({
   const searchParams = useSearchParams();
 
   // ── Ouverture pilotée par l'URL ────────────────────────────────────────────
-  // Le lien « Corriger le financeur de l'inscription → » vit dans un AUTRE
+  // Le lien « Corriger l'organisation commanditaire → » vit dans un AUTRE
   // onglet (bloc Signature de « Avant ») : un `useState` local ne franchit pas
   // cette distance. Cf. `@/lib/sessions/lien-corriger-financeur` pour la forme
   // d'URL publiée.
@@ -94,7 +103,7 @@ export function EditParticipantButton({
     toIsoDate(currentFinancingRequestDate),
   );
 
-  // ── Financeur de l'inscription ────────────────────────────────────────────
+  // ── Organisation commanditaire ────────────────────────────────────────────
   const [financeurs, setFinanceurs] = useState<FinanceurPropose[]>([]);
   const [financeurActuelId, setFinanceurActuelId] = useState<string | null>(null);
   const [financeurId, setFinanceurId] = useState<string>('');
@@ -215,7 +224,7 @@ export function EditParticipantButton({
   }
 
   const idMode = `mode-financement-${participantId}`;
-  const idFinanceur = `financeur-inscription-${participantId}`;
+  const idFinanceur = `organisation-commanditaire-${participantId}`;
 
   return (
     <>
@@ -223,7 +232,7 @@ export function EditParticipantButton({
         type="button"
         onClick={() => setOpenLocal(true)}
         className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-muted text-muted-foreground"
-        title="Modifier prix HT, statut et financeur"
+        title="Modifier prix HT, statut et organisation commanditaire"
       >
         <Pencil className="h-3 w-3" />
         Éditer
@@ -292,7 +301,7 @@ export function EditParticipantButton({
                 <p className="text-[11px] text-muted-foreground mt-1">{AIDE_MODE}</p>
               </div>
 
-              {/* ══ Financeur de l'inscription (décision Laurent 11/09/2026) ══
+              {/* ══ Organisation commanditaire (décision Laurent 11/09/2026) ══
                   Jusqu'ici, une inscription rattachée à la mauvaise organisation
                   n'était corrigeable qu'en la supprimant et en la recréant. */}
               <div
@@ -307,7 +316,7 @@ export function EditParticipantButton({
                   htmlFor={idFinanceur}
                   className="block text-xs font-medium text-muted-foreground mb-1"
                 >
-                  Financeur de l&apos;inscription
+                  {LIBELLE_CHAMP_COMMANDITAIRE}
                 </label>
                 {chargementFinanceurs ? (
                   <p className="text-xs text-muted-foreground py-2">
@@ -315,8 +324,8 @@ export function EditParticipantButton({
                   </p>
                 ) : financeurIndispo !== null ? (
                   <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                    Financeur non modifiable ici : {financeurIndispo} (réservé aux rôles
-                    Administrateur et Manager).
+                    Organisation commanditaire non modifiable ici : {financeurIndispo} (réservé
+                    aux rôles Administrateur et Manager).
                   </p>
                 ) : (
                   <>
@@ -327,15 +336,22 @@ export function EditParticipantButton({
                       onChange={(e) => setFinanceurId(e.target.value)}
                       className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white"
                     >
-                      <option value="">— Aucun financeur —</option>
+                      <option value="">{OPTION_AUCUN_COMMANDITAIRE}</option>
+                      {/* ⚠ LE FINANCEUR EST DANS L'OPTION, jamais dans un champ
+                          à part : il est porté PAR l'organisation. Sans lui,
+                          choisir entre l'EI et l'enseigne ne dit rien des
+                          pièces à signer — alors que c'est ce que ce choix
+                          décide. Composé par le module partagé pour que le code
+                          brut (`OPCO_EP`) ne ressorte nulle part. */}
                       {financeurs.map((f) => (
                         <option key={f.id} value={f.id}>
-                          {f.label}
-                          {f.opcoCode ? ` · ${f.opcoCode}` : ''}
+                          {libelleOptionCommanditaire({ label: f.label, opcoCode: f.opcoCode })}
                         </option>
                       ))}
                     </select>
-                    <p className="text-[11px] text-muted-foreground mt-1">{AIDE_FINANCEUR}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {AIDE_CHAMP_COMMANDITAIRE}
+                    </p>
                   </>
                 )}
               </div>

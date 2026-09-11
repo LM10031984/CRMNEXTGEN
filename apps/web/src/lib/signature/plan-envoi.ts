@@ -140,7 +140,8 @@ function messageAvertissement(p: ParticipantPourEnvoi, docType: DocTypeSignable)
     `${p.nomAffiche} : le financeur rattaché à ${organisation} n'ouvre pas ` +
     `${PIECE[docType].designation}, alors que le dossier de cet apprenant en porte les ` +
     `signaux (entreprise individuelle rattachée, ou autre organisation dont le financeur ` +
-    `l'ouvre). Corrigez le financeur de l'inscription : rien n'a été envoyé pour cette pièce.`
+    `l'ouvre). Corrigez l'organisation commanditaire de l'inscription : rien n'a été envoyé ` +
+    `pour cette pièce.`
   );
 }
 

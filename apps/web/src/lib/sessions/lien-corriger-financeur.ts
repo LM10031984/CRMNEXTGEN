@@ -1,5 +1,13 @@
 /**
- * « Corriger le financeur de l'inscription → » — la FORME D'URL, module NEUTRE.
+ * « Corriger l'organisation commanditaire → » — la FORME D'URL, module NEUTRE.
+ *
+ * ⚠ CE LIEN N'EST PLUS LE SEUL. Depuis la correction n°7 bis (Laurent,
+ * 11/09/2026), l'avertissement « régime incohérent » a DEUX destinations, et
+ * celle-ci n'en couvre qu'une : le cas où le commanditaire lui-même est à
+ * revoir. Quand le commanditaire est le bon et qu'il lui manque son code
+ * financeur, c'est la FICHE ORGANISATION qu'il faut ouvrir — voir le module
+ * frère `lien-renseigner-financeur.ts`. Envoyer ce cas-là ici ferait changer un
+ * champ qui est déjà juste.
  *
  * POURQUOI L'OUVERTURE EST PILOTÉE PAR L'URL, ET PAS PAR UN ÉTAT LOCAL. Le
  * formulaire d'édition d'une inscription vit dans la liste des inscrits, sur
@@ -45,12 +53,19 @@ export const CHAMP_FINANCEUR = 'financeur';
 /** L'onglet qui porte la liste des inscrits, donc le formulaire d'édition. */
 export const ONGLET_PORTEUR: SessionTabId = 'session';
 
-/** Le libellé du lien, partagé pour que l'appelant n'en invente pas un autre. */
-export const LIBELLE_LIEN_CORRIGER_FINANCEUR = "Corriger le financeur de l'inscription →";
+/**
+ * Le libellé du lien, partagé pour que l'appelant n'en invente pas un autre.
+ *
+ * ⚠ IL NE DIT PLUS « financeur ». Ce lien ouvre le champ qui change
+ * l'ORGANISATION portant l'inscription ; le financeur, lui, se renseigne sur la
+ * fiche de cette organisation. Nommer les deux « financeur » est exactement ce
+ * qui faisait corriger le mauvais champ.
+ */
+export const LIBELLE_LIEN_CORRIGER_COMMANDITAIRE = "Corriger l'organisation commanditaire →";
 
 /**
- * L'URL qui ouvre le formulaire d'édition d'une inscription, champ « Financeur
- * de l'inscription » en évidence.
+ * L'URL qui ouvre le formulaire d'édition d'une inscription, champ
+ * « Organisation commanditaire » en évidence.
  */
 export function lienCorrigerFinanceur(opts: {
   sessionId: string;

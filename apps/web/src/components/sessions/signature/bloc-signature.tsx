@@ -44,7 +44,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 import {
-  LIBELLE_LIEN_CORRIGER_FINANCEUR,
+  LIBELLE_LIEN_CORRIGER_COMMANDITAIRE,
   lienCorrigerFinanceur,
 } from '@/lib/sessions/lien-corriger-financeur';
 import {
@@ -234,7 +234,7 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
               }
               className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
             >
-              {LIBELLE_LIEN_CORRIGER_FINANCEUR}
+              {LIBELLE_LIEN_CORRIGER_COMMANDITAIRE}
             </Link>
           </span>
         </div>
