@@ -72,6 +72,32 @@ aussi sur l'ordinateur du stand : sans ça, il faut recharger la page entre deux
 - Ajoute le traitement « diagnostic express du stand » à `docs/rgpd/REGISTRE-TRAITEMENTS.md` :
   finalité, base légale (consentement), données collectées, durée de conservation, destinataires.
 
+
+**LOT 6 — la fiche lead sert enfin à rappeler (constat du test de Laurent du 01/09).**
+Le test réel a montré : le lead arrive dans la liste, mais on ne peut ni cliquer dessus, ni voir
+son téléphone, ni voir le programme qui lui a été envoyé. Or la fiche détail EXISTE
+(`app/app/leads/[id]/page.tsx`, avec téléphone et notes) — elle n'est simplement reliée nulle part.
+
+1. `app/app/leads/page.tsx` : chaque ligne du tableau devient cliquable vers
+   `/app/leads/[id]` (lien sur le nom du contact au minimum). Aujourd'hui les `<tr>` n'ont
+   aucun `Link` : la fiche est inaccessible sans taper l'URL à la main.
+2. Dans la liste, sous l'email : le **téléphone**, en lien `tel:` — le soir du salon et le
+   jeudi matin, cette liste est utilisée depuis un téléphone, l'appel doit partir en un tap.
+3. Dans la liste, une colonne **« Dernière action »** affichant `lastAction` : c'est là que le
+   LOT 2 écrit la priorité `[A]/[B]/[C]` — si elle ne s'affiche pas, le tri des rappels
+   n'existe pas à l'écran. (Corrige au passage mon hypothèse : cette colonne n'existait pas.)
+4. `app/app/leads/[id]/page.tsx` : une section **« Diagnostic du stand »** quand le lead a des
+   `diagnosticSubmissions` :
+   - le **statut d'envoi du programme** en badge : PENDING (« en attente d'envoi » — après la
+     soirée, ça veut dire que le worker ne tourne pas), SENT avec la date, FAILED avec
+     `lastError` ;
+   - le **programme réellement envoyé**, rendu depuis le JSON `personnalisation` (accroche,
+     objectifs, séquences) — au téléphone, Laurent doit avoir sous les yeux exactement ce que
+     le prospect a reçu ;
+   - les scores par problématique.
+5. Optionnel si le temps le permet : un bouton « Renvoyer le programme » sur les soumissions
+   FAILED, qui remet le statut à PENDING.
+
 ## Contraintes qui n'ont pas changé
 
 - Le résultat affiché au prospect reste calculé **côté client par le module pur** : aucun appel

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquette — Proposition d'accompagnement chiffrée (spécimen)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+  :root{
+    --brand-deep:#00527A; --brand-vif:#3EA9FF; --brand-deep-08:rgba(0,82,122,.08);
+    --ink:#1c2733; --ink-2:#4a5a68; --ink-3:#7b8894; --line:#dde4ea; --paper:#fff; --wash:#f4f8fb;
+    --ok:#1a7f37; --ok-bg:#e8f5ec; --gold:#9a6b00; --gold-bg:#fdf6e3;
+  }
+  *{box-sizing:border-box; margin:0}
+  html{background:#e9edf1}
+  body{font-family:'Montserrat',system-ui,Segoe UI,Arial,sans-serif; color:var(--ink); font-size:10.5pt; line-height:1.55; background:#e9edf1; padding:24px 0}
+  h1,h2,h3,.display{font-family:'Rajdhani','Montserrat',system-ui,sans-serif}
+  .page{width:210mm; min-height:297mm; margin:0 auto 24px; background:var(--paper); padding:16mm 17mm 26mm; position:relative; box-shadow:0 2px 14px rgba(16,42,67,.14); overflow:hidden}
+  .specimen{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:0}
+  .specimen span{font-family:'Rajdhani'; font-weight:700; font-size:64pt; letter-spacing:.18em; color:rgba(0,82,122,.055); transform:rotate(-28deg); white-space:nowrap}
+  .page>*:not(.specimen){position:relative; z-index:1}
+  @page{size:A4; margin:0}
+  @media print{ html,body{background:#fff; padding:0} .page{box-shadow:none; margin:0; page-break-after:always} }
+
+  .band{background:var(--brand-deep); color:#fff; margin:-16mm -17mm 0; padding:20mm 17mm 16mm}
+  .kicker{font-family:'Rajdhani'; font-weight:600; letter-spacing:.22em; font-size:9.5pt; text-transform:uppercase; color:var(--brand-vif)}
+  .band h1{font-size:27pt; font-weight:700; line-height:1.1; margin-top:5mm; color:#fff}
+  .band .sub{font-size:13pt; color:#cfe7f7; margin-top:2mm; font-weight:500}
+  .band-meta{display:flex; flex-wrap:wrap; gap:8mm; margin-top:10mm; font-size:9pt; color:#a9c9dd}
+  .band-meta b{display:block; color:#fff; font-size:10pt; font-weight:600}
+
+  .sec{margin-top:8mm}
+  .sec>h2{font-size:16pt; font-weight:700; color:var(--brand-deep); border-bottom:2px solid var(--brand-deep); padding-bottom:1.5mm; margin-bottom:3.5mm; display:flex; gap:3mm; align-items:baseline}
+  .sec>h2 .no{font-size:10pt; color:var(--brand-vif); font-weight:600; letter-spacing:.08em}
+  .muted{color:var(--ink-3); font-size:8.5pt}
+  .lead{color:var(--ink-2)}
+  ul.dash{list-style:none; margin-top:2mm}
+  ul.dash li{padding-left:5mm; position:relative; margin-bottom:1.6mm; color:var(--ink-2)}
+  ul.dash li::before{content:"–"; position:absolute; left:0; color:var(--brand-vif); font-weight:700}
+  ul.dash b{color:var(--ink)}
+
+  table{width:100%; border-collapse:collapse; font-size:9pt; margin-top:2.5mm}
+  th{font-family:'Rajdhani'; font-size:8.5pt; text-transform:uppercase; letter-spacing:.1em; text-align:left; color:#fff; background:var(--brand-deep); padding:2.2mm 3mm; font-weight:600}
+  td{padding:2.1mm 3mm; border-bottom:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:var(--wash)}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+  tr.total td{background:var(--brand-deep); color:#fff; font-weight:700; font-size:10pt; border:none}
+  tr.subtotal td{background:var(--brand-deep-08); font-weight:600}
+
+  .phase{display:grid; grid-template-columns:30mm 1fr; gap:4.5mm; margin-top:3.5mm; border:1px solid var(--line); border-radius:2.5mm; padding:4mm 5mm; background:var(--paper)}
+  .phase .tag{font-family:'Rajdhani'; font-weight:700; color:var(--brand-deep); font-size:11pt; line-height:1.25}
+  .phase .tag small{display:block; font-family:'Montserrat'; font-weight:500; font-size:8pt; color:var(--ink-3); letter-spacing:.04em}
+  .phase h3{font-size:11pt; color:var(--ink); font-weight:700}
+  .phase p{font-size:9pt; color:var(--ink-2); margin-top:1mm}
+  .phase .why{font-size:8.5pt; color:var(--brand-deep); background:var(--brand-deep-08); border-radius:1.5mm; padding:1.5mm 3mm; margin-top:2mm; display:inline-block}
+
+  .callout{border:1.5px solid var(--gold); background:var(--gold-bg); border-radius:2.5mm; padding:4mm 5.5mm; margin-top:4mm}
+  .callout h3{color:var(--gold); font-size:10.5pt; text-transform:uppercase; letter-spacing:.1em; font-family:'Rajdhani'}
+  .callout ul{list-style:none; margin-top:1.5mm}
+  .callout li{font-size:9pt; color:var(--ink-2); padding-left:5mm; position:relative; margin-bottom:1.2mm}
+  .callout li::before{content:"•"; position:absolute; left:1mm; color:var(--gold); font-weight:700}
+
+  /* Barre budget (2 segments, gaps 2px, libellés directs) */
+  .budgetbar{display:flex; gap:2px; height:7.5mm; border-radius:1.5mm; overflow:hidden; margin-top:3mm}
+  .budgetbar div{min-width:0}
+  .budgetbar .agefice{background:var(--brand-deep)}
+  .budgetbar .opco{background:var(--brand-vif)}
+  .budgetlegend{display:flex; gap:7mm; margin-top:1.8mm; font-size:8.5pt; color:var(--ink-2); font-variant-numeric:tabular-nums}
+  .budgetlegend b{color:var(--ink)}
+  .dot{display:inline-block; width:2.6mm; height:2.6mm; border-radius:.7mm; margin-right:1.5mm; vertical-align:-.2mm}
+
+  .offert{display:flex; align-items:center; gap:5mm; border:2px solid var(--ok); background:var(--ok-bg); border-radius:2.5mm; padding:4mm 6mm; margin-top:4mm}
+  .stamp{font-family:'Rajdhani'; font-weight:700; font-size:19pt; letter-spacing:.16em; color:var(--ok); border:2.5px solid var(--ok); border-radius:2mm; padding:1mm 5mm; transform:rotate(-4deg); white-space:nowrap}
+  .offert p{font-size:8.8pt; color:var(--ink-2)}
+
+  .steps td:first-child{font-weight:500}
+  .sign{margin-top:8mm; display:flex; justify-content:space-between; gap:8mm}
+  .sign .box{border:1px dashed var(--ink-3); border-radius:2mm; padding:3.5mm 5mm; width:62mm; min-height:26mm; font-size:8.5pt; color:var(--ink-3)}
+  .legal{font-size:7.6pt; color:var(--ink-3); font-style:italic; margin-top:5mm; line-height:1.5}
+  .page > .footer{position:absolute; left:17mm; right:17mm; bottom:8mm; display:flex; justify-content:space-between; font-size:7.5pt; color:var(--ink-3); border-top:1px solid var(--line); padding-top:2mm}
+  .foot-brand{font-family:'Rajdhani'; font-weight:600; letter-spacing:.14em; color:var(--brand-deep)}
+</style>
+</head>
+<body>
+
+<!-- ============================== PAGE 1 — GARDE + CE QUE NOUS AVONS ENTENDU ============================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+  <div class="band">
+    <div class="kicker">Start Academy · Proposition d'accompagnement</div>
+    <h1>Structurer la vente, sécuriser les compromis,<br>équiper l'équipe — financé par vos droits</h1>
+    <div class="sub">Agence du Baou — Vence (exemple fictif) · transaction dans l'ancien</div>
+    <div class="band-meta">
+      <div><span>À l'attention de</span><b>Madame [Gérante] et de son équipe</b></div>
+      <div><span>Référence</span><b>PROP-0042 · v1</b></div>
+      <div><span>Date</span><b>15 septembre 2026</b></div>
+      <div><span>Validité</span><b>30 jours — 15 octobre 2026</b></div>
+      <div><span>Votre interlocuteur</span><b>[Prénom Nom] · 06 xx xx xx xx</b></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no">01</span> Ce que nous avons entendu</h2>
+    <p class="lead">À la suite de notre diagnostic du 12 septembre dans vos locaux (audit complet joint — DIAG-0042), voici les enjeux identifiés :</p>
+    <ul class="dash">
+      <li><b>1 mandat sur 5 seulement en exclusivité</b> (20 % pour un repère à 30 %) : des prix de rentrée acceptés au-dessus du marché, une découverte vendeur non formalisée — c'est votre fuite de valeur n° 1.</li>
+      <li><b>1 compromis sur 5 n'arrive pas à l'acte</b> (80 % pour un repère à 85 %) : le financement acquéreur n'est pas vérifié avant les visites — deux ventes perdues ce trimestre.</li>
+      <li><b>Le pilotage repose sur vous seule</b> : aucun indicateur suivi hors chiffre d'affaires, comptes-rendus vendeurs « à la demande », stock ancien non requalifié.</li>
+      <li><b>L'IA est absente des routines</b> : annonces, comptes-rendus, relances et collecte d'avis sont manuels — 9 avis Google pour 32 ventes, un gisement de preuve sociale inexploité.</li>
+      <li><b>Vos droits à la formation dorment</b> : environ 4 % consommés sur 24 mois, alors que 14 500 € sont mobilisables cette année — et perdus au 31 décembre.</li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no">02</span> Notre proposition — 9 demi-journées chez vous, en 3 axes</h2>
+    <p class="lead">Un parcours sur mesure, dans vos locaux, co-animé par <b>deux formateurs spécialisés immobilier</b>, composé depuis notre catalogue de programmes <b>métier</b> (vendeur, acquéreur, négociation) et <b>IA</b> — chaque axe répond à une priorité de votre audit, chaque module part de vos dossiers réels. Un point de douleur métier reçoit un programme métier : l'IA n'est jamais la réponse par défaut.</p>
+
+    <div class="phase"><div class="tag">Axe 1<small>2 demi-journées · sept.</small></div><div>
+      <h3>« Immobilier : gagnez 2 h par jour grâce à l'IA » — programme n° 070</h3>
+      <p>Paramétrage commun (instructions, modèles de prompts, confidentialité), cas métier : annonce, compte-rendu de visite, relance. Chacun repart avec ses outils configurés.</p>
+      <div class="why">Pourquoi : priorité n° 3 — reprendre du temps ; usages IA « aucun » relevé au diagnostic (Ch. 10).</div>
+    </div></div>
+    <div class="phase"><div class="tag">Axe 2<small>4 demi-journées · oct.</small></div><div>
+      <h3>« Booster vendeur : devenir incontournable auprès des vendeurs » (n° 058) + « Maîtrise des techniques de vente immobilière » (n° 055)</h3>
+      <p>Découverte vendeur formalisée, préparation R1, protocole d'estimation, R2 de closing, défense du prix de rentrée ; puis comptes-rendus rythmés, requalification du stock, stratégie de baisses.</p>
+      <div class="why">Pourquoi : priorité n° 2 — 20 % d'exclusivité, prix « souvent » au-dessus du marché, CR « à la demande » (Ch. 4, 5, 6).</div>
+    </div></div>
+    <div class="phase"><div class="tag">Axe 3<small>3 demi-journées · nov.</small></div><div>
+      <h3>« Booster Acheteurs » (n° 059) + « Face à face acheteurs » (n° 008)</h3>
+      <p>Vérification du financement avant visite, parcours acquéreur outillé, suivi des compromis ; automatisations des tâches répétitives et process de collecte d'avis Google.</p>
+      <div class="why">Pourquoi : priorité n° 1 — 80 % compromis → acte ; 9 avis pour 32 ventes (Ch. 7, 8, 9).</div>
+    </div></div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>PROP-0042 · Agence du Baou</span><span>1 / 3</span></div>
+</section>
+
+<!-- ============================== PAGE 2 — PLANNING + BUDGET MOBILISABLE ============================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">03</span> Planning proposé</h2>
+    <table>
+      <thead><tr><th>Date</th><th>Session (4 h sur site · 2 formateurs)</th><th>Participants</th></tr></thead>
+      <tbody>
+        <tr><td><b>Jeudi 24/09</b> · 9 h – 13 h</td><td>Axe 1 — Socle IA (1/2)</td><td>Toute l'équipe (7)</td></tr>
+        <tr><td><b>Jeudi 01/10</b> · 9 h – 13 h</td><td>Axe 1 — Socle IA (2/2)</td><td>Toute l'équipe (7)</td></tr>
+        <tr><td><b>Jeudis 08/10 → 29/10</b></td><td>Axe 2 — Gagner le mandat + Suivi vendeur (4 sessions)</td><td>4 agents + 3 salariés</td></tr>
+        <tr><td><b>Jeudis 05/11 → 19/11</b></td><td>Axe 3 — Acheteur &amp; sécurisation + Gagner 5-10 h (3 sessions)</td><td>4 agents (+ salariés sur 1 session)</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:2mm"><b>Pour sécuriser la date du 24/09, l'ensemble des pièces administratives doit être réuni au plus tard le 9 septembre</b> (15 jours avant la première session). Le lien de pré-inscription transmis à votre équipe permet à chacun de déposer ses pièces en 5 minutes — nous relançons nous-mêmes les retardataires.</p>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no">04</span> Budget mobilisable : 14 500 €, dossiers montés par nos soins</h2>
+    <p class="lead">L'accompagnement est dimensionné sur vos droits réellement disponibles — des droits qui, s'ils ne sont pas consommés, sont <b>définitivement perdus au 31 décembre</b> :</p>
+    <table>
+      <thead><tr><th>Financeur</th><th>Bénéficiaires</th><th>Base</th><th class="num">Montant</th></tr></thead>
+      <tbody>
+        <tr><td><b>AGEFICE</b></td><td>4 agents commerciaux éligibles (production 2025 &gt; 7 000 €)</td><td>3 000 € / agent (plafond annuel AGEFICE)</td><td class="num">12 000 €</td></tr>
+        <tr><td><b>OPCO EP</b></td><td>Agence du Baou — 3 salariées (structure &lt; 11 salariés)</td><td>forfait annuel entreprise</td><td class="num">2 500 €</td></tr>
+        <tr><td>Déduction</td><td>Aucune formation engagée en 2026</td><td>—</td><td class="num">− 0 €</td></tr>
+        <tr class="total"><td colspan="3">ENVELOPPE MOBILISABLE ESTIMÉE</td><td class="num">14 500 €</td></tr>
+      </tbody>
+    </table>
+    <div class="budgetbar" aria-label="Répartition du financement mobilisable">
+      <div class="agefice" style="flex:12000"></div>
+      <div class="opco" style="flex:2500"></div>
+    </div>
+    <div class="budgetlegend">
+      <span><span class="dot" style="background:var(--brand-deep)"></span>AGEFICE — 4 dossiers individuels · <b>12 000 €</b></span>
+      <span><span class="dot" style="background:var(--brand-vif)"></span>OPCO EP — enveloppe entreprise · <b>2 500 €</b></span>
+    </div>
+    <p class="muted" style="margin-top:2mm"><b>Potentiel complémentaire :</b> votre enveloppe AGEFICE de gérante TNS (+ 3 000 €, sous réserve d'attestation CFP à demander à votre expert-comptable) pourra être intégrée dès réception — soit jusqu'à <b>17 500 €</b> mobilisables au total.</p>
+    <div class="callout">
+      <h3>Trois points clés pour votre équipe</h3>
+      <ul>
+        <li>Chaque agent commercial formé perçoit <b>en plus une indemnisation AGEFICE de l'ordre de 700 à 800 €</b>.</li>
+        <li>La formation <b>valide les heures obligatoires loi ALUR</b> des professionnels de l'immobilier.</li>
+        <li>Start Academy prend en charge <b>100 % du montage administratif</b> (dossiers AGEFICE et OPCO, appels aux agents, lien de pré-inscription) — et <b>vous n'avancez pas un euro de trésorerie</b>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>PROP-0042 · Agence du Baou</span><span>2 / 3</span></div>
+</section>
+
+<!-- ============================== PAGE 3 — DÉTAIL TYPE DEVIS + RESTE À CHARGE + ÉTAPES ============================== -->
+<section class="page">
+  <div class="specimen"><span>SPÉCIMEN · MAQUETTE</span></div>
+
+  <div class="sec" style="margin-top:0">
+    <h2><span class="no">05</span> Le détail chiffré — par payeur</h2>
+    <table>
+      <thead><tr><th>Désignation</th><th class="num">Particip.</th><th class="num">Demi-journées</th><th class="num">Heures conv.</th><th class="num">PU HT</th><th class="num">Total HT</th></tr></thead>
+      <tbody>
+        <tr><td colspan="6" style="background:var(--wash); font-weight:700; color:var(--brand-deep)">Agents commerciaux indépendants — dossiers individuels AGEFICE (subrogation, zéro avance)</td></tr>
+        <tr><td>Parcours 9 demi-journées (axes 1-2-3), co-animé, sur site</td><td class="num">4</td><td class="num">9</td><td class="num">72 h / agent</td><td class="num">336 €</td><td class="num">12 096 €</td></tr>
+        <tr class="subtotal"><td colspan="4">Prise en charge AGEFICE estimée (plafond 3 000 € / agent)</td><td class="num"></td><td class="num">− 12 000 €</td></tr>
+        <tr><td colspan="6" style="background:var(--wash); font-weight:700; color:var(--brand-deep)">Agence du Baou SARL — salariées (devis entreprise, dossier OPCO EP)</td></tr>
+        <tr><td>Axes 1 &amp; 2 + session sécurisation — 6 demi-journées, co-animées, sur site</td><td class="num">3</td><td class="num">6</td><td class="num">48 h / salariée</td><td class="num">336 €</td><td class="num">6 048 €</td></tr>
+        <tr class="subtotal"><td colspan="4">Prise en charge OPCO EP estimée (enveloppe entreprise)</td><td class="num"></td><td class="num">− 2 500 €</td></tr>
+        <tr><td colspan="5"><b>Coût pédagogique total</b> (TVA non applicable — art. 261-4-4° a du CGI, activité de formation exonérée)</td><td class="num"><b>18 144 €</b></td></tr>
+        <tr><td colspan="5">Financements mobilisés (AGEFICE + OPCO EP)</td><td class="num">− 14 500 €</td></tr>
+        <tr><td colspan="5">Reste à charge théorique avant geste commercial</td><td class="num">3 644 €</td></tr>
+        <tr><td colspan="5">Remise commerciale — offre de lancement partenariat <span class="muted">(motif enregistré, validé direction le 15/09)</span></td><td class="num">− 3 644 €</td></tr>
+        <tr class="total"><td colspan="5">RESTE À VOTRE CHARGE</td><td class="num">0 €</td></tr>
+      </tbody>
+    </table>
+    <div class="offert">
+      <div class="stamp">OFFERT</div>
+      <p><b>Le reste à charge vous est intégralement offert.</b> Précision importante : ce geste commercial ne modifie ni le coût pédagogique déclaré ni vos droits — les prises en charge AGEFICE et OPCO EP sont calculées sur le coût réel. Les 8 heures conventionnées par demi-journée (2 formateurs × 4 h) figurent à l'identique sur la convention, les feuilles d'émargement et les dossiers financeurs.</p>
+    </div>
+    <p class="muted" style="margin-top:2.5mm">Deux devis joints reprennent exactement ces montants : DEV-0107 (Agence du Baou SARL — 6 048 € HT) et les dossiers individuels AGEFICE des 4 agents. Aucune facturation avant accord de prise en charge.</p>
+  </div>
+
+  <div class="sec">
+    <h2><span class="no">06</span> Prochaines étapes</h2>
+    <table class="steps">
+      <thead><tr><th>Action</th><th>Qui</th><th>Échéance</th></tr></thead>
+      <tbody>
+        <tr><td>Valider la proposition (signature du devis entreprise + accord de principe des agents)</td><td>Agence du Baou</td><td><b>Avant le 9/09</b></td></tr>
+        <tr><td>Transmettre le lien de pré-inscription à l'équipe (pièces : CNI, RIB, attestation CFP)</td><td>Ensemble</td><td><b>Cette semaine</b></td></tr>
+        <tr><td>Vérifier chaque dossier, relancer, monter et déposer les dossiers AGEFICE / OPCO EP</td><td>Start Academy</td><td><b>Au plus tard le 9/09</b></td></tr>
+        <tr><td>Première session — Socle IA, toute l'équipe</td><td>Ensemble</td><td><b>Jeudi 24/09</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sign">
+    <div class="box">Pour l'Agence du Baou<br><span class="muted">« Bon pour accord » · date · signature</span></div>
+    <div class="box">Pour Start Academy<br><span class="muted">[Prénom Nom] · date · signature</span></div>
+  </div>
+
+  <p class="legal">Montants estimatifs, sous réserve des droits réellement disponibles et de l'acceptation des dossiers par les financeurs (AGEFICE, OPCO EP) — les éventuels écarts seront ajustés d'un commun accord sur le périmètre du parcours. Proposition valable 30 jours. Start Academy — organisme de formation certifié Qualiopi · NDA [xxxxx] · SIRET [xxxxx] · La certification qualité a été délivrée au titre de la catégorie d'action suivante : actions de formation.</p>
+
+  <div class="footer"><span class="foot-brand">START ACADEMY</span><span>PROP-0042 · Agence du Baou</span><span>3 / 3</span></div>
+</section>
+
+</body>
+</html>
