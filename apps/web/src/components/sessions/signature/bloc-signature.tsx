@@ -40,7 +40,13 @@
  */
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
+import {
+  LIBELLE_LIEN_CORRIGER_FINANCEUR,
+  lienCorrigerFinanceur,
+} from '@/lib/sessions/lien-corriger-financeur';
 import {
   AlertTriangle,
   Ban,
@@ -203,14 +209,35 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
           correction à faire. `construireVueSignature` regroupe et compose ; ce
           composant, lui, continue de rendre le message TEL QUEL. */}
       {vue.avertissements.map((avertissement) => (
-        <p
+        <div
           key={`avert-${avertissement.participantId}`}
           role="alert"
           className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span>{avertissement.message}</span>
-        </p>
+          <span className="min-w-0">
+            {avertissement.message}{' '}
+            {/* Le lien qui tient la promesse du message. Sans lui, « Corrigez le
+                financeur de l'inscription » est une consigne sans destination :
+                l'admin doit deviner où aller, et le champ n'existait même pas
+                avant le lot C.2b-5. `retour` suit le scope pour le ramener ici. */}
+            <Link
+              // `typedRoutes` est actif : Link n'accepte pas une URL construite.
+              // `as Route` plutôt que `as any` — on échappe au typage des routes,
+              // pas au typage tout court (motif de `devis/page.tsx:209`).
+              href={
+                lienCorrigerFinanceur({
+                  sessionId,
+                  participantId: avertissement.participantId,
+                  retour: scope === 'BEFORE' ? 'avant' : 'apres',
+                }) as Route
+              }
+              className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
+            >
+              {LIBELLE_LIEN_CORRIGER_FINANCEUR}
+            </Link>
+          </span>
+        </div>
       ))}
 
       {vue.lignes.length > 0 && (
