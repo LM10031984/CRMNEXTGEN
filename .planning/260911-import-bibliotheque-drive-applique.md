@@ -33,17 +33,6 @@ Motif : un import qui VIDE un contenu ne peut pas avoir raison ; un import qui l
 
 - `drive:047#20` « Atelier pratique : Simulation de réponse aux avis  » — le Drive n'a pas de déroulé, la base en a un : **contenu conservé**. Le reste du module est mis à jour normalement.
 
-## Déroulés vidés — la base ne portait que du boilerplate de gabarit
-
-Pour ces modules, la base portait un déroulé, mais **uniquement des mentions d'organisme** du gabarit Qualiopi (« QCM évaluation des acquis », « Questionnaire de satisfaction et clôture de la formation »). L'extraction les retire depuis le lot 1 du 11/09/2026 ; la garde « un import ne vide jamais un contenu écrit » **ne s'applique donc pas** : elle protège la pédagogie, pas le boilerplate.
-
-**Rien de pédagogique n'a été perdu.** Ces modules sont des fantômes nés du pied de page — leur titre est en réalité le dernier objectif de la liste précédente, et leur découpage est un chantier à part (lot 3). Le composeur les écarte déjà des sorties client, faute de déroulé.
-
-- `drive:010#2` « Apprendre à réévaluer régulièrement le plan d'acti » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
-- `drive:014#4` « Analyser et comprendre les besoins et les attentes » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
-- `drive:027#2` « Mettre en œuvre des changements pour accroître la  » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
-- `drive:038#3` « Mettre en place un suivi régulier et des récompens » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.
-
 ## ⚠️ À trancher — le même programme importé deux fois
 
 Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dossiers source différents. D-19 bis ne sait pas les départager : il compare un rayon aux produits VENDUS, et entre deux rayons il n’y a pas de version vendue qui fasse foi.

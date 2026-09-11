@@ -37,18 +37,32 @@
  *
  * ── Ce que ce filtre laisse volontairement passer ───────────────────────────
  *
+ * Ce ne sont plus des questions ouvertes : les arbitrages sont tombés le
+ * 11/09/2026 (lot 1 bis). Chaque cas ci-dessous est une DÉCISION, et chacune est
+ * verrouillée par un `it()` qui la nomme.
+ *
  * • Les 3 LIGNES MIXTES (drive:024#11, drive:028#6, drive:055#10), où la mention
  *   est soudée à de la pédagogie dans la même phrase :
  *   « Clôture et questionnaire de satisfaction. Feedback et Questions/Réponses ».
- *   Les retirer en entier détruirait du contenu ; les réécrire serait un
- *   arbitrage que Laurent n'a pas donné — il a demandé une suppression pure, sans
- *   arbitrage. Elles restent, et elles sont signalées.
+ *   DÉCISION : **reportées au lot 2**. Les retirer en entier détruirait du
+ *   contenu, et les couper est un arbitrage de RÉDACTION. Au lot 2, Laurent relit
+ *   déjà du texte (les titres de modules) : c'est là que la phrase se coupe, avec
+ *   un œil humain sur la coupe, pas ici.
  *
- * • « Remise des attestations », « Remise de l'attestation. » et les MOYENS
- *   PÉDAGOGIQUES de drive:058#6 (« Les formateurs proposeront… », « Un livret de
- *   formation sera remis… ») : mentions d'organisme probables, mais HORS des trois
- *   familles nommées par Laurent. Les retirer serait élargir le périmètre tout
- *   seul. Elles restent, et elles sont signalées.
+ * • « Remise des attestations », « Remise des attestations de formation »,
+ *   « Remise de l'attestation. » — DÉCISION du 11/09/2026 : **elles restent**.
+ *   C'est un vrai moment de fin de session, pas de l'administratif d'organisme.
+ *   Ce n'est plus « hors périmètre » : c'est tranché, et un test le verrouille.
+ *
+ * • Les voisines de la MÊME FAMILLE que les moyens pédagogiques de la famille 4,
+ *   rencontrées dans drive:067#1, drive:068#1 et drive:069#1 : « Formation
+ *   interactive orientée pratique. », « Présentation visuelle sur support
+ *   Canva. », « Support pédagogique numérique remis à chaque participant. »,
+ *   « Démonstrations en direct sur un outil d'intelligence artificielle. »,
+ *   « Exercices guidés pas à pas sur la rédaction de prompts. ». Laurent a nommé
+ *   deux phrases, pas dix, et certaines de celles-là (démonstrations, exercices
+ *   guidés) sont discutablement de la pédagogie. Les retirer serait élargir le
+ *   périmètre tout seul. Elles restent, et elles sont SIGNALÉES pour le lot 2.
  *
  * • TOUT le module `faros:SA-ADM-M001#1` « LIVRABLE 001 » (855 lignes) : il
  *   ENSEIGNE le montage du dossier AGEFICE/CFP, donc il parle légitimement
@@ -69,13 +83,14 @@
  */
 
 /**
- * Les SEPT formes canoniques — déjà normalisées, donc sans accent, sans
+ * Les ONZE formes canoniques — déjà normalisées, donc sans accent, sans
  * apostrophe courbe et sans ponctuation finale.
  *
  * Chacune couvre plusieurs écritures réelles : `normaliserLigne` absorbe les
  * variantes (les deux apostrophes, la présence ou l'absence de « d' », le point,
  * le point-virgule, les deux-points, les espaces surnuméraires, la puce
- * Markdown). Les 13 formes relevées dans l'instantané se replient sur ces sept.
+ * Markdown). Les 13 formes relevées dans l'instantané au lot 1 se replient sur
+ * les sept premières ; la famille 4 en ajoute quatre au lot 1 bis.
  */
 const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   // Famille 1 — le QCM du gabarit (46 occurrences, 5 écritures)
@@ -91,6 +106,51 @@ const MENTIONS_CANONIQUES: ReadonlySet<string> = new Set([
   // drive:016#3, drive:034#3, drive:039#3 — le cas « Gérer les objections »
   // relevé par Laurent sur le programme composé de DIAG-0001)
   "tous les formateurs de l'equipe start-academy ont minimum 8 annees d'experience dans l'immobilier, notamment dans le domaine de la vente de biens, de formation d'agents et de coaching individuel",
+
+  // ── Famille 4 — les MOYENS PÉDAGOGIQUES du pied de document (lot 1 bis,
+  //    arbitrage du 11/09/2026). 7 occurrences : les 4 lignes contiguës de
+  //    drive:058#6, plus la seule ligne de modalité dans drive:067#1,
+  //    drive:068#1 et drive:069#1.
+  //
+  // POURQUOI CE DÉFAUT EXISTE — et pourquoi on le corrige ICI et pas à la source.
+  //
+  // `/moyens pedagogiques et techniques/` est le 4ᵉ motif de `BODY_START` dans
+  // `extract-drive-catalog.ts`, et il n'est dans AUCUN motif de `BODY_END`. Sur
+  // `drive:058`, le corps a démarré plus tôt (`contenu detaille de la
+  // formation`) : ce titre de pied de document tombe donc À L'INTÉRIEUR du corps,
+  // et rien ne l'arrête. Les lignes qui le suivent sont avalées comme des puces
+  // du déroulé.
+  //
+  // On ne touche PAS aux délimiteurs. Ajouter ce titre à `BODY_END` déplacerait
+  // le découpage de TOUT le corpus — 76 programmes, 402 modules — pour réparer un
+  // module. On retire par le FILTRE, qui agit ligne à ligne et se relit dans un
+  // `git diff`.
+  //
+  // POURQUOI QUATRE LIGNES ET PAS DEUX — élargissement assumé, à contredire.
+  //
+  // Laurent a nommé les deux dernières. Mais les quatre forment UN SEUL BLOC
+  // CONTIGU en fin de module, introduit par son propre titre de section :
+  //
+  //   - LES MOYENS PÉDAGOGIQUES ET TECHNIQUES      ← le TITRE de la section
+  //   - La formation se déroule en présentiel.      ← une modalité d'en-tête
+  //   - Les formateurs proposeront des mises en situation…   ← nommée
+  //   - Un livret de formation sera remis…                   ← nommée
+  //
+  // N'en retirer que deux laisserait, dans un déroulé qui part chez un financeur,
+  // un titre de section ORPHELIN suivi d'une phrase isolée : on créerait sciemment
+  // un défaut. Et la ligne de modalité appartient à l'en-tête du programme, pas au
+  // déroulé — elle vit sous ce même titre.
+  //
+  // Ce que l'élargissement emporte AILLEURS, et c'est à savoir : un ensemble fermé
+  // agit sur tout le corpus. « La formation se déroule en présentiel. » ouvre le
+  // même bloc avalé dans drive:067#1, drive:068#1 et drive:069#1, qui perdent donc
+  // cette ligne aussi. Aucun ne se vide (32, 41 et 41 lignes). Les 5 autres lignes
+  // de moyens pédagogiques de ces modules RESTENT — voir la liste des décisions en
+  // tête de fichier.
+  'les moyens pedagogiques et techniques',
+  'la formation se deroule en presentiel',
+  'les formateurs proposeront des mises en situation professionnelles sur les techniques de prospection, les discours et la posture ainsi que des echanges sur les pratiques actuelles',
+  'un livret de formation sera remis a chaque participant en debut de formation. le formateur deroulera sa formation avec une presentation canva projetee',
 ]);
 
 /** Apostrophes rencontrées dans les .docx : courbe, modificatrice, droite. */
