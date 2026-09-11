@@ -37,7 +37,13 @@ vi.mock('nodemailer', () => ({
   default: { createTransport },
 }));
 
-import { resolveEmailPolicy, EMAIL_CATEGORY_LABELS, type EmailCategory } from '../email-policy';
+import {
+  resolveEmailPolicy,
+  EMAIL_CATEGORY_FIELD,
+  EMAIL_CATEGORY_LABELS,
+  type EmailCategory,
+} from '../email-policy';
+import { EmailSettingsSchema } from '@qualiof/shared';
 import { sendMail } from '../mailer';
 
 // ---------------------------------------------------------------------------
@@ -172,6 +178,99 @@ describe('resolveEmailPolicy — matrice fail-closed', () => {
       expect(typeof EMAIL_CATEGORY_LABELS[category]).toBe('string');
       expect(EMAIL_CATEGORY_LABELS[category].length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Partie A bis — la catégorie `signature` (lot C.2c, D-9)
+// ---------------------------------------------------------------------------
+
+describe('catégorie « signature » — décochable, fail-closed', () => {
+  /**
+   * ⚠ LA FIXTURE ÉNUMÈRE LES 11 BOOLÉENS EN DUR, et ce n'est pas de la
+   * verbosité : la construire depuis `EMAIL_CATEGORY_FIELD` rendrait le test
+   * tautologique — il vérifierait que la map est cohérente avec elle-même,
+   * jamais que `signature` pointe vers le BON champ.
+   */
+  function tousCochesSaufSignature() {
+    return {
+      emailsEnabled: true,
+      invoiceRemindersEnabled: true,
+      preinscriptionRemindersEnabled: true,
+      opcoRemindersEnabled: true,
+      opcoSubmissionsEnabled: true,
+      internalNotificationsEnabled: true,
+      userInvitationsEnabled: true,
+      diagnosticProgramsEnabled: true,
+      newLeadAlertsEnabled: true,
+      preEnrollmentAlertsEnabled: true,
+      signatureEmailsEnabled: false,
+      testSessionIds: [] as string[],
+    } as Parameters<typeof resolveEmailPolicy>[0];
+  }
+
+  it('T1.1 — décochée alors que TOUT le reste est coché ⇒ suppress/category-off', () => {
+    expect(resolveEmailPolicy(tousCochesSaufSignature(), { category: 'signature' })).toEqual({
+      decision: 'suppress',
+      reason: 'category-off',
+    });
+  });
+
+  it('T1.1 bis — cochée + interrupteur général ON ⇒ send', () => {
+    const s = { ...tousCochesSaufSignature(), signatureEmailsEnabled: true };
+    expect(resolveEmailPolicy(s, { category: 'signature' })).toEqual({ decision: 'send' });
+  });
+
+  it('aucune ligne de réglages ⇒ suppress/no-settings', () => {
+    expect(resolveEmailPolicy(null, { category: 'signature' })).toEqual({
+      decision: 'suppress',
+      reason: 'no-settings',
+    });
+  });
+
+  it('interrupteur général OFF + catégorie cochée + session témoin ⇒ send', () => {
+    const s = {
+      ...tousCochesSaufSignature(),
+      emailsEnabled: false,
+      signatureEmailsEnabled: true,
+      testSessionIds: ['ses-temoin'],
+    } as Parameters<typeof resolveEmailPolicy>[0];
+    expect(resolveEmailPolicy(s, { category: 'signature', sessionId: 'ses-temoin' })).toEqual({
+      decision: 'send',
+    });
+    expect(resolveEmailPolicy(s, { category: 'signature', sessionId: 'ses-autre' })).toEqual({
+      decision: 'suppress',
+      reason: 'master-off',
+    });
+  });
+
+  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 10 catégories = les clés des DEUX maps', () => {
+    // Écrite à la main. Le libellé manquant est le défaut le plus discret :
+    // l'écran afficherait `undefined` sans que rien ne casse.
+    const attendues = [
+      'invoice_reminder',
+      'preinscription_reminder',
+      'opco_reminder',
+      'opco_submission',
+      'internal_notification',
+      'user_invitation',
+      'diagnostic_program',
+      'new_lead',
+      'preenrollment_submitted',
+      'signature',
+    ];
+    expect(new Set(Object.keys(EMAIL_CATEGORY_FIELD))).toEqual(new Set(attendues));
+    expect(new Set(Object.keys(EMAIL_CATEGORY_LABELS))).toEqual(new Set(attendues));
+  });
+
+  it('le libellé FR dit les quatre emails de la chaîne, pas seulement « signature »', () => {
+    expect(EMAIL_CATEGORY_LABELS.signature).toBe(
+      'Signature électronique (demandes, relances, exemplaires signés)',
+    );
+  });
+
+  it('T1.5 — le défaut Zod est FALSE : une catégorie qu’on n’a pas cochée n’envoie rien', () => {
+    expect(EmailSettingsSchema.parse({}).signatureEmailsEnabled).toBe(false);
   });
 });
 
