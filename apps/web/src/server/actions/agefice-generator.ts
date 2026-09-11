@@ -19,6 +19,7 @@ import {
   type AttestationType,
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
+import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
@@ -234,56 +235,28 @@ export async function generateAgeficeForParticipant(
     theme: product.theme,
     title: product.title,
   });
-  // Format "Raison sociale — Nom du lieu\nadresse\nCP Ville" (cf demande Laurent
-  // 2026-06-03 : Cerfa AGEFICE exige SARL X — Agence Y + adresse).
-  // Normalise une adresse pour comparaison tolérante (accents, ponctuation,
-  // abréviations FR courantes) — sert à détecter une rue déjà présente dans le
-  // libellé du lieu.
-  const normalizeAddr = (s: string): string =>
-    s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/\bav\b/g, 'avenue')
-      .replace(/\bbd\b|\bbld\b|\bboul\b/g, 'boulevard')
-      .replace(/\bimp\b/g, 'impasse')
-      .replace(/\bch\b|\bchem\b/g, 'chemin')
-      .replace(/\bpl\b/g, 'place')
-      .replace(/\brte\b/g, 'route')
-      .replace(/\bst\b/g, 'saint')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim();
-
-  const lieuAdresseComplete = session.location
-    ? (() => {
-        const nameLine = [
-          (session.location as { legalName?: string | null }).legalName,
-          session.location.name,
-        ]
-          .filter(Boolean)
-          .join(' — ');
-        const addr = (session.location.address as any) ?? {};
-        const street = addr?.street as string | null | undefined;
-        const cpVille = [addr?.postalCode, addr?.city]
-          .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
-          .join(' ');
-        // Le libellé du lieu (`name`) contient DÉJÀ souvent la rue (saisi
-        // « Ville — Agence, rue »). Ne ré-ajouter la rue que si elle n'y figure
-        // pas déjà, sinon l'adresse s'affiche 2 fois d'affilée (bug Laurent
-        // 2026-07). Même règle pour « CP Ville ».
-        const appendStreet =
-          !!street && !normalizeAddr(nameLine).includes(normalizeAddr(street));
-        const appendCpVille =
-          !!cpVille && !normalizeAddr(nameLine).includes(normalizeAddr(cpVille));
-        // Séparateur « , » et NON « \n » : le champ Cerfa « Nom et Adresse
-        // exacte du lieu de formation » est mono-ligne (Ff=2, police auto), et
-        // `sanitizeWinAnsi` strippe le 0x0A → la rue se collait au nom du lieu
-        // (« Agence Y12 rue Z », bug Laurent 2026-09-04).
-        return [nameLine, appendStreet ? street : null, appendCpVille ? cpVille : null]
-          .filter(Boolean)
-          .join(', ');
-      })()
-    : of.addressFull;
+  // Composition déléguée à `formatLieuFormation`, la SOURCE UNIQUE partagée
+  // avec l'émargement, la convention et le pack de clôture. Ce générateur en
+  // était resté à une copie inline — sur le document qui part justement à
+  // l'AGEFICE, alors que c'est elle qui a motivé la règle (refus du 28/08/2026,
+  // « raison sociale du lieu de formation » manquante). Le module applique les
+  // mêmes règles, abréviations postales comprises, et le même séparateur « , »
+  // qu'exige le champ Cerfa mono-ligne.
+  //
+  // Sans lieu rattaché (coaching individuel, cas SES-0099), le repli porte
+  // désormais la raison sociale de l'OF — « Start Academy, 12 avenue des
+  // Camélias… » — et non l'adresse nue, qui exposait au même motif de refus
+  // (Laurent 11/09).
+  const lieuAdresseComplete = formatLieuFormation(session.location, fallbackLieuOf(of));
+  if (!session.location) {
+    // Le repli sur le siège est LÉGITIME quand la formation s'y tient, et FAUX
+    // sinon — rien ne les distingue ici. La convocation, elle, affiche « à
+    // préciser » : sans cet avertissement, les deux documents d'un même dossier
+    // se contredisent sans que personne ne le voie.
+    warnings.push(
+      `Aucun lieu n'est rattaché à cette session : le formulaire porte l'adresse du siège (${fallbackLieuOf(of)}). Rattachez le lieu réel sur la fiche session si la formation se tient ailleurs, puis régénérez.`,
+    );
+  }
 
   // ── Conformité Cerfa (Section C/D) ───────────────────────────
   // Lit les valeurs depuis TrainingProduct si renseignées, sinon fallback

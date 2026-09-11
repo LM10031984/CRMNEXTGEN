@@ -38,6 +38,17 @@ function normalize(raw: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    // Abréviations postales françaises — sans elles, « 12 av des Fleurs » et
+    // « 12 avenue des Fleurs » passent pour deux segments différents et
+    // l'adresse s'imprime deux fois. Portées ici le 11/09/2026 depuis la copie
+    // inline du générateur AGEFICE, au moment de la raccorder à ce module.
+    .replace(/\bav\b/g, 'avenue')
+    .replace(/\bbd\b|\bbld\b|\bboul\b/g, 'boulevard')
+    .replace(/\bimp\b/g, 'impasse')
+    .replace(/\bch\b|\bchem\b/g, 'chemin')
+    .replace(/\bpl\b/g, 'place')
+    .replace(/\brte\b/g, 'route')
+    .replace(/\bst\b/g, 'saint')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
