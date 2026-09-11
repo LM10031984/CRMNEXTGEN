@@ -316,6 +316,12 @@ export function BlocSignature({ sessionId, scope, vue }: BlocSignatureProps) {
                     onOpenChange={(ouvert) => setDepotOuvert(ouvert ? ligne.cle : null)}
                     participantId={ligne.participantIdUnique}
                     docType={ligne.docType}
+                    /* « Une pièce, un seul chemin ouvert » (lot C.2b-3). Cette
+                       ligne est la SEULE à savoir qu'un envoi est en cours : le
+                       menu de la matrice l'ignore, et c'est pour ça que le
+                       garde-fou vit aussi côté serveur. Ici, il permet à la
+                       modale de POSER LA QUESTION au lieu d'échouer. */
+                    envoiEnAttente={ligne.etat === 'ENVOYE'}
                   />
                 )}
               </li>

@@ -157,7 +157,25 @@ export type SendForSignatureInput = z.infer<typeof sendForSignatureSchema>;
  * demande qui est annulée chez le prestataire, et elle peut couvrir plusieurs
  * documents.
  */
+export const MOTIFS_ANNULATION_SIGNATURE = ['user_requested', 'scan_deposited'] as const;
+export type MotifAnnulationSignature = (typeof MOTIFS_ANNULATION_SIGNATURE)[number];
+
 export const annulerEnvoiSignatureSchema = z.object({
   signatureRequestId: z.string().uuid(),
+  /**
+   * POURQUOI LE MOTIF EST UN CHAMP D'ENTRÉE (lot C.2b-3, Laurent 11/09/2026).
+   *
+   * Deux annulations ne se valent pas. L'une est volontaire : l'admin clique
+   * « Annuler l'envoi ». L'autre est PROVOQUÉE par le dépôt d'un scan signé sur
+   * la même pièce — « une pièce, un seul chemin ouvert ». Sans le motif, elles
+   * produisent la même ligne de journal, et c'est pourtant la première question
+   * qu'un auditeur pose devant deux preuves d'une même pièce : pourquoi la
+   * signature électronique s'est-elle arrêtée ?
+   *
+   * Une ÉNUMÉRATION, pas du texte libre : le journal doit rester interrogeable.
+   * Une valeur par défaut, pour que l'appelant existant (le bouton du bloc
+   * « Signature ») n'ait rien à préciser.
+   */
+  motif: z.enum(MOTIFS_ANNULATION_SIGNATURE).optional().default('user_requested'),
 });
 export type AnnulerEnvoiSignatureInput = z.infer<typeof annulerEnvoiSignatureSchema>;

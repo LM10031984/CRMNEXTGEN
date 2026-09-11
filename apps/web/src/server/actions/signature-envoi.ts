@@ -102,6 +102,7 @@ import {
   messageEnvoiEnCours,
   messageErreurPrestataire,
   messageRegenerationImpossible,
+  texteMotifAnnulation,
   ofSigneLaPiece,
   roleAncreClient,
   roleAncreOf,
@@ -1078,6 +1079,15 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
  * `signatureTags: false`, symétriquement, par LE MÊME chemin
  * (`REGENERATION_PAR_PIECE`), avec sa trace.
  *
+ * LE MOTIF EST PORTÉ PAR LE CONTRAT (lot C.2b-3, Laurent 11/09/2026). Cette
+ * action a désormais DEUX appelants : le bouton « Annuler l'envoi » du bloc
+ * « Signature », et le dépôt d'un scan signé sur une pièce partie en signature
+ * (« une pièce, un seul chemin ouvert »). Le second passe `motif:
+ * 'scan_deposited'`. Sans ce champ, les deux produiraient la même ligne de
+ * journal — or c'est la première question qu'un auditeur pose devant deux
+ * preuves d'une même pièce. Le champ est ÉNUMÉRÉ (Zod) et non du texte libre :
+ * un journal doit rester interrogeable.
+ *
  * SAUF QUAND CE SERAIT DÉTRUIRE UNE PREUVE. Tous les générateurs commencent par
  * un `deleteMany` : régénérer une pièce qui porte déjà un exemplaire signé
  * (`signedPdfUrl`, ou un renvoi forcé d'un document `signed`) l'effacerait. On
@@ -1106,7 +1116,7 @@ export async function annulerEnvoiSignature(
         .join(', ')}`,
     };
   }
-  const { signatureRequestId } = parsed.data;
+  const { signatureRequestId, motif } = parsed.data;
 
   // Fail-closed, comme l'envoi : sans prestataire configuré, on ne « tente » pas
   // une annulation qui laisserait la demande ouverte chez lui.
@@ -1202,9 +1212,12 @@ export async function annulerEnvoiSignature(
             signatureRequestId: demande.id,
             providerId: demande.providerId,
             docType: doc.type,
-            motif:
-              "Envoi en signature annulé depuis QualiOF. La demande a d'abord été annulée " +
-              'chez le prestataire ; la pièce sort du gel et redevient régénérable.',
+            // Le CODE pour interroger le journal, la PHRASE pour le lire. Les
+            // deux, parce qu'une annulation volontaire et une annulation
+            // provoquée par un dépôt de scan ne se distinguaient jusqu'ici par
+            // rien (lot C.2b-3).
+            motif,
+            motifTexte: texteMotifAnnulation(motif),
             status: { before: doc.status, after: statutRetabli },
             demande: { before: demande.status, after: 'CANCELED' },
           },

@@ -26,7 +26,14 @@ vi.mock('@qualiof/db', () => ({
       findMany: vi.fn(),
     },
     trainingSession: { findUnique: vi.fn(), findFirst: vi.fn() },
-    document: { deleteMany: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    document: {
+      deleteMany: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      // Lot C.2b-3 — « une pièce, un seul chemin ouvert » : le dépôt commence
+      // par chercher un envoi en signature à annuler. `null` = rien en cours,
+      // c'est-à-dire le cas de tous les scans de ce fichier (émargement).
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -49,6 +56,7 @@ vi.mock('@/lib/document-audit', () => ({ logDocumentEvent: vi.fn().mockResolvedV
 vi.mock('@/lib/storage', () => ({
   DOCS_BUCKET: 'qualiof-docs',
   uploadFile: vi.fn().mockResolvedValue({ key: 'k', bucket: 'qualiof-docs', size: 1 }),
+  downloadFile: vi.fn(),
 }));
 
 vi.mock('@/lib/pdf-split', () => ({
@@ -58,6 +66,23 @@ vi.mock('@/lib/pdf-split', () => ({
 
 // Hermétisme (cf. 17-02) : ces modules exécutent createEnv au load.
 vi.mock('@/lib/pdf-render', () => ({ renderHtmlToPdf: vi.fn(), renderHtmlToPdfWeasy: vi.fn() }));
+// Depuis le lot C.2b-3, le dépôt d'un scan peut annuler un envoi en signature :
+// `qualiopi-matrix` importe `signature-envoi` → `@/lib/signature/provider`, qui
+// lit `@qualiof/shared/env` au chargement. Remplacé ENTIÈREMENT, sans
+// `importActual` — même remède que `signature-annulation.test.ts`.
+vi.mock('@/lib/signature/provider', () => {
+  class SignatureNotConfiguredError extends Error {}
+  return { getSignatureProvider: vi.fn(), SignatureNotConfiguredError };
+});
+vi.mock('@/lib/of-config', () => ({ loadOfConfig: vi.fn() }));
+vi.mock('@/lib/closure/convention-core', () => ({
+  generateConventionCore: vi.fn(),
+  generateConventionEntrepriseCore: vi.fn(),
+}));
+vi.mock('../agefice-attendance-generator', () => ({
+  generateAgeficeAttendanceForParticipant: vi.fn(),
+}));
+vi.mock('../convocation-generator', () => ({ generateConvocationForParticipant: vi.fn() }));
 vi.mock('../closure-pack', () => ({ generateClosurePack: vi.fn() }));
 vi.mock('../convention-generator', () => ({ generateConventionForParticipant: vi.fn() }));
 vi.mock('../agefice-generator', () => ({ generateAgeficeForParticipant: vi.fn() }));

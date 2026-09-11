@@ -27,6 +27,7 @@
  * signerait. C'est le gabarit qui nomme.
  */
 
+import type { MotifAnnulationSignature } from '@qualiof/shared';
 import { SIGNATURE_ROLES } from './text-tags';
 import type { DocTypeSignable, SignerRole } from './regime';
 import type { AnomalieEnvoi } from './plan-envoi';
@@ -329,6 +330,80 @@ export function messageRegenerationApresAnnulationImpossible(cause: string): str
     `Le PDF n'a pas pu être régénéré sans ses zones de signature : ${cause} Le document ` +
     `reste dans sa version à ancres, et donc SANS le tampon de l'organisme : régénérez-le ` +
     `depuis la fiche session avant de le remettre à qui que ce soit.`
+  );
+}
+
+/**
+ * Les deux motifs d'annulation d'un envoi (lot C.2b-3, Laurent 11/09/2026).
+ *
+ * Exportés comme constantes plutôt que recopiés au fil du code : le motif entre
+ * dans un AuditLog, et une chaîne d'audit écrite deux fois finit écrite de deux
+ * façons. `MOTIFS_ANNULATION_SIGNATURE` (paquet partagé) reste la source du
+ * schéma Zod ; ces deux constantes en sont les noms lisibles côté serveur.
+ */
+export const MOTIF_ANNULATION_DEMANDE: MotifAnnulationSignature = 'user_requested';
+export const MOTIF_ANNULATION_SCAN_DEPOSE: MotifAnnulationSignature = 'scan_deposited';
+
+/**
+ * La phrase qui accompagne le code de motif dans la trace.
+ *
+ * Le code sert aux requêtes, la phrase sert au lecteur. Les deux cohabitent
+ * dans le `diff` : un journal qu'un auditeur Qualiopi doit pouvoir lire sans
+ * décodeur, et qu'un développeur doit pouvoir filtrer sans expression
+ * régulière.
+ */
+export function texteMotifAnnulation(motif: MotifAnnulationSignature): string {
+  if (motif === MOTIF_ANNULATION_SCAN_DEPOSE) {
+    return (
+      "Envoi annulé parce qu'un scan signé a été déposé sur cette pièce — une pièce n'a " +
+      "qu'un seul chemin ouvert. L'annulation a été explicitement confirmée par " +
+      "l'utilisateur AVANT le dépôt ; le scan fait désormais foi."
+    );
+  }
+  return (
+    "Envoi en signature annulé depuis QualiOF. La demande a d'abord été annulée chez le " +
+    'prestataire ; la pièce sort du gel et redevient régénérable.'
+  );
+}
+
+/**
+ * Le refus d'un dépôt de scan qui annulerait un envoi SANS confirmation.
+ *
+ * LA RÈGLE, ET POURQUOI ELLE EST FAIL-CLOSED. « Déposer le scan » et « signer
+ * électroniquement » sont deux chemins vers la même preuve. Les laisser ouverts
+ * ensemble, c'est accepter qu'un scan arrive pendant qu'une signature aboutit :
+ * deux preuves concurrentes sur une pièce contractuelle destinée à un
+ * financeur, et rien pour dire laquelle fait foi. Le dépôt ferme donc l'autre
+ * chemin — mais jamais en silence, d'où ce refus quand la confirmation manque.
+ *
+ * Il nomme le geste : tous les chemins d'entrée du dépôt (menu de la matrice,
+ * cellule cible de drop, zone de dépôt de la fiche session) ne savent PAS
+ * qu'un envoi est en cours. Seul le bloc « Signature » le sait, et c'est lui
+ * qui pose la question.
+ */
+export function messageDepotAnnuleraitEnvoi(): string {
+  return (
+    `Cette pièce est partie en signature électronique : déposer un scan annulerait cet ` +
+    `envoi chez le prestataire. Rien n'a été déposé, et rien n'a été annulé. Une pièce ` +
+    `n'a qu'un seul chemin ouvert — passez par le bloc « Signature » de la fiche ` +
+    `session : le dépôt y demande confirmation avant d'annuler l'envoi.`
+  );
+}
+
+/**
+ * Le dépôt empêché parce que l'annulation elle-même a échoué.
+ *
+ * On refuse le scan plutôt que de l'enregistrer : tant que la demande reste
+ * ouverte chez le prestataire, déposer le scan rouvrirait exactement les deux
+ * chemins que cette règle ferme. Et la régénération sans ancres que fait
+ * l'annulation commence par un `deleteMany` : un scan écrit avant elle serait
+ * effacé par elle.
+ */
+export function messageDepotAnnulationImpossible(cause: string): string {
+  return (
+    `Le scan n'a PAS été déposé : l'envoi en signature n'a pas pu être annulé. ${cause} ` +
+    `Tant que la demande reste ouverte chez le prestataire, enregistrer le scan laisserait ` +
+    `deux chemins ouverts sur la même pièce.`
   );
 }
 

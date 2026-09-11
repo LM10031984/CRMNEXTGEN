@@ -133,6 +133,21 @@ vi.mock('../programme-generator', () => ({
   generateProgrammeForProduct: vi.fn(),
 }));
 
+// Lot C.2b-3 — « une pièce, un seul chemin ouvert » : le dépôt d'un scan peut
+// désormais annuler un envoi en signature, donc `qualiopi-matrix` importe
+// `signature-envoi` → `@/lib/signature/provider`, qui exécute createEnv au load.
+// Même politique hermétique que ci-dessus (17-02) : on remplace le module
+// ENTIÈREMENT, sans `importActual`.
+vi.mock('@/lib/signature/provider', () => {
+  class SignatureNotConfiguredError extends Error {}
+  return { getSignatureProvider: vi.fn(), SignatureNotConfiguredError };
+});
+vi.mock('@/lib/of-config', () => ({ loadOfConfig: vi.fn() }));
+vi.mock('@/lib/closure/convention-core', () => ({
+  generateConventionCore: vi.fn(),
+  generateConventionEntrepriseCore: vi.fn(),
+}));
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }));
