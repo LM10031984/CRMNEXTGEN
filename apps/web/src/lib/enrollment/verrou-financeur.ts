@@ -27,6 +27,21 @@
  *     bénéficiaire. Le PDF signé fait foi (spec signature §4.4) ; on ne peut
  *     pas le contredire en base.
  *
+ *  3. UNE PIÈCE EST PARTIE EN SIGNATURE ÉLECTRONIQUE (11/09/2026, lot C.2b-10).
+ *     `Document.status = 'sent_for_signature'` : une demande est ouverte chez le
+ *     prestataire et le PDF que le signataire a sous les yeux nomme DÉJÀ
+ *     l'entreprise bénéficiaire. Changer le commanditaire pendant ce temps, ce
+ *     n'est pas corriger une erreur : c'est faire signer un document qui ne
+ *     correspond plus à la base — et si la signature aboutit, le mur n°2 se
+ *     referme dessus sans que personne n'ait vu passer la divergence.
+ *
+ *     ⚠ CE MUR-LÀ A UNE PORTE, et c'est pour ça qu'il est nommé EN DERNIER.
+ *     `annulerEnvoiSignature` (lot C.2b-bis) le fait tomber d'un clic depuis le
+ *     bloc « Signature » de la fiche session. Le nommer avant les deux autres
+ *     enverrait l'admin annuler un envoi pour découvrir juste après une
+ *     convention signée que rien ne lève : un mur derrière l'autre. On nomme
+ *     toujours le refus le plus dur en premier.
+ *
  * PUR : ni Prisma, ni réseau, ni horloge. L'action `changerFinanceurInscription`
  * lit la base et lui passe ce qu'elle a lu. Le refus est TOUJOURS nominatif —
  * jamais un `return { ok: false }` muet : l'admin doit savoir QUI est bloqué,
@@ -65,6 +80,14 @@ const LIBELLE_STATUT_OPCO: Record<string, string> = {
 /** Le statut `Document.status` qui vaut signature, même sans PDF signé stocké. */
 export const STATUT_DOCUMENT_SIGNE = 'signed';
 
+/**
+ * Le statut posé par `sendForSignature` et levé par `annulerEnvoiSignature` ou
+ * par le webhook du lot C.3. Même chaîne que `STATUT_ENVOYE` de
+ * `server/actions/signature-envoi.ts` : la colonne est une String (§4.1), il n'y
+ * a pas d'enum Prisma à importer ici — et ce module reste pur.
+ */
+export const STATUT_DOCUMENT_ENVOYE = 'sent_for_signature';
+
 /** Un dossier de prise en charge, réduit à ce que le verrou en lit. */
 export interface DossierFinanceurLu {
   id: string;
@@ -82,9 +105,11 @@ export interface PieceLue {
   signedPdfUrl: string | null;
 }
 
+export type MotifVerrouFinanceur = 'DOSSIER_PARTI' | 'PIECE_SIGNEE' | 'PIECE_ENVOYEE';
+
 export type VerrouFinanceur =
   | { bloque: false }
-  | { bloque: true; motif: 'DOSSIER_PARTI' | 'PIECE_SIGNEE'; message: string };
+  | { bloque: true; motif: MotifVerrouFinanceur; message: string };
 
 /** Une chaîne utile, ou `null`. Un champ rempli d'espaces est un champ vide. */
 function texteUtile(valeur: string | null | undefined): string | null {
@@ -104,6 +129,19 @@ export function dossierEstParti(statut: string): boolean {
  */
 export function pieceEstSignee(piece: PieceLue): boolean {
   return texteUtile(piece.signedPdfUrl) !== null || piece.status === STATUT_DOCUMENT_SIGNE;
+}
+
+/**
+ * Une pièce est PARTIE si une demande de signature est ouverte sur elle et
+ * qu'aucune preuve n'est encore revenue. Les deux prédicats ne se recouvrent
+ * jamais : depuis C.2b-3, déposer un scan sur une pièce en attente annule
+ * l'envoi (« une pièce, un seul chemin ouvert »), donc `sent_for_signature` et
+ * `signedPdfUrl` ne cohabitent pas. On le vérifie quand même, parce qu'un statut
+ * qui traîne après une annulation ratée ne doit pas faire dire « annulez
+ * l'envoi » devant une pièce déjà signée.
+ */
+export function pieceEstPartieEnSignature(piece: PieceLue): boolean {
+  return piece.status === STATUT_DOCUMENT_ENVOYE && !pieceEstSignee(piece);
 }
 
 export function verrouChangementFinanceur(input: {
@@ -142,6 +180,23 @@ export function verrouChangementFinanceur(input: {
         `et nomme l'entreprise bénéficiaire — la changer maintenant la ferait mentir. ` +
         `Désinscrivez puis réinscrivez ${nom} avec le bon financeur, ou faites annuler ` +
         `cette signature, avant de corriger.`,
+    };
+  }
+
+  // En dernier, et c'est délibéré (cf. point 3 du docblock) : seul mur des trois
+  // qu'un clic fait tomber, donc seul mur qu'il serait trompeur de nommer avant
+  // un autre qui, lui, ne tomberait pas.
+  const piecePartie = input.pieces.find((p) => pieceEstPartieEnSignature(p));
+  if (piecePartie) {
+    const libelle = DOC_TYPE_LABELS[piecePartie.type]?.long ?? piecePartie.type;
+    return {
+      bloque: true,
+      motif: 'PIECE_ENVOYEE',
+      message:
+        `Financeur non modifiable pour ${nom} : la pièce « ${libelle} » est partie en ` +
+        `signature électronique et le document que le signataire a sous les yeux nomme ` +
+        `déjà l'entreprise bénéficiaire. Annulez d'abord l'envoi en cours, depuis le bloc ` +
+        `« Signature » de la fiche session, puis corrigez le financeur et renvoyez.`,
     };
   }
 
