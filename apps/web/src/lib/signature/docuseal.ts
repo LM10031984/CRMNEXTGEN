@@ -176,6 +176,14 @@ export function createDocusealProvider(config: DocusealConfig): SignatureProvide
           // D-9 — QualiOF envoie les emails, pas DocuSeal.
           send_email: false,
           send_sms: false,
+          // Le certificat de signature part au dossier AGEFICE : un financeur
+          // français doit pouvoir le lire. DocuSeal le compose dans la langue
+          // du **dernier signataire ayant complété** — d'où la pose sur chaque
+          // signataire, sans quoi le résultat dépendrait de l'ordre réel des
+          // signatures. Portée : les libellés seulement. Les horodatages, eux,
+          // suivent la langue du COMPTE, réglée à la main dans
+          // console.docuseal.eu — voir docs/rgpd/dpa/docuseal.md.
+          metadata: { lang: 'fr-FR' },
         }));
 
       const body: Json = {

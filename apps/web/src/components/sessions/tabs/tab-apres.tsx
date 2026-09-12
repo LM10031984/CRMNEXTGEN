@@ -34,10 +34,9 @@ import { generateDerouleForProduct } from '@/server/actions/deroule-product-gene
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
 import { generateSatisfactionSessionForSession } from '@/server/actions/generate-satisfaction-session';
-import {
-  SignedDocDropZone,
-  type DropZoneParticipant,
-} from '../qualiopi-matrix/signed-doc-drop-zone';
+import type { DropZoneParticipant } from '../qualiopi-matrix/signed-doc-drop-zone';
+import { BlocSignature } from '../signature/bloc-signature';
+import type { VueSignature } from '@/lib/sessions/bloc-signature-vue';
 
 type SessionDocKey = 'deroule' | 'grilleObs' | 'checklist' | 'satisfactionSession';
 
@@ -88,6 +87,12 @@ interface Props {
    */
   pendantGroups?: PhaseParticipantGroup[];
   apresGroups?: PhaseParticipantGroup[];
+  /**
+   * Lot C.2b-2 — la vue du bloc « Signature » pour le scope APRÈS
+   * (l'attestation d'assiduité). Calculée côté serveur par
+   * `construireVueSignature` : l'onglet ne décide RIEN, il met en page.
+   */
+  vueSignature?: VueSignature;
 }
 
 const SESSION_CARDS: Array<{
@@ -114,6 +119,7 @@ export function TabApres({
   closureBlock,
   pendantGroups = [],
   apresGroups = [],
+  vueSignature,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -379,25 +385,29 @@ export function TabApres({
         onGenerateAssiduite={handleGenerateAssiduite}
       />
 
-      {/* Lot A signature — dépôt des émargements signés à la main (O-3).
-          Le geste doit être visible ici, pas caché dans le menu d'une cellule.
-          Placé sous les lignes par apprenant : c'est le geste de masse qui les
-          complète, une fois les feuilles récupérées en salle. */}
-      {canWrite && dropZoneParticipants && dropZoneParticipants.length > 0 && (
-        <SignedDocDropZone
+      {/* Lot C.2b-2 — envoi en signature électronique. Depuis la demande n°4
+          (11/09/2026) il porte AUSSI le dépôt des exemplaires signés à la
+          main : l'un fait signer à distance, l'autre récupère la feuille
+          signée en salle, et les deux s'EXCLUENT dès qu'un signé existe
+          (décision n°4). Deux gestes qui s'annulent l'un l'autre ne peuvent
+          pas vivre dans deux coins différents de l'écran. */}
+      {vueSignature && (
+        <BlocSignature
           sessionId={sessionId}
-          docType="EMARGEMENT"
-          docLabel="émargements"
-          participants={dropZoneParticipants}
+          scope="AFTER"
+          vue={vueSignature}
+          depotAutorise={canWrite}
+          depotDocType="EMARGEMENT"
           // L'attestation d'assiduité se signe le plus souvent EN PRÉSENTIEL,
           // en fin de session : même geste que l'émargement — on ramasse, on
           // scanne, on dépose. L'envoi en signature électronique (lot C) sera
           // l'exception, pour le distanciel. L'émargement reste le défaut,
           // c'est le dépôt le plus fréquent.
-          docTypeOptions={[
+          depotDocTypeOptions={[
             { value: 'EMARGEMENT', label: 'Émargements' },
             { value: 'ASSIDUITE', label: "Attestations d'assiduité" },
           ]}
+          depotParticipants={dropZoneParticipants}
         />
       )}
 

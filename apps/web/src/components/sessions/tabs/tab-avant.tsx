@@ -37,11 +37,10 @@ import {
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { LearnerPhaseActions } from '../learner-phase-actions';
 import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
-import {
-  SignedDocDropZone,
-  type DropZoneParticipant,
-} from '../qualiopi-matrix/signed-doc-drop-zone';
+import type { DropZoneParticipant } from '../qualiopi-matrix/signed-doc-drop-zone';
 import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
+import { BlocSignature } from '../signature/bloc-signature';
+import type { VueSignature } from '@/lib/sessions/bloc-signature-vue';
 
 interface Props {
   sessionId: string;
@@ -54,6 +53,10 @@ interface Props {
    * repliée : un doc pré-formation signé à la main (convention rendue papier,
    * AGEFICE signé au stylo) revient ici en attendant la signature électronique
    * (lot C).
+   *
+   * ⚠ DEPUIS LE 11/09/2026 (demande n°4), ces inscrits sont RELAYÉS au bloc
+   * « Signature électronique » : c'est lui qui rend la zone, repliée sous ses
+   * lignes. L'onglet n'en monte plus aucune — une seule zone, une seule règle.
    */
   dropZoneParticipants?: DropZoneParticipant[];
   /**
@@ -67,6 +70,12 @@ interface Props {
    * dossier de CHAQUE apprenant, parce que l'OPCO le demande annexé.
    */
   avantGroups?: PhaseParticipantGroup[];
+  /**
+   * Lot C.2b-2 — la vue du bloc « Signature » pour le scope AVANT (convention +
+   * dossier de financement). Calculée côté serveur par `construireVueSignature`
+   * : l'onglet ne décide RIEN, il met en page.
+   */
+  vueSignature?: VueSignature;
 }
 
 /** Docs pré-formation qui peuvent revenir signés à la main. */
@@ -85,6 +94,7 @@ export function TabAvant({
   canGenerate,
   dropZoneParticipants,
   avantGroups = [],
+  vueSignature,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -341,17 +351,19 @@ export function TabAvant({
         </DocLineSection>
       ))}
 
-      {/* Lot A signature — dépôt d'un doc pré-formation signé à la main.
-          Repliée par défaut : le cas courant avant la session reste la
-          génération, pas le dépôt d'un scan. */}
-      {canGenerate && dropZoneParticipants && dropZoneParticipants.length > 0 && (
-        <SignedDocDropZone
+      {/* Lot C.2b-2 — envoi en signature électronique. Depuis la demande n°4
+          (11/09/2026) il porte AUSSI le dépôt des exemplaires signés à la
+          main, en section repliée sous ses lignes : les deux chemins vers la
+          même preuve s'excluent, ils doivent se lire au même endroit. */}
+      {vueSignature && (
+        <BlocSignature
           sessionId={sessionId}
-          docType="CONVENTION"
-          docLabel="documents"
-          participants={dropZoneParticipants}
-          defaultOpen={false}
-          docTypeOptions={AVANT_SIGNABLE_DOC_TYPES}
+          scope="BEFORE"
+          vue={vueSignature}
+          depotAutorise={canGenerate}
+          depotDocType="CONVENTION"
+          depotDocTypeOptions={AVANT_SIGNABLE_DOC_TYPES}
+          depotParticipants={dropZoneParticipants}
         />
       )}
 

@@ -51,7 +51,16 @@ function splitDureeByModality(
 
 export async function generateAgeficeAttendanceForParticipant(
   participantId: string,
-  options?: { force?: boolean },
+  options?: {
+    force?: boolean;
+    /**
+     * Lot C.2a-2 — ancres de signature électronique. En mode ancres le gabarit
+     * retire le tampon ET la signature de l'OF, qui signe alors chez le
+     * prestataire (D-8) : deux signatures de la même personne, dont une hors
+     * certificat, ne prouveraient rien.
+     */
+    signatureTags?: boolean;
+  },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; warnings?: string[] }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
@@ -215,7 +224,10 @@ export async function generateAgeficeAttendanceForParticipant(
 
   let pdfBuffer: Buffer;
   try {
-    const html = renderAgeficeAttendanceHtml(data);
+    const html = renderAgeficeAttendanceHtml({
+      ...data,
+      signatureTags: options?.signatureTags === true,
+    });
     pdfBuffer = await renderHtmlToPdf(html);
   } catch (e: any) {
     return { ok: false, error: `Erreur rendu PDF attestation assiduité : ${e?.message ?? e}` };

@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Bell, Inbox, AlertTriangle, AlertCircle, Users, ChevronRight, UserPlus } from 'lucide-react';
+import {
+  Bell,
+  Inbox,
+  AlertTriangle,
+  AlertCircle,
+  Users,
+  ChevronRight,
+  UserPlus,
+  FileSignature,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getNotifications, type NotificationItem, type NotificationKind } from '@/server/actions/notifications';
 import { markNotificationRead } from '@/server/actions/notification-mark-read';
@@ -14,6 +23,10 @@ const ICONS: Record<NotificationKind, React.ComponentType<{ className?: string }
   session_to_close: AlertCircle,
   cleanup: Users,
   'lead.assigned': UserPlus,
+  // Lot C.3 (D-C3-2) — la MÊME icône que le bloc « Signature » de la fiche
+  // session : l'admin doit reconnaître d'où vient la notification avant même
+  // d'avoir lu le libellé.
+  'signature.completed': FileSignature,
 };
 
 const SEVERITY_CLASSES: Record<NotificationItem['severity'], string> = {

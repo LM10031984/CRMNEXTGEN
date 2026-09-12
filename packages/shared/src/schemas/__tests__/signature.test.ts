@@ -18,6 +18,8 @@ import {
   tenantSignatorySchema,
   signatureSignersSchema,
   parseSignatureSigners,
+  signatureSignerSchema,
+  SignatureCompletedPayloadSchema,
 } from '../signature';
 
 describe('tenantSignatorySchema — signataire OF (D-1)', () => {
@@ -87,16 +89,118 @@ describe('signers — contrat de la colonne Json', () => {
   });
 
   it('parseSignatureSigners relit ce qui a été écrit', () => {
-    expect(parseSignatureSigners([signer])).toEqual([signer]);
+    expect(parseSignatureSigners([signer])).toEqual([{ ...signer, declinedAt: null }]);
+  });
+
+  /**
+   * ⚠ LA RÈGLE DU LOT C.3, ET L'INCIDENT QU'ELLE ÉVITE.
+   *
+   * `parseSignatureSigners` écarte SANS BRUIT tout élément qui ne parse pas —
+   * c'est voulu : une fiche session ne doit pas tomber en erreur parce qu'un
+   * webhook a écrit une ligne inattendue. Le revers est un piège SILENCIEUX :
+   * ajouter au schéma un champ **requis** invalide d'un coup TOUTES les lignes
+   * déjà en base, écrites avant que le champ existe. Elles ne lèvent pas
+   * d'erreur — elles DISPARAISSENT. L'écran affiche un envoi sans aucun
+   * signataire, la relance ne trouve personne, et rien dans les logs ne le dit.
+   *
+   * LA RÈGLE : tout nouveau champ de signataire est `.optional()` AVEC
+   * `.default(...)`, jamais `.min(1)` nu.
+   *
+   * LA GARDE : ce test. La fixture porte EXACTEMENT les sept champs écrits par
+   * le lot C.2a — la forme réellement présente en base aujourd'hui, pas un
+   * objet recopié du schéma courant. Une fixture recopiée du nouveau schéma
+   * porterait le champ neuf, donc passerait quoi qu'il arrive et ne garderait
+   * rien.
+   */
+  const FORME_EN_BASE_C2A = {
+    role: 'Client',
+    name: 'Paul MARTIN',
+    email: 'paul@agence-martin.fr',
+    providerSignerId: 'sg-1',
+    status: 'sent',
+    signedAt: null,
+    signUrl: 'https://docuseal.eu/s/abc',
+  };
+
+  it('RÈGLE C.3 — un signataire de la forme C.2a (7 champs) SURVIT et ressort complété', () => {
+    const relus = parseSignatureSigners([FORME_EN_BASE_C2A]);
+    expect(relus).toHaveLength(1);
+    expect(relus[0]!.role).toBe('Client');
+    expect(relus[0]!.email).toBe('paul@agence-martin.fr');
+    // Le champ neuf est REÇU avec son défaut, jamais exigé.
+    expect(relus[0]!.declinedAt).toBe(null);
+  });
+
+  it('RÈGLE C.3 — les sept champs de C.2a suffisent : aucun champ ajouté depuis n’est requis', () => {
+    // Test de PUISSANCE de la règle : on énumère la forme minimale et on exige
+    // qu'elle passe. Le jour où quelqu'un ajoutera un champ requis, cette
+    // assertion rougira AVANT que les lignes de production disparaissent.
+    expect(signatureSignerSchema.safeParse(FORME_EN_BASE_C2A).success).toBe(true);
+    expect(Object.keys(FORME_EN_BASE_C2A)).toHaveLength(7);
+  });
+
+  it('un `declinedAt` écrit par le webhook est relu tel quel', () => {
+    const refuse = { ...FORME_EN_BASE_C2A, declinedAt: '2026-09-20T14:30:00.000Z' };
+    expect(parseSignatureSigners([refuse])[0]!.declinedAt).toBe('2026-09-20T14:30:00.000Z');
   });
 
   it('une ligne mal formée est écartée, pas propagée — jamais de page en erreur', () => {
-    expect(parseSignatureSigners([signer, { role: 'Client' }, 42, null])).toEqual([signer]);
+    expect(parseSignatureSigners([signer, { role: 'Client' }, 42, null])).toEqual([
+      { ...signer, declinedAt: null },
+    ]);
   });
 
   it('une valeur qui n’est pas un tableau rend une liste vide', () => {
     expect(parseSignatureSigners(null)).toEqual([]);
     expect(parseSignatureSigners({ role: 'Client' })).toEqual([]);
     expect(parseSignatureSigners('[]')).toEqual([]);
+  });
+});
+
+/* ── D-C3-2 — le payload de la cloche « pièce signée par tous » ───────────── */
+
+/**
+ * POURQUOI UN SCHÉMA, ET POURQUOI TOLÉRANT.
+ *
+ * `Notification.payload` est une colonne Json sans forme garantie : le lecteur
+ * (`getNotifications`) doit refuser ce qu'il ne comprend pas plutôt que de
+ * rendre une cloche qui pointe nulle part. Mais les lignes DÉJÀ ÉCRITES — sur
+ * l'aperçu du 11/09/2026 — portent exactement cinq champs : exiger un champ de
+ * plus les ferait disparaître en silence, la même mécanique que
+ * `parseSignatureSigners` (règle n°2 du bloc C.3 de la spec).
+ */
+describe('SignatureCompletedPayloadSchema — la forme réellement écrite en base', () => {
+  const REEL = {
+    signatureRequestId: '11111111-1111-4111-8111-111111111111',
+    sessionId: '22222222-2222-4222-8222-222222222222',
+    sessionCode: 'SES-0048',
+    documentId: '33333333-3333-4333-8333-333333333333',
+    docType: 'CONVENTION',
+  };
+
+  it('accepte la ligne écrite par `prevenirAdmins`, telle qu’elle est en base', () => {
+    const parsed = SignatureCompletedPayloadSchema.safeParse(REEL);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.sessionId).toBe(
+      '22222222-2222-4222-8222-222222222222',
+    );
+    expect(parsed.success && parsed.data.docType).toBe('CONVENTION');
+    expect(parsed.success && parsed.data.sessionCode).toBe('SES-0048');
+  });
+
+  it('le code de session est FACULTATIF : sans lui la cloche reste lisible', () => {
+    const { sessionCode: _omis, ...sansCode } = REEL;
+    const parsed = SignatureCompletedPayloadSchema.safeParse(sansCode);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.sessionCode).toBeNull();
+  });
+
+  it('sans session ni type de pièce : REFUSÉ — une cloche sans destination ne sert à rien', () => {
+    expect(SignatureCompletedPayloadSchema.safeParse({ docType: 'CONVENTION' }).success).toBe(
+      false,
+    );
+    expect(
+      SignatureCompletedPayloadSchema.safeParse({ sessionId: REEL.sessionId }).success,
+    ).toBe(false);
   });
 });

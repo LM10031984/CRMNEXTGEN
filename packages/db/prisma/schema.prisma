@@ -135,6 +135,12 @@ model User {
   role             UserRole         @default(LECTEUR)
   // Phase 8 — soft-delete + métadonnées invitation (D-03 CONTEXT.md)
   disabledAt       DateTime? // null = actif. Si !null → validateRequest rejette + sessions invalidées
+  // Compte de service (robot) : reste ACTIF — Playwright se connecte à `e2e@` —
+  // mais n'est JAMAIS destinataire d'un email interne. Sans ce drapeau, chaque
+  // alerte partait aussi aux comptes sans boîte et revenait en bounce sur
+  // `formation@` (constat du 11/09/2026). Détourner `disabledAt` aurait cassé
+  // la suite E2E : d'où un champ distinct.
+  isServiceAccount Boolean          @default(false)
   lastLoginAt      DateTime? // mis à jour dans loginAction sur succès
   invitedAt        DateTime? // null = créé manuellement (seed)
   invitedBy        String? // FK User.id de l'admin (pas de Prisma relation pour éviter cycle)
@@ -1276,12 +1282,70 @@ model SignatureRequest {
   /// Clé bucket du certificat de signature (audit log du provider). Pièce à
   /// part entière : les AGEFICE le réclament (règle métier n°3).
   auditTrailUrl String?
+  /// Lot C.3 — le RÉGIME qui a décidé cet envoi (`OpcoCatalog.conventionSigner`
+  /// & co, lot C.1), mémorisé au moment de l'envoi.
+  ///
+  /// POURQUOI LE PERSISTER PLUTÔT QUE LE RECALCULER. Le webhook arrive des mois
+  /// plus tard, sans utilisateur, et l'email de retour doit NOMMER le
+  /// destinataire — « responsable de l'organisation » ou « stagiaire ». Le
+  /// déduire du rôle d'ancre est impossible : le gabarit de convention n'écrit
+  /// que `Client`, y compris quand c'est un indépendant qui signe pour
+  /// lui-même. On l'appellerait « responsable de l'organisation » alors qu'il
+  /// est le stagiaire — l'amendement n°6 du lot C, revenu par le vocabulaire.
+  /// Et le recalculer exposerait à ce que le régime ait changé entre-temps :
+  /// l'email doit dire ce qui a été envoyé, pas ce qu'on enverrait aujourd'hui.
+  ///
+  /// Nullable : les demandes créées avant le lot C.3 n'en portent pas.
+  signerRole    SignerRole?
   lastError     String?
+  /// Lot C.3 — relances J+3/J+7 (D-5). Même couple que `PreEnrollment` et
+  /// `OpcoSubmission`, pas un second système.
+  ///
+  /// ⚠ Le compteur n'est consommé que sur un DÉPART RÉEL : un envoi en dry-run
+  /// ou supprimé par les réglages tenant ne doit pas « brûler » une relance,
+  /// sinon un parc en mode test épuiserait ses deux rappels sans qu'un seul
+  /// email soit parti (Pitfall 1 de la Phase 22, déjà appliqué aux deux crons
+  /// existants).
+  reminderCount      Int       @default(0)
+  lastReminderSentAt DateTime?
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 
   @@index([tenantId, sessionId])
   @@index([tenantId, status])
+  /// Le cron des relances et le filet `signature-sync` balaient tous deux par
+  /// statut + date d'envoi.
+  @@index([status, sentAt])
+}
+
+/// Lot C.3 — un événement de webhook DÉJÀ TRAITÉ.
+///
+/// POURQUOI UNE TABLE ET PAS UN CHAMP SUR `SignatureRequest`. Un prestataire
+/// rejoue ses webhooks : à la moindre latence, au moindre 500, le même
+/// événement revient. Sans mémoire, `submission.completed` rejoué
+/// re-téléchargerait le PDF, réécrirait le document et renverrait l'email
+/// « voici votre exemplaire » — deux fois.
+///
+/// ⚠ LA CLÉ PORTE LE SIGNATAIRE, et ce n'est pas du zèle. `form.completed` part
+/// UNE FOIS PAR SIGNATAIRE : sur une convention, le client puis l'organisme.
+/// Dédupliquer sur `(providerId, eventType)` seul ferait disparaître en silence
+/// la signature du second — la demande resterait éternellement
+/// `PARTIALLY_SIGNED`. `signerKey` vaut la chaîne vide pour les événements de
+/// submission, qui n'en portent pas.
+model SignatureWebhookEvent {
+  id         String   @id @default(uuid())
+  tenantId   String
+  /// `SignatureRequest.providerId` — la submission chez le prestataire.
+  providerId String
+  /// Le type BRUT du prestataire (`form.completed`, `submission.completed`, …),
+  /// pas notre type de domaine : c'est lui qui identifie la livraison.
+  eventType  String
+  /// Id du signataire concerné, ou "" pour un événement de submission.
+  signerKey  String   @default("")
+  receivedAt DateTime @default(now())
+
+  @@unique([providerId, eventType, signerKey])
+  @@index([tenantId, receivedAt])
 }
 
 enum SignatureRequestStatus {
@@ -1339,6 +1403,14 @@ enum OpcoStatus {
   ARCHIVED
 }
 
+/// Qui signe une pièce, pour un régime de financement donné (spec signature §3 bis, D-10).
+/// DIRIGEANT = le représentant légal de l'organisation payeuse (SessionParticipant.sponsorOrg).
+/// STAGIAIRE = le participant lui-même.
+enum SignerRole {
+  DIRIGEANT
+  STAGIAIRE
+}
+
 // Calqué sur la table Airtable "Opco" : référentiel partagé pour ne pas répéter
 // les délais / plafonds / docs requis sur chaque Organization.
 model OpcoCatalog {
@@ -1361,6 +1433,13 @@ model OpcoCatalog {
   organizations        Organization[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
+
+  /// Régime de signature du financeur (spec signature §3 bis, D-10).
+  /// null = la pièce est HORS RÉGIME pour ce financeur → NA dans la matrice, jamais MISSING.
+  /// `requiredDocs` ci-dessus reste de la prose d'affichage : elle ne dit jamais QUI signe.
+  conventionSigner SignerRole?
+  ageficeSigner    SignerRole?
+  assiduiteSigner  SignerRole?
 }
 
 /// Statut du dossier OPCO envoyé au financeur (AGEFICE, etc.).
@@ -1962,6 +2041,11 @@ model TenantEmailSettings {
   /// maison vers un prospect — d'où une catégorie à lui, qu'on peut couper
   /// sans couper les alertes internes.
   proposalSendEnabled            Boolean  @default(false)
+  /// Lot C.2c (D-9) — emails de la chaîne de signature électronique : demande
+  /// de signature, « à votre tour », relances J+3/J+7, exemplaire signé. Défaut
+  /// false comme toutes les autres : fail-closed, une catégorie qu'on n'a pas
+  /// cochée n'envoie rien.
+  signatureEmailsEnabled         Boolean  @default(false)
   testSessionIds                 String[] @default([])
   createdAt                      DateTime @default(now())
   updatedAt                      DateTime @default(now()) @updatedAt

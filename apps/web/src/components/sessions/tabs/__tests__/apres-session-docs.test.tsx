@@ -30,6 +30,18 @@ vi.mock('@/server/actions/qualiopi-matrix', () => ({
   uploadSignedScans: vi.fn().mockResolvedValue({ ok: true, saved: 0, failures: [] }),
 }));
 
+// Lot C.2b-2 — l'onglet embarque `<BlocSignature>`, qui importe
+// `annulerEnvoiSignature`. Même chaîne, même remède : le module est REMPLACÉ,
+// jamais `importActual` (@qualiof/shared/env validerait l'environnement au
+// chargement et ferait tomber la suite sur `DATABASE_URL: [ 'Required' ]`).
+vi.mock('@/server/actions/signature-envoi', () => ({
+  annulerEnvoiSignature: vi.fn().mockResolvedValue({ ok: true, pieces: [] }),
+  preparerEnvoiSignature: vi
+    .fn()
+    .mockResolvedValue({ ok: true, envois: [], blocages: [], avertissements: [] }),
+  sendForSignature: vi.fn().mockResolvedValue({ ok: true, envoyes: [], refus: [] }),
+}));
+
 vi.mock('@/server/actions/deroule-product-generator', () => ({
   generateDerouleForProduct: (...a: unknown[]) => generateDerouleForProduct(...a),
 }));

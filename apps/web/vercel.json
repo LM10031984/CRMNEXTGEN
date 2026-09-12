@@ -2,13 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["cdg1"],
   "crons": [
-    {
-      "path": "/api/cron/diagnostic-worker",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/alerts",
-      "schedule": "0 * * * *"
-    }
+    { "path": "/api/cron/diagnostic-worker", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/closure-worker", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/alerts", "schedule": "0 * * * *" },
+    { "path": "/api/cron/signature-sync", "schedule": "17 * * * *" },
+    { "path": "/api/cron/signature-reminders", "schedule": "35 7 * * *" },
+    { "path": "/api/cron/preinscription-reminders", "schedule": "45 7 * * *" },
+    { "path": "/api/cron/opco-submission-reminders", "schedule": "55 7 * * *" }
   ]
 }

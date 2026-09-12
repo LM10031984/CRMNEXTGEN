@@ -51,6 +51,32 @@ vi.mock('@/server/actions/generate-checklist-formation', () => ({
 vi.mock('@/server/actions/qualiopi-matrix', () => ({
   regenerateParticipantDoc: vi.fn(async () => ({ ok: true })),
   attachSignedScan: vi.fn(async () => ({ ok: true })),
+  // Fusion du 12/09/2026 : la zone de dépôt et la modale de cellule appellent
+  // ces deux-là depuis le lot A de la signature. Un module remplacé ne fournit
+  // que ce que sa fabrique déclare.
+  uploadSignedDoc: vi.fn(async () => ({ ok: true })),
+  uploadSignedScans: vi.fn(async () => ({ ok: true, saved: 0, failures: [] })),
+}));
+// Fusion du 12/09/2026 — le bloc « Signature » des onglets Avant / Après (lot
+// C.2b-2) importe ses trois server actions. Ce test est né sur `main`, où
+// l'onglet ne les traînait pas ; il est vert des deux côtés séparément, et
+// c'est leur COMBINAISON qui exige ce mock : sans lui, la chaîne
+// @/lib/rbac → @/lib/auth exécute `cache()` de React, indisponible en jsdom.
+vi.mock('@/server/actions/signature-envoi', () => ({
+  preparerEnvoiSignature: vi.fn(async () => ({
+    ok: true,
+    sessionId: 'ses-1',
+    envois: [],
+    blocages: [],
+    avertissements: [],
+  })),
+  sendForSignature: vi.fn(async () => ({ ok: true, envoyes: [], refus: [] })),
+  annulerEnvoiSignature: vi.fn(async () => ({
+    ok: true,
+    signatureRequestId: 'req-1',
+    sessionId: 'ses-1',
+    pieces: [],
+  })),
 }));
 vi.mock('@/server/actions/generate-satisfaction-session', () => ({
   generateSatisfactionSessionForSession: vi.fn(async () => ({ ok: true })),
