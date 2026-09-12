@@ -77,6 +77,10 @@ export default async function ComposeOpcoPage({
 
       <SubmissionEditor
         id={sub.id}
+        // Le RBAC décidé une fois, côté serveur : c'est lui qui fait exister
+        // l'option « Envoyer quand même », et `sendOpcoSubmission` la refuse à
+        // tout autre qu'un ADMIN.
+        role={user.role}
         initial={{
           recipientEmail: sub.recipientEmail,
           subject: sub.subject,
@@ -85,6 +89,11 @@ export default async function ComposeOpcoPage({
           apprenantName,
           sessionLabel,
           sponsorName,
+          // D-D-1 : de quoi dire, sous un champ vide, CE qu'il manque — le
+          // point d'accueil AGEFICE ou l'adresse de facturation — et où aller
+          // le renseigner.
+          sponsorOpcoCode: sub.sponsorOrg.opcoCode,
+          sponsorOrgId: sub.sponsorOrg.id,
         }}
       />
     </div>

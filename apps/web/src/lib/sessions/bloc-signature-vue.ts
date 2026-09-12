@@ -77,6 +77,31 @@ export interface DocumentDeLaPiece {
    * finiraient par ranger le même signataire dans deux camps différents.
    */
   signataires: SignataireEnvoye[];
+  /**
+   * LA CLÉ DU CERTIFICAT DE SIGNATURE — lot D, défaut D-C3-5.
+   *
+   * Elle appartient à la DEMANDE (`SignatureRequest.auditTrailUrl`), pas au
+   * document : une demande peut couvrir plusieurs pièces, et le certificat les
+   * couvre toutes. On la transporte sur le document parce que c'est par lui que
+   * la ligne est indexée — la vue ne la lit que pour savoir s'il y a quelque
+   * chose à offrir, jamais pour composer une URL.
+   *
+   * ⚠ OBLIGATOIRE, comme `signataires` avant elle et pour la raison mesurée au
+   * lot C.2b-8 : une prop optionnelle se perd en silence. `null` reste une
+   * valeur parfaitement légitime — un scan déposé à la main (lot A) est signé
+   * sans qu'aucun certificat n'existe, et une demande partie n'en a pas encore.
+   * Ce qu'on rend impossible, c'est l'OUBLI.
+   */
+  auditTrailUrl: string | null;
+}
+
+/**
+ * DE QUOI LA LIGNE A BESOIN POUR OFFRIR LE CERTIFICAT : l'identifiant de la
+ * demande, et rien d'autre. L'URL se compose dans le JSX à partir de lui —
+ * transporter la clé bucket jusqu'à l'écran l'exposerait sans aucun gain.
+ */
+export interface CertificatDeLaPiece {
+  signatureRequestId: string;
 }
 
 export interface LigneSignature {
@@ -158,6 +183,17 @@ export interface LigneSignature {
    * à deux lots qui l'avaient rendue caduque.
    */
   attente: string | null;
+  /**
+   * LE CERTIFICAT DE SIGNATURE DE CETTE PIÈCE — `null` s'il n'y en a pas.
+   *
+   * ⚠ DÉCIDÉ ICI, JAMAIS DANS LE JSX. Le composant se contente de rendre un
+   * lien ou rien : la règle « quelles lignes en ont un » reste sous test
+   * unitaire. Écrite dans le rendu, elle ne serait vérifiable qu'à l'œil — et
+   * c'est précisément à l'œil qu'on a laissé passer, pendant tout le lot C.3,
+   * une pièce produite, stockée et envoyée par email que personne ne pouvait
+   * télécharger depuis l'application.
+   */
+  certificat: CertificatDeLaPiece | null;
 }
 
 /**
@@ -269,6 +305,13 @@ export interface VueSignature {
   /** Rendus TELS QUELS : leurs messages sont déjà nominatifs et complets. */
   blocages: AnomalieEnvoi[];
   /**
+   * Les participants pour qui il n'y a RIEN à signer — lot D, défaut D-C3-4.
+   *
+   * Vide dans le cas normal. Non vide, c'est le seul moyen qu'a l'écran de ne
+   * pas se taire là où le moteur n'a rien à dire.
+   */
+  riensASigner: RienASigner[];
+  /**
    * Le RBAC, décidé une fois côté serveur. Le composant ne le re-dérive pas :
    * `ADMIN | MANAGER` (`canEdit`), surtout PAS `canWrite`, qui inclut
    * `COMMERCIAL` — un rôle que les trois server actions de signature refusent.
@@ -331,6 +374,34 @@ export function etatDeLaPiece(a: {
   if (document.status === 'signed') return 'SIGNE';
   if (document.status === 'sent_for_signature') return 'ENVOYE';
   return 'GENERE';
+}
+
+/**
+ * Cette pièce offre-t-elle son certificat de signature ? — lot D (D-C3-5).
+ *
+ * DEUX SIGNÉS QUI NE SE RESSEMBLENT PAS. `etatDeLaPiece` répond « SIGNE » pour
+ * trois origines (décision n°4), et deux d'entre elles ne produisent AUCUN
+ * certificat : le scan déposé à la main du lot A, et un `Document.status` posé
+ * hors signature électronique. Seul le retour du prestataire en produit un.
+ * Offrir le lien sur toute ligne verte mènerait donc à un 404 sur la moitié
+ * d'entre elles — et un admin qui clique sur « Certificat » et tombe sur une
+ * erreur cesse de croire l'écran.
+ *
+ * L'ÉTAT COMMANDE, PAS LA COLONNE. On exige `SIGNE` en plus de la clé : une
+ * demande dont le certificat serait arrivé avant que la pièce soit close ne
+ * doit rien offrir, sans quoi la ligne promettrait une preuve d'une signature
+ * qui n'est pas encore acquise.
+ */
+export function certificatDeLaPiece(a: {
+  etat: EtatPiece;
+  signatureRequestId: string | null;
+  auditTrailUrl: string | null;
+}): CertificatDeLaPiece | null {
+  if (a.etat !== 'SIGNE') return null;
+  if (!rempli(a.auditTrailUrl)) return null;
+  const signatureRequestId = (a.signatureRequestId ?? '').trim();
+  if (signatureRequestId.length === 0) return null;
+  return { signatureRequestId };
 }
 
 /* ── L'avertissement « régime incohérent », tel qu'il se lit ──────────────── */
@@ -461,6 +532,95 @@ export function regrouperAvertissements(
 }
 
 /**
+ * UN PARTICIPANT POUR QUI IL N'Y A RIEN À SIGNER — lot D, défaut D-C3-4.
+ *
+ * CE QUE LA PRODUCTION A MONTRÉ (SES-0112, 12/09/2026). Cinq apprenants
+ * « Agence », conventions individuelles : le bloc se réduisait à la zone de
+ * dépôt. `regle === null` pour tous — financeur absent sur le commanditaire —
+ * donc aucune pièce ; et aucun avertissement non plus, faute de signal (pas de
+ * lien `EI_SELF`, pas d'autre organisation ouvrant la pièce).
+ *
+ * LE MOTEUR A RAISON DE SE TAIRE : il ne sait rien d'INCOHÉRENT à signaler.
+ * C'est la VUE qui doit parler, parce qu'elle seule voit la différence entre
+ * « il n'y a rien à signer » et « on ne sait pas quoi signer ». Un écran vide
+ * se lit comme « tout va bien » — et les cinq dossiers sont partis sans
+ * convention.
+ */
+export interface RienASigner {
+  participantId: string;
+  nomAffiche: string;
+  /** Composé par `composerRienASigner`. Rendu tel quel par le bloc. */
+  message: string;
+  /** MÊME mécanique que l'avertissement de régime : jamais une troisième règle. */
+  correction: CorrectionAvertissement;
+}
+
+/**
+ * La phrase, dans la forme des autres : le manque, sa conséquence, puis le geste.
+ *
+ * Deux cas, et ils n'appellent pas la même correction — c'est exactement la
+ * frontière que `financeurSansRegime` trace déjà depuis la correction n°3.
+ */
+export function composerRienASigner(a: {
+  nomAffiche: string;
+  contexte: ContexteAvertissement;
+}): string {
+  const correction = correctionAvertissement(a.contexte);
+  if (correction.cible === 'ORGANISATION') {
+    const organisation = correction.libelleOrganisation || 'cette organisation';
+    return (
+      `Aucun financeur renseigné pour ${organisation} : il n’y a rien à faire signer ` +
+      `pour ${a.nomAffiche}. Renseignez le financeur de cette organisation pour que ses ` +
+      `pièces existent.`
+    );
+  }
+  return (
+    `Aucun commanditaire sur l’inscription de ${a.nomAffiche} : il n’y a rien à faire ` +
+    `signer. Ouvrez l’inscription pour désigner qui commande cette formation.`
+  );
+}
+
+/**
+ * Les participants que le bloc laisserait MUETS.
+ *
+ * ⚠ UN PARTICIPANT DÉJÀ NOMMÉ N'EST PAS DIT DEUX FOIS. Le cas Florent
+ * HAUSSWIRTH est signalé par le moteur, avec sa phrase et sa correction propres
+ * ; ajouter « rien à signer » en dessous ferait deux encarts pour une seule
+ * correction — ce que la correction n°2 de Laurent a précisément supprimé.
+ *
+ * ⚠ SANS CONTEXTE, ON SE TAIT. Un appelant qui ne calcule pas le contexte n'a
+ * pas de quoi écrire une phrase juste : affirmer « aucun financeur » serait
+ * énoncer une cause qu'on n'a pas lue.
+ */
+export function composerRiensASigner(a: {
+  participants: readonly { participantId: string; nomAffiche: string }[];
+  envois: readonly EnvoiPlanifie[];
+  blocages: readonly AnomalieEnvoi[];
+  avertissements: readonly AnomalieEnvoi[];
+  contexteParParticipant: ReadonlyMap<string, ContexteAvertissement>;
+}): RienASigner[] {
+  const dejaCouverts = new Set<string>();
+  for (const envoi of a.envois) for (const id of envoi.participantIds) dejaCouverts.add(id);
+  for (const anomalie of [...a.blocages, ...a.avertissements]) {
+    dejaCouverts.add(anomalie.participantId);
+  }
+
+  const riens: RienASigner[] = [];
+  for (const participant of a.participants) {
+    if (dejaCouverts.has(participant.participantId)) continue;
+    const contexte = a.contexteParParticipant.get(participant.participantId);
+    if (contexte === undefined) continue;
+    riens.push({
+      participantId: participant.participantId,
+      nomAffiche: participant.nomAffiche,
+      message: composerRienASigner({ nomAffiche: participant.nomAffiche, contexte }),
+      correction: correctionAvertissement(contexte),
+    });
+  }
+  return riens;
+}
+
+/**
  * Croise le plan d'envoi avec l'état réel des documents.
  *
  * Une pièce ABSENTE reste envoyable : c'est l'ouverture du récapitulatif qui la
@@ -470,6 +630,20 @@ export function regrouperAvertissements(
  */
 export function construireVueSignature(a: {
   plan: { envois: EnvoiPlanifie[]; blocages: AnomalieEnvoi[]; avertissements: AnomalieEnvoi[] };
+  /**
+   * TOUS LES INSCRITS DE LA SESSION, dans l'ordre de l'écran — lot D (D-C3-4).
+   *
+   * ⚠ OBLIGATOIRE, comme `signataireOf` et `signataires` avant lui, et pour la
+   * raison mesurée au lot C.2b-8 : une prop optionnelle se perd en silence.
+   * Sans cette liste, la vue ne peut PAS savoir qui le plan a laissé de côté —
+   * elle ne voit que ce qui existe, donc elle ne peut nommer que ce qui existe.
+   * C'est exactement pourquoi les cinq « Agence » de SES-0112 sont passés
+   * inaperçus.
+   *
+   * Un tableau VIDE reste légitime (session sans inscrit). Ce qu'on rend
+   * impossible, c'est l'OUBLI.
+   */
+  participants: readonly { participantId: string; nomAffiche: string }[];
   documentParCle: ReadonlyMap<string, DocumentDeLaPiece>;
   docStatusParCle: ReadonlyMap<string, string | null>;
   canSign: boolean;
@@ -554,6 +728,13 @@ export function construireVueSignature(a: {
           : signataires.length === 0
             ? PHRASE_DEMANDE_SANS_SIGNATAIRE
             : mentionAttentePiece(ordre),
+      // ⚠ LA RÈGLE EST DANS `certificatDeLaPiece`, PAS ICI. Cette ligne ne fait
+      // que la brancher sur les trois faits qu'elle demande.
+      certificat: certificatDeLaPiece({
+        etat,
+        signatureRequestId: document?.signatureRequestId ?? null,
+        auditTrailUrl: document?.auditTrailUrl ?? null,
+      }),
     };
   });
 
@@ -566,6 +747,13 @@ export function construireVueSignature(a: {
       a.contexteAvertissementParParticipant ?? new Map(),
     ),
     blocages: a.plan.blocages,
+    riensASigner: composerRiensASigner({
+      participants: a.participants,
+      envois: a.plan.envois,
+      blocages: a.plan.blocages,
+      avertissements: a.plan.avertissements,
+      contexteParParticipant: a.contexteAvertissementParParticipant ?? new Map(),
+    }),
     canSign: a.canSign,
     boutonVisible: a.canSign && nbEnvoyables > 0,
     nbEnvoyables,

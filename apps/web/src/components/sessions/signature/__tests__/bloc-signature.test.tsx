@@ -135,6 +135,9 @@ function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
     signatureRequestId: null,
     envoyable: true,
     signataire: null,
+    // Lot D (D-C3-5) : le certificat de la demande. Nul par défaut — la plupart
+    // des lignes n'en ont aucun, et c'est ce qui rend le lien significatif.
+    certificat: null,
     ...over,
   };
   return {
@@ -202,6 +205,9 @@ function vue(over: Partial<VueSignature> = {}): VueSignature {
     lignes,
     blocages: [],
     avertissements: [],
+    // Lot D (D-C3-4) : les inscrits pour qui il n'y a AUCUNE pièce. Vide par
+    // défaut — c'est le cas normal, et c'est ce qui rend l'encart significatif.
+    riensASigner: [],
     canSign: true,
     boutonVisible: lignes.some((l) => l.envoyable),
     nbEnvoyables: lignes.filter((l) => l.envoyable).length,
@@ -1052,6 +1058,7 @@ describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout cl
     const client = a.client === undefined ? CLIENT : a.client;
     const vueReelle = construireVueSignature({
       plan: { envois: [envoi], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -1200,5 +1207,158 @@ describe('PUISSANCE (e) — une pièce partie montre où elle en est, rang par r
     );
     expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
     expect(document.body.textContent).not.toContain('a signé le');
+  });
+});
+
+/* ── D-C3-5 — le certificat de signature, atteignable depuis la ligne ─────── */
+
+/**
+ * LA PIÈCE QUE LES AGEFICE RÉCLAMENT, et qu'aucun écran n'offrait.
+ *
+ * Constat de mise en prod du 12/09/2026 : le certificat était produit, stocké
+ * et envoyé par email depuis le lot C.3, mais la ligne signée ne proposait que
+ * « Ouvrir » — c'est-à-dire le PDF signé seul. Monter un dossier AGEFICE
+ * obligeait donc à retrouver l'email « Votre exemplaire signé » dans sa boîte.
+ *
+ * ⚠ À CÔTÉ D'« OUVRIR », JAMAIS À LA PLACE (leçon du 10/09 sur `?dl=1`). Les
+ * deux pièces sont différentes et se rangent toutes les deux dans le dossier.
+ */
+describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
+  beforeEach(() => cleanup());
+
+  it('propose le certificat quand la demande en porte un', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [
+            ligne({
+              etat: 'SIGNE',
+              envoyable: false,
+              documentId: 'doc-7',
+              signatureRequestId: 'req-9',
+              certificat: { signatureRequestId: 'req-9' },
+            }),
+          ],
+        })}
+      />,
+    );
+    const lien = screen.getByRole('link', { name: /Certificat de signature/i });
+    // ⚠ VALEUR LITTÉRALE (règle n°2) : c'est « vers où » qu'on garde. Comparer
+    // au retour d'un constructeur laisserait les deux côtés bouger ensemble.
+    expect(lien.getAttribute('href')).toBe('/api/signature-requests/req-9/audit-trail?dl=1');
+  });
+
+  it('n’en propose aucun sur une pièce signée par un SCAN déposé à la main', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [
+            ligne({ etat: 'SIGNE', envoyable: false, documentId: 'doc-7', certificat: null }),
+          ],
+        })}
+      />,
+    );
+    // Un lien qui mène à un 404 fait cesser de croire l'écran.
+    expect(screen.queryByRole('link', { name: /Certificat de signature/i })).toBeNull();
+    // « Ouvrir » reste, lui : le PDF signé existe bel et bien.
+    expect(screen.getByRole('link', { name: /Ouvrir/i })).not.toBeNull();
+  });
+
+  it('n’en propose aucun tant que la pièce n’est pas signée', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [
+            ligne({ etat: 'ENVOYE', envoyable: false, signatureRequestId: 'req-9', certificat: null }),
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Certificat de signature/i })).toBeNull();
+  });
+});
+
+/* ── D-C3-4 — le bloc ne se tait plus devant un inscrit sans pièce ───────── */
+
+/**
+ * L'ÉCRAN DU 12/09/2026 (SES-0112). Cinq apprenants « Agence », aucune pièce,
+ * aucun avertissement : le bloc se réduisait à la zone de dépôt, ce qui se lit
+ * comme « tout va bien ». Les cinq dossiers sont partis sans convention.
+ */
+describe('le bloc muet — un inscrit pour qui il n’y a rien à signer (D-C3-4)', () => {
+  beforeEach(() => cleanup());
+
+  const RIEN_ORGANISATION = {
+    participantId: 'part-2',
+    nomAffiche: 'Marion MAINO',
+    message: 'Aucun financeur renseigné pour AGENCE DU PORT : il n’y a rien à faire signer.',
+    correction: {
+      cible: 'ORGANISATION' as const,
+      organizationId: 'org-9',
+      libelleOrganisation: 'AGENCE DU PORT',
+    },
+  };
+
+  it('rend le message TEL QUEL, dans un encart d’alerte', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], riensASigner: [RIEN_ORGANISATION] })}
+      />,
+    );
+    const alerte = screen.getByRole('alert');
+    expect(alerte.textContent).toContain(
+      'Aucun financeur renseigné pour AGENCE DU PORT : il n’y a rien à faire signer.',
+    );
+  });
+
+  it('le lien mène à la FICHE ORGANISATION — même mécanique que l’avertissement de régime', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], riensASigner: [RIEN_ORGANISATION] })}
+      />,
+    );
+    // ⚠ VALEUR LITTÉRALE (règle n°2) : le « vers où » est ce qu'on garde.
+    expect(
+      screen.getByRole('link', { name: libelleLienRenseignerFinanceur('AGENCE DU PORT') })
+        .getAttribute('href'),
+    ).toBe(
+      '/app/organisations/org-9?champ=financeur' +
+        '&from=%2Fapp%2Fsessions%2Fsess-1%3Ftab%3Dapres',
+    );
+  });
+
+  it('sans commanditaire, le lien mène à l’INSCRIPTION', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [],
+          riensASigner: [
+            { ...RIEN_ORGANISATION, correction: { cible: 'INSCRIPTION' as const } },
+          ],
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_COMMANDITAIRE }),
+    ).not.toBeNull();
+  });
+
+  it('aucun encart quand il n’y a rien à dire — l’alerte à tort n’alerte plus', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [] })} />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

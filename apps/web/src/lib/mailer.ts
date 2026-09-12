@@ -64,6 +64,13 @@ export interface SendMailContext {
 
 export interface SendMailInput {
   to: string;
+  /**
+   * Copie visible. Sert à mettre l'EXPÉDITEUR en copie d'un envoi partant au
+   * nom de l'organisme (dossier de financement, lot D) : le mail arrive aussi
+   * dans sa boîte, avec ses pièces jointes. Un second `sendMail` aurait
+   * doublé la trace `EmailMessage` et fait croire à deux départs.
+   */
+  cc?: string;
   subject: string;
   html: string;
   text?: string;
@@ -190,6 +197,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     const info = await getTransporter().sendMail({
       from,
       to: input.to,
+      ...(input.cc ? { cc: input.cc } : {}),
       subject: input.subject,
       html: input.html,
       text: input.text,
