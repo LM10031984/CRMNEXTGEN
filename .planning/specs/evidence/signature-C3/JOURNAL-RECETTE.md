@@ -176,3 +176,35 @@ remis à `true` (12/09, pris au prochain déploiement). Reste au moment de la
 fusion : retirer le webhook DocuSeal de l'aperçu et poser en Production
 `DOCUSEAL_*` (clé du compte EU, `whsec_` d'un webhook prod sans bypass, URL
 `https://<prod>/api/webhooks/docuseal`), `WEASYPRINT_URL` déjà en prod.
+
+## Mise en prod (12/09/2026)
+
+PR #55 fusionnée (squash 099828f) après résolution des conflits avec main ; Vercel
+prod Ready, « Deploy migrations #68 » vert (11 migrations additives). Variables
+Production posées : SIGNATURE_PROVIDER, DOCUSEAL_BASE_URL (config),
+DOCUSEAL_API_KEY, DOCUSEAL_WEBHOOK_SECRET (secrets, collés par Laurent) ; webhook
+DocuSeal basculé sur https://qualiof.vercel.app/api/webhooks/docuseal ; curl →
+401 signature-invalide ✓. DocuSeal Pro souscrit.
+
+### D-C3-4 — bloc muet quand aucun participant n'a de régime (constaté prod SES-0112)
+
+5 apprenants « Agence », conventions individuelles, bloc Signature réduit à la
+zone de dépôt : `regle === null` pour tous (financeur absent sur le commanditaire
+ou commanditaire absent) → aucune pièce, et AUCUN avertissement faute de signal
+(pas de lien EI_SELF, pas d'autre org ouvrant la pièce). Le cas Marion sans son
+signal. À faire : quand `financeurSansRegime` est vrai pour un participant, le
+bloc affiche « Aucun financeur renseigné pour {commanditaire} → rien à signer »
+avec le lien vers la fiche organisation (même mécanique que
+`composerAvertissementRegime`), ou « inscription sans commanditaire » avec le
+lien vers l'inscription.
+
+**Correctif D-C3-4, cause réelle** : ce n'était pas un défaut de données mais un
+**backfill manquant** — la migration `signature_regime_financement` est additive,
+les trois colonnes SignerRole d'OpcoCatalog étaient NULL en prod pour les 6
+financeurs (le seed ne tourne qu'en local/aperçu). Rattrapé le 12/09 par
+`packages/db/scripts/backfill-signer-roles.ts` (SEED_ALLOW_PROD=1, colonnes
+signer uniquement, avant/après affiché). SES-0112 affiche désormais 10 pièces
+(5 conventions EI + 5 dossiers AGEFICE). Leçon pour /prod : une migration qui
+ajoute une colonne de règle métier doit venir avec son backfill (ou un seed
+idempotent lancé au déploiement). L'amélioration « bloc muet → dire pourquoi »
+reste utile (financeur vraiment absent) et garde le numéro D-C3-4.
