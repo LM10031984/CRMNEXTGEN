@@ -677,7 +677,8 @@ Le total monte de **3155 → 3163**, soit exactement les **8 tests ajoutés** da
 | 14 | `b7bbda27` | `docs(web)` — le séquenceur lit `PROD-00661` comme 661, le constat en commentaire |
 | 15 | `d6b7c5b2` | `docs(state)` — le relevé de prod est NOMMÉ : 41 codes, en clair, avec sa commande |
 | 16 | `37a469e3` | `docs(spec)` — D-18 a sa réponse, et ce n'était pas le moteur |
-| 17 | _celui-ci_ | `docs(260911-kwf)` — compte rendu de la passe 3 |
+| 17 | `cfb3659c` | `docs(260911-kwf)` — compte rendu de la passe 3 |
+| 18 | _celui-ci_ | `docs(state)` — la passe 3 entre dans le journal Roadmap Evolution |
 
 **Pourquoi trois commits là où un aurait suffi** (11 → 12 → 13) : le commit 11
 est une extraction **à iso-comportement**, qui ne fait que rendre la règle
@@ -687,7 +688,7 @@ correctif ensemble aurait rendu la rougeur invérifiable après coup.
 
 Branche `docs/260911-decisions-par-surface`, **PR #61 ouverte, non fusionnée**.
 État au 12/09 : `origin` porte les passes 1 **et 2** (jusqu'à `5e3eee02`) ; les
-**7 commits de la passe 3 ne sont PAS poussés** — c'est Laurent qui s'en charge.
+**commits de la passe 3, depuis `56947bb3`, ne sont PAS poussés** — c'est Laurent qui s'en charge.
 Rien n'a touché `main` ni la PR #58.
 
 ---
