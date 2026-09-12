@@ -77,6 +77,31 @@ export interface DocumentDeLaPiece {
    * finiraient par ranger le même signataire dans deux camps différents.
    */
   signataires: SignataireEnvoye[];
+  /**
+   * LA CLÉ DU CERTIFICAT DE SIGNATURE — lot D, défaut D-C3-5.
+   *
+   * Elle appartient à la DEMANDE (`SignatureRequest.auditTrailUrl`), pas au
+   * document : une demande peut couvrir plusieurs pièces, et le certificat les
+   * couvre toutes. On la transporte sur le document parce que c'est par lui que
+   * la ligne est indexée — la vue ne la lit que pour savoir s'il y a quelque
+   * chose à offrir, jamais pour composer une URL.
+   *
+   * ⚠ OBLIGATOIRE, comme `signataires` avant elle et pour la raison mesurée au
+   * lot C.2b-8 : une prop optionnelle se perd en silence. `null` reste une
+   * valeur parfaitement légitime — un scan déposé à la main (lot A) est signé
+   * sans qu'aucun certificat n'existe, et une demande partie n'en a pas encore.
+   * Ce qu'on rend impossible, c'est l'OUBLI.
+   */
+  auditTrailUrl: string | null;
+}
+
+/**
+ * DE QUOI LA LIGNE A BESOIN POUR OFFRIR LE CERTIFICAT : l'identifiant de la
+ * demande, et rien d'autre. L'URL se compose dans le JSX à partir de lui —
+ * transporter la clé bucket jusqu'à l'écran l'exposerait sans aucun gain.
+ */
+export interface CertificatDeLaPiece {
+  signatureRequestId: string;
 }
 
 export interface LigneSignature {
@@ -158,6 +183,17 @@ export interface LigneSignature {
    * à deux lots qui l'avaient rendue caduque.
    */
   attente: string | null;
+  /**
+   * LE CERTIFICAT DE SIGNATURE DE CETTE PIÈCE — `null` s'il n'y en a pas.
+   *
+   * ⚠ DÉCIDÉ ICI, JAMAIS DANS LE JSX. Le composant se contente de rendre un
+   * lien ou rien : la règle « quelles lignes en ont un » reste sous test
+   * unitaire. Écrite dans le rendu, elle ne serait vérifiable qu'à l'œil — et
+   * c'est précisément à l'œil qu'on a laissé passer, pendant tout le lot C.3,
+   * une pièce produite, stockée et envoyée par email que personne ne pouvait
+   * télécharger depuis l'application.
+   */
+  certificat: CertificatDeLaPiece | null;
 }
 
 /**
@@ -331,6 +367,34 @@ export function etatDeLaPiece(a: {
   if (document.status === 'signed') return 'SIGNE';
   if (document.status === 'sent_for_signature') return 'ENVOYE';
   return 'GENERE';
+}
+
+/**
+ * Cette pièce offre-t-elle son certificat de signature ? — lot D (D-C3-5).
+ *
+ * DEUX SIGNÉS QUI NE SE RESSEMBLENT PAS. `etatDeLaPiece` répond « SIGNE » pour
+ * trois origines (décision n°4), et deux d'entre elles ne produisent AUCUN
+ * certificat : le scan déposé à la main du lot A, et un `Document.status` posé
+ * hors signature électronique. Seul le retour du prestataire en produit un.
+ * Offrir le lien sur toute ligne verte mènerait donc à un 404 sur la moitié
+ * d'entre elles — et un admin qui clique sur « Certificat » et tombe sur une
+ * erreur cesse de croire l'écran.
+ *
+ * L'ÉTAT COMMANDE, PAS LA COLONNE. On exige `SIGNE` en plus de la clé : une
+ * demande dont le certificat serait arrivé avant que la pièce soit close ne
+ * doit rien offrir, sans quoi la ligne promettrait une preuve d'une signature
+ * qui n'est pas encore acquise.
+ */
+export function certificatDeLaPiece(a: {
+  etat: EtatPiece;
+  signatureRequestId: string | null;
+  auditTrailUrl: string | null;
+}): CertificatDeLaPiece | null {
+  if (a.etat !== 'SIGNE') return null;
+  if (!rempli(a.auditTrailUrl)) return null;
+  const signatureRequestId = (a.signatureRequestId ?? '').trim();
+  if (signatureRequestId.length === 0) return null;
+  return { signatureRequestId };
 }
 
 /* ── L'avertissement « régime incohérent », tel qu'il se lit ──────────────── */
@@ -554,6 +618,13 @@ export function construireVueSignature(a: {
           : signataires.length === 0
             ? PHRASE_DEMANDE_SANS_SIGNATAIRE
             : mentionAttentePiece(ordre),
+      // ⚠ LA RÈGLE EST DANS `certificatDeLaPiece`, PAS ICI. Cette ligne ne fait
+      // que la brancher sur les trois faits qu'elle demande.
+      certificat: certificatDeLaPiece({
+        etat,
+        signatureRequestId: document?.signatureRequestId ?? null,
+        auditTrailUrl: document?.auditTrailUrl ?? null,
+      }),
     };
   });
 

@@ -86,6 +86,7 @@ import {
   OctagonAlert,
   PenLine,
   Send,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -432,6 +433,32 @@ export function BlocSignature({
                       className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-primary hover:bg-primary-50 transition-colors shrink-0"
                     >
                       Ouvrir <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </a>
+                  )}
+
+                  {/* ── LE CERTIFICAT DE SIGNATURE (lot D, défaut D-C3-5) ───
+                      À CÔTÉ d'« Ouvrir », jamais à la place : ce sont DEUX
+                      pièces, et un dossier AGEFICE les range toutes les deux.
+                      Il était produit, stocké et joint à l'email « Votre
+                      exemplaire signé » depuis le lot C.3 — mais le retrouver
+                      obligeait à fouiller sa boîte mail.
+
+                      ⚠ RIEN N'EST DÉCIDÉ ICI. `ligne.certificat` est nul sur
+                      une pièce signée par un scan déposé à la main : elle n'a
+                      pas de certificat, et un lien qui mène à un 404 fait
+                      cesser de croire l'écran. La règle vit dans
+                      `certificatDeLaPiece`, sous test unitaire.
+
+                      `?dl=1` : le certificat se RANGE plus qu'il ne se lit. */}
+                  {ligne.certificat && (
+                    <a
+                      href={`/api/signature-requests/${ligne.certificat.signatureRequestId}/audit-trail?dl=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors shrink-0"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Certificat de
+                      signature
                     </a>
                   )}
 

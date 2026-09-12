@@ -279,7 +279,10 @@ export default async function SessionDetailPage({
             // « Signer maintenant » pour l'organisme, dont c'est le tour.
             // JOINTURE, pas une requête de plus : ce `findMany` charge déjà
             // tous les documents de la session.
-            signatureRequest: { select: { signers: true } },
+            // `auditTrailUrl` (lot D, D-C3-5) voyage sur la MÊME jointure : le
+            // certificat était produit et stocké depuis C.3, mais aucun écran
+            // ne l'offrait — et c'est la pièce que les AGEFICE réclament.
+            signatureRequest: { select: { signers: true, auditTrailUrl: true } },
           },
         }),
         prisma.pedagogicalAsset.findMany({
@@ -660,6 +663,7 @@ export default async function SessionDetailPage({
           signers: parseSignatureSigners(d.signatureRequest?.signers),
           docType: d.type,
         }),
+        auditTrailUrl: d.signatureRequest?.auditTrailUrl ?? null,
       },
     ]),
   );

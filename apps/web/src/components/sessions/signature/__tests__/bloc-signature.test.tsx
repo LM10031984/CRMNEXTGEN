@@ -1226,6 +1226,7 @@ describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
     render(
       <BlocSignature
         sessionId={SESSION_ID}
+        scope="AFTER"
         vue={vue({
           lignes: [
             ligne({
@@ -1249,6 +1250,7 @@ describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
     render(
       <BlocSignature
         sessionId={SESSION_ID}
+        scope="AFTER"
         vue={vue({
           lignes: [
             ligne({ etat: 'SIGNE', envoyable: false, documentId: 'doc-7', certificat: null }),
@@ -1266,6 +1268,7 @@ describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
     render(
       <BlocSignature
         sessionId={SESSION_ID}
+        scope="AFTER"
         vue={vue({
           lignes: [
             ligne({ etat: 'ENVOYE', envoyable: false, signatureRequestId: 'req-9', certificat: null }),

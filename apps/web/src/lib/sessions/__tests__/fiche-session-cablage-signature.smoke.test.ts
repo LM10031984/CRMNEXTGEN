@@ -83,7 +83,7 @@ describe('fiche session — les signataires de la demande remontent jusqu’au b
   it('la requête CHARGE les signataires : sans eux, il n’y a rien à afficher', () => {
     // La colonne Json `SignatureRequest.signers`, jointe au document — pas une
     // requête de plus : `sessionDocs` charge déjà tous les documents utiles.
-    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{ signers: true \} \}/);
+    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{[^}]*\bsigners: true\b/);
   });
 
   it('ils sont RELUS par le contrat partagé, jamais castés à la main', () => {
@@ -120,9 +120,11 @@ describe('fiche session — le certificat de signature remonte jusqu’au bloc (
   it('la requête CHARGE la clé du certificat, sur la MÊME jointure que les signataires', () => {
     // Une seconde jointure vers `signatureRequest` serait une requête de plus
     // pour une colonne du même enregistrement.
-    expect(pageSrc).toMatch(
-      /signatureRequest: \{ select: \{ signers: true, auditTrailUrl: true \} \}/,
-    );
+    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{[^}]*\bauditTrailUrl: true\b/);
+    // Sur la MÊME jointure que les signataires : deux `signatureRequest:` dans
+    // le même `select` seraient une requête de plus pour deux colonnes du même
+    // enregistrement.
+    expect(pageSrc.match(/signatureRequest: \{ select:/g) ?? []).toHaveLength(1);
   });
 
   it('et elle est PASSÉE à la vue : la substitution par `null` doit rougir', () => {
