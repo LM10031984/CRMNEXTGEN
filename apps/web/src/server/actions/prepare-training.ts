@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma, type ClosureDocKind, type DocType } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { generateProgrammeForProduct } from './programme-generator';
+import { generateProgrammeForSession } from './programme-generator';
 import {
   GROUP_CONVENTION_ENTITY_TYPES,
   expandGroupConventions,
@@ -153,9 +153,10 @@ export async function prepareTrainingForSession(
   let convocationsGenerated = 0;
   let derouleGenerated = false;
 
-  // Programme = asset PRODUIT (1 seul appel pour toute la session,
-  // find-or-create idempotent — réutilisé à chaque clic).
-  const prog = await generateProgrammeForProduct(session.productId);
+  // Programme : le cœur choisit entre le catalogue et un programme propre à
+  // la session (tarif négocié, ou convention d'entreprise dont le montant est
+  // global). Find-or-create idempotent des deux côtés — réutilisé à chaque clic.
+  const prog = await generateProgrammeForSession(sessionId);
   if (prog.ok) programmesGenerated = 1;
   else errors.push({ participantName: '(produit)', doc: 'PROGRAMME', message: prog.error ?? 'Erreur inconnue' });
 
@@ -345,7 +346,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
   // 1. Produit-level + session-level (Promise.allSettled — chacun reste idempotent
   //    en interne via find-or-create / hash sha256).
   const [progRes, derRes, checklistRes] = await Promise.allSettled([
-    generateProgrammeForProduct(session.productId),
+    generateProgrammeForSession(sessionId),
     generateDerouleForProduct(session.productId),
     generateChecklistForSession(sessionId),
   ]);
@@ -706,6 +707,11 @@ export async function getSessionPreparationStatus(
         type: { in: docTypes },
         OR: [
           { entityType: 'product', entityId: session.productId, type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] } },
+          // Le programme d'une session d'entreprise est stocké sur la SESSION
+          // (11/09) : son montant est celui de la convention, pas celui du
+          // catalogue. Sans cette branche, le statut annonce un programme
+          // manquant alors qu'il existe, et propose de le regénérer sans fin.
+          { entityType: 'session', entityId: session.id, type: 'PROGRAMME' as DocType },
           { entityType: 'session', entityId: session.id, type: 'CHECKLIST_FORMATION' },
           ...(participantIds.length > 0
             ? [

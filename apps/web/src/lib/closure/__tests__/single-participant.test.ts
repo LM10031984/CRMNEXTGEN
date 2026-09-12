@@ -80,6 +80,7 @@ vi.mock('../../../server/actions/generate-grille-obs-session', () => ({
 }));
 vi.mock('../../../server/actions/programme-generator', () => ({
   generateProgrammeForProduct: vi.fn().mockResolvedValue({ ok: true }),
+  generateProgrammeForSession: vi.fn().mockResolvedValue({ ok: true }),
 }));
 // Conventions : closure-pack passe par le routeur règle payeur depuis le 28/08
 // (une convention d'entreprise par commanditaire, plus une par salarié).

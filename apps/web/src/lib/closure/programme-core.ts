@@ -17,7 +17,7 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
-import { resoudrePrixProgramme } from './tarif-programme';
+import { resoudrePrixProgramme, programmeDoitEtrePropreALaSession } from './tarif-programme';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
@@ -346,4 +346,65 @@ export async function generateProgrammeForSessionCore(
   });
 
   return { ok: true, documentId: doc.id, pdfUrl: objectKey };
+}
+
+/**
+ * LE point d'entrée quand on génère le programme DEPUIS UNE SESSION.
+ *
+ * Ajouté le 11/09 après ASSALIT SYNDIC (SES-0107) : le générateur de session
+ * existait, mais aucun bouton n'y menait. « Préparer la formation », la matrice
+ * Qualiopi et le pack de clôture appelaient le générateur PRODUIT en dur, si
+ * bien que le programme d'une session d'entreprise annonçait le prix catalogue
+ * par tête — 2 500 € « par stagiaire » pour huit salariés dont la convention
+ * disait 2 500 € au total.
+ *
+ * Le routage vit ici, une fois : tout appelant qui part d'une session passe par
+ * cette fonction et n'a plus à savoir quel générateur choisir. La règle
+ * elle-même est dans `programmeDoitEtrePropreALaSession` (module pur, testable
+ * sans base).
+ *
+ * Le programme de CATALOGUE reste la règle par défaut : on ne fabrique un PDF
+ * par session que lorsque le montant à annoncer n'est pas celui du catalogue.
+ */
+export async function generateProgrammeForSessionOrProductCore(
+  tenantId: string,
+  sessionId: string,
+  opts: { force?: boolean; programmeMdOverride?: string } = {},
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId },
+    select: {
+      productId: true,
+      pricePerLearner: true,
+      product: { select: { priceHT: true } },
+      participants: {
+        select: {
+          priceHT: true,
+          sponsorOrgId: true,
+          sponsorOrg: { select: { legalForm: true } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+        },
+      },
+    },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable' };
+  if (!session.productId) return { ok: false, error: 'Produit lié à la session manquant' };
+
+  const propreALaSession = programmeDoitEtrePropreALaSession({
+    inscrits: session.participants.map((p) => ({
+      priceHT: Number(p.priceHT),
+      sponsorOrgId: p.sponsorOrgId,
+      couvertParConvention: releveDeLaConvention({
+        sponsorLegalForm: p.sponsorOrg?.legalForm,
+        roleChezSponsor:
+          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+      }),
+    })),
+    tarifSession: session.pricePerLearner,
+    prixProduit: session.product?.priceHT,
+  });
+
+  return propreALaSession
+    ? generateProgrammeForSessionCore(tenantId, sessionId, opts)
+    : generateProgrammeForProductCore(tenantId, session.productId, opts);
 }
