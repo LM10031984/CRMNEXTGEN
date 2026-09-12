@@ -58,6 +58,12 @@ apps/web/playwright-report/
 # large les COUVRE toutes les deux, y compris les `.tsbuildinfo` nommés
 # autrement par une version future de `tsc` — on le garde, et on garde le
 # constat de `main`, qui explique pourquoi la règle doit être large.
+#
+# Le cas qui l'a prouvé une fois de plus : en ouvrant la couverture
+# `tsconfig.scripts.json` le 11/09/2026, le cache
+# `apps/web/tsconfig.scripts.tsbuildinfo` est entré dans git par le même oubli —
+# un NOUVEAU nom, que les règles nominatives ne voyaient pas. Il se salissait à
+# chaque `pnpm lint` et polluait tous les diffs.
 *.tsbuildinfo
 
 # Python (doc-engine)

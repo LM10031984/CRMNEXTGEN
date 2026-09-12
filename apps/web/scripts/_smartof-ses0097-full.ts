@@ -17,3 +17,5 @@ try {
 const inDb = await prisma.trainingSession.findFirst({ where: { code: 'SES-0097' }, select: { id: true, name: true, status: true } });
 console.log('\nDans QualiOF (DB) :', inDb ? `OUI (${inDb.status})` : 'NON — pas encore importée');
 await prisma.$disconnect();
+
+export {};

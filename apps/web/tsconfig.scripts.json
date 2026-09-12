@@ -1,0 +1,10 @@
+{
+  // Les scripts sont vérifiés à part du build Next : `next build` type-vérifie
+  // avec `tsconfig.json`, et y faire entrer des scripts Node (prisma, fs,
+  // top-level await) ralentirait le build sans rien apporter à l'application.
+  //
+  // Mais ils DOIVENT être vérifiés : cinquante-huit d'entre eux écrivent en
+  // base. Ce fichier est branché sur `pnpm lint` — cf. `package.json`.
+  "extends": "./tsconfig.json",
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "next-env.d.ts"]
+}

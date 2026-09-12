@@ -5,3 +5,5 @@ console.log('avant :', before.map(b=>`${b.enrollmentStatus}=${b._count}`).join('
 const r = await prisma.sessionParticipant.updateMany({ where: { sessionId: s.id }, data: { enrollmentStatus: 'ATTENDED' } });
 console.log('✓ mis à ATTENDED :', r.count);
 await prisma.$disconnect();
+
+export {};

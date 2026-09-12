@@ -240,7 +240,13 @@ function personDataFromSmart(
   civility: string | null;
   birthDate: Date | null;
   birthName: string | null;
-  personalAddress: Prisma.JsonObject | null;
+  /**
+   * Un Json NULLABLE se met à `null` chez Prisma avec `Prisma.JsonNull`, pas
+   * avec `null` — un `null` nu est refusé à l'exécution. Le type disait `null`
+   * et l'import aurait planté sur la première personne sans adresse ; rien ne
+   * le signalait, ce dossier n'étant pas type-vérifié.
+   */
+  personalAddress: Prisma.JsonObject | typeof Prisma.JsonNull;
   professionalStatus: string | null;
   bpfDefaultStatus: string | null;
   educationLevel: string | null;
@@ -258,7 +264,7 @@ function personDataFromSmart(
     civility: meta?.civilite?.trim() || null,
     birthDate: parseDate(meta?.dateNaissance),
     birthName: meta?.nomUsage?.trim() || null,
-    personalAddress: mapAddress(meta?.adresse),
+    personalAddress: mapAddress(meta?.adresse) ?? Prisma.JsonNull,
     professionalStatus: meta?.fonction?.trim() || null,
     bpfDefaultStatus: meta?.statutBPF?.trim() || null,
     // custom_field_2 = diplôme, custom_field_3 = expérience (cf sample SmartOF)
@@ -585,7 +591,9 @@ async function upsertPersonFromSmart(opts: {
 async function importApprenants(
   token: string,
   tenantId: string,
-  orgIdMap: Map<string, string>,
+  // Élargi de `string` à `OrgInfo` en amont ; ces deux signatures étaient
+  // restées en arrière, sans que rien ne le signale (dossier hors tsc).
+  orgIdMap: Map<string, OrgInfo>,
 ): Promise<ImportCounts> {
   const c = emptyCounts();
   const { apprenants } = await smartofPost<{ apprenants: SmartApprenant[] }>(
@@ -621,7 +629,9 @@ async function importApprenants(
 async function importFormateurs(
   token: string,
   tenantId: string,
-  orgIdMap: Map<string, string>,
+  // Élargi de `string` à `OrgInfo` en amont ; ces deux signatures étaient
+  // restées en arrière, sans que rien ne le signale (dossier hors tsc).
+  orgIdMap: Map<string, OrgInfo>,
 ): Promise<ImportCounts> {
   const c = emptyCounts();
   const { formateurs } = await smartofPost<{ formateurs: SmartFormateur[] }>(

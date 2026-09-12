@@ -13,3 +13,5 @@ console.log('Sophie participation id (à retirer):', sp?.id);
 const ei: any = await prisma.organization.findFirst({ where: { legalForm:'AUTO_ENTREPRENEUR', opcoCode:'AGEFICE' }, select:{ legalName:true, address:true, opcoCode:true, type:true } });
 console.log('exemple EI AGEFICE:', JSON.stringify(ei));
 await prisma.$disconnect();
+
+export {};

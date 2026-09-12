@@ -176,7 +176,7 @@ async function main(): Promise<void> {
         },
       },
     },
-  } as never);
+  });
 
   const items: WorkItem[] = []; // worklist réelle = Lot A + Lot B
   const driveItems: WorkItem[] = []; // Lot DRIVE = émargements (preuve au Drive, hors worklist)
@@ -192,22 +192,11 @@ async function main(): Promise<void> {
     productName: string | null;
   }> = [];
 
-  for (const s of sessions as Array<{
-    id: string;
-    code: string;
-    name: string | null;
-    startDate: Date;
-    endDate: Date;
-    productId: string | null;
-    product: { title: string } | null;
-    trainers: Array<{ person: { firstName: string; lastName: string } | null }>;
-    participants: Array<{
-      id: string;
-      docStatus: unknown;
-      person: { firstName: string; lastName: string };
-      sponsorOrg: { opcoCode: string | null } | null;
-    }>;
-  }>) {
+  // Le `select` de la requête donne déjà le type exact : la réassertion qui
+  // vivait ici le RÉÉCRIVAIT de travers (elle annonçait un `productId` que la
+  // requête ne sélectionne pas). Une assertion qui ment est pire qu'une absence
+  // de type — elle fait taire le compilateur sur ce qu'on voulait qu'il vérifie.
+  for (const s of sessions) {
     const participantIds = s.participants.map((p) => p.id);
 
     // Charge les sources documentaires EXACTEMENT comme la fiche session (page.tsx)

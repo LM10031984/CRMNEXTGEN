@@ -44,7 +44,7 @@ if (deroule) {
   const html = renderDerouleHtml(ctx, deroule);
   fs.writeFileSync(`${OUT}/DEROULE_SESSION.pdf`, await renderHtmlToPdfWeasy(html));
   const nbSeq = deroule.jours.reduce((n, j) => n + j.sequences.length, 0);
-  console.log(`✓ DEROULE_SESSION.pdf — ${deroule.jours.length}j/${nbSeq}séq, formateur ctx=${ctx.sessionTrainers[0]?.prenom ?? '—'} ${ctx.sessionTrainers[0]?.nom ?? ''}`);
+  console.log(`✓ DEROULE_SESSION.pdf — ${deroule.jours.length}j/${nbSeq}séq, formateur ctx=${ctx.sessionTrainers[0] ?? '—'}`);
 } else console.log('✗ déroulé: contenu null (LLM échoué)');
 
 // ---------- 2) GRILLE OBS SESSION (Sonnet, genre par stagiaire) ----------

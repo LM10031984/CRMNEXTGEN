@@ -17,3 +17,5 @@ for (const p of s.participants) console.log(`  - ${p.person.firstName} ${p.perso
 const tot = s.participants.reduce((a:number,p:any)=>a+(p.priceHT||0),0);
 console.log('total prix participants :', tot, '€');
 await prisma.$disconnect();
+
+export {};

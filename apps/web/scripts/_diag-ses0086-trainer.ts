@@ -12,3 +12,5 @@ for (const t of s.trainers) {
   console.log(`  signature « ${name} » : ${sig ? 'TROUVÉE ('+sig.length+' chars)' : 'AUCUNE (placeholder vide)'}`);
 }
 await prisma.$disconnect();
+
+export {};

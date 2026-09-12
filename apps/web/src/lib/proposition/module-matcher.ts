@@ -454,6 +454,65 @@ const MAX_EVIDENCE_PER_NEED = 3;
  */
 const MAX_PER_SOURCE = 2;
 
+/**
+ * Le DÉPARTAGE de deux candidats à score égal (arbitrage du 11/09/2026).
+ *
+ * ── Ce que ça répare ────────────────────────────────────────────────────────
+ *
+ * « Une égalité de score ne doit pas se trancher alphabétiquement. » Le cas est
+ * réel : sur DIAG-0001, `BIB-D017#3` et `BIB-D034#3` étaient à 10 points chacun
+ * et c'est l'ordre des titres qui a décidé quel module serait programmé en
+ * demi-journée 5. Un parcours pédagogique ne se décide pas à l'alphabet.
+ *
+ * ── L'intention, et pourquoi on ne l'implémente PAS littéralement ────────────
+ *
+ * Laurent a formulé la règle ainsi : « préférer le module dont les signaux
+ * relèvent de la même famille / du même chapitre que le besoin servi ». Aucun des
+ * deux critères n'est disponible, et ce n'est pas un manque de volonté :
+ *
+ *   • `family` est GROSSIÈRE (`METIER | IA | REGLEMENTAIRE`) et elle est déjà
+ *     filtrée en amont par `servedFamily` — ici, tous les candidats ont la même.
+ *     Elle ne départage rien.
+ *   • un module ne porte AUCUN chapitre. `ProgrammeNeed.chapters` existe, rien
+ *     côté module ne s'y rattache.
+ *   • ⛔ et surtout : NE PAS rebâtir cette règle sur le préfixe de domaine des
+ *     signaux (« Mandat — … », « Transformation — … »). Relevé en base le
+ *     11/09/2026 : 132 signaux, **90 avec préfixe, 42 sans**, et 28 valeurs
+ *     libres qui ne correspondent ni aux codes de besoin ni aux chapitres. Une
+ *     règle bâtie dessus casserait sur 42 signaux. Ces chiffres sont écrits ici
+ *     pour que personne ne « l'améliore » en repartant du préfixe.
+ *
+ * ── Ce qu'on fait à la place ────────────────────────────────────────────────
+ *
+ * On compare les `matchedTerms` du candidat au LABEL du besoin. Un module
+ * accroché par un mot que le besoin porte dans son intitulé passe devant un
+ * module accroché par du vocabulaire périphérique. Sur le cas réel :
+ * `BIB-D017#3` est accroché par `mandat`, présent dans « Rentrer des mandats en
+ * exclusivité, au bon prix » ; `BIB-D034#3` par `negociation`, absent du label.
+ *
+ * Cette clé est STABLE : elle ne dépend pas de la taille de la bibliothèque,
+ * contrairement aux poids de `discriminationWeights()`. C'est précisément le
+ * repesage qui a fait bouger la demi-journée 5 au lot 1 — on ne veut pas d'une
+ * règle de départage qui bouge au prochain import.
+ *
+ * Note sur les clés 2 et 3 : elles ne peuvent jamais se contredire.
+ * `'lexique' + 'forte'` est impossible par construction (`source` vaut `signaux`
+ * dès que `signalWeight > 0`, et `confidence` vaut `forte` dès que
+ * `signalWeight >= 1`) : un candidat `lexique` a forcément `signalWeight === 0`.
+ */
+const RANG_SOURCE: Record<ModuleCandidate['matchSource'], number> = { signaux: 0, lexique: 1 };
+const RANG_CONFIANCE: Record<ModuleCandidate['confidence'], number> = { forte: 0, faible: 1 };
+
+/**
+ * Ce candidat est-il accroché par un mot que le besoin porte dans son LABEL ?
+ *
+ * `labelNormalise` est passé déjà normalisé, calculé UNE fois par besoin : c'est
+ * ce qui permet d'appeler cette fonction n fois au lieu de n log n.
+ */
+function toucheLeVocabulaireDuBesoin(c: ModuleCandidate, labelNormalise: string): boolean {
+  return c.matchedTerms.some((terme) => labelNormalise.includes(normalize(terme)));
+}
+
 export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
   const maxCandidates = input.maxCandidates ?? 5;
   const notices: string[] = [];
@@ -579,10 +638,30 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
 
     const metierGap = need.families[0] === 'METIER' && inFamily.length === 0 && scored.length > 0;
 
+    // Le DÉPARTAGE d'une égalité de score — voir `RANG_SOURCE` plus haut pour le
+    // pourquoi de l'ordre. Les deux pré-calculs sont hors du comparateur : un
+    // comparateur de tri est appelé O(n log n) fois, il ne doit pas refaire le
+    // même travail à chaque paire.
+    const labelNormalise = normalize(need.label);
+    const vocabulairePropre = new Set(
+      inFamily.filter((c) => toucheLeVocabulaireDuBesoin(c, labelNormalise)),
+    );
     const ranked = inFamily.sort(
       (a, b) =>
+        // 1. le score, toujours
         b.score - a.score ||
+        // 2. une PREUVE passe devant une PISTE
+        RANG_SOURCE[a.matchSource] - RANG_SOURCE[b.matchSource] ||
+        // 3. une confiance forte passe devant une faible
+        RANG_CONFIANCE[a.confidence] - RANG_CONFIANCE[b.confidence] ||
+        // 4. le vocabulaire PROPRE du besoin passe devant le périphérique
+        Number(vocabulairePropre.has(b)) - Number(vocabulairePropre.has(a)) ||
+        // 5. le socle avant l'avancé — on n'apprend pas l'avancé avant la base
         Number(b.isFoundation) - Number(a.isFoundation) ||
+        // 6. DERNIER RECOURS, et rien d'autre : l'alphabet. Il ne tranche que
+        //    quand tout le reste est strictement égal. Ne pas le supprimer (un
+        //    tri instable rendrait la composition non reproductible), ne pas le
+        //    remonter (c'est ce qui a changé la demi-journée 5 d'un dossier réel).
         a.title.localeCompare(b.title, 'fr'),
     );
     const perSource = new Map<string, number>();

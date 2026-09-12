@@ -10,3 +10,5 @@ const html = renderAnalyseBesoinHtml(ctx!, { contexte_professionnel: 'x', object
 const checks = ['Formation envisagée', 'Date(s)', 'Lieu :', 'Durée', '&#9744; OUI', '&#9745; NON', 'info-box'];
 for (const c of checks) console.log(`${html.includes(c) ? '✓ PRÉSENT' : '✗ absent  '}  "${c}"`);
 await prisma.$disconnect();
+
+export {};

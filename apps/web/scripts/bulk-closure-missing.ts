@@ -82,12 +82,14 @@ async function main() {
   const plan: Array<{
     sessionCode: string;
     sessionId: string;
-    sessionName: string;
+    sessionName: string | null;
     nParticipants: number;
     nJobsToCreate: number;
     docKindsBreakdown: Map<ClosureDocKind, number>;
   }> = [];
-  const incompleteSessions: Array<{ code: string; name: string; nParticipants: number; blockers: string[] }> = [];
+  // `TrainingSession.name` est NULLABLE en base — le type local le niait, et
+// c'est le genre d'écart qu'un dossier sans nom révèle en production.
+const incompleteSessions: Array<{ code: string; name: string | null; nParticipants: number; blockers: string[] }> = [];
 
   for (const session of sessions) {
     if (session.participants.length === 0) {
@@ -219,7 +221,7 @@ async function main() {
         .slice(0, 15);
       for (const s of topIncomplete) {
         console.log(`   ${s.code.padEnd(10)} ${s.nParticipants.toString().padStart(3)} part. · ${s.blockers.join(', ')}`);
-        console.log(`            ${s.name.slice(0, 80)}`);
+        console.log(`            ${(s.name ?? '(sans nom)').slice(0, 80)}`);
       }
       console.log(`\n💡 Pour traiter ces sessions : corriger les blockers (formateur/prix/programme/etc.) dans QualiOF.`);
     } else {
@@ -233,7 +235,7 @@ async function main() {
   console.log(`\n🔥 Top 10 sessions à traiter :`);
   const topPlan = [...plan].sort((a, b) => b.nJobsToCreate - a.nJobsToCreate).slice(0, 10);
   for (const p of topPlan) {
-    console.log(`   ${p.sessionCode.padEnd(10)} ${p.nParticipants.toString().padStart(3)} part. · ${p.nJobsToCreate.toString().padStart(4)} jobs · ${p.sessionName.slice(0, 60)}`);
+    console.log(`   ${p.sessionCode.padEnd(10)} ${p.nParticipants.toString().padStart(3)} part. · ${p.nJobsToCreate.toString().padStart(4)} jobs · ${(p.sessionName ?? '(sans nom)').slice(0, 60)}`);
   }
 
   // Breakdown global par docKind

@@ -9,3 +9,5 @@ console.log('Répartition formateur principal (70 sessions) :');
 for (const [k,v] of Object.entries(dist).sort((a,b)=>b[1]-a[1])) console.log(`  ${v}×  ${k}`);
 console.log('Sessions à venir/en cours :', future);
 await prisma.$disconnect();
+
+export {};

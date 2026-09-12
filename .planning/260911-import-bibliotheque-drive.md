@@ -1,6 +1,6 @@
 # Import de la bibliothèque de modules — Drive + Faros (lot I-1)
 
-_Simulation (dry-run) le 2026-09-11 · instantané du 2026-09-10 · tenant « Start Academy »._
+_Simulation (dry-run) le 2026-09-11 · instantané du 2026-09-11 · tenant « Start Academy »._
 
 ## En un coup d’œil
 
@@ -129,6 +129,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:010` — Accélérez votre succès en immobilier de la théorie à la
 
+- `drive:010#2` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 2 module(s) sans durée lisible — défaut appliqué à l'import.
 - 2 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -144,6 +145,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:014` — Boostez, animez et fidélisez les performances de votre équ
 
+- `drive:014#4` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 4 module(s) sans durée lisible — défaut appliqué à l'import.
 - 4 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -175,6 +177,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:027` — Gestion stratégique des objectifs en immobilier
 
+- `drive:027#2` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 2 module(s) sans durée lisible — défaut appliqué à l'import.
 - 2 module(s) à 60 min par défaut (D-17/D-20).
 
@@ -209,6 +212,7 @@ Ces programmes sont présents **deux fois dans la bibliothèque**, sous deux dos
 
 ### `drive:038` — Transformez votre recrutement en un jeu gagnant
 
+- `drive:038#3` — déroulé entièrement fait de mentions d'organisme — vidé (module fantôme né du pied de page, découpage au lot 3).
 - 3 module(s) sans durée lisible — défaut appliqué à l'import.
 - 3 module(s) à 60 min par défaut (D-17/D-20).
 

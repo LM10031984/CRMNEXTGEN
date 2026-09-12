@@ -161,6 +161,99 @@ scénario qui a besoin d'apprenants ou de sessions réels passe par les scripts
 `import:*`, qui visent `.env` : les lancer avec `.env.local` en tête, faute de
 quoi le garde-fou les arrête.
 
+## 4 bis. Les scripts sont du code de production — ils sont vérifiés
+
+**Un garde-fou qui ne garde pas est pire que pas de garde-fou, parce qu'on lui
+fait confiance.** C'est la même famille que l'index GIN et que le `db push` en
+CI, et le troisième cas est arrivé le 11/09/2026.
+
+`apps/web/scripts/**` n'était couvert par aucun `tsconfig` : `include` ne prenait
+que `src/**`. `packages/db/scripts/**` non plus. On lançait pourtant
+`tsc --noEmit` avant chaque livraison, et on croyait le dépôt vérifié — alors que
+**soixante-et-onze scripts écrivant en base** ne l'étaient pas, dont les deux
+imports qui construisent tout le catalogue.
+
+Ce que la couverture a révélé en s'ouvrant, en une seule passe :
+
+- une création `SessionTrainer` sans son champ obligatoire `role` — elle
+  échouait à l'exécution ;
+- un `Json` nullable passé à `null` au lieu de `Prisma.JsonNull` dans l'importeur
+  SmartOF — il aurait planté sur la première personne sans adresse ;
+- de l'arithmétique sur des `Decimal` dans un **rapprochement de trésorerie**,
+  qui « marchait » par coercition en chaîne ;
+- un classeur vide qui importait silencieusement zéro ligne en annonçant un
+  succès ;
+- deux assertions de type (`as never` sur les arguments, `as Array<…>` sur le
+  résultat) qui se neutralisaient en masquant une requête incomplète ;
+- et l'origine du signalement : un mapping en quatre exemplaires dont deux
+  avaient décroché, qui a fait rendre à une sonde **un parcours vide en
+  annonçant 9 demi-journées**, sur un dossier réel.
+
+Aucun de ces défauts n'était subtil. Ils étaient simplement hors de portée du
+seul outil qui les aurait vus.
+
+**La règle** : tout script qui écrit en base est couvert par un `tsconfig`.
+
+- `apps/web` : `tsconfig.scripts.json`, branché sur `pnpm lint` (il reste hors
+  du `tsconfig.json` du build — `next build` n'a pas à type-vérifier des scripts
+  Node, ça ralentirait sans rien protéger de plus).
+- `packages/db` : `scripts/**/*` est dans l'`include` du `tsconfig.json`.
+
+**Et le garde se garde lui-même** : `src/lib/__tests__/scripts-sous-tsc.test.ts`
+balaie le dépôt et échoue si un dossier de scripts écrivant en base apparaît hors
+couverture. Sans lui, la prochaine application naîtrait avec le même trou, et on
+recommencerait à faire confiance à un `tsc` qui ne regarde pas.
+
+**Corollaire, pour le jour où une duplication se présente** : le mapping
+« ligne Prisma → type du moteur » vit à UN seul endroit
+(`src/server/proposition-library.ts`). Dupliquer un mapping dans un dossier non
+vérifié, c'est se garantir une divergence muette.
+
+## 4 ter. Un test qui n'a jamais rougi n'est pas un test
+
+**Un test qui n'a jamais rougi n'est pas un test, c'est une décoration.**
+
+Même famille que §4 bis — un garde-fou auquel on fait confiance et qui ne garde
+rien —, et le troisième cas est arrivé le 11/09/2026, sur le départage des
+modules à égalité de score.
+
+Le défaut : une égalité de score se tranchait à l'ORDRE ALPHABÉTIQUE des titres,
+et ça avait changé le module programmé en demi-journée 5 d'un dossier réel.
+L'assertion naïve, celle qui vient spontanément :
+
+```ts
+// à égalité de score, BIB-D017#3 sort premier
+expect(axe.candidates[0]!.moduleId).toBe('m-d017');
+```
+
+**Elle passait déjà sur le code cassé.** Le repli alphabétique place
+« Convaincre le vendeur… » avant « Gérer les objections… » : le test mesurait
+l'alphabet en croyant mesurer la règle. Il serait resté vert en cachant le bug,
+et il serait resté vert si on avait supprimé la correction.
+
+Ce qui donne sa valeur au test, c'est la **variante discriminante** : les mêmes
+modules, les mêmes signaux, mais les titres ÉCHANGÉS, de sorte que le module
+qu'on veut voir sortir premier porte le titre alphabétiquement dernier. Là, le
+test rougit contre le code non corrigé — donc il prouve quelque chose.
+
+**La règle** : pour tout test de contrat, exécute-le contre le code NON corrigé
+avant d'écrire le correctif, et consigne le nombre d'échecs. En TDD c'est
+mécanique (le commit `test(...): … — tests RED` porte ce compte) ; hors TDD,
+c'est à faire à la main. Si un test passe avant la correction, ce n'est pas une
+bonne nouvelle : c'est qu'il ne teste pas ce qu'on croit.
+
+Corollaire, pour les tests bâtis sur une égalité : **ASSERTE l'égalité**, ne la
+suppose pas. Un départage testé sur deux candidats qu'on croyait à égalité, et
+qui ne l'étaient pas, ne teste aucun départage.
+
+### Le cas vécu, plus instructif que la formule
+
+La première tentative de mutation sur le garde des chemins en dur est restée
+**VERTE** — le fichier piégé avait été créé mais pas indexé, et le garde balaie
+`git ls-files`. Le garde avait raison, la mutation était une décoration. Refaite
+avec `git add -N`, elle a rougi en nommant le fichier, puis reverdi après retrait.
+**La leçon s'applique d'abord à celui qui l'écrit.**
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

@@ -75,13 +75,34 @@ function excelSerialToDate(n: number): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Un groupe de capture d'un match RÉUSSI.
+ *
+ * `noUncheckedIndexedAccess` type `groupe(m, 1)` en `string | undefined`, à raison : rien
+ * ne garantit au compilateur que le motif porte ce groupe. Ici le motif vient
+ * d'être écrit deux lignes plus haut — si le groupe manque, c'est que le motif
+ * et sa lecture ont divergé, et c'est une erreur de programmation, pas une
+ * donnée douteuse. On échoue donc FORT plutôt que de produire un `NaN` qui
+ * finirait en date invalide dans un import de trésorerie.
+ */
+function groupe(m: RegExpMatchArray, i: number): string {
+  const v = m[i];
+  if (v === undefined) {
+    throw new Error(`Groupe de capture ${i} absent du motif — lecture et motif désaccordés.`);
+  }
+  return v;
+}
+
 function parseFRDate(s: string): Date | null {
   // "DD/MM/YYYY" ou "D/M/YYYY"
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!m) return null;
-  const day = parseInt(m[1], 10);
-  const month = parseInt(m[2], 10);
-  let year = parseInt(m[3], 10);
+  // Les trois groupes sont garantis par le motif qui vient de matcher ; on les
+  // extrait quand même explicitement plutôt qu'en forçant le type.
+  const [, j, mo, an] = m ?? [];
+  if (j === undefined || mo === undefined || an === undefined) return null;
+  const day = parseInt(j, 10);
+  const month = parseInt(mo, 10);
+  let year = parseInt(an, 10);
   if (year < 100) year += 2000;
   const d = new Date(Date.UTC(year, month - 1, day));
   return isNaN(d.getTime()) ? null : d;
@@ -100,11 +121,11 @@ function parseFormationRange(
   // Cas "13 au 23/10/2025" / "10/12 au 12/12/2025" / "30 au 31/12/2025"
   const rangeFull = str.match(/(\d{1,2})(?:\/(\d{1,2}))?\s*au\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
   if (rangeFull) {
-    const dStart = parseInt(rangeFull[1], 10);
-    const mStart = parseInt(rangeFull[2] ?? rangeFull[4], 10);
-    const dEnd = parseInt(rangeFull[3], 10);
-    const mEnd = parseInt(rangeFull[4], 10);
-    let year = parseInt(rangeFull[5], 10);
+    const dStart = parseInt(groupe(rangeFull, 1), 10);
+    const mStart = parseInt(groupe(rangeFull, 2) ?? groupe(rangeFull, 4), 10);
+    const dEnd = parseInt(groupe(rangeFull, 3), 10);
+    const mEnd = parseInt(groupe(rangeFull, 4), 10);
+    let year = parseInt(groupe(rangeFull, 5), 10);
     if (year < 100) year += 2000;
     const start = new Date(Date.UTC(year, mStart - 1, dStart));
     const end = new Date(Date.UTC(year, mEnd - 1, dEnd));
@@ -114,10 +135,10 @@ function parseFormationRange(
   if (fallbackYear) {
     const rangeNoYear = str.match(/(\d{1,2})(?:\/(\d{1,2}))?\s*au\s*(\d{1,2})\/(\d{1,2})\b/i);
     if (rangeNoYear) {
-      const dStart = parseInt(rangeNoYear[1], 10);
-      const mStart = parseInt(rangeNoYear[2] ?? rangeNoYear[4], 10);
-      const dEnd = parseInt(rangeNoYear[3], 10);
-      const mEnd = parseInt(rangeNoYear[4], 10);
+      const dStart = parseInt(groupe(rangeNoYear, 1), 10);
+      const mStart = parseInt(groupe(rangeNoYear, 2) ?? groupe(rangeNoYear, 4), 10);
+      const dEnd = parseInt(groupe(rangeNoYear, 3), 10);
+      const mEnd = parseInt(groupe(rangeNoYear, 4), 10);
       const start = new Date(Date.UTC(fallbackYear, mStart - 1, dStart));
       const end = new Date(Date.UTC(fallbackYear, mEnd - 1, dEnd));
       return { start, end, raw: str };
@@ -125,9 +146,9 @@ function parseFormationRange(
     // Cas "17 et 18/03" → 2 dates rapprochées
     const conjMatch = str.match(/(\d{1,2})\s*(?:et|,)\s*(\d{1,2})\/(\d{1,2})\b/i);
     if (conjMatch) {
-      const dStart = parseInt(conjMatch[1], 10);
-      const dEnd = parseInt(conjMatch[2], 10);
-      const month = parseInt(conjMatch[3], 10);
+      const dStart = parseInt(groupe(conjMatch, 1), 10);
+      const dEnd = parseInt(groupe(conjMatch, 2), 10);
+      const month = parseInt(groupe(conjMatch, 3), 10);
       const start = new Date(Date.UTC(fallbackYear, month - 1, dStart));
       const end = new Date(Date.UTC(fallbackYear, month - 1, dEnd));
       return { start, end, raw: str };

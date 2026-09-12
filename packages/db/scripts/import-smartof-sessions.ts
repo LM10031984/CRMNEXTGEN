@@ -90,10 +90,11 @@ function parseSmartOFDate(v: unknown): Date | null {
     const s = v.trim();
     // "DD/MM/YYYY" ou "D/M/YY"
     const fr = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-    if (fr) {
-      const day = parseInt(fr[1], 10);
-      const month = parseInt(fr[2], 10);
-      let year = parseInt(fr[3], 10);
+    const [, frJ, frM, frA] = fr ?? [];
+    if (fr && frJ !== undefined && frM !== undefined && frA !== undefined) {
+      const day = parseInt(frJ, 10);
+      const month = parseInt(frM, 10);
+      let year = parseInt(frA, 10);
       if (year < 100) year += 2000;
       const d = new Date(Date.UTC(year, month - 1, day));
       return isNaN(d.getTime()) ? null : d;

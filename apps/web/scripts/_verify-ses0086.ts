@@ -9,3 +9,5 @@ for (const a of assets) console.log(`  ${a.kind}: ${a._count}`);
 const emarg = await prisma.document.count({ where: { sessionId: s.id, type: 'EMARGEMENT' as never } });
 console.log('\nÉMARGEMENT en base :', emarg, emarg===0 ? '✓ (bien exclu)' : '⚠');
 await prisma.$disconnect();
+
+export {};

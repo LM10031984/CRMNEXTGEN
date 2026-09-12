@@ -12,3 +12,5 @@ for (const s of sessions) {
   console.log(`  ${s.code} ${s.status} ${s.startDate?.toISOString().slice(0,10)} | participants=${s._count.participants} | docs=${docs}`);
 }
 await prisma.$disconnect();
+
+export {};

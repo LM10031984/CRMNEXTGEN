@@ -623,3 +623,169 @@ describe('recommendModules — règle 4 : une étiquette n’est pas un contenu'
     expect(avant.recommendations.some((r) => r.candidates.length > 0)).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Départage d'une égalité de score (arbitrage du 11/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Le lot 1 a fait apparaître le défaut sur un dossier réel : la demi-journée 5
+// de DIAG-0001 s'est jouée sur l'ORDRE ALPHABÉTIQUE des titres, entre deux
+// modules à 10 points chacun. « Une égalité de score ne doit pas se trancher
+// alphabétiquement » — et le correctif porte sur la RÈGLE, pas sur un module.
+//
+// Les bibliothèques de ces tests sont volontairement PETITES (< 30 modules,
+// `MIN_LIBRARY_FOR_WEIGHTING`) : `discriminationWeights` rend alors une map vide
+// et tous les poids valent 1. Les scores sont donc exactement prévisibles —
+// `score = 5 × (mots-clés touchant un signal) + 2 × (mots-clés dans le titre)
+// + (isFoundation ? 1 : 0)` — et chaque test ASSERTE l'égalité au lieu de la
+// supposer. Un test de départage bâti sur une égalité non prouvée ne prouve rien.
+//
+// Le besoin servi est `mandat_exclusivite` :
+//   label    « Rentrer des mandats en exclusivité, au bon prix »
+//   keywords ['mandat', 'exclusivite', 'vente', 'negociation', 'booster']
+// Son label contient donc `mandat` et `exclusivite`, mais NI `vente`, NI
+// `negociation`, NI `booster` : c'est ce qui rend la 4ᵉ clé observable.
+
+const ARGS_MANDAT = {
+  chapterScores: [chapitre(5, 30)],
+  alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
+  answers: REPONSES,
+};
+
+/** Le signal réel de BIB-D017#3 — il parle du MANDAT, mot du label du besoin. */
+const SIGNAL_MANDAT = 'Mandat — le prix de rentrée se lâche pour ne pas perdre l’affaire';
+/** Le signal réel de BIB-D034#3 — il parle de la TRANSFORMATION, pas du mandat. */
+const SIGNAL_TRANSFORMATION =
+  'Transformation — trop d’offres ne deviennent pas des compromis, la négociation cale';
+
+function axeMandat(library: LibraryModule[]) {
+  const out = recommendModules({ ...ARGS_MANDAT, library });
+  const axe = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite');
+  expect(axe, 'le besoin mandat_exclusivite doit être déclenché').toBeDefined();
+  return axe!;
+}
+
+describe('recommendModules — départage d’une égalité de score (arbitrage du 11/09)', () => {
+  it('le cas réel D017#3 / D034#3 : le candidat accroché par un mot du LABEL sort premier', () => {
+    const axe = axeMandat([
+      mod('m-d017', 'Convaincre le vendeur avec des arguments solides', VENDEUR, {
+        signals: [SIGNAL_MANDAT],
+      }),
+      mod('m-d034', 'Gérer les objections et trouver des solutions de compromis', VENDEUR, {
+        signals: [SIGNAL_TRANSFORMATION],
+      }),
+    ]);
+
+    // L'égalité est PROUVÉE : un signal touché de chaque côté, aucun mot-clé dans
+    // les titres, aucun module socle ⇒ 5 contre 5.
+    expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
+    expect(axe.candidates.map((c) => c.matchSource)).toEqual(['signaux', 'signaux']);
+    expect(axe.candidates.map((c) => c.confidence)).toEqual(['forte', 'forte']);
+    expect(axe.candidates.find((c) => c.moduleId === 'm-d017')!.matchedTerms).toEqual(['mandat']);
+    expect(axe.candidates.find((c) => c.moduleId === 'm-d034')!.matchedTerms).toEqual([
+      'negociation',
+    ]);
+
+    expect(axe.candidates[0]!.moduleId).toBe('m-d017');
+  });
+
+  it('et c’est bien le vocabulaire du besoin qui tranche, PAS l’alphabet — titres échangés', () => {
+    // LA variante discriminante. Sans elle, le test précédent ne prouverait rien :
+    // l'alphabet met déjà « Convaincre… » avant « Gérer… ». Ici le module accroché
+    // par `mandat` porte le titre alphabétiquement DERNIER.
+    expect('Analyser les objections'.localeCompare('Zoom sur le prix de rentrée', 'fr')).toBeLessThan(
+      0,
+    );
+
+    const axe = axeMandat([
+      mod('m-mandat-dernier', 'Zoom sur le prix de rentrée', VENDEUR, {
+        signals: [SIGNAL_MANDAT],
+      }),
+      mod('m-negociation-premier', 'Analyser les objections', VENDEUR, {
+        signals: [SIGNAL_TRANSFORMATION],
+      }),
+    ]);
+
+    expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
+    expect(axe.candidates[0]!.moduleId).toBe('m-mandat-dernier');
+  });
+
+  it('une PREUVE passe devant une PISTE : `signaux` avant `lexique`, même à score égal', () => {
+    // Le module « piste » est en plus un module SOCLE et porte le titre
+    // alphabétiquement premier : l'ancien comparateur le mettait donc devant par
+    // deux fois. La source du rapprochement passe maintenant avant les deux.
+    const axe = axeMandat([
+      mod('m-preuve', 'Convaincre le vendeur', VENDEUR, { signals: [SIGNAL_MANDAT] }),
+      mod('m-piste', 'Booster la vente en réunion', VENDEUR, { isFoundation: true }),
+    ]);
+
+    // 5 = 1 signal × 5  contre  5 = (« booster » + « vente » dans le titre) × 2 + 1 socle
+    expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
+    const preuve = axe.candidates.find((c) => c.moduleId === 'm-preuve')!;
+    const piste = axe.candidates.find((c) => c.moduleId === 'm-piste')!;
+    expect(preuve.matchSource).toBe('signaux');
+    expect(piste.matchSource).toBe('lexique');
+    expect('Booster la vente en réunion'.localeCompare('Convaincre le vendeur', 'fr')).toBeLessThan(
+      0,
+    );
+    expect(piste.isFoundation).toBe(true);
+
+    expect(axe.candidates[0]!.moduleId).toBe('m-preuve');
+  });
+
+  it('une confiance FORTE passe devant une FAIBLE, à score et source égaux', () => {
+    // Ce cas demande des poids < 1, donc une bibliothèque d'au moins 30 modules
+    // (`MIN_LIBRARY_FOR_WEIGHTING`) : en dessous, `confidence` ne peut pas être
+    // « faible » sur un candidat venu des signaux. On fabrique donc 40 modules où
+    //   • « mandat » touche 2 haystacks sur 40 (= 0,05) ⇒ poids 1 ;
+    //   • « vente » en touche 4 sur 40 (= 0,10)          ⇒ poids 0,6.
+    const REMPLISSEUR = rayon('DRV-999', 'Rayon de remplissage');
+    const library: LibraryModule[] = [
+      mod('m-forte', 'Zoom sur le prix de rentrée', VENDEUR, { signals: [SIGNAL_MANDAT] }),
+      mod('m-faible', 'Atelier mandat : cas pratiques', VENDEUR, {
+        signals: ['Transformation — la vente se conclut mal'],
+      }),
+      ...Array.from({ length: 3 }, (_, i) =>
+        mod(`m-vente-${i}`, `Conclure une vente ${i}`, REMPLISSEUR),
+      ),
+      ...Array.from({ length: 35 }, (_, i) =>
+        mod(`m-neutre-${i}`, `Module de remplissage ${i}`, REMPLISSEUR),
+      ),
+    ];
+    expect(library).toHaveLength(40);
+
+    const axe = axeMandat(library);
+    const forte = axe.candidates.find((c) => c.moduleId === 'm-forte')!;
+    const faible = axe.candidates.find((c) => c.moduleId === 'm-faible')!;
+
+    // 5 = 1 signal × poids 1 × 5   contre   5 = 0,6 × 5 + « mandat » dans le titre × 2
+    expect(forte.score).toBe(5);
+    expect(faible.score).toBe(5);
+    expect(forte.matchSource).toBe('signaux');
+    expect(faible.matchSource).toBe('signaux');
+    expect(forte.confidence).toBe('forte');
+    expect(faible.confidence).toBe('faible');
+    // L'alphabet dirait le contraire.
+    expect('Atelier mandat : cas pratiques'.localeCompare('Zoom sur le prix de rentrée', 'fr')).toBeLessThan(0);
+
+    expect(axe.candidates[0]!.moduleId).toBe('m-forte');
+  });
+
+  it('l’alphabet tranche encore — mais en DERNIER recours seulement', () => {
+    // Les deux candidats sont identiques sur les quatre premières clés : même
+    // score, même source, même confiance, tous deux accrochés par « mandat », et
+    // aucun des deux n'est socle. C'est le test qui interdit de supprimer le repli.
+    const axe = axeMandat([
+      mod('m-alpha-z', 'Travailler sa posture en rendez-vous', VENDEUR, {
+        signals: [SIGNAL_MANDAT],
+      }),
+      mod('m-alpha-a', 'Améliorer sa posture en rendez-vous', VENDEUR, {
+        signals: [SIGNAL_MANDAT],
+      }),
+    ]);
+
+    expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
+    expect(axe.candidates.map((c) => c.matchedTerms)).toEqual([['mandat'], ['mandat']]);
+    expect(axe.candidates.map((c) => c.moduleId)).toEqual(['m-alpha-a', 'm-alpha-z']);
+  });
+});

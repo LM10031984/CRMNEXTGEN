@@ -23,6 +23,7 @@ import { buildAuditData } from '../src/lib/diagnostic-r1/audit-builder';
 import { loadFundingRules } from '../src/lib/financement/load-rules';
 import { loadOfConfig } from '../src/lib/of-config';
 import { seedContent, seedPricing, conventionedHoursOf } from '../src/lib/proposition/builder';
+import { onSiteMinutesPerBlock } from '../src/lib/proposition/composer';
 import { resolveQualiopiMentions } from '../src/lib/docs/qualiopi-mentions';
 import { buildComposedProgramme } from '../src/lib/proposition/composed-programme';
 import { computePricing } from '../src/lib/proposition/pricing';
@@ -140,7 +141,13 @@ const pricing = seedPricing({
   halfDaysSold: composition.totalHalfDays,
 });
 const synthesis = computePricing({ pricing, rules });
-const quotes = buildQuoteDrafts({ pricing, synthesis, rules, validUntil: null });
+// `buildQuoteDrafts` ne prend plus `pricing` : la synthèse suffit. La sonde
+// n'avait pas suivi — invisible tant que ce dossier n'était pas type-vérifié.
+const quotes = buildQuoteDrafts({
+  synthesis,
+  proposalReference: `PROP-${d.reference}`,
+  onsiteHoursPerHalfDay: onSiteMinutesPerBlock(rules) / 60,
+});
 const sommeDevis = quotes.reduce((s, q) => s + q.lines.reduce((n, l) => n + l.quantity * l.unitPriceHt, 0), 0);
 
 console.log('\n=== Chiffrage ===');

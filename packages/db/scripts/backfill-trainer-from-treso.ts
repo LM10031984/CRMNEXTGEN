@@ -58,10 +58,11 @@ function excelSerialToDate(n: number): Date | null {
 
 function parseFRDate(s: string): Date | null {
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!m) return null;
-  let year = parseInt(m[3], 10);
+  const [, j, mo, an] = m ?? [];
+  if (j === undefined || mo === undefined || an === undefined) return null;
+  let year = parseInt(an, 10);
   if (year < 100) year += 2000;
-  const d = new Date(Date.UTC(year, parseInt(m[2], 10) - 1, parseInt(m[1], 10)));
+  const d = new Date(Date.UTC(year, parseInt(mo, 10) - 1, parseInt(j, 10)));
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -228,6 +229,9 @@ async function main() {
     console.error('❌ Tenant Start Academy introuvable');
     process.exit(1);
   }
+  // Repris dans une constante : le rétrécissement de type ne franchit pas la
+  // frontière d'une closure définie plus bas (`windowCount`).
+  const tenantId = tenant.id;
 
   const wb = XLSX.read(fs.readFileSync(FILE), { type: 'buffer', cellDates: false });
   const allRows: TresoRow[] = [];
@@ -503,7 +507,7 @@ async function main() {
     const max = new Date(row.startDate);
     max.setUTCDate(max.getUTCDate() + 5);
     return prisma.trainingSession.count({
-      where: { tenantId: tenant.id, startDate: { gte: min, lte: max } },
+      where: { tenantId, startDate: { gte: min, lte: max } },
     });
   }
 

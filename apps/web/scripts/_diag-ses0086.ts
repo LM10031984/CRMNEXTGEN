@@ -24,7 +24,7 @@ console.log('Participants :', s.participants.length);
 const byStatus: Record<string, number> = {};
 for (const p of s.participants) byStatus[p.enrollmentStatus] = (byStatus[p.enrollmentStatus]??0)+1;
 console.log('  par statut :', JSON.stringify(byStatus));
-console.log('  prix HT renseigné :', s.participants.filter(p=>p.priceHT && p.priceHT>0).length, '/', s.participants.length);
+console.log('  prix HT renseigné :', s.participants.filter((p) => p.priceHT !== null && Number(p.priceHT) > 0).length, '/', s.participants.length);
 
 const docs = await prisma.document.count({ where: { sessionId: s.id } });
 const assets = await prisma.pedagogicalAsset.count({ where: { sessionId: s.id } });
@@ -41,3 +41,5 @@ if (batches.length) {
   if (errJob) console.log('  1er err:', errJob.kind, '→', errJob.errorMessage);
 }
 await prisma.$disconnect();
+
+export {};

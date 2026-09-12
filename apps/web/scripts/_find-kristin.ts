@@ -15,3 +15,5 @@ for (const p of persons) {
   console.log(`SESSIONS ${p.firstName} ${p.lastName}:`, JSON.stringify(sps, null, 2));
 }
 await prisma.$disconnect();
+
+export {};

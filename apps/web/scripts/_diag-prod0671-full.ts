@@ -23,3 +23,5 @@ for (const [k,v] of Object.entries(p)) {
 console.log('\n--- programMd (400 chars) ---');
 console.log((p.programMd ?? '').slice(0,400));
 await prisma.$disconnect();
+
+export {};

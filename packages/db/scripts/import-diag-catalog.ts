@@ -28,6 +28,8 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { candidatsNxtCoach, premierEmplacementPorteur } from './lib/corpus-local.js';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 loadEnv({ path: path.resolve(REPO_ROOT, '.env') });
@@ -47,10 +49,26 @@ const TENANT_NAME = process.env.TENANT_DEFAULT_NAME ?? 'Start Academy';
  * Parcours « L'Agent Incomparable » — matière NXT coach (Annexe A de la spec).
  * Statut v0.9 : trous 🔴/🟠 non levés, manifeste explicite « NE PAS DIFFUSER ».
  * On l'importe pour qu'il soit visible et mappable, jamais actif.
+ *
+ * La matière a suivi le dépôt hors d'iCloud le 11/09/2026 : elle vit sous
+ * `~/Projects`. L'ancien chemin `~/Documents` EXISTE encore — iCloud y a laissé
+ * un dossier vide — et `existsSync` y réussissait, donc le script annonçait
+ * « matière introuvable » sur un dossier bien présent mais creux. On cherche
+ * maintenant le premier emplacement qui PORTE un module, avec le même helper que
+ * `trouverFaros()` et le même prédicat que `readAgentIncomparableModules()`
+ * ci-dessous : au moins une entrée `/^M\d_/`.
+ *
+ * `AGENT_INCOMPARABLE_DIR` explicite reste souverain. Repli sur le premier
+ * candidat quand rien ne porte, pour que l'avertissement existant (« ⚠️ Matière
+ * introuvable dans … — import sauté ») nomme un chemin.
  */
+const CANDIDATS_AGENT_INCOMPARABLE = candidatsNxtCoach('LIVRAISON_PARCOURS');
 const AGENT_INCOMPARABLE_DIR =
   process.env.AGENT_INCOMPARABLE_DIR ??
-  path.resolve(process.env.HOME ?? '', 'Documents/nxt-coach/Formation Faros/LIVRAISON_PARCOURS');
+  premierEmplacementPorteur(CANDIDATS_AGENT_INCOMPARABLE, (entrees) =>
+    entrees.some((e) => /^M\d_/.test(e)),
+  ) ??
+  CANDIDATS_AGENT_INCOMPARABLE[0]!;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types de l'instantané

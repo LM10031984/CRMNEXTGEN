@@ -23,7 +23,7 @@ interface DateOption {
   texte: string;
   /** « 09:00 – 13:00 » — ce que le participant doit bloquer dans son agenda. */
   horaire: string;
-  /** « 1 demi-journée · 4 h sur site · 8 h conventionnées » — même phrase que côté admin. */
+  /** « 1 demi-journée · 4 h sur site » — la phrase participant, sans heures conventionnées. */
   creneau: string;
   isRetained: boolean;
 }

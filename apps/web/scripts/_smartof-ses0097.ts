@@ -14,3 +14,5 @@ if (!hit.length) {
   console.log('\nAucune 097 — 5 sessions les plus récentes :');
   for (const s of sorted.slice(0,5)) console.log(`  ${s.customId||s.code||s.id} | ${s.name||s.title} | ${s.startDate}`);
 }
+
+export {};
