@@ -9,6 +9,10 @@ import { Pagination } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { SessionStatusBadgeMenu } from '@/components/sessions/session-status-badge-menu';
 import type { SessionStatus } from '@/server/actions/sessions-create';
+import {
+  LIBELLE_FILTRE_CONVENTIONS_SIGNEES,
+  WHERE_CONVENTIONS_SIGNEES,
+} from '@/lib/sessions/filtre-conventions-signees';
 
 const PAGE_SIZE = 25;
 
@@ -44,7 +48,12 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   }
   if (filter === 'cancelled') where.status = 'CANCELLED';
   if (filter === 'signed') {
-    where.status = { in: ['VALIDATED', 'IN_PROGRESS', 'COMPLETED'] };
+    // D-2, tranché au lot D. Ce filtre portait `status IN (VALIDATED,
+    // IN_PROGRESS, COMPLETED)` — aucun rapport avec une signature. Le critère
+    // vit désormais dans son module, avec son test : écrit ici, il n'était
+    // vérifiable qu'à la lecture, et c'est ainsi qu'il a survécu plusieurs lots
+    // en disant le contraire de son nom.
+    Object.assign(where, WHERE_CONVENTIONS_SIGNEES);
   }
   if (filter === 'ei') {
     where.participants = { some: { sponsorOrg: { legalForm: { in: ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'] } } } };
@@ -72,6 +81,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     noAttendeesCount,
     toInvoiceCount,
     totalParticipations,
+    signedCount,
   ] = await Promise.all([
     prisma.trainingSession.count({ where }),
     prisma.trainingSession.findMany({
@@ -123,6 +133,12 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
       },
     }),
     prisma.sessionParticipant.count({ where: { session: { tenantId: user.tenantId } } }),
+    // Le compte de la puce « Conventions signées » — MÊME critère que le
+    // filtre, par le même module : une puce qui annonce un nombre et en
+    // affiche un autre est pire qu'une puce absente.
+    prisma.trainingSession.count({
+      where: { tenantId: user.tenantId, ...WHERE_CONVENTIONS_SIGNEES },
+    }),
   ]);
 
   const subtitleParts = [
@@ -139,6 +155,15 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     { label: 'À facturer', href: hrefWith({ q, filter: 'to_invoice' }), active: filter === 'to_invoice', count: toInvoiceCount },
     { label: 'Terminées', href: hrefWith({ q, filter: 'completed' }), active: filter === 'completed', count: completedCount },
     { label: 'Avec EI', href: hrefWith({ q, filter: 'ei' }), active: filter === 'ei', count: eiCount },
+    // D-2 : la puce EXISTE désormais. Le filtre était atteignable par l'URL
+    // seule — donc personne ne pouvait constater qu'il répondait autre chose
+    // que son nom.
+    {
+      label: LIBELLE_FILTRE_CONVENTIONS_SIGNEES,
+      href: hrefWith({ q, filter: 'signed' }),
+      active: filter === 'signed',
+      count: signedCount,
+    },
     { label: 'Annulées', href: hrefWith({ q, filter: 'cancelled' }), active: filter === 'cancelled' },
   ];
 
