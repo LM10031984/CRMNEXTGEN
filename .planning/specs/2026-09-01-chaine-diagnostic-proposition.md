@@ -975,6 +975,40 @@ Arguments contractuels affichés d'office (blocs OPTIMO réels) : **montage admi
 
 ## 9. Les sorties documentaires
 
+### 9.0 Vocabulaire — la FICHE CATALOGUE et le PROGRAMME COMPOSÉ sont deux objets
+
+_Posé par Laurent le 12/09/2026, parce que les deux se confondaient dans les
+comptes rendus et que la confusion oriente le travail dans le mauvais sens._
+
+| | **Fiche catalogue** | **Programme composé** |
+|---|---|---|
+| Ce que c'est | la description d'une prestation vendue | un parcours assemblé pour UN client |
+| Qui la fabrique | un humain, une fois | le composeur, à chaque diagnostic |
+| Varie selon le client | **non** — la même pour tous | **oui** — c'est tout son objet |
+| Publiée | **oui**, `/catalogue` (produits `isActive`) | **jamais** |
+| Qui la lit | le prospect, et **l'auditeur Qualiopi** | le client concerné, et le financeur |
+| Porte des modules | pas nécessairement | oui, par construction |
+
+**Conséquence, et c'est le but de ce paragraphe :** un produit qui n'a pas de
+module n'est pas un produit incomplet — il lui manque seulement de quoi entrer
+dans le composeur. Sa **fiche** peut être parfaitement conforme sans qu'aucun
+module n'existe : l'indicateur 1 demande une information détaillée et
+vérifiable **par prestation** (objectifs, durée, prérequis, modalités, méthodes,
+évaluation, accessibilité, tarif, délais d'accès), et la fiche les porte toutes.
+
+Donc, face à un produit sans module, deux questions **distinctes**, à ne jamais
+fondre en une :
+
+1. **Sa fiche est-elle conforme ?** → question Qualiopi, réponse dans
+   `/catalogue`, traitée produit par produit.
+2. **Doit-il entrer dans le composeur ?** → question commerciale, qui suppose un
+   découpage en modules porteurs de signaux. **Elle ne se pose pas
+   systématiquement** : un produit peut rester vendable en direct, sur sa seule
+   fiche, sans jamais être composable.
+
+Écrire un programme sur mesure pour un produit dont on voulait seulement la
+fiche, c'est répondre à la question 2 quand on posait la question 1.
+
 ### 9.1 La proposition (« comme un devis, mais hyper détaillé »)
 
 **Le modèle de référence est la proposition OPTIMO du 11/08/2026** (`nxt-coach/Formation Faros/PROPOSITION-OPTIMO/`) — c'est le format qui a fait mouche en vrai, la maquette `2026-09-01-maquette-proposition.html` le systématise. Structure contractuelle du `contentJson` (schéma Zod `PropositionSchema`, port étendu du repo diag) :
