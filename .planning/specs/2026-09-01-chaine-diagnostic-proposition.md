@@ -772,6 +772,59 @@ pourquoi chaque module y est ne la passe pas.
 
 ---
 
+## 5.4 Un code produit n'est pas une adresse
+
+_Posé par Laurent le 12/09/2026, sur constat mesuré le même jour._
+
+`TrainingProduct.code` n'est unique que **par tenant** (`@@unique([tenantId, code])`),
+et **chaque base séquence indépendamment**. Le séquenceur de `crud-edits.ts` prend
+le plus grand numéro existant **dans SA base** : un produit de plus d'un côté, et
+toute la série décale d'un cran.
+
+Ce n'est pas théorique. Relevé du 12/09/2026 :
+
+| Code | en **production** | en **local `qualiof_dev`** |
+|---|---|---|
+| `PROD-0681` | « Catalogue diagnostic — Vendeur » (14 modules) | « L'Agent Incomparable — parcours M0 → M6 » (7 modules) |
+| `PROD-0682` | « L'Agent Incomparable — parcours M0 → M6 » (7 modules) | *n'existe pas* |
+
+**Le même code désigne deux produits différents.** Un script mis au point en local
+et rejoué en prod ne vise pas la même ligne — et il ne le dira pas : il trouvera
+bien un produit, un seul, portant ce code.
+
+### Les trois règles qui en découlent — non négociables
+
+1. **Toute opération sur la prod cible par `{ tenantId, code }` ET vérifie le
+   TITRE avant d'écrire.** « Exactement 1 ligne » ne suffit pas : *une ligne
+   unique peut être la mauvaise ligne*. Le compte prouve qu'on ne va pas écrire
+   en masse ; il ne prouve pas qu'on écrit au bon endroit.
+2. **Tout dry-run imprime le titre**, pour qu'un humain voie que c'est le bon
+   produit. C'est ce qui a rendu sûre l'écriture de `PROD-00661` le 12/09 : le
+   dry-run affichait « Communication digitale & Stratégie marketing pour activité
+   événementielle », et c'est un œil humain qui a validé, pas un compte de lignes.
+3. **Un ciblage par `code` seul est un défaut**, même quand il marche aujourd'hui.
+
+### Recensement du 12/09/2026 — les scripts à ciblage par code
+
+Relevé sur `apps/web/scripts/*.ts` et `packages/db/scripts/*.ts` suivis par git.
+**Liste, pas correctif** : chacun est à traiter sur décision, pas en série.
+
+| Script | Écrit ? | `tenantId` dans le ciblage | Codes visés |
+|---|---|---|---|
+| `_fill-prod0671.ts` | **🔴 oui** | **NON** — `findFirstOrThrow({ where: { code } })` puis `update` | `PROD-0671` |
+| `fix-data-ses-0086.ts` | **🔴 oui** | **NON** — `findFirst({ where: { code } })` | `PROD-0662`, `PROD-0671` |
+| `_create-optimmo-152h.ts` | 🔴 oui | oui (`tenantId_code`) | `PROD-0674` |
+| `_create-ses-0101.ts` | 🔴 oui | oui | `PROD-0058` |
+| `_gen-optimmo-152h-docs.ts` | 🔴 oui | oui | `PROD-0674` |
+| `_check-prod0671-frozen.ts` · `_diag-prod0671.ts` · `_diag-prod0671-full.ts` · `_dump-prod0671-prog.ts` · `_gen-deroule-cloud.ts` · `_q.ts` | 🟢 lecture | NON | `PROD-0671`, `PROD-0042`, `PROD-0058` |
+
+**Deux scripts écrivent sans scoper** : `_fill-prod0671.ts` et
+`fix-data-ses-0086.ts`. Aucun des deux ne mord aujourd'hui — la divergence
+mesurée commence à `PROD-0681`, et les codes qu'ils visent désignent le même
+produit dans les deux bases. **Rien ne les en empêche demain**, et c'est tout le
+propos : le jour où la série décale sous eux, ils écriront sur le mauvais produit
+sans une erreur.
+
 ## 6. Le diagnostic R1
 
 ### 6.1 Structure — 3 étages, pas 69 écrans
