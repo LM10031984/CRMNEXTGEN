@@ -276,3 +276,30 @@ fusion :
 3. **L'alerte J-15** : au premier passage du cron horaire, vérifier qu'elle ne
    part PAS en masse sur l'historique (la fenêtre est bornée aux sessions à
    venir, mais aucune n'a encore de `Task` marqueur).
+
+## Recette lot D sur l'aperçu (12/09/2026, branche feat/signature-lot-d)
+
+Préalable : base d'aperçu remise à niveau (`scripts/recette-apercu-migrate.sh`,
+7 migrations de main appliquées — l'aperçu du lot D plantait sinon).
+
+| Sujet | Constaté |
+|---|---|
+| D.1 certificat | ✅ lien « Certificat de signature » sur les 2 conventions signées → `/api/signature-requests/{id}/audit-trail?dl=1` — téléchargé : `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` (sans le nom du participant, alors que la PJ du dossier l'inclut : à harmoniser, mineur) |
+| D.2 composition | ✅ dossier de Julien (après facture FAC-000001 sur l'aperçu) : Convention **Signée** (PDF signé), Formulaire AGEFICE **Non signée**, Certificat joint `Certificat-de-signature-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf` |
+| D.3 écran | ✅ sans destinataire → bannière « Aucune adresse destinataire » ; avec une adresse → bannière « Dossier incomplet : Formulaire AGEFICE PA pré-rempli non signée… » + bouton « Envoyer quand même » (ADMIN). Aucun envoi effectué (catégorie OPCO décochée sur l'aperçu). |
+| D.8 fiche EI | ✅ fiche DEMO-SIG BERNARD Julien (EI) : responsable = l'apprenant avec son adresse, plus d'encart contradictoire |
+| D.5 cron J-15, D.7 bloc muet | non rejouables sur l'aperçu (pas de cron ; pas de participant sans régime dans la démo) — couverts par les tests, à observer en prod |
+
+### D-D-1 — libellé du destinataire AGEFICE périmé (mineur)
+Sous « Email destinataire » vide, l'aide dit encore « vérifie l'organisation
+sponsor (champ emailBilling) ». Pour un dossier AGEFICE la règle du lot D est le
+point d'accueil : dire « Point d'accueil AGEFICE non rattaché à l'organisation
+{nom} — renseignez son département / point d'accueil sur la fiche », avec le
+lien. Non bloquant pour la fusion.
+
+Certificat vérifié par Laurent (Provence Immobilier, enveloppe 1630502) : journal
+d'audit en français, SHA-256 origine/résultat, IP/appareil/heures par signataire ✅.
+### D-D-2 — nom du document chez DocuSeal en « .pdf.pdf » (cosmétique)
+Le journal d'audit affiche « Convention — Provence Immobilier (2 participants).pdf.pdf » :
+l'extension est ajoutée deux fois au nom transmis à `POST /submissions/pdf`. À
+corriger au passage (docuseal.ts, nom du document).
