@@ -30,16 +30,15 @@ import {
   markOpcoSubmissionStatus,
   type SubmissionAttachment,
 } from '@/server/actions/opco-submission';
+import { LIBELLES_PIECE_DOSSIER } from '@/lib/opco/pieces-dossier';
 
-const KIND_LABELS: Record<SubmissionAttachment['kind'], string> = {
-  CNI: 'Carte d\'identité',
-  RIB: 'RIB',
-  CFP_ATTESTATION: 'Attestation CFP URSSAF',
-  AGEFICE_PA_FORM: 'Formulaire AGEFICE PA',
-  CONVENTION: 'Convention de formation',
-  PROGRAMME: 'Programme pédagogique',
-  OTHER: 'Autre',
-};
+/**
+ * Les libellés viennent du module du dossier — lot D. Cet écran en portait une
+ * COPIE, et elle avait déjà divergé (« Formulaire AGEFICE PA » ici, « …
+ * pré-rempli » dans le corps du mail) : le financeur lisait donc un nom, et
+ * l'admin qui composait en lisait un autre.
+ */
+const KIND_LABELS = LIBELLES_PIECE_DOSSIER;
 
 interface Props {
   id: string;
