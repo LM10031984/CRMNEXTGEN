@@ -128,6 +128,55 @@ describe('resolveProductCode — la provenance décide, pas la forme', () => {
     expect(resolveProductCode({ uid: UID_SMARTOF, customId: null }, pris)).toBe('PROD-0677');
   });
 
+  // ── Un Custom ID VIDE n'est pas un Custom ID ABSENT ────────────────────────
+
+  it("REFUSE un Custom ID présent mais VIDE — c'est une erreur de source", () => {
+    // La distinction est tout le sujet. `customId: null` = la colonne n'est pas
+    // renseignée : provenance « nous », la série maison s'applique, c'est
+    // normal. `customId: ''` = la colonne EXISTE et ne porte rien : la source
+    // est cassée, et fabriquer un code par-dessus enterre le défaut.
+    //
+    // C'est ce que faisait le `||` de `import-from-smartof.ts` (l.695) :
+    // `p.customId?.trim() || 'PROD-…'` traitait la chaîne vide exactement
+    // comme l'absence, en silence.
+    const pris = new Set<string>(CODES_PROD_11_09);
+
+    expect(() => resolveProductCode({ uid: UID_SMARTOF, customId: '' }, pris)).toThrow(
+      /Custom ID/i,
+    );
+  });
+
+  it("REFUSE un Custom ID qui n'est QUE des espaces", () => {
+    // Le cas réel d'un export tableur : une cellule « vidée » garde souvent une
+    // espace. Sans ce cas, la garde se contourne d'un coup de barre d'espace.
+    const pris = new Set<string>(CODES_PROD_11_09);
+
+    expect(() => resolveProductCode({ uid: UID_SMARTOF, customId: '   ' }, pris)).toThrow(
+      /Custom ID/i,
+    );
+  });
+
+  it("NOMME la ligne source dans le refus — sinon le message est inutilisable", () => {
+    // Un import qui s'arrête sur « Custom ID vide » sans dire QUELLE ligne
+    // oblige à relire le classeur entier. L'UID est la seule adresse stable de
+    // la ligne source.
+    const pris = new Set<string>(CODES_PROD_11_09);
+
+    expect(() => resolveProductCode({ uid: UID_SMARTOF, customId: '' }, pris)).toThrow(
+      new RegExp(UID_SMARTOF),
+    );
+  });
+
+  it("DISTINGUE le vide de l'absence — `null` fabrique toujours, lui", () => {
+    // Le test discriminant (§4 ter) : si quelqu'un « corrige » le refus en
+    // rejetant aussi l'absence, l'import cesserait de fabriquer le moindre
+    // code et tout produit sans Custom ID serait perdu. Les deux comportements
+    // doivent coexister, et c'est ce que ce test fige.
+    const pris = new Set<string>(CODES_PROD_11_09);
+
+    expect(resolveProductCode({ uid: UID_SMARTOF, customId: null }, pris)).toBe('PROD-0676');
+  });
+
   // ── Le relevé lui-même, puisque le test le porte en dur ────────────────────
 
   it('le relevé du 11/09 porte bien 41 codes distincts, dont 7 FRM-*', () => {

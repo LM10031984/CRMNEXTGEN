@@ -474,15 +474,38 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
       updated++;
     } else {
       try {
-        const newProduct = await prisma.trainingProduct.create({ data });
-        await prisma.externalIdentity.create({
-          data: {
-            tenantId,
-            entityType: 'TrainingProduct',
-            entityId: newProduct.id,
-            source: 'smartof',
-            externalId: uid,
-          },
+        // Produit + identité externe + trace, ou rien. Les trois étaient des
+        // écritures séparées : un run interrompu entre la première et la
+        // deuxième laisse un produit qu'aucun import ne retrouvera par son UID,
+        // et que personne ne pourra dater. C'est l'état de `PROD-cdd22466` en
+        // production depuis le 21/08/2026.
+        await prisma.$transaction(async (tx) => {
+          const newProduct = await tx.trainingProduct.create({ data });
+          await tx.externalIdentity.create({
+            data: {
+              tenantId,
+              entityType: 'TrainingProduct',
+              entityId: newProduct.id,
+              source: 'smartof',
+              externalId: uid,
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              userId: null,
+              entity: 'TrainingProduct',
+              entityId: newProduct.id,
+              action: 'trainingProduct.create',
+              diff: {
+                source: 'import-smartof.ts',
+                smartofUid: uid,
+                code,
+                title,
+                provenanceCode: s(row['Custom ID']) ? 'Custom ID source' : 'série maison',
+              },
+            },
+          });
         });
         created++;
       } catch (err) {

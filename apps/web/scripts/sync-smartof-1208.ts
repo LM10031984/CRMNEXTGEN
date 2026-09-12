@@ -47,6 +47,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as XLSX from 'xlsx';
 import { prisma, LegalForm, LinkRole, Modality, SessionStatus, EnrollmentStatus, Prisma } from '@qualiof/db';
+import { resolveProductCode } from '@qualiof/db/product-code';
 import {
   cleanSiret,
   isValidSiret,
@@ -957,6 +958,15 @@ async function main() {
     idents.filter((i) => i.entityType === 'TrainingProduct').map((i) => [i.externalId, i.entityId]),
   );
   const pendingProductUids = new Set<string>(); // dédup des créations de produits en DRY
+  // Les codes produits déjà pris : ceux de la base ET ceux alloués pendant ce
+  // run. Le générateur partagé s'en sert pour continuer la série sans jamais
+  // réclamer un numéro existant — y compris en DRY, où rien n'est écrit mais
+  // où le rapport doit annoncer les codes qui SERAIENT posés.
+  const codesProduitsPris = new Set<string>(
+    (await prisma.trainingProduct.findMany({ where: { tenantId }, select: { code: true } })).map(
+      (x) => x.code,
+    ),
+  );
 
   for (const row of sesRows) {
     const uid = cell(row, 'UID');
@@ -1016,7 +1026,12 @@ async function main() {
       if (!productId && CREATE_MISSING_PRODUCTS && productUid) {
         const info = findProductInfoRow(productUid);
         const prodTitle = productName ?? cell(info ?? {}, 'Produit - Intitulé de la formation') ?? `Produit ${productUid.slice(0, 8)}`;
-        const prodCode = `PROD-${productUid.slice(0, 8)}`;
+        // Générateur UNIQUE : ce script fabriquait son propre repli
+        // hexadécimal, d'où `PROD-7a78c8b2`, `PROD-c0c85e08` et
+        // `PROD-f8be726b` en production. La source n'ayant pas de Custom ID
+        // ici, la provenance est « nous » : c'est la série maison.
+        const prodCode = resolveProductCode({ uid: productUid, customId: null }, codesProduitsPris);
+        codesProduitsPris.add(prodCode);
         const durationHours =
           Math.round(parseFloat(cell(info ?? {}, 'Produit - Durée de formation (en heures)') ?? '0')) || 0;
         if (!pendingProductUids.has(productUid)) {
@@ -1031,7 +1046,8 @@ async function main() {
             .split(/\n|•|- /)
             .map((o) => o.trim())
             .filter(Boolean);
-          const created = await prisma.trainingProduct.create({
+          const created = await prisma.$transaction(async (tx) => {
+          const prod = await tx.trainingProduct.create({
             data: {
               tenantId,
               code: prodCode,
@@ -1052,8 +1068,29 @@ async function main() {
               isActive: true,
             },
           });
-          await prisma.externalIdentity.create({
-            data: { tenantId, entityType: 'TrainingProduct', entityId: created.id, source: 'smartof', externalId: productUid },
+          // Produit + identité externe + trace, ou rien. Séparées, ces trois
+          // écritures laissent un produit orphelin quand le run s'arrête entre
+          // deux — c'est l'état de `PROD-cdd22466` en prod.
+          await tx.externalIdentity.create({
+            data: { tenantId, entityType: 'TrainingProduct', entityId: prod.id, source: 'smartof', externalId: productUid },
+          });
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              userId: null,
+              entity: 'TrainingProduct',
+              entityId: prod.id,
+              action: 'trainingProduct.create',
+              diff: {
+                source: 'sync-smartof-1208.ts',
+                smartofUid: productUid,
+                code: prodCode,
+                title: prodTitle,
+                provenanceCode: 'série maison',
+              },
+            },
+          });
+          return prod;
           });
           productIdByUid.set(productUid, created.id);
           productId = created.id;

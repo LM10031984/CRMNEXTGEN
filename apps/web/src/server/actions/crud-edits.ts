@@ -852,21 +852,53 @@ export async function createProduct(input: {
   }
   if (!code) return { ok: false, error: 'Impossible de générer un code unique (50 collisions). Réessaie.' };
 
-  const product = await prisma.trainingProduct.create({
-    data: {
-      tenantId: user.tenantId,
-      code,
-      title: input.title.trim(),
-      durationHours: input.durationHours,
-      modality: input.modality,
-      priceHT: input.priceHT ? new Prisma.Decimal(input.priceHT) : new Prisma.Decimal(0),
-      theme: input.theme?.trim() || null,
-      capacityMin: input.capacityMin ?? 1,
-      capacityMax: input.capacityMax ?? 12,
-      isActive: true,
-      objectives: [],
-      programMd: '',
-    },
+  // Le produit et sa TRACE, d'un seul geste.
+  //
+  // Jusqu'ici la naissance d'un produit n'était journalisée nulle part —
+  // relevé prod du 12/09/2026 : `PROD-0674`, créé depuis cet écran le 12/08, ne
+  // porte que deux `products.validate_ai_draft`, jamais sa création. Un produit
+  // apparaissait au catalogue sans que rien ne dise qui l'avait créé ni quand.
+  //
+  // L'auto-remplissage IA reste DEHORS, et volontairement : il dure 10 à 30 s
+  // contre Ollama. Le tenir dans la transaction garderait un verrou ouvert tout
+  // ce temps, et son échec — prévu, rattrapable depuis la fiche — annulerait un
+  // produit parfaitement valide.
+  const product = await prisma.$transaction(async (tx) => {
+    const cree = await tx.trainingProduct.create({
+      data: {
+        tenantId: user.tenantId,
+        code,
+        title: input.title.trim(),
+        durationHours: input.durationHours,
+        modality: input.modality,
+        priceHT: input.priceHT ? new Prisma.Decimal(input.priceHT) : new Prisma.Decimal(0),
+        theme: input.theme?.trim() || null,
+        capacityMin: input.capacityMin ?? 1,
+        capacityMax: input.capacityMax ?? 12,
+        isActive: true,
+        objectives: [],
+        programMd: '',
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        entity: 'TrainingProduct',
+        entityId: cree.id,
+        action: 'trainingProduct.create',
+        diff: {
+          source: 'createProduct',
+          code,
+          title: input.title.trim(),
+          durationHours: input.durationHours,
+          modality: input.modality,
+          priceHT: input.priceHT ?? 0,
+          autoFillWithAI: input.autoFillWithAI !== false,
+        },
+      },
+    });
+    return cree;
   });
 
   // Auto-fill IA : objectifs / public / prerequis / programme detaille via
