@@ -66,6 +66,25 @@ function plusGrandNumero(codes: Iterable<string>): number {
  *         `crud-edits.ts` : on vérifie avant d'écrire plutôt que d'écraser).
  */
 export function resolveProductCode(source: ProductCodeSource, taken: ReadonlySet<string>): string {
+  // Un Custom ID VIDE n'est pas un Custom ID ABSENT.
+  //
+  // `null` = la colonne n'est pas renseignée : provenance « nous », la série
+  // maison s'applique, c'est le cas normal. Une chaîne vide (ou blanche) veut
+  // dire que la colonne EXISTE et ne porte rien : la source est cassée, et
+  // fabriquer un code par-dessus enterre le défaut au lieu de le montrer.
+  //
+  // C'est ce que faisait le `||` de `import-from-smartof.ts` (l.695) :
+  // `p.customId?.trim() || \`PROD-…\`` traitait les deux cas à l'identique. Le
+  // `??` seul ne suffit pas non plus — il laisserait passer la chaîne vide
+  // jusqu'en base. D'où ce refus, ici, une fois pour les deux chemins.
+  if (source.customId !== null && source.customId.trim().length === 0) {
+    throw new Error(
+      `Custom ID vide sur la ligne source ${source.uid} : la colonne existe et ne ` +
+        `porte rien. Ce n'est pas une absence (qui ferait fabriquer un code de la ` +
+        `série), c'est une erreur de source — à corriger dans SmartOF, pas ici.`,
+    );
+  }
+
   // Provenance « fichier source » : verbatim, quelle que soit la forme.
   if (source.customId) return source.customId;
 
