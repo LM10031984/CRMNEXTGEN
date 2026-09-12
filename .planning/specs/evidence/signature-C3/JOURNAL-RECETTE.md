@@ -208,3 +208,12 @@ signer uniquement, avant/après affiché). SES-0112 affiche désormais 10 pièce
 ajoute une colonne de règle métier doit venir avec son backfill (ou un seed
 idempotent lancé au déploiement). L'amélioration « bloc muet → dire pourquoi »
 reste utile (financeur vraiment absent) et garde le numéro D-C3-4.
+
+### D-C3-5 — le certificat de signature n'est pas téléchargeable depuis l'écran
+
+`SignatureRequest.auditTrailUrl` est bien renseigné (signature-retour.ts télécharge
+et stocke le certificat en bucket, et l'envoie en PJ de « Votre exemplaire signé »),
+mais aucune ligne SIGNÉ n'offre de lien « Certificat de signature ». À faire au
+lot D (le dossier AGEFICE l'embarque) : lien à côté de « Ouvrir » sur une ligne
+signée, servi par une route équivalente à /api/documents/[id] avec nom parlant
+`…audit-trail.pdf`.
