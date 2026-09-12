@@ -254,6 +254,30 @@ La première tentative de mutation sur le garde des chemins en dur est restée
 avec `git add -N`, elle a rougi en nommant le fichier, puis reverdi après retrait.
 **La leçon s'applique d'abord à celui qui l'écrit.**
 
+### Un garde sur la PRÉSENCE d'un appel est une décoration
+
+Corollaire du même piège, relevé le 12/09/2026 — **deuxième fois de la semaine
+qu'un garde écrit pour attraper « le garde qui ne garde rien » en était un
+lui-même.**
+
+Le garde cherchait un `auditLog.create(` **quelconque** dans chaque chemin de
+création de produit. **Trois fichiers sur six étaient VERTS avant tout
+correctif** : ils journalisent déjà leurs personnes et leurs organisations. Le
+test mesurait la présence d'un import, pas la trace du produit.
+
+Durci en exigeant `entity: 'TrainingProduct'`, il restait une décoration pour
+`crud-edits.ts` : le fichier contenait déjà un tel bloc — celui de
+`products.validate_ai_draft` — **cinq cents lignes sous** la fonction visée. Un
+balayage de source ne distingue pas l'appel d'une opération de l'appel d'une
+AUTRE opération dans le même fichier.
+
+**La règle** : un garde doit porter sur l'appel **de ce chemin-là**, pas sur sa
+présence dans le fichier. Quand le balayage de source ne peut pas le prouver —
+et c'est le cas dès que deux opérations du même type cohabitent — il faut un
+test qui **appelle** le code. Et dans les deux cas, la mutation contre le code
+d'origine est ce qui tranche : un garde qui ne rougit pas contre le défaut
+qu'il prétend attraper ne l'attrape pas.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

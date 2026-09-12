@@ -83,7 +83,7 @@ describe('fiche session — les signataires de la demande remontent jusqu’au b
   it('la requête CHARGE les signataires : sans eux, il n’y a rien à afficher', () => {
     // La colonne Json `SignatureRequest.signers`, jointe au document — pas une
     // requête de plus : `sessionDocs` charge déjà tous les documents utiles.
-    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{ signers: true \} \}/);
+    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{[^}]*\bsigners: true\b/);
   });
 
   it('ils sont RELUS par le contrat partagé, jamais castés à la main', () => {
@@ -104,5 +104,50 @@ describe('fiche session — les signataires de la demande remontent jusqu’au b
   it('et ils sont PASSÉS à la vue : la substitution par un tableau vide doit rougir', () => {
     expect(pageSrc).toMatch(/signataires: signatairesDeLaDemande\(/);
     expect(pageSrc).not.toMatch(/signataires: \[\],/);
+  });
+});
+
+/* ── D-C3-5 — le certificat traverse-t-il la page ? ──────────────────────── */
+
+/**
+ * MÊME TROU, MÊME GARDE. `DocumentDeLaPiece.auditTrailUrl` est OBLIGATOIRE :
+ * l'oublier ne compile pas. Mais `auditTrailUrl: null` compile parfaitement et
+ * reproduit exactement l'écran d'avant — une ligne verte sans son certificat,
+ * et un dossier AGEFICE qu'il faut aller reconstituer dans sa boîte mail.
+ * C'est la SUBSTITUTION que `tsc` ne voit pas (lot C.2b-8, puis D-C3-1).
+ */
+describe('fiche session — le certificat de signature remonte jusqu’au bloc (D-C3-5)', () => {
+  it('la requête CHARGE la clé du certificat, sur la MÊME jointure que les signataires', () => {
+    // Une seconde jointure vers `signatureRequest` serait une requête de plus
+    // pour une colonne du même enregistrement.
+    expect(pageSrc).toMatch(/signatureRequest: \{ select: \{[^}]*\bauditTrailUrl: true\b/);
+    // Sur la MÊME jointure que les signataires : deux `signatureRequest:` dans
+    // le même `select` seraient une requête de plus pour deux colonnes du même
+    // enregistrement.
+    expect(pageSrc.match(/signatureRequest: \{ select:/g) ?? []).toHaveLength(1);
+  });
+
+  it('et elle est PASSÉE à la vue : la substitution par `null` doit rougir', () => {
+    expect(pageSrc).toMatch(/auditTrailUrl: d\.signatureRequest\?\.auditTrailUrl \?\? null,/);
+    expect(pageSrc).not.toMatch(/auditTrailUrl: null,/);
+  });
+});
+
+/* ── D-C3-4 — les inscrits SANS pièce traversent-ils la page ? ───────────── */
+
+/**
+ * `participants` est OBLIGATOIRE : l'oublier ne compile pas. Mais
+ * `participants: []` compile parfaitement et reproduit exactement l'écran du
+ * 12/09/2026 — un bloc muet devant cinq apprenants sans convention. C'est la
+ * SUBSTITUTION, encore, que `tsc` ne voit pas.
+ */
+describe('fiche session — les inscrits sans aucune pièce remontent au bloc (D-C3-4)', () => {
+  it('la liste passée est celle qui a nourri le plan, pas un tableau vide', () => {
+    expect(pageSrc).toMatch(/participants: participantsLus\.map\(\(lu\) => \(\{/);
+    expect(pageSrc).not.toMatch(/participants: \[\],/);
+  });
+
+  it('elle porte de quoi NOMMER le participant — sans nom, l’encart ne dit rien', () => {
+    expect(pageSrc).toMatch(/participantId: lu\.participantId,\n\s*nomAffiche: lu\.nomAffiche,/);
   });
 });

@@ -759,7 +759,11 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
     try {
       creation = await provider.createRequest({
         name: `${envoi.libelle} — ${contexte.sessionCode}`,
-        documents: [{ name: `${envoi.libelle}.pdf`, pdf }],
+        // ⚠ SANS EXTENSION (D-D-2, recette du 12/09/2026). `POST /submissions/pdf`
+        // pose l'extension lui-même : la donner produisait « Convention —
+        // Provence Immobilier (2 participants).pdf.pdf » dans le journal
+        // d'audit — c'est-à-dire sur la preuve même qu'on remet au financeur.
+        documents: [{ name: envoi.libelle, pdf }],
         signers,
         externalId: signatureRequestId,
         expiresAt,

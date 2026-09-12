@@ -176,3 +176,157 @@ remis à `true` (12/09, pris au prochain déploiement). Reste au moment de la
 fusion : retirer le webhook DocuSeal de l'aperçu et poser en Production
 `DOCUSEAL_*` (clé du compte EU, `whsec_` d'un webhook prod sans bypass, URL
 `https://<prod>/api/webhooks/docuseal`), `WEASYPRINT_URL` déjà en prod.
+
+## Mise en prod (12/09/2026)
+
+PR #55 fusionnée (squash 099828f) après résolution des conflits avec main ; Vercel
+prod Ready, « Deploy migrations #68 » vert (11 migrations additives). Variables
+Production posées : SIGNATURE_PROVIDER, DOCUSEAL_BASE_URL (config),
+DOCUSEAL_API_KEY, DOCUSEAL_WEBHOOK_SECRET (secrets, collés par Laurent) ; webhook
+DocuSeal basculé sur https://qualiof.vercel.app/api/webhooks/docuseal ; curl →
+401 signature-invalide ✓. DocuSeal Pro souscrit.
+
+### D-C3-4 — bloc muet quand aucun participant n'a de régime (constaté prod SES-0112)
+
+5 apprenants « Agence », conventions individuelles, bloc Signature réduit à la
+zone de dépôt : `regle === null` pour tous (financeur absent sur le commanditaire
+ou commanditaire absent) → aucune pièce, et AUCUN avertissement faute de signal
+(pas de lien EI_SELF, pas d'autre org ouvrant la pièce). Le cas Marion sans son
+signal. À faire : quand `financeurSansRegime` est vrai pour un participant, le
+bloc affiche « Aucun financeur renseigné pour {commanditaire} → rien à signer »
+avec le lien vers la fiche organisation (même mécanique que
+`composerAvertissementRegime`), ou « inscription sans commanditaire » avec le
+lien vers l'inscription.
+
+**Correctif D-C3-4, cause réelle** : ce n'était pas un défaut de données mais un
+**backfill manquant** — la migration `signature_regime_financement` est additive,
+les trois colonnes SignerRole d'OpcoCatalog étaient NULL en prod pour les 6
+financeurs (le seed ne tourne qu'en local/aperçu). Rattrapé le 12/09 par
+`packages/db/scripts/backfill-signer-roles.ts` (SEED_ALLOW_PROD=1, colonnes
+signer uniquement, avant/après affiché). SES-0112 affiche désormais 10 pièces
+(5 conventions EI + 5 dossiers AGEFICE). Leçon pour /prod : une migration qui
+ajoute une colonne de règle métier doit venir avec son backfill (ou un seed
+idempotent lancé au déploiement). L'amélioration « bloc muet → dire pourquoi »
+reste utile (financeur vraiment absent) et garde le numéro D-C3-4.
+
+### D-C3-5 — le certificat de signature n'est pas téléchargeable depuis l'écran
+
+`SignatureRequest.auditTrailUrl` est bien renseigné (signature-retour.ts télécharge
+et stocke le certificat en bucket, et l'envoie en PJ de « Votre exemplaire signé »),
+mais aucune ligne SIGNÉ n'offre de lien « Certificat de signature ». À faire au
+lot D (le dossier AGEFICE l'embarque) : lien à côté de « Ouvrir » sur une ligne
+signée, servi par une route équivalente à /api/documents/[id] avec nom parlant
+`…audit-trail.pdf`.
+
+## Lot D — les trois défauts d'écran soldés (12/09/2026, `feat/signature-lot-d`)
+
+Branche partie d'`origin/main` à jour. ⚠ Le dernier commit de
+`feat/signature-docs-signes` (`5785996b` — script `backfill-signer-roles.ts` et
+entrée D-C3-4 ci-dessus) n'était PAS dans `origin/main` : la PR #55 a été
+fusionnée en squash AVANT lui. Il a été reporté par cherry-pick, sans quoi le
+rattrapage de production joué le 12/09 aurait disparu du dépôt.
+
+### D-C3-3 — RÉSOLU
+
+La fiche organisation appelait `resoudreRepresentantEntreprise`, le chemin des
+AGENCES, pour une entreprise individuelle dont l'apprenant signe. Elle suit
+désormais la cascade EI_SELF, dans le même ordre que le moteur (`estEiSelf`
+avant `representative`). Le critère est le **rôle du `LegalLink`**, celui que
+`estEiSelfChezSponsor` lit aussi — pas `legalForm === 'EI'`, qui aurait été un
+second critère pour une même question. Message d'absence d'adresse réécrit : il
+envoie vers la **fiche apprenant**, jamais vers « le contact qui porte ce nom »,
+qui n'existe pas sur ce chemin.
+
+### D-C3-4 — RÉSOLU
+
+Le moteur a raison de se taire quand `regle === null` : il n'a rien
+d'INCOHÉRENT à signaler. C'est la VUE qui parle désormais — elle seule voit la
+différence entre « rien à signer » et « on ne sait pas quoi signer ».
+`construireVueSignature` reçoit `participants` (prop OBLIGATOIRE) et compose un
+encart par inscrit laissé de côté, avec la MÊME mécanique de lien que
+l'avertissement de régime. La condition `muet` du bloc intègre le cas : c'est
+là que SES-0112 s'était joué — avec zone de dépôt le bloc s'affichait mais
+réduit, sans elle il disparaissait.
+
+### D-C3-5 — RÉSOLU
+
+Route `GET /api/signature-requests/[id]/audit-trail` (décalquée de
+`/api/documents/[id]` : auth, scope tenant, 404 indiscernable, redirection
+Supabase / proxy MinIO, `?dl=1`, `no-store`) et lien « Certificat de signature »
+À CÔTÉ d'« Ouvrir ». Le lien n'existe que s'il mène quelque part : un scan
+déposé à la main est signé sans qu'aucun certificat existe.
+
+⚠ **Défaut trouvé en cours de lot** : deux certificats d'un même dossier
+portaient le même nom de fichier (un dossier AGEFICE porte deux demandes). Le
+nom porte désormais la pièce couverte — `Certificat-de-signature-Convention-…`
+vs `Certificat-de-signature-Dossier-AGEFICE-…`.
+
+### Ce qui reste à jouer sur l'aperçu
+
+Le lot D n'a pas été rejoué en recette : les trois gates sont verts
+(lint, `tsc`, 3636 tests) et toutes les mutations exécutées sont rouges, mais
+aucun envoi RÉEL n'a été fait depuis ces changements. À vérifier à la
+fusion :
+
+1. **Le certificat se télécharge** depuis une ligne signée, et porte le nom
+   attendu — c'est le seul point où la redirection Supabase peut encore faire
+   perdre le nom.
+2. **Un dossier AGEFICE composé** porte bien les pièces SIGNÉES, ses deux
+   certificats sous deux noms distincts, et le point d'accueil en destinataire.
+3. **L'alerte J-15** : au premier passage du cron horaire, vérifier qu'elle ne
+   part PAS en masse sur l'historique (la fenêtre est bornée aux sessions à
+   venir, mais aucune n'a encore de `Task` marqueur).
+
+## Recette lot D sur l'aperçu (12/09/2026, branche feat/signature-lot-d)
+
+Préalable : base d'aperçu remise à niveau (`scripts/recette-apercu-migrate.sh`,
+7 migrations de main appliquées — l'aperçu du lot D plantait sinon).
+
+| Sujet | Constaté |
+|---|---|
+| D.1 certificat | ✅ lien « Certificat de signature » sur les 2 conventions signées → `/api/signature-requests/{id}/audit-trail?dl=1` — téléchargé : `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` (sans le nom du participant, alors que la PJ du dossier l'inclut : à harmoniser, mineur) |
+| D.2 composition | ✅ dossier de Julien (après facture FAC-000001 sur l'aperçu) : Convention **Signée** (PDF signé), Formulaire AGEFICE **Non signée**, Certificat joint `Certificat-de-signature-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf` |
+| D.3 écran | ✅ sans destinataire → bannière « Aucune adresse destinataire » ; avec une adresse → bannière « Dossier incomplet : Formulaire AGEFICE PA pré-rempli non signée… » + bouton « Envoyer quand même » (ADMIN). Aucun envoi effectué (catégorie OPCO décochée sur l'aperçu). |
+| D.8 fiche EI | ✅ fiche DEMO-SIG BERNARD Julien (EI) : responsable = l'apprenant avec son adresse, plus d'encart contradictoire |
+| D.5 cron J-15, D.7 bloc muet | non rejouables sur l'aperçu (pas de cron ; pas de participant sans régime dans la démo) — couverts par les tests, à observer en prod |
+
+### D-D-1 — libellé du destinataire AGEFICE périmé (mineur)
+Sous « Email destinataire » vide, l'aide dit encore « vérifie l'organisation
+sponsor (champ emailBilling) ». Pour un dossier AGEFICE la règle du lot D est le
+point d'accueil : dire « Point d'accueil AGEFICE non rattaché à l'organisation
+{nom} — renseignez son département / point d'accueil sur la fiche », avec le
+lien. Non bloquant pour la fusion.
+
+Certificat vérifié par Laurent (Provence Immobilier, enveloppe 1630502) : journal
+d'audit en français, SHA-256 origine/résultat, IP/appareil/heures par signataire ✅.
+### D-D-2 — nom du document chez DocuSeal en « .pdf.pdf » (cosmétique)
+Le journal d'audit affiche « Convention — Provence Immobilier (2 participants).pdf.pdf » :
+l'extension est ajoutée deux fois au nom transmis à `POST /submissions/pdf`. À
+corriger au passage (docuseal.ts, nom du document).
+
+### Retouches d'avant-fusion (12/09/2026)
+
+- **Plancher du cron J-15** — `ALERTE_J15_DEPUIS = 27/09/2026 (minuit à Paris)`.
+  Les sessions déjà dans la fenêtre à la mise en service sont traitées à la main :
+  sans plancher, la première exécution aurait alerté d'un coup sur toutes, et
+  une alerte qui commence par une salve est une alerte qu'on filtre. 12/09 + 15
+  jours = 27/09 : au-delà, toute session entrée dans la fenêtre y sera entrée
+  APRÈS la mise en service. Le plancher passe AVANT toute autre raison de se
+  taire, pour que les compteurs du cron ne disent pas « sans inscrit » d'une
+  session simplement hors périmètre.
+- **D-D-1** — l'aide sous un destinataire vide vient désormais du module :
+  « Point d'accueil AGEFICE non rattaché à {organisation} … » pour l'AGEFICE,
+  « Aucune adresse de facturation pour {organisation} … » sinon, avec le lien
+  vers la fiche. L'ancienne nommait une colonne (`emailBilling`) et était
+  périmée depuis le lot D.
+- **D-D-2** — le nom du document transmis à `POST /submissions/pdf` n'a plus
+  d'extension : le prestataire la pose lui-même, d'où le « .pdf.pdf » lu dans le
+  journal d'audit — c'est-à-dire sur la preuve remise au financeur.
+- **Nom du certificat, un seul des deux côtés** — la route lisait le participant
+  sur le `Document` (nul pour une convention de groupe), le dossier le lisait sur
+  l'inscription qu'il compose. D'où deux noms pour un fichier. Les deux appellent
+  maintenant `personnesCouvertesParLaPiece` + `personneDuCertificat` : un
+  certificat porte un nom de personne quand la demande ne couvre QU'ELLE.
+  Corollaire — le défaut symétrique du dossier disparaît : le certificat d'une
+  convention de groupe ne prend plus le nom de l'inscrit dont on ouvre le
+  dossier (un fichier, autant de noms que de salariés).

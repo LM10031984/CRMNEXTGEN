@@ -19,15 +19,37 @@ import { validateRequest } from '@/lib/auth';
 import { sendMail } from '@/lib/mailer';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
+import {
+  nomFichierCertificat,
+  personneDuCertificat,
+  personnesCouvertesParLaPiece,
+} from '@/lib/signature/certificat-signature';
+import {
+  LIBELLES_PIECE_DOSSIER,
+  messageDossierIncomplet,
+  piecesNonSignees,
+  versionAJoindre,
+  type KindPieceDossier,
+} from '@/lib/opco/pieces-dossier';
+import { resoudreDestinataireDossier } from '@/lib/opco/destinataire-dossier';
 
 export interface SubmissionAttachment {
   /** clé MinIO du fichier */
   key: string;
   filename: string;
   /** kind = DocType-like pour la sémantique métier */
-  kind: 'CNI' | 'RIB' | 'CFP_ATTESTATION' | 'AGEFICE_PA_FORM' | 'CONVENTION' | 'PROGRAMME' | 'OTHER';
+  kind: KindPieceDossier;
   /** Inclure (true par défaut) ou non dans l'envoi */
   included: boolean;
+  /**
+   * Lot D — cette pièce porte-t-elle une signature ?
+   *
+   * Écrit au moment de la composition, relu à l'envoi : c'est lui qui décide du
+   * refus « dossier incomplet ». Optionnel parce que les dossiers composés
+   * AVANT le lot D n'en portent pas — absent vaut « on ne sait pas », donc
+   * jamais bloquant rétroactivement sur un brouillon déjà préparé.
+   */
+  signe?: boolean;
 }
 
 export interface ComposeResult {
@@ -37,6 +59,14 @@ export interface ComposeResult {
   attachments?: SubmissionAttachment[];
   /** Pièces manquantes (à ajouter manuellement avant envoi) */
   missing?: SubmissionAttachment['kind'][];
+  /**
+   * Lot D — pourquoi aucune adresse n'a pu être pré-remplie. Non nul EXACTEMENT
+   * quand `recipientEmail` est resté vide : l'admin doit savoir s'il manque un
+   * point d'accueil AGEFICE ou une adresse sur la fiche organisation.
+   */
+  avertissementDestinataire?: string | null;
+  /** Lot D — les pièces exigées présentes au dossier mais non signées. */
+  nonSignees?: SubmissionAttachment['kind'][];
   error?: string;
 }
 
@@ -60,7 +90,9 @@ export async function composeOpcoSubmission(
     where: { id: participantId, session: { tenantId: user.tenantId } },
     include: {
       person: { include: { sensitiveData: true } },
-      sponsorOrg: { include: { ageficeProfile: true } },
+      // Lot D : le POINT D'ACCUEIL rattaché. C'est lui le destinataire d'un
+      // dossier AGEFICE — le commanditaire, lui, est l'entreprise du stagiaire.
+      sponsorOrg: { include: { ageficeProfile: { include: { pointAccueil: true } } } },
       session: { include: { product: true } },
     },
   });
@@ -77,6 +109,8 @@ export async function composeOpcoSubmission(
       filename: `CNI_${participant.person.lastName}_${participant.person.firstName}.pdf`,
       kind: 'CNI',
       included: true,
+      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+      signe: false,
     });
   } else {
     missing.push('CNI');
@@ -89,6 +123,8 @@ export async function composeOpcoSubmission(
       filename: `RIB_${participant.person.lastName}_${participant.person.firstName}.pdf`,
       kind: 'RIB',
       included: true,
+      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+      signe: false,
     });
   } else {
     missing.push('RIB');
@@ -101,6 +137,8 @@ export async function composeOpcoSubmission(
       filename: `Attestation_CFP_${participant.person.lastName}.pdf`,
       kind: 'CFP_ATTESTATION',
       included: true,
+      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+      signe: false,
     });
   } else {
     missing.push('CFP_ATTESTATION');
@@ -128,8 +166,35 @@ export async function composeOpcoSubmission(
         ),
       ],
     },
-    select: { type: true, pdfUrl: true, participantId: true },
+    select: {
+      type: true,
+      pdfUrl: true,
+      participantId: true,
+      // La FORME DE STOCKAGE — elle dit qui la pièce couvre, donc qui nommer
+      // sur son certificat (correction du 12/09 : le même fichier sortait sous
+      // deux noms selon qu'on le téléchargeait ou qu'on le recevait).
+      entityType: true,
+      entityId: true,
+      // Lot D — règle métier n°2 : le PDF signé fait foi. Jusqu'ici le dossier
+      // partait avec la convention VIERGE alors que la signée existait à côté.
+      signedPdfUrl: true,
+      // Règle métier n°3 : le certificat est une pièce à part entière, et c'est
+      // ce que les AGEFICE réclament. Il appartient à la DEMANDE, pas au
+      // document — jointure, pas requête de plus.
+      signatureRequest: { select: { id: true, auditTrailUrl: true } },
+    },
     orderBy: { createdAt: 'desc' },
+  });
+
+  // Les inscrits de la session — ils servent UNIQUEMENT à savoir qui une
+  // convention de GROUPE couvre, donc qui nommer sur son certificat. Une seule
+  // requête, et seulement des noms.
+  const participantsSession = await prisma.sessionParticipant.findMany({
+    where: { sessionId: participant.session.id },
+    select: {
+      sponsorOrgId: true,
+      person: { select: { firstName: true, lastName: true } },
+    },
   });
 
   const conventionDocs = docs.filter((d) => d.type === 'CONVENTION');
@@ -141,41 +206,105 @@ export async function composeOpcoSubmission(
   const programmeDoc = docs.find((d) => d.type === 'PROGRAMME');
 
   if (conventionDoc) {
+    const version = versionAJoindre(conventionDoc);
     attachments.push({
-      key: conventionDoc.pdfUrl,
+      key: version.key,
       filename: `Convention_${participant.session.code ?? 'session'}.pdf`,
       kind: 'CONVENTION',
       included: true,
+      signe: version.signe,
     });
   } else {
     missing.push('CONVENTION');
   }
 
   if (programmeDoc) {
+    const version = versionAJoindre(programmeDoc);
     attachments.push({
-      key: programmeDoc.pdfUrl,
+      key: version.key,
       filename: `Programme_${participant.session.code ?? 'session'}.pdf`,
       kind: 'PROGRAMME',
       included: true,
+      signe: version.signe,
     });
   } else {
     missing.push('PROGRAMME');
   }
 
   if (ageficeDoc) {
+    const version = versionAJoindre(ageficeDoc);
     attachments.push({
-      key: ageficeDoc.pdfUrl,
+      key: version.key,
       filename: `AGEFICE_PA_${participant.person.lastName}.pdf`,
       kind: 'AGEFICE_PA_FORM',
       included: true,
+      signe: version.signe,
     });
   } else {
     missing.push('AGEFICE_PA_FORM');
   }
 
-  // Email destinataire
-  const recipientEmail =
-    participant.sponsorOrg.emailBilling ?? participant.sponsorOrg.email ?? null;
+  // ── Les CERTIFICATS de signature — règle métier n°3 ─────────────────────
+  //
+  // UN PAR DEMANDE, pas un par pièce : une demande peut porter plusieurs
+  // documents, et son certificat les couvre tous. Le joindre deux fois mettrait
+  // deux pièces jointes identiques dans le mail du financeur.
+  //
+  // L'ORDRE suit celui des pièces du dossier (convention, puis AGEFICE) : c'est
+  // l'ordre dans lequel un instructeur les dépile.
+  const certificatsVus = new Set<string>();
+  for (const source of [conventionDoc, ageficeDoc]) {
+    const demande = source?.signatureRequest ?? null;
+    const cle = (demande?.auditTrailUrl ?? '').trim();
+    if (demande === null || cle.length === 0) continue;
+    if (certificatsVus.has(demande.id)) continue;
+    certificatsVus.add(demande.id);
+    attachments.push({
+      key: cle,
+      // Le MÊME nom que celui servi par `/api/signature-requests/[id]/audit-trail` :
+      // l'admin retrouve dans le mail du financeur le fichier qu'il a téléchargé.
+      // ⚠ LE NOM VIENT DE LA PORTÉE DE LA PIÈCE, pas du dossier qu'on compose.
+      // Avant, le certificat d'une convention de groupe prenait le nom de
+      // l'inscrit dont on ouvrait le dossier : autant de noms que de salariés
+      // pour UN seul fichier — et un nom différent de celui que servait la
+      // route. Même module, même règle, des deux côtés.
+      filename: nomFichierCertificat({
+        docType: source?.type,
+        ...(personneDuCertificat(
+          personnesCouvertesParLaPiece({
+            piece: {
+              entityType: source?.entityType ?? null,
+              entityId: source?.entityId ?? null,
+              participant:
+                source?.participantId === participant.id ? participant.person : null,
+            },
+            participantsSession,
+          }),
+        ) ?? {}),
+        sessionCode: participant.session.code,
+      }),
+      kind: 'AUDIT_TRAIL',
+      included: true,
+      // Le certificat n'est pas « signé » : il EST la preuve de la signature.
+      signe: false,
+    });
+  }
+
+  // ── Le DESTINATAIRE — lot D ─────────────────────────────────────────────
+  //
+  // Un dossier AGEFICE se dépose auprès d'un POINT D'ACCUEIL, pas auprès du
+  // commanditaire : celui-ci est l'entreprise individuelle du stagiaire, et
+  // l'application proposait donc de lui envoyer son propre dossier. La règle
+  // vit dans `resoudreDestinataireDossier`, sous test unitaire — sans repli
+  // silencieux sur l'entreprise, parce qu'un envoi parti au mauvais endroit ne
+  // se rattrape pas.
+  const destinataire = resoudreDestinataireDossier({
+    opcoCode: participant.sponsorOrg.opcoCode,
+    pointAccueil: participant.sponsorOrg.ageficeProfile?.pointAccueil ?? null,
+    emailBilling: participant.sponsorOrg.emailBilling,
+    email: participant.sponsorOrg.email,
+  });
+  const recipientEmail = destinataire.email;
 
   // Subject + body défaut
   const opcoCode = participant.sponsorOrg.opcoCode ?? 'OPCO';
@@ -230,24 +359,33 @@ ${
     submissionId: submission.id,
     attachments,
     missing,
+    avertissementDestinataire: destinataire.motif,
+    nonSignees: piecesNonSignees(
+      attachments.map((a) => ({ kind: a.kind, signe: a.signe === true })),
+    ),
   };
 }
 
-const ATTACHMENT_LABELS: Record<SubmissionAttachment['kind'], string> = {
-  CNI: 'Carte d\'identité',
-  RIB: 'RIB',
-  CFP_ATTESTATION: 'Attestation CFP URSSAF',
-  AGEFICE_PA_FORM: 'Formulaire AGEFICE PA pré-rempli',
-  CONVENTION: 'Convention de formation',
-  PROGRAMME: 'Programme pédagogique',
-  OTHER: 'Autre',
-};
+/**
+ * Les libellés viennent du module du dossier — ils servent aussi au message de
+ * refus et à l'écran. Trois copies finiraient par se contredire sous les yeux
+ * du financeur.
+ */
+const ATTACHMENT_LABELS = LIBELLES_PIECE_DOSSIER;
 
 /**
  * Envoie un OpcoSubmission DRAFT via SMTP nodemailer. Bascule status=SENT.
  */
 export async function sendOpcoSubmission(
   submissionId: string,
+  options: {
+    /**
+     * Lot D — envoyer MALGRÉ une pièce non signée. C'est une DÉCISION, pas un
+     * contournement : réservée à ADMIN, comme les autres dérogations du
+     * chantier signature (la saisie d'adresse au récapitulatif d'envoi).
+     */
+    force?: boolean;
+  } = {},
 ): Promise<{ ok: boolean; error?: string; dryRun?: boolean }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
@@ -264,6 +402,33 @@ export async function sendOpcoSubmission(
   const attachments = (sub.attachments as unknown as SubmissionAttachment[]).filter((a) => a.included);
   if (attachments.length === 0) return { ok: false, error: 'Aucune pièce jointe à envoyer' };
 
+  // ── JAMAIS D'ENVOI PARTIEL SILENCIEUX (lot D) ───────────────────────────
+  //
+  // Une convention non signée dans un dossier de financement, c'est un dossier
+  // refusé — et refusé des semaines plus tard, quand la session est passée. Le
+  // refus est NOMINATIF : il dit quelle pièce, et les deux gestes qui la
+  // corrigent.
+  //
+  // `signe` absent vaut « on ne sait pas » : les brouillons composés AVANT ce
+  // lot ne portent pas l'information, et les bloquer rétroactivement
+  // immobiliserait des dossiers déjà préparés.
+  const nonSignees = piecesNonSignees(
+    attachments.filter((a) => a.signe !== undefined).map((a) => ({ kind: a.kind, signe: a.signe === true })),
+  );
+  if (nonSignees.length > 0) {
+    if (options.force !== true) {
+      return { ok: false, error: messageDossierIncomplet(nonSignees) };
+    }
+    if (user.role !== 'ADMIN') {
+      return {
+        ok: false,
+        error:
+          `${messageDossierIncomplet(nonSignees)} Seul un ADMIN peut décider d’envoyer ` +
+          'un dossier incomplet.',
+      };
+    }
+  }
+
   // Récupère les bytes des PJ depuis MinIO
   const mailAttachments = await Promise.all(
     attachments.map(async (a) => ({
@@ -276,13 +441,26 @@ export async function sendOpcoSubmission(
   // ne référence que des clés de stockage : on remonte aux ids pour que la
   // trace d'envoi soit exploitable (règle « document engagé »). Les pièces sans
   // ligne Document (CNI / RIB / CFP) ne résolvent rien, et c'est normal.
+  //
+  // ⚠ LES DEUX CLÉS, depuis le lot D. La recherche ne portait que sur `pdfUrl` ;
+  // depuis que les pièces partent dans leur version SIGNÉE, aucune clé ne
+  // correspondait plus et la trace se vidait EN SILENCE — on n'aurait jamais su
+  // quelle version était partie chez le financeur.
+  const clesJointes = attachments.map((a) => a.key);
   const joinedDocuments = await prisma.document.findMany({
-    where: { tenantId: user.tenantId, pdfUrl: { in: attachments.map((a) => a.key) } },
+    where: {
+      tenantId: user.tenantId,
+      OR: [{ pdfUrl: { in: clesJointes } }, { signedPdfUrl: { in: clesJointes } }],
+    },
     select: { id: true },
   });
 
   const result = await sendMail({
     to: sub.recipientEmail,
+    // L'EXPÉDITEUR EN COPIE (Laurent, 10/09) : « le mail arrive aussi dans sa
+    // boîte, avec les pièces ». Pas un `mailto:` — il ne joint pas de fichiers
+    // de façon fiable — et pas un second envoi, qui doublerait la trace.
+    ...(user.email ? { cc: user.email } : {}),
     subject: sub.subject,
     html: sub.bodyHtml,
     attachments: mailAttachments,
