@@ -72,7 +72,15 @@ function splitDureeByModality(
 
 export async function generateAgeficeForParticipant(
   participantId: string,
-  options?: { force?: boolean },
+  options?: {
+    force?: boolean;
+    /**
+     * Lot C.2a-2 — pose l'ancre de signature du DEMANDEUR. Le formulaire garde
+     * l'image de signature de l'OF : une seule partie signe électroniquement ce
+     * dossier (spec §3). C'est `fillAgeficePdf` qui en décide, pas l'appelant.
+     */
+    signatureTags?: boolean;
+  },
 ): Promise<{ ok: boolean; documentId?: string; error?: string; warnings?: string[] }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
@@ -371,7 +379,7 @@ export async function generateAgeficeForParticipant(
   // ── Génère le PDF ────────────────────────────────────────────
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = await fillAgeficePdf(data);
+    pdfBuffer = await fillAgeficePdf({ ...data, signatureTags: options?.signatureTags === true });
   } catch (e: any) {
     return { ok: false, error: `Erreur génération PDF AGEFICE : ${e?.message ?? e}`, warnings };
   }

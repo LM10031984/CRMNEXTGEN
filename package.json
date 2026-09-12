@@ -14,12 +14,16 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "db:migrate": "pnpm --filter @qualiof/db prisma migrate dev",
-    "db:seed": "pnpm --filter @qualiof/db prisma db seed",
-    "db:studio": "pnpm --filter @qualiof/db prisma studio",
-    "db:reset": "pnpm --filter @qualiof/db prisma migrate reset",
+    "db:migrate": "pnpm --filter @qualiof/db run db:migrate:local",
+    "db:seed": "pnpm --filter @qualiof/db run db:seed:local",
+    "db:studio": "pnpm --filter @qualiof/db run db:studio:local",
+    "db:reset": "pnpm --filter @qualiof/db run db:reset:local",
     "import:smartof": "pnpm --filter @qualiof/web exec tsx scripts/import-smartof.ts",
-    "db:smoke:cloud": "dotenv -e .env -- pnpm --filter @qualiof/web exec tsx scripts/db-smoke-cloud.ts"
+    "db:smoke:cloud": "dotenv -e .env -- pnpm --filter @qualiof/web exec tsx scripts/db-smoke-cloud.ts",
+    "db:deploy": "pnpm --filter @qualiof/db run db:deploy:local",
+    "db:deploy:prod": "pnpm --filter @qualiof/db run db:deploy:prod",
+    "db:seed:prod": "pnpm --filter @qualiof/db run db:seed:prod",
+    "db:studio:prod": "pnpm --filter @qualiof/db run db:studio:prod"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

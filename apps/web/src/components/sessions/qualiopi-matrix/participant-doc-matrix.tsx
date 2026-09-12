@@ -18,11 +18,18 @@
  *
  * Colonnes :
  *   columns = [...MATRIX_DOC_TYPES, ...(hasAgeficeParticipant ? ['AGEFICE'] : [])]
- *   → 14 ou 15 colonnes selon présence d'au moins 1 participant AGEFICE
- *     (sponsorOrg.opcoCode === 'AGEFICE').
+ *   → 14 ou 15 colonnes. La décision revient à la PAGE, qui la prend avec
+ *     `colonneAgeficeVisible` (régime OU document existant OU avertissement).
  *
- * Cas AGEFICE par-ligne : si la colonne AGEFICE est présente mais
- * `!participant.isAgefice` → cellule { state: 'NA' } (pastille grise — pas applicable).
+ * LE « NA » NE SE DÉCIDE PLUS ICI (lot C.2b-1, décision Laurent du 10/09/2026).
+ * Ce composant portait sa propre règle en dur — `if (docType === 'AGEFICE' &&
+ * !p.isAgefice) return NA` — qui écrasait jusqu'au document existant : un
+ * dossier généré disparaissait de l'écran, et un dossier qui disparaît ne se
+ * corrige jamais. La règle vit désormais dans le régime de financement
+ * (`lib/signature/participants-regime.ts` → `docTypesSansObjet`), et arrive
+ * ici comme une DONNÉE, `docTypesHorsRegime`, passée à `deriveCellState`.
+ * Celui-ci ne rend `NA` qu'en DERNIER RECOURS, après avoir cherché partout :
+ * une pièce hors régime dont le PDF existe reste affichée telle quelle.
  */
 
 import { Users } from 'lucide-react';
@@ -40,6 +47,11 @@ export interface MatrixParticipant {
   financingMode?: string | null;
   docStatus: Record<string, unknown> | null;
   isAgefice: boolean;
+  /**
+   * Pièces SANS OBJET sous le régime de financement de ce participant (lot C.1
+   * + C.2b-1). Absent = comportement d'avant, aucun `NA` dérivé du régime.
+   */
+  docTypesHorsRegime?: ReadonlySet<string>;
   /** Map docType → Document.id (entityType='participant', match entityId). */
   participantDocs: Map<string, { id: string }>;
   /** Map kind → PedagogicalAsset.id (participantId match). */
@@ -89,11 +101,6 @@ export function ParticipantDocMatrix({
   // aux MatrixRow client.
   const rows = participants.map((p) => {
     const cells: Array<{ docType: string; state: CellState }> = columns.map((docType) => {
-      // AGEFICE : si la colonne AGEFICE est présente mais ce participant
-      // n'est pas affilié AGEFICE → NA explicite (pas MISSING).
-      if (docType === 'AGEFICE' && !p.isAgefice) {
-        return { docType, state: { state: 'NA' as const } };
-      }
       const state = deriveCellState(
         docType,
         // docStatus est un Json BDD → on cast via `as never` pour satisfaire
@@ -104,6 +111,9 @@ export function ParticipantDocMatrix({
         sessionDocs,
         p.pedagogicalAssets,
         flags,
+        // Le 8ᵉ paramètre, livré en C.1 et que PERSONNE ne passait : sans lui,
+        // `NA` n'apparaissait jamais et le régime restait invisible à l'écran.
+        p.docTypesHorsRegime,
       );
       return { docType, state };
     });

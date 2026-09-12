@@ -529,7 +529,7 @@ describe('generateConventionEntrepriseCore — convergence des deux formes', () 
  * chaîne vide passer jusqu'au PDF. Une convention sans signataire n'est pas
  * opposable — elle ne doit pas pouvoir être produite.
  */
-describe('generateConventionEntrepriseCore — représentant légal', () => {
+describe('generateConventionEntrepriseCore — responsable de l’organisation', () => {
   const BASE = {
     id: 'org-1', legalName: 'EXPERTA', siret: '81234567800042', siren: null,
     legalForm: 'SARL', address: { city: 'Nice' },
@@ -589,7 +589,7 @@ describe('generateConventionEntrepriseCore — représentant légal', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/EXPERTA/);
-    expect(res.error).toMatch(/représentant/i);
+    expect(res.error).toMatch(/responsable/i);
     expect(res.error).toMatch(/opposable/i);
     expect(res.error).toContain('/app/organisations/org-1');
     // Le refus tombe AVANT tout rendu et toute écriture.

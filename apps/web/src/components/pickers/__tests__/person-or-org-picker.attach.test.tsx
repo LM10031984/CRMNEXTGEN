@@ -115,7 +115,7 @@ describe('PersonOrOrgPicker — apprenant sans casquette', () => {
  * semaines plus tard la convention d'entreprise était refusée faute de
  * signataire, sans que rien n'ait signalé le manque au bon moment.
  *
- * Test de puissance : retirer le champ « Représentant légal » du formulaire, ou
+ * Test de puissance : retirer le champ « Responsable » du formulaire, ou
  * cesser de le transmettre à `createOrganization`, fait virer ce test au rouge.
  */
 describe('PersonOrOrgPicker — création d’entreprise depuis la session', () => {
@@ -129,7 +129,7 @@ describe('PersonOrOrgPicker — création d’entreprise depuis la session', () 
     await ouvrirFormulaireCreation();
     expect(screen.getByLabelText(/Raison sociale/i)).toBeDefined();
     expect(screen.getByLabelText(/Forme juridique/i)).toBeDefined();
-    expect(screen.getByLabelText(/Représentant légal/i)).toBeDefined();
+    expect(screen.getByLabelText(/Responsable/i)).toBeDefined();
     expect(screen.getByLabelText(/SIRET/i)).toBeDefined();
     expect(screen.getByLabelText(/^Adresse$/i)).toBeDefined();
     expect(screen.getByLabelText(/Code postal/i)).toBeDefined();
@@ -144,7 +144,7 @@ describe('PersonOrOrgPicker — création d’entreprise depuis la session', () 
       target: { value: "AGENCE DE L'OLIVIER" },
     });
     fireEvent.change(screen.getByLabelText(/Forme juridique/i), { target: { value: 'SAS' } });
-    fireEvent.change(screen.getByLabelText(/Représentant légal/i), {
+    fireEvent.change(screen.getByLabelText(/Responsable/i), {
       target: { value: 'Olivier Martin' },
     });
     fireEvent.change(screen.getByLabelText(/SIRET/i), { target: { value: '83879522700019' } });

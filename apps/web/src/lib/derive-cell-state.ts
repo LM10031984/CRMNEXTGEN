@@ -74,6 +74,7 @@ export interface CellFlagSets {
  *   3. pedagogicalAssets (PedagogicalAsset participant + kind)
  *   4. sessionDocs (Document.entityType='session')
  *   5. productDocs (Document.entityType='product' — PROGRAMME, etc.) ← Bug P0
+ *   6 bis. hors régime de financement (lot C.1 signature) → NA
  *   6. MISSING
  *
  * Cas dérogatoire D-01 : `MANUAL_OK + markedOkWithoutUpload=true` → warning='no_proof'.
@@ -87,6 +88,18 @@ export interface CellFlagSets {
  * @param flags Ensembles qualifiant les documents (lot 0). Optionnel : un
  *   appelant qui ne les passe pas retrouve exactement le comportement d'avant,
  *   sans « à jour » de complaisance.
+ * @param docTypesHorsRegime DocTypes SANS OBJET pour ce participant, au vu du
+ *   régime de financement de son financeur (spec signature §3 bis, D-10 —
+ *   `docTypesHorsRegime` de `lib/signature/regime.ts`).
+ *
+ *   Ne s'applique qu'en DERNIER RECOURS, juste avant `MISSING` : une pièce hors
+ *   régime qui existe malgré tout (Document généré, scan déposé) reste affichée
+ *   telle quelle. `MISSING` appelle une action, `NA` dit qu'il n'y a rien à
+ *   faire — confondre les deux fait courir l'admin après des pièces qui
+ *   n'existent pas.
+ *
+ *   Paramètre optionnel : un appelant qui ne le passe pas retrouve exactement le
+ *   comportement d'avant.
  */
 export function deriveCellState(
   docType: string,
@@ -96,6 +109,7 @@ export function deriveCellState(
   sessionDocs: Map<string, { id: string }>,
   pedagogicalAssets: Map<string, { id: string }>,
   flags?: CellFlagSets,
+  docTypesHorsRegime?: ReadonlySet<string>,
 ): CellState {
   const manual = participant.docStatus?.[docType];
 
@@ -139,6 +153,10 @@ export function deriveCellState(
   const prodDoc = productDocs.get(docType);
   if (prodDoc)
     return { state: 'GENERATED', pdfRef: { kind: 'productDoc', id: prodDoc.id }, ...qualifie(prodDoc.id) };
+
+  // Dernier recours, et seulement ici : aucune trace nulle part ET la pièce n'a
+  // pas d'objet sous le régime de financement du participant. Rien à réclamer.
+  if (docTypesHorsRegime?.has(docType)) return { state: 'NA' };
 
   return { state: 'MISSING' };
 }

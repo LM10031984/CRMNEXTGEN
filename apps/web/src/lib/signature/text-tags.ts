@@ -21,7 +21,12 @@
  * d'un côté = champ orphelin de l'autre : d'où la constante unique.
  */
 export const SIGNATURE_ROLES = {
-  /** Dirigeant de l'entreprise bénéficiaire — convention entreprise. */
+  /**
+   * Le responsable de l'organisation bénéficiaire — convention entreprise.
+   * (Vocabulaire fixé le 11/09/2026 : le champ `representative` dit qui signe
+   * les conventions, pas une qualité juridique. Le nom du RÔLE, `Client`, ne
+   * bouge pas : il est imprimé dans les gabarits et attendu par le prestataire.)
+   */
   CLIENT: 'Client',
   /** Le stagiaire lui-même — dossier AGEFICE, attestation d'assiduité. */
   STAGIAIRE: 'Stagiaire',

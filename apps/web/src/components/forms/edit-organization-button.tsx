@@ -1,7 +1,18 @@
 'use client';
 
+import { useCallback } from 'react';
+import type { Route } from 'next';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { EditModal } from './edit-modal';
 import { updateOrganization } from '@/server/actions/crud-edits';
+import { LIBELLE_RESPONSABLE_ORGANISATION } from '@/lib/organisations/responsable-organisation';
+import {
+  LIBELLE_CHAMP_FINANCEUR_ORG,
+  NOM_CHAMP_FINANCEUR_ORG,
+  PARAM_CHAMP,
+  champFinanceurEnEvidence,
+  queryApresEditionOrganisation,
+} from '@/lib/sessions/lien-renseigner-financeur';
 
 // Auto-entrepreneur = EI au régime micro (depuis 2016), une seule option
 // "Auto-entrepreneur" qui couvre les 2. En base on stocke AUTO_ENTREPRENEUR
@@ -35,6 +46,17 @@ const TYPE_OPTIONS = [
   { value: 'Sous-traitant', label: 'Sous-traitant' },
 ];
 
+/**
+ * ⚠ CETTE MODALE S'OUVRE AUSSI PAR L'URL (correction n°7 bis, Laurent
+ * 11/09/2026). Le bloc « Signature » d'une fiche session porte un lien
+ * « Renseigner le financeur de {organisation} → » pour le cas où le
+ * commanditaire est le BON et qu'il lui manque son code financeur. Ce cas-là
+ * n'a rien à corriger sur l'inscription : il doit atterrir ICI, sur CE champ.
+ *
+ * Un `useState` local ne franchissait pas cette distance — d'où
+ * `ouvertParUrl` / `champEnEvidence` / `onFermeture` sur `<EditModal>`, et le
+ * contrat d'URL publié dans `@/lib/sessions/lien-renseigner-financeur`.
+ */
 export function EditOrganizationButton({
   organizationId,
   current,
@@ -62,10 +84,36 @@ export function EditOrganizationButton({
     addressCity?: string | null;
   };
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const ouvertParUrl = champFinanceurEnEvidence(searchParams?.get(PARAM_CHAMP));
+
+  /**
+   * Refermer : `champ=` est effacé — sinon la modale se rouvrirait au rendu
+   * suivant — et `from=` est PRÉSERVÉ, sans quoi le bouton « Retour à la
+   * session » perdrait sa destination au moment précis où l'on veut s'en
+   * servir. `router.refresh()` remplace le `window.location.reload()` de
+   * `<EditModal>` : il rafraîchit la fiche sans relire la barre d'adresse.
+   */
+  const fermer = useCallback(() => {
+    if (ouvertParUrl) {
+      const qs = queryApresEditionOrganisation(
+        new URLSearchParams(searchParams?.toString() ?? ''),
+      );
+      router.replace((qs.length > 0 ? `${pathname}?${qs}` : pathname) as Route);
+    }
+    router.refresh();
+  }, [ouvertParUrl, pathname, router, searchParams]);
+
   return (
     <EditModal
       buttonLabel="Éditer la fiche"
       title="Éditer l'organisation"
+      ouvertParUrl={ouvertParUrl}
+      champEnEvidence={ouvertParUrl ? NOM_CHAMP_FINANCEUR_ORG : null}
+      onFermeture={fermer}
       fields={[
         { name: 'legalName', label: 'Raison sociale', defaultValue: current.legalName, required: true },
         {
@@ -79,10 +127,17 @@ export function EditOrganizationButton({
           // Placé juste après la forme juridique, et pas en bas de liste : c'est
           // LE champ dont l'absence fait refuser la convention d'entreprise
           // (« Représentée par , » n'est pas opposable).
+          //
+          // ⚠ « Responsable », PAS « Représentant légal » (Laurent, 11/09/2026).
+          // Le second affirme une qualité juridique que la donnée ne porte pas :
+          // pour un salarié, le signataire de la convention est le RESPONSABLE
+          // D'AGENCE, désigné ici, pas nécessairement le mandataire social. Le
+          // libellé vient du module de vocabulaire pour que la fiche et la
+          // modale ne puissent pas diverger.
           name: 'representative',
-          label: 'Représentant légal',
+          label: LIBELLE_RESPONSABLE_ORGANISATION,
           defaultValue: current.representative,
-          placeholder: 'Signe la convention — ex : Olivier MARTIN, gérant',
+          placeholder: 'Signe les conventions — ex : Olivier MARTIN, responsable d’agence',
         },
         { name: 'siret', label: 'SIRET', defaultValue: current.siret, placeholder: '14 chiffres' },
         { name: 'siren', label: 'SIREN', defaultValue: current.siren, placeholder: '9 chiffres' },
@@ -100,8 +155,13 @@ export function EditOrganizationButton({
         { name: 'email', label: 'Email', defaultValue: current.email },
         { name: 'phone', label: 'Téléphone', defaultValue: current.phone },
         {
-          name: 'opcoCode',
-          label: 'OPCO de rattachement',
+          // ⚠ « Financeur », PAS « OPCO de rattachement » : cette colonne porte
+          // aussi l'AGEFICE, qui n'est pas un OPCO — et c'est le mot que
+          // l'écran de signature emploie (« Renseigner le financeur de … »).
+          // Un lien qui promet « le financeur » et atterrit sur un champ nommé
+          // autrement fait douter qu'on soit au bon endroit.
+          name: NOM_CHAMP_FINANCEUR_ORG,
+          label: LIBELLE_CHAMP_FINANCEUR_ORG,
           type: 'select',
           options: OPCO_OPTIONS,
           defaultValue: current.opcoCode,

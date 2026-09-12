@@ -26,7 +26,14 @@ vi.mock('@qualiof/db', () => ({
       findMany: vi.fn(),
     },
     trainingSession: { findUnique: vi.fn(), findFirst: vi.fn() },
-    document: { deleteMany: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    document: {
+      deleteMany: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      // Lot C.2b-3 — « une pièce, un seul chemin ouvert » : le dépôt commence
+      // par chercher un envoi en signature à annuler. `null` = rien en cours,
+      // c'est-à-dire le cas de tous les scans de ce fichier (émargement).
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -49,6 +56,7 @@ vi.mock('@/lib/document-audit', () => ({ logDocumentEvent: vi.fn().mockResolvedV
 vi.mock('@/lib/storage', () => ({
   DOCS_BUCKET: 'qualiof-docs',
   uploadFile: vi.fn().mockResolvedValue({ key: 'k', bucket: 'qualiof-docs', size: 1 }),
+  downloadFile: vi.fn(),
 }));
 
 vi.mock('@/lib/pdf-split', () => ({
@@ -58,6 +66,23 @@ vi.mock('@/lib/pdf-split', () => ({
 
 // Hermétisme (cf. 17-02) : ces modules exécutent createEnv au load.
 vi.mock('@/lib/pdf-render', () => ({ renderHtmlToPdf: vi.fn(), renderHtmlToPdfWeasy: vi.fn() }));
+// Depuis le lot C.2b-3, le dépôt d'un scan peut annuler un envoi en signature :
+// `qualiopi-matrix` importe `signature-envoi` → `@/lib/signature/provider`, qui
+// lit `@qualiof/shared/env` au chargement. Remplacé ENTIÈREMENT, sans
+// `importActual` — même remède que `signature-annulation.test.ts`.
+vi.mock('@/lib/signature/provider', () => {
+  class SignatureNotConfiguredError extends Error {}
+  return { getSignatureProvider: vi.fn(), SignatureNotConfiguredError };
+});
+vi.mock('@/lib/of-config', () => ({ loadOfConfig: vi.fn() }));
+vi.mock('@/lib/closure/convention-core', () => ({
+  generateConventionCore: vi.fn(),
+  generateConventionEntrepriseCore: vi.fn(),
+}));
+vi.mock('../agefice-attendance-generator', () => ({
+  generateAgeficeAttendanceForParticipant: vi.fn(),
+}));
+vi.mock('../convocation-generator', () => ({ generateConvocationForParticipant: vi.fn() }));
 vi.mock('../closure-pack', () => ({ generateClosurePack: vi.fn() }));
 vi.mock('../convention-generator', () => ({ generateConventionForParticipant: vi.fn() }));
 vi.mock('../agefice-generator', () => ({ generateAgeficeForParticipant: vi.fn() }));
@@ -70,6 +95,8 @@ import { logDocumentEvent } from '@/lib/document-audit';
 import { uploadFile } from '@/lib/storage';
 import { splitPdfPages } from '@/lib/pdf-split';
 import { uploadSignedScans } from '../qualiopi-matrix';
+import { messageDepotAnnuleraitEnvoi } from '@/lib/signature/envoi-contrats';
+import { getSignatureProvider } from '@/lib/signature/provider';
 
 const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
 const participantFindMany = prisma.sessionParticipant.findMany as unknown as ReturnType<typeof vi.fn>;
@@ -78,6 +105,8 @@ const executeRaw = prisma.$executeRaw as unknown as ReturnType<typeof vi.fn>;
 const uploadFileMock = uploadFile as unknown as ReturnType<typeof vi.fn>;
 const logDocumentEventMock = logDocumentEvent as unknown as ReturnType<typeof vi.fn>;
 const splitPdfPagesMock = splitPdfPages as unknown as ReturnType<typeof vi.fn>;
+const documentFindFirst = prisma.document.findFirst as unknown as ReturnType<typeof vi.fn>;
+const getSignatureProviderMock = getSignatureProvider as unknown as ReturnType<typeof vi.fn>;
 
 const TENANT_ID = '11111111-1111-4111-8111-111111111111';
 const USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -85,6 +114,10 @@ const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const P1 = '44444444-4444-4444-8444-444444444444';
 const P2 = '55555555-5555-4555-8555-555555555555';
 const P3 = '66666666-6666-4666-8666-666666666666';
+/** Un UUID RÉEL : `annulerEnvoiSignature` valide l'entrée par Zod avant tout.
+ *  Avec un identifiant factice, la chaîne s'arrêtait sur le schéma et le test
+ *  ne prouvait rien de ce qu'il annonçait (constaté par mutation). */
+const REQ_ID = '77777777-7777-4777-8777-777777777777';
 
 function participantRow(id: string) {
   return { id, sessionId: SESSION_ID, session: { code: 'SES-0010' }, docStatus: null };
@@ -275,5 +308,74 @@ describe('uploadSignedScans — mode split (A.2)', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain('page');
     expect(uploadFileMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Lot C.2b-3 — « une pièce, un seul chemin ouvert », vu depuis la ZONE DE DÉPÔT.
+ *
+ * CE QUE CETTE ENTRÉE NE PEUT PAS FAIRE, et pourquoi c'est assumé. La zone de
+ * dépôt traite N fichiers pour N stagiaires d'un coup. Elle ne peut pas montrer,
+ * pièce par pièce, ce qu'une annulation d'envoi coûterait — et une confirmation
+ * globale « oui, annulez tout ce qu'il faut » serait exactement la confirmation
+ * aveugle que la règle interdit.
+ *
+ * Elle ne confirme donc JAMAIS. Une pièce partie en signature ressort en
+ * `failures`, avec le message du moteur qui renvoie au bloc « Signature », où la
+ * question se pose une par une. Les autres fichiers du lot passent : le dépôt
+ * reste tolérant par fichier, comme depuis le lot A.
+ */
+describe('uploadSignedScans — une pièce partie en signature ne part pas en douce', () => {
+  it('PUISSANCE — le fichier visant une pièce en attente de signature RESSORT en échec, sans rien écrire', async () => {
+    documentFindFirst.mockResolvedValue({ id: 'doc-1', signatureRequestId: REQ_ID });
+
+    const r = await uploadSignedScans(
+      makeFormData({
+        docType: 'ASSIDUITE',
+        files: [pdfFile('assiduite-dupont.pdf')],
+        participantIds: [P1],
+      }),
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.saved).toBe(0);
+    expect(r.failures).toHaveLength(1);
+    // Le message du moteur, IMPORTÉ : il nomme le geste (passer par le bloc
+    // « Signature »), ce qu'un « Enregistrement impossible » ne ferait pas.
+    // ⚠ CETTE ASSERTION VIENT EN PREMIER, ET C'EST DÉLIBÉRÉ. Elle a été ajoutée
+    // après mutation : le test n'assertait que le LIBELLÉ du refus, et
+    // rougissait donc pour la mauvaise raison — avec un provider mocké qui ne
+    // rend rien, une zone de dépôt qui confirmerait d'office échouerait quand
+    // même, sur un AUTRE message. Le test gardait la forme du refus, pas le
+    // fait que l'annulation n'ait jamais été TENTÉE. Placée après, elle n'aurait
+    // jamais été atteinte : la première assertion en échec arrête le test.
+    expect(getSignatureProviderMock).not.toHaveBeenCalled();
+
+    expect(r.failures[0]!.error).toBe(messageDepotAnnuleraitEnvoi());
+    expect(uploadFileMock).not.toHaveBeenCalled();
+    expect(executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('PUISSANCE — les AUTRES fichiers du même lot passent : le refus est par pièce', async () => {
+    participantFindMany.mockResolvedValueOnce([participantRow(P1), participantRow(P2)]);
+    // Seule la pièce de P1 est partie en signature.
+    documentFindFirst.mockImplementation(async (args: { where?: { participantId?: string } }) =>
+      args?.where?.participantId === P1 ? { id: 'doc-1', signatureRequestId: REQ_ID } : null,
+    );
+
+    const r = await uploadSignedScans(
+      makeFormData({
+        docType: 'ASSIDUITE',
+        files: [pdfFile('assiduite-p1.pdf'), pdfFile('assiduite-p2.pdf')],
+        participantIds: [P1, P2],
+      }),
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.saved).toBe(1);
+    expect(r.failures).toHaveLength(1);
+    expect(uploadFileMock).toHaveBeenCalledTimes(1);
   });
 });

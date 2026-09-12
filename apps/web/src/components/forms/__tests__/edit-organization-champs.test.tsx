@@ -18,13 +18,32 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
  *
  * Règle que ce test protège : ce que la fiche AFFICHE doit être ÉDITABLE.
  *
- * Test de puissance : retirer le champ « Représentant légal » du dialogue, ou
- * cesser de le transmettre à `updateOrganization`, fait virer ce test au rouge.
+ * Test de puissance : retirer le champ « Responsable — signe les conventions »
+ * du dialogue, ou cesser de le transmettre à `updateOrganization`, fait virer ce
+ * test au rouge.
+ *
+ * ⚠ LE LIBELLÉ A CHANGÉ le 11/09/2026 (demande n°1 de Laurent), pas le champ.
+ * « Représentant légal » affirmait une qualité juridique que la donnée ne porte
+ * pas : pour un salarié, le signataire de la convention est le responsable
+ * d'agence, désigné dans ce même champ. La colonne `representative` et la
+ * cascade de `representant.ts` sont INCHANGÉES — c'est du vocabulaire.
+ *
+ * ⚠ VALEUR LITTÉRALE, jamais `LIBELLE_RESPONSABLE_ORGANISATION` importé : un
+ * test qui compare un libellé à la constante que le composant affiche laisse les
+ * deux côtés bouger ensemble et ne garde plus rien (règle de test n°2,
+ * `.claude/commands/signature.md`).
  */
 
 const { updateOrganizationMock } = vi.hoisted(() => ({ updateOrganizationMock: vi.fn() }));
 vi.mock('@/server/actions/crud-edits', () => ({ updateOrganization: updateOrganizationMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+// Depuis la correction n°7 bis (11/09/2026), la modale peut s'ouvrir par l'URL :
+// le composant lit `useSearchParams` / `useRouter`, indisponibles hors App Router.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
+  usePathname: () => '/app/organisations/org-1',
+}));
 
 const ACTUEL = {
   legalName: "AGENCE DE L'OLIVIER",
@@ -60,10 +79,10 @@ async function ouvrirDialogue() {
 }
 
 describe('Éditer l’organisation — tout ce que la fiche affiche est saisissable', () => {
-  it('expose le représentant légal, le RCS, le Type et l’adresse', async () => {
+  it('expose le responsable, le RCS, le Type et l’adresse', async () => {
     await ouvrirDialogue();
     for (const libelle of [
-      /Représentant légal/i,
+      /^Responsable — signe les conventions$/,
       /^RCS$/i,
       /^Type$/i,
       /^Adresse$/i,
@@ -82,10 +101,10 @@ describe('Éditer l’organisation — tout ce que la fiche affiche est saisissa
     }
   });
 
-  it('transmet le représentant et l’adresse à l’enregistrement', async () => {
+  it('transmet le responsable et l’adresse à l’enregistrement', async () => {
     await ouvrirDialogue();
 
-    fireEvent.change(screen.getByLabelText(/Représentant légal/i), {
+    fireEvent.change(screen.getByLabelText(/^Responsable — signe les conventions$/), {
       target: { value: 'Olivier MARTIN' },
     });
     fireEvent.change(screen.getByLabelText(/^Adresse$/i), { target: { value: '12 rue des Oliviers' } });

@@ -45,6 +45,19 @@ import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateProgrammeForProduct } from './programme-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
+import { annulerEnvoiSignature } from './signature-envoi';
+import {
+  MOTIF_ANNULATION_SCAN_DEPOSE,
+  messageDepotAnnulationImpossible,
+  messageDepotAnnuleraitEnvoi,
+} from '@/lib/signature/envoi-contrats';
+
+/**
+ * Le statut d'un `Document` parti en signature et pas encore signé — le seul
+ * état dans lequel un dépôt de scan doit d'abord fermer l'autre chemin.
+ * Même valeur que `signature-envoi.ts` ; la colonne est un `String` (spec §4.1).
+ */
+const STATUT_ENVOYE = 'sent_for_signature';
 
 export type ActionResult<T = void> =
   | ({ ok: true } & T)
@@ -178,6 +191,25 @@ function validateSignedPdf(file: File): string | null {
 }
 
 /**
+ * Ce que rend le dépôt d'un scan — union discriminée depuis le lot C.2b-3.
+ *
+ * Elle a remplacé un retour nu parce que le dépôt peut désormais ÉCHOUER pour
+ * une raison métier : la pièce est partie en signature électronique. `tsc`
+ * oblige alors les deux appelants à traiter le refus, ce qu'un `throw` aurait
+ * laissé au hasard de leur `try`.
+ */
+type DepotScanResult =
+  | {
+      ok: true;
+      key: string;
+      before: unknown;
+      entry: Record<string, unknown>;
+      /** L'identifiant de la demande annulée par ce dépôt, quand il y en avait une. */
+      envoiAnnule: string | null;
+    }
+  | { ok: false; error: string };
+
+/**
  * Cœur partagé du dépôt d'un PDF signé (scan manuel).
  *
  * Un seul chemin d'écriture pour les deux entrées UI — la modale par cellule
@@ -189,6 +221,29 @@ function validateSignedPdf(file: File): string | null {
  *   `sessions/{tenantId}/{sessionCode}/signed/{docType}-{entityId}-{sha8}.pdf`
  * Une session = un préfixe = un dossier zippable pour le pack audit (lot D).
  * L'ancien préfixe `signed/{tenantId}/…` reste lisible : rien n'est déplacé.
+ *
+ * ── « UNE PIÈCE, UN SEUL CHEMIN OUVERT » (Laurent, 11/09/2026 — lot C.2b-3) ──
+ *
+ * Déposer un scan sur une pièce PARTIE en signature électronique ANNULE cet
+ * envoi chez le prestataire. Motif : « déposer le scan » et « signer
+ * électroniquement » mènent à la même preuve ; les laisser ouverts ensemble,
+ * c'est accepter qu'un scan arrive pendant qu'une signature aboutit — deux
+ * preuves concurrentes sur une pièce contractuelle destinée à un financeur.
+ *
+ * LE GARDE-FOU EST ICI, pas dans l'appelant : c'est le seul point par lequel
+ * TOUS les dépôts passent (modale de cellule, cellule cible de drop, zone de
+ * dépôt de la fiche session). Un garde-fou posé dans un seul écran laisserait
+ * les autres ouvrir le second chemin.
+ *
+ * JAMAIS EN SILENCE. Sans confirmation explicite de l'utilisateur
+ * (`confirmeAnnulationEnvoi`), le dépôt est REFUSÉ et le prestataire n'est même
+ * pas appelé. C'est la moitié serveur de la règle ; l'autre est l'étape de
+ * confirmation de `<UploadSignedDocDialog>`.
+ *
+ * L'ORDRE N'EST PAS DÉCORATIF : on annule d'abord, on écrit ensuite.
+ * L'annulation régénère la pièce SANS ses ancres, et tous les générateurs
+ * commencent par un `deleteMany` — un `signedPdfUrl` écrit avant elle serait
+ * effacé par elle. Et si l'annulation échoue, rien n'a été écrit.
  */
 async function persistSignedScan(opts: {
   userId: string;
@@ -196,8 +251,18 @@ async function persistSignedScan(opts: {
   participant: SignedScanParticipant;
   docType: string;
   buf: Buffer;
-}): Promise<{ key: string; before: unknown; entry: Record<string, unknown> }> {
+  /** L'utilisateur a lu ce qui allait se passer et l'a confirmé. Jamais implicite. */
+  confirmeAnnulationEnvoi?: boolean;
+}): Promise<DepotScanResult> {
   const { userId, tenantId, participant, docType, buf } = opts;
+
+  const envoiAnnule = await libererEnvoiEnCours({
+    tenantId,
+    participantId: participant.id,
+    docType,
+    confirme: opts.confirmeAnnulationEnvoi === true,
+  });
+  if (!envoiAnnule.ok) return envoiAnnule;
 
   const sha8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 8);
   const safeCode = (participant.session.code ?? 'unknown').replace(/[^A-Za-z0-9_-]/g, '_');
@@ -247,7 +312,61 @@ async function persistSignedScan(opts: {
     });
   }
 
-  return { key, before, entry };
+  return { ok: true, key, before, entry, envoiAnnule: envoiAnnule.signatureRequestId };
+}
+
+/**
+ * Ferme l'autre chemin avant d'ouvrir celui du scan (lot C.2b-3).
+ *
+ * Rend `signatureRequestId` = la demande annulée, ou `null` quand il n'y avait
+ * rien à annuler — le cas de très loin le plus courant (l'émargement, par
+ * exemple, ne part jamais en signature électronique).
+ *
+ * ⚠ RÉUTILISE `annulerEnvoiSignature`, elle ne la réécrit pas. Cette action
+ * fait déjà les quatre choses qu'il faut, et dans le bon ordre : `provider
+ * .cancel` d'abord (échec ⇒ rien n'est écrit en local), passage de la demande
+ * en `CANCELED`, retour du `Document` au statut que le journal lui connaissait
+ * avant l'envoi, et régénération en sens inverse (`signatureTags: false`) pour
+ * que la pièce retrouve le tampon de l'organisme. Une seconde annulation écrite
+ * ici aurait divergé de celle-là au premier changement.
+ */
+async function libererEnvoiEnCours(a: {
+  tenantId: string;
+  participantId: string;
+  docType: string;
+  confirme: boolean;
+}): Promise<{ ok: true; signatureRequestId: string | null } | { ok: false; error: string }> {
+  // Seules les pièces qui ont un `Document` peuvent porter une demande.
+  if (!isDocumentDocType(a.docType)) return { ok: true, signatureRequestId: null };
+
+  const enAttente = await prisma.document.findFirst({
+    where: {
+      tenantId: a.tenantId,
+      participantId: a.participantId,
+      type: a.docType,
+      status: STATUT_ENVOYE,
+      signatureRequestId: { not: null },
+    },
+    select: { id: true, signatureRequestId: true },
+  });
+
+  // Dérive de donnée : gelé sans demande rattachée. Rien à annuler, et refuser
+  // le dépôt gèlerait la pièce pour de bon. On dépose, sans prétendre avoir
+  // annulé quoi que ce soit.
+  const signatureRequestId = enAttente?.signatureRequestId ?? null;
+  if (signatureRequestId === null) return { ok: true, signatureRequestId: null };
+
+  if (!a.confirme) return { ok: false, error: messageDepotAnnuleraitEnvoi() };
+
+  const annulation = await annulerEnvoiSignature({
+    signatureRequestId,
+    motif: MOTIF_ANNULATION_SCAN_DEPOSE,
+  });
+  if (!annulation.ok) {
+    return { ok: false, error: messageDepotAnnulationImpossible(annulation.error) };
+  }
+
+  return { ok: true, signatureRequestId };
 }
 
 /**
@@ -292,13 +411,19 @@ export async function uploadSignedDoc(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
-  const { before, entry } = await persistSignedScan({
+  const depot = await persistSignedScan({
     userId: user.id,
     tenantId: user.tenantId,
     participant,
     docType,
     buf: Buffer.from(await file.arrayBuffer()),
+    // « Une pièce, un seul chemin ouvert » : le drapeau ne vaut QUE pour la
+    // confirmation lue et validée dans `<UploadSignedDocDialog>`. Rien de
+    // déduit d'un état côté serveur — ce serait confirmer à la place de l'admin.
+    confirmeAnnulationEnvoi: String(formData.get('annulerEnvoiEnCours') ?? '') === '1',
   });
+  if (!depot.ok) return { ok: false, error: depot.error };
+  const { before, entry } = depot;
 
   await logDocumentEvent({
     tenantId: user.tenantId,
@@ -306,7 +431,12 @@ export async function uploadSignedDoc(
     targetEntityId: participantId,
     action: 'documents.upload_signed',
     // mask key en log (sécurité — la clé bucket contient tenantId/sessionCode)
-    diff: { [docType]: { before, after: { ...entry, uploadedSignedPdfKey: '<masked>' } } },
+    diff: {
+      [docType]: { before, after: { ...entry, uploadedSignedPdfKey: '<masked>' } },
+      // Sans cette mention, le journal du dépôt et celui de l'annulation ne se
+      // recoupent que par l'horodatage (lot C.2b-3).
+      ...(depot.envoiAnnule !== null ? { envoiAnnule: depot.envoiAnnule } : {}),
+    },
   });
 
   revalidatePath(`/app/sessions/${participant.sessionId}`);
@@ -434,19 +564,29 @@ export async function uploadSignedScans(formData: FormData): Promise<UploadSigne
     }
 
     try {
-      const { key } = await persistSignedScan({
+      const depot = await persistSignedScan({
         userId: user.id,
         tenantId: user.tenantId,
         participant,
         docType,
         buf: item.buf,
+        // ⚠ JAMAIS confirmé ici, et c'est volontaire (lot C.2b-3). La zone de
+        // dépôt traite N fichiers pour N stagiaires : elle ne peut pas montrer,
+        // pièce par pièce, ce qu'une annulation coûterait. Une pièce partie en
+        // signature ressort donc en `failures` avec un message nominatif qui
+        // renvoie au bloc « Signature », où la question se pose une par une.
+        confirmeAnnulationEnvoi: false,
       });
+      if (!depot.ok) {
+        failures.push({ filename: item.filename, error: depot.error });
+        continue;
+      }
       await logDocumentEvent({
         tenantId: user.tenantId,
         actorUserId: user.id,
         targetEntityId: participant.id,
         action: 'document.signed_scan_uploaded',
-        diff: { sessionId, docType, participantId: participant.id, key },
+        diff: { sessionId, docType, participantId: participant.id, key: depot.key },
       });
       saved += 1;
     } catch (e) {

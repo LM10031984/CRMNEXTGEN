@@ -112,6 +112,7 @@ describe('getNotifications — extension persistées lead.assigned (Plan 09-04)'
     notificationFindMany.mockResolvedValueOnce([
       {
         id: 'notif-1',
+        type: 'lead.assigned',
         payload: {
           leadId: '00000000-0000-0000-0000-000000000001',
           prospectName: 'Jean Dupont',
@@ -121,6 +122,7 @@ describe('getNotifications — extension persistées lead.assigned (Plan 09-04)'
       },
       {
         id: 'notif-2',
+        type: 'lead.assigned',
         payload: {
           leadId: '00000000-0000-0000-0000-000000000002',
           prospectName: 'Alice Martin',
@@ -149,11 +151,13 @@ describe('getNotifications — extension persistées lead.assigned (Plan 09-04)'
     notificationFindMany.mockResolvedValueOnce([
       {
         id: 'notif-bad',
+        type: 'lead.assigned',
         payload: { prospectName: 'Anonyme' }, // leadId manquant
         createdAt: new Date(),
       },
       {
         id: 'notif-ok',
+        type: 'lead.assigned',
         payload: {
           leadId: '00000000-0000-0000-0000-000000000010',
           prospectName: 'OK Person',
@@ -177,7 +181,11 @@ describe('getNotifications — extension persistées lead.assigned (Plan 09-04)'
     expect(call.where.tenantId).toBe('tenant-1');
     expect(call.where.userId).toBe('user-1');
     expect(call.where.readAt).toBeNull();
-    expect(call.where.type).toBe('lead.assigned');
+    // ⚠ LES DEUX TYPES PERSISTÉS (lot C.3, défaut D-C3-2). Le filtre valait
+    // `'lead.assigned'` en dur, alors que le webhook écrivait des lignes
+    // `signature.completed` depuis C.3 : la cloche restait muette après le
+    // retour d'une convention signée par les deux parties.
+    expect(call.where.type).toEqual({ in: ['lead.assigned', 'signature.completed'] });
     expect(call.orderBy.createdAt).toBe('desc');
     expect(call.take).toBe(10);
   });
@@ -188,6 +196,103 @@ describe('getNotifications — extension persistées lead.assigned (Plan 09-04)'
     expect(res.total).toBe(0);
     expect(res.items).toEqual([]);
     expect(notificationFindMany).not.toHaveBeenCalled();
+  });
+});
+
+/* ── D-C3-2 — la cloche sonne pour une pièce signée par tous ─────────────── */
+
+/**
+ * LE DÉFAUT (recette C.3 du 11/09/2026, étape 10). `prevenirAdmins` écrit une
+ * ligne `Notification` de type `signature.completed` par ADMIN dès que le
+ * webhook `submission.completed` a ramené le PDF signé ET son certificat —
+ * vérifié en base sur l'aperçu. `getNotifications()` ne lisait que
+ * `lead.assigned` : la cloche restait muette. Une notification écrite que
+ * personne ne lit est pire qu'une notification absente — elle donne l'illusion
+ * que le circuit est complet.
+ *
+ * ⚠ LES DEUX SENS SONT GARDÉS ICI. Que le nouveau type soit lu, et que l'ancien
+ * n'ait pas CESSÉ de l'être : un filtre qui remplacerait `lead.assigned` au lieu
+ * de l'élargir ferait disparaître les leads assignés sans qu'un écran ne le
+ * dise. Les tests 2, 3 et 4 ci-dessus tiennent l'autre moitié.
+ */
+describe('getNotifications — une pièce signée par tous (lot C.3, D-C3-2)', () => {
+  const PIECE_SIGNEE = {
+    id: 'notif-sig-1',
+    type: 'signature.completed',
+    payload: {
+      signatureRequestId: '11111111-1111-4111-8111-111111111111',
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      sessionCode: 'SES-0048',
+      documentId: '33333333-3333-4333-8333-333333333333',
+      docType: 'CONVENTION',
+    },
+    createdAt: new Date(),
+  };
+
+  it('la ligne du webhook devient un item — libellé et destination en toutes lettres', async () => {
+    validateRequestMock.mockResolvedValue({ user: USER, session: null });
+    notificationFindMany.mockResolvedValueOnce([PIECE_SIGNEE]);
+
+    const res = await getNotifications();
+    const items = res.items.filter((i) => i.kind === 'signature.completed');
+    expect(items).toHaveLength(1);
+    // ⚠ LITTÉRAL des deux côtés : comparer au retour de
+    // `libelleSignatureCompletee` collapserait avec lui, et l'assertion ne
+    // garderait plus rien (règle n°2 du projet).
+    expect(items[0]!.label).toBe('Convention signée par tous les signataires — SES-0048');
+    expect(items[0]!.href).toBe('/app/sessions/22222222-2222-4222-8222-222222222222?tab=avant');
+    expect(items[0]!.id).toBe('notif-sig-1');
+    expect(items[0]!.severity).toBe('info');
+    expect(items[0]!.count).toBe(1);
+  });
+
+  it('l’attestation d’assiduité mène à l’onglet APRÈS — l’autre la rendrait invisible', async () => {
+    // Les panneaux d'onglet inactifs sont rendus `hidden` : ouvrir « Avant »
+    // pour une pièce qui vit dans « Après » ne montre aucune pièce du tout.
+    validateRequestMock.mockResolvedValue({ user: USER, session: null });
+    notificationFindMany.mockResolvedValueOnce([
+      { ...PIECE_SIGNEE, payload: { ...PIECE_SIGNEE.payload, docType: 'ASSIDUITE' } },
+    ]);
+
+    const res = await getNotifications();
+    const item = res.items.find((i) => i.kind === 'signature.completed');
+    expect(item!.href).toBe('/app/sessions/22222222-2222-4222-8222-222222222222?tab=apres');
+    expect(item!.label).toBe(
+      "Attestation d'assiduité signée par tous les signataires — SES-0048",
+    );
+  });
+
+  it('payload sans session : écarté en silence — une cloche sans destination ne sert à rien', async () => {
+    validateRequestMock.mockResolvedValue({ user: USER, session: null });
+    notificationFindMany.mockResolvedValueOnce([
+      { ...PIECE_SIGNEE, payload: { docType: 'CONVENTION' } },
+      PIECE_SIGNEE,
+    ]);
+
+    const res = await getNotifications();
+    const items = res.items.filter((i) => i.kind === 'signature.completed');
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe('notif-sig-1');
+  });
+
+  it('PUISSANCE — les deux types coexistent : aucun ne chasse l’autre', async () => {
+    validateRequestMock.mockResolvedValue({ user: USER, session: null });
+    notificationFindMany.mockResolvedValueOnce([
+      PIECE_SIGNEE,
+      {
+        id: 'notif-lead',
+        type: 'lead.assigned',
+        payload: {
+          leadId: '00000000-0000-0000-0000-000000000001',
+          prospectName: 'Jean Dupont',
+        },
+        createdAt: new Date(),
+      },
+    ]);
+
+    const res = await getNotifications();
+    expect(res.items.filter((i) => i.kind === 'signature.completed')).toHaveLength(1);
+    expect(res.items.filter((i) => i.kind === 'lead.assigned')).toHaveLength(1);
   });
 });
 
