@@ -39,7 +39,8 @@ publiques AVANT** le merge — sinon il n'y a rien à quoi comparer après.
 
 - `/diagnostic` → **200**, titre « Diagnostic express — Start Academy »
 - `/catalogue` → **200**, titre « Catalogue formations Start Academy — IA pour
-  conseillers immobiliers », **41 codes produits distincts**, les voici :
+  conseillers immobiliers », **41 codes produits distincts — soit les produits
+  ACTIFS, les seuls que la page rende** (la base en porte 51). Les voici :
 
 ```
 FRM-0001 FRM-0002 FRM-0003 FRM-0004 FRM-0005 FRM-0006 FRM-0007
@@ -85,6 +86,20 @@ chacun suffisait :
 
 Donc tout relevé de référence porte sa **date et son heure**, la **commande
 exacte** qui le reproduit, et la **liste en clair** — pas un total.
+
+> **La deuxième règle, sous la première parce qu'elle naît du même défaut : un
+> relevé doit NOMMER la population qu'il compte, pas seulement la lister.**
+
+Les 41 codes ci-dessus sont ceux du **catalogue public**, et `/catalogue` ne rend
+que les produits `isActive` (`page.tsx`, `where: { tenantId, isActive: true }`).
+La **base**, elle, en porte **51** — le chiffre du point 2 ci-dessous. **Les deux
+sont justes.** Ce sont deux populations, pas deux mesures de la même.
+
+Les confondre a coûté deux relevés : lu contre 51, un relevé qui annonce « 41 »
+sans dire *41 quoi* se lit comme dix produits disparus. Un relevé se nomme donc
+en toutes lettres — « **41 produits ACTIFS, vus depuis la page publique** », pas
+« 41 produits » — et quand deux populations coexistent, il dit laquelle il
+compte **et** ce que vaut l'autre.
 
 #### Un dernier détail du relevé, à savoir avant de toucher au séquenceur
 
