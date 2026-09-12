@@ -150,3 +150,29 @@ avant de la rejouer.
 2. Puis les réglages de sortie d'aperçu déjà listés plus haut : `MAIL_DRY_RUN`
    Preview → `true`, retrait du webhook DocuSeal de l'aperçu, clé et URL webhook
    remises en Production.
+
+## Rejeu du 12/09/2026 après corrections (commits 8e76e2ae → 03d32239, aperçu redéployé)
+
+Pièce : Convention — DEMO-SIG BERNARD Julien (EI) (TNS AGEFICE, EI_SELF), adresse
+de Julien passée à laurent@start-academy.fr depuis la fiche apprenant.
+
+| # | Attendu | Constaté |
+|---|---|---|
+| 4 | Retour client → état par signataire sur la ligne | ✅ « 1. Julien DEMO-SIG BERNARD — laurent@… · a signé le 12/09/2026 à 07:29 » (D-C3-1) |
+| 6 | Lien « Signer maintenant » sur la ligne OF | ✅ lien docuseal.eu/s/… + « Il ne manque plus que la signature de Laurent MARX pour l'organisme de formation… » (D-C3-1) |
+| 10 | Cloche ADMIN | ✅ « Convention signée par tous les signataires… » (D-C3-2, sur la signature de la veille) |
+
+Observations : la ligne à l'état SIGNÉ (Provence Immobilier) affiche l'ordre prévu
+sans les dates de signature — acceptable, non bloquant. Fiche organisation d'une EI
+(DEMO-SIG BERNARD Julien) : l'encart « Aucune adresse email pour Julien BERNARD,
+responsable… aucune convention ne peut partir » contredit le moteur, qui prend
+l'adresse de l'apprenant lui-même (EI_SELF) et envoie bien — message à aligner
+sur la cascade EI (D-C3-3, mineur, à prendre au lot D ou H).
+
+Étape 7-8 (rejeu) : OF signé depuis « Signer maintenant » → ligne Julien au vert « Signé » ✅.
+
+**Recette C.3 ACCEPTÉE le 12/09/2026.** Sortie d'aperçu : `MAIL_DRY_RUN` Preview
+remis à `true` (12/09, pris au prochain déploiement). Reste au moment de la
+fusion : retirer le webhook DocuSeal de l'aperçu et poser en Production
+`DOCUSEAL_*` (clé du compte EU, `whsec_` d'un webhook prod sans bypass, URL
+`https://<prod>/api/webhooks/docuseal`), `WEASYPRINT_URL` déjà en prod.
