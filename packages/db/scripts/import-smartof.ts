@@ -46,6 +46,7 @@ import {
   normalizeName,
   normalizeEmail,
 } from '@qualiof/shared';
+import { resolveProductCode } from './lib/product-code.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -407,12 +408,16 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
   let created = 0;
   let updated = 0;
 
+  // Codes déjà pris. Le repli actuel ne le lit pas (cf. lib/product-code.ts) :
+  // il sera rempli par le correctif qui fabrique la séquence `PROD-NNNN`.
+  const codesPris = new Set<string>();
+
   for (const row of rows) {
     const uid = s(row['UID']);
     if (!uid) continue;
     if (s(row['Statut']) === 'Inactif') continue;
 
-    const code = s(row['Custom ID']) ?? `PROD-${uid.substring(0, 8)}`;
+    const code = resolveProductCode({ uid, customId: s(row['Custom ID']) }, codesPris);
     const title = s(row['Intitulé de la formation']) ?? s(row['Nom du produit']) ?? '(sans titre)';
     const durationHours = parseInt(s(row['Durée de formation (en heures)']) ?? '0', 10) || 0;
     const modality: Modality = mapModality(s(row["Mode d'organisation"]));
