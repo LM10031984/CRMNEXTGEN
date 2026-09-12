@@ -55,6 +55,7 @@ vi.mock('../../../server/actions/generate-grille-obs-session', () => ({
 }));
 vi.mock('../../../server/actions/programme-generator', () => ({
   generateProgrammeForProduct: vi.fn().mockResolvedValue({ ok: true }),
+  generateProgrammeForSession: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/lib/closure/route-conventions', () => ({
   ROUTABLE_PARTICIPANT_SELECT: { id: true },

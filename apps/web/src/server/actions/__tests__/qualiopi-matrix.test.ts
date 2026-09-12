@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  - `../closure-pack`          → generateClosurePack mocké
  *  - `../convention-generator`  → generateConventionForParticipant mocké
  *  - `../agefice-generator`     → generateAgeficeForParticipant mocké
- *  - `../programme-generator`   → generateProgrammeForProduct mocké
+ *  - `../programme-generator`   → generateProgrammeForSession mocké
  *  - `next/cache`               → revalidatePath no-op
  *
  * Coverage (9 tests minimum — 1 par item <behavior> du plan) :
@@ -131,6 +131,7 @@ vi.mock('../agefice-generator', () => ({
 vi.mock('../programme-generator', () => ({
   generateProgrammeForParticipant: vi.fn(),
   generateProgrammeForProduct: vi.fn(),
+  generateProgrammeForSession: vi.fn(),
 }));
 
 vi.mock('next/cache', () => ({
@@ -144,7 +145,7 @@ import { uploadFile } from '@/lib/storage';
 import { generateClosurePack } from '../closure-pack';
 import { generateConventionForParticipant } from '../convention-generator';
 import { generateAgeficeForParticipant } from '../agefice-generator';
-import { generateProgrammeForProduct } from '../programme-generator';
+import { generateProgrammeForSession } from '../programme-generator';
 import {
   markDocStatus,
   uploadSignedDoc,
@@ -167,7 +168,7 @@ const uploadFileMock = uploadFile as unknown as ReturnType<typeof vi.fn>;
 const generateClosurePackMock = generateClosurePack as unknown as ReturnType<typeof vi.fn>;
 const generateConventionMock = generateConventionForParticipant as unknown as ReturnType<typeof vi.fn>;
 const generateAgeficeMock = generateAgeficeForParticipant as unknown as ReturnType<typeof vi.fn>;
-const generateProgrammeMock = generateProgrammeForProduct as unknown as ReturnType<typeof vi.fn>;
+const generateProgrammeMock = generateProgrammeForSession as unknown as ReturnType<typeof vi.fn>;
 
 const TEST_USER = {
   id: '00000000-0000-0000-0000-000000000001',

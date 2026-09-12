@@ -83,3 +83,33 @@ export function resoudrePrixProgramme(input: {
   const total = inscrits.reduce((somme, i) => somme + Number(i.priceHT), 0);
   return { mode: 'TOTAL_ENTREPRISE', montantHT: total };
 }
+
+/**
+ * Le programme de cette session doit-il être le sien, ou le catalogue suffit-il ?
+ *
+ * Constat du 11/09 (ASSALIT SYNDIC, SES-0107) : le mode TOTAL_ENTREPRISE
+ * existait depuis le 02/09 mais n'était atteint par AUCUN bouton de
+ * l'application. « Préparer la formation », la matrice Qualiopi et le pack de
+ * clôture appelaient tous le générateur PRODUIT — un programme de catalogue,
+ * qui annonce le prix par tête. Résultat : 2 500 € « par stagiaire » face à une
+ * convention de 2 500 € pour huit salariés, dans la même enveloppe OPCO.
+ *
+ * Deux raisons, et deux seulement, de sortir du catalogue :
+ *  - un tarif a été consenti POUR CETTE SESSION (`pricePerLearner`) — c'est lui
+ *    que reprennent la convention et la facture, pas le prix catalogue ;
+ *  - la session est portée par UNE convention d'entreprise : le montant qui
+ *    engage est le total du groupe, une notion qui n'existe pas au catalogue.
+ *
+ * Partout ailleurs — sessions inter, auto-payeurs, salles mixtes — le programme
+ * reste le document de catalogue partagé, conformément à la règle du 18/06
+ * (contenu FIGÉ au produit).
+ */
+export function programmeDoitEtrePropreALaSession(input: {
+  inscrits: ReadonlyArray<InscritPourPrix>;
+  tarifSession: unknown;
+  prixProduit: unknown;
+}): boolean {
+  const tarifSession = Number(input.tarifSession ?? 0);
+  if (Number.isFinite(tarifSession) && tarifSession > 0) return true;
+  return resoudrePrixProgramme(input).mode === 'TOTAL_ENTREPRISE';
+}

@@ -8,7 +8,10 @@ import { uploadFile, downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
-import { generateProgrammeForProductCore } from '@/lib/closure/programme-core';
+import {
+  generateProgrammeForProductCore,
+  generateProgrammeForSessionOrProductCore,
+} from '@/lib/closure/programme-core';
 
 // Phase 7 — Plan 07-01 : suppression de l'objet `const OF_DEFAULTS = { ... }`
 // local qui bypassait `getOfConfig()`. Les fonctions ci-dessous appellent
@@ -20,9 +23,10 @@ import { generateProgrammeForProductCore } from '@/lib/closure/programme-core';
 // reste un wrapper (validateRequest → core → revalidatePath).
 
 /**
- * Programme = asset PRODUIT (1 fois pour tous les apprenants — cf décision
- * Laurent 05/05/2026). Ce wrapper résout le productId depuis le participant
- * et délègue à generateProgrammeForProduct (find-or-create idempotent).
+ * Programme = asset partagé par toute la session (1 fois pour tous les
+ * apprenants — décision Laurent 05/05/2026), jamais nominatif. Ce wrapper
+ * remonte du participant à sa session et délègue au cœur, qui choisit entre le
+ * programme de catalogue et celui de la session (find-or-create idempotent).
  */
 export async function generateProgrammeForParticipant(
   participantId: string,
@@ -36,7 +40,7 @@ export async function generateProgrammeForParticipant(
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
 
-  const r = await generateProgrammeForProduct(participant.session.productId);
+  const r = await generateProgrammeForSessionOrProductCore(user.tenantId, participant.session.id);
   revalidatePath(`/app/sessions/${participant.session.id}`);
   revalidatePath(`/app/apprenants/${participant.person.id}`);
   return r;
@@ -198,4 +202,25 @@ export async function getDocumentPdfBuffer(documentId: string): Promise<Buffer |
   });
   if (!doc) return null;
   return downloadFile(DOCS_BUCKET, doc.pdfUrl);
+}
+
+/**
+ * Programme d'UNE SESSION — le point d'entrée de tous les boutons qui partent
+ * d'une session (préparation, matrice Qualiopi, pack de clôture, régénération).
+ *
+ * Délègue le choix « programme de session ou de catalogue » au cœur neutre :
+ * l'application ne décide plus du générateur à deux endroits différents, ce qui
+ * est exactement ce qui avait laissé ASSALIT SYNDIC avec un programme de
+ * catalogue à 2 500 € « par stagiaire » (11/09).
+ */
+export async function generateProgrammeForSession(
+  sessionId: string,
+  opts: { force?: boolean } = {},
+): Promise<{ ok: boolean; documentId?: string; pdfUrl?: string; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié' };
+
+  const r = await generateProgrammeForSessionOrProductCore(user.tenantId, sessionId, opts);
+  revalidatePath(`/app/sessions/${sessionId}`);
+  return r;
 }
