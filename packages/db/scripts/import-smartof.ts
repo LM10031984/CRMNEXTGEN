@@ -13,6 +13,9 @@
  *   3. Détection cas EI : si l'organisation rattachée porte le nom de l'apprenant, on crée
  *      un LegalLink avec rôle EI_SELF. Sinon on tente DIRIGEANT/SALARIE.
  *   4. Marquage qualité : SIRET malformé / email manquant → requiresCleanup=true.
+ *   5. Codes produits : le `Custom ID` source est repris VERBATIM (traçabilité
+ *      SmartOF, formes hétérogènes assumées) ; à défaut, le code est FABRIQUÉ
+ *      dans la série `PROD-NNNN`. Cf. `lib/product-code.ts`.
  *
  * Lancement :
  *   pnpm --filter @qualiof/db exec tsx scripts/import-smartof.ts
@@ -408,9 +411,17 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
   let created = 0;
   let updated = 0;
 
-  // Codes déjà pris. Le repli actuel ne le lit pas (cf. lib/product-code.ts) :
-  // il sera rempli par le correctif qui fabrique la séquence `PROD-NNNN`.
-  const codesPris = new Set<string>();
+  // Codes déjà pris — ceux de la base, PLUS ceux alloués pendant ce run. Sans
+  // le second, deux lignes sans `Custom ID` réclameraient le même numéro.
+  // Lecture seule : la séquence vérifie avant d'écrire, elle n'écrase rien.
+  const codesPris = new Set<string>(
+    (
+      await prisma.trainingProduct.findMany({
+        where: { tenantId },
+        select: { code: true },
+      })
+    ).map((p) => p.code),
+  );
 
   for (const row of rows) {
     const uid = s(row['UID']);
@@ -418,6 +429,7 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
     if (s(row['Statut']) === 'Inactif') continue;
 
     const code = resolveProductCode({ uid, customId: s(row['Custom ID']) }, codesPris);
+    codesPris.add(code);
     const title = s(row['Intitulé de la formation']) ?? s(row['Nom du produit']) ?? '(sans titre)';
     const durationHours = parseInt(s(row['Durée de formation (en heures)']) ?? '0', 10) || 0;
     const modality: Modality = mapModality(s(row["Mode d'organisation"]));
