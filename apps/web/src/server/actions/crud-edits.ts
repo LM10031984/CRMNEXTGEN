@@ -815,6 +815,20 @@ export async function createProduct(input: {
   // type "PROD-IMPORT-FALLBACK" ressortent en tete (alphabetiquement I > 0).
   // On filtre cote SQL sur le format strict PROD-DDDD puis on prend le max
   // numerique cote JS — robuste au format mixte des imports SmartOF.
+  //
+  // ⚠ CONSTAT du 12/09/2026, consigne ici faute de pouvoir etre corrige :
+  // le `0*` de la regex fait lire `PROD-00661` comme **661**, exactement comme
+  // `PROD-0661`. Deux codes distincts pour l'oeil, un seul numero pour ce
+  // sequenceur — le sequenceur et l'oeil humain ne lisent PAS la meme chose.
+  // Rien ne casse aujourd'hui : le maximum du catalogue est 675 (`PROD-0675`,
+  // releve du 11/09 a 19:58 CEST, 41 codes — cf. STATE.md), et la boucle de
+  // garde ci-dessous verifie l'existence avant d'ecrire. Ca doit etre ecrit
+  // quand meme : le jour ou quelqu'un deduira un numero d'un code a l'oeil,
+  // il ne trouvera pas le meme que ce code-ci.
+  //
+  // Le filtre `startsWith: 'PROD-'` ignore aussi les 7 codes `FRM-*` (journees
+  // Faros de D-25). C'est CORRECT — autre espace de noms, autre serie — mais ca
+  // se dit, sinon le prochain lecteur croira a un oubli.
   const candidates = await prisma.trainingProduct.findMany({
     where: { tenantId: user.tenantId, code: { startsWith: 'PROD-' } },
     select: { code: true },

@@ -291,14 +291,16 @@ model BatchDateOption {
 | `AGEFICE_HOURLY_PRESENTIEL` | 42 | €/h pris en charge présentiel (vérifié 01/09/2026) |
 | `AGEFICE_HOURLY_DISTANCIEL` | 35 | €/h distanciel synchrone |
 | `AGEFICE_LEAD_DAYS_MIN` | 15 | Dépôt du dossier ≥ 15 jours calendaires avant démarrage |
-| `OPCO_EP_ENVELOPE_LT_11` | 2 500 | Enveloppe entreprise/an, < 11 salariés (« l'entreprise entière ») |
-| `OPCO_EP_ENVELOPE_11_TO_50` | 4 500 | Enveloppe entreprise/an, 11 à 50 salariés |
+| `OPCO_EP_ENVELOPE_LT_11` | 2 500 | Enveloppe entreprise/an, < 11 salariés (« l'entreprise entière ») — **palier de convention collective, IDCC 1527, cf. D-7** |
+| `OPCO_EP_ENVELOPE_11_TO_50` | 4 500 | Enveloppe entreprise/an, 11 à 50 salariés — **palier de convention collective, IDCC 1527, cf. D-7** |
 | `OPCO_EP_RATE_REGLEMENTAIRE` | 40 | €/h (UNIQUEMENT TRACFIN / non-discrimination / déontologie) |
 | `OPCO_EP_RATE_COEUR_METIER` | 30 | €/h (tout le reste — défaut) |
 | `PRICE_PER_HOUR_PER_PARTICIPANT` | 84 | Tarif de vente Start Academy tout compris, €/h/participant — PARAMÈTRE, la main de Laurent |
 | `CONSUMPTION_LEVER_PERCENT` | 30 | Sous ce taux de consommation 24 mois → levier « droits sous-utilisés » |
 | `DISCOUNT_WARNING_PERCENT` | 15 | Au-delà, remise à faire valider par un MANAGER/ADMIN (§8.3) |
 | `PROPOSAL_VALIDITY_DAYS` | 30 | Validité par défaut d'une proposition |
+
+⚠ **Note de branche (D-7)** : `OPCO_EP_ENVELOPE_LT_11` et `OPCO_EP_ENVELOPE_11_TO_50` portent les paliers de la **convention collective du client** — ici **IDCC 1527 (agences immobilières et syndics)**. Ce ne sont pas des constantes universelles : hors immobilier les montants changent, et au-delà de 50 salariés il n'y a pas de palier mais des **fonds conventionnels**. D'où le `FundingRule` modifiable, voulu comme tel — détail au §8.2 et en D-7.
 
 ⚠ **Note de réconciliation AGEFICE** (à écrire en commentaire du moteur) : en R1 prospect, on ne connaît pas la CFP → le seuil CA N-1 > 7 000 € sert d'**estimation commerciale**. Dès que le client existe au CRM avec `AgeficeProfile.lastCfpEligibleBudget`, c'est la **CFP réelle qui fait foi** (3 000 / 600 / 0) et l'UI passe le badge de « estimation déclarative » à « vérifié CRM » (§8.4). Une estimation n'est jamais affichée comme un droit acquis.
 
@@ -543,12 +545,70 @@ et le **dit** en notice, comme pour la pige et le doublon.
 |---|---|---|
 | `isActive: false` | pas vendu tel quel — **la norme** pour un rayon de bibliothèque | 81 rayons sur 81 |
 | `supersededByProductId` | doublon d'un produit vendu, la version vendue fait foi (D-19 bis) | 4, bientôt 6 |
-| `excludedFromClientOutputs` | **interdit de sortie client** — une interdiction, pas un état de vente | 1 (`PROD-0681`) |
+| `excludedFromClientOutputs` | **interdit de sortie client** — une interdiction, pas un état de vente | 2 : `PROD-0681` (v0.9 non livrable, 11/09) et `PROD-00661` (hors domaine, session réelle, 12/09 — cf. D-18 *la réponse*) |
+
+⚠ **Le champ n'est pas toujours posé par l'import.** `import:diag-catalog` le
+pose pour les rayons qu'il crée ou répare — c'est le cas de `PROD-0681`. Mais le
+second cas, `PROD-00661` (12/09, cf. D-18 *la réponse*), est un **produit vendu**
+venu de SmartOF : aucun import ne le traverse, donc l'interdiction ne peut venir
+que d'une **décision écrite, puis appliquée à la main** par un `update` ciblé.
+D'où la règle qui l'accompagne : la décision vit dans cette spec, la commande
+dans le compte rendu, et l'écriture est un geste séparé.
 
 **Test** : un module porteur du signal exact d'une douleur, marqué socle, venu
 d'un programme non diffusable, ne doit ressortir nulle part — et la règle vaut
 pour un module ajouté au programme sans être marqué lui-même. Le test jumeau
 vérifie qu'un rayon simplement inactif, lui, n'est pas écarté.
+
+##### D-18, la RÉPONSE — ce n'était pas le moteur, c'était un produit qui n'aurait pas dû être diffusable (arbitrage Laurent du 12/09/2026)
+
+D-18 partait d'un symptôme : la recommandation faisait remonter un programme
+« pour activité événementielle » sur l'e-réputation d'une agence immobilière. La
+réponse du 04/09 traitait le moteur — des mots-clés qui qualifient, des familles
+acceptées par ordre de préférence. Elle était juste, et **elle ne suffisait
+pas**, parce qu'elle répondait à côté de la vraie question.
+
+**Le programme a maintenant un nom** : `PROD-00661`, « Communication digitale &
+Stratégie marketing pour activité événementielle » — 72 h, 3 024 € HT, **une
+session réellement terminée**. Et une fois nommé, le diagnostic change de
+nature : ce n'était **pas un défaut de rapprochement**. C'était un **produit
+diffusable qui n'aurait pas dû l'être**. Aucun réglage de mots-clés ne règle ça
+— un programme d'événementiel peut légitimement partager du vocabulaire avec une
+douleur de communication digitale. Ce qui manquait, ce n'était pas de la
+précision lexicale, c'était **l'information que ce programme ne doit pas sortir**.
+
+**C'est exactement le champ de D-19 ter**, posé le 11/09 pour un autre cas : une
+interdiction de sortie client, qui n'est ni un état de vente (`isActive`) ni un
+doublon (`supersededByProductId`).
+
+###### Arbitrage de Laurent — premier usage RÉEL de D-19 ter
+
+`PROD-00661` passe à **`excludedFromClientOutputs = true`**. Conséquences, et
+elles ne sont pas symétriques :
+
+| Surface | Effet | Pourquoi |
+|---|---|---|
+| Moteur de reco (audit, proposition) | **Ne le propose plus jamais** | C'est l'interdiction elle-même, et elle porte sur le programme **et tous ses modules**, y compris ceux qu'on lui ajouterait demain |
+| Catalogue public `/catalogue` | **Il y reste, téléchargeable** | **Une session réelle a eu lieu.** L'auditeur Qualiopi doit pouvoir voir le programme remis aux stagiaires de cette session — le retirer créerait un trou dans la preuve |
+
+C'est la distinction que D-19 ter rend possible : **« ne pas proposer » n'est pas
+« ne pas montrer »**. Un produit retiré du catalogue aurait emporté la preuve
+avec lui ; un produit retiré des sorties client ne coûte rien à la preuve.
+
+Le relevé du 12/09 porte donc **deux** produits dans la colonne
+`excludedFromClientOutputs` de la table des trois notions (§D-19 ter) :
+`PROD-0681` (v0.9 non livrable) et `PROD-00661` (hors domaine, session réelle).
+
+⚠ **Décision consignée, PAS appliquée.** Aucune écriture n'a été faite, ni en
+prod ni en local. La commande d'application — un `update` ciblé sur
+`code = 'PROD-00661'`, scopé `tenantId` — attend le feu vert de Laurent ; elle
+vit dans le compte rendu `260911-kwf-SUMMARY-03.md`. Une écriture en prod est un
+geste séparé et délibéré (cf. STATE.md point 1).
+
+**Et `PROD-00661` n'est pas renommé.** Son code est lu 661 par le séquenceur, à
+égalité avec un hypothétique `PROD-0661` — c'est un constat consigné, pas un
+motif de renommage. Un identifiant qui a servi ne se réécrit pas : attestation,
+émargement et dossier financeur de la session terminée le portent.
 
 ##### D-27 — **deux mots pleins concordants, ou rien** (relecture du 11/09/2026)
 
@@ -712,6 +772,79 @@ pourquoi chaque module y est ne la passe pas.
 
 ---
 
+## 5.4 Un code produit n'est pas une adresse
+
+_Posé par Laurent le 12/09/2026, sur constat mesuré le même jour._
+
+`TrainingProduct.code` n'est unique que **par tenant** (`@@unique([tenantId, code])`),
+et **chaque base séquence indépendamment**. Le séquenceur de `crud-edits.ts` prend
+le plus grand numéro existant **dans SA base** : un produit de plus d'un côté, et
+toute la série décale d'un cran.
+
+Ce n'est pas théorique. Relevé du 12/09/2026 :
+
+| Code | en **production** | en **local `qualiof_dev`** |
+|---|---|---|
+| `PROD-0681` | « Catalogue diagnostic — Vendeur » (14 modules) | « L'Agent Incomparable — parcours M0 → M6 » (7 modules) |
+| `PROD-0682` | « L'Agent Incomparable — parcours M0 → M6 » (7 modules) | *n'existe pas* |
+
+**Le même code désigne deux produits différents.** Un script mis au point en local
+et rejoué en prod ne vise pas la même ligne — et il ne le dira pas : il trouvera
+bien un produit, un seul, portant ce code.
+
+### Les trois règles qui en découlent — non négociables
+
+1. **Toute opération sur la prod cible par `{ tenantId, code }` ET vérifie le
+   TITRE avant d'écrire.** « Exactement 1 ligne » ne suffit pas : *une ligne
+   unique peut être la mauvaise ligne*. Le compte prouve qu'on ne va pas écrire
+   en masse ; il ne prouve pas qu'on écrit au bon endroit.
+2. **Tout dry-run imprime le titre**, pour qu'un humain voie que c'est le bon
+   produit. C'est ce qui a rendu sûre l'écriture de `PROD-00661` le 12/09 : le
+   dry-run affichait « Communication digitale & Stratégie marketing pour activité
+   événementielle », et c'est un œil humain qui a validé, pas un compte de lignes.
+3. **Un ciblage par `code` seul est un défaut**, même quand il marche aujourd'hui.
+
+### Recensement du 12/09/2026 — les scripts à ciblage par code
+
+Relevé sur `apps/web/scripts/*.ts` et `packages/db/scripts/*.ts` suivis par git.
+**Liste, pas correctif** : chacun est à traiter sur décision, pas en série.
+
+| Script | Écrit ? | `tenantId` dans le ciblage | Codes visés |
+|---|---|---|---|
+| `_fill-prod0671.ts` | **🔴 oui** | **NON** — `findFirstOrThrow({ where: { code } })` puis `update` | `PROD-0671` |
+| `fix-data-ses-0086.ts` | **🔴 oui** | **NON** — `findFirst({ where: { code } })` | `PROD-0662`, `PROD-0671` |
+| `_create-optimmo-152h.ts` | 🔴 oui | oui (`tenantId_code`) | `PROD-0674` |
+| `_create-ses-0101.ts` | 🔴 oui | oui | `PROD-0058` |
+| `_gen-optimmo-152h-docs.ts` | 🔴 oui | oui | `PROD-0674` |
+| `_check-prod0671-frozen.ts` · `_diag-prod0671.ts` · `_diag-prod0671-full.ts` · `_dump-prod0671-prog.ts` · `_gen-deroule-cloud.ts` · `_q.ts` | 🟢 lecture | NON | `PROD-0671`, `PROD-0042`, `PROD-0058` |
+
+### Où vit le générateur, et quand il déménage
+
+Le générateur unique vit dans **`packages/db/scripts/lib/product-code.ts`**,
+exposé par `@qualiof/db/product-code`. Ses appelants au 12/09/2026 : les trois
+imports SmartOF et `import-diag-catalog.ts`.
+
+**`crud-edits.ts` garde sa propre boucle de séquence, et c'est délibéré.** Le
+danger réel n'était pas la duplication de forme : c'était que trois sites
+LISENT le catalogue différemment pour en déduire le prochain numéro —
+`import-diag-catalog.ts` lisait `/^PROD-(\d{1,4})$/`, quatre chiffres maximum,
+donc `PROD-00661` lui était **invisible**. Les lectures sont désormais
+identiques (`/^PROD-0*(\d+)$/`) : deux sites ne peuvent plus se croiser.
+
+**Condition de reprise, écrite pour qu'on n'y revienne pas par réflexe** : le
+module migre vers `packages/shared` le jour où un **troisième** appelant en a
+besoin, pas avant. Le déplacer aujourd'hui pour un besoin qui n'existe pas
+serait du travail spéculatif — et il faudrait élargir l'`exports` de
+`@qualiof/db` pour qu'une server action du bundle Next consomme un fichier de
+`scripts/`.
+
+**Deux scripts écrivent sans scoper** : `_fill-prod0671.ts` et
+`fix-data-ses-0086.ts`. Aucun des deux ne mord aujourd'hui — la divergence
+mesurée commence à `PROD-0681`, et les codes qu'ils visent désignent le même
+produit dans les deux bases. **Rien ne les en empêche demain**, et c'est tout le
+propos : le jour où la série décale sous eux, ils écriront sur le mauvais produit
+sans une erreur.
+
 ## 6. Le diagnostic R1
 
 ### 6.1 Structure — 3 étages, pas 69 écrans
@@ -810,7 +943,7 @@ Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui
 
 1. Depuis le diagnostic (bouton « Organiser les pré-inscriptions ») ou depuis la liste des campagnes, le commercial crée une **campagne de RDV** : **agence (obligatoire — D-22)**, libellé, produit pressenti, 2-3 **dates prévisionnelles** (`BatchDateOption`), expiration (défaut : date du R2 + 30 j). Un seul lien multi-usages est généré (token affiché une seule fois, doctrine §3 du repo diag).
    - **Le rattachement est l'agence, et elle seule (D-22).** Ouverte depuis un diagnostic, l'agence est reprise de lui et verrouillée, le lead suit en contexte, et le libellé se pré-remplit (agence + date du RDV). Ouverte depuis la liste, l'agence se choisit dans le CRM et le diagnostic reste vide — c'est le cas du **client récurrent reformé sans nouveau R1**. Une campagne sans aucun client n'existe plus.
-   - **Les dates se saisissent en demi-journées (D-23)**, l'unité de vente de §8.1. Trois préréglages : Matin, Après-midi, Journée (= 2 demi-journées, et c'est écrit). Chaque date affiche ses demi-journées, ses heures sur site et ses heures conventionnées — le même nombre que la proposition, la convention, l'émargement et le dossier financeur.
+   - **Les dates se saisissent en demi-journées (D-23)**, l'unité de vente de §8.1. Trois préréglages : Matin, Après-midi, Journée (= 2 demi-journées, et c'est écrit). **La lecture dépend de la SURFACE — révision du 11/09/2026, cf. D-23 et D-25.** Côté ADMIN (fiche campagne, formulaire de création), chaque date annonce ses demi-journées, ses heures sur site ET ses heures conventionnées — le même nombre que la proposition, la convention, l'émargement, l'attestation d'assiduité et le dossier financeur. Côté PARTICIPANT (`/rdv/[token]`), chaque date annonce ses **demi-journées et ses heures sur site, et rien d'autre** : l'agent y lit ce qu'il doit bloquer dans son agenda, pas l'assiette de son financeur. **La ligne rouge de cohérence (§8.1) n'en est pas entamée** — elle nomme ses surfaces (proposition, convention, feuilles d'émargement, attestation d'assiduité, dossier financeur), et l'écran d'inscription n'en fait pas partie.
 2. Le dirigeant diffuse le lien à son équipe (ou Start Academy l'envoie — email catégorie « Lien de pré-inscription », fail-closed).
 3. Chaque participant ouvre le lien → page publique `/rdv/[token]`. **Précision de Laurent du 10/09/2026, qui remplace la formulation initiale : cette page NE PORTE PAS de formulaire. Elle DISTRIBUE des liens individuels.** Le participant y donne son identité minimale (prénom, nom, email) et son choix de date ; on lui remet alors SON lien `/preinscription/[token]`, et c'est ce lien-là qui porte le formulaire complet (statut, pièces CNI recto/verso, RIB, attestation CFP pour les TNS). **Motif** : tout le pipeline existant — OCR, extraction, validation admin, motif de rejet, relances des dossiers non rendus — est accroché à une pré-inscription INDIVIDUELLE. Un formulaire porté par le lien partagé aurait obligé à recréer chacune de ces briques à côté des premières, soit exactement le second pipeline que §13 interdit. Chaque demande crée un `PreEnrollment(batchId=…)` qui entre dans le pipeline existant — rien de nouveau à construire.
    - **Idempotence sur l'email** : rouvrir le lien avec la même adresse rend le MÊME lien individuel, jamais un second. C'est ce qui permet de reprendre son dossier depuis son téléphone après l'avoir commencé sur son poste, et ça évite les doublons que l'admin devrait démêler.
@@ -821,7 +954,7 @@ Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui
 
 - L'écran de campagne affiche en tête **l'agence, la formation et la date limite de dépôt** — les trois faits qui gouvernent le dossier. La liste affiche l'agence en première colonne.
 - Un participant ne voit JAMAIS le diagnostic, la proposition ou les autres participants — il ne voit que SON formulaire (doctrine « le client ne fait jamais son diagnostic », étendue : il ne voit pas non plus le chiffrage des autres).
-- **Aucun nombre d'heures ne s'affiche sans dire lequel il est** (D-25) : « 36 h sur site · 72 h conventionnées », jamais « 36 h ».
+- **Aucun nombre d'heures ne s'affiche sans dire lequel il est** (D-25), **et la lecture dépend de la surface** : côté admin « 36 h sur site · 72 h conventionnées », côté participant « 36 h sur site » — jamais « 36 h » nu, ni sur l'un ni sur l'autre.
 - **Les compteurs sont exclusifs et totalisants** (D-24) : Non rendu · Pièces manquantes · Rejeté · Bon, somme = effectif attendu.
 - **Les dates s'écrivent en minuscules** — « jeudi 8 octobre 2026 ». Le formatage vient de `lib/dates-fr.ts`, jamais d'une classe CSS `capitalize`, qui majuscule chaque mot.
 - La deadline administrative est calculée et AFFICHÉE : `date de session la plus proche − AGEFICE_LEAD_DAYS_MIN (15 j)` — « pièces réunies au plus tard le … » (c'est déjà l'argument de la proposition OPTIMO réelle).
@@ -839,7 +972,7 @@ Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui
 - **Une demi-journée de formation (4 h sur site, co-animée par 2 formateurs) est facturée 336 € HT par participant.**
 - Le dossier de financement correspondant est monté sur **8 heures conventionnées** (4 h × 2 formateurs — « à deux, ça avance plus vite ») : paramètres `TRAINER_COUNT_DEFAULT = 2` et `heures conventionnées = heures sur site × nb formateurs`.
 - Équivalence : 336 € = 8 h conventionnées × 42 €/h — soit, côté AGEFICE présentiel, **une prise en charge de 100 %** de la demi-journée pour un indé éligible.
-- **⚠ Ligne rouge de cohérence (non négociable, héritée du PRD proposition v2)** : les heures conventionnées sont LA valeur de référence UNIQUE — proposition, convention, feuilles d'émargement, attestation d'assiduité, dossier financeur portent LE MÊME nombre d'heures. Le système l'impose par construction (une seule source, `SessionSlot`/produit) et un test de contrat le verrouille. Le multiplicateur co-animation est un paramètre métier assumé par Laurent — à faire valider une fois par l'expert-comptable/l'auditeur Qualiopi, et la génération d'émargement doit refléter les 2 formateurs.
+- **⚠ Ligne rouge de cohérence (non négociable, héritée du PRD proposition v2)** : les heures conventionnées sont LA valeur de référence UNIQUE — proposition, convention, feuilles d'émargement, attestation d'assiduité, dossier financeur portent LE MÊME nombre d'heures. Le système l'impose par construction (une seule source, `SessionSlot`/produit) et un test de contrat le verrouille. Le multiplicateur co-animation est un paramètre métier assumé par Laurent, et la génération d'émargement doit refléter les 2 formateurs. **Tranché le 11/09/2026 — D-6, CLOSE, à ne jamais rouvrir** : le dossier se déclare bien en 8 h, source « les sessions co-animées sont déjà remboursées sur des heures doublées ; les dossiers payés de Laurent font foi ». La validation par l'expert-comptable et l'auditeur Qualiopi reste un confort — ce n'est plus une condition.
 
 ### 8.2 Dimensionnement automatique : le budget fabrique le volume
 
@@ -896,6 +1029,8 @@ prise_en_charge_sal   = min(Σ heures_conventionnées × taux_opco (30 ou 40 €
 reste_à_charge        = Σ prix_vente − Σ prises_en_charge   [UN seul montant consolidé présenté au dirigeant]
 ```
 
+⚠ **Nuance conventionnelle (D-7, tranchée le 11/09/2026)** : les paliers de `OPCO_EP_ENVELOPE` écrits ci-dessus — **2 500 € HT/an sous 11 salariés, 4 500 € HT/an de 11 à 50, fonds conventionnels au-delà de 50** — sont ceux de la **convention collective DU CLIENT**, ici **IDCC 1527, qui couvre les agences immobilières et les syndics**. C'est un **fait vérifié** (plafonds OPCO EP 2026), pas un arbitrage : le seed est juste, et le « ≈ 4 000 € » lu sur la proposition OPTIMO du 11/08 était une **erreur de saisie**, pas une seconde source. **Hors immobilier, le chiffre change** — c'est pourquoi ces paliers restent **modifiables dans Paramètres, à dessein** : ce n'est pas une constante du produit, c'est une **donnée de branche**. Un moteur qui les graverait en dur mentirait au premier client d'une autre convention collective.
+
 Règles conservées du PRD : régimes **séparés en calcul, consolidés en affichage** (mention obligatoire « deux dossiers administratifs distincts ») · un participant appartient à UN régime · surplus au-delà d'une enveloppe = reste à charge additionnel, **arbitrage humain, jamais automatique** · modules distanciels : alerte « non pris en charge OPCO EP » · > 50 salariés : blocage doux « à valider avec l'OPCO EP » · une projection (CA en cours) n'est JAMAIS un droit acquis · taux de consommation 24 mois affiché « Environ X % » — sous 30 % : levier « vos droits sont sous-utilisés ».
 
 Arguments contractuels affichés d'office (blocs OPTIMO réels) : **montage administratif 100 % Start Academy** · **zéro avance de trésorerie** · **indemnisation AGEFICE ~700-800 € perçue par chaque agent formé** (paramètre `AGEFICE_INDEMNITY_RANGE`) · **valide les heures obligatoires loi ALUR** · **droits perdus au 31/12 s'ils ne sont pas consommés**.
@@ -911,7 +1046,68 @@ Arguments contractuels affichés d'office (blocs OPTIMO réels) : **montage admi
 
 ---
 
+## 8.4 L'exception à la règle anti-vidage : l'avarie n'est pas du contenu
+
+_Posée par Laurent le 12/09/2026, au premier cas réel._
+
+La règle anti-vidage du 11/09/2026 — **un import ne vide plus un contenu écrit
+en base** — protège du **CONTENU** : ce qu'un humain a rédigé ne doit pas être
+écrasé par une source plus pauvre.
+
+Elle ne protège pas une **AVARIE**. Cas fondateur : `FRM-0001` et `FRM-0002`
+portaient un texte d'accessibilité de 141 caractères **coupé au milieu, deux
+fois, par des points de suspension littéraux** — une extraction tronquée écrite
+en base, pas une rédaction. Le repli de `/catalogue` en rend 231, complets,
+référent handicap nommé avec son contact.
+
+**Le critère, et il est vérifiable** : vider améliore-t-il ce que lit le
+client ? Si oui, ce n'était pas du contenu.
+
+**La preuve exigée avant d'agir** — et c'est elle qui empêche d'invoquer
+l'exception à tort : le **rendu de la page avec le champ nul**, constaté sur une
+fiche réelle, pas déduit du code. Vérifié le 12/09 sur `PROD-0058`, dont
+`accessibility` est `NULL` en production et qui rend bien le texte complet. Si
+le repli ne rend pas mieux que l'override, **on ne touche à rien**.
+
+Corollaire : le texte retiré se **conserve dans le diff de l'`AuditLog`**.
+Effacer une avarie sans en garder la trace rendrait l'opération invérifiable —
+et c'est précisément quand on soupçonne une erreur qu'on relit l'audit.
+
 ## 9. Les sorties documentaires
+
+### 9.0 Vocabulaire — la FICHE CATALOGUE et le PROGRAMME COMPOSÉ sont deux objets
+
+_Posé par Laurent le 12/09/2026, parce que les deux se confondaient dans les
+comptes rendus et que la confusion oriente le travail dans le mauvais sens._
+
+| | **Fiche catalogue** | **Programme composé** |
+|---|---|---|
+| Ce que c'est | la description d'une prestation vendue | un parcours assemblé pour UN client |
+| Qui la fabrique | un humain, une fois | le composeur, à chaque diagnostic |
+| Varie selon le client | **non** — la même pour tous | **oui** — c'est tout son objet |
+| Publiée | **oui**, `/catalogue` (produits `isActive`) | **jamais** |
+| Qui la lit | le prospect, et **l'auditeur Qualiopi** | le client concerné, et le financeur |
+| Porte des modules | pas nécessairement | oui, par construction |
+
+**Conséquence, et c'est le but de ce paragraphe :** un produit qui n'a pas de
+module n'est pas un produit incomplet — il lui manque seulement de quoi entrer
+dans le composeur. Sa **fiche** peut être parfaitement conforme sans qu'aucun
+module n'existe : l'indicateur 1 demande une information détaillée et
+vérifiable **par prestation** (objectifs, durée, prérequis, modalités, méthodes,
+évaluation, accessibilité, tarif, délais d'accès), et la fiche les porte toutes.
+
+Donc, face à un produit sans module, deux questions **distinctes**, à ne jamais
+fondre en une :
+
+1. **Sa fiche est-elle conforme ?** → question Qualiopi, réponse dans
+   `/catalogue`, traitée produit par produit.
+2. **Doit-il entrer dans le composeur ?** → question commerciale, qui suppose un
+   découpage en modules porteurs de signaux. **Elle ne se pose pas
+   systématiquement** : un produit peut rester vendable en direct, sur sa seule
+   fiche, sans jamais être composable.
+
+Écrire un programme sur mesure pour un produit dont on voulait seulement la
+fiche, c'est répondre à la question 2 quand on posait la question 1.
 
 ### 9.1 La proposition (« comme un devis, mais hyper détaillé »)
 
@@ -1099,45 +1295,53 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | # | Question | Décision de Laurent | Date |
 |---|---|---|---|
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
+| **D-8** | Volume 72 h × 42 € = 3 024 € vs plafond AGEFICE 3 000 € : que faire des 24 €/agent d'écart ? | ✅ **Tranchée avec D-11** : plafonner à 3 000, afficher l'écart en reste à charge, geste commercial en un clic dans la proposition. ⚠ **Restée par erreur dans le tableau des décisions restantes jusqu'au 11/09/2026**, alors que sa propre cellule disait « tranchée » — c'est la moitié de l'incident consigné en tête de ce tableau-là. | 02/09/2026 |
+| **D-7** | Montants OPCO EP : le seed porte 2 500 € (< 11 salariés) et 4 500 € (11 à 50), alors que la proposition OPTIMO du 11/08 mentionnait « ≈ 4 000 € » au-delà de 10 salariés. Lequel fait foi ? | **Le seed est JUSTE — et ce n'est pas un arbitrage, c'est un FAIT VÉRIFIÉ.** Plafonds OPCO EP 2026, branche immobilier, **convention collective IDCC 1527** : **2 500 € HT/an** pour un effectif de moins de 11 salariés · **4 500 € HT/an** de 11 à 50 salariés · **au-delà de 50, fonds conventionnels** — jamais un montant automatique (le §8.2 garde son blocage doux « à valider avec l'OPCO EP »). **Le « ≈ 4 000 € » de la proposition OPTIMO du 11/08 était une ERREUR DE SAISIE, pas une source concurrente** : c'est écrit ici noir sur blanc pour qu'on ne le ressorte plus jamais comme une contradiction à réarbitrer. ⚠ **Nuance conventionnelle** : ces paliers sont ceux de la convention collective DU CLIENT — **IDCC 1527 couvre les agences immobilières et les syndics** — donc hors immobilier le chiffre change. Le paramètre reste **modifiable dans Paramètres, et c'est voulu** : ce n'est pas une constante du produit, c'est une **donnée de branche** (cf. §8.2 et les seeds `OPCO_EP_ENVELOPE_*` du §4). | 11/09/2026 |
+| **D-3** | Qui peut accorder une remise > 15 % du reste à charge — un MANAGER suffit, ou l'ADMIN seul ? | **MANAGER.** Motif : **cohérent avec D-8** — l'écart de 24 €/agent créé par le plafond AGEFICE s'offre d'un clic depuis la proposition, geste tracé comme toute remise ; réserver ce clic à l'ADMIN seul bloquerait en rendez-vous la seule personne qui est devant le client. Les garde-fous du §8.3 ne bougent pas d'un mot : remise **uniquement sur le reste à charge** (non-transfert de dette), motif obligatoire, validation **bloquante avant envoi** au-delà de `DISCOUNT_WARNING_PERCENT`. | 11/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
 | **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. **Corollaire du 10/09 : on n'active JAMAIS les conteneurs importés** — la reco et le composeur lisent les modules quel que soit l'`isActive` du conteneur, et c'est le produit composé qui porte l'état vendable. **Appliqué en I-1 le 10/09/2026** : `recommendModules` ne filtre nulle part sur `source.isActive`, et deux tests tiennent la règle — l'un joue la reco avec TOUS les conteneurs inactifs, l'autre vérifie que les activer ne change strictement rien au résultat. Cf. §5.3. | 04/09/2026 |
 | **D-19 bis** | Quatre rayons importés du Drive portent le même programme qu'un produit déjà vendu (`drive:055`↔`PROD-055`, `drive:053`↔`PROD-053`, `drive:046`↔`PROD-0671`, `drive:074`↔`PROD-0662`). Lequel fait foi ? | **La version VENDUE.** Le produit vendu ne bouge pas — ni sa durée, ni sa page publique « Programme détaillé », qui EST l'information préalable remise au client ; la modifier après coup crée un écart annoncé/réalisé, donc une réserve Qualiopi. C'est le RAYON qui s'efface : il reste consultable, mais **ses modules sortent du chemin de composition**. Motif : deux versions du même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en animer une autre. **Détection** : égalité de nom normalisée, à l'import uniquement, contre les seuls produits **vendus** (non importés ET actifs) ; le lien est **persisté** dans `TrainingProduct.supersededByProductId` et **jamais recalculé ni retiré** par un import — c'est ce qui empêche un dossier Drive renommé de réintroduire le doublon. Le moteur filtre en plus, et le dit en notice. **À ne pas confondre avec `isActive`** : inactif = la norme (81 rayons sur 81), écarté = doublon (4). **Conséquence assumée** : ces quatre produits ne portant aucun module, ils deviennent invisibles à la reco au niveau module — cf. §5.3. | 10/09/2026 |
-| **D-19 ter** | « L'Agent Incomparable » (`PROD-0681`), parcours v0.9 dont le manifeste porte « NE PAS DIFFUSER AUX APPRENANTS », était proposé en tête de deux douleurs sur la liste de rattachement du 11/09. Pourquoi le filtre ne l'a-t-il pas arrêté ? | **Parce que l'interdiction n'était nulle part dans la donnée** — elle vivait dans un manifeste et dans une phrase de `programMd`. Le seul champ qui en portait la trace, `isActive`, est précisément celui sur lequel le corollaire D-19 interdit de filtrer (81 rayons sur 81 sont inactifs). **Règle** : `TrainingProduct.excludedFromClientOutputs`, même sens et même nom que la pige sur `TrainingModule`, posé un cran au-dessus — l'interdiction porte sur le PROGRAMME, donc sur tous ses modules, **y compris ceux qu'on lui ajouterait demain**. Posée par l'import (création ET réparation), tenue par `recommendModules` qui écarte et le DIT en notice. **Trois notions, trois champs** : inactif = la norme (81), écarté = doublon (4), non diffusable = interdiction (1). Quatre tests, dont un qui vérifie qu'un rayon simplement inactif n'est PAS écarté. | 11/09/2026 |
+| **D-19 ter** | « L'Agent Incomparable » (`PROD-0681`), parcours v0.9 dont le manifeste porte « NE PAS DIFFUSER AUX APPRENANTS », était proposé en tête de deux douleurs sur la liste de rattachement du 11/09. Pourquoi le filtre ne l'a-t-il pas arrêté ? | **Parce que l'interdiction n'était nulle part dans la donnée** — elle vivait dans un manifeste et dans une phrase de `programMd`. Le seul champ qui en portait la trace, `isActive`, est précisément celui sur lequel le corollaire D-19 interdit de filtrer (81 rayons sur 81 sont inactifs). **Règle** : `TrainingProduct.excludedFromClientOutputs`, même sens et même nom que la pige sur `TrainingModule`, posé un cran au-dessus — l'interdiction porte sur le PROGRAMME, donc sur tous ses modules, **y compris ceux qu'on lui ajouterait demain**. Posée par l'import (création ET réparation), tenue par `recommendModules` qui écarte et le DIT en notice. **Trois notions, trois champs** : inactif = la norme (81), écarté = doublon (4), non diffusable = interdiction (1 le 11/09, **2 depuis le 12/09** — `PROD-00661` rejoint `PROD-0681`, cf. D-18 *la réponse*). Quatre tests, dont un qui vérifie qu'un rayon simplement inactif n'est PAS écarté. | 11/09/2026 |
 | **D-19 bis (suite)** | D-19 bis tranche un rayon contre un produit VENDU. Entre **deux rayons**, elle est muette : rien ne les départage. `drive:008` « Face à face acheteurs » et `drive:020` « Face a face acheteurs » sont le même programme sous deux numéros. | **C'est Laurent qui désigne, et la décision est déclarée dans le code** (`RAYONS_TRANCHES`), datée et motivée — jamais passée à la main sur une base, sinon elle est perdue à la prochaine. **Arbitrage du 11/09** : garder `BIB-D008`, écarter `BIB-D020` ; motif — **008 est le numéro de ce programme dans la numérotation catalogue de Laurent** (008 → 074), 020 est une copie rangée sous un autre numéro. Le lien se pose dans le même champ que D-19 bis, donc il **n'est jamais recalculé** : un prochain import du Drive ne peut pas réintroduire le doublon. Le rayon écarté **reste en base et consultable**, et le rapport le **dit** — un doublon réglé par une décision doit rester lisible, sinon quelqu'un la reprendra depuis zéro. Refus de sécurité si le rayon gardé est introuvable. | 11/09/2026 |
 | **D-20** | Le total d'un programme composé se déduit-il de la somme des durées de ses modules ? | **Non — l'unité de vente est le bloc de 8 h** (4 h sur site × 2 formateurs, cohérent avec 336 €/participant/demi-journée). Un programme composé est un multiple de ce bloc ; les durées de modules servent uniquement à savoir ce qui TIENT dans un bloc. Clôt le sujet des 16 modules à 1 h (D-17) : le défaut ne pilote plus aucun montant vendu. **Ligne rouge** : diagnostic et modules uniquement — interdiction de retoucher la durée d'un produit portant sessions ou conventions signées (journées Faros), sinon les documents émis ne correspondent plus. | 04/09/2026 |
 | **D-21** | La proposition doit-elle partir par email, et si oui automatiquement ? | **Elle se PRÉSENTE en rendez-vous — c'est là qu'elle se vend.** Mais le commercial doit pouvoir l'envoyer : bouton **« Envoyer par email », déclenché par lui, jamais automatique**. Trois garde-fous : ① une **catégorie d'email décochable de plus** dans `TenantEmailSettings`, fail-closed comme les autres (sans la case, rien ne part) ; ② on envoie le **lien de lecture public**, jamais une fiche nominative en pièce jointe — le lien porte déjà la règle « sans PII » du lot E ; ③ l'envoi est tracé comme une remise via `markProposalSent`, donc un envoi et une remise en main propre laissent la même trace et le statut ne ment pas. Livré **dans le lot F**, où le mailer est déjà touché. Les relances AUTOMATIQUES restent au **lot H** — ce sont deux sujets, et les mélanger ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer. | 10/09/2026 |
 | **D-22** | Une campagne de pré-inscription doit-elle porter un client, et lequel ? | **Elle porte TOUJOURS une agence — `organizationId` non-null sur `EnrollmentBatch`.** `diagnosticId` et `leadId` restent facultatifs, en contexte supplémentaire, jamais comme alternatives. **Motif** : un rattachement unique et obligatoire évite d'avoir à deviner, dans chaque écran et à la conversion des pré-inscriptions, lequel de trois liens facultatifs a été renseigné. Deux chemins de création, une seule règle : depuis la fiche diagnostic (bouton « Organiser les pré-inscriptions » — l'agence, le lead et le libellé se pré-remplissent), ou depuis la liste en choisissant l'agence dans le CRM, ce qui couvre le **client récurrent reformé sans nouveau R1** — l'interdire pousserait à saisir un faux diagnostic. **La création sans aucun client disparaît.** Aucune reprise de données : la fonctionnalité n'a jamais tourné en production. | 10/09/2026 |
-| **D-23** | Un créneau de campagne se saisit-il en journées ou en demi-journées ? | **En demi-journées — c'est l'unité de vente (§8.1), et l'écran doit la dire.** Le défaut passe de 09:00–17:00 (une journée pleine, muette sur ce qu'elle vaut) à une demi-journée le matin, avec trois préréglages Matin / Après-midi / **Journée (2 × 4 h)**. Chaque date annonce en clair ses demi-journées, ses heures sur site et ses **heures conventionnées** — dérivées de `conventionedHoursPerHalfDay`, le helper qu'utilise déjà le chiffrage, jamais d'une seconde formule (ligne rouge §8.1). Le participant lit le même horaire et le même décompte sur `/rdv/[token]` : il ne pouvait pas, avant, distinguer une matinée d'une journée. Arrondi : durée du créneau ÷ durée d'une demi-journée, **au plus proche avec plancher à 1** — une journée réelle de 09:00 à 18:00 vaut 2 demi-journées et non 3, la pause déjeuner ne se facturant pas. **Les heures s'affichent en `Europe/Paris`, jamais dans le fuseau du serveur** : l'aperçu rendu en UTC annonçait « 07:00 – 11:00 » un créneau de 09:00, écart invisible depuis un poste français. | 10/09/2026 |
+| **D-23** | Un créneau de campagne se saisit-il en journées ou en demi-journées ? | **En demi-journées — c'est l'unité de vente (§8.1), et l'écran doit la dire.** Le défaut passe de 09:00–17:00 (une journée pleine, muette sur ce qu'elle vaut) à une demi-journée le matin, avec trois préréglages Matin / Après-midi / **Journée (2 × 4 h)**. **Révision du 11/09/2026 — la lecture se règle PAR SURFACE, et non « partout ».** Arbitrage de Laurent après le commit `267f401` « heures conventionnées retirées de la page participant », **conservé, pas reverté**. Motif : la **ligne rouge de cohérence (§8.1) NOMME ses surfaces** — proposition, convention, feuilles d'émargement, attestation d'assiduité, dossier financeur — et **l'écran d'inscription n'en fait pas partie** ; le lecteur des heures conventionnées est le **PAYEUR**, qui les reçoit expliquées dans la proposition avant la convention, pas l'agent qui choisit son créneau. **Trois règles.** **① Documents contractuels et financeur** (la liste du §8.1) : **heures conventionnées obligatoires, valeur unique, JAMAIS recalculées** — dérivées de `conventionedHoursPerHalfDay`, le helper qu'utilise déjà le chiffrage, jamais d'une seconde formule. **② Écran de choix de créneau (`/rdv/[token]`) : demi-journées + heures sur site UNIQUEMENT.** Le participant y lit ce qu'il doit bloquer dans son agenda. Les heures conventionnées sont une mécanique de financement (co-animation, assiette du financeur) dont le lecteur est le payeur, pas l'agent qui choisit une matinée. Il distingue toujours une matinée d'une journée — ce que l'écran d'avant D-23 ne permettait pas. **③ Partout où le chiffre est montré au client, il ne paraît JAMAIS seul** — une phrase avec sa raison. Formulation de référence (Laurent) : « 4 h sur site animées par 2 formateurs, soit 8 h conventionnées prises en charge par votre financeur. » Ce n'est pas à inventer : la **page 3 de la proposition** l'applique déjà **en production**, sans condition, sous le tableau par payeur — « Les N heures conventionnées par participant (X demi-journées de Y h sur site, co-animées par Z formateurs) figurent à l'identique sur la convention, les feuilles d'émargement, l'attestation d'assiduité et les dossiers financeurs » (`proposition-template.ts`). En code, deux phrases pour deux lecteurs : `decrireCreneau` / `decrireDureeProduit` (admin, **avec** les heures conventionnées) et `decrireCreneauParticipant` / `decrireDureeProduitParticipant` (participant, **sans**). Arrondi : durée du créneau ÷ durée d'une demi-journée, **au plus proche avec plancher à 1** — une journée réelle de 09:00 à 18:00 vaut 2 demi-journées et non 3, la pause déjeuner ne se facturant pas. **Les heures s'affichent en `Europe/Paris`, jamais dans le fuseau du serveur** : l'aperçu rendu en UTC annonçait « 07:00 – 11:00 » un créneau de 09:00, écart invisible depuis un poste français. | 10/09/2026 · **révisée le 11/09/2026** |
 | **D-24** | Les compteurs de la fiche campagne : cinq axes, ou quatre cases ? | **Quatre tuiles EXCLUSIVES et TOTALISANTES**, dans l'ordre du parcours : **Non rendu · Pièces manquantes · Rejeté · Bon**, dont la somme vaut l'effectif attendu. L'aperçu en affichait cinq dont le total faisait 5 pour 4 dossiers : « en cours de vérification » disait un STATUT, « pièces manquantes » une COMPLÉTUDE, et un même dossier tombait dans les deux. Arbitrages qui en découlent : un dossier **en vérification ET incomplet** compte comme « pièces manquantes » (la seule information actionnable) ; un dossier **rendu, complet, pas encore validé** compte comme « bon » — rien ne bloque — et le nombre de non-tranchés se dit en **sous-libellé, jamais en tuile** ; une **validation admin l'emporte** sur le contrôle automatique des pièces ; les **attendus qui n'ont pas ouvert le lien** comptent comme non rendus, sinon la somme ne vaudrait que le nombre de dossiers ouverts. Les compteurs s'accordent alors exactement avec « ce qui bloque » : une ligne de relance par dossier non bon, jamais deux. | 10/09/2026 |
-| **D-25** | Que compte `TrainingProduct.durationHours` — heures sur site ou heures conventionnées ? | **Heures CONVENTIONNÉES.** Preuve dans le catalogue réel : les journées Faros (FRM-0004..0007) valent 336 € HT — une demi-journée au tarif §8.1 — pour `durationHours = 8`. Et ce champ alimente `convention-template.ts` et `agefice-attendance-generator.ts`, donc la convention et le dossier financeur : c'est bien la valeur unique de la règle gravée n°2. **Conséquence d'écran** : aucun nombre d'heures ne s'affiche sans dire lequel il est. La page publique montrait « 36 h » nu sous le nom de la formation, juste au-dessus de dates qui, elles, distinguaient « h sur site » et « h conventionnées » ; elle affiche désormais les deux, dérivées par `decrireDureeProduit`. Un parcours de 9 demi-journées porte donc **72 h conventionnées / 36 h sur site**, le nombre même que verrouille le test de contrat de la proposition. **Précision de Laurent du 10/09/2026** : le facteur ×2 est une règle de **TARIFICATION** — il dit ce que vaut une demi-journée co-animée, pas ce que la convention doit raconter. **La convention n'a pas à nommer deux formateurs.** | 10/09/2026 |
-| **D-25 bis** | Conséquence directe de D-25, à lire avec elle | Ce même facteur de tarification fixe le **nombre d'heures déclaré au financeur** — 8 h pour 4 h sur site — et ce nombre-là **s'imprime sur la convention et sur l'attestation d'assiduité**. Autrement dit : on ne nomme pas deux formateurs, mais on déclare leurs heures. C'est exactement ce que **D-6** doit trancher, et sa question est désormais écrite en toutes lettres dans le tableau des décisions restantes. Tant que la réponse n'est pas là, le paramètre `TRAINER_COUNT_DEFAULT` reste actif et la valeur qu'il produit est la seule qui circule — aucun écran, aucun document n'en fabrique une deuxième. | 10/09/2026 |
+| **D-25** | Que compte `TrainingProduct.durationHours` — heures sur site ou heures conventionnées ? | **Heures CONVENTIONNÉES.** Preuve dans le catalogue réel : les journées Faros (FRM-0004..0007) valent 336 € HT — une demi-journée au tarif §8.1 — pour `durationHours = 8`. Et ce champ alimente `convention-template.ts` et `agefice-attendance-generator.ts`, donc la convention et le dossier financeur : c'est bien LA valeur unique de la **ligne rouge de cohérence (§8.1)** — la « règle gravée n°2 » du PRD proposition v2. **Conséquence d'écran, énoncée PAR SURFACE (révision du 11/09/2026, à lire avec D-23)** : aucun nombre d'heures ne s'affiche sans dire lequel il est, et toutes les surfaces ne portent pas les mêmes. **① Documents contractuels et financeur** — proposition, convention, feuilles d'émargement, attestation d'assiduité, dossier financeur : **heures conventionnées obligatoires, valeur unique, jamais recalculées** ; c'est exactement la liste du §8.1, et `durationHours` est ce qui l'alimente. **② Écran de choix de créneau (`/rdv/[token]`) : demi-journées + heures sur site UNIQUEMENT** (`decrireDureeProduitParticipant`, `decrireCreneauParticipant`) — son lecteur bloque son agenda, il n'instruit pas un dossier ; l'écran admin, lui, porte les deux (`decrireDureeProduit`, `decrireCreneau`). **③ Partout où le chiffre est montré au client, il ne paraît jamais seul** — une phrase avec sa raison : « 4 h sur site animées par 2 formateurs, soit 8 h conventionnées prises en charge par votre financeur », ce que la page 3 de la proposition rend déjà sans condition (`proposition-template.ts`). Le défaut d'origine reste le même : la page publique montrait « 36 h » nu sous le nom de la formation, juste au-dessus de dates qui, elles, distinguaient « h sur site » et « h conventionnées » — un nombre qui ne dit pas lequel il est vaut moins que pas de nombre. Un parcours de 9 demi-journées porte donc **72 h conventionnées / 36 h sur site**, le nombre même que verrouille le test de contrat de la proposition. **Précision de Laurent du 10/09/2026** : le facteur ×2 est une règle de **TARIFICATION** — il dit ce que vaut une demi-journée co-animée, pas ce que la convention doit raconter. **La convention n'a pas à nommer deux formateurs.** **Révision du 11/09/2026** : le commit `267f401` « heures conventionnées retirées de la page participant » est **conservé sans revert** — motif de Laurent, la ligne rouge du §8.1 nomme ses cinq surfaces et l'écran d'inscription n'en fait pas partie ; le lecteur des heures conventionnées est le PAYEUR, qui les reçoit expliquées dans la proposition avant la convention. | 10/09/2026 · **révisée le 11/09/2026** |
+| **D-25 bis** | Conséquence directe de D-25, à lire avec elle | Ce même facteur de tarification fixe le **nombre d'heures déclaré au financeur** — 8 h pour 4 h sur site — et ce nombre-là **s'imprime sur la convention et sur l'attestation d'assiduité**. Autrement dit : on ne nomme pas deux formateurs, mais on déclare leurs heures. C'était exactement ce que **D-6** devait trancher — **et c'est fait : D-6 est CLOSE depuis le 11/09/2026** (réponse : 8 h ; source : les dossiers de financement payés de Laurent), elle vit désormais dans ce tableau-ci, juste en dessous, et ne se rouvre jamais. Le paramètre `TRAINER_COUNT_DEFAULT` reste donc actif à 2 — non plus par défaut d'arbitrage, mais par décision — et la valeur qu'il produit est la seule qui circule : aucun écran, aucun document n'en fabrique une deuxième. | 10/09/2026 · **complétée le 11/09/2026** |
+| **D-6** _(CLOSE — ne jamais la rouvrir)_ | **Question exacte (formulée le 10/09/2026)** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » Enjeu : c'est le nombre qui s'imprime sur la convention, l'émargement, l'attestation d'assiduité et le dossier financeur (cf. D-25 et D-25 bis). | **En 8 H — les heures doublées.** Réponse de Laurent, le 11/09/2026 : **les sessions co-animées sont déjà remboursées sur des heures doublées ; ses dossiers payés font foi.** **Source** : les dossiers de financement de Laurent déjà payés sur ce décompte — c'est une réponse AVEC sa source, ce que la fiche exigeait (« une réponse sans sa source ne vaut rien le jour d'un contrôle »). Conséquences : `TRAINER_COUNT_DEFAULT = 2` n'est plus un défaut en attente d'arbitrage mais la règle ; la validation par l'expert-comptable et l'auditeur Qualiopi reste un confort, elle n'est plus une condition ; D-26 (nombre de formateurs corrigeable par session) reste entière — déclarer des heures doublées suppose justement que le nombre déclaré soit le vrai. **Consigne explicite de Laurent : ne JAMAIS rouvrir cette décision.** ⚠ Elle est ici, et plus dans les restantes, parce qu'elle y a été laissée « ouverte » après avoir été tranchée : une session l'y a lue comme à trancher et en a tiré, **de bonne foi**, un contre-argument contre une décision déjà prise. | 11/09/2026 |
 | **D-26** | Le nombre de formateurs est-il toujours de deux ? | **Non — Laurent anime rarement, mais parfois SEUL.** Deux formateurs restent le défaut, mais le nombre doit être **corrigeable SUR UNE SESSION, avant émission des documents** : sinon la convention et l'attestation déclarent le double de ce qui s'est réellement passé, ce qui est un faux en pièce financeur. À porter au modèle : **nombre de formateurs par session** (défaut = la règle du tenant), **heures conventionnées dérivées** de ce nombre et non plus de la seule règle, **émargement cohérent** avec lui. **À PLANIFIER APRÈS LE LOT F — pas dedans** (décision Laurent du 10/09/2026) : la campagne de RDV ne produit aucun document conventionnel, elle peut donc être fusionnée sans attendre. | 10/09/2026 |
 | **D-27** | Le rapprochement lexical acceptait un mot unique s'il était rare et long (≥ 8 caractères). Sur les 17 douleurs « couvertes » du 11/09, six lignes venaient d'un seul mot — et les six étaient fausses (« formation » → déontologie, « collecte » → e-mails, « nécessaires » → journée de tournage, « contacts » → newsletters, « régulièrement » → plan d'action, « conseiller » → cadastre). | **Deux mots pleins concordants, ou rien.** Un rapprochement fondé sur un seul mot commun n'est plus proposé du tout. Motif : une ligne fausse n'est pas neutre — elle se lit, se vérifie, se barre, et surtout elle **cache** la vérité utile, qui est que la douleur n'est pas couverte. Mieux vaut une douleur déclarée non couverte, qui dit d'écrire du contenu. **Conséquence chiffrée assumée** : les douleurs sans réponse montent de 17 à 21 — c'est le chiffre vrai. ⚠ **Ne recouvre PAS `recommendModules`** — **tranché par Laurent le 11/09 : on ne l'aligne pas.** Motif : le seuil lexical est une **béquille de relecture**, pas une doctrine de moteur ; une fois les rattachements écrits, le moteur suit les étiquettes et ne devine plus. À rouvrir seulement si des recommandations sortent encore en `source: 'lexique'` sur dossiers réels après l'écriture. | 11/09/2026 |
 | **D-28** | « Le dirigeant connaît ses droits à formation », « au moins une action de formation sur 24 mois », « part de la transaction dans l'ancien », « aucun refus de prise en charge à traiter » : quatre douleurs qui recevaient des propositions de modules, et qui en recevront toujours de mauvaises. | **Ce ne sont pas des besoins de formation.** Ce sont des faits de contexte ou de financement ; la réponse est un dossier AGEFICE, une explication en rendez-vous ou un fait de marché, jamais un programme. **Règle** : `Rule.answerableByTraining` dans le barème, exposé par `listDiagnosticPainPoints()`. Elles **restent notées** — savoir que le dirigeant ignore ses droits change le rendez-vous — mais sortent de l'exercice de rattachement : **ni proposées, ni comptées comme non couvertes**. La décision vit dans le barème et non dans le script, parce que le composeur (I-2) et l'éditeur de proposition poseront la même question. | 11/09/2026 |
 | **D-29** _(OUVERTE)_ | En retirant des déroulés les moyens pédagogiques d'organisme (lot 1 bis du 11/09), plusieurs lignes retirées étaient **spécifiques au programme** — « études de cas réels issus du marché immobilier », « exercices guidés pas à pas sur la rédaction de prompts » — alors que la rubrique « Moyens pédagogiques et techniques » du programme composé se remplit en **générique depuis l'organisme**. On a donc retiré du spécifique sans point de chute. | **Question ouverte : faut-il un champ « moyens pédagogiques » au niveau du PRODUIT, qui COMPLÈTE celui de l'organisme dans le programme composé ?** C'est une décision de **modèle** : elle revient à Laurent et elle **attend** — rien dans le code ne l'anticipe. Le texte retiré est conservé mot pour mot, programme par programme, dans `.planning/quick/260911-kwf-…/260911-kwf-SUMMARY-02.md` : c'est la seule trace si la réponse est « oui ». | **ouverte** — 11/09/2026 |
 | **D-17** | Le catalogue diag déclare le même module pour trois profils (`conseiller`, `manager`, `assistant`) et ne porte la durée que sur `conseiller` — 30 modules sur 79 sortaient sans durée, et le conteneur « Usecases » à **0 h**. | **Deux étages, jamais zéro.** ① la durée déclarée pour le même module sous un autre profil (14 modules — c'est la vraie durée, simplement rangée ailleurs) ; ② 1 h par défaut pour les 16 restants, la durée la plus fréquente du catalogue déclaré, **choix conservateur** (surestimer des heures qui finiront sur une convention ou un dossier financeur est une non-conformité ; les sous-estimer n'est qu'un catalogue à affiner). Le rapport les liste une par une. Seul « L'Agent Incomparable » reste à 0 h : parcours v0.9 explicitement non diffusable, aucune durée connue — l'inventer serait pire. | 04/09/2026 |
-| **D-18** | La recommandation faisait remonter un programme « pour activité événementielle » sur l'e-réputation d'une agence immobilière. Faut-il un filtre de domaine ? | **Non — des mots-clés qui qualifient.** « marketing », « communication », « digital » sont du vocabulaire d'entreprise : ils matchent tout, donc ne qualifient rien. Le besoin e-réputation ne cherche plus que « avis », « réputation », « visible », « recommandation », « présence locale ». Et un besoin déclare désormais les **familles qu'il accepte, par ordre de préférence** : les sept besoins de la chaîne commerciale n'acceptent que `METIER` ; l'e-réputation accepte `METIER` puis `IA` (demander et suivre des avis est un sujet d'outillage autant que de méthode) — le métier passe devant, et servir une autre famille se DIT dans le rapport. | 04/09/2026 |
+| **D-18** _(réponse complétée le 12/09/2026)_ | La recommandation faisait remonter un programme « pour activité événementielle » sur l'e-réputation d'une agence immobilière. Faut-il un filtre de domaine ? | **Deux réponses, et la seconde est la vraie.** ① *Moteur (04/09)* — **Non, des mots-clés qui qualifient**, pas un filtre de domaine. ② *Produit (12/09, Laurent)* — le programme a été **nommé** : `PROD-00661` « Communication digitale & Stratégie marketing pour activité événementielle » (72 h, 3 024 € HT, 1 session réellement terminée). Et nommé, le diagnostic change : **ce n'était pas un défaut de moteur, c'était un produit diffusable qui n'aurait pas dû l'être**. Aucun réglage lexical ne règle ça. Il passe donc à `excludedFromClientOutputs = true` — **premier usage réel de D-19 ter** : plus jamais proposé en audit ni en proposition, mais **maintenu au catalogue public et téléchargeable**, parce qu'une session réelle a eu lieu et que l'auditeur Qualiopi doit pouvoir en voir le programme. « Ne pas proposer » n'est pas « ne pas montrer ». ⚠ Décision **consignée, pas appliquée** : aucune écriture en base, la commande attend le feu vert de Laurent. Détail ci-dessus, §*D-18, la RÉPONSE*. Le ① reste vrai et inchangé : **des mots-clés qui qualifient.** « marketing », « communication », « digital » sont du vocabulaire d'entreprise : ils matchent tout, donc ne qualifient rien. Le besoin e-réputation ne cherche plus que « avis », « réputation », « visible », « recommandation », « présence locale ». Et un besoin déclare désormais les **familles qu'il accepte, par ordre de préférence** : les sept besoins de la chaîne commerciale n'acceptent que `METIER` ; l'e-réputation accepte `METIER` puis `IA` (demander et suivre des avis est un sujet d'outillage autant que de méthode) — le métier passe devant, et servir une autre famille se DIT dans le rapport. | 04/09/2026 |
 | **D-15** | Le devis doit-il porter le reste à charge après remise, ou le coût pédagogique ? | **Le coût pédagogique**, et lui seul. Une remise en ligne négative sur le devis réduirait le coût déclaré, donc l'assiette des droits — le client financerait le geste qu'on lui fait. La prise en charge, le reste à charge et le geste commercial vivent dans les **notes** du devis. Σ lignes de devis = coût pédagogique de la proposition, au centime (test de contrat). Cf. §9.1. | 04/09/2026 |
 | **D-16** | Trois pages fixes comme la maquette, ou un document qui coule ? | **Il coule.** Forcer les trois pages produisait une page à moitié vide dès qu'un axe débordait (constaté sur PROP-0001 : la page 2 ne portait qu'un axe et 20 cm de blanc). Les sections s'enchaînent, les blocs ne se coupent jamais (`break-inside:avoid`), et c'est le moteur qui décide où couper — jamais une estimation de hauteur. Même doctrine que le format condensé de l'audit (D-13). | 04/09/2026 |
+| **D-4** | Les devis sont-ils générés à l'envoi de la proposition, ou à son acceptation ? | **À L'ACCEPTATION de la proposition.** Motif : **pas de `DEV-NNNN` mort dans la numérotation — elle doit rester propre pour l'audit.** Émettre un devis à chaque envoi laisse un numéro abandonné derrière chaque affaire perdue, et une numérotation trouée est précisément ce qu'un contrôle regarde. Le client n'en a d'ailleurs pas besoin pour décider : **il lit le détail chiffré dans la proposition** (détail type devis par payeur, §9.1). | 11/09/2026 |
+| **D-5** | Durée de validité par défaut d'une proposition, et relance ? | **30 jours de validité, relance automatique à J-5.** Motif : ce n'est pas un chiffre rond, c'est **l'équilibre entre deux contraintes** — le **dossier OPCO EP se dépose 1 mois avant le démarrage**, et le dirigeant a besoin de temps pour consulter. 30 j lui laissent ce temps **sans rendre le dépôt impossible** ; la relance à J-5 tombe tant que la fenêtre de dépôt est encore tenable. Seed `PROPOSAL_VALIDITY_DAYS = 30` (§4) — modifiable, mais pas sans refaire ce calcul-là. | 11/09/2026 |
 
 | **D-13** | Un diagnostic LÉGER produisait un audit de 17 pages à moitié vides (un chapitre de 2 réponses occupait une page entière). Fallait-il une « synthèse 2-3 pages » distincte ? | **Non — un seul document, deux formats.** Le LÉGER sort au **format condensé** : mêmes 17 sections, mêmes contenus, mais les chapitres s'enchaînent en flux (2-3 par page, jamais coupés). Le COMPLET garde une page par chapitre. Motif : deux documents distincts, c'est deux gabarits à maintenir et deux occasions de diverger — alors que la seule différence utile est la densité. Cf. §9.2. **Densité tranchée le 03/09 après relecture du PDF : DEUX chapitres par page, on garde** — pas de rabotage des encadrés « Repères » / « Premier levier » pour en faire tenir un troisième. C'est le moteur qui décide, sur le contenu réel. | 03/09/2026 |
 | **D-14** | Le pied de page portait « n / 17 » écrit en dur, et un chapitre non noté affichait « — / 100 ». Quelle source pour la numérotation ? | **Les compteurs du moteur d'impression** (`counter(page)` / `counter(pages)` en boîte de marge `@page`). En condensé, le total n'est pas connu à la génération : tout total écrit en dur ment. Effet de bord bienvenu : le pied de page est enfin réellement ancré en bas — un bloc `position:absolute` dans une page en `min-height` retombe dans le flux sous WeasyPrint. | 03/09/2026 |
+| **D-10** | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclusifs individuels) en plus du CA N-1 ? | **Non — la page équipe v1 = CA N-1 + objectif + forces, saisis par le commercial.** Motif : les **ratios individuels** (RDV, mandats, exclusifs par agent) sont une **extension du référentiel v2, pas la v1** — trois champs de plus par agent rallongent le R1 d'autant, et sur une équipe de 8 cela se paie en rendez-vous. **Complété le 03/09** : quand le commercial n'a rien saisi, l'objectif et la préconisation sont **proposés par une règle pure** (objectif = production N-1 × croissance visée par l'agence ; préconisation = position vs moyenne d'équipe). Ce que l'humain a saisi gagne toujours. Si rien n'est calculable, les deux colonnes sont **masquées** — pas remplies de tirets. **✅ Règle VALIDÉE par Laurent le 03/09/2026, telle quelle**, après relecture de la page équipe de DIAG-0001 (objectifs 150/119/100/53 k€ pour une croissance visée de +25 %). ⚠ Restée dans le tableau des décisions restantes jusqu'au 11/09/2026 alors que sa propre cellule portait déjà « validée » — même défaut de rangement que D-6 et D-8, consigné en tête de ce tableau-là. | 11/09/2026 · complément validé le 03/09/2026 |
 
 ### Décisions restantes pour Laurent (à trancher au fil des lots, pas bloquantes pour A)
 
-| # | Question | Défaut proposé |
-|---|---|---|
-| D-1 | Composition exacte du set LÉGER (§6.2) | La liste proposée, ajustée après 2 RDV réels |
-| D-2 | Benchmarks initiaux des ratios (seuils d'alerte) | Valeurs du référentiel v1.0 du repo diag |
-| D-3 | Qui peut créer une remise > 15 % (MANAGER suffit, ou ADMIN seul ?) | MANAGER |
-| D-4 | Devis générés à l'envoi de la proposition ou à l'acceptation ? | À l'acceptation (moins de DEV-NNNN morts) |
-| D-5 | Durée de validité par défaut (30 j ?) et relance à J-5 | 30 j |
-| D-6 | **Question exacte (formulée le 10/09/2026)** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » À poser à l'expert-comptable et à l'auditeur Qualiopi. **Réponse et SOURCE à consigner ici** dès que Laurent l'a — une réponse sans sa source ne vaut rien le jour d'un contrôle. Enjeu : c'est le nombre qui s'imprime sur la convention, l'émargement, l'attestation d'assiduité et le dossier financeur (cf. D-25 et D-25 bis). | Paramètre `TRAINER_COUNT_DEFAULT` actif à 2 (donc 8 h), note de conformité dans la convention. Non bloquant pour le lot F, qui ne produit aucun document conventionnel. |
-| D-7 | Montants OPCO EP : 4 500 € (dit le 01/09) vs ≈ 4 000 € (proposition OPTIMO du 11/08) pour > 10 salariés | 4 500 en seed, modifiable dans Paramètres |
-| D-8 | Volume 72 h × 42 € = 3 024 € vs plafond AGEFICE 3 000 € : que faire des 24 €/agent d'écart ? | ✅ **Tranchée avec D-11** : plafonner à 3 000, afficher l'écart en reste à charge, geste commercial en un clic dans la proposition |
-| D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D, calibré sur 3 audits réels puis figé/versionné |
-| D-10 | Page équipe : faut-il des champs d'activité par agent (RDV, mandats, exclus individuels) en plus du CA N-1 ? | v1 : CA N-1 + objectif + forces saisies par le commercial ; ratios individuels = extension du référentiel v2. **Complété le 03/09** : quand le commercial n'a rien saisi, l'objectif et la préconisation sont **proposés par une règle pure** (objectif = production N-1 × croissance visée par l'agence ; préconisation = position vs moyenne d'équipe). Ce que l'humain a saisi gagne toujours. Si rien n'est calculable, les deux colonnes sont **masquées** — pas remplies de tirets. **✅ Règle VALIDÉE par Laurent le 03/09/2026, telle quelle**, après relecture de la page équipe de DIAG-0001 (objectifs 150/119/100/53 k€ pour une croissance visée de +25 %). |
+> ⚠ **Une décision tranchée quitte ce tableau LE JOUR où elle est tranchée.** Ce tableau-ci ne liste que ce qui attend encore un arbitrage de Laurent — ce n'est pas une archive, et y laisser une décision close la rend FAUSSE.
+>
+> **Pourquoi c'est une règle, et non une préférence de rangement.** Le défaut du 11/09/2026 n'était **pas** qu'une décision manquait par écrit : c'est qu'une décision **réglée était restée rangée avec les questions ouvertes** — lisible, et trompeuse. **Le remède est le déplacement, pas l'écriture.** L'incident, en clair : **D-6**, tranchée par Laurent avec sa source, et **D-8**, dont la cellule disait elle-même « ✅ tranchée avec D-11 », figuraient encore ici. Une session les a lues comme ouvertes et a construit, **de bonne foi**, un contre-argument contre une décision déjà prise ; il a fallu un arbitrage de Laurent pour le défaire. **Troisième cas de la semaine.** La cause racine est toujours la même : *une décision qui n'est pas dans la spec — ou qui y est au mauvais endroit — sera défaite de bonne foi par la session suivante.* C'est la spec qui vit, pas la conversation. Le même défaut de rangement touchait **D-3, D-4, D-5, D-7 et D-10** : les sept sont dans le tableau du dessus depuis le 11/09/2026.
+>
+> **Et la seconde colonne porte un « défaut proposé », jamais un arbitrage.** Tant que Laurent n'a pas dit oui, ce qui y est écrit est une proposition de l'outil, pas une décision — ne jamais la citer comme tranchée.
+>
+> **Ce qui reste ici attend des DONNÉES RÉELLES, pas un avis** — c'est exactement ce qui distingue ces trois lignes des sept déjà tranchées. Chacune porte donc sa **condition de fermeture** en dernière colonne : on sait à quoi elle se ferme, et on ne la tranche pas avant de l'avoir.
+
+| # | Question | Défaut proposé | Se ferme quand |
+|---|---|---|---|
+| D-1 | Composition exacte du set LÉGER (§6.2) | La liste proposée, ajustée après 2 RDV réels | **Après 2 R1 RÉELS menés avec le set proposé.** Ce sont des données d'usage qui la ferment, pas un avis : avant d'avoir tenu deux rendez-vous avec ce set, on ne sait ni ce qui manque ni ce qui traîne. |
+| D-2 | Benchmarks initiaux des ratios (seuils d'alerte) | Valeurs du référentiel v1.0 du repo diag | **Avec D-9, pas avant** — même matière, même calibration : un seuil d'alerte et une pondération de score se règlent sur les mêmes audits réels. Les trancher séparément, c'est calibrer deux fois la même chose et finir par se contredire. |
+| D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D | **Se calibre sur 3 AUDITS RÉELS, puis se FIGE et se VERSIONNE.** Conséquence qu'on oublie, et qui doit donc être écrite ici : **tant que le barème n'est pas figé, aucun score n'est comparable d'un audit à l'autre** — deux dossiers notés sous deux barèmes successifs ne se comparent ni entre eux, ni dans le temps. D'où le versionnement, qui dit sous quel barème un score a été produit. |
 
 ---
 
