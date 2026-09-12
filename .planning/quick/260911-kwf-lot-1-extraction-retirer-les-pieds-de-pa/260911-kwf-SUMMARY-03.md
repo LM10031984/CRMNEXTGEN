@@ -575,24 +575,36 @@ C'est la distinction que D-19 ter rend possible, et elle n'est pas symétrique :
 consignée dans la spec ; voici le geste qui l'appliquerait, `update` ciblé sur le
 code, **scopé `tenantId`** :
 
+⚠ **NON EXÉCUTÉE.** Écrire le script dans le bac à sable, pas dans le dépôt —
+ce n'est pas du code à garder, c'est un geste à tracer :
+
+```ts
+// /tmp/appliquer-d19ter-prod00661.ts  — ⚠ NON EXÉCUTÉ, attend Laurent.
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+const tenant = await prisma.tenant.findFirst({
+  where: { name: process.env.TENANT_DEFAULT_NAME ?? 'Start Academy' },
+  select: { id: true, name: true },
+});
+if (!tenant) throw new Error('Tenant introuvable — lancer le seed.');
+
+// Scopé { tenantId, code } — jamais un `update` sur un `id` recopié à la main.
+const r = await prisma.trainingProduct.updateMany({
+  where: { tenantId: tenant.id, code: 'PROD-00661' },
+  data: { excludedFromClientOutputs: true },
+});
+
+console.log(`tenant ${tenant.name} — lignes touchées : ${r.count}`); // attendu : 1
+await prisma.$disconnect();
+```
+
 ```bash
-# ⚠ NON EXÉCUTÉE — attend le feu vert de Laurent.
-# Base LOCALE (qualiof_dev) : `:local` charge .env.local AVANT .env.
-pnpm --filter @qualiof/db exec dotenv -e ../../.env.local -e ../../.env -- tsx -e "
-  import { PrismaClient } from '@prisma/client';
-  const prisma = new PrismaClient();
-  const tenant = await prisma.tenant.findFirst({
-    where: { name: process.env.TENANT_DEFAULT_NAME ?? 'Start Academy' },
-    select: { id: true },
-  });
-  if (!tenant) throw new Error('Tenant introuvable — lancer le seed.');
-  const r = await prisma.trainingProduct.updateMany({
-    where: { tenantId: tenant.id, code: 'PROD-00661' },   // scopé tenant + code exact
-    data: { excludedFromClientOutputs: true },
-  });
-  console.log('lignes touchées :', r.count);              // doit afficher 1, pas 0, pas 2
-  await prisma.\$disconnect();
-"
+# Base LOCALE (qualiof_dev) : `.env.local` est chargé AVANT `.env`, comme les
+# scripts `:local` du dépôt. ⚠ NON EXÉCUTÉE.
+pnpm --filter @qualiof/db exec dotenv -e ../../.env.local -e ../../.env -- \
+  tsx /tmp/appliquer-d19ter-prod00661.ts
 ```
 
 Trois précautions qui font partie de la commande, pas de son confort :
