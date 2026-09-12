@@ -34,10 +34,68 @@ de push anodin sur `main`.
 Conséquence pratique : ne jamais fusionner vers `main` sans avoir dit d'abord à
 Laurent ce qui part en base, et sans avoir relevé une **référence des routes
 publiques AVANT** le merge — sinon il n'y a rien à quoi comparer après.
-Référence du 11/09, prod intacte : `/diagnostic` → 200, titre « Diagnostic
-express » ; `/catalogue` → 200, **32 codes `PROD-` distincts** (ce compte-là est
-le marqueur utile : un 200 prouve que la page répond, les codes prouvent qu'elle
-lit vraiment le catalogue en base).
+
+#### La référence, prise le 11/09/2026 à 19:58 CEST sur la prod intacte
+
+- `/diagnostic` → **200**, titre « Diagnostic express — Start Academy »
+- `/catalogue` → **200**, titre « Catalogue formations Start Academy — IA pour
+  conseillers immobiliers », **41 codes produits distincts**, les voici :
+
+```
+FRM-0001 FRM-0002 FRM-0003 FRM-0004 FRM-0005 FRM-0006 FRM-0007
+PROD-0001 PROD-0003 PROD-0041 PROD-0042 PROD-0043 PROD-0044 PROD-047
+PROD-053 PROD-055 PROD-0057 PROD-0058 PROD-0059 PROD-0060 PROD-0061
+PROD-0062 PROD-0063 PROD-0064 PROD-0065 PROD-0066 PROD-00661 PROD-0662
+PROD-0663 PROD-0667 PROD-0668 PROD-0670 PROD-0671 PROD-0672 PROD-0673
+PROD-0674 PROD-0675 PROD-7a78c8b2 PROD-c0c85e08 PROD-cdd22466 PROD-f8be726b
+```
+
+**34 en `PROD-*` et 7 en `FRM-*`** (`FRM-0001` à `FRM-0007`, les journées Faros
+de D-25). Trois marqueurs indépendants concordent sur 41 : les badges de code,
+les sujets « Devis » distincts, et le relevé ci-dessus.
+
+La commande qui les reproduit — le badge de code est un `<span>` en `font-mono`,
+et **le préfixe n'est PAS présumé** :
+
+```bash
+curl -s https://qualiof.vercel.app/catalogue \
+  | grep -oE '<span class="shrink-0 text-xs font-mono[^"]*">[^<]+</span>' \
+  | sed -E 's/.*">([^<]+)<.*/\1/' | sort -u
+```
+
+Elle rend 41 lignes. `wc -l` pour le compte, la liste pour la différence.
+
+#### Pourquoi l'ancien relevé ne valait rien
+
+Ce paragraphe annonçait « **32 codes `PROD-` distincts** ». Deux défauts, et
+chacun suffisait :
+
+1. **Il comptait les préfixes, pas les produits.** `grep PROD-` ne voit pas les
+   7 `FRM-*`. Or `import-smartof.ts` (l.415) écrit le `Custom ID` source
+   **verbatim**, sans imposer aucun préfixe : un code qui ne commence pas par
+   `PROD-` est un code légitime et invisible au relevé. Le marqueur mesurait un
+   préfixe en croyant mesurer un catalogue.
+2. **Il notait un compte sans noter la liste.** C'est ce qui a coûté : lu plus
+   tard contre 34, le « 32 → 34 » a été interprété comme **deux créations**,
+   alors qu'**aucun produit n'avait été créé**. Avec la liste, la question se
+   tranchait en une seconde ; avec le seul compte, elle n'était pas tranchable.
+
+> **La règle, une fois pour toutes : un relevé qui note un compte sans noter la
+> liste ne peut répondre à aucune question de différence.**
+
+Donc tout relevé de référence porte sa **date et son heure**, la **commande
+exacte** qui le reproduit, et la **liste en clair** — pas un total.
+
+#### Un dernier détail du relevé, à savoir avant de toucher au séquenceur
+
+`PROD-00661` et `PROD-0662` sont deux codes distincts au catalogue, mais le
+séquenceur de `crud-edits.ts` (~l.823) lit `/^PROD-0*(\d+)$/` : il voit **661**
+dans `PROD-00661`, comme il verrait 661 dans `PROD-0661`. **Le séquenceur et
+l'œil humain ne lisent pas la même chose.** Rien ne casse aujourd'hui — le
+maximum est 675 et une boucle de garde vérifie l'existence avant d'écrire — et
+le constat est consigné en commentaire à côté du code. Le séquenceur ignore
+aussi les `FRM-*` (filtre `startsWith: 'PROD-'`) : correct, autre espace de
+noms, mais ça se dit.
 
 ### 2. Le CONTENU de la bibliothèque n'est QUE local
 
@@ -508,6 +566,8 @@ Plan: 9 of 10
 - 2026-05-25 — **D-13-E DocType += VEILLE_AUDIT (extension enum additive)** : 21e valeur ajoutée à enum `DocType` (Postgres safe extension, sans casser les 20 existantes). Convention `entityType='RegulatoryWatch'` + `entityId={theme}` plutôt que linker sur 1 ligne RegulatoryWatch précise (l'export est un agrégat par thème, pas une fiche par source). Cohérent avec Phase 9.1 D-09.1-D pattern entity-namespaced. Migration appliquée localement via `prisma db push --skip-generate` + `prisma generate` (mémoire `feedback_prisma_db_push_sandbox.md`). Avant prod : créer vraie migration `phase13_doctype_veille_audit` via `prisma migrate dev` (mémoire `feedback_prisma_migrate_deploy.md`). Audit Plan 13-04.
 - 2026-05-18 — Phase 9.1 closed : CENTRAL-01/02/03/04/05 livrés. 6 plans exécutés. (1) Plan 09.1-01 Foundation : migration Prisma `phase091_participant_doc_status` additive + schémas Zod `qualiopi-matrix.ts` + helpers purs lib/doc-scope.ts (16 DocTypes figés D-04) + lib/derive-cell-state.ts (priorité participant > pedagogical > session > product, Bug P0 anti-régression test ciblé) + lib/document-audit.ts (logDocumentEvent clone strict logLeadEvent Phase 9). (2) Plan 09.1-02 Server actions + Worker : 5 actions tenant-scoped (markDocStatus/uploadSignedDoc/regenerateParticipantDoc/regenerateBatchParticipantDocs/deleteDocument) avec requireRole(['ADMIN','MANAGER']) D-11 + jsonb_set raw query Pitfall 2 + AuditLog `documents.*` ; extension `generateClosurePack(sessionId, { participantIds?, kinds?, force? })` mode single-participant Pitfall 1 ; 3 composants atomiques DocStatusBadge (6 variants) + DocCellMenu (5 actions filtrées) + UploadSignedDocDialog (RHF + 10 Mo). (3) Plan 09.1-03 Fiche session refondue : ParticipantDocMatrix Server orchestrateur + MatrixRow client + MatrixFilters useLocalStorageState key sessionId-scoped (R5) + BatchRegenBar slide-in + AttendanceDetailDrawer Radix Dialog centrée (Finding 3 Option B) + SessionOnlyDocsBlock 3 cards + Promise.all 4 queries bulk. (4) Plan 09.1-04 Fiche apprenant refondue : LearnerTimeline verticale années + LearnerPrioCards 3 cards + LearnerAlertsBanner early return null si 0 (Phase 5 UX-09) + TimelineSessionCard Link cross-nav D-05 + helper lib/learner-stats.ts. (5) Plan 09.1-05 Fiche produit refondue : ProductTabs URL-state ?tab=stats|sessions|apprenants|programme + 4 panels Server Components + helper lib/product-stats.ts (Promise.all tenantId scope) + cross-nav D-05 vers sessions + apprenants. (6) Plan 09.1-06 Bookkeeping + 09.1-SMOKE.md 8 flows DevTools + 09.1-SUMMARY.md. Conventions AuditLog complétées : `documents.*` (4 actions) en plus de Phase 7/8/9. **Bug P0** résolu structurellement (1 PDF session-wide + N statuts par-participant) — anti-régression test unitaire ciblé. Total nouveaux fichiers : ~25 production + 13 tests. Tests Vitest verts : 421/421 apps/web + 56/56 shared. tsc clean. next build OK (3 routes refondues compilent : sessions/[id] 17.4 kB, apprenants/[id] 7.56 kB, produits/[id] 5.18 kB). Phase 10 (Audit Qualiopi blanc) débloquée.
 - 2026-06-01 — Phase 12 closed : MOD-01 + MOD-02 livrés. Plan 12-01 rename `/app/preinscriptions` → `/app/inscriptions` (move git mv 2 fichiers + stub Placeholder supprimé + redirect 308 reverse next.config.mjs + sidebar 1 entrée Inscriptions section Essentiel D-04 + doublon stub Configuration supprimé + 17 refs hardcodées migrées (hrefs/redirects/router.push/revalidatePath) D-05 + route publique /preinscription/[token] PRÉSERVÉE D-03 + constante MinIO PREENROLLMENT_BUCKET préservée). Plan 12-02 catalogue read-only : `lib/templates-catalog.ts` source unique D-10 (27 entries TemplateCatalogEntry typed = 19 qualiopi + 3 agefice + 5 email) + Server Component /app/templates listing par catégorie qualiopi/agefice/email + helpers getTemplatesByCategory/getTemplateById/countByCategory + RBAC `requireRole(['ADMIN','MANAGER','LECTEUR'])` D-09 + sidebar `allowedRoles` miroir + V1 sans preview Gotenberg (D-11 décision planner, ROI insuffisant, screenshots statiques v2 possible) + note V1 affichée dans page pour transparence. Plan 12-03 bookkeeping : REQUIREMENTS/ROADMAP/STATE + 12-SUMMARY/12-SMOKE + composant `<Placeholder>` orphelin **supprimé** (`apps/web/src/components/ui/placeholder.tsx` — 0 import restant après Plans 12-01/02, success criterion #3 « zéro placeholder dans la sidebar » → composant n'a plus de raison d'être). 2 conventions établies (1ère application projet) : « renommage de route » (move git mv + redirect 308 + grep update systématique) + « catalogue centralisé code-driven `lib/<feature>-catalog.ts` » (1 source de vérité typée, helpers filter/find/count, réutilisable Phase 10 audit Qualiopi blanc). 15 tests Wave 0 verts. Build Next clean. **707/707 tests verts** global. Phase v5 restante : Phase 10 (Audit Qualiopi blanc QBLANC-01/02/03).
+- 2026-09-12 — **Code produit : une garde de PROVENANCE, pas de format** (arbitrage Laurent). L'hétérogénéité des codes du catalogue est VOULUE : le `Custom ID` SmartOF est la référence qui permet de remonter au dossier d'origine, et un `CHECK` en base rejetterait `FRM-0001`, `PROD-047` ou `PROD-00661`, tous légitimes. La frontière se trace sur la provenance : **venu du fichier source → verbatim** ; **fabriqué par nous → série `PROD-NNNN`**, comme `crud-edits.ts` (~l.823) et `import-diag-catalog.ts` (~l.217). Le repli `PROD-${uid.substring(0,8)}` de `packages/db/scripts/import-smartof.ts` (l.415) disparaît — il rendait un fragment hexadécimal illisible ET invisible au séquenceur. Règle extraite dans `packages/db/scripts/lib/product-code.ts`, 8 tests de contrat (5 prouvés RED avant correctif). **Aucun code existant réécrit** : un identifiant qui a servi ne se réécrit pas — les 4 `PROD-xxxxxxxx` en base portent des sessions, attestations et dossiers financeurs. ⚠ `apps/web/scripts/import-from-smartof.ts` (l.695) porte le MÊME défaut et n'a pas été arbitré : en attente. `apps/web/scripts/sync-smartof-1208.ts` (l.1019) est un one-shot daté déjà joué, intouchable (le réécrire falsifierait son rapport).
+- 2026-09-12 — **D-19 ter reçoit son premier usage réel, et D-18 sa réponse** (arbitrage Laurent). Le programme « pour activité événementielle » qui remontait à tort sur l'e-réputation d'une agence n'était **pas un défaut de moteur** : c'était un **produit diffusable qui n'aurait pas dû l'être** — `PROD-00661` « Communication digitale & Stratégie marketing pour activité événementielle » (72 h, 3 024 € HT, 1 session réellement terminée). Il passe à `excludedFromClientOutputs = true` : le moteur ne le proposera plus jamais en audit ni en proposition, et il **reste au catalogue public et téléchargeable**, parce qu'une session réelle a eu lieu et que l'auditeur Qualiopi doit pouvoir en voir le programme. ⚠ **Décision consignée, PAS appliquée** : aucune écriture en base n'a été faite, la commande attend le feu vert de Laurent (cf. compte rendu `260911-kwf-SUMMARY-03.md`).
 
 ## Workflow Conventions
 
