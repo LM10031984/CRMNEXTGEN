@@ -818,6 +818,26 @@ Relevé sur `apps/web/scripts/*.ts` et `packages/db/scripts/*.ts` suivis par git
 | `_gen-optimmo-152h-docs.ts` | 🔴 oui | oui | `PROD-0674` |
 | `_check-prod0671-frozen.ts` · `_diag-prod0671.ts` · `_diag-prod0671-full.ts` · `_dump-prod0671-prog.ts` · `_gen-deroule-cloud.ts` · `_q.ts` | 🟢 lecture | NON | `PROD-0671`, `PROD-0042`, `PROD-0058` |
 
+### Où vit le générateur, et quand il déménage
+
+Le générateur unique vit dans **`packages/db/scripts/lib/product-code.ts`**,
+exposé par `@qualiof/db/product-code`. Ses appelants au 12/09/2026 : les trois
+imports SmartOF et `import-diag-catalog.ts`.
+
+**`crud-edits.ts` garde sa propre boucle de séquence, et c'est délibéré.** Le
+danger réel n'était pas la duplication de forme : c'était que trois sites
+LISENT le catalogue différemment pour en déduire le prochain numéro —
+`import-diag-catalog.ts` lisait `/^PROD-(\d{1,4})$/`, quatre chiffres maximum,
+donc `PROD-00661` lui était **invisible**. Les lectures sont désormais
+identiques (`/^PROD-0*(\d+)$/`) : deux sites ne peuvent plus se croiser.
+
+**Condition de reprise, écrite pour qu'on n'y revienne pas par réflexe** : le
+module migre vers `packages/shared` le jour où un **troisième** appelant en a
+besoin, pas avant. Le déplacer aujourd'hui pour un besoin qui n'existe pas
+serait du travail spéculatif — et il faudrait élargir l'`exports` de
+`@qualiof/db` pour qu'une server action du bundle Next consomme un fichier de
+`scripts/`.
+
 **Deux scripts écrivent sans scoper** : `_fill-prod0671.ts` et
 `fix-data-ses-0086.ts`. Aucun des deux ne mord aujourd'hui — la divergence
 mesurée commence à `PROD-0681`, et les codes qu'ils visent désignent le même
@@ -1025,6 +1045,33 @@ Arguments contractuels affichés d'office (blocs OPTIMO réels) : **montage admi
 | « OFFERT » | = remise qui ramène le reste à charge à 0. Affiché **OFFERT** sur la proposition, distinct de « pris en charge à 100 % » (`describeCoverageState` porté tel quel : fully_covered_by_funding ≠ offered_via_discount). Le cumul des « offert » est un KPI patrons (§11). |
 
 ---
+
+## 8.4 L'exception à la règle anti-vidage : l'avarie n'est pas du contenu
+
+_Posée par Laurent le 12/09/2026, au premier cas réel._
+
+La règle anti-vidage du 11/09/2026 — **un import ne vide plus un contenu écrit
+en base** — protège du **CONTENU** : ce qu'un humain a rédigé ne doit pas être
+écrasé par une source plus pauvre.
+
+Elle ne protège pas une **AVARIE**. Cas fondateur : `FRM-0001` et `FRM-0002`
+portaient un texte d'accessibilité de 141 caractères **coupé au milieu, deux
+fois, par des points de suspension littéraux** — une extraction tronquée écrite
+en base, pas une rédaction. Le repli de `/catalogue` en rend 231, complets,
+référent handicap nommé avec son contact.
+
+**Le critère, et il est vérifiable** : vider améliore-t-il ce que lit le
+client ? Si oui, ce n'était pas du contenu.
+
+**La preuve exigée avant d'agir** — et c'est elle qui empêche d'invoquer
+l'exception à tort : le **rendu de la page avec le champ nul**, constaté sur une
+fiche réelle, pas déduit du code. Vérifié le 12/09 sur `PROD-0058`, dont
+`accessibility` est `NULL` en production et qui rend bien le texte complet. Si
+le repli ne rend pas mieux que l'override, **on ne touche à rien**.
+
+Corollaire : le texte retiré se **conserve dans le diff de l'`AuditLog`**.
+Effacer une avarie sans en garder la trace rendrait l'opération invérifiable —
+et c'est précisément quand on soupçonne une erreur qu'on relit l'audit.
 
 ## 9. Les sorties documentaires
 
