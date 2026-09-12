@@ -290,6 +290,41 @@ Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
 
+## 5 bis. Une PR verte peut ne rien faire — vérifie sa BASE
+
+Deux pièges de fusion, tous deux rencontrés le 12/09/2026, et qu'aucune gate
+n'attrape : les trois portes (lint, tsc, tests) portent sur le CONTENU d'une
+branche, jamais sur sa destination.
+
+### ① Une PR verte sur une base déjà fusionnée est verte parce qu'elle ne fait rien
+
+La #61 visait `chore/260911-scripts-sous-tsc`. Cette branche avait été
+fusionnée le matin même par la #58. La PR était **MERGEABLE, CLEAN, checks
+verts** — et la fusionner n'aurait porté **aucune ligne** à `main` : elle
+comparait sa branche à une cible qui n'était plus la trajectoire du dépôt.
+
+Le vert ne mesurait pas le travail, il mesurait le vide.
+
+**Le réflexe** : avant toute fusion, lire la BASE de la PR, pas seulement son
+état. `gh pr view <n> --json baseRefName,mergeStateStatus`. Une base qui n'est
+ni `main` ni une PR ouverte est un signal, pas un détail.
+
+### ② Supprimer une branche de base FERME la PR qui s'empilait dessus
+
+La #63 était empilée sur la #61. Fusionner la #61 avec `--delete-branch` a
+**fermé la #63** — GitHub ferme une PR dont la branche de base disparaît. Et
+elle ne se rouvre pas : `gh pr reopen` échoue (« Could not open the pull
+request »), et rebaser sa cible échoue aussi (« Cannot change the base branch
+of a closed pull request »).
+
+Le travail n'est pas perdu — les commits vivent sur la branche `head` — mais
+il faut **rouvrir une PR neuve** vers `main`, et la relecture déjà faite est
+à refaire.
+
+**Le réflexe** : quand une PR en porte une autre, ou bien fusionner **sans**
+`--delete-branch`, ou bien **recibler la PR empilée sur `main` AVANT** de
+fusionner sa base.
+
 ## 6. Rendre compte
 
 Trois lignes : ce qui change pour l'utilisateur, ce qui a été mis de côté, ce
