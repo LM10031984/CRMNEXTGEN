@@ -38,7 +38,10 @@ vi.mock('@/lib/rbac', () => ({
   ForbiddenError: class ForbiddenError extends Error {},
 }));
 
-vi.mock('../programme-generator', () => ({ generateProgrammeForProduct: vi.fn() }));
+vi.mock('../programme-generator', () => ({
+  generateProgrammeForProduct: vi.fn(),
+  generateProgrammeForSession: vi.fn(),
+}));
 vi.mock('../deroule-product-generator', () => ({ generateDerouleForProduct: vi.fn() }));
 vi.mock('../generate-checklist-formation', () => ({ generateChecklistForSession: vi.fn() }));
 vi.mock('../convention-generator', () => ({ generateConventionForParticipant: vi.fn() }));

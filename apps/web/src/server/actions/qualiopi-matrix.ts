@@ -42,7 +42,7 @@ import { splitPdfPages } from '@/lib/pdf-split';
 import { generateClosurePack } from './closure-pack';
 import { generateConventionForParticipant } from './convention-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
-import { generateProgrammeForProduct } from './programme-generator';
+import { generateProgrammeForSession } from './programme-generator';
 import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
 
@@ -587,15 +587,10 @@ export async function regenerateParticipantDoc(
       return { ok: res.ok, ...(res.documentId ? { documentId: res.documentId } : {}), ...(res.error ? { error: res.error } : {}) };
     }
     if (parsed.data.docKind === 'PROGRAMME') {
-      // Doc session-wide → délègue au generator produit (1 PDF partagé).
-      const sess = await prisma.trainingSession.findUnique({
-        where: { id: participant.sessionId },
-        select: { productId: true },
-      });
-      if (!sess?.productId) {
-        return { ok: false, error: 'Produit introuvable pour la session' };
-      }
-      const res = await generateProgrammeForProduct(sess.productId, { force: true });
+      // Doc session-wide → le cœur tranche : programme de catalogue (1 PDF
+      // partagé) ou programme de CETTE session quand le montant à annoncer
+      // n'est pas celui du catalogue.
+      const res = await generateProgrammeForSession(participant.sessionId, { force: true });
       revalidatePath(`/app/sessions/${participant.sessionId}`);
       return { ok: res.ok, ...(res.documentId ? { documentId: res.documentId } : {}), ...(res.error ? { error: res.error } : {}) };
     }

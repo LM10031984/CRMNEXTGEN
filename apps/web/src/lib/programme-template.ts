@@ -534,10 +534,12 @@ ${renderOfPagedFooter(of)}
 <section>
   <h2 class="section">Tarif</h2>
   <div class="tarif">
-    <strong>${fmtEUR.format(data.produitPriceHT)}</strong> HT ${
-      data.prixMode === 'TOTAL_ENTREPRISE'
-        ? 'pour l’ensemble des stagiaires inscrits'
-        : 'par stagiaire'
+    <strong>${fmtEUR.format(data.produitPriceHT)}</strong> HT${
+      // TOTAL_ENTREPRISE : le montant est celui de la convention d'entreprise,
+      // et rien ne doit le qualifier (arbitrage Laurent du 11/09). Toute mention
+      // d'effectif invite à multiplier : 2 500 € lus « par stagiaire » pour
+      // ASSALIT SYNDIC, c'était 20 000 € annoncés à l'OPCO pour huit salariés.
+      data.prixMode === 'TOTAL_ENTREPRISE' ? '' : ' par stagiaire'
     }
     <span style="color:#64748B; font-size: 9.5pt;">— ${MENTION_EXONERATION_TVA}.</span>
   </div>

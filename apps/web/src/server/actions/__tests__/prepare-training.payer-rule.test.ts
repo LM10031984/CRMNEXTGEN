@@ -35,7 +35,7 @@ const m = vi.hoisted(() => ({
   generateAnalyseBesoinEntrepriseCore: vi.fn(),
   generateConventionEntrepriseCore: vi.fn(),
   generateConvocationForParticipant: vi.fn(),
-  generateProgrammeForProduct: vi.fn(),
+  generateProgrammeForSession: vi.fn(),
   generateDerouleForProduct: vi.fn(),
   generateChecklistForSession: vi.fn(),
   generateAgeficeForParticipant: vi.fn(),
@@ -71,7 +71,7 @@ vi.mock('../convocation-generator', () => ({
   generateConvocationForParticipant: m.generateConvocationForParticipant,
 }));
 vi.mock('../programme-generator', () => ({
-  generateProgrammeForProduct: m.generateProgrammeForProduct,
+  generateProgrammeForSession: m.generateProgrammeForSession,
 }));
 vi.mock('../deroule-product-generator', () => ({
   generateDerouleForProduct: m.generateDerouleForProduct,
@@ -128,7 +128,7 @@ function seedSession(participants: unknown[]) {
 beforeEach(() => {
   vi.clearAllMocks();
   m.validateRequest.mockResolvedValue({ user: USER });
-  m.generateProgrammeForProduct.mockResolvedValue({ ok: true });
+  m.generateProgrammeForSession.mockResolvedValue({ ok: true });
   m.generateDerouleForProduct.mockResolvedValue({ ok: true });
   m.generateChecklistForSession.mockResolvedValue({ ok: true });
   m.generateConventionCore.mockResolvedValue({ ok: true, documentId: 'doc-indiv' });

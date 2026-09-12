@@ -61,7 +61,11 @@ vi.mock('@/lib/pdf-render', () => ({ renderHtmlToPdf: vi.fn(), renderHtmlToPdfWe
 vi.mock('../closure-pack', () => ({ generateClosurePack: vi.fn() }));
 vi.mock('../convention-generator', () => ({ generateConventionForParticipant: vi.fn() }));
 vi.mock('../agefice-generator', () => ({ generateAgeficeForParticipant: vi.fn() }));
-vi.mock('../programme-generator', () => ({ generateProgrammeForParticipant: vi.fn(), generateProgrammeForProduct: vi.fn() }));
+vi.mock('../programme-generator', () => ({
+  generateProgrammeForParticipant: vi.fn(),
+  generateProgrammeForProduct: vi.fn(),
+  generateProgrammeForSession: vi.fn(),
+}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 import { prisma } from '@qualiof/db';
