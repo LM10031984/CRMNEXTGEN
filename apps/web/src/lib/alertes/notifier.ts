@@ -28,6 +28,7 @@ import { newLeadRecipients, leadStaleRecipients } from './lead-stale';
 import { grouperLeadsDormants } from './lead-stale-digest';
 import { EQUIPE_JOIGNABLE } from './destinataires';
 import { sujetAlerteSubmission, type AlerteSubmission } from './preinscription-digest';
+import { TITRE_TACHE_CONVENTION_NON_ENVOYEE } from './convention-non-envoyee';
 
 function appUrl(): string {
   const base = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
@@ -72,7 +73,13 @@ async function poser(args: {
   userIds: string[];
   payload: Record<string, unknown>;
   destinataires: Destinataire[];
-  category: 'new_lead' | 'preenrollment_submitted';
+  /**
+   * Une catégorie EXISTANTE, toujours : une alerte qui s'offrirait son propre
+   * canal échapperait aux réglages de Paramètres — donc à la seule chose qui
+   * protège les boîtes de l'équipe. `internal_notification` est celle des
+   * alertes qui ne portent ni lead ni pré-inscription (lot D, J-15).
+   */
+  category: 'new_lead' | 'preenrollment_submitted' | 'internal_notification';
   subject: string;
   titre: string;
   intro: string;
@@ -340,5 +347,88 @@ export async function alerterPreinscriptionsDeposees(args: {
     });
   } catch (e) {
     console.error('[alertes] A-3 pré-inscriptions déposées', e);
+  }
+}
+
+/**
+ * Lot D — « Convention non envoyée pour signature », à J-15.
+ *
+ * Destinataires : ADMIN et MANAGER. Ce sont eux qui peuvent envoyer — les trois
+ * server actions de signature refusent COMMERCIAL, et alerter quelqu'un sur un
+ * geste qu'on lui refuse est la meilleure façon de faire ignorer l'alerte.
+ *
+ * ⚠ LA TÂCHE D'ABORD, L'EMAIL ENSUITE, et cet ordre est la garantie
+ * d'idempotence : c'est l'existence de la `Task` qui empêche le cron horaire de
+ * ré-alerter. Envoyer avant de l'écrire ferait partir une alerte par heure si
+ * la création échouait — exactement le défaut qu'un digest est censé éviter.
+ *
+ * UN ENVOI PAR SESSION, volontairement : contrairement aux leads dormants, il
+ * n'y a jamais trente sessions à J-15 le même jour, et chaque session appelle
+ * un geste distinct sur un écran distinct. Les regrouper ferait perdre le lien
+ * direct « cliquer, envoyer ».
+ */
+export async function alerterConventionNonEnvoyee(args: {
+  tenantId: string;
+  sessionId: string;
+  /** `code ?? name` — ce que l'équipe lit sur la fiche. */
+  libelleSession: string;
+  startDate: Date;
+  joursRestants: number;
+  nbParticipants: number;
+}): Promise<{ alertee: boolean }> {
+  try {
+    const users = await equipe(args.tenantId);
+    const responsables = users.filter((u) => u.role === 'ADMIN' || u.role === 'MANAGER');
+    if (responsables.length === 0) return { alertee: false };
+
+    // Le marqueur, écrit AVANT l'envoi. Le `dueDate` est la date de début : la
+    // tâche cesse d'avoir un sens le jour où la session commence.
+    await prisma.task.create({
+      data: {
+        tenantId: args.tenantId,
+        title: TITRE_TACHE_CONVENTION_NON_ENVOYEE,
+        description:
+          `La session ${args.libelleSession} démarre dans ${args.joursRestants} jour` +
+          `${args.joursRestants > 1 ? 's' : ''} avec ${args.nbParticipants} inscrit` +
+          `${args.nbParticipants > 1 ? 's' : ''}, et aucune convention n’est partie en ` +
+          `signature. Envoyez-la depuis la fiche session, ou déposez le scan si elle a ` +
+          `été signée à la main.`,
+        priority: 'HIGH',
+        dueDate: args.startDate,
+        sessionId: args.sessionId,
+      },
+    });
+
+    const jours = `${args.joursRestants} jour${args.joursRestants > 1 ? 's' : ''}`;
+    await poser({
+      tenantId: args.tenantId,
+      type: 'signature.convention_non_envoyee',
+      userIds: responsables.map((u) => u.id),
+      payload: { sessionId: args.sessionId, joursRestants: args.joursRestants },
+      destinataires: responsables,
+      // Catégorie EXISTANTE : une alerte qui s'offrirait son propre canal
+      // échapperait aux réglages de Paramètres, donc à la seule chose qui
+      // protège les boîtes de l'équipe.
+      category: 'internal_notification',
+      subject: `Convention non envoyée — ${args.libelleSession} démarre dans ${jours}`,
+      titre: 'Une convention n’est pas partie en signature',
+      intro:
+        `La session démarre dans ${jours} et aucune convention n’a été envoyée en ` +
+        `signature. Sans engagement signé, le financeur refusera le dossier.`,
+      vedette: args.libelleSession,
+      details: [
+        { label: 'Début', value: args.startDate.toLocaleDateString('fr-FR') },
+        { label: 'Inscrits', value: String(args.nbParticipants) },
+      ],
+      ctaLabel: 'Ouvrir la session',
+      ctaUrl: `${appUrl()}/app/sessions/${args.sessionId}`,
+      urgent: true,
+    });
+    return { alertee: true };
+  } catch (e) {
+    // Prévenir est un effet de bord : le cron ne doit pas tomber pour une
+    // session, ni empêcher les suivantes d'être traitées.
+    console.error('[alertes] J-15 convention non envoyée', e);
+    return { alertee: false };
   }
 }
