@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resoudreDestinataireDossier } from '../destinataire-dossier';
+import { aideDestinataireDossier, resoudreDestinataireDossier } from '../destinataire-dossier';
 
 const PA_NICE = { name: 'CCI Nice Côte d’Azur', email: 'formation@cci-nice.fr' };
 
@@ -136,5 +136,42 @@ describe('resoudreDestinataireDossier — les autres financeurs : comportement i
         email: 'contact@agence-martin.fr',
       }).email,
     ).toBe('contact@agence-martin.fr');
+  });
+});
+
+/* ── D-D-1 — l'aide sous un champ destinataire vide ──────────────────────── */
+
+describe('aideDestinataireDossier — ce qu’on lit sous un champ vide', () => {
+  it('AGEFICE : le point d’accueil, nommé avec l’organisation', () => {
+    expect(
+      aideDestinataireDossier({ opcoCode: 'AGEFICE', organisation: 'DUPONT Jean' }),
+    ).toBe(
+      'Point d’accueil AGEFICE non rattaché à DUPONT Jean — renseignez son département / ' +
+        'point d’accueil sur la fiche organisation.',
+    );
+  });
+
+  it('OPCO de branche : l’adresse de facturation, EN FRANÇAIS', () => {
+    // L'ancienne phrase nommait la colonne `emailBilling` : elle supposait que
+    // le lecteur sache où la trouver, alors que l'écran l'appelle « Email de
+    // facturation ».
+    expect(
+      aideDestinataireDossier({ opcoCode: 'OPCO_EP', organisation: 'AGENCE MARTIN' }),
+    ).toBe(
+      'Aucune adresse de facturation pour AGENCE MARTIN — renseignez-la sur sa fiche organisation.',
+    );
+  });
+
+  it('aucune phrase ne nomme une colonne de base', () => {
+    for (const code of ['AGEFICE', 'OPCO_EP', null]) {
+      const aide = aideDestinataireDossier({ opcoCode: code, organisation: 'X' });
+      expect(aide).not.toMatch(/emailBilling|opcoCode|sponsor/i);
+    }
+  });
+
+  it('sans nom d’organisation, la phrase reste lisible', () => {
+    expect(aideDestinataireDossier({ opcoCode: 'AGEFICE', organisation: null })).toContain(
+      'non rattaché à cette organisation',
+    );
   });
 });

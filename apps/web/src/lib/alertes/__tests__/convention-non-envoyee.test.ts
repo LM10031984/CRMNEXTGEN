@@ -24,6 +24,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  ALERTE_J15_DEPUIS,
   JOURS_AVANT_ALERTE_CONVENTION,
   TITRE_TACHE_CONVENTION_NON_ENVOYEE,
   decideAlerteConventionNonEnvoyee,
@@ -87,8 +88,10 @@ describe('decideAlerteConventionNonEnvoyee — quand elle se tait', () => {
   });
 
   it('session DÉJÀ COMMENCÉE : l’alerte n’aide plus, elle accuse', () => {
+    // ⚠ Date choisie APRÈS le plancher de mise en service (27/09) : avant lui,
+    // c'est le plancher qui répondrait, et ce test ne garderait plus rien.
     const d = decideAlerteConventionNonEnvoyee(
-      session({ startDate: new Date('2026-09-20T09:00:00.000Z') }),
+      session({ startDate: new Date('2026-09-28T09:00:00+02:00') }),
       MAINTENANT,
     );
     expect(d).toEqual({ alerter: false, motif: 'deja_commencee' });
@@ -139,5 +142,84 @@ describe('le titre de la tâche — c’est lui le marqueur d’idempotence', ()
     // ⚠ Le changer ferait ré-alerter TOUTES les sessions déjà alertées : la
     // recherche d'idempotence ne retrouverait plus les tâches existantes.
     expect(TITRE_TACHE_CONVENTION_NON_ENVOYEE).toBe('Convention non envoyée pour signature');
+  });
+});
+
+/* ── LE PLANCHER DE MISE EN SERVICE ──────────────────────────────────────── */
+
+/**
+ * POURQUOI UN PLANCHER, ET POURQUOI CETTE DATE.
+ *
+ * Le cron naît le 12/09/2026, alors que des sessions sont DÉJÀ dans sa fenêtre
+ * de quinze jours. Sans plancher, sa première exécution alerterait d'un coup
+ * sur toutes celles dont la convention n'est pas partie — une salve sur des
+ * dossiers que Laurent traite à la main, et une alerte qui commence par une
+ * salve est une alerte qu'on filtre.
+ *
+ * 12/09 + 15 jours = 27/09 : à partir de cette date, toute session entrant dans
+ * la fenêtre y sera entrée APRÈS la mise en service, donc le cron l'aura vue
+ * naître. Les sessions antérieures restent traitées à la main, une fois.
+ */
+describe('le plancher de mise en service — aucune salve au démarrage', () => {
+  const AU_DEMARRAGE = new Date('2026-09-12T09:00:00.000Z');
+
+  it('la date est nommée, et c’est le 27/09/2026 à Paris', () => {
+    // ⚠ Minuit à PARIS, pas en UTC : une session du 26/09 à 23 h n'a pas à
+    // être alertée sous prétexte qu'elle tombe le 27 en temps universel.
+    expect(ALERTE_J15_DEPUIS.toISOString()).toBe('2026-09-26T22:00:00.000Z');
+  });
+
+  it('une session qui démarre le 26/09 n’est PAS alertée', () => {
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-09-26T09:00:00+02:00') }),
+      AU_DEMARRAGE,
+    );
+    expect(d).toEqual({ alerter: false, motif: 'avant_mise_en_service' });
+  });
+
+  it('une session qui démarre le 27/09 EST alertée', () => {
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-09-27T09:00:00+02:00') }),
+      AU_DEMARRAGE,
+    );
+    expect(d.alerter).toBe(true);
+  });
+
+  it('le bord exact — minuit pile le 27/09 à Paris — passe', () => {
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-09-27T00:00:00+02:00') }),
+      AU_DEMARRAGE,
+    );
+    expect(d.alerter).toBe(true);
+  });
+
+  it('la veille à 23 h 59 ne passe pas', () => {
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-09-26T23:59:00+02:00') }),
+      AU_DEMARRAGE,
+    );
+    expect(d.alerter).toBe(false);
+  });
+
+  it('le plancher passe AVANT toute autre raison de se taire', () => {
+    // Une session d'avant le plancher ne doit pas être annoncée « déjà
+    // envoyée » ou « sans inscrit » : elle est simplement hors périmètre, et
+    // c'est ce que le motif doit dire à qui lit les compteurs du cron.
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-09-20T09:00:00+02:00'), nbParticipants: 0 }),
+      AU_DEMARRAGE,
+    );
+    expect(d).toEqual({ alerter: false, motif: 'avant_mise_en_service' });
+  });
+
+  it('PUISSANCE — une fois le plancher passé, il ne retient plus rien', () => {
+    // En novembre, toutes les sessions sont postérieures au plancher : celui-ci
+    // ne doit plus jamais être la raison d'un silence.
+    const enNovembre = new Date('2026-11-01T09:00:00.000Z');
+    const d = decideAlerteConventionNonEnvoyee(
+      session({ startDate: new Date('2026-11-08T09:00:00+01:00') }),
+      enNovembre,
+    );
+    expect(d.alerter).toBe(true);
   });
 });

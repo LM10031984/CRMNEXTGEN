@@ -42,14 +42,21 @@ vi.mock('@/lib/storage', () => ({
 
 import { GET } from '../route';
 
+const STEPHANE = { firstName: 'Stéphane', lastName: 'Rousseau' };
+
 const DEMANDE = {
   id: 'req-9',
   auditTrailUrl: 'sessions/t1/SES-0112/signed/convention.audit-trail.pdf',
-  session: { code: 'SES-0112' },
+  session: {
+    code: 'SES-0112',
+    participants: [{ sponsorOrgId: 'org-1', person: STEPHANE }],
+  },
   documents: [
     {
       type: 'CONVENTION',
-      participant: { person: { firstName: 'Stéphane', lastName: 'Rousseau' } },
+      entityType: 'participant',
+      entityId: null,
+      participant: { person: STEPHANE },
     },
   ],
 };
@@ -136,10 +143,20 @@ describe('GET audit-trail — le fichier servi', () => {
     expect(res.headers.get('cache-control')).toBe('no-store, must-revalidate');
   });
 
-  it('une demande COLLECTIVE (convention de groupe) est nommée sans personne', async () => {
+  it('une convention de GROUPE couvrant deux salariés est nommée sans personne', async () => {
+    // Un fichier unique ne peut pas s'appeler du nom de l'un des deux.
     findFirstMock.mockResolvedValue({
       ...DEMANDE,
-      documents: [{ type: 'CONVENTION', participant: null }],
+      session: {
+        code: 'SES-0112',
+        participants: [
+          { sponsorOrgId: 'org-1', person: { firstName: 'Alice', lastName: 'Martin' } },
+          { sponsorOrgId: 'org-1', person: { firstName: 'Bob', lastName: 'Durand' } },
+        ],
+      },
+      documents: [
+        { type: 'CONVENTION', entityType: 'organization', entityId: 'org-1', participant: null },
+      ],
     });
     await GET(
       requete('https://qualiof.example.com/api/signature-requests/req-9/audit-trail?dl=1'),
@@ -150,6 +167,45 @@ describe('GET audit-trail — le fichier servi', () => {
       expect.any(String),
       600,
       'Certificat-de-signature-Convention-SES-0112.pdf',
+    );
+  });
+
+  it('une convention d’ENTREPRISE INDIVIDUELLE stockée en groupe nomme SON inscrit', async () => {
+    // ⚠ LE CAS DE LA RECETTE (DEMO-SIG-01, 12/09/2026). La route rendait
+    // `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` quand le dossier
+    // rendait `…-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf` : deux noms
+    // pour UN fichier. La pièce ne porte pas de participant, elle porte son
+    // organisation — qui ne compte qu'un inscrit.
+    findFirstMock.mockResolvedValue({
+      ...DEMANDE,
+      session: {
+        code: 'DEMO-SIG-01',
+        participants: [
+          {
+            sponsorOrgId: 'org-julien-ei',
+            person: { firstName: 'Julien', lastName: 'DEMO-SIG BERNARD' },
+          },
+          { sponsorOrgId: 'org-provence', person: { firstName: 'Alice', lastName: 'Martin' } },
+        ],
+      },
+      documents: [
+        {
+          type: 'CONVENTION',
+          entityType: 'organization',
+          entityId: 'org-julien-ei',
+          participant: null,
+        },
+      ],
+    });
+    await GET(
+      requete('https://qualiof.example.com/api/signature-requests/req-9/audit-trail?dl=1'),
+      contexte,
+    );
+    expect(signedUrlMock).toHaveBeenCalledWith(
+      'qualiof-docs',
+      expect.any(String),
+      600,
+      'Certificat-de-signature-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf',
     );
   });
 });

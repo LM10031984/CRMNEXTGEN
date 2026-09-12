@@ -303,3 +303,30 @@ d'audit en français, SHA-256 origine/résultat, IP/appareil/heures par signatai
 Le journal d'audit affiche « Convention — Provence Immobilier (2 participants).pdf.pdf » :
 l'extension est ajoutée deux fois au nom transmis à `POST /submissions/pdf`. À
 corriger au passage (docuseal.ts, nom du document).
+
+### Retouches d'avant-fusion (12/09/2026)
+
+- **Plancher du cron J-15** — `ALERTE_J15_DEPUIS = 27/09/2026 (minuit à Paris)`.
+  Les sessions déjà dans la fenêtre à la mise en service sont traitées à la main :
+  sans plancher, la première exécution aurait alerté d'un coup sur toutes, et
+  une alerte qui commence par une salve est une alerte qu'on filtre. 12/09 + 15
+  jours = 27/09 : au-delà, toute session entrée dans la fenêtre y sera entrée
+  APRÈS la mise en service. Le plancher passe AVANT toute autre raison de se
+  taire, pour que les compteurs du cron ne disent pas « sans inscrit » d'une
+  session simplement hors périmètre.
+- **D-D-1** — l'aide sous un destinataire vide vient désormais du module :
+  « Point d'accueil AGEFICE non rattaché à {organisation} … » pour l'AGEFICE,
+  « Aucune adresse de facturation pour {organisation} … » sinon, avec le lien
+  vers la fiche. L'ancienne nommait une colonne (`emailBilling`) et était
+  périmée depuis le lot D.
+- **D-D-2** — le nom du document transmis à `POST /submissions/pdf` n'a plus
+  d'extension : le prestataire la pose lui-même, d'où le « .pdf.pdf » lu dans le
+  journal d'audit — c'est-à-dire sur la preuve remise au financeur.
+- **Nom du certificat, un seul des deux côtés** — la route lisait le participant
+  sur le `Document` (nul pour une convention de groupe), le dossier le lisait sur
+  l'inscription qu'il compose. D'où deux noms pour un fichier. Les deux appellent
+  maintenant `personnesCouvertesParLaPiece` + `personneDuCertificat` : un
+  certificat porte un nom de personne quand la demande ne couvre QU'ELLE.
+  Corollaire — le défaut symétrique du dossier disparaît : le certificat d'une
+  convention de groupe ne prend plus le nom de l'inscrit dont on ouvre le
+  dossier (un fichier, autant de noms que de salariés).

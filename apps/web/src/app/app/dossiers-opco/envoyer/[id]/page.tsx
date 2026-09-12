@@ -89,6 +89,11 @@ export default async function ComposeOpcoPage({
           apprenantName,
           sessionLabel,
           sponsorName,
+          // D-D-1 : de quoi dire, sous un champ vide, CE qu'il manque — le
+          // point d'accueil AGEFICE ou l'adresse de facturation — et où aller
+          // le renseigner.
+          sponsorOpcoCode: sub.sponsorOrg.opcoCode,
+          sponsorOrgId: sub.sponsorOrg.id,
         }}
       />
     </div>

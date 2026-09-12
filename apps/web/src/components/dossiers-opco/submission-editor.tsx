@@ -36,6 +36,7 @@ import {
   type KindPieceDossier,
 } from '@/lib/opco/pieces-dossier';
 import { vueDossierPret } from '@/lib/opco/etat-dossier';
+import { aideDestinataireDossier } from '@/lib/opco/destinataire-dossier';
 
 /**
  * Les libellés viennent du module du dossier — lot D. Cet écran en portait une
@@ -87,6 +88,13 @@ interface Props {
     apprenantName: string;
     sponsorName: string;
     sessionLabel: string;
+    /**
+     * Le financeur et la fiche du commanditaire — D-D-1. Ils décident de la
+     * phrase affichée sous un champ destinataire vide : pour l'AGEFICE c'est le
+     * point d'accueil qu'il faut rattacher, pas l'adresse de l'entreprise.
+     */
+    sponsorOpcoCode: string | null;
+    sponsorOrgId: string;
   };
 }
 
@@ -204,9 +212,26 @@ export function SubmissionEditor({ id, role, initial }: Props) {
           placeholder="contact@agefice.fr"
           className="w-full px-3 py-2 border border-border rounded-md text-sm"
         />
+        {/* ⚠ LA PHRASE EST COMPOSÉE PAR LE MODULE (D-D-1). Celle d'avant — « vérifie
+            l'organisation sponsor (champ emailBilling) » — était périmée depuis
+            le lot D (un dossier AGEFICE part au point d'accueil, pas au
+            commanditaire) et nommait une COLONNE de base, que l'écran appelle
+            « Email de facturation ». Écrite dans le JSX, elle n'était
+            vérifiable qu'à l'œil, et c'est à l'œil qu'elle a survécu au lot qui
+            la rendait fausse. */}
         {!recipient && (
-          <p className="text-[10px] text-amber-700 mt-1 inline-flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> À renseigner — vérifie l'organisation sponsor (champ emailBilling).
+          <p className="text-[10px] text-amber-700 mt-1 inline-flex items-center gap-1 flex-wrap">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            {aideDestinataireDossier({
+              opcoCode: initial.sponsorOpcoCode,
+              organisation: initial.sponsorName,
+            })}{' '}
+            <a
+              href={`/app/organisations/${initial.sponsorOrgId}`}
+              className="font-semibold underline underline-offset-2 hover:text-amber-900"
+            >
+              Ouvrir la fiche organisation
+            </a>
           </p>
         )}
       </div>

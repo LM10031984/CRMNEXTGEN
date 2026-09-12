@@ -22,6 +22,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findFirstParticipant = vi.fn();
+const findManyParticipants = vi.fn();
 const findManyDocuments = vi.fn();
 const createSubmission = vi.fn();
 const findFirstSubmission = vi.fn();
@@ -33,7 +34,10 @@ const validateRequestMock = vi.fn();
 vi.mock('@qualiof/db', () => ({
   Prisma: {},
   prisma: {
-    sessionParticipant: { findFirst: (...a: unknown[]) => findFirstParticipant(...a) },
+    sessionParticipant: {
+      findFirst: (...a: unknown[]) => findFirstParticipant(...a),
+      findMany: (...a: unknown[]) => findManyParticipants(...a),
+    },
     document: { findMany: (...a: unknown[]) => findManyDocuments(...a) },
     opcoSubmission: {
       create: (...a: unknown[]) => createSubmission(...a),
@@ -92,6 +96,8 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
       id: 'doc-conv',
       type: 'CONVENTION',
       participantId: 'part-1',
+      entityType: 'participant',
+      entityId: null,
       pdfUrl: 'docs/convention.pdf',
       signedPdfUrl: over.conventionSignee === false ? null : 'signed/convention.pdf',
       signatureRequest: over.conventionSignee === false
@@ -102,6 +108,8 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
       id: 'doc-agefice',
       type: 'AGEFICE',
       participantId: 'part-1',
+      entityType: 'participant',
+      entityId: null,
       pdfUrl: 'docs/agefice.pdf',
       signedPdfUrl: over.ageficeSignee === false ? null : 'signed/agefice.pdf',
       signatureRequest: over.ageficeSignee === false
@@ -112,6 +120,8 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
       id: 'doc-prog',
       type: 'PROGRAMME',
       participantId: null,
+      entityType: 'session',
+      entityId: 'sess-1',
       pdfUrl: 'docs/programme.pdf',
       signedPdfUrl: null,
       signatureRequest: null,
@@ -129,6 +139,11 @@ beforeEach(() => {
     user: { id: 'u-1', tenantId: 't-1', role: 'ADMIN', firstName: 'Laurent', lastName: 'Marx', email: 'laurent@start-academy.fr' },
   });
   findFirstParticipant.mockResolvedValue(participant());
+  // Les inscrits de la session — ils ne servent qu'à la PORTÉE d'une convention
+  // de groupe. Ici, Jean est seul sous son commanditaire.
+  findManyParticipants.mockResolvedValue([
+    { sponsorOrgId: 'org-1', person: { firstName: 'Jean', lastName: 'Dupont' } },
+  ]);
   findManyDocuments.mockResolvedValue(documents());
   createSubmission.mockResolvedValue({ id: 'sub-1' });
   downloadFileMock.mockResolvedValue(Buffer.from('%PDF'));
@@ -346,5 +361,57 @@ describe('sendOpcoSubmission — ce que l’envoi laisse derrière lui', () => {
     });
     await sendOpcoSubmission('sub-1');
     expect(sendMailMock.mock.calls[0]![0].cc).toBeUndefined();
+  });
+});
+
+/* ── Le nom du certificat, identique à celui que sert la route ────────────── */
+
+/**
+ * LE DÉFAUT DE LA RECETTE (12/09/2026). Le même certificat s'appelait
+ * `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` téléchargé depuis la
+ * ligne, et `…-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf` en pièce
+ * jointe du dossier : impossible de dire à un financeur « c'est le même
+ * document ».
+ *
+ * Le dossier avait un défaut symétrique, moins visible : il nommait le
+ * certificat d'après l'inscrit dont on ouvrait le dossier. Pour une convention
+ * de groupe, UN fichier sortait donc sous autant de noms qu'il y avait de
+ * salariés.
+ */
+describe('le certificat porte le nom de la PORTÉE de sa pièce, pas du dossier ouvert', () => {
+  it('convention de groupe à deux salariés : aucun nom de personne', async () => {
+    findManyParticipants.mockResolvedValue([
+      { sponsorOrgId: 'org-1', person: { firstName: 'Jean', lastName: 'Dupont' } },
+      { sponsorOrgId: 'org-1', person: { firstName: 'Alice', lastName: 'Martin' } },
+    ]);
+    findManyDocuments.mockResolvedValue(
+      documents().map((d) =>
+        d.type === 'CONVENTION'
+          ? { ...d, participantId: null, entityType: 'organization', entityId: 'org-1' }
+          : d,
+      ),
+    );
+    await composeOpcoSubmission('part-1');
+    const certificats = piecesCreees().filter((p) => p.kind === 'AUDIT_TRAIL');
+    expect(certificats[0]!.filename).toBe('Certificat-de-signature-Convention-SES-0112.pdf');
+  });
+
+  it('convention d’une EI stockée en groupe : SON inscrit, comme la route', async () => {
+    findManyParticipants.mockResolvedValue([
+      { sponsorOrgId: 'org-1', person: { firstName: 'Jean', lastName: 'Dupont' } },
+      { sponsorOrgId: 'org-autre', person: { firstName: 'Alice', lastName: 'Martin' } },
+    ]);
+    findManyDocuments.mockResolvedValue(
+      documents().map((d) =>
+        d.type === 'CONVENTION'
+          ? { ...d, participantId: null, entityType: 'organization', entityId: 'org-1' }
+          : d,
+      ),
+    );
+    await composeOpcoSubmission('part-1');
+    const certificats = piecesCreees().filter((p) => p.kind === 'AUDIT_TRAIL');
+    expect(certificats[0]!.filename).toBe(
+      'Certificat-de-signature-Convention-Jean-DUPONT-SES-0112.pdf',
+    );
   });
 });

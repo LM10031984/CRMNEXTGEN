@@ -93,3 +93,37 @@ export function resoudreDestinataireDossier(a: {
   }
   return { email: adresse, source: 'ORGANISATION', libelle: null, motif: null };
 }
+
+/* ── L'AIDE SOUS UN CHAMP DESTINATAIRE VIDE (D-D-1) ──────────────────────── */
+
+/**
+ * CE QUE L'ÉCRAN DISAIT ENCORE (recette du 12/09/2026) : « À renseigner —
+ * vérifie l'organisation sponsor (champ emailBilling). »
+ *
+ * Deux défauts en une phrase. D'abord elle est PÉRIMÉE : depuis le lot D, un
+ * dossier AGEFICE ne part pas au commanditaire mais à un point d'accueil, et
+ * `emailBilling` n'a donc rien à voir avec ce champ. Ensuite elle nomme une
+ * COLONNE DE BASE — ce qui suppose que le lecteur sache où la trouver, alors
+ * que l'écran qui la porte s'appelle « Email de facturation ».
+ *
+ * ⚠ CETTE FONCTION RÉPOND À UNE AUTRE QUESTION QUE `resoudreDestinataireDossier`,
+ * et c'est pourquoi elles coexistent : celle-ci dit « ce champ est vide, que
+ * faire ? » — vrai même quand l'admin vient d'effacer une adresse correctement
+ * pré-remplie. L'autre dit « pourquoi rien n'a été pré-rempli », au moment de
+ * la composition. Les fusionner ferait répondre à la seconde question dans un
+ * cas où elle ne se pose pas.
+ */
+export function aideDestinataireDossier(a: {
+  opcoCode: string | null;
+  /** Raison sociale ou nom commercial du commanditaire. */
+  organisation: string | null;
+}): string {
+  const organisation = (a.organisation ?? '').trim() || 'cette organisation';
+  if (a.opcoCode === FINANCEUR_A_POINT_ACCUEIL) {
+    return (
+      `Point d’accueil AGEFICE non rattaché à ${organisation} — renseignez son ` +
+      `département / point d’accueil sur la fiche organisation.`
+    );
+  }
+  return `Aucune adresse de facturation pour ${organisation} — renseignez-la sur sa fiche organisation.`;
+}

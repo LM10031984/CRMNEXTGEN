@@ -53,7 +53,15 @@ const PJ_NON_SIGNEES: SubmissionAttachment[] = [
   { key: 'signed/a.pdf', filename: 'Agefice.pdf', kind: 'AGEFICE_PA_FORM', included: true, signe: true },
 ];
 
-function editeur(over: { attachments?: SubmissionAttachment[]; role?: string; recipientEmail?: string | null } = {}) {
+function editeur(
+  over: {
+    attachments?: SubmissionAttachment[];
+    role?: string;
+    recipientEmail?: string | null;
+    sponsorOpcoCode?: string | null;
+    sponsorName?: string;
+  } = {},
+) {
   return (
     <SubmissionEditor
       id="sub-1"
@@ -64,8 +72,10 @@ function editeur(over: { attachments?: SubmissionAttachment[]; role?: string; re
         bodyHtml: '<p>x</p>',
         attachments: over.attachments ?? PJ_SIGNEES,
         apprenantName: 'Jean DUPONT',
-        sponsorName: 'DUPONT Jean (AGEFICE)',
+        sponsorName: over.sponsorName ?? 'DUPONT Jean',
         sessionLabel: 'IA immobilier · 01 oct. 2026',
+        sponsorOpcoCode: over.sponsorOpcoCode === undefined ? 'AGEFICE' : over.sponsorOpcoCode,
+        sponsorOrgId: 'org-1',
       }}
     />
   );
@@ -151,5 +161,47 @@ describe('(c) le forçage — il existe, ou il n’existe pas', () => {
     render(editeur());
     fireEvent.click(screen.getByRole('button', { name: /Envoyer maintenant/ }));
     await waitFor(() => expect(sendOpcoSubmission).toHaveBeenCalledWith('sub-1'));
+  });
+});
+
+/* ── D-D-1 — l'aide sous un champ destinataire vide ──────────────────────── */
+
+/**
+ * L'ÉCRAN DE LA RECETTE (12/09/2026) disait encore « À renseigner — vérifie
+ * l'organisation sponsor (champ emailBilling) » : périmé depuis le lot D (un
+ * dossier AGEFICE part au point d'accueil, pas au commanditaire) et formulé
+ * avec un nom de colonne.
+ */
+describe('D-D-1 — ce qu’on lit sous un destinataire vide', () => {
+  beforeEach(() => cleanup());
+
+  it('AGEFICE : le point d’accueil à rattacher, avec le nom de l’organisation', () => {
+    render(editeur({ recipientEmail: null, sponsorOpcoCode: 'AGEFICE', sponsorName: 'DUPONT Jean' }));
+    expect(screen.getByText(/Point d’accueil AGEFICE non rattaché à DUPONT Jean/)).toBeTruthy();
+  });
+
+  it('OPCO de branche : l’adresse de facturation, en français', () => {
+    render(
+      editeur({ recipientEmail: null, sponsorOpcoCode: 'OPCO_EP', sponsorName: 'AGENCE MARTIN' }),
+    );
+    expect(screen.getByText(/Aucune adresse de facturation pour AGENCE MARTIN/)).toBeTruthy();
+  });
+
+  it('l’ancienne phrase, et le nom de colonne, ont disparu', () => {
+    const { container } = render(editeur({ recipientEmail: null }));
+    expect(container.textContent ?? '').not.toContain('emailBilling');
+    expect(container.textContent ?? '').not.toContain('organisation sponsor');
+  });
+
+  it('le lien mène à la fiche organisation — c’est là qu’on corrige', () => {
+    render(editeur({ recipientEmail: null }));
+    expect(
+      screen.getByRole('link', { name: 'Ouvrir la fiche organisation' }).getAttribute('href'),
+    ).toBe('/app/organisations/org-1');
+  });
+
+  it('rien de tout cela quand l’adresse est renseignée', () => {
+    render(editeur({ recipientEmail: 'formation@cci-nice.fr' }));
+    expect(screen.queryByRole('link', { name: 'Ouvrir la fiche organisation' })).toBeNull();
   });
 });

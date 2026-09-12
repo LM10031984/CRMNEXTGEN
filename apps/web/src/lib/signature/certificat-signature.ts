@@ -18,6 +18,7 @@
  */
 
 import { asciiSlug, personFilenamePart } from '@/lib/docs/download-filename';
+import { GROUP_CONVENTION_ENTITY_TYPES } from '@/lib/docs/convention-coverage';
 
 /**
  * Le préfixe, figé à UN endroit.
@@ -80,4 +81,89 @@ export function nomFichierCertificat(parties: PartiesNomCertificat): string {
     asciiSlug(parties.sessionCode),
   ].filter(Boolean);
   return `${segments.join('-')}.pdf`;
+}
+
+/* ── QUI NOMMER SUR UN CERTIFICAT — la règle partagée ────────────────────── */
+
+/** Une personne, réduite à ce qu'un nom de fichier en retient. */
+export interface PersonneCouverte {
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * La personne à porter sur le nom du certificat, ou `null`.
+ *
+ * CE QU'ELLE RÉPARE (recette du 12/09/2026). Le même certificat s'appelait
+ * `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` téléchargé depuis la
+ * ligne, et `…-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf` en pièce
+ * jointe du dossier. Deux noms pour un fichier : impossible de dire à un
+ * financeur « c'est le même document ».
+ *
+ * POURQUOI LES DEUX DIVERGEAIENT. La route lisait le participant sur le
+ * `Document` — nul pour une convention de GROUPE, qui ne porte que son
+ * organisation. Le dossier, lui, le lisait sur l'inscription qu'il compose : il
+ * avait donc toujours un nom, au prix d'un défaut symétrique — le certificat
+ * d'une convention de groupe prenait le nom de l'inscrit dont on ouvrait le
+ * dossier, soit autant de noms que de salariés pour un seul fichier.
+ *
+ * LA RÈGLE, DÉSORMAIS UNIQUE : un certificat porte un nom de personne quand la
+ * demande ne couvre QU'ELLE. Sinon aucun — un fichier unique ne peut pas
+ * s'appeler du nom de l'un des trois qu'il couvre.
+ *
+ * ⚠ DÉDOUBLONNÉ PAR LE NOM, pas par un identifiant : ce module n'en reçoit pas,
+ * et deux inscrits homonymes produiraient de toute façon le même nom de
+ * fichier. Une demande portant deux pièces du même apprenant (convention
+ * individuelle + dossier AGEFICE) n'est donc pas prise pour un groupe.
+ */
+export function personneDuCertificat(
+  couvertes: readonly PersonneCouverte[],
+): PersonneCouverte | null {
+  const parNom = new Map<string, PersonneCouverte>();
+  for (const p of couvertes) {
+    parNom.set(`${p.firstName}\u0000${p.lastName}`, p);
+  }
+  if (parNom.size !== 1) return null;
+  return [...parNom.values()][0]!;
+}
+
+/** Une pièce, réduite à ce qui dit QUI elle couvre. */
+export interface PieceCouvrante {
+  /** `Document.entityType` — String libre côté schéma. */
+  entityType: string | null;
+  /** `Document.entityId` — le commanditaire, ou la session. */
+  entityId: string | null;
+  /** L'apprenant quand la pièce est NOMINATIVE ; `null` pour une pièce de groupe. */
+  participant: PersonneCouverte | null;
+}
+
+/**
+ * Les inscrits qu'une pièce couvre — DEUX chemins, et les deux existent en
+ * production (cf. `lib/docs/convention-coverage.ts`) :
+ *
+ *  • une pièce NOMINATIVE porte son participant ;
+ *  • une convention de GROUPE n'en porte aucun. Elle porte son organisation
+ *    (`entityType='organization'`, `entityId=sponsorOrgId`) ou la session
+ *    entière (`entityType='session'`, la forme produite par les scripts `_gen-*`).
+ *
+ * ⚠ SANS LE SECOND CHEMIN, une convention d'ENTREPRISE INDIVIDUELLE — une seule
+ * personne, mais stockée en forme de groupe — sort sans nom. C'est exactement
+ * ce que la recette du 12/09 a constaté sur DEMO-SIG-01 : la route ne nommait
+ * personne là où le dossier nommait Julien.
+ *
+ * Une forme d'entité inconnue ne couvre personne : on ne devine pas une portée.
+ */
+export function personnesCouvertesParLaPiece(a: {
+  piece: PieceCouvrante;
+  participantsSession: readonly { sponsorOrgId: string | null; person: PersonneCouverte }[];
+}): PersonneCouverte[] {
+  if (a.piece.participant) return [a.piece.participant];
+  const forme = a.piece.entityType ?? '';
+  if (!GROUP_CONVENTION_ENTITY_TYPES.includes(forme as never)) return [];
+  // `session` porte la session ENTIÈRE ; `organization` ne porte que les
+  // inscrits de ce commanditaire — une session peut réunir deux entreprises.
+  if (forme === 'session') return a.participantsSession.map((p) => p.person);
+  return a.participantsSession
+    .filter((p) => p.sponsorOrgId === a.piece.entityId)
+    .map((p) => p.person);
 }

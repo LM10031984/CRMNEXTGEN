@@ -16,6 +16,32 @@
 export const JOURS_AVANT_ALERTE_CONVENTION = 15;
 
 /**
+ * LE PLANCHER DE MISE EN SERVICE — aucune session antérieure n'est alertée.
+ *
+ * POURQUOI IL EXISTE. Le cron naît le 12/09/2026, alors que des sessions sont
+ * DÉJÀ dans sa fenêtre de quinze jours. Sans plancher, sa première exécution
+ * alerterait d'un coup sur toutes celles dont la convention n'est pas partie —
+ * une salve sur des dossiers que Laurent traite à la main. Une alerte qui
+ * commence par une salve est une alerte qu'on filtre, et elle ne servira plus
+ * jamais.
+ *
+ * POURQUOI CETTE DATE. 12/09 + 15 jours = 27/09. À partir de là, toute session
+ * entrant dans la fenêtre y sera entrée APRÈS la mise en service : le cron
+ * l'aura vue naître, et son silence antérieur ne cache rien. Les sessions
+ * d'avant restent traitées à la main, une fois.
+ *
+ * ⚠ MINUIT À PARIS, pas en UTC. Une session du 26/09 à 23 h n'a pas à être
+ * alertée sous prétexte qu'elle tombe le 27 en temps universel — les sessions
+ * se lisent dans le fuseau où elles se tiennent.
+ *
+ * ⚠ CETTE CONSTANTE NE SE PÉRIME PAS TOUTE SEULE, et c'est voulu : elle dit
+ * « ce cron n'a rien vu avant cette date », ce qui reste vrai pour toujours.
+ * La retirer un jour ne changerait rien (toutes les sessions lui sont
+ * postérieures) — mais la déplacer ferait ré-alerter du passé.
+ */
+export const ALERTE_J15_DEPUIS = new Date('2026-09-27T00:00:00+02:00');
+
+/**
  * LE TITRE DE LA TÂCHE — et, par la même occasion, LE MARQUEUR D'IDEMPOTENCE.
  *
  * POURQUOI PAS UNE COLONNE, comme `Lead.staleAlertedAt`. Elle serait plus
@@ -65,6 +91,7 @@ export type DecisionAlerteConvention =
   | {
       alerter: false;
       motif:
+        | 'avant_mise_en_service'
         | 'trop_tot'
         | 'deja_commencee'
         | 'hors_statut'
@@ -79,6 +106,12 @@ export function decideAlerteConventionNonEnvoyee(
   now: Date,
   seuilJours: number = JOURS_AVANT_ALERTE_CONVENTION,
 ): DecisionAlerteConvention {
+  // ⚠ LE PLANCHER EN PREMIER. Une session d'avant la mise en service est hors
+  // périmètre, point : l'annoncer « sans inscrit » ou « déjà envoyée » ferait
+  // croire à qui lit les compteurs du cron qu'elle a été examinée sur le fond.
+  if (session.startDate.getTime() < ALERTE_J15_DEPUIS.getTime()) {
+    return { alerter: false, motif: 'avant_mise_en_service' };
+  }
   if (!STATUTS_ALERTABLES.has(session.status)) return { alerter: false, motif: 'hors_statut' };
 
   const millisecondesRestantes = session.startDate.getTime() - now.getTime();

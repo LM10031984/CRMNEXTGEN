@@ -19,7 +19,11 @@ import { validateRequest } from '@/lib/auth';
 import { sendMail } from '@/lib/mailer';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
-import { nomFichierCertificat } from '@/lib/signature/certificat-signature';
+import {
+  nomFichierCertificat,
+  personneDuCertificat,
+  personnesCouvertesParLaPiece,
+} from '@/lib/signature/certificat-signature';
 import {
   LIBELLES_PIECE_DOSSIER,
   messageDossierIncomplet,
@@ -166,6 +170,11 @@ export async function composeOpcoSubmission(
       type: true,
       pdfUrl: true,
       participantId: true,
+      // La FORME DE STOCKAGE — elle dit qui la pièce couvre, donc qui nommer
+      // sur son certificat (correction du 12/09 : le même fichier sortait sous
+      // deux noms selon qu'on le téléchargeait ou qu'on le recevait).
+      entityType: true,
+      entityId: true,
       // Lot D — règle métier n°2 : le PDF signé fait foi. Jusqu'ici le dossier
       // partait avec la convention VIERGE alors que la signée existait à côté.
       signedPdfUrl: true,
@@ -175,6 +184,17 @@ export async function composeOpcoSubmission(
       signatureRequest: { select: { id: true, auditTrailUrl: true } },
     },
     orderBy: { createdAt: 'desc' },
+  });
+
+  // Les inscrits de la session — ils servent UNIQUEMENT à savoir qui une
+  // convention de GROUPE couvre, donc qui nommer sur son certificat. Une seule
+  // requête, et seulement des noms.
+  const participantsSession = await prisma.sessionParticipant.findMany({
+    where: { sessionId: participant.session.id },
+    select: {
+      sponsorOrgId: true,
+      person: { select: { firstName: true, lastName: true } },
+    },
   });
 
   const conventionDocs = docs.filter((d) => d.type === 'CONVENTION');
@@ -243,10 +263,24 @@ export async function composeOpcoSubmission(
       key: cle,
       // Le MÊME nom que celui servi par `/api/signature-requests/[id]/audit-trail` :
       // l'admin retrouve dans le mail du financeur le fichier qu'il a téléchargé.
+      // ⚠ LE NOM VIENT DE LA PORTÉE DE LA PIÈCE, pas du dossier qu'on compose.
+      // Avant, le certificat d'une convention de groupe prenait le nom de
+      // l'inscrit dont on ouvrait le dossier : autant de noms que de salariés
+      // pour UN seul fichier — et un nom différent de celui que servait la
+      // route. Même module, même règle, des deux côtés.
       filename: nomFichierCertificat({
         docType: source?.type,
-        firstName: participant.person.firstName,
-        lastName: participant.person.lastName,
+        ...(personneDuCertificat(
+          personnesCouvertesParLaPiece({
+            piece: {
+              entityType: source?.entityType ?? null,
+              entityId: source?.entityId ?? null,
+              participant:
+                source?.participantId === participant.id ? participant.person : null,
+            },
+            participantsSession,
+          }),
+        ) ?? {}),
         sessionCode: participant.session.code,
       }),
       kind: 'AUDIT_TRAIL',

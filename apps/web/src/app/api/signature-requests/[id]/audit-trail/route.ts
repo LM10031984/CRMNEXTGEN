@@ -18,7 +18,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { downloadFile, createSignedDownloadUrl, DOCS_BUCKET, _internals } from '@/lib/storage';
-import { nomFichierCertificat } from '@/lib/signature/certificat-signature';
+import {
+  nomFichierCertificat,
+  personneDuCertificat,
+  personnesCouvertesParLaPiece,
+} from '@/lib/signature/certificat-signature';
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { user } = await validateRequest();
@@ -32,14 +36,29 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     select: {
       id: true,
       auditTrailUrl: true,
-      session: { select: { code: true } },
+      // Les inscrits de la session : indispensables pour nommer le certificat
+      // d'une convention de GROUPE, qui ne porte aucun participant.
+      session: {
+        select: {
+          code: true,
+          participants: {
+            select: {
+              sponsorOrgId: true,
+              person: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      },
+      // ⚠ TOUTES les pièces de la demande, pas la première : c'est leur
+      // ENSEMBLE qui dit qui la demande couvre, et donc qui nommer.
       documents: {
         select: {
           type: true,
+          entityType: true,
+          entityId: true,
           participant: { select: { person: { select: { firstName: true, lastName: true } } } },
         },
         orderBy: { createdAt: 'asc' },
-        take: 1,
       },
     },
   });
@@ -55,7 +74,22 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   // la personne quand la demande est nominative, et personne quand elle est
   // collective (convention de groupe) — ce qui est la bonne chose à dire.
   const piece = demande.documents[0] ?? null;
-  const personne = piece?.participant?.person ?? null;
+
+  // ⚠ LA PORTÉE EST LUE PAR LE MODULE PARTAGÉ, pas ici — c'est LA correction du
+  // 12/09 : la route et le dossier lisaient chacun la leur, et le même
+  // certificat sortait sous deux noms.
+  const personne = personneDuCertificat(
+    demande.documents.flatMap((d) =>
+      personnesCouvertesParLaPiece({
+        piece: {
+          entityType: d.entityType,
+          entityId: d.entityId,
+          participant: d.participant?.person ?? null,
+        },
+        participantsSession: demande.session.participants,
+      }),
+    ),
+  );
   const filename = nomFichierCertificat({
     // La PIÈCE couverte : un dossier AGEFICE porte deux demandes, donc deux
     // certificats, qui sortiraient sinon sous le même nom.

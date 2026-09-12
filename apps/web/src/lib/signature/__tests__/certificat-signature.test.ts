@@ -16,7 +16,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { nomFichierCertificat } from '../certificat-signature';
+import {
+  nomFichierCertificat,
+  personneDuCertificat,
+  personnesCouvertesParLaPiece,
+} from '../certificat-signature';
 
 describe('nomFichierCertificat — un nom qu’un admin range sans l’ouvrir', () => {
   it('nomme la personne et la session, en ASCII strict', () => {
@@ -102,5 +106,148 @@ describe('nomFichierCertificat — le certificat porte la PIÈCE qu’il couvre'
     expect(nomFichierCertificat({ docType: 'PROGRAMME', sessionCode: 'SES-0112' })).toBe(
       'Certificat-de-signature-SES-0112.pdf',
     );
+  });
+});
+
+/* ── UN SEUL NOMMAGE, PARTAGÉ PAR LA ROUTE ET LE DOSSIER ─────────────────── */
+
+/**
+ * CE QUE LA RECETTE A VU (12/09/2026). Le même certificat s'appelait
+ * `Certificat-de-signature-Convention-DEMO-SIG-01.pdf` téléchargé depuis la
+ * ligne, et
+ * `Certificat-de-signature-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf`
+ * en pièce jointe du dossier. Deux noms pour un fichier : impossible de dire à
+ * un financeur « c'est le même document ».
+ *
+ * POURQUOI LES DEUX DIVERGEAIENT. La route lisait le participant sur le
+ * `Document` (nul pour une convention de GROUPE, qui ne porte que son
+ * organisation) ; le dossier, lui, le lisait sur l'inscription qu'il compose.
+ * Le dossier avait donc TOUJOURS un nom — au prix d'un défaut symétrique : le
+ * certificat d'une convention de groupe prenait le nom de l'inscrit dont on
+ * ouvrait le dossier, soit autant de noms que de salariés pour un seul fichier.
+ *
+ * LA RÈGLE PARTAGÉE : un certificat porte un nom de personne quand la demande
+ * ne couvre QU'ELLE. Sinon, il n'en porte aucun — un fichier unique ne peut pas
+ * s'appeler du nom de l'un des trois qu'il couvre.
+ */
+describe('personneDuCertificat — nommer quelqu’un seulement si la demande ne couvre que lui', () => {
+  const JULIEN = { firstName: 'Julien', lastName: 'DEMO-SIG BERNARD' };
+  const ALICE = { firstName: 'Alice', lastName: 'MARTIN' };
+
+  it('un seul couvert : c’est lui', () => {
+    expect(personneDuCertificat([JULIEN])).toEqual(JULIEN);
+  });
+
+  it('deux couverts (convention de groupe) : personne', () => {
+    expect(personneDuCertificat([JULIEN, ALICE])).toBeNull();
+  });
+
+  it('aucun couvert : personne', () => {
+    expect(personneDuCertificat([])).toBeNull();
+  });
+
+  it('le même inscrit cité deux fois ne compte QUE pour un', () => {
+    // Une demande peut porter deux pièces du même apprenant (convention
+    // individuelle + dossier AGEFICE) : ce n'est pas un groupe.
+    expect(personneDuCertificat([JULIEN, { ...JULIEN }])).toEqual(JULIEN);
+  });
+
+  it('deux homonymes stricts restent une seule personne', () => {
+    // Cas dégénéré assumé : on ne dispose pas des ids ici, et deux noms
+    // identiques produiraient de toute façon le même nom de fichier.
+    expect(personneDuCertificat([ALICE, { ...ALICE }])).toEqual(ALICE);
+  });
+});
+
+describe('les deux appelants produisent LE MÊME nom pour le MÊME certificat', () => {
+  it('convention individuelle (EI) : le participant, des deux côtés', () => {
+    const couverts = [{ firstName: 'Julien', lastName: 'DEMO-SIG BERNARD' }];
+    const personne = personneDuCertificat(couverts);
+    expect(
+      nomFichierCertificat({
+        docType: 'CONVENTION',
+        firstName: personne?.firstName,
+        lastName: personne?.lastName,
+        sessionCode: 'DEMO-SIG-01',
+      }),
+    ).toBe('Certificat-de-signature-Convention-Julien-DEMO-SIG-BERNARD-DEMO-SIG-01.pdf');
+  });
+
+  it('convention de groupe : aucun nom, des deux côtés', () => {
+    const personne = personneDuCertificat([
+      { firstName: 'Alice', lastName: 'MARTIN' },
+      { firstName: 'Bob', lastName: 'DURAND' },
+    ]);
+    expect(
+      nomFichierCertificat({
+        docType: 'CONVENTION',
+        firstName: personne?.firstName,
+        lastName: personne?.lastName,
+        sessionCode: 'SES-0106',
+      }),
+    ).toBe('Certificat-de-signature-Convention-SES-0106.pdf');
+  });
+});
+
+/* ── QUI une pièce couvre — la seule lecture de la portée ─────────────────── */
+
+describe('personnesCouvertesParLaPiece — les deux formes de stockage', () => {
+  const ALICE = { firstName: 'Alice', lastName: 'MARTIN' };
+  const BOB = { firstName: 'Bob', lastName: 'DURAND' };
+  const JULIEN = { firstName: 'Julien', lastName: 'DEMO-SIG BERNARD' };
+
+  const INSCRITS = [
+    { sponsorOrgId: 'org-provence', person: ALICE },
+    { sponsorOrgId: 'org-provence', person: BOB },
+    { sponsorOrgId: 'org-julien-ei', person: JULIEN },
+  ];
+
+  it('pièce NOMINATIVE : son participant, et lui seul', () => {
+    expect(
+      personnesCouvertesParLaPiece({
+        piece: { entityType: 'participant', entityId: null, participant: JULIEN },
+        participantsSession: INSCRITS,
+      }),
+    ).toEqual([JULIEN]);
+  });
+
+  it('convention de GROUPE : les inscrits de CE commanditaire', () => {
+    // Une session peut réunir deux entreprises : prendre tout le monde ferait
+    // dire à la convention de Provence qu'elle couvre aussi Julien.
+    expect(
+      personnesCouvertesParLaPiece({
+        piece: { entityType: 'organization', entityId: 'org-provence', participant: null },
+        participantsSession: INSCRITS,
+      }),
+    ).toEqual([ALICE, BOB]);
+  });
+
+  it('convention d’une ENTREPRISE INDIVIDUELLE stockée en groupe : une seule personne', () => {
+    // Le cas DEMO-SIG-01 : la route ne nommait personne, le dossier nommait
+    // Julien. C'est CE chemin qui manquait.
+    expect(
+      personnesCouvertesParLaPiece({
+        piece: { entityType: 'organization', entityId: 'org-julien-ei', participant: null },
+        participantsSession: INSCRITS,
+      }),
+    ).toEqual([JULIEN]);
+  });
+
+  it('forme « session » (produite par les scripts) : toute la session', () => {
+    expect(
+      personnesCouvertesParLaPiece({
+        piece: { entityType: 'session', entityId: 'sess-1', participant: null },
+        participantsSession: INSCRITS,
+      }),
+    ).toEqual([ALICE, BOB, JULIEN]);
+  });
+
+  it('forme inconnue : personne — on ne devine pas une portée', () => {
+    expect(
+      personnesCouvertesParLaPiece({
+        piece: { entityType: 'chose', entityId: 'x', participant: null },
+        participantsSession: INSCRITS,
+      }),
+    ).toEqual([]);
   });
 });
