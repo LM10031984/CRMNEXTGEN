@@ -205,6 +205,9 @@ function vue(over: Partial<VueSignature> = {}): VueSignature {
     lignes,
     blocages: [],
     avertissements: [],
+    // Lot D (D-C3-4) : les inscrits pour qui il n'y a AUCUNE pièce. Vide par
+    // défaut — c'est le cas normal, et c'est ce qui rend l'encart significatif.
+    riensASigner: [],
     canSign: true,
     boutonVisible: lignes.some((l) => l.envoyable),
     nbEnvoyables: lignes.filter((l) => l.envoyable).length,
@@ -1055,6 +1058,7 @@ describe('PUISSANCE (h) — l’ordre COMPLET se lit sur la LIGNE, avant tout cl
     const client = a.client === undefined ? CLIENT : a.client;
     const vueReelle = construireVueSignature({
       plan: { envois: [envoi], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -1277,5 +1281,84 @@ describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
       />,
     );
     expect(screen.queryByRole('link', { name: /Certificat de signature/i })).toBeNull();
+  });
+});
+
+/* ── D-C3-4 — le bloc ne se tait plus devant un inscrit sans pièce ───────── */
+
+/**
+ * L'ÉCRAN DU 12/09/2026 (SES-0112). Cinq apprenants « Agence », aucune pièce,
+ * aucun avertissement : le bloc se réduisait à la zone de dépôt, ce qui se lit
+ * comme « tout va bien ». Les cinq dossiers sont partis sans convention.
+ */
+describe('le bloc muet — un inscrit pour qui il n’y a rien à signer (D-C3-4)', () => {
+  beforeEach(() => cleanup());
+
+  const RIEN_ORGANISATION = {
+    participantId: 'part-2',
+    nomAffiche: 'Marion MAINO',
+    message: 'Aucun financeur renseigné pour AGENCE DU PORT : il n’y a rien à faire signer.',
+    correction: {
+      cible: 'ORGANISATION' as const,
+      organizationId: 'org-9',
+      libelleOrganisation: 'AGENCE DU PORT',
+    },
+  };
+
+  it('rend le message TEL QUEL, dans un encart d’alerte', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], riensASigner: [RIEN_ORGANISATION] })}
+      />,
+    );
+    const alerte = screen.getByRole('alert');
+    expect(alerte.textContent).toContain(
+      'Aucun financeur renseigné pour AGENCE DU PORT : il n’y a rien à faire signer.',
+    );
+  });
+
+  it('le lien mène à la FICHE ORGANISATION — même mécanique que l’avertissement de régime', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({ lignes: [], riensASigner: [RIEN_ORGANISATION] })}
+      />,
+    );
+    // ⚠ VALEUR LITTÉRALE (règle n°2) : le « vers où » est ce qu'on garde.
+    expect(
+      screen.getByRole('link', { name: libelleLienRenseignerFinanceur('AGENCE DU PORT') })
+        .getAttribute('href'),
+    ).toBe(
+      '/app/organisations/org-9?champ=financeur' +
+        '&from=%2Fapp%2Fsessions%2Fsess-1%3Ftab%3Dapres',
+    );
+  });
+
+  it('sans commanditaire, le lien mène à l’INSCRIPTION', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        scope="AFTER"
+        vue={vue({
+          lignes: [],
+          riensASigner: [
+            { ...RIEN_ORGANISATION, correction: { cible: 'INSCRIPTION' as const } },
+          ],
+        })}
+      />,
+    );
+    expect(
+      screen.getByRole('link', { name: LIBELLE_LIEN_CORRIGER_COMMANDITAIRE }),
+    ).not.toBeNull();
+  });
+
+  it('aucun encart quand il n’y a rien à dire — l’alerte à tort n’alerte plus', () => {
+    render(
+      <BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({ lignes: [] })} />,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

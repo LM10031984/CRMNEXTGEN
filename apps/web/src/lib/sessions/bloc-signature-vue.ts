@@ -305,6 +305,13 @@ export interface VueSignature {
   /** Rendus TELS QUELS : leurs messages sont déjà nominatifs et complets. */
   blocages: AnomalieEnvoi[];
   /**
+   * Les participants pour qui il n'y a RIEN à signer — lot D, défaut D-C3-4.
+   *
+   * Vide dans le cas normal. Non vide, c'est le seul moyen qu'a l'écran de ne
+   * pas se taire là où le moteur n'a rien à dire.
+   */
+  riensASigner: RienASigner[];
+  /**
    * Le RBAC, décidé une fois côté serveur. Le composant ne le re-dérive pas :
    * `ADMIN | MANAGER` (`canEdit`), surtout PAS `canWrite`, qui inclut
    * `COMMERCIAL` — un rôle que les trois server actions de signature refusent.
@@ -525,6 +532,95 @@ export function regrouperAvertissements(
 }
 
 /**
+ * UN PARTICIPANT POUR QUI IL N'Y A RIEN À SIGNER — lot D, défaut D-C3-4.
+ *
+ * CE QUE LA PRODUCTION A MONTRÉ (SES-0112, 12/09/2026). Cinq apprenants
+ * « Agence », conventions individuelles : le bloc se réduisait à la zone de
+ * dépôt. `regle === null` pour tous — financeur absent sur le commanditaire —
+ * donc aucune pièce ; et aucun avertissement non plus, faute de signal (pas de
+ * lien `EI_SELF`, pas d'autre organisation ouvrant la pièce).
+ *
+ * LE MOTEUR A RAISON DE SE TAIRE : il ne sait rien d'INCOHÉRENT à signaler.
+ * C'est la VUE qui doit parler, parce qu'elle seule voit la différence entre
+ * « il n'y a rien à signer » et « on ne sait pas quoi signer ». Un écran vide
+ * se lit comme « tout va bien » — et les cinq dossiers sont partis sans
+ * convention.
+ */
+export interface RienASigner {
+  participantId: string;
+  nomAffiche: string;
+  /** Composé par `composerRienASigner`. Rendu tel quel par le bloc. */
+  message: string;
+  /** MÊME mécanique que l'avertissement de régime : jamais une troisième règle. */
+  correction: CorrectionAvertissement;
+}
+
+/**
+ * La phrase, dans la forme des autres : le manque, sa conséquence, puis le geste.
+ *
+ * Deux cas, et ils n'appellent pas la même correction — c'est exactement la
+ * frontière que `financeurSansRegime` trace déjà depuis la correction n°3.
+ */
+export function composerRienASigner(a: {
+  nomAffiche: string;
+  contexte: ContexteAvertissement;
+}): string {
+  const correction = correctionAvertissement(a.contexte);
+  if (correction.cible === 'ORGANISATION') {
+    const organisation = correction.libelleOrganisation || 'cette organisation';
+    return (
+      `Aucun financeur renseigné pour ${organisation} : il n’y a rien à faire signer ` +
+      `pour ${a.nomAffiche}. Renseignez le financeur de cette organisation pour que ses ` +
+      `pièces existent.`
+    );
+  }
+  return (
+    `Aucun commanditaire sur l’inscription de ${a.nomAffiche} : il n’y a rien à faire ` +
+    `signer. Ouvrez l’inscription pour désigner qui commande cette formation.`
+  );
+}
+
+/**
+ * Les participants que le bloc laisserait MUETS.
+ *
+ * ⚠ UN PARTICIPANT DÉJÀ NOMMÉ N'EST PAS DIT DEUX FOIS. Le cas Florent
+ * HAUSSWIRTH est signalé par le moteur, avec sa phrase et sa correction propres
+ * ; ajouter « rien à signer » en dessous ferait deux encarts pour une seule
+ * correction — ce que la correction n°2 de Laurent a précisément supprimé.
+ *
+ * ⚠ SANS CONTEXTE, ON SE TAIT. Un appelant qui ne calcule pas le contexte n'a
+ * pas de quoi écrire une phrase juste : affirmer « aucun financeur » serait
+ * énoncer une cause qu'on n'a pas lue.
+ */
+export function composerRiensASigner(a: {
+  participants: readonly { participantId: string; nomAffiche: string }[];
+  envois: readonly EnvoiPlanifie[];
+  blocages: readonly AnomalieEnvoi[];
+  avertissements: readonly AnomalieEnvoi[];
+  contexteParParticipant: ReadonlyMap<string, ContexteAvertissement>;
+}): RienASigner[] {
+  const dejaCouverts = new Set<string>();
+  for (const envoi of a.envois) for (const id of envoi.participantIds) dejaCouverts.add(id);
+  for (const anomalie of [...a.blocages, ...a.avertissements]) {
+    dejaCouverts.add(anomalie.participantId);
+  }
+
+  const riens: RienASigner[] = [];
+  for (const participant of a.participants) {
+    if (dejaCouverts.has(participant.participantId)) continue;
+    const contexte = a.contexteParParticipant.get(participant.participantId);
+    if (contexte === undefined) continue;
+    riens.push({
+      participantId: participant.participantId,
+      nomAffiche: participant.nomAffiche,
+      message: composerRienASigner({ nomAffiche: participant.nomAffiche, contexte }),
+      correction: correctionAvertissement(contexte),
+    });
+  }
+  return riens;
+}
+
+/**
  * Croise le plan d'envoi avec l'état réel des documents.
  *
  * Une pièce ABSENTE reste envoyable : c'est l'ouverture du récapitulatif qui la
@@ -534,6 +630,20 @@ export function regrouperAvertissements(
  */
 export function construireVueSignature(a: {
   plan: { envois: EnvoiPlanifie[]; blocages: AnomalieEnvoi[]; avertissements: AnomalieEnvoi[] };
+  /**
+   * TOUS LES INSCRITS DE LA SESSION, dans l'ordre de l'écran — lot D (D-C3-4).
+   *
+   * ⚠ OBLIGATOIRE, comme `signataireOf` et `signataires` avant lui, et pour la
+   * raison mesurée au lot C.2b-8 : une prop optionnelle se perd en silence.
+   * Sans cette liste, la vue ne peut PAS savoir qui le plan a laissé de côté —
+   * elle ne voit que ce qui existe, donc elle ne peut nommer que ce qui existe.
+   * C'est exactement pourquoi les cinq « Agence » de SES-0112 sont passés
+   * inaperçus.
+   *
+   * Un tableau VIDE reste légitime (session sans inscrit). Ce qu'on rend
+   * impossible, c'est l'OUBLI.
+   */
+  participants: readonly { participantId: string; nomAffiche: string }[];
   documentParCle: ReadonlyMap<string, DocumentDeLaPiece>;
   docStatusParCle: ReadonlyMap<string, string | null>;
   canSign: boolean;
@@ -637,6 +747,13 @@ export function construireVueSignature(a: {
       a.contexteAvertissementParParticipant ?? new Map(),
     ),
     blocages: a.plan.blocages,
+    riensASigner: composerRiensASigner({
+      participants: a.participants,
+      envois: a.plan.envois,
+      blocages: a.plan.blocages,
+      avertissements: a.plan.avertissements,
+      contexteParParticipant: a.contexteAvertissementParParticipant ?? new Map(),
+    }),
     canSign: a.canSign,
     boutonVisible: a.canSign && nbEnvoyables > 0,
     nbEnvoyables,

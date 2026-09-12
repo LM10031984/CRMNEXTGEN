@@ -132,3 +132,22 @@ describe('fiche session — le certificat de signature remonte jusqu’au bloc (
     expect(pageSrc).not.toMatch(/auditTrailUrl: null,/);
   });
 });
+
+/* ── D-C3-4 — les inscrits SANS pièce traversent-ils la page ? ───────────── */
+
+/**
+ * `participants` est OBLIGATOIRE : l'oublier ne compile pas. Mais
+ * `participants: []` compile parfaitement et reproduit exactement l'écran du
+ * 12/09/2026 — un bloc muet devant cinq apprenants sans convention. C'est la
+ * SUBSTITUTION, encore, que `tsc` ne voit pas.
+ */
+describe('fiche session — les inscrits sans aucune pièce remontent au bloc (D-C3-4)', () => {
+  it('la liste passée est celle qui a nourri le plan, pas un tableau vide', () => {
+    expect(pageSrc).toMatch(/participants: participantsLus\.map\(\(lu\) => \(\{/);
+    expect(pageSrc).not.toMatch(/participants: \[\],/);
+  });
+
+  it('elle porte de quoi NOMMER le participant — sans nom, l’encart ne dit rien', () => {
+    expect(pageSrc).toMatch(/participantId: lu\.participantId,\n\s*nomAffiche: lu\.nomAffiche,/);
+  });
+});

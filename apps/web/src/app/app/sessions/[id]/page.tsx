@@ -783,6 +783,15 @@ export default async function SessionDetailPage({
     }
     return construireVueSignature({
       plan,
+      // ⚠ TOUS LES INSCRITS (lot D, D-C3-4), et depuis la MÊME liste que celle
+      // qui a nourri le plan : la vue doit pouvoir nommer ceux que le plan a
+      // laissés de côté. Sans eux, elle ne voit que ce qui existe — et c'est
+      // exactement ainsi que les cinq « Agence » de SES-0112 sont passés
+      // inaperçus.
+      participants: participantsLus.map((lu) => ({
+        participantId: lu.participantId,
+        nomAffiche: lu.nomAffiche,
+      })),
       documentParCle,
       docStatusParCle,
       canSign,
