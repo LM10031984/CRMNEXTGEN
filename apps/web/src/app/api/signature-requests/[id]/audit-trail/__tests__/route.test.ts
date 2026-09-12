@@ -107,7 +107,7 @@ describe('GET audit-trail — le fichier servi', () => {
       'qualiof-docs',
       'sessions/t1/SES-0112/signed/convention.audit-trail.pdf',
       600,
-      'Certificat-de-signature-Stephane-ROUSSEAU-SES-0112.pdf',
+      'Certificat-de-signature-Convention-Stephane-ROUSSEAU-SES-0112.pdf',
     );
   });
 
@@ -130,7 +130,7 @@ describe('GET audit-trail — le fichier servi', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(res.headers.get('content-disposition')).toBe(
-      'attachment; filename="Certificat-de-signature-Stephane-ROUSSEAU-SES-0112.pdf"',
+      'attachment; filename="Certificat-de-signature-Convention-Stephane-ROUSSEAU-SES-0112.pdf"',
     );
     // Un certificat régénéré garderait la même URL : pas de cache navigateur.
     expect(res.headers.get('cache-control')).toBe('no-store, must-revalidate');
@@ -149,7 +149,7 @@ describe('GET audit-trail — le fichier servi', () => {
       'qualiof-docs',
       expect.any(String),
       600,
-      'Certificat-de-signature-SES-0112.pdf',
+      'Certificat-de-signature-Convention-SES-0112.pdf',
     );
   });
 });

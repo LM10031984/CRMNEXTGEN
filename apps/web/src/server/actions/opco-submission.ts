@@ -244,6 +244,7 @@ export async function composeOpcoSubmission(
       // Le MÊME nom que celui servi par `/api/signature-requests/[id]/audit-trail` :
       // l'admin retrouve dans le mail du financeur le fichier qu'il a téléchargé.
       filename: nomFichierCertificat({
+        docType: source?.type,
         firstName: participant.person.firstName,
         lastName: participant.person.lastName,
         sessionCode: participant.session.code,

@@ -180,10 +180,15 @@ describe('composeOpcoSubmission — le certificat, la pièce que les AGEFICE ré
     ]);
   });
 
-  it('le certificat porte un nom parlant — il se range à côté du PDF signé', async () => {
+  it('chaque certificat nomme LA PIÈCE qu’il couvre — sinon les deux sont homonymes', async () => {
+    // Un dossier AGEFICE porte deux demandes de signature, donc deux
+    // certificats : sous le même nom, le financeur ne peut plus dire lequel
+    // couvre la convention.
     await composeOpcoSubmission('part-1');
-    const certificat = piecesCreees().find((p) => p.kind === 'AUDIT_TRAIL');
-    expect(certificat?.filename).toBe('Certificat-de-signature-Jean-DUPONT-SES-0112.pdf');
+    expect(piecesCreees().filter((p) => p.kind === 'AUDIT_TRAIL').map((p) => p.filename)).toEqual([
+      'Certificat-de-signature-Convention-Jean-DUPONT-SES-0112.pdf',
+      'Certificat-de-signature-Dossier-AGEFICE-Jean-DUPONT-SES-0112.pdf',
+    ]);
   });
 
   it('deux pièces couvertes par la MÊME demande ne joignent qu’un certificat', async () => {

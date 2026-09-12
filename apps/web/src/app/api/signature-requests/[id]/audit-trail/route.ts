@@ -54,8 +54,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   // Le nom parlant se calcule sur la PREMIÈRE pièce de la demande : elle porte
   // la personne quand la demande est nominative, et personne quand elle est
   // collective (convention de groupe) — ce qui est la bonne chose à dire.
-  const personne = demande.documents[0]?.participant?.person ?? null;
+  const piece = demande.documents[0] ?? null;
+  const personne = piece?.participant?.person ?? null;
   const filename = nomFichierCertificat({
+    // La PIÈCE couverte : un dossier AGEFICE porte deux demandes, donc deux
+    // certificats, qui sortiraient sinon sous le même nom.
+    docType: piece?.type,
     firstName: personne?.firstName,
     lastName: personne?.lastName,
     sessionCode: demande.session?.code,

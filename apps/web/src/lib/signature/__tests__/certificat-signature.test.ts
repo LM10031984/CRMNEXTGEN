@@ -49,3 +49,58 @@ describe('nomFichierCertificat — un nom qu’un admin range sans l’ouvrir', 
     ).toBe('Certificat-de-signature-Mael-D-ANGLADE-SES-0099.pdf');
   });
 });
+
+/* ── LA COLLISION, trouvée en montant le ZIP du pack audit ───────────────── */
+
+/**
+ * DEUX CERTIFICATS, UN SEUL NOM. Un dossier AGEFICE porte DEUX demandes de
+ * signature — la convention et le formulaire — donc DEUX certificats. Nommés
+ * seulement d'après la personne et la session, ils sortaient sous le même nom :
+ * deux pièces jointes identiques en apparence dans le mail du financeur, et
+ * deux entrées en collision dans le ZIP du pack audit. Un instructeur ne peut
+ * alors plus dire quel certificat couvre quelle pièce.
+ */
+describe('nomFichierCertificat — le certificat porte la PIÈCE qu’il couvre', () => {
+  it('nomme la convention', () => {
+    expect(
+      nomFichierCertificat({
+        docType: 'CONVENTION',
+        firstName: 'Jean',
+        lastName: 'Dupont',
+        sessionCode: 'SES-0112',
+      }),
+    ).toBe('Certificat-de-signature-Convention-Jean-DUPONT-SES-0112.pdf');
+  });
+
+  it('nomme le dossier AGEFICE', () => {
+    expect(
+      nomFichierCertificat({
+        docType: 'AGEFICE',
+        firstName: 'Jean',
+        lastName: 'Dupont',
+        sessionCode: 'SES-0112',
+      }),
+    ).toBe('Certificat-de-signature-Dossier-AGEFICE-Jean-DUPONT-SES-0112.pdf');
+  });
+
+  it('nomme l’attestation d’assiduité', () => {
+    expect(nomFichierCertificat({ docType: 'ASSIDUITE', sessionCode: 'SES-0112' })).toBe(
+      'Certificat-de-signature-Attestation-assiduite-SES-0112.pdf',
+    );
+  });
+
+  it('les deux certificats d’un même dossier ne portent JAMAIS le même nom', () => {
+    const personne = { firstName: 'Jean', lastName: 'Dupont', sessionCode: 'SES-0112' };
+    expect(nomFichierCertificat({ ...personne, docType: 'CONVENTION' })).not.toBe(
+      nomFichierCertificat({ ...personne, docType: 'AGEFICE' }),
+    );
+  });
+
+  it('un type inconnu ne fabrique pas un segment bancal — il n’en met aucun', () => {
+    // Mieux vaut un nom générique qu'un `Certificat-de-signature-UNKNOWN-…`
+    // qui ferait chercher un type de document inexistant.
+    expect(nomFichierCertificat({ docType: 'PROGRAMME', sessionCode: 'SES-0112' })).toBe(
+      'Certificat-de-signature-SES-0112.pdf',
+    );
+  });
+});

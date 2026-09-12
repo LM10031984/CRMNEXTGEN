@@ -28,7 +28,32 @@ import { asciiSlug, personFilenamePart } from '@/lib/docs/download-filename';
  */
 const PREFIXE_CERTIFICAT = 'Certificat-de-signature';
 
+/**
+ * LE SEGMENT QUI DIT QUELLE PIÈCE LE CERTIFICAT COUVRE.
+ *
+ * POURQUOI IL EXISTE. Un dossier AGEFICE porte DEUX demandes de signature — la
+ * convention et le formulaire — donc deux certificats. Nommés seulement d'après
+ * la personne et la session, ils sortaient sous le MÊME nom : deux pièces
+ * jointes identiques en apparence dans le mail du financeur, et deux entrées en
+ * collision dans le ZIP du pack audit. Un instructeur ne pouvait plus dire quel
+ * certificat couvrait quelle pièce.
+ *
+ * POURQUOI UNE TABLE, ET PAS `docTypeFilenameLabel`. Le libellé long du
+ * catalogue donnerait « Convention-de-formation-professionnelle » au milieu
+ * d'un nom déjà long. On ne garde que ce qui DISTINGUE les trois pièces
+ * signables — et un type absent d'ici n'ajoute AUCUN segment, plutôt qu'un
+ * `-PROGRAMME-` qui ferait chercher un certificat sur un document qui ne se
+ * signe pas.
+ */
+const SEGMENT_PAR_PIECE: Record<string, string> = {
+  CONVENTION: 'Convention',
+  AGEFICE: 'Dossier-AGEFICE',
+  ASSIDUITE: 'Attestation-assiduite',
+};
+
 export interface PartiesNomCertificat {
+  /** Le `Document.type` de la pièce couverte, quand on le connaît. */
+  docType?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   /** Code de session, ex. 'SES-0112'. */
@@ -50,6 +75,7 @@ export interface PartiesNomCertificat {
 export function nomFichierCertificat(parties: PartiesNomCertificat): string {
   const segments = [
     PREFIXE_CERTIFICAT,
+    SEGMENT_PAR_PIECE[parties.docType ?? ''] ?? '',
     personFilenamePart(parties.firstName, parties.lastName),
     asciiSlug(parties.sessionCode),
   ].filter(Boolean);
