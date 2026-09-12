@@ -148,7 +148,7 @@ export async function generateAnalyseBesoinEntrepriseCore(
   if (!representant) {
     return {
       ok: false,
-      error: `Aucun représentant déterminable pour « ${org.legalName} » : renseignez le représentant légal sur la fiche entreprise, ou un contact principal.`,
+      error: `Aucun représentant déterminable pour « ${org.legalName} » : renseignez le responsable sur la fiche entreprise, ou un contact principal.`,
     };
   }
 

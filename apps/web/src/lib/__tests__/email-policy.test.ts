@@ -37,7 +37,14 @@ vi.mock('nodemailer', () => ({
   default: { createTransport },
 }));
 
-import { resolveEmailPolicy, EMAIL_CATEGORY_LABELS, type EmailCategory } from '../email-policy';
+import {
+  resolveEmailPolicy,
+  EMAIL_CATEGORY_FIELD,
+  EMAIL_CATEGORY_LABELS,
+  type EmailCategory,
+  type EmailPolicySettings,
+} from '../email-policy';
+import { EmailSettingsSchema } from '@qualiof/shared';
 import { sendMail } from '../mailer';
 
 // ---------------------------------------------------------------------------
@@ -176,6 +183,109 @@ describe('resolveEmailPolicy — matrice fail-closed', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Partie A bis — la catégorie `signature` (lot C.2c, D-9)
+// ---------------------------------------------------------------------------
+
+describe('catégorie « signature » — décochable, fail-closed', () => {
+  /**
+   * ⚠ LA FIXTURE ÉNUMÈRE LES 12 BOOLÉENS EN DUR, et ce n'est pas de la
+   * verbosité : la construire depuis `EMAIL_CATEGORY_FIELD` rendrait le test
+   * tautologique — il vérifierait que la map est cohérente avec elle-même,
+   * jamais que `signature` pointe vers le BON champ.
+   */
+  function tousCochesSaufSignature(): EmailPolicySettings {
+    return {
+      emailsEnabled: true,
+      invoiceRemindersEnabled: true,
+      preinscriptionRemindersEnabled: true,
+      opcoRemindersEnabled: true,
+      opcoSubmissionsEnabled: true,
+      internalNotificationsEnabled: true,
+      userInvitationsEnabled: true,
+      diagnosticProgramsEnabled: true,
+      newLeadAlertsEnabled: true,
+      preEnrollmentAlertsEnabled: true,
+      // Fusion du 12/09/2026 : `main` a apporté la catégorie « envoi de la
+      // proposition ». Cochée comme les autres — cette fixture dit « tout est
+      // coché SAUF signature », et l'énumération doit rester exhaustive pour
+      // que le test garde « `signature` pointe vers le BON champ ».
+      proposalSendEnabled: true,
+      signatureEmailsEnabled: false,
+      testSessionIds: [] as string[],
+    };
+  }
+
+  it('T1.1 — décochée alors que TOUT le reste est coché ⇒ suppress/category-off', () => {
+    expect(resolveEmailPolicy(tousCochesSaufSignature(), { category: 'signature' })).toEqual({
+      decision: 'suppress',
+      reason: 'category-off',
+    });
+  });
+
+  it('T1.1 bis — cochée + interrupteur général ON ⇒ send', () => {
+    const s = { ...tousCochesSaufSignature(), signatureEmailsEnabled: true };
+    expect(resolveEmailPolicy(s, { category: 'signature' })).toEqual({ decision: 'send' });
+  });
+
+  it('aucune ligne de réglages ⇒ suppress/no-settings', () => {
+    expect(resolveEmailPolicy(null, { category: 'signature' })).toEqual({
+      decision: 'suppress',
+      reason: 'no-settings',
+    });
+  });
+
+  it('interrupteur général OFF + catégorie cochée + session témoin ⇒ send', () => {
+    const s: EmailPolicySettings = {
+      ...tousCochesSaufSignature(),
+      emailsEnabled: false,
+      signatureEmailsEnabled: true,
+      testSessionIds: ['ses-temoin'],
+    };
+    expect(resolveEmailPolicy(s, { category: 'signature', sessionId: 'ses-temoin' })).toEqual({
+      decision: 'send',
+    });
+    expect(resolveEmailPolicy(s, { category: 'signature', sessionId: 'ses-autre' })).toEqual({
+      decision: 'suppress',
+      reason: 'master-off',
+    });
+  });
+
+  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 11 catégories = les clés des DEUX maps', () => {
+    // Écrite à la main. Le libellé manquant est le défaut le plus discret :
+    // l'écran afficherait `undefined` sans que rien ne casse.
+    //
+    // ⚠ Fusion du 12/09/2026 : `proposal_sent` arrive de `main` (D-21, envoi de
+    // la proposition au client). Ce test a fait exactement son office — il a
+    // rougi à la fusion, en nommant la catégorie qui manquait à la liste.
+    const attendues = [
+      'invoice_reminder',
+      'preinscription_reminder',
+      'opco_reminder',
+      'opco_submission',
+      'internal_notification',
+      'user_invitation',
+      'diagnostic_program',
+      'new_lead',
+      'preenrollment_submitted',
+      'proposal_sent',
+      'signature',
+    ];
+    expect(new Set(Object.keys(EMAIL_CATEGORY_FIELD))).toEqual(new Set(attendues));
+    expect(new Set(Object.keys(EMAIL_CATEGORY_LABELS))).toEqual(new Set(attendues));
+  });
+
+  it('le libellé FR dit les quatre emails de la chaîne, pas seulement « signature »', () => {
+    expect(EMAIL_CATEGORY_LABELS.signature).toBe(
+      'Signature électronique (demandes, relances, exemplaires signés)',
+    );
+  });
+
+  it('T1.5 — le défaut Zod est FALSE : une catégorie qu’on n’a pas cochée n’envoie rien', () => {
+    expect(EmailSettingsSchema.parse({}).signatureEmailsEnabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Partie B — sendMail : ordre des couches env → BDD, suppression tracée
 // ---------------------------------------------------------------------------
 
@@ -222,6 +332,83 @@ describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)
     expect(line).toContain('category=invoice_reminder');
     expect(line).not.toContain('apprenant@example.com');
     expect(line).toContain('a***@example.com');
+  });
+
+  it('B1 bis. la chaîne SIGNATURE respecte MAIL_DRY_RUN comme les autres — rien ne part', async () => {
+    // La demande est créée chez le prestataire, mais en local rien ne doit
+    // sortir : c'est la couche env, PRIORITAIRE sur les réglages tenant. Un
+    // envoi de signature qui la contournerait enverrait un vrai lien à un vrai
+    // signataire depuis le Mac d'un développeur.
+    process.env.MAIL_DRY_RUN = 'true';
+    process.env.SMTP_HOST = 'ssl0.ovh.net';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toEqual({ ok: true, dryRun: true });
+    expect(settingsFindUnique).not.toHaveBeenCalled();
+    expect(smtpSendMail).not.toHaveBeenCalled();
+    const line = logSpy.mock.calls.map((c) => String(c[0])).find((l) => l.includes('dry-run'));
+    expect(line).toContain('category=signature');
+    // D-17 : jamais l'adresse complète dans un log.
+    expect(line).not.toContain('responsable@agence.fr');
+  });
+
+  it('B1 ter. SMTP_HOST vide ⇒ dry-run aussi, pour la signature comme pour le reste', async () => {
+    delete process.env.MAIL_DRY_RUN;
+    delete process.env.SMTP_HOST;
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toEqual({ ok: true, dryRun: true });
+    expect(smtpSendMail).not.toHaveBeenCalled();
+  });
+
+  it('B1 quater. SMTP configuré + catégorie signature DÉCOCHÉE ⇒ supprimé, tracé, jamais de throw', async () => {
+    process.env.MAIL_DRY_RUN = 'false';
+    process.env.SMTP_HOST = 'ssl0.ovh.net';
+    settingsFindUnique.mockResolvedValue({
+      emailsEnabled: true,
+      invoiceRemindersEnabled: true,
+      preinscriptionRemindersEnabled: true,
+      opcoRemindersEnabled: true,
+      opcoSubmissionsEnabled: true,
+      internalNotificationsEnabled: true,
+      userInvitationsEnabled: true,
+      diagnosticProgramsEnabled: true,
+      newLeadAlertsEnabled: true,
+      preEnrollmentAlertsEnabled: true,
+      proposalSendEnabled: true,
+      signatureEmailsEnabled: false,
+      testSessionIds: [],
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await sendMail({
+      to: 'responsable@agence.fr',
+      subject: 'Signature demandée — Convention',
+      html: '<p>Bonjour</p>',
+      context: { tenantId: 'tenant-1', category: 'signature', sessionId: 'ses-1' },
+    });
+
+    expect(res).toMatchObject({ ok: true, dryRun: true, suppressed: true });
+    expect(smtpSendMail).not.toHaveBeenCalled();
+    const line = logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.includes('suppressed-by-settings'));
+    expect(line).toBeDefined();
+    expect(line).not.toContain('responsable@agence.fr');
   });
 
   it('B2. env OK mais settings null (fail-closed) → suppressed:true, jamais de throw, destinataire masqué', async () => {

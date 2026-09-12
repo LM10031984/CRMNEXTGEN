@@ -58,6 +58,50 @@ import { SettingsDrawerSection } from '@/components/sessions/settings-drawer';
 import { SessionEnrollmentBlock } from '@/components/sessions/session-enrollment-block';
 import { SessionEnrollmentRequests } from '@/components/sessions/session-enrollment-requests';
 import { publicLinkState, buildPublicEnrollmentUrl } from '@/lib/enrollment/public-link';
+// Régime de signature (spec 2026-09-04 §3 bis, D-10 ; lot C.2b-1) — le MÊME
+// chemin que le moteur d'envoi, pour que l'écran ne promette jamais un envoi
+// que `planifierEnvoi` ne planifie pas.
+import { chargerReglesSignature } from '@/lib/signature/catalogue-regime';
+import {
+  codesFinanceursDe,
+  colonneAgeficeVisible,
+  docTypesSansObjet,
+  participantPourEnvoi,
+  type ParticipantLu,
+} from '@/lib/signature/participants-regime';
+import { docTypesEnRegime } from '@/lib/signature/regime';
+import { planifierEnvoi } from '@/lib/signature/plan-envoi';
+// Correction n°4 (11/09/2026) — « qui signe, et à quelle adresse » sur la ligne
+// du bloc « Signature ». MÊME module que le moteur d'envoi : deux cascades pour
+// une question, c'est un écran qui annonce un signataire et un lien qui part
+// ailleurs.
+import {
+  formeDuDocument,
+  resoudreSignataireClient,
+  type ParticipantPourSignataire,
+} from '@/lib/signature/signataire-de-la-piece';
+// L'ordre complet sur CHAQUE ligne du bloc « Signature » (Laurent, 11/09/2026).
+// ⚠ MÊME module que le moteur d'envoi : `resoudreSignataireOf` a quitté
+// `signature-envoi.ts` pour être appelable d'ici sans relire `Tenant.signatory*`
+// une seconde fois. Deux lectures de cette cascade divergeraient, et la ligne
+// annoncerait un organisme différent de celui qui reçoit le lien.
+import { resoudreSignataireOf, signataireOfPrevu } from '@/lib/signature/signataire-of';
+// Lot C.3 (D-C3-1) — l'état par signataire d'une pièce PARTIE. Le contrat de
+// lecture de la colonne Json vient du paquet partagé ; le rangement par camp
+// vient du module que le webhook appelle aussi. Aucune des deux règles n'est
+// recopiée ici : une seconde lecture de « qui est l'organisme » ferait diverger
+// l'écran des emails de retour.
+import { parseSignatureSigners } from '@qualiof/shared';
+import { signatairesDeLaDemande } from '@/lib/signature/envoi-contrats';
+// Bloc « Signature » des onglets Avant / Après (lot C.2b-2) : la VUE est
+// calculée ici, côté serveur, pour que « le bouton existe ou n'existe pas »
+// reste sous test unitaire au lieu d'être une inspection visuelle du JSX.
+import {
+  construireVueSignature,
+  type ContexteAvertissement,
+  type DocumentDeLaPiece,
+  type VueSignature,
+} from '@/lib/sessions/bloc-signature-vue';
 import { contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
@@ -134,9 +178,18 @@ export default async function SessionDetailPage({
               id: true,
               firstName: true,
               lastName: true,
-              // BUG-11 — pour permettre AGEFICE même si sponsorOrg n'est pas
-              // AGEFICE : on lit les LegalLinks pour détecter EI_SELF (TNS)
-              // ou un autre rattachement à une org AGEFICE.
+              // Correction n°4 (11/09/2026) : l'adresse du signataire se lit
+              // désormais SUR LA LIGNE du bloc « Signature ». Quand c'est
+              // l'apprenant qui signe (dossier de financement, attestation
+              // d'assiduité), c'est celle de sa fiche.
+              email: true,
+              // Les liens juridiques ne servent PLUS à décider du régime
+              // (dérivation élargie BUG-11 retirée le 10/09/2026, lot C.2b-1 :
+              // c'est le financeur du commanditaire qui décide, et lui seul).
+              // Ils restent chargés pour les SIGNAUX du garde-fou « régime
+              // incohérent » — une EI rattachée, une autre organisation dont le
+              // financeur ouvre la pièce — qui rend l'anomalie bruyante au lieu
+              // de faire disparaître un dossier de l'écran.
               legalLinks: {
                 select: {
                   role: true,
@@ -160,7 +213,16 @@ export default async function SessionDetailPage({
               // le représentant signe la convention et porte le recueil du
               // besoin ; à défaut, le contact principal en tient lieu.
               representative: true,
-              contacts: { where: { isPrimary: true }, take: 1, select: { id: true } },
+              // ⚠ ORDRE EXIGÉ PAR LE CONTRAT DE `representant.ts` : le contact
+              // principal d'abord, le plus ancien ensuite — la cascade ne
+              // rejoue pas ce tri, elle s'y fie. Le `where: { isPrimary }` de
+              // naguère ne servait qu'au garde-fou `aContactPrincipal` ; il
+              // empêchait de résoudre l'adresse du représentant, qui peut être
+              // portée par un contact non principal du MÊME nom.
+              contacts: {
+                orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+                select: { id: true, firstName: true, lastName: true, email: true, isPrimary: true },
+              },
             },
           },
         },
@@ -195,7 +257,30 @@ export default async function SessionDetailPage({
               { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
             ],
           },
-          select: { id: true, type: true, participantId: true, entityType: true, entityId: true },
+          select: {
+            id: true,
+            type: true,
+            participantId: true,
+            entityType: true,
+            entityId: true,
+            // Lot C.2b-2 — l'état de SIGNATURE de la pièce, pas seulement son
+            // existence. `status` distingue « parti » de « prêt à partir » ;
+            // `signedPdfUrl` dit qu'une preuve existe déjà (webhook C.3 comme
+            // scan du lot A) ; `signatureRequestId` porte l'annulation, qui
+            // s'applique à la DEMANDE et non au document. Aucune requête de
+            // plus : ce `findMany` charge déjà les documents participants ET
+            // les conventions de groupe, toutes formes de stockage confondues.
+            status: true,
+            signedPdfUrl: true,
+            signatureRequestId: true,
+            // Lot C.3 (D-C3-1) — les SIGNATAIRES de la demande en cours. Sans
+            // eux, une pièce partie affiche « En attente de signature » même
+            // une fois le client passé : pas de date, et surtout aucun lien
+            // « Signer maintenant » pour l'organisme, dont c'est le tour.
+            // JOINTURE, pas une requête de plus : ce `findMany` charge déjà
+            // tous les documents de la session.
+            signatureRequest: { select: { signers: true } },
+          },
         }),
         prisma.pedagogicalAsset.findMany({
           where: {
@@ -412,33 +497,298 @@ export default async function SessionDetailPage({
     inner.set(assetDocType, { id: a.id });
   }
 
-  // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
-  const matrixParticipants = session.participants.map((p) => ({
-    id: p.id,
-    personId: p.person.id,
-    fullName: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+  // ══ Régime de financement — spec signature §3 bis (D-10), lot C.2b-1 ═══════
+  //
+  // CE QUI A CHANGÉ LE 10/09/2026 (décision Laurent). Cette page décidait
+  // elle-même « ce participant relève-t-il d'AGEFICE ? » avec la dérivation
+  // élargie BUG-11 : commanditaire AGEFICE **ou** lien `EI_SELF` **ou** autre
+  // organisation rattachée à ce financeur. Pendant ce temps, le moteur d'envoi
+  // (lot C.2a) lisait les trois colonnes d'`OpcoCatalog`. Deux règles pour une
+  // question : l'écran promettait des envois que `planifierEnvoi` ne planifiait
+  // pas. Le RÉGIME fait foi désormais — un seul financeur par participant, celui
+  // du commanditaire DE CETTE INSCRIPTION.
+  //
+  // La contrepartie est l'avertissement « régime incohérent » (`regime.ts`) :
+  // il ne déclenche aucun envoi, il rend l'anomalie bruyante au lieu de faire
+  // disparaître un dossier de l'écran. Son AFFICHAGE nominatif est le lot
+  // C.2b-2 (bloc « Signature ») ; ici il sert déjà à garder la colonne AGEFICE.
+  //
+  // Même chemin que le moteur, à la ligne près : `codesFinanceursDe` →
+  // `chargerReglesSignature` → `participantPourEnvoi`. Une seule requête
+  // `OpcoCatalog` pour toute la page.
+  const participantsLus: ParticipantLu[] = session.participants.map((p) => ({
+    participantId: p.id,
+    nomAffiche: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
-    sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
-    financingMode: p.financingMode as string | null,
-    docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
-    // BUG-11 — élargi : participant éligible AGEFICE si SOIT son sponsor est
-    // AGEFICE, SOIT il a un LegalLink EI_SELF (auto-entrepreneur TNS), SOIT
-    // il a une autre org rattachée avec opcoCode=AGEFICE. Permet de
-    // générer le dossier AGEFICE depuis la matrice même si le sponsor de la
-    // session est un OPCO classique (cas Florent HAUSSWIRTH / Imagimmo OPCO_EP
-    // qui est aussi auto-entrepreneur AGEFICE en parallèle).
-    isAgefice:
-      p.sponsorOrg.opcoCode === 'AGEFICE' ||
-      p.person.legalLinks.some(
-        (l) =>
-          l.role === 'EI_SELF' || l.organization?.opcoCode === 'AGEFICE',
-      ),
-    participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
-    pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+    sponsorOpcoCode: p.sponsorOrg.opcoCode,
+    liens: p.person.legalLinks,
   }));
+  const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
+  const regimeParParticipant = new Map(
+    participantsLus.map((lu) => {
+      const pourLePlan = participantPourEnvoi(lu, reglesSignature);
+      return [
+        lu.participantId,
+        {
+          pourLePlan,
+          enRegime: docTypesEnRegime(pourLePlan.regle),
+          // `docTypesSansObjet`, PAS `docTypesHorsRegime` : un commanditaire
+          // sans code financeur doit toujours sa convention (cf. le module).
+          sansObjet: docTypesSansObjet(pourLePlan.regle) as ReadonlySet<string>,
+        },
+      ] as const;
+    }),
+  );
 
-  const hasAgeficeParticipant = matrixParticipants.some((p) => p.isAgefice);
+  // Le scope AVANT est le seul à porter AGEFICE (`PIECES_PAR_SCOPE`).
+  const planSignatureAvant = planifierEnvoi({
+    scope: 'BEFORE',
+    participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
+  });
+  const planSignatureApres = planifierEnvoi({
+    scope: 'AFTER',
+    participants: [...regimeParParticipant.values()].map((r) => r.pourLePlan),
+  });
+  /**
+   * Ce que l'avertissement « régime incohérent » doit DIRE, et que
+   * `AnomalieEnvoi` ne transporte pas (correction n°3, Laurent 11/09/2026) :
+   * l'organisation de l'inscription, et les financeurs des organisations
+   * rattachées à l'apprenant.
+   *
+   * AUCUNE RÈGLE ICI — la décision « cette pièce est incohérente » reste
+   * entièrement dans `regime.ts`. On recopie trois faits déjà chargés, sans
+   * reconnaître aucun code financeur au passage : ce sont les codes tels que le
+   * catalogue les porte qui ressortent à l'écran.
+   */
+  const contexteAvertissementParParticipant = new Map<string, ContexteAvertissement>(
+    participantsLus.map((lu) => {
+      const codesRattaches = [
+        ...new Set(
+          lu.liens
+            .filter((lien) => lien.organizationId !== lu.sponsorOrgId)
+            .map((lien) => (lien.organization?.opcoCode ?? '').trim())
+            .filter((code) => code.length > 0),
+        ),
+      ];
+      return [
+        lu.participantId,
+        {
+          // L'id, PAS seulement le libellé : c'est la fiche que le lien du cas A
+          // ouvre (`/app/organisations/{id}`). Sans lui, l'avertissement
+          // retomberait sur le formulaire d'inscription — le comportement que la
+          // correction n°7 bis supprime.
+          sponsorOrgId: lu.sponsorOrgId,
+          sponsorOrgLabel: lu.sponsorOrgLabel,
+          // `regle === null` = financeur absent ou hors catalogue : aucune
+          // pièce en régime. C'est ce qui distingue « n'a aucun régime de
+          // financement » de « n'ouvre pas ces pièces ».
+          financeurSansRegime:
+            (regimeParParticipant.get(lu.participantId)?.pourLePlan.regle ?? null) === null,
+          financeursRattaches: codesRattaches,
+        },
+      ] as const;
+    }),
+  );
+
+  const avertissementsRegimeAvant = planSignatureAvant.avertissements;
+  const participantsAvertisAgefice = new Set(
+    avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
+  );
+
+  // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
+  const matrixParticipants = session.participants.map((p) => {
+    const regime = regimeParParticipant.get(p.id);
+    return {
+      id: p.id,
+      personId: p.person.id,
+      fullName: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+      sponsorOrgId: p.sponsorOrg.id,
+      sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
+      sponsorOrgOpcoCode: p.sponsorOrg.opcoCode,
+      financingMode: p.financingMode as string | null,
+      docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
+      isAgefice: regime?.enRegime.has('AGEFICE') ?? false,
+      docTypesHorsRegime: regime?.sansObjet,
+      participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+      pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
+    };
+  });
+
+  // ⚠ TROIS raisons de garder la colonne, et la deuxième est la contrepartie du
+  // changement de règle : un dossier AGEFICE DÉJÀ GÉNÉRÉ ne disparaît pas de
+  // l'écran parce que le régime a cessé de reconnaître son porteur. Un dossier
+  // qui disparaît de l'écran ne se corrige jamais.
+  const hasAgeficeParticipant = colonneAgeficeVisible({
+    participants: matrixParticipants.map((p) => ({
+      participantId: p.id,
+      enRegime: regimeParParticipant.get(p.id)?.enRegime ?? new Set(),
+    })),
+    participantsAvecDocumentAgefice: new Set(
+      matrixParticipants.filter((p) => p.participantDocs.has('AGEFICE')).map((p) => p.id),
+    ),
+    participantsAvertisAgefice,
+  });
+
+  // ══ Bloc « Signature » des onglets Avant / Après — lot C.2b-2 ══════════════
+  //
+  // RBAC : `ADMIN | MANAGER`, le MÊME ensemble que `canEdit` (défini plus bas
+  // pour l'édition des champs structurants) — calculé ici parce que le bloc en a
+  // besoin avant. ⚠ SURTOUT PAS `canWrite`, qui inclut `COMMERCIAL` : les trois
+  // server actions de signature refusent ce rôle. Un bouton visible pour un rôle
+  // refusé est un bouton qui ment.
+  const canSign = ['ADMIN', 'MANAGER'].includes(user.role);
+
+  // L'état de signature de chaque document déjà chargé, indexé par id.
+  //
+  // ⚠ LES SIGNATAIRES SONT RELUS PAR LE CONTRAT PARTAGÉ, puis rangés dans leur
+  // camp par le MÊME module que le webhook (`signatairesDeLaDemande`).
+  // `parseSignatureSigners` écarte sans bruit une ligne mal formée — c'est le
+  // seul point de lecture autorisé de cette colonne Json (règle du lot C.3) — et
+  // `signatairesDeLaDemande` lit le camp sur le nom d'ancre, jamais sur le
+  // régime. Recopier l'un ou l'autre ici ferait dire à l'écran autre chose qu'aux
+  // emails de retour.
+  const etatDocParId = new Map<string, DocumentDeLaPiece>(
+    sessionDocs.map((d) => [
+      d.id,
+      {
+        id: d.id,
+        status: d.status,
+        signedPdfUrl: d.signedPdfUrl,
+        signatureRequestId: d.signatureRequestId,
+        signataires: signatairesDeLaDemande({
+          signers: parseSignatureSigners(d.signatureRequest?.signers),
+          docType: d.type,
+        }),
+      },
+    ]),
+  );
+
+  // Le dépôt manuel du lot A ne touche PAS `Document.status` : il écrit
+  // `SessionParticipant.docStatus[docType].state = 'MANUAL_OK'`. Lu ici depuis
+  // la même source que `deriveCellState`, pour que la ligne du bloc ne dise
+  // jamais autre chose que la cellule de la matrice.
+  const docStatusParParticipant = new Map<string, Record<string, string | null>>(
+    session.participants.map((p) => {
+      const brut = (p.docStatus as Record<string, unknown> | null) ?? {};
+      const etats: Record<string, string | null> = {};
+      for (const [type, valeur] of Object.entries(brut)) {
+        const state = (valeur as { state?: unknown } | null)?.state;
+        etats[type] = typeof state === 'string' ? state : null;
+      }
+      return [p.id, etats] as const;
+    }),
+  );
+
+  /**
+   * Les inscriptions dans la forme attendue par la résolution du signataire.
+   *
+   * `releveDeLaConvention` est appelé par `releveDeLaConventionPour`, le
+   * helper déjà présent en tête de ce fichier — la MÊME règle payeur du 12/08
+   * qui a décidé de la forme du document au moment de sa génération.
+   */
+  const participantsPourSignataire: ParticipantPourSignataire[] = session.participants.map((p) => ({
+    id: p.id,
+    nom: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
+    apprenant: {
+      firstName: p.person.firstName,
+      lastName: p.person.lastName,
+      email: p.person.email,
+    },
+    org: {
+      id: p.sponsorOrg.id,
+      legalName: p.sponsorOrg.legalName,
+      representative: p.sponsorOrg.representative,
+      contacts: p.sponsorOrg.contacts.map((c) => ({
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        isPrimary: c.isPrimary,
+      })),
+    },
+    estEiSelfChezSponsor:
+      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role === 'EI_SELF',
+    relevantDeLaConvention: releveDeLaConventionPour(p),
+  }));
+  const participantPourSignataireParId = new Map(
+    participantsPourSignataire.map((p) => [p.id, p] as const),
+  );
+
+  /**
+   * Le couple nom + adresse de chaque pièce du plan.
+   *
+   * ⚠ AUCUNE RÈGLE ICI. On assemble les inscrits couverts, puis on appelle les
+   * DEUX fonctions du moteur (`formeDuDocument`, puis `resoudreSignataireClient`).
+   * Une pièce dont la cascade n'aboutit pas n'entre pas dans la map : la ligne
+   * dira « signataire à déterminer », et le récapitulatif rendra le refus
+   * nominatif complet au moment d'envoyer.
+   */
+  const signataireParCle = (plan: ReturnType<typeof planifierEnvoi>) => {
+    const parCle = new Map<string, { nom: string; email: string }>();
+    for (const envoi of plan.envois) {
+      const couverts = envoi.participantIds.flatMap((id) => {
+        const p = participantPourSignataireParId.get(id);
+        return p === undefined ? [] : [p];
+      });
+      const forme = formeDuDocument(envoi, couverts);
+      if (!forme.ok) continue;
+      const client = resoudreSignataireClient({
+        docType: envoi.docType,
+        forme: forme.forme,
+        envoi,
+        couverts,
+      });
+      if (!client.ok) continue;
+      parCle.set(envoi.cle, { nom: client.signataire.nom, email: client.signataire.email });
+    }
+    return parCle;
+  };
+
+  /**
+   * La vue d'un scope. Le document d'une pièce est celui du PREMIER participant
+   * couvert : `docsByParticipant` reporte déjà la convention de groupe sur
+   * chaque salarié (`expandGroupConventions`), donc tous les couverts pointent
+   * le même document — en lire un suffit, et en lire plusieurs inventerait un
+   * arbitrage que le moteur ne fait pas.
+   */
+  /**
+   * Le signataire de l'ORGANISME, résolu UNE fois pour les deux scopes.
+   *
+   * ⚠ AUCUNE RÈGLE ICI NON PLUS. On appelle la résolution du moteur et on en
+   * garde la projection d'affichage (`signataireOfPrevu`). Non résolu ⇒ `null`,
+   * et les lignes n'annoncent que le client : le récapitulatif rendra
+   * l'empêchement `SIGNATAIRE_OF_INCOMPLET`, qui nomme le réglage manquant.
+   *
+   * ⚠ « Cette pièce porte-t-elle une signature OF ? » n'est PAS tranché ici :
+   * `ordreSignatairesPrevu` interroge `ANCRES_PAR_PIECE` pièce par pièce, donc
+   * le dossier AGEFICE n'annoncera qu'un rang même avec cet objet sous la main.
+   */
+  const signataireOfDeLOrganisme = signataireOfPrevu(await resoudreSignataireOf(user.tenantId));
+
+  const vuePourScope = (plan: ReturnType<typeof planifierEnvoi>): VueSignature => {
+    const documentParCle = new Map<string, DocumentDeLaPiece>();
+    const docStatusParCle = new Map<string, string | null>();
+    for (const envoi of plan.envois) {
+      const premier = envoi.participantIds[0];
+      if (premier === undefined) continue;
+      const docId = docsByParticipant.get(premier)?.get(envoi.docType);
+      const etat = docId === undefined ? undefined : etatDocParId.get(docId);
+      if (etat !== undefined) documentParCle.set(envoi.cle, etat);
+      const manuel = docStatusParParticipant.get(premier)?.[envoi.docType] ?? null;
+      docStatusParCle.set(envoi.cle, manuel);
+    }
+    return construireVueSignature({
+      plan,
+      documentParCle,
+      docStatusParCle,
+      canSign,
+      contexteAvertissementParParticipant,
+      signataireParCle: signataireParCle(plan),
+      signataireOf: signataireOfDeLOrganisme,
+    });
+  };
+  const vueSignatureAvant = vuePourScope(planSignatureAvant);
+  const vueSignatureApres = vuePourScope(planSignatureApres);
 
   // Lot 0 (audit 28/08, E-1) — état documentaire de la session : périmé,
   // non vérifiable (produit avant le suivi des empreintes), engagé. Une seule
@@ -937,7 +1287,10 @@ export default async function SessionDetailPage({
           id: orgId,
           legalName: org.legalName,
           representative: org.representative,
-          aContactPrincipal: org.contacts.length > 0,
+          // ⚠ `.some(isPrimary)`, plus `.length > 0` : la requête charge
+          // désormais TOUS les contacts (cf. le `select`), donc compter les
+          // lignes ne dirait plus « il existe un contact principal ».
+          aContactPrincipal: org.contacts.some((c) => c.isPrimary),
         },
         participants: membres.map((p) => ({
           nom: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
@@ -988,7 +1341,10 @@ export default async function SessionDetailPage({
   // canEdit : seuls ADMIN/MANAGER éditent les champs structurants (titre,
   // tarif, notes, capacités, dates). COMMERCIAL peut écrire (inscrire,
   // générer docs) mais pas modifier la structure de la session.
-  const canEdit = ['ADMIN', 'MANAGER'].includes(user.role);
+  // Même ensemble que `canSign` (lot C.2b-2), calculé plus haut parce que le
+  // bloc « Signature » en a besoin avant : une seule source, pas deux listes de
+  // rôles à faire diverger.
+  const canEdit = canSign;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -1476,6 +1832,7 @@ export default async function SessionDetailPage({
               canGenerate={canWrite}
               dropZoneParticipants={dropZoneParticipants}
               avantGroups={avantGroups}
+              vueSignature={vueSignatureAvant}
             />
           </div>
         }
@@ -1489,6 +1846,7 @@ export default async function SessionDetailPage({
             dropZoneParticipants={dropZoneParticipants}
             pendantGroups={pendantGroups}
             apresGroups={apresGroups}
+            vueSignature={vueSignatureApres}
             batch={
               latestBatch
                 ? {

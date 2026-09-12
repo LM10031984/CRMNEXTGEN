@@ -21,9 +21,15 @@ import crypto from 'node:crypto';
  *     comparaison à temps constant, et **fail-closed sans secret**.
  *  4. `downloadAuditTrail` : le certificat de signature est une pièce à part
  *     entière (règle métier n°3 — c'est ce que les AGEFICE réclament).
+ *  5. `metadata.lang: 'fr-FR'` sur **chaque** signataire : ce certificat va au
+ *     dossier AGEFICE, il doit être lisible par un financeur français.
+ *     DocuSeal lit la langue du dernier signataire ayant complété — n'en
+ *     équiper qu'un seul rendrait le résultat dépendant de l'ordre réel.
  *
  * PROTOCOLE DE MUTATION : passer `send_email: true` dans docuseal.ts → test 2
  * ROUGE. Retirer le contrôle de fraîcheur du timestamp → test « rejoue » ROUGE.
+ * Retirer `metadata.lang` d'un SEUL signataire → test « certificat en
+ * français » ROUGE.
  */
 
 const fetchMock = vi.fn();
@@ -149,6 +155,19 @@ describe('DocuSeal — createRequest', () => {
 
     expect(body.send_email).toBe(false);
     expect(body.submitters.every((s: { send_email: boolean }) => s.send_email === false)).toBe(true);
+  });
+
+  it('demande le certificat de signature en français, sur CHAQUE signataire', async () => {
+    await provider().createRequest(CREATE_INPUT);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+
+    // DocuSeal compose le certificat dans la langue du dernier signataire
+    // ayant complété : `every`, pas `some` — oublier un signataire suffirait à
+    // rendre la pièce AGEFICE en anglais selon qui signe en dernier.
+    expect(body.submitters).toHaveLength(2);
+    expect(
+      body.submitters.every((s: { metadata?: { lang?: string } }) => s.metadata?.lang === 'fr-FR'),
+    ).toBe(true);
   });
 
   it('préserve l’ordre de signature client → OF (D-3)', async () => {

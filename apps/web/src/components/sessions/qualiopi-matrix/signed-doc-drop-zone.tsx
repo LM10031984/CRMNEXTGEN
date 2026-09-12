@@ -18,7 +18,7 @@
  * (la modale par cellule) : un seul chemin d'écriture des PDF signés.
  */
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowDown, ArrowUp, ChevronDown, Loader2, Trash2, Upload } from 'lucide-react';
@@ -29,6 +29,7 @@ import {
   type MatchCandidate,
 } from '@/lib/signed-scan-match';
 import { uploadSignedScans } from '@/server/actions/qualiopi-matrix';
+import { titreDepotSigne } from '@/lib/sessions/titre-depot-signe';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -44,12 +45,26 @@ export interface SignedDocDropZoneProps {
   sessionId: string;
   /** Type de document déposé (EMARGEMENT dans l'onglet Après). */
   docType: string;
-  docLabel: string;
   participants: DropZoneParticipant[];
   /** Replié par défaut dans l'onglet Avant, déplié dans Après. */
   defaultOpen?: boolean;
   /** Si fourni, l'admin choisit le type de document déposé. */
   docTypeOptions?: Array<{ value: string; label: string }>;
+  /**
+   * L'en-tête de la section, quand l'appelant en impose un (demande n°4).
+   *
+   * Le bloc « Signature » y met une QUESTION — « Exemplaire signé à la main ? »
+   * — parce que la section n'est plus une rubrique de dépôt mais l'un des deux
+   * chemins vers la preuve, présenté à côté de l'autre. Sans `titre`, l'en-tête
+   * reste `titreDepotSigne(selectedDocType)` : un appelant isolé continue
+   * d'annoncer la pièce qu'il attend.
+   */
+  titre?: string;
+  /**
+   * Ce qui se lit AVANT de glisser quoi que ce soit : comment le fichier est
+   * rattaché, et pourquoi cette zone ne concerne que le papier. Rendu tel quel.
+   */
+  aide?: ReactNode;
 }
 
 type Row = { file: File; participantId: string | null };
@@ -57,10 +72,11 @@ type Row = { file: File; participantId: string | null };
 export function SignedDocDropZone({
   sessionId,
   docType,
-  docLabel,
   participants,
   defaultOpen = true,
   docTypeOptions,
+  titre,
+  aide,
 }: SignedDocDropZoneProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [rows, setRows] = useState<Row[]>([]);
@@ -68,11 +84,26 @@ export function SignedDocDropZone({
   const [splitMode, setSplitMode] = useState(false);
   const [order, setOrder] = useState<string[]>(participants.map((p) => p.id));
   const [selectedDocType, setSelectedDocType] = useState(docType);
-  // L'en-tête doit nommer le document RÉELLEMENT sélectionné : sinon l'encadré
-  // annonce « Déposer les émargements signés » alors que l'admin a choisi
-  // l'attestation d'assiduité.
-  const libelleCourant =
-    docTypeOptions?.find((o) => o.value === selectedDocType)?.label.toLowerCase() ?? docLabel;
+  /**
+   * L'en-tête nomme le document RÉELLEMENT sélectionné — sinon l'encadré
+   * annonce « Déposer les émargements signés » alors que l'admin a choisi
+   * l'attestation d'assiduité.
+   *
+   * ⚠ IL VIENT D'UNE TABLE, PLUS D'UNE CONCATÉNATION (Laurent, 11/09/2026).
+   * `Déposer les ${libellé} signés` produisait « Déposer les convention
+   * signés » : le pluriel et l'accord étaient écrits en dur dans le gabarit,
+   * donc faux dès que le libellé n'était ni masculin ni déjà au pluriel.
+   */
+  const titreDeLaPiece = titreDepotSigne(selectedDocType);
+  /**
+   * L'en-tête : celui imposé par l'appelant, sinon celui de la pièce.
+   *
+   * Les deux cohabitent volontairement. Quand le bloc « Signature » impose sa
+   * question, le titre de la pièce ne disparaît pas : il nomme la zone où les
+   * fichiers atterrissent (« Déposer les conventions signées »), donc il SUIT
+   * toujours le type sélectionné.
+   */
+  const enTete = titre ?? titreDeLaPiece;
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -177,7 +208,7 @@ export function SignedDocDropZone({
       >
         <span className="inline-flex items-center gap-2 text-sm font-semibold">
           <Upload className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Déposer les {libelleCourant} signés
+          {enTete}
         </span>
         <ChevronDown
           className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
@@ -187,6 +218,8 @@ export function SignedDocDropZone({
 
       {open && (
         <div className="border-t border-border px-4 py-4 space-y-4">
+          {aide}
+
           {docTypeOptions && (
             <div>
               <label htmlFor="drop-zone-doctype" className="block text-xs font-medium mb-1">
@@ -225,7 +258,11 @@ export function SignedDocDropZone({
               dragging ? 'border-primary bg-primary-50/50' : 'border-border hover:bg-muted/40',
             )}
           >
-            <p className="text-sm font-medium">Glissez les PDF signés ici</p>
+            {/* La zone d'atterrissage NOMME la pièce attendue, même quand
+                l'en-tête porte la question de l'appelant : c'est ici qu'on
+                lâche les fichiers, donc ici qu'il faut savoir lesquels. Le
+                pluriel et l'accord viennent de la table (correction n°5). */}
+            <p className="text-sm font-medium">{titreDeLaPiece}</p>
             <p className="text-xs text-muted-foreground mt-1">
               Un fichier par stagiaire · Format PDF · max 10 Mo
             </p>

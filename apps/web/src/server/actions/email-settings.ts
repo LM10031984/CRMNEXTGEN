@@ -60,6 +60,7 @@ export async function updateEmailSettings(
         newLeadAlertsEnabled: true,
         preEnrollmentAlertsEnabled: true,
         proposalSendEnabled: true,
+        signatureEmailsEnabled: true,
         testSessionIds: true,
       },
     });
@@ -80,6 +81,7 @@ export async function updateEmailSettings(
         newLeadAlertsEnabled: true,
         preEnrollmentAlertsEnabled: true,
         proposalSendEnabled: true,
+        signatureEmailsEnabled: true,
         testSessionIds: true,
       },
     });

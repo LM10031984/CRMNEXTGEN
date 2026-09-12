@@ -364,3 +364,140 @@ describe('lot 0 — périmé, non vérifiable, générique, engagé', () => {
     expect(r.state).toBe('MANUAL_OK');
   });
 });
+
+/**
+ * Lot C.1 signature — `NA` pour une pièce HORS RÉGIME de financement
+ * (spec `2026-09-04-signature-electronique-docs-signes.md` §3 bis, décision D-10).
+ *
+ * `MISSING` appelle une action, `NA` dit qu'il n'y a rien à faire. Confondre les
+ * deux fait courir l'admin après des pièces qui n'existent pas : une session
+ * 100 % salariés OPCO n'a ni dossier AGEFICE ni attestation d'assiduité, et ces
+ * cellules n'ont pas à réclamer un document qui n'existera jamais.
+ *
+ * Le paramètre ne s'applique qu'en DERNIER RECOURS, juste avant `MISSING` :
+ * une pièce hors régime qui EXISTE malgré tout reste affichée telle quelle
+ * (même raisonnement que `lib/sessions/participant-phase-items.ts` : « "Sans
+ * objet" ne vaut que pour un document ABSENT » — cas de la double casquette
+ * EI + enseigne).
+ */
+describe('lot C.1 — hors régime de financement → NA, jamais MISSING', () => {
+  const HORS_REGIME: ReadonlySet<string> = new Set(['AGEFICE', 'ASSIDUITE']);
+
+  it('Test A — hors régime et aucune trace nulle part → NA (et non MISSING)', () => {
+    const maps = emptyMaps();
+
+    const r = deriveCellState(
+      'ASSIDUITE',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      HORS_REGIME,
+    );
+
+    expect(r.state).toBe('NA');
+  });
+
+  it('Test B — hors régime mais un Document existe → reste GENERATED', () => {
+    // Une pièce qui EXISTE ne disparaît pas de l'écran parce qu'elle est hors
+    // régime. `NA` ne masque jamais une preuve.
+    const maps = emptyMaps();
+    maps.participantDocs.set('ASSIDUITE', { id: 'doc-assiduite' });
+
+    const r = deriveCellState(
+      'ASSIDUITE',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      HORS_REGIME,
+    );
+
+    expect(r.state).toBe('GENERATED');
+    if (r.state === 'GENERATED') {
+      expect(r.pdfRef).toEqual({ kind: 'document', id: 'doc-assiduite' });
+    }
+  });
+
+  it('Test C — hors régime mais un scan est déposé → reste MANUAL_OK (priorité 1 intacte)', () => {
+    const maps = emptyMaps();
+    const docStatus: DocStatusMap = {
+      ASSIDUITE: {
+        state: 'MANUAL_OK',
+        uploadedSignedPdfKey: 'signed/assiduite.pdf',
+        updatedAt: isoNow,
+      },
+    };
+
+    const r = deriveCellState(
+      'ASSIDUITE',
+      { docStatus },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      HORS_REGIME,
+    );
+
+    expect(r.state).toBe('MANUAL_OK');
+  });
+
+  it('Test D — hors régime + MANUAL_OK sans preuve → le cas dérogatoire D-01 est intact', () => {
+    const maps = emptyMaps();
+    const docStatus: DocStatusMap = {
+      ASSIDUITE: { state: 'MANUAL_OK', markedOkWithoutUpload: true, updatedAt: isoNow },
+    };
+
+    const r = deriveCellState(
+      'ASSIDUITE',
+      { docStatus },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      HORS_REGIME,
+    );
+
+    expect(r).toEqual({ state: 'MANUAL_OK', warning: 'no_proof' });
+  });
+
+  it('Test E — non-régression : sans le nouveau paramètre, une cellule vide rend MISSING', () => {
+    // Les 8 call sites actuels ne passent pas ce paramètre et ne doivent pas
+    // changer d'un caractère.
+    const maps = emptyMaps();
+
+    const r = deriveCellState(
+      'ASSIDUITE',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+    );
+
+    expect(r.state).toBe('MISSING');
+  });
+
+  it('Test E bis — un docType EN régime reste MISSING même quand d’autres sont hors régime', () => {
+    const maps = emptyMaps();
+
+    const r = deriveCellState(
+      'CONVENTION',
+      { docStatus: null },
+      maps.participantDocs,
+      maps.productDocs,
+      maps.sessionDocs,
+      maps.pedagogicalAssets,
+      undefined,
+      HORS_REGIME,
+    );
+
+    expect(r.state).toBe('MISSING');
+  });
+});
