@@ -38,8 +38,20 @@ export function EditPersonButton({
     professionalExperience?: string | null;
     professionalStatus?: string | null;
     bpfDefaultStatus?: string | null;
+    /**
+     * Affichés sur la fiche mais éditables nulle part jusqu'au 11/09 (« où
+     * est-ce que je mets le numéro de sécu ? »). Les deux sont exigés par le
+     * Cerfa AGEFICE et arrivent souvent après l'inscription.
+     */
+    socialSecurityNb?: string | null;
+    personalAddress?: unknown;
   };
 }) {
+  const domicile = (current.personalAddress ?? null) as null | {
+    street?: string | null;
+    postalCode?: string | null;
+    city?: string | null;
+  };
   const diplomaCurrentIsLegacy =
     !!current.diplomas && !DIPLOME_OPTIONS.includes(current.diplomas as (typeof DIPLOME_OPTIONS)[number]);
   const DIPLOMA_OPTIONS_FOR_EDIT = [
@@ -99,6 +111,25 @@ export function EditPersonButton({
           options: BPF_OPTIONS,
           defaultValue: current.bpfDefaultStatus,
         },
+        {
+          name: 'addressStreet',
+          label: 'Adresse du domicile (AGEFICE)',
+          defaultValue: domicile?.street ?? null,
+          placeholder: '28 route de la badine',
+        },
+        {
+          name: 'addressPostalCode',
+          label: 'Code postal',
+          defaultValue: domicile?.postalCode ?? null,
+          placeholder: '06600',
+        },
+        { name: 'addressCity', label: 'Ville', defaultValue: domicile?.city ?? null, placeholder: 'Antibes' },
+        {
+          name: 'socialSecurityNb',
+          label: 'N° de sécurité sociale (AGEFICE)',
+          defaultValue: current.socialSecurityNb ?? null,
+          placeholder: '1 85 05 78 006 084 36',
+        },
       ]}
       onSubmit={async (values) => {
         return updatePerson({
@@ -115,6 +146,10 @@ export function EditPersonButton({
           professionalExperience: values.professionalExperience as string | null,
           professionalStatus: values.professionalStatus as string | null,
           bpfDefaultStatus: values.bpfDefaultStatus as string | null,
+          addressStreet: values.addressStreet as string | null,
+          addressPostalCode: values.addressPostalCode as string | null,
+          addressCity: values.addressCity as string | null,
+          socialSecurityNb: values.socialSecurityNb as string | null,
         });
       }}
     />

@@ -51,7 +51,7 @@ export async function createQuoteFromRdv(input: {
   transcript: string;
   jours: number;
   tarifJourHT: number;
-  /** 0 par défaut : formation professionnelle exonérée de TVA. */
+  /** 0 par défaut : formation professionnelle exonérée (art. 261-4-4° CGI). */
   vatRate?: number;
   modalite?: string | null;
   theme?: string | null;

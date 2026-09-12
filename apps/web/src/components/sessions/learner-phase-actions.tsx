@@ -15,7 +15,7 @@
  * nouvel onglet ou copiable — ce qu'un `onClick` ne permet pas.
  */
 
-import { Download, Loader2, Zap } from 'lucide-react';
+import { Download, Loader2, RefreshCw, Zap } from 'lucide-react';
 
 export interface LearnerPhaseActionsProps {
   sessionId: string;
@@ -41,6 +41,19 @@ export interface LearnerPhaseActionsProps {
   canGenerate: boolean;
   /** Génère les manquants de CETTE phase pour CET apprenant. */
   onGenerateAll?: () => void;
+  /**
+   * Refait TOUTES les pièces de cette phase, y compris celles déjà produites.
+   *
+   * « Tout générer » ne traite que les manquants et disparaît dès qu'un
+   * apprenant est complet — or le besoin courant est l'inverse : une
+   * correction vient d'être apportée (l'adresse du lieu, le nom d'un
+   * apprenant, le tarif) et il faut refaire des pièces existantes. Il fallait
+   * jusqu'ici les reprendre une par une dans la matrice (Laurent 11/09).
+   *
+   * Les documents engagés — signés, envoyés — ne sont jamais remplacés : le
+   * serveur les saute et les remonte.
+   */
+  onRegenerateAll?: () => void;
   /** Génération en cours pour cet apprenant. */
   busy?: boolean;
 }
@@ -55,6 +68,7 @@ export function LearnerPhaseActions({
   missingCount,
   canGenerate,
   onGenerateAll,
+  onRegenerateAll,
   busy = false,
 }: LearnerPhaseActionsProps) {
   return (
@@ -70,6 +84,24 @@ export function LearnerPhaseActions({
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
           Tout générer ({missingCount})
+        </button>
+      )}
+
+      {canGenerate && readyCount > 0 && onRegenerateAll && (
+        <button
+          type="button"
+          onClick={onRegenerateAll}
+          disabled={busy}
+          aria-label={`Regénérer les documents de ${participantName}`}
+          title={`Refaire les ${readyCount} document${readyCount > 1 ? 's' : ''} de cette phase pour ${participantName}. Ceux déjà signés ou envoyés sont conservés.`}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-amber-300 text-amber-800 text-xs font-semibold hover:bg-amber-50 disabled:opacity-60 disabled:cursor-wait transition-colors"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          Tout regénérer ({readyCount})
         </button>
       )}
 

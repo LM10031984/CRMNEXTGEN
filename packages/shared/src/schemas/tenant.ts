@@ -147,6 +147,10 @@ export const EmailSettingsSchema = z.object({
   /// A-3 « nouvelle pré-inscription ». Défaut false : fail-closed.
   newLeadAlertsEnabled: z.boolean().default(false),
   preEnrollmentAlertsEnabled: z.boolean().default(false),
+  /// D-21 — envoi de la proposition au client, déclenché par le commercial.
+  /// Le seul email de la chaîne qui sorte vers un prospect, d'où sa propre
+  /// case : on peut le couper sans couper les alertes internes.
+  proposalSendEnabled: z.boolean().default(false),
   /// Lot C.2c (D-9) — la chaîne de signature électronique : demande de
   /// signature, « à votre tour », relances J+3/J+7, exemplaire signé. Défaut
   /// false : fail-closed, comme les dix autres.

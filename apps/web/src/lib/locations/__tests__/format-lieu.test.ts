@@ -108,3 +108,58 @@ describe('formatLieuFormation — dédoublonnage', () => {
     );
   });
 });
+
+/**
+ * Abréviations postales françaises — portées ici le 11/09/2026 depuis la copie
+ * inline du générateur AGEFICE, au moment de la raccorder à cette source
+ * unique. Sans elles, « Nice — Agence, 12 av des Fleurs » et la rue
+ * « 12 avenue des Fleurs » passaient pour deux segments différents, et
+ * l'adresse s'imprimait deux fois d'affilée sur le Cerfa.
+ *
+ * Le gain profite désormais à TOUS les documents (émargement, convention,
+ * pack de clôture), et plus au seul formulaire AGEFICE.
+ *
+ * Test de puissance : retirer les remplacements d'abréviations de `normalize`
+ * fait virer ROUGE « ne répète pas une rue abrégée dans le nom du lieu ».
+ */
+describe('formatLieuFormation — abréviations postales', () => {
+  it('ne répète pas une rue abrégée dans le nom du lieu', () => {
+    expect(
+      formatLieuFormation(
+        {
+          legalName: 'AKORIMMO',
+          name: '12 av des Fleurs',
+          address: { street: '12 avenue des Fleurs', postalCode: '06000', city: 'Nice' },
+        },
+        'repli',
+      ),
+    ).toBe('AKORIMMO — 12 av des Fleurs, 06000 Nice');
+  });
+
+  it('traite bd, bld et boul comme boulevard', () => {
+    expect(
+      formatLieuFormation(
+        { legalName: 'AKORIMMO', name: '63 bd de Cessole', address: { street: '63 Boulevard de Cessole' } },
+        'repli',
+      ),
+    ).toBe('AKORIMMO — 63 bd de Cessole');
+  });
+
+  it('traite st comme saint', () => {
+    expect(
+      formatLieuFormation(
+        { legalName: 'Agence', name: '4 place St Roch', address: { street: '4 Place Saint Roch' } },
+        'repli',
+      ),
+    ).toBe('Agence — 4 place St Roch');
+  });
+
+  it('laisse une vraie adresse différente s’ajouter normalement', () => {
+    expect(
+      formatLieuFormation(
+        { legalName: 'AKORIMMO', name: 'Agence Nice Nord', address: { street: '63 bd de Cessole' } },
+        'repli',
+      ),
+    ).toBe('AKORIMMO — Agence Nice Nord, 63 bd de Cessole');
+  });
+});

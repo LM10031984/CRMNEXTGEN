@@ -105,6 +105,11 @@ export const CATEGORY_FIELDS: Array<{
     hint: 'Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l\'écran de validation.',
   },
   {
+    field: 'proposalSendEnabled',
+    category: 'proposal_sent',
+    hint: 'Destinataire : le client, quand le commercial clique « Envoyer par email » sur une proposition. Jamais automatique — décochée, le bouton le dit au lieu d\'envoyer.',
+  },
+  {
     field: 'signatureEmailsEnabled',
     category: 'signature',
     hint: 'Destinataire : le signataire dont c\'est le tour (responsable de l\'organisation, stagiaire, ou vous). Demandes de signature, relances J+3/J+7 et envoi de l\'exemplaire signé. Décochée, aucun signataire n\'est prévenu — le lien reste copiable depuis la fiche session.',
@@ -127,6 +132,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
       newLeadAlertsEnabled: initial.newLeadAlertsEnabled,
       preEnrollmentAlertsEnabled: initial.preEnrollmentAlertsEnabled,
+      proposalSendEnabled: initial.proposalSendEnabled,
       signatureEmailsEnabled: initial.signatureEmailsEnabled,
     },
   });

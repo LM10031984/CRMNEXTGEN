@@ -35,6 +35,19 @@ export interface DiagnosticAlert {
   audience: AlertAudience;
   observed: number | null;
   threshold: number | null;
+  /**
+   * Les questions dont la réponse a produit cette alerte (lot I-1).
+   *
+   * Sans ce champ, une alerte est un constat sans auteur : on sait que
+   * l'exclusivité décroche, pas QUELLE réponse du dirigeant le dit. Le moteur
+   * de recommandation au niveau module doit pouvoir répondre à « pourquoi ce
+   * module est-il dans la proposition ? » par la phrase même du client — c'est
+   * ce que regarde un contrôle OPCO (cohérence besoin ↔ programme).
+   *
+   * Vide quand l'alerte ne vient pas d'une question mais des fiches équipe
+   * (droits mobilisés) : mieux vaut une liste vide qu'un rattachement inventé.
+   */
+  questionIds: string[];
 }
 
 export interface RatiosInput {
@@ -130,6 +143,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: transactionAncien,
       threshold: b.transactionAncienMinPercent,
+      questionIds: ['identity-transaction-ancien-percent'],
     });
   }
 
@@ -155,6 +169,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     threshold: number,
     chapter: number,
     label: string,
+    questionIds: string[],
   ) => {
     if (value !== null && value < threshold) {
       push({
@@ -165,6 +180,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
         audience: 'client',
         observed: value,
         threshold,
+        questionIds,
       });
     }
   };
@@ -175,6 +191,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     b.contactsToRdvPercent,
     3,
     `Sur 100 contacts vendeurs, ${ratios.contactsToRdvPercent} obtiennent un rendez-vous, contre ${b.contactsToRdvPercent} attendus.`,
+    ['prospecting-contacts-per-month', 'seller-meetings-per-month'],
   );
   belowBenchmark(
     'rdv_to_mandat_below_benchmark',
@@ -182,6 +199,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     b.rdvToMandatPercent,
     4,
     `${ratios.rdvToMandatPercent} % de vos rendez-vous estimation se transforment en mandat, contre ${b.rdvToMandatPercent} % attendus.`,
+    ['seller-meetings-per-month', 'mandates-per-month'],
   );
   belowBenchmark(
     'exclusivity_below_benchmark',
@@ -189,6 +207,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     b.exclusivityPercent,
     5,
     `L'exclusivité représente ${ratios.exclusivityPercent} % de vos rentrées, contre ${b.exclusivityPercent} % attendus.`,
+    ['mandates-exclusivity-percent'],
   );
   belowBenchmark(
     'offres_to_compromis_below_benchmark',
@@ -196,6 +215,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     b.offresToCompromisPercent,
     8,
     `${ratios.offresToCompromisPercent} % de vos offres se concrétisent en compromis, contre ${b.offresToCompromisPercent} % attendus.`,
+    ['offers-per-month', 'compromis-per-month'],
   );
   belowBenchmark(
     'compromis_to_acte_below_benchmark',
@@ -203,6 +223,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
     b.compromisToActePercent,
     8,
     `${ratios.compromisToActePercent} % de vos compromis vont jusqu'à l'acte, contre ${b.compromisToActePercent} % attendus : chaque point perdu ici est une vente déjà gagnée qui s'annule.`,
+    ['compromis-per-month', 'actes-per-month'],
   );
 
   if (ratios.visitesParVente !== null && ratios.visitesParVente > b.visitsPerActe) {
@@ -214,6 +235,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: ratios.visitesParVente,
       threshold: b.visitsPerActe,
+      questionIds: ['visits-per-month', 'actes-per-month'],
     });
   }
 
@@ -228,6 +250,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: null,
       threshold: null,
+      questionIds: ['prospecting-who'],
     });
   }
   if (a['seller-discovery-formalized'] === 'no') {
@@ -240,6 +263,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: null,
       threshold: null,
+      questionIds: ['seller-discovery-formalized'],
     });
   }
   if (a['buyers-financing-verified'] === 'no') {
@@ -252,6 +276,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: null,
       threshold: null,
+      questionIds: ['buyers-financing-verified'],
     });
   }
   const followup = a['commercial-followup-frequency'];
@@ -265,6 +290,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: null,
       threshold: null,
+      questionIds: ['commercial-followup-frequency'],
     });
   }
   const indicateurs = a['mgmt-indicators-followed'];
@@ -277,6 +303,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: null,
       threshold: null,
+      questionIds: ['mgmt-indicators-followed'],
     });
   }
 
@@ -295,6 +322,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
       audience: 'client',
       observed: ratios.avisParVentePercent,
       threshold: b.reviewsPerVentePercent,
+      questionIds: ['google-reviews-count', 'identity-sales-n1'],
     });
   }
 
@@ -321,6 +349,7 @@ export function computeRatios(input: RatiosInput): RatiosOutput {
         audience: 'client',
         observed: ratios.consumptionRatePercent,
         threshold: lever,
+        questionIds: [],
       });
     }
   }

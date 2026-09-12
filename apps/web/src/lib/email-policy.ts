@@ -26,6 +26,7 @@ export type EmailCategory =
   | 'diagnostic_program'
   | 'new_lead'
   | 'preenrollment_submitted'
+  | 'proposal_sent'
   | 'signature';
 
 /**
@@ -44,6 +45,7 @@ export interface EmailPolicySettings {
   diagnosticProgramsEnabled: boolean;
   newLeadAlertsEnabled: boolean;
   preEnrollmentAlertsEnabled: boolean;
+  proposalSendEnabled: boolean;
   signatureEmailsEnabled: boolean;
   testSessionIds: string[];
 }
@@ -69,6 +71,7 @@ export const EMAIL_CATEGORY_FIELD: Record<EmailCategory, keyof Omit<EmailPolicyS
   diagnostic_program: 'diagnosticProgramsEnabled',
   new_lead: 'newLeadAlertsEnabled',
   preenrollment_submitted: 'preEnrollmentAlertsEnabled',
+  proposal_sent: 'proposalSendEnabled',
   signature: 'signatureEmailsEnabled',
 };
 
@@ -83,6 +86,7 @@ export const EMAIL_CATEGORY_LABELS: Record<EmailCategory, string> = {
   diagnostic_program: 'Programme du diagnostic express (stand)',
   new_lead: 'Alertes nouveaux leads (équipe)',
   preenrollment_submitted: 'Alertes pré-inscriptions (admin)',
+  proposal_sent: 'Envoi de la proposition au client',
   signature: 'Signature électronique (demandes, relances, exemplaires signés)',
 };
 

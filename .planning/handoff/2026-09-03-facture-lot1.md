@@ -85,7 +85,7 @@ Portes : `tsc` 0 · `pnpm lint` 3/3 · **214 fichiers, 1856 tests verts** côté
 - **`deliveryAddressJson` est DÉRIVÉE** de la partie DELIVERY
   (`deliveryAddressJson(party)`), jamais construite à côté. Deux écritures
   parallèles de la même adresse reproduiraient le piège ① ci-dessous.
-- **`vatExemptionReasonCode` reste null.** D-2 non tranchée.
+- **`vatExemptionReasonCode` porte `VATEX-EU-132-1I`** sur toute ligne de catégorie E, depuis la clôture de D-2 le 10/09/2026 (au lot 1, le champ restait null).
 
 ### L'écart assumé du lot : l'avoir ne bloque pas sur le SIREN
 
@@ -141,9 +141,13 @@ La plateforme impose `POST /validation_reports` **avant** `POST /invoices`.
 Ce n'est pas un outil de mise au point qu'on branche à la fin : c'est une étape
 du parcours d'envoi, à écrire comme telle au lot 3.
 
-Et un choix qui n'est pas un écart mais une abstention : `vatExemptionReasonCode`
-reste **null**. **D-2** (code VATEX de l'art. 261-4-4°a) n'est pas tranchée, et
-on n'invente pas un code fiscal.
+Et un choix qui, **à la clôture du lot 1 le 03/09**, n'était pas un écart mais une
+abstention : `vatExemptionReasonCode` restait **null**, D-2 n'étant pas tranchée.
+
+**Ce n'est plus vrai depuis le 10/09/2026** : D-2 a été tranchée, le champ porte
+`VATEX-EU-132-1I` sur toute ligne de catégorie E, et le repli est écrit dans
+`invoice-snapshot.ts` — si le validateur refuse le code au lot 2, on garde le
+texte seul.
 
 ## 5. Les pièges repérés dans `invoices.ts`
 
@@ -206,7 +210,7 @@ masse, jamais une garde maison.
 |---|---|
 | **D-1** Plateforme | **Tranchée le 03/09 — Super PDP confirmé.** L'API couvre envoi, validation, statuts, annuaire, bac à sable isolé. |
 | **D-3** Prestations non exonérées | **Tranchée le 04/09 — tout est exonéré.** L'émission reste donc une conformité *anticipée*, pas une obligation 2027. |
-| **D-2** Code VATEX art. 261-4-4°a | **Ouverte.** `vatExemptionReasonCode` reste null en attendant. |
+| **D-2** Code VATEX art. 261-4-4°a | **Tranchée le 10/09/2026 par Laurent, sans expert-comptable — `VATEX-EU-132-1I`.** Posé en plus du texte (BR-E-10 n'exige que l'un des deux). Repli si le validateur le refuse au lot 2 : texte seul. |
 | **D-4** Financeur en subrogation (AGEFICE paie l'OF) | **Ouverte.** Buyer = client, financeur en note, à valider avec l'expert-comptable pour EN 16931. |
 | **E-9** `settleInvoiceForParticipant` | **Ouverte** — Laurent tranche avant le lot 3. |
 | **Avoir non bloquant sur le SIREN** | **Validée par Laurent le 04/09/2026.** L'écart du lot 1 est acquis : une facture neuve est refusée sans SIREN ni SIRET, un avoir passe. Ne pas le re-litiger. |

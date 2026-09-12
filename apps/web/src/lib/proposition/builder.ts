@@ -17,6 +17,7 @@ import type {
   ProposalAxis,
   ProposalContent,
   ProposalFunding,
+  ProposalModule,
   ProposalPricing,
 } from '@qualiof/shared';
 
@@ -25,6 +26,12 @@ import type { FundingParticipantResult, FundingSynthesis } from '@/lib/financeme
 import type { FundingRuleValues } from '@/lib/financement/types';
 
 import { accord, plural } from './plural';
+import { composeProgramme, type ComposeOutput, type ComposedBlock } from './composer';
+import {
+  recommendModules,
+  type LibraryModule,
+  type ModuleMatchOutput,
+} from './module-matcher';
 import { conventionedHoursPerHalfDay } from './pricing';
 import {
   recommendProgrammes,
@@ -162,6 +169,21 @@ export interface PayerSeedInput {
     displayName: string;
     statut: 'INDEPENDANT' | 'SALARIE' | 'DIRIGEANT';
   }[];
+  /**
+   * Le volume RÉELLEMENT vendu, en demi-journées (lot I-2).
+   *
+   * Par défaut, c'est l'enveloppe que le moteur budget a dimensionnée — ce que
+   * les droits du client pourraient financer. Depuis la composition, l'appelant
+   * passe le volume **composé**, c'est-à-dire celui dont chaque demi-journée est
+   * justifiée par un point de douleur tracé.
+   *
+   * La différence n'est pas cosmétique : facturer l'enveloppe alors que la
+   * composition n'en justifie que la moitié, c'est exactement le « remplir pour
+   * remplir » que §8.2 interdit, et c'est ce qu'un contrôle OPCO cherche. Le
+   * surplus se dit au dirigeant (arbitrage humain affiché), il ne se facture
+   * pas d'office.
+   */
+  halfDaysSold?: number;
 }
 
 /**
@@ -176,7 +198,12 @@ export interface PayerSeedInput {
 export function seedPayers(input: PayerSeedInput): PricingPayer[] {
   const { funding, rules } = input;
   const unitPriceHt = euros(rules.HALF_DAY_ONSITE_HOURS * rules.PRICE_PER_HOUR_PER_PARTICIPANT);
-  const halfDays = funding.halfDays;
+  // Le volume composé quand il existe, l'enveloppe sinon — un parcours qui n'a
+  // rien pu composer doit rester chiffrable à la main plutôt que de sortir à 0.
+  const halfDays =
+    input.halfDaysSold !== undefined && input.halfDaysSold > 0
+      ? input.halfDaysSold
+      : funding.halfDays;
   const byId = new Map<string, FundingParticipantResult>(funding.participants.map((p) => [p.id, p]));
 
   const payers: PricingPayer[] = [];
@@ -276,7 +303,8 @@ export function seedPricing(input: PayerSeedInput): ProposalPricing {
 export interface ContentSeedInput {
   audit: AuditData;
   rules: FundingRuleValues;
-  catalogue: readonly CatalogueEntry[];
+  /** La bibliothèque de modules (lot I-2) — l'unité composable, cf. D-19. */
+  library: readonly LibraryModule[];
   agencyName: string;
   /** DIAG-NNNN, cité dans « ce que nous avons entendu ». */
   diagnosticReference: string;
@@ -287,7 +315,8 @@ export interface ContentSeedInput {
 
 export interface ContentSeedOutput {
   content: ProposalContent;
-  match: ProgrammeMatchOutput;
+  match: ModuleMatchOutput;
+  composition: ComposeOutput;
 }
 
 /** Les mois d'un parcours, dans l'ordre, à partir du mois courant. */
@@ -399,6 +428,70 @@ export function planningMismatches(
   return planning.map((p) => p.sessionLabel).filter((label) => !attendus.has(label));
 }
 
+/**
+ * Un BLOC de composition devient un axe de la proposition.
+ *
+ * Le choix de forme, et sa raison : **un axe = une demi-journée**, pas un
+ * thème. Un thème n'a pas de durée — il s'étale sur un bloc et demi, et le
+ * dirigeant n'a plus aucun moyen de vérifier que le parcours détaillé explique
+ * le volume facturé. Une demi-journée, si : elle vaut 1, elle porte une date au
+ * planning, et la somme des axes tombe exactement sur le volume vendu.
+ *
+ * Le titre, lui, reste thématique — il nomme les besoins servis par ce bloc.
+ * C'est ce que le dirigeant lit ; le décompte, c'est ce qu'il peut vérifier.
+ */
+export function axisFromBlock(
+  block: ComposedBlock,
+  index: number,
+  periodLabel: string,
+): ProposalAxis {
+  const besoins = [...new Set(block.modules.map((m) => m.need.label))];
+
+  const modules: ProposalModule[] = block.modules.map((m) => ({
+    moduleId: m.moduleId,
+    title: m.title,
+    sourceCode: m.source.code,
+    sourceTitle: m.source.title,
+    needLabel: m.need.label,
+    durationMin: m.durationMin,
+    quotes: m.evidence.flatMap((e) =>
+      e.kind === 'alerte'
+        ? e.answers.map((a) => `${a.label} : ${a.value}`)
+        : [`${e.label} : ${e.value}`],
+    ),
+    signal: m.matchedSignals[0] ?? null,
+    confidence: m.confidence,
+  }));
+
+  // Le « pourquoi » de l'axe : les constats du diagnostic, tels qu'ils ont été
+  // formulés dans l'audit. Jamais une reformulation — le dirigeant doit
+  // reconnaître ses propres mots d'un document à l'autre.
+  const constats = [
+    ...new Set(
+      block.modules.flatMap((m) =>
+        m.evidence.map((e) => (e.kind === 'alerte' ? e.label : `${e.label} : ${e.value}`)),
+      ),
+    ),
+  ];
+
+  return {
+    id: slugId('axe', index),
+    label: `Demi-journée ${block.index}`,
+    title: besoins.join(' · ') || 'À composer',
+    // Un bloc réunit des modules de plusieurs programmes : aucun produit unique
+    // ne le représente. La traçabilité vit dans `modules`, pas dans un id qui
+    // désignerait arbitrairement l'un des rayons.
+    productId: null,
+    productCode: null,
+    description: '',
+    why: constats.join(' ') || 'À justifier avant envoi.',
+    halfDays: 1,
+    periodLabel,
+    matchSource: block.modules.every((m) => m.confidence === 'forte') ? 'signaux' : 'lexique',
+    modules,
+  };
+}
+
 export function buildCoverHeadline(priorityTitles: readonly string[]): string {
   const retenues = priorityTitles.filter((t) => t.trim().length > 0).slice(0, 3);
   if (retenues.length === 0) return 'Un parcours dimensionné sur vos droits à la formation';
@@ -409,10 +502,24 @@ export function buildCoverHeadline(priorityTitles: readonly string[]): string {
 export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const { audit, rules } = input;
 
-  const match = recommendProgrammes({
-    chapterScores: audit.chapterScores.map((c) => ({ chapter: c.chapter, score: c.score })),
+  const match = recommendModules({
+    chapterScores: audit.chapterScores.map((c) => ({
+      chapter: c.chapter,
+      score: c.score,
+      breakdown: c.breakdown,
+    })),
     alerts: audit.chapters.flatMap((c) => c.alerts),
-    catalogue: input.catalogue,
+    answers: audit.chapters.flatMap((c) => c.answers),
+    library: input.library,
+  });
+
+  // La composition : des blocs de 8 h conventionnées, chaque module justifié
+  // par une réponse du diagnostic (D-19, D-20). Le volume ne se déduit plus
+  // d'une division du total par le nombre d'axes.
+  const composition = composeProgramme({
+    recommendations: match.recommendations,
+    rules,
+    envelopeHalfDays: audit.funding.halfDays,
   });
 
   // « Ce que nous avons entendu » : les constats du diagnostic, jamais du
@@ -427,29 +534,11 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const fundingLever = audit.funding.alerts.find((a) => a.code === 'droits_sous_utilises');
   if (fundingLever) heard.push(fundingLever.label);
 
-  const months = monthLabels(input.meetingAt ?? audit.generatedAt, 6);
-  const recommended = match.recommendations.filter((r) => r.candidates.length > 0);
+  const months = monthLabels(input.meetingAt ?? audit.generatedAt, 12);
 
-  const merged = mergeRecommendationsByProduct(recommended);
-
-  // Le volume total est celui que le moteur budget a dimensionné : les axes se
-  // partagent ces demi-journées, ils n'en inventent pas.
-  const totalHalfDays = audit.funding.halfDays;
-  const perAxis = merged.length > 0 ? Math.floor(totalHalfDays / merged.length) : totalHalfDays;
-  const remainder = merged.length > 0 ? totalHalfDays - perAxis * merged.length : 0;
-
-  const axes: ProposalAxis[] = merged.map(({ candidate, triggers }, index) => ({
-    id: slugId('axe', index),
-    label: `Axe ${index + 1}`,
-    title: `${candidate.title}${candidate.code ? ` — ${candidate.code}` : ''}`,
-    productId: candidate.productId,
-    productCode: candidate.code,
-    description: '',
-    why: triggers.join(' '),
-    halfDays: perAxis + (index < remainder ? 1 : 0),
-    periodLabel: months[index] ?? '',
-    matchSource: candidate.matchSource,
-  }));
+  const axes: ProposalAxis[] = composition.blocks.map((block, index) =>
+    axisFromBlock(block, index, months[index] ?? ''),
+  );
 
   const planning = rebuildPlanningFromAxes(axes, [], input.participantCount);
 
@@ -508,7 +597,7 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     }),
   };
 
-  return { content, match };
+  return { content, match, composition };
 }
 
 /** Les heures conventionnées du parcours — la valeur unique, exposée une fois. */

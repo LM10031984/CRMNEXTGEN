@@ -27,6 +27,7 @@
  */
 
 import { formatIban } from './iban-format';
+import { MENTION_EXONERATION_TVA } from './tva-exoneration';
 import {
   loadLogoColorDataUrl,
   loadPaidStampDataUrl,
@@ -257,7 +258,7 @@ ${STYLES}
   </div>
   <div class="right-block">
     <div class="facture-no">${headerTitle} N° ${escapeHtml(d.number)}</div>
-    <div class="date">Date: ${fmtDate.format(d.issueDate)}</div>
+    <div class="date">Date d'émission: ${fmtDate.format(d.issueDate)}</div>
     ${
       acq
         ? `<div class="duplicata">DUPLICATA — FACTURE ACQUITTÉE</div>
@@ -292,7 +293,7 @@ ${avoirMention}
       <td class="designation">
         <div class="line"><strong>Formation : ${escapeHtml(d.formationTitre)}</strong></div>
         <div class="line"><strong>Formation :</strong> ${escapeHtml(d.formationTitre)} – ${d.formationDureeHeures}h00</div>
-        <div class="line"><strong>Dates :</strong> ${datesLabel}</div>
+        <div class="line"><strong>Période de formation :</strong> ${datesLabel}</div>
         ${d.formationLieu ? `<div class="line"><strong>Lieu de la formation :</strong> ${escapeHtml(d.formationLieu)}</div>` : ''}
         <div class="line"><strong>Durée :</strong> ${dureeLabel}</div>
         ${d.formateurNom ? `<div class="line"><strong>Formateur :</strong> ${escapeHtml(d.formateurNom)}</div>` : ''}
@@ -310,7 +311,7 @@ ${avoirMention}
 <div class="bottom">
   <div class="left">
     ${exonerationTva ? `
-    <div class="row">T.V.A. non applicable ou exonérée<br>TVA non applicable en vertu de l'article 261-4-4° du CGI</div>
+    <div class="row">T.V.A. non applicable ou exonérée<br>${MENTION_EXONERATION_TVA}</div>
     ` : ''}
     ${acq ? '' : `<div class="row"><strong>Date d'échéance:</strong>&nbsp;&nbsp;${fmtDate.format(d.dueDate)}</div>`}
     <div class="row"><strong>Mode de règlement:</strong> ${escapeHtml(d.paymentMethod)}</div>

@@ -67,8 +67,8 @@ model InvoiceLine {
   unitPriceHT  Decimal @db.Decimal(10, 2)
   vatRate      Decimal @db.Decimal(5, 2)
   vatCategory  String  @default("E")   // EN16931 : S standard, E exonéré, K, AE…
-  vatExemptionReasonCode String?       // code VATEX (à fixer, voir D-2)
-  vatExemptionReasonText String?       // "TVA non applicable, art. 261-4-4° du CGI"
+  vatExemptionReasonCode String?       // VATEX-EU-132-1I (D-2 tranchée le 10/09/2026)
+  vatExemptionReasonText String?       // "TVA non applicable en vertu de l'article 261-4-4° du CGI"
   participantId String?                // traçabilité (facture groupée)
   totalHT      Decimal @db.Decimal(10, 2)
   @@index([invoiceId, position])
@@ -134,7 +134,7 @@ model EInvoiceEvent {
 ```
 
 Ajouts sur `Invoice` : `deliveryAddressJson Json?`, `supplyNature String @default("SERVICES")`, `vatOnDebits Boolean @default(false)`, `sourceFingerprint String?` (le E-1, enfin), relations `lines`, `parties`, `transmissions`.
-Ajouts sur `Tenant` : `einvoiceProvider String?`, `einvoiceEnabled Boolean @default(false)`, `siren String?` (dérivé du SIRET si absent), `vatExemptionText String?` (défaut `MENTION_TVA` de `catalogue-constants.ts`).
+Ajouts sur `Tenant` : `einvoiceProvider String?`, `einvoiceEnabled Boolean @default(false)`, `siren String?` (dérivé du SIRET si absent), `vatExemptionText String?` (défaut `MENTION_EXONERATION_TVA` de `lib/tva-exoneration.ts`).
 Secrets : `EINVOICE_PROVIDER`, `SUPERPDP_API_KEY`, `SUPERPDP_BASE_URL`, `SUPERPDP_WEBHOOK_SECRET` dans `packages/shared/env` (jamais en dur, pattern `sharedEnv`).
 
 Rétro-compatibilité : les factures existantes n'ont pas de lignes → un script `scripts/backfill-invoice-lines.ts` crée **une ligne de synthèse** par facture ISSUED/PAID (label = titre de la session, quantité 1, `totalHT = amountHT`). Pas de réécriture de montants (code de commerce : une facture émise ne se modifie pas, on ajoute de la structure autour).
@@ -172,10 +172,22 @@ Règles :
    - (a) Gotenberg → PDF, puis conversion PDF/A-3b via **Ghostscript** dans le conteneur, puis attachement de `factur-x.xml` + métadonnées XMP avec `pdf-lib` (déjà en dépendance) ;
    - (b) `@e-invoice-eu/core` qui sait embarquer l'XML dans un PDF fourni (LibreOffice optionnel pour la conversion PDF/A).
    Critère : le fichier passe le validateur de la PA **et** s'ouvre normalement chez un client (le PDF reste lisible, l'XML est invisible).
-3. **Cas TVA** : Start Academy = catégorie **E** (exonéré) sur chaque ligne avec `vatExemptionReasonText = "TVA non applicable, art. 261-4-4° du CGI"`. Le code VATEX exact pour l'art. 261-4-4°a est **D-2** (voir §9) — ne pas inventer un code, le prendre dans la liste VATEX publiée par la DGFiP / EN 16931.
+3. **Cas TVA** : Start Academy = catégorie **E** (exonéré) sur chaque ligne, avec les DEUX champs renseignés :
+   - `vatExemptionReasonText = "TVA non applicable en vertu de l'article 261-4-4° du CGI"` (source unique : `MENTION_EXONERATION_TVA` de `lib/tva-exoneration.ts`, surchargeable par `Tenant.vatExemptionText`) ;
+   - `vatExemptionReasonCode = "VATEX-EU-132-1I"` — **D-2 tranchée le 10/09/2026** (voir §9). L'art. 261-4-4°a du CGI transpose l'art. 132-1-i de la directive TVA (formation professionnelle dispensée par un organisme reconnu), que la liste VATEX de l'EN 16931 code `VATEX-EU-132-1I`. Non surchargeable par tenant : un OF à un autre régime porterait une autre catégorie que E.
+
+   La règle **BR-E-10** de l'EN 16931 n'exige que **l'un des deux** (code *ou* texte). On met les deux : c'est permis, et le texte reste lisible par un humain là où le code ne l'est pas.
+
+   **Repli, décidé d'avance** : le validateur de la plateforme tranche au lot 2 (`POST /validation_reports`, étape obligatoire avant `POST /invoices`). **S'il refuse le code, on garde le texte seul** — on ne cherche pas un autre code, on ne bricole pas.
 4. **Avoirs** : `InvoiceStatus.CREDIT_NOTE` → `TypeCode 381` avec référence à la facture d'origine (`originalInvoiceId`) — cohérent avec la règle « avoir, jamais réécriture » de `/tarification`.
 5. **Hash** : `Invoice.hashSha256` reste le hash du PDF ; `EInvoiceTransmission.xmlSha256` est celui de l'XML. Les deux sont audités.
 6. Le PDF Factur-X **remplace** le PDF envoyé par mail au client (c'est un PDF valide) — un seul fichier, pas deux.
+7. **Financeur en subrogation (AGEFICE, OPCO) — D-4 tranchée le 10/09/2026.** Trois rôles à ne pas confondre dans le pivot EN 16931 :
+   - **`BuyerParty` (BG-7) = le client** — le stagiaire ou son entreprise. C'est lui le preneur de la prestation et le débiteur de la créance. Le financeur ne prend jamais sa place, même quand c'est lui qui paie.
+   - **`PayeeParty` (BG-10) : NE PAS L'UTILISER.** BG-10 ne sert qu'à désigner un bénéficiaire du règlement **différent du vendeur** — cas de l'affacturage. Ici l'argent va à Start Academy, qui est déjà le vendeur : renseigner BG-10 serait factuellement faux et ferait croire à une cession de créance. **Le payee reste Start Academy**, donc le champ reste absent.
+   - **Le financeur figure dans les conditions de règlement** (`PaymentTerms`, BT-20) : mention en clair du type « Réglé par subrogation par l'AGEFICE, dossier n° … ». C'est une information de paiement, pas une partie à la facture.
+
+   Le financeur n'est donc **ni buyer, ni payee** : il est une modalité de règlement. Piège à ne pas rouvrir au lot 2.
 
 ---
 
@@ -215,11 +227,24 @@ Un lot = une PR, `/livraison` avant chaque commit, `pnpm test` vert (les 1 332 t
 
 | # | Question | Défaut proposé |
 |---|---|---|
-| D-1 | Confirmer Super PDP après lecture de la doc et création du compte (lot 0). Si l'API réelle est trop pauvre (pas de statuts, pas de webhook), basculer Iopole et demander un devis. | Super PDP |
-| D-2 | Code VATEX à utiliser pour l'art. 261-4-4°a (à demander à l'expert-comptable ou à lire dans les spécifications externes DGFiP). | Catégorie E + texte, code laissé `null` tant que non confirmé |
+| ~~D-1~~ | ~~Confirmer Super PDP après lecture de la doc ?~~ **TRANCHÉE le 03/09/2026 : Super PDP confirmé**, après lecture de la documentation de l'API — relevé dans `docs/einvoice-superpdp.md`. L'API porte ce qu'il faut (statuts de cycle de vie, webhook, `POST /validation_reports` avant `POST /invoices`) : pas de bascule Iopole, pas de devis à demander. | Laurent, 03/09/2026 |
+| ~~D-2~~ | ~~Code VATEX à utiliser pour l'art. 261-4-4°a ?~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** catégorie **E** + texte + code **`VATEX-EU-132-1I`** (261-4-4°a CGI = transposition de l'art. 132-1-i directive TVA). BR-E-10 n'exige que l'un des deux, on met les deux. Repli si le validateur refuse le code au lot 2 : texte seul. | Laurent, 10/09/2026 |
 | ~~D-3~~ | ~~Y a-t-il des prestations **non exonérées** ?~~ **TRANCHÉE le 04/09/2026 : tout est exonéré.** L'émission reste une conformité anticipée, pas une obligation au 01/09/2027 ; le lot 3 ne devient pas prioritaire pour raison réglementaire. | Laurent, 04/09/2026 |
-| D-4 | Factures payées par un financeur en subrogation (AGEFICE paie l'OF) : le « buyer » reste le stagiaire/entreprise, le financeur est un tiers payeur — à valider avec l'expert-comptable pour la représentation EN 16931 (`PayeeParty` ?). | Buyer = client, financeur en note |
-| D-5 | Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 (cascade de tarif) ? | Après — sinon on transmet des montants faux à une plateforme d'État |
+| ~~D-4~~ | ~~Représentation EN 16931 d'un financeur en subrogation (`PayeeParty` ?)~~ **TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable :** **buyer = le client** ; le financeur (AGEFICE) figure **dans les conditions de règlement** (BT-20), **jamais en `PayeeParty`** — BG-10 ne désigne qu'un bénéficiaire différent du vendeur (affacturage), or ici l'argent va à Start Academy. **Le payee reste Start Academy**, le champ reste absent. Règle détaillée en §5.7, à appliquer au lot 2. | Laurent, 10/09/2026 |
+| ~~D-5~~ | ~~Ordre : lot 1 avant ou après le lot 0 de l'audit 28/08 ?~~ **SATISFAITE — le lot 0 de l'audit (cascade de tarif) a été fermé avant le lot 1**, qui a été mergé le 10/09/2026 (PR #32). L'ordre voulu a été tenu : on ne transmet pas de montants faux à une plateforme d'État. | Fait, 10/09/2026 |
+
+**Toutes les décisions D-1 à D-5 sont closes au 10/09/2026.**
+
+~~Le seul point encore ouvert…~~ **E-9 — `settleInvoiceForParticipant` : TRANCHÉE le 10/09/2026 par Laurent, sans passer par l'expert-comptable.** Réversion **symétrique** : le dé-toggle défait ce que le toggle a fait.
+
+- `InvoicePayment.source` (`MANUAL` | `OPCO_SYNC`), migration **additive**, défaut `MANUAL` — les règlements antérieurs à la colonne ont une origine inconnue, donc humaine par précaution : se tromper dans ce sens ne fait que refuser une suppression, se tromper dans l'autre en efface une vraie.
+- **Toggle ON** : règlement `OPCO_SYNC` + facture `PAID` + `AuditLog` — l'aller n'en écrivait aucun.
+- **Toggle OFF** : suppression du seul règlement `OPCO_SYNC`, retour `ISSUED` (ou `PARTIAL` s'il reste quelque chose) + `AuditLog`.
+- **Règlement `MANUAL` coexistant** : refus explicite nommant la facture, **aucune écriture** — et le refus est vérifié AVANT d'écrire le participant, sinon on créerait la divergence qu'on corrige.
+
+Ce qui a invalidé le statu quo : son commentaire invoquait « un mouvement d'argent ne s'annule pas silencieusement », mais rien ne signalait jamais la correction à faire, et la bascule n'écrivait **aucun** `AuditLog`. L'argument défendait une trace qui n'existait pas. Elle existe désormais des deux côtés.
+
+**Plus aucun point ouvert sur cette spec.** Le lot 2 (Factur-X) peut démarrer.
 
 ---
 

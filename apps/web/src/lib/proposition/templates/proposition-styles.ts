@@ -60,6 +60,13 @@ export const PROPOSITION_STYLES = String.raw`
   .phase h3{font-size:11pt; color:#1c2733; font-weight:700}
   .phase p{font-size:9pt; color:#4a5a68; margin-top:1mm}
   .phase .why{font-size:8.5pt; color:#00527A; background:rgba(0,82,122,.08); border-radius:1.5mm; padding:1.5mm 3mm; margin-top:2mm; display:block}
+  /* Les modules composés (lot I-2). Aucun flex ni grid : WeasyPrint ne les
+     implémente pas et échoue en SILENCE (§9.5). Tout tient en flux de blocs. */
+  .phase .modules{margin:2mm 0 0; padding:0; list-style:none}
+  .phase .modules li{font-size:9pt; color:#2b3a47; padding:1.2mm 0 1.2mm 3.5mm; border-left:2px solid #dde4ea; margin-top:1.2mm}
+  .phase .modules li b{font-weight:600}
+  .phase .modules .src{display:block; font-size:7.5pt; color:#7b8894; margin-top:.4mm}
+  .phase .modules .need{display:block; font-size:7.5pt; color:#00527A; margin-top:.4mm}
 
   .callout{border:1.5px solid #9a6b00; background:#fdf6e3; border-radius:2.5mm; padding:4mm 5.5mm; margin-top:4mm}
   .callout h3{color:#9a6b00; font-size:10.5pt; text-transform:uppercase; letter-spacing:.1em; font-family:'Rajdhani'}

@@ -23,6 +23,7 @@ import type { PricingPayerResult, PricingSynthesis } from '../pricing';
 import { COVERAGE_STATE_LABEL } from '../pricing';
 import { PROPOSITION_STYLES } from './proposition-styles';
 import { renderDocumentPageRule } from '@/lib/docs/weasyprint-base';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 import type { PropositionData } from './proposition-data';
 
 /** Nombre de sections numérotées de la proposition — invariant. */
@@ -119,9 +120,34 @@ function pageCover(data: PropositionData): string {
 </section>`;
 }
 
+/**
+ * Les modules d'une demi-journée, avec ce qui les a fait entrer (lot I-2).
+ *
+ * On nomme le programme source de chaque module. C'est le point que D-19 rend
+ * vendable : le dirigeant voit que son parcours est ASSEMBLÉ pour lui, pas
+ * qu'on lui ressert un programme sur étagère. Et il peut vérifier, module par
+ * module, à quelle phrase de son diagnostic il répond.
+ *
+ * Les propositions antérieures à la composition n'ont pas de modules : elles se
+ * rendent exactement comme avant, sans bloc vide.
+ */
+function renderModules(axe: PropositionData['content']['axes'][number]): string {
+  if (axe.modules.length === 0) return '';
+  const items = axe.modules
+    .map(
+      (m) => `<li>
+        <b>${esc(m.title)}</b>
+        ${m.sourceTitle ? `<span class="src">issu de ${esc(m.sourceTitle)}</span>` : ''}
+        ${m.needLabel ? `<span class="need">${esc(m.needLabel)}</span>` : ''}
+      </li>`,
+    )
+    .join('');
+  return `<ul class="modules">${items}</ul>`;
+}
+
 function renderAxes(data: PropositionData): string {
   if (data.content.axes.length === 0) {
-    return `<p class="notice">Aucun axe n’est encore composé. Le parcours se compose depuis le catalogue actif : un point de douleur métier reçoit un programme métier.</p>`;
+    return `<p class="notice">Aucun axe n’est encore composé. Le parcours s’assemble depuis la bibliothèque de modules : chaque module répond à un point de douleur relevé au diagnostic, et un point de douleur métier reçoit un module métier.</p>`;
   }
   return data.content.axes
     .map(
@@ -130,6 +156,7 @@ function renderAxes(data: PropositionData): string {
       <div class="body">
         <h3>${esc(axe.title)}</h3>
         ${axe.description ? `<p>${esc(axe.description)}</p>` : ''}
+        ${renderModules(axe)}
         <div class="why">Pourquoi : ${esc(axe.why)}</div>
       </div>
     </div>`,
@@ -319,7 +346,7 @@ function renderPricingTable(data: PropositionData): string {
 
   const rows: string[] = [blocks];
   rows.push(
-    `<tr><td colspan="5"><b>Coût pédagogique total</b> <span class="muted">(TVA non applicable — article 261-4-4° a du CGI, activité de formation exonérée)</span></td><td class="num"><b>${money(pricing.totalHt)}</b></td></tr>`,
+    `<tr><td colspan="5"><b>Coût pédagogique total</b> <span class="muted">(${MENTION_EXONERATION_TVA})</span></td><td class="num"><b>${money(pricing.totalHt)}</b></td></tr>`,
   );
   if (pricing.totalCoverage > 0) {
     rows.push(

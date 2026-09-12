@@ -12,6 +12,8 @@ import {
   HelpCircle,
   Link2,
   Loader2,
+  Mail,
+  BookOpen,
   Receipt,
   RefreshCw,
   Send,
@@ -21,12 +23,14 @@ import {
 
 import {
   approveProposalDiscount,
+  generateComposedProduct,
   generateProposalPdf,
   generateProposalQuotes,
   issueProposalPublicLink,
   markProposalReviewed,
   markProposalSent,
   revokeProposalPublicLink,
+  sendProposalByEmail,
 } from '@/server/actions/propositions';
 import type { FingerprintComparison } from '@/lib/proposition/fingerprint';
 
@@ -44,6 +48,9 @@ export function ProposalActions({
   reviewedAt,
   blockers,
   warnings,
+  composedProductCode,
+  composedModuleCount,
+  composedRemittable,
   freshness,
   hasPdf,
   documentId,
@@ -56,6 +63,12 @@ export function ProposalActions({
 }: {
   proposalId: string;
   status: string;
+  /** Le produit composé déjà généré depuis cette proposition, s'il existe. */
+  composedProductCode: string | null;
+  /** Combien de modules la proposition compose — 0 = rien à générer. */
+  composedModuleCount: number;
+  /** `false` = le programme généré ne se remet à personne. `null` = rien de composé. */
+  composedRemittable: boolean | null;
   reviewedAt: string | null;
   blockers: string[];
   warnings: string[];
@@ -228,6 +241,43 @@ export function ProposalActions({
           {quoteNumbers.length > 0 ? `Devis : ${quoteNumbers.join(', ')}` : 'Générer les devis'}
         </button>
 
+        <button
+          type="button"
+          onClick={() =>
+            start(async () => {
+              const r = await generateComposedProduct(proposalId);
+              if (r.ok) {
+                toast.success('Programme Qualiopi du parcours généré — à relire avant envoi.');
+                router.refresh();
+              } else {
+                toast.error(r.error);
+              }
+            })
+          }
+          disabled={pending || composedModuleCount === 0}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+          title={
+            composedModuleCount === 0
+              ? 'Aucun module composé : il n’y a pas de programme à générer.'
+              : composedProductCode
+                ? `Régénère ${composedProductCode} depuis les axes actuels. Refusé si le produit porte déjà des sessions.`
+                : 'Crée le produit sur mesure et son programme Qualiopi (objectifs, durées, prérequis, déroulé) depuis les modules composés.'
+          }
+        >
+          <BookOpen className="h-4 w-4" />
+          {composedProductCode
+            ? `Programme ${composedProductCode} — régénérer`
+            : 'Générer le programme Qualiopi'}
+          {composedRemittable === false && (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800 dark:bg-red-900 dark:text-red-200"
+              title="Le programme se génère, mais il ne se remet ni au client ni au financeur tant que le catalogue n’a pas de déroulé ni d’objectifs pour ces modules."
+            >
+              à ne pas remettre
+            </span>
+          )}
+        </button>
+
         {publicLinkActive ? (
           <button
             type="button"
@@ -274,6 +324,36 @@ export function ProposalActions({
           >
             <Send className="h-4 w-4" />
             Marquer comme remise
+          </button>
+        )}
+
+        {/* D-21 — l'envoi par email, déclenché ici et nulle part ailleurs. Il
+            reste proposé même après ENVOYEE : une proposition remise en main
+            propre se renvoie parfois par écrit, et le refuser obligerait à
+            passer par sa propre boîte mail, hors de toute trace. */}
+        {status !== 'ACCEPTEE' && (
+          <button
+            type="button"
+            onClick={() =>
+              start(async () => {
+                const r = await sendProposalByEmail(proposalId);
+                if (r.ok) {
+                  toast.success(`Proposition envoyée à ${r.data?.sentTo ?? 'ce client'}.`);
+                  router.refresh();
+                } else {
+                  // Une catégorie décochée ou un dry-run remontent ici : le
+                  // commercial doit savoir que rien n'est parti, plutôt que de
+                  // croire son client servi.
+                  toast.error(r.error ?? 'Envoi impossible', { duration: 8000 });
+                }
+              })
+            }
+            disabled={pending || blockers.length > 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+            title={blockers[0] ?? 'Envoie le lien de lecture au prospect'}
+          >
+            <Mail className="h-4 w-4" />
+            Envoyer par email
           </button>
         )}
       </div>

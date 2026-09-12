@@ -460,7 +460,7 @@ async function main() {
     // stagiaire. groupFlatPrice porte la sémantique ; priceHT requis > 0 par
     // les générateurs (programme/convention).
     priceHT: new Prisma.Decimal(TOTAL_GROUP_HT),
-    vatRate: new Prisma.Decimal(0), // TVA non applicable art. 261-4-4° CGI (régime constaté)
+    vatRate: new Prisma.Decimal(0), // exonéré art. 261-4-4° CGI (régime constaté)
     groupFlatPrice: new Prisma.Decimal(TOTAL_GROUP_HT),
     theme: 'IA',
     capacityMin: 5,

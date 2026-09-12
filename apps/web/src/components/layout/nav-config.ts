@@ -21,6 +21,7 @@ import {
   FilePlus,
   BarChart3,
   FileSignature,
+  Users2,
   Stethoscope,
 } from 'lucide-react';
 import type { UserRole } from '@qualiof/db';
@@ -158,6 +159,16 @@ export const NAV: NavSection[] = [
         label: 'Propositions',
         href: '/app/propositions',
         icon: FileSignature,
+        allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
+      },
+      // Campagnes de pré-inscription (chaîne diagnostic, lot F) : le lien qu'on
+      // diffuse à l'équipe du client après le R2. ADMIN inclus, contrairement
+      // aux deux écrans ci-dessus — c'est l'admin qui vérifie les pièces, et
+      // c'est même son écran principal ici.
+      {
+        label: 'Campagnes RDV',
+        href: '/app/campagnes',
+        icon: Users2,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL'],
       },
       // Vue de charge (Phase 9 Plan 09-04) : ADMIN+MANAGER uniquement

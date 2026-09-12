@@ -204,6 +204,83 @@ export function TabApres({
   }
 
   /**
+   * « Tout regénérer » pour UN apprenant, sur UNE phase.
+   *
+   * Le pendant de `handleGenerateForLearner`, mais pour les pièces DÉJÀ
+   * produites : après une correction (l'adresse du lieu, le nom d'un
+   * apprenant, le tarif), il fallait jusqu'ici les reprendre une par une dans
+   * la matrice (Laurent 11/09).
+   *
+   * `force` est indispensable : sans lui les générateurs sautent ce qui existe
+   * et le bouton ne ferait rien. Côté serveur, `force` n'est honoré qu'en mode
+   * mono-participant — exactement notre cas.
+   *
+   * Ce qui est signé ou envoyé n'est PAS remplacé : `checkDocumentReplacement`
+   * saute ces documents en régime groupé et les remonte. On l'annonce avant de
+   * lancer, parce qu'un bouton qui refait des documents mérite une confirmation
+   * — `window.confirm` et non un Dialog, pour la raison connue de ce repo.
+   */
+  function handleRegenerateForLearner(group: PhaseParticipantGroup, phase: DocPhase) {
+    const kinds = closureKindsForPhase(phase);
+    const assiduiteExistante = group.items.some(
+      (i) => i.docType === 'ASSIDUITE' && i.state === 'generated',
+    );
+    if (kinds.length === 0 && !assiduiteExistante) return;
+
+    if (
+      !window.confirm(
+        `Refaire les documents de ${group.fullName} pour cette phase ?\n\n` +
+          `Les documents déjà signés ou envoyés sont conservés — seuls les autres sont remplacés.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyParticipant(group.participantId);
+    startTransition(async () => {
+      try {
+        let refaits = 0;
+        if (kinds.length > 0) {
+          const r = await generateClosurePack(sessionId, {
+            participantIds: [group.participantId],
+            kinds: kinds as never,
+            force: true,
+          });
+          if (!r.ok) {
+            toast.error(r.error ?? `Erreur régénération pour ${group.fullName}`);
+            return;
+          }
+          refaits += r.total ?? 0;
+          // Un traitement qui ignore une partie de son périmètre doit le dire.
+          if (r.skippedEngaged && r.skippedEngaged.length > 0) {
+            toast.warning(
+              `${group.fullName} — ${r.skippedEngaged.length} document(s) conservé(s) : déjà signé(s) ou envoyé(s).`,
+            );
+          }
+        }
+        if (assiduiteExistante) {
+          const r = await dispatchGenerateDoc({
+            sessionId,
+            docType: 'ASSIDUITE_AGEFICE',
+            participantId: group.participantId,
+            force: true,
+          });
+          if (r.ok) refaits += 1;
+          else toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+        }
+        if (refaits > 0) {
+          toast.success(
+            `${group.fullName} — ${refaits} document${refaits > 1 ? 's' : ''} en cours de régénération`,
+          );
+        }
+        router.refresh();
+      } finally {
+        setBusyParticipant(null);
+      }
+    });
+  }
+
+  /**
    * L'attestation d'assiduité AGEFICE, seule, pour un apprenant.
    *
    * Elle a son générateur synchrone dédié (`ASSIDUITE_AGEFICE`) : elle ne fait
@@ -295,6 +372,7 @@ export function TabApres({
         canWrite={canWrite}
         busyParticipant={busyParticipant}
         onGenerateAll={handleGenerateForLearner}
+        onRegenerateAll={handleRegenerateForLearner}
       />
       <PhaseLearnerBlocks
         phase="apres"
@@ -303,6 +381,7 @@ export function TabApres({
         canWrite={canWrite}
         busyParticipant={busyParticipant}
         onGenerateAll={handleGenerateForLearner}
+        onRegenerateAll={handleRegenerateForLearner}
         onGenerateAssiduite={handleGenerateAssiduite}
       />
 
@@ -413,6 +492,7 @@ function PhaseLearnerBlocks({
   canWrite,
   busyParticipant,
   onGenerateAll,
+  onRegenerateAll,
   onGenerateAssiduite,
 }: {
   phase: DocPhase;
@@ -421,6 +501,7 @@ function PhaseLearnerBlocks({
   canWrite: boolean;
   busyParticipant: string | null;
   onGenerateAll: (group: PhaseParticipantGroup, phase: DocPhase) => void;
+  onRegenerateAll: (group: PhaseParticipantGroup, phase: DocPhase) => void;
   /** Générateur dédié de l'attestation d'assiduité AGEFICE (hors pack). */
   onGenerateAssiduite?: (participantId: string, fullName: string, force: boolean) => void;
 }) {
@@ -455,6 +536,7 @@ function PhaseLearnerBlocks({
               missingCount={group.missingCount}
               canGenerate={canWrite}
               onGenerateAll={() => onGenerateAll(group, phase)}
+              onRegenerateAll={() => onRegenerateAll(group, phase)}
               busy={busyParticipant === group.participantId}
             />
           </div>

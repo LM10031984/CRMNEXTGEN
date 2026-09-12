@@ -188,7 +188,7 @@ describe('resolveEmailPolicy — matrice fail-closed', () => {
 
 describe('catégorie « signature » — décochable, fail-closed', () => {
   /**
-   * ⚠ LA FIXTURE ÉNUMÈRE LES 11 BOOLÉENS EN DUR, et ce n'est pas de la
+   * ⚠ LA FIXTURE ÉNUMÈRE LES 12 BOOLÉENS EN DUR, et ce n'est pas de la
    * verbosité : la construire depuis `EMAIL_CATEGORY_FIELD` rendrait le test
    * tautologique — il vérifierait que la map est cohérente avec elle-même,
    * jamais que `signature` pointe vers le BON champ.
@@ -205,6 +205,11 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
       diagnosticProgramsEnabled: true,
       newLeadAlertsEnabled: true,
       preEnrollmentAlertsEnabled: true,
+      // Fusion du 12/09/2026 : `main` a apporté la catégorie « envoi de la
+      // proposition ». Cochée comme les autres — cette fixture dit « tout est
+      // coché SAUF signature », et l'énumération doit rester exhaustive pour
+      // que le test garde « `signature` pointe vers le BON champ ».
+      proposalSendEnabled: true,
       signatureEmailsEnabled: false,
       testSessionIds: [] as string[],
     };
@@ -245,9 +250,13 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
     });
   });
 
-  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 10 catégories = les clés des DEUX maps', () => {
+  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 11 catégories = les clés des DEUX maps', () => {
     // Écrite à la main. Le libellé manquant est le défaut le plus discret :
     // l'écran afficherait `undefined` sans que rien ne casse.
+    //
+    // ⚠ Fusion du 12/09/2026 : `proposal_sent` arrive de `main` (D-21, envoi de
+    // la proposition au client). Ce test a fait exactement son office — il a
+    // rougi à la fusion, en nommant la catégorie qui manquait à la liste.
     const attendues = [
       'invoice_reminder',
       'preinscription_reminder',
@@ -258,6 +267,7 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
       'diagnostic_program',
       'new_lead',
       'preenrollment_submitted',
+      'proposal_sent',
       'signature',
     ];
     expect(new Set(Object.keys(EMAIL_CATEGORY_FIELD))).toEqual(new Set(attendues));
@@ -379,6 +389,7 @@ describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)
       diagnosticProgramsEnabled: true,
       newLeadAlertsEnabled: true,
       preEnrollmentAlertsEnabled: true,
+      proposalSendEnabled: true,
       signatureEmailsEnabled: false,
       testSessionIds: [],
     });

@@ -6,6 +6,7 @@ import { InvoicesPrioCards } from '@/components/invoices/invoices-prio-cards';
 import { InvoicesFilters } from '@/components/invoices/invoices-filters';
 import { InvoicesListTable } from '@/components/invoices/invoices-list-table';
 import { InvoicesExportButton } from '@/components/invoices/invoices-export-button';
+import { coerceInvoiceSort } from '@/lib/invoices/list-sort';
 
 /**
  * Phase 11 Plan 11-08 Task 3 — Page liste factures (FACT-01).
@@ -38,6 +39,8 @@ interface SP {
   onlyUnpaid?: string;
   payerOrgId?: string;
   page?: string;
+  sort?: string;
+  dir?: string;
 }
 
 function parseFiltersFromSearchParams(sp: SP) {
@@ -98,6 +101,8 @@ export default async function FacturesPage({
   const filters = parseFiltersFromSearchParams(sp);
   const page = sp.page ? parseInt(sp.page, 10) || 1 : 1;
   const pageSize = 50;
+  // Le tri vient de l'URL, donc de l'utilisateur : validé avant d'atteindre Prisma.
+  const { sort, dir } = coerceInvoiceSort(sp.sort, sp.dir);
 
   const { kpis, rows, total } = await getInvoicesListData({
     filters: {
@@ -109,6 +114,8 @@ export default async function FacturesPage({
     },
     page,
     pageSize,
+    sort,
+    dir,
   });
 
   return (

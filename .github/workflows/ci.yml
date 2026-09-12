@@ -46,14 +46,21 @@ jobs:
       # Garde anti-dérive (10/09/2026). L'index GIN de la migration du 08/09
       # n'était pas déclaré au schéma : rien ne l'a signalé pendant deux jours,
       # et le premier `migrate dev` venu l'aurait supprimé en production.
-      # Base DÉDIÉE et jetable : `qualiof_test` reçoit un `db push` juste après,
-      # donc y jouer le diff comparerait le schéma à lui-même — tautologie.
+      # Base DÉDIÉE et jetable, distincte de `qualiof_test` : le garde a besoin
+      # d'une base vierge qu'il RÉINITIALISE, ce qu'on ne fait pas à la base des
+      # tests d'intégration.
       - name: Le schéma doit être exactement ce que les migrations produisent
         env:
           DRIFT_DATABASE_URL: postgresql://qualiof:qualiof@localhost:5432/qualiof_drift
         run: pnpm --filter @qualiof/db run check:schema
-      - name: Push schema to test DB (tests intégration dedupe/match-treso)
-        run: pnpm --filter @qualiof/db exec dotenv -e ../../.env -- prisma db push --skip-generate
+      # `migrate deploy`, PAS `db push` (décision Laurent du 10/09/2026, règle
+      # inscrite dans /quick). `db push` alignait `qualiof_test` sur le schéma
+      # sans passer par les migrations : la CI validait donc le schéma contre
+      # lui-même et ne pouvait structurellement pas voir un objet créé par une
+      # migration mais absent du schéma — exactement l'angle mort du 08/09.
+      # Le garde ci-dessus prouve que les deux chemins donnent la même base.
+      - name: Appliquer les migrations à la base de test (dedupe/match-treso)
+        run: pnpm --filter @qualiof/db exec dotenv -e ../../.env -- prisma migrate deploy
       - run: pnpm lint
       - run: pnpm --filter @qualiof/web exec tsc --noEmit
       - run: pnpm test

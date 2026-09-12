@@ -41,8 +41,13 @@ const routes = readdirSync(CRONS_DIR, { withFileTypes: true })
   .sort();
 
 describe('vercel.json — toute route cron est planifiée, et réciproquement', () => {
-  it('les SIX routes existantes sont déclarées', () => {
+  it('les SEPT routes existantes sont déclarées', () => {
+    // ⚠ Fusion du 12/09/2026 : `/api/cron/alerts` arrive de `main` (veille
+    // quotidienne de chronologie des factures + alertes leads/pré-inscriptions).
+    // Ce test a fait exactement son office — il a rougi à la fusion en nommant
+    // la route qui venait d'apparaître, au lieu de la laisser non planifiée.
     expect(routes).toEqual([
+      '/api/cron/alerts',
       '/api/cron/closure-worker',
       '/api/cron/diagnostic-worker',
       '/api/cron/opco-submission-reminders',
@@ -74,14 +79,28 @@ describe('vercel.json — toute route cron est planifiée, et réciproquement', 
   });
 
   it('PUISSANCE — aucune expression ne fait tout partir à la même minute', () => {
-    // Six crons déclenchés ensemble, c'est six fonctions concurrentes sur la
+    // Sept crons déclenchés ensemble, c'est sept fonctions concurrentes sur la
     // même base. Les quotidiens sont échelonnés ; seuls les « toutes les 5
-    // minutes » se partagent leur créneau, et c'est sans conséquence.
+    // minutes » se partagent leur créneau, et c'est sans conséquence. Les
+    // horaires (`17 * * * *` pour signature-sync, `0 * * * *` pour alerts)
+    // tombent sur des minutes différentes — vérifié par le test ci-dessous.
     const quotidiens = config.crons
       .map((c) => c.schedule)
       .filter((s) => /^\d+ \d+ \* \* \*$/.test(s));
     expect(new Set(quotidiens).size).toBe(quotidiens.length);
     expect(quotidiens.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('PUISSANCE — les crons HORAIRES ne tombent pas non plus sur la même minute', () => {
+    // Fusion du 12/09/2026 : il y a désormais DEUX crons horaires (`alerts` de
+    // `main`, `signature-sync` de la branche signature). Le test des quotidiens
+    // ne les regardait pas — deux `0 * * * *` se seraient croisés 24 fois par
+    // jour sans que rien ne rougisse.
+    const horaires = config.crons
+      .map((c) => c.schedule)
+      .filter((s) => /^\d+ \* \* \* \*$/.test(s));
+    expect(new Set(horaires).size).toBe(horaires.length);
+    expect(horaires.length).toBeGreaterThanOrEqual(2);
   });
 
   it('chaque expression est un cron à cinq champs — pas six, pas quatre', () => {

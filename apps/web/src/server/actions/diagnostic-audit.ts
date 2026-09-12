@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { REFERENTIAL_VERSION } from '@qualiof/shared/diagnostic';
+import { REPONSES_CONFIRMEES } from '@/lib/diagnostic-r1/transcript/confirmees';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { loadOfConfig } from '@/lib/of-config';
 import { loadFundingRules } from '@/lib/financement/load-rules';
@@ -55,7 +56,7 @@ async function loadDiagnosticForAudit(diagnosticId: string, tenantId: string) {
       sourceFingerprint: true,
       organization: { select: { legalName: true } },
       lead: { select: { firstName: true, lastName: true, notes: true } },
-      answers: { select: { questionId: true, value: true, isSkipped: true } },
+      answers: REPONSES_CONFIRMEES,
       participants: {
         orderBy: { createdAt: 'asc' },
         select: {

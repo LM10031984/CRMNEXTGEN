@@ -33,6 +33,7 @@ import { CreateLeadSchema } from '@qualiof/shared';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { autoAssignLead } from './auto-assign-leads';
 import { notifyLeadAssigned } from '@/lib/lead-notifications';
+import { alerterNouveauLead } from '@/lib/alertes/notifier';
 import { logLeadEvent } from '@/lib/audit-log';
 
 export type ActionResult<T = void> =
@@ -101,6 +102,11 @@ export async function createLead(
       });
     }
   }
+
+  // A-1 (spec §11.1) — APRÈS l'auto-assignation, jamais avant : c'est elle qui
+  // détermine les destinataires. Alerter d'abord enverrait « ce lead n'est à
+  // personne » à toute l'équipe une seconde avant qu'il soit attribué.
+  await alerterNouveauLead({ tenantId: user.tenantId, leadId: lead.id });
 
   revalidatePath('/app/leads');
   return { ok: true, data: { leadId: lead.id, ownerUserId } };

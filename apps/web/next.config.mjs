@@ -79,6 +79,26 @@ const nextConfig = {
         destination: '/app/propositions/:path*',
         permanent: true,
       },
+      // Chaîne diagnostic (lot F) — la campagne de RDV vit sur /app/campagnes
+      // au PLURIEL, et le lien public sur /rdv/{jeton} au SINGULIER. Les deux
+      // variantes naturelles sont rattrapées : un lien de campagne se retape à
+      // la main plus souvent qu'on ne le croit, et un 404 dessus coûte un
+      // dossier.
+      {
+        source: '/app/campagne',
+        destination: '/app/campagnes',
+        permanent: true,
+      },
+      {
+        source: '/app/campagne/:path*',
+        destination: '/app/campagnes/:path*',
+        permanent: true,
+      },
+      {
+        source: '/rdvs/:token',
+        destination: '/rdv/:token',
+        permanent: true,
+      },
       {
         source: '/inscriptions/:token',
         destination: '/inscription/:token',

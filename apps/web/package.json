@@ -21,6 +21,10 @@
     "probe:veille": "dotenv -e ../../.env -- tsx scripts/probe-veille-sources.ts",
     "probe:reco": "dotenv -e ../../.env -- tsx scripts/probe-recommandation.ts",
     "probe:reco:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-recommandation.ts",
+    "probe:composition": "dotenv -e ../../.env -- tsx scripts/probe-composition.ts",
+    "probe:composition:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-composition.ts",
+    "propose:rattachement": "dotenv -e ../../.env -- tsx scripts/propose-rattachement.ts",
+    "propose:rattachement:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/propose-rattachement.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
     "dump:closure": "dotenv -e ../../.env -- tsx scripts/closure-dump-pdfs.ts",
     "bench:closure": "dotenv -e ../../.env -- tsx scripts/closure-bench-ollama.ts",
@@ -32,7 +36,12 @@
     "storage:purge-drafts": "dotenv -e ../../.env -- tsx scripts/purge-orphan-drafts.ts",
     "docs:empreintes": "dotenv -e ../../.env -- tsx scripts/coherence-empreintes.ts",
     "docs:backfill-converted": "dotenv -e ../../.env -- tsx scripts/backfill-converted-docs.ts",
-    "invoices:backfill-lines": "dotenv -e ../../.env -- tsx scripts/backfill-invoice-lines.ts"
+    "invoices:backfill-lines": "dotenv -e ../../.env -- tsx scripts/backfill-invoice-lines.ts",
+    "invoices:audit-chronology": "dotenv -e ../../.env -- tsx scripts/audit-invoice-chronology.ts",
+    "ecrire:rattachements": "dotenv -e ../../.env -- tsx scripts/ecrire-rattachements.ts",
+    "ecrire:rattachements:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/ecrire-rattachements.ts",
+    "ecrire:modules": "dotenv -e ../../.env -- tsx scripts/ecrire-modules-rediges.ts",
+    "ecrire:modules:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/ecrire-modules-rediges.ts"
   },
   "//": "Le .env est lu depuis la racine du monorepo via next.config.mjs (loadEnv).",
   "dependencies": {

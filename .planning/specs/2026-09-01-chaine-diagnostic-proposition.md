@@ -247,11 +247,13 @@ model Proposal {
 enum BatchStatus { OUVERTE  CLOTUREE  ANNULEE }
 
 model EnrollmentBatch {
-  id           String      @id @default(uuid())
-  tenantId     String
-  label        String      // "RDV OPTIMMO — R1 du 12/09"
-  diagnosticId String?     @unique
-  proposalId   String?
+  id             String    @id @default(uuid())
+  tenantId       String
+  label          String    // "RDV OPTIMMO — R1 du 12/09"
+  organizationId String    // D-22 — OBLIGATOIRE : le rattachement canonique
+  diagnosticId   String?   @unique // contexte, jamais une alternative à l'agence
+  leadId         String?   // contexte, jamais une alternative à l'agence
+  proposalId     String?
   productId    String?     // produit pressenti (pré-remplit les pré-inscriptions)
   tokenHash    String      // lien public multi-usages, hashé (doctrine §3 repo diag)
   expiresAt    DateTime
@@ -389,6 +391,232 @@ Test qui tient la règle : une recommandation jouée alors que **tous** les
 conteneurs sont inactifs doit continuer à proposer des modules. Une liste vide
 signifie qu'un filtre `isActive` s'est glissé dans le chemin de composition.
 
+##### D-19 bis — quand un rayon importé double un produit vendu, **la version VENDUE fait foi** (arbitrage Laurent du 10/09/2026)
+
+L'import du Drive a créé quatre rayons qui portent le même programme qu'un
+produit réellement vendu : `drive:055` ↔ `PROD-055`, `drive:053` ↔ `PROD-053`,
+`drive:046` ↔ `PROD-0671`, `drive:074` ↔ `PROD-0662`.
+
+**Le produit vendu ne bouge pas** — ni sa durée, ni ses modules, ni sa page
+publique « Programme détaillé ». Cette page **est** l'information préalable
+remise au client, et la modifier après coup crée un écart entre ce qui a été
+annoncé et ce qui est réalisé : une réserve en audit Qualiopi.
+
+**C'est donc le RAYON qui s'efface** : il reste en base et reste consultable,
+mais ses modules **sortent du chemin de composition**. Motif : deux versions du
+même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en
+animer une autre. Composer depuis la version Drive bâtirait une proposition sur
+un contenu qui n'est pas celui que la convention annonce.
+
+**Comment le doublon est détecté — et pourquoi il ne peut pas revenir :**
+
+1. **À l'import seulement**, et par **égalité de nom normalisée** (accents,
+   casse et ponctuation neutralisés) contre les produits **vendus** —
+   c'est-à-dire ceux qui ne viennent pas d'un import (`sourceRef` nul) **et qui
+   sont actifs**. Un produit qu'on ne vend plus ne peut pas « faire foi » contre
+   un rayon : l'écarter au profit d'un produit mort retirerait le contenu de la
+   reco sans rien mettre à la place.
+2. **Le lien est PERSISTÉ**, pas recalculé : `TrainingProduct.supersededByProductId`.
+   C'est le point qui compte. Un rapprochement par titre est fragile — il suffit
+   que le dossier Drive soit renommé pour qu'il ne matche plus. Un lien stocké,
+   lui, survit au renommage.
+3. **Un lien déjà posé n'est JAMAIS recalculé ni retiré par un import.** Le
+   script se contente de le reconduire et de le dire au rapport. Délier un rayon
+   est une décision de catalogue, pas un effet de bord d'un script — comme la
+   suppression d'un module orphelin.
+4. **Le moteur filtre aussi**, en plus de l'import (`recommendModules` écarte
+   tout module dont le rayon est écarté, et le dit en notice avec le couple
+   `rayon → produit vendu`). Défense en profondeur : la même doctrine que pour
+   la pige, où un filtre oublié dans un template reste invisible jusqu'au jour
+   où un client le lit.
+
+⚠ **À ne pas confondre avec `isActive`.** Un rayon **inactif** est la norme
+depuis le corollaire D-19 — les 81 rayons le sont, et ça n'en écarte aucun. Un
+rayon **écarté** est un doublon, et il n'y en a que quatre. Deux notions, deux
+champs, et un test qui vérifie qu'on ne les confond pas.
+
+**Conséquence assumée, à connaître avant I-2** : ces quatre produits vendus ne
+portent **aucun module** (leur contenu vit dans `programMd`). Les écarter côté
+rayon les rend donc **invisibles à la recommandation au niveau module** — y
+compris `PROD-055 Maîtrise des techniques de vente`, qui est du métier pur. Le
+jour où le composeur devra piocher dedans, il faudra créer les modules **sur le
+produit vendu lui-même**, à partir de son `programMd` — ce qui est un travail de
+catalogue, à faire les yeux ouverts, pas un import automatique.
+
+##### D-19 bis, suite — quand le doublon oppose **deux rayons**, c'est Laurent qui désigne (11/09/2026)
+
+D-19 bis tranche un rayon contre un produit **vendu** : la convention et la page
+publique font foi. **Entre deux RAYONS, la règle est muette** — ils ont le même
+statut, rien ne les départage. C'est ce qu'a montré `drive:008` « Face à face
+acheteurs » contre `drive:020` « Face a face acheteurs » : le même programme
+rangé sous deux numéros, invisible jusqu'ici parce que la détection ne comparait
+qu'aux produits vendus.
+
+**Arbitrage de Laurent** : garder `BIB-D008`, écarter `BIB-D020`. Motif — **008
+est le numéro de ce programme dans la numérotation catalogue de Laurent**
+(008 → 074) ; 020 est une copie rangée sous un autre numéro.
+
+**Comment la décision est tenue** :
+
+1. Elle est **déclarée dans le code**, datée et motivée (`RAYONS_TRANCHES` dans
+   `import-drive-catalog.ts`), pas passée une fois à la main sur une base. Un
+   arbitrage appliqué par un `UPDATE` manuel est perdu à la prochaine base.
+2. Elle se pose dans le **même champ** qu'un doublon D-19 bis
+   (`supersededByProductId`), donc elle hérite de la même garantie : **un lien
+   déjà posé n'est jamais recalculé**, et un dossier Drive renommé ne peut pas
+   réintroduire le doublon.
+3. Le rayon écarté **reste en base et reste consultable** — seuls ses modules
+   sortent de la composition. On ne supprime rien.
+4. **Le rapport le DIT** plutôt que de le faire disparaître : un doublon réglé
+   par la règle est une non-information, un doublon réglé par une **décision**
+   doit rester lisible, sinon quelqu'un la reprendra un jour depuis zéro.
+5. **Refus de sécurité** : si le rayon gardé est introuvable en base, aucun lien
+   n'est posé et le rapport le signale. Écarter au profit d'un gardien absent
+   retirerait du contenu de la reco sans rien mettre à la place.
+
+##### Chantier identifié — nettoyage de l'extraction Drive (11/09/2026)
+
+Écrire les rattachements a fait entrer de vrais modules dans le programme
+composé de DIAG-0001, et **ce qu'ils ont remplacé masquait trois défauts de
+données**. Ils n'étaient pas visibles tant que les créneaux étaient tenus par
+des modules du catalogue diagnostic sans déroulé : une place vide ne montre
+rien. Ce n'est **pas** de l'écriture de contenu — c'est du travail de machine
+sur l'extraction, et il se planifie à part.
+
+1. **Les pieds de page de programme ont été avalés dans les déroulés de
+   modules.** « QCM évaluation des acquis », « Questionnaire de satisfaction et
+   clôture de la formation », et jusqu'aux états de service des formateurs
+   (« Tous les formateurs de l'équipe Start-Academy ont minimum 8 années
+   d'expérience… ») figurent comme des **puces du déroulé** de `BIB-D034` et de
+   `BIB-D012`. Ce sont des **mentions d'organisme** — elles ont leur section
+   dédiée depuis les trois colonnes `Tenant.qualiopi*`. Sur le programme de
+   DIAG-0001, « Gérer les objections » se termine donc par l'expérience des
+   formateurs présentée comme une étape pédagogique, et un financeur le lit.
+
+2. **Certains « modules » sont des journées entières.** `BIB-D012` « Pratiquer
+   une découverte acheteur… » porte **38 puces** et un « Après-midi : » en plein
+   milieu, pour une durée déclarée de **60 min**. L'extraction ne l'a pas
+   découpé : le rapport d'import du 10/09 le signalait déjà sous « 17 programmes
+   en bloc unique », et la conséquence se voit maintenant sur un document
+   client. Effet de bord à connaître : un tel module fausse le remplissage des
+   blocs de 8 h (D-20), puisqu'il annonce 60 min pour une journée de contenu.
+
+3. **Les titres ne sont pas présentables.** Deux-points final (« …besoins des
+   acheteurs : », 114 caractères), capitales erratiques (« Mettre en Pratique
+   des Situations de Découverte du Projet Acheteur-Vendeur »), titres muets pour
+   un client (« Suivi », « e réputation »). Le point qui aggrave : **les
+   objectifs pédagogiques dérivent des titres** — chaque défaut de titre devient
+   un défaut d'objectif sur la pièce remise au financeur.
+
+**Ce que ce chantier n'est PAS** : l'écriture des déroulés manquants. Trois
+modules sortent encore « déroulé à compléter » sur DIAG-0001 — c'est du contenu,
+c'est le chantier de Laurent, et le confondre avec celui-ci ferait attendre
+l'un pour l'autre.
+
+##### D-19 ter — un programme **NON DIFFUSABLE** ne sort jamais, ni lui ni ses modules (relecture du 11/09/2026)
+
+La liste de rattachement du 11/09 proposait **« L'Agent Incomparable » en tête
+de deux douleurs** — « rythme de suivi vendeur » (module M4) et « diversité des
+sources de contacts » (module M1). Or ce parcours est en **v0.9 de
+pré-livraison**, son manifeste porte « trous 🔴/🟠 NON levés — NE PAS DIFFUSER
+AUX APPRENANTS », et il a été importé inactif *pour cette raison*.
+
+**Pourquoi le filtre ne l'a pas retenu** : l'interdiction n'existait nulle part
+dans la donnée. Elle vivait dans un manifeste au fond d'un dossier et dans une
+phrase du `programMd`. Le seul champ qui en portait la trace était `isActive` —
+et c'est précisément le champ sur lequel le corollaire D-19 **interdit** de
+filtrer, puisque les 81 rayons importés sont inactifs par construction. Filtrer
+sur `isActive` aurait vidé la bibliothèque ; ne pas filtrer laissait passer le
+seul programme qu'il fallait arrêter.
+
+**La règle** : `TrainingProduct.excludedFromClientOutputs` — même sens et même
+nom que le champ de la pige sur `TrainingModule`, posé un cran au-dessus.
+L'interdiction porte sur le **programme**, donc sur **tout ce qu'il contient**,
+y compris les modules qu'on lui ajouterait après la relecture. Elle est posée
+par l'import (`import:diag-catalog`, à la création **et** en réparation d'une
+ligne existante), et tenue par le moteur : `recommendModules` écarte ces modules
+et le **dit** en notice, comme pour la pige et le doublon.
+
+⚠ **Trois notions, trois champs, à ne jamais confondre :**
+
+| Champ | Ce qu'il dit | Combien de produits |
+|---|---|---|
+| `isActive: false` | pas vendu tel quel — **la norme** pour un rayon de bibliothèque | 81 rayons sur 81 |
+| `supersededByProductId` | doublon d'un produit vendu, la version vendue fait foi (D-19 bis) | 4, bientôt 6 |
+| `excludedFromClientOutputs` | **interdit de sortie client** — une interdiction, pas un état de vente | 1 (`PROD-0681`) |
+
+**Test** : un module porteur du signal exact d'une douleur, marqué socle, venu
+d'un programme non diffusable, ne doit ressortir nulle part — et la règle vaut
+pour un module ajouté au programme sans être marqué lui-même. Le test jumeau
+vérifie qu'un rayon simplement inactif, lui, n'est pas écarté.
+
+##### D-27 — **deux mots pleins concordants, ou rien** (relecture du 11/09/2026)
+
+Le rapprochement lexical acceptait un mot unique s'il était rare dans le
+catalogue et long d'au moins 8 caractères. Rare et long n'est pas qualifiant :
+sur les 17 douleurs « couvertes » du 11/09, **six lignes venaient d'un seul
+mot**, et les six étaient fausses.
+
+| Le mot | Ce qu'il proposait | À quelle douleur |
+|---|---|---|
+| « formation » | un programme de **déontologie** | « le dirigeant connaît ses droits à formation » |
+| « collecte » | une **collecte d'e-mails** | « processus de collecte d'avis » |
+| « nécessaires » | la **synthèse d'une journée de tournage** | « nombre de visites nécessaires par vente » |
+| « contacts » | une formation aux **newsletters** | « transformation contacts → rendez-vous » |
+| « régulièrement » | réévaluer un **plan d'action** | « indicateurs suivis » |
+| « conseiller » | le **cadastre** | « trame d'appel commune » |
+
+**La règle** : un rapprochement fondé sur un seul mot commun n'est **pas proposé
+du tout**. Il faut deux mots pleins concordants — deux mots qui qualifient,
+c'est-à-dire dont le pouvoir discriminant mesuré sur la bibliothèque est non nul
+(D-18).
+
+**Le raisonnement, et il vaut au-delà de ce script** : une ligne fausse n'est
+pas neutre. Elle se lit, se comprend, se vérifie, se barre — elle coûte du temps
+de relecture, et elle **cache** la vérité utile, qui est que la douleur n'est
+pas couverte. Mieux vaut une douleur déclarée non couverte, qui dit à Laurent
+d'écrire du contenu, qu'une proposition qui lui fait croire le contraire.
+
+**Conséquence chiffrée, assumée** : le nombre de douleurs sans réponse **monte**
+de 17 à 21. C'est le chiffre vrai — les 4 douleurs hors champ en sortent (D-28),
+mais les 4 barrées et les 2 tombées y entrent.
+
+⚠ **Ce que D-27 ne recouvre PAS, et c'est définitif** : le moteur de recommandation
+(`recommendModules`) garde sa propre échelle — signaux, lexique, confiance
+`forte`/`faible`. **Laurent a tranché le 11/09 : on ne l'aligne pas.**
+
+Son motif, qui vaut plus que la règle elle-même : **le seuil lexical est une
+béquille de relecture, pas une doctrine de moteur.** Il sert à protéger un
+humain qui relit des rapprochements devinés. Une fois les rattachements écrits,
+le moteur ne devine plus — il suit les **étiquettes** posées sur les modules, et
+le lexical n'est plus qu'un filet de sécurité. Durcir un filet qu'on s'apprête à
+ne plus utiliser reviendrait à optimiser le mauvais chemin.
+
+**Quand rouvrir la question** : seulement si, après l'écriture des
+rattachements, le lexical sert encore — c'est-à-dire si des recommandations
+continuent de sortir en `source: 'lexique'` sur des dossiers réels. Si elles
+sortent toutes en `source: 'signaux'`, le sujet est clos pour de bon.
+
+##### D-28 — toutes les douleurs ne sont pas des besoins de **formation** (relecture du 11/09/2026)
+
+Quatre règles du barème sur trente-quatre notent un fait de **contexte** ou de
+**financement**, jamais une pratique qui s'apprend : « part de la transaction
+dans l'ancien », « le dirigeant connaît ses droits à formation », « au moins une
+action de formation sur 24 mois », « aucun refus de prise en charge à traiter ».
+Aucun module ne leur répondra jamais — la réponse est un dossier AGEFICE, une
+explication en rendez-vous ou un fait de marché.
+
+**La règle** : `Rule.answerableByTraining` dans le barème, exposé par
+`listDiagnosticPainPoints()`. Ces douleurs **restent notées** — savoir que le
+dirigeant ignore ses droits change le rendez-vous — mais elles **sortent de
+l'exercice de rattachement** : ni proposées, ni comptées comme « non couvertes ».
+
+**Pourquoi la décision vit dans le barème et pas dans le script qui en a
+besoin** : le composeur (I-2) et l'éditeur de proposition poseront la même
+question, et deux définitions de « douleur adressable par une formation »
+finiraient par diverger. Les compter comme non couvertes gonflait par ailleurs
+le nombre de douleurs à combler et décourageait pour rien.
+
 #### D-20 — l'unité de vente est le bloc de 8 h, pas la somme des modules
 
 Un programme composé est un **multiple du bloc de 8 h** = une demi-journée de
@@ -428,7 +656,34 @@ pourquoi chaque module y est ne la passe pas.
 
 > **État au 04/09/2026 — import VALIDÉ par Laurent et appliqué sur la base LOCALE** (`qualiof_dev`). 79 modules, 6 conteneurs inactifs, aucun module à 0 h (D-17), 3 modules pige exclus des sorties client (« Pige Faq », « Veille concurrentielle » ×2 — confirmé par Laurent : ils restent au catalogue interne). Le script est **idempotent ET réparateur** : rejoué, il corrige la durée de ce qu'il possède au lieu de ne rien faire. L'`--apply` en production reste à la checklist du 10/09.
 >
-> ⚠ **Le maillon qui manque encore** : les signaux (`diagnosticSignals`) vivent sur les modules des conteneurs **inactifs**, et **aucun produit ACTIF n'en porte**. La recommandation se rabat donc systématiquement sur le lexique, et badge chaque axe « à vérifier ». Relier les modules diag aux programmes réellement vendus (ou faire des conteneurs de vrais programmes) est une **décision de catalogue, pas de code** — c'est ce qui fera passer le rapprochement de « lexique » à « signaux ». `pnpm --filter @qualiof/web probe:reco` montre l'état du rapprochement sur un dossier réel, sans rien écrire.
+> ✅ **Maillon rétabli par le lot I-1 (10/09/2026).** Le constat qui précédait — « les signaux vivent sur les modules des conteneurs inactifs, aucun produit ACTIF n'en porte, la reco se rabat sur le lexique » — décrivait un moteur qui lisait les PRODUITS et filtrait sur `isActive`. Il ne lit plus que des MODULES, et ne filtre plus sur l'état du conteneur : les signaux du catalogue diagnostic sont redevenus lisibles sans qu'aucun rayon n'ait été activé. Relier les modules aux produits vendus n'est donc plus nécessaire — c'était la bonne réponse à la mauvaise question. `pnpm --filter @qualiof/web probe:reco` (ou `probe:reco:local`) montre le rapprochement sur un dossier réel, sans rien écrire.
+
+> **État au 10/09/2026 — lot I-1 livré (bibliothèque + reco au niveau module).**
+>
+> - **Bibliothèque** : 479 modules dans 81 rayons sur la base locale — les 86 du catalogue diagnostic, plus **402 extraits du Drive « Formations et programmes » (74 rayons) et de la formation Faros**. **Aucun rayon actif** : les 41 produits vendus n'ont pas été touchés.
+> - **Chaîne d'extraction** : `extract:drive-catalog` lit les `.docx` et écrit un **instantané versionné** (`data/drive-programmes-catalog.json`) ; `import:drive-catalog` l'écrit en base, dry-run par défaut, idempotent, avec rapport dans `.planning/`. Cinq motifs de découpage reconnus (horaire, module numéroté, demi-journée, durée déclarée, liste imbriquée Word) ; **17 programmes restent en bloc unique** et attendent un découpage à la main — ils sont listés dans le rapport, et restent recommandables par leur intitulé.
+> - **Ce que l'import NE fait PAS** : il ne fusionne aucun rayon avec un produit vendu qui lui ressemble (`drive:055` ↔ `PROD-055`, `drive:053` ↔ `PROD-053`, `drive:046` ↔ `PROD-0671`, `drive:074` ↔ `PROD-0662`). Rattacher des modules à un produit ACTIF changerait sa page publique « Programme détaillé », donc l'information préalable remise au client. Les correspondances sont **signalées dans le rapport**, à charge du composeur (I-2) de savoir qu'elles parlent du même métier.
+> - **Traçabilité** : `DiagnosticAlert.questionIds` et `ChapterScore.breakdown[].questionId` (ajouts purs) permettent de remonter de chaque axe recommandé à **la réponse du dirigeant** qui l'a déclenché. Vérifié sur DIAG-0001 : chaque axe servi cite son alerte ET la réponse chiffrée derrière elle.
+> - **Deux règles de moteur ajoutées, dans le prolongement de D-18** : ① les mots-clés sont **pesés par leur pouvoir discriminant** mesuré sur la bibliothèque du moment — « vendeur » touche un module sur cinq et ne suffit plus à badger un rapprochement « forte », « exclusivité » en touche 2 % et vaut plein tarif ; la pondération ne s'applique qu'au-dessus de 30 modules, en dessous elle mesurerait du bruit. ② **deux modules maximum par programme source dans un axe** : sans plafond, un module du catalogue diagnostic portant huit signaux transverses raflait les cinq places de presque chaque axe — l'inverse de ce que D-19 demande.
+> - **Résultat sur DIAG-0001** : 7 programmes sources représentés, dont 2 rayons du Drive, tous conteneurs inactifs, 9 modules pige écartés d'office.
+> - **Arbitrages de Laurent sur le rapport d'import (10/09/2026)** : ① **D-19 bis** — la version vendue fait foi pour les 4 doublons, cf. ci-dessus (59 modules écartés de la reco, bibliothèque utilisable 479 → 420) ; ② **les 17 programmes en bloc unique restent tels quels** — recommandables entiers, ça suffit à I-1, à réexaminer quand le composeur devra piocher dedans ; ③ **le dossier Drive `069` est en cours de vérification** par Laurent (il contient un fichier nommé `068`) — **ne rien y réimporter avant son retour**.
+> - **Reste à I-2** : le composeur par blocs de 8 h, le programme Qualiopi du produit composé, et l'éditeur de proposition branché dessus. L'éditeur lit encore `recommendProgrammes` (niveau produit) — c'est délibéré : le rebrancher sans le composeur laisserait l'écran à mi-chemin.
+
+> **État au 10/09/2026 — lot I-2 livré (le composeur).**
+>
+> - **L'unité est le BLOC** : 1 bloc = 1 demi-journée = 4 h sur site = 8 h conventionnées, tout dérivé des `FundingRule`. Ce qui TIENT dans un bloc se mesure en heures sur site ; ce que le bloc DÉCLARE au financeur se compte en heures conventionnées. Les deux valeurs cohabitent partout, aucune ne s'affiche nue.
+> - **Un axe de proposition = une demi-journée**, pas un thème. Un thème n'a pas de durée : il s'étale sur un bloc et demi, et le dirigeant perd tout moyen de vérifier que le parcours détaillé explique le volume facturé. Le titre reste thématique (il nomme les besoins servis), le décompte devient vérifiable — Σ axes = volume vendu, exactement.
+> - **Le chiffrage suit la COMPOSITION, plus l'enveloppe** (`seedPayers({ halfDaysSold })`). C'était le vrai défaut caché : la proposition facturait les 9 demi-journées que les droits permettaient, alors que 5 seulement étaient justifiées. Facturer l'enveloppe est précisément le « remplir pour remplir » que §8.2 interdit, et c'est ce qu'un contrôle OPCO cherche. Le surplus s'affiche désormais comme arbitrage humain.
+> - **Aucun module n'entre sans justification tracée** : un besoin déclenché qu'aucune réponse ne documente voit ses modules REFUSÉS, et le refus se dit. Un module qu'on ne sait pas expliquer ne passe pas un contrôle.
+> - **Un module ne se programme qu'une fois** — par identifiant ET par intitulé. Constaté sur DIAG-0001 : un module portant huit signaux transverses remontait en tête sur deux besoins et se retrouvait programmé deux fois ; et deux identifiants distincts portent le même titre (« Chatbot mandat » sous deux familles). La place libérée revient au candidat suivant du besoin.
+> - **Le programme Qualiopi ne cite jamais les chiffres du client.** La justification chiffrée (« votre exclusivité est à 25 % ») vit dans la proposition, qui s'adresse au dirigeant ; le programme s'attache à la convention et part au FINANCEUR, il ne porte que le libellé du besoin. Cela suffit à montrer la cohérence besoin ↔ programme ↔ durée sans livrer les ratios commerciaux de l'agence.
+> - **Les objectifs dérivent des modules retenus**, pas des objectifs du programme source : ne retenir qu'un module sur dix et recopier les dix objectifs promettrait neuf choses qu'on n'anime pas. Détection du verbe par **liste blanche** relevée sur le corpus réel — une liste noire aurait le mauvais mode d'échec (du français cassé sur une pièce financeur), la liste blanche produit au pire « Maîtriser « … » », plus lourd mais correct.
+> - **Le produit composé** (`SUR-NNNN`) naît ACTIF et porte `sourceRef = proposal:PROP-NNNN` ; `Proposal.composedProductId` le relie. Il est bâti depuis les axes ENREGISTRÉS, jamais recomposé : le composeur propose, le commercial dispose, et c'est ce qu'il a laissé que le client signe. **Un produit portant déjà des sessions ne se régénère pas** — la convention émise divergerait de sa source.
+> - **Vérifié sur DIAG-0001** (`probe:composition:local`) : 5 demi-journées composées depuis **4 programmes sources**, 40 h conventionnées = 5 × 8, chaque module rattaché à une réponse, **Σ devis = Σ proposition au centime** (6 720,00 €), 4 demi-journées d'enveloppe affichées et non facturées.
+>
+> ⚠ **Ce que la composition a mis au jour, et qui est une décision de CATALOGUE.** Le programme composé sur DIAG-0001 **n'est pas remettable en l'état** : les huit modules retenus viennent du catalogue diagnostic, qui porte des signaux et des questions de rendez-vous — **aucun déroulé pédagogique** (l'import du lot A a rangé `needIdentification` dans `contentMd`, faute de contenu dans la source). Le générateur refuse de les imprimer : un financeur qui lit « à quelle fréquence les vendeurs reçoivent-ils un compte rendu ? » y verrait un rendez-vous commercial, pas une formation. Il laisse la place vide et le DIT — dans l'éditeur, pas seulement dans un log.
+>
+> Deux leviers pour Laurent, à trancher : ① écrire les déroulés des modules diag les plus utilisés ; ② **attacher les signaux diagnostic aux modules du Drive**, qui ont du contenu — ainsi le meilleur rapprochement et le meilleur déroulé cesseraient d'être portés par deux modules différents. ② est le fond du sujet, et c'est le prolongement naturel de D-19.
 
 ---
 
@@ -485,6 +740,41 @@ Parcours : le commercial mène son R1 en conversation libre (enregistré, ex. Pl
 
 Garde-fous : transcript jamais dans un lien public, jamais dans le rapport client ; purge du `transcriptText` à J+90 (paramètre RGPD, aligné phase 22) ; l'extraction passe par le rate-limit et le monitoring IA existants ; job visible avec statut (pattern `AIGenerationJob`).
 
+**Tranché à la construction du lot C (10/09/2026) — ces points ne se renégocient plus :**
+
+1. **La citation fait foi, et son absence fait rejeter.** Une réponse dont le `quote` ne se retrouve pas dans le transcript (comparaison insensible à la casse, aux accents, à la ponctuation et aux retours à la ligne — mais pas à un mot changé) est ÉCARTÉE, pas rétrogradée en « confiance faible ». Motif : une citation inventée mais crédible est exactement ce qu'une relecture rapide ne rattrape pas — le relecteur la lit, elle sonne juste, il confirme. Le prompt l'interdit, `normalize.ts` le vérifie ; un prompt n'est pas un garde-fou.
+2. **Une extraction non confirmée compte dans la PROGRESSION, jamais dans un CHIFFRE.** Le champ est rempli à l'écran : prétendre le contraire serait faux. Mais synthèse financement, pipeline, snapshot, rapport d'audit et proposition lisent tous par `REPONSES_CONFIRMEES`. Le constat qui l'impose : avant le lot C, **personne ne lisait `confirmedAt`** — les six lecteurs auraient imprimé du non-relu. Un test de contrat lit désormais le code source pour qu'un septième lecteur ait à choisir explicitement.
+3. **Reprendre la main vaut confirmation.** Modifier une valeur extraite dans son chapitre la repasse en `origin=COMMERCIAL`, confirmée, `aiConfidence`/`aiQuote` effacées : il n'existe pas d'état « corrigée mais toujours douteuse ».
+4. **Rétention : 90 jours après la dernière preuve d'usage**, c'est-à-dire le plus récent de `meetingAt`, `prefillAt` et `createdAt` — et non la seule date de rendez-vous. Sinon un enregistrement qui a dormi trois mois dans un Plaud serait purgé la nuit de son dépôt. La purge efface le TEXTE seul ; les réponses confirmées survivent, ainsi que `prefillAt`/`prefillModel` (traçabilité Qualiopi, pas donnée personnelle). Greffée sur le worker quotidien, à côté de la purge des traces d'envoi.
+5. **Le mode se déduit, on ne le demande pas** : un questionnaire déjà entamé au clavier passe en `HYBRIDE`, un questionnaire vierge en `TRANSCRIPT`.
+6. **Aucune migration** : le lot A avait déjà posé `transcriptText`, `transcriptSource`, `prefillModel`, `prefillAt`, `AnswerOrigin.IA_TRANSCRIPT`, `aiConfidence`, `aiQuote`, `confirmedAt`, `confirmedById`.
+7. **L'échafaudage de diarisation n'est pas de la parole.** Le contrôle d'ancrage compare la citation au transcript **dépouillé** de ce qu'a écrit la machine qui a transcrit — horodatage suivi d'un libellé court de locuteur, cues WebVTT, « Speaker 3 : » en tête de ligne. Sans ça, toute citation enjambant un changement de tour est rejetée, ce qui condamne le format même que la fonctionnalité vise. La parole, elle, reste intouchée : un mot changé reste un rejet. Ligne rouge : une ligne qui commence par une heure mais poursuit en phrase est de la parole, pas un en-tête.
+
+**Première mesure sur un transcript réel — 11/09/2026, transcript Optimmo du 11/08 :**
+
+**19 % de pré-remplissage (7/37 du set léger)**, 7 réponses retenues sur 7 exactes, une seule écartée. Ce que la répartition par chapitre raconte :
+
+| Chapitre | Retenues |
+|---|---|
+| 1 · Identité | 1/5 |
+| 2 · Équipe & financement | 4/7 |
+| **3 à 8 · Prospection, RDV vendeur, mandats, suivi, acquéreurs, visites & offres** | **0/17** |
+| 9 · Base de données & e-réputation | 1/3 |
+| 10 · Outils & IA | 1/2 |
+| 11 · Management & vision | 0/3 |
+
+**Les chapitres 3 à 8 sont absents parce que le rendez-vous n'est pas un R1 de diagnostic : c'est l'entretien commercial qui l'accompagne** — le cas OPTIMO de l'annexe A. On y parle d'automatiser la location, du recouvrement, des sinistres et du budget OPCO ; jamais de prospection, de mandats, de visites ni d'offres. Le taux mesure donc ce que la conversation contenait, pas ce que l'extracteur sait faire. Sur les seuls chapitres réellement abordés, il est de **41 %**.
+
+Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui alimente le moteur budget, donc la moitié utile du R2 — est le mieux servi (4/7) ; et **la confiance est calibrée sans complaisance** (50 % sur un effectif qu'il a fallu reconstituer d'une énumération, 90 % sur un chiffre donné en clair).
+
+**Ce que cette mesure a corrigé dans le moteur** : avant `1d7a55e`, le taux tombait à **3 %** — sept propositions sur huit écartées pour « citation absente », alors que le modèle n'avait rien inventé. Dans un transcript diarisé, le dirigeant répond au tour de parole SUIVANT la question ; le modèle cite les deux ensemble, fidèlement, mais le texte source intercale `00:17:19 Speaker 3` entre les deux. Le garde-fou mordait la main du modèle honnête, sur le format même que la fonctionnalité vise. Cf. point 7 ci-dessus.
+
+**Reste ouvert après le lot C :**
+
+- **Le seuil de 0,7 n'est pas encore réglable par tenant.** Il est un paramètre de `trierParException`, pas un champ de `TenantEmailSettings` : le rendre configurable demande une migration, à faire quand deux R1 réels auront dit si 0,7 est le bon nombre.
+- **Le registre des traitements connaît désormais le transcript** — `docs/rgpd/REGISTRE-TRAITEMENTS.md` v1.7, **Traitement 11**, amendé le 11/09/2026. Restent à contresigner par le responsable de traitement : la durée de 90 jours, la base d'intérêt légitime retenue pour les collaborateurs cités, et la **limite de l'art. 14** (point 5 des limites connues) — ces collaborateurs ne sont pas informés, et ne peuvent pas l'être individuellement tant qu'ils ne sont pas inscrits à une formation.
+- **L'import direct Plaud reste au lot H**, comme prévu : v1 = collage et dépôt de fichier (`.txt`, `.md`, `.vtt`, `.srt`).
+
 ---
 
 ## 7. Le lien de pré-inscription par RDV (`EnrollmentBatch`)
@@ -493,15 +783,22 @@ Garde-fous : transcript jamais dans un lien public, jamais dans le rapport clien
 
 ### 7.1 Parcours
 
-1. Depuis le diagnostic (ou la proposition), le commercial crée une **campagne de RDV** : libellé, produit pressenti, 2-3 **dates prévisionnelles** (`BatchDateOption`), expiration (défaut : date du R2 + 30 j). Un seul lien multi-usages est généré (token affiché une seule fois, doctrine §3 du repo diag).
+1. Depuis le diagnostic (bouton « Organiser les pré-inscriptions ») ou depuis la liste des campagnes, le commercial crée une **campagne de RDV** : **agence (obligatoire — D-22)**, libellé, produit pressenti, 2-3 **dates prévisionnelles** (`BatchDateOption`), expiration (défaut : date du R2 + 30 j). Un seul lien multi-usages est généré (token affiché une seule fois, doctrine §3 du repo diag).
+   - **Le rattachement est l'agence, et elle seule (D-22).** Ouverte depuis un diagnostic, l'agence est reprise de lui et verrouillée, le lead suit en contexte, et le libellé se pré-remplit (agence + date du RDV). Ouverte depuis la liste, l'agence se choisit dans le CRM et le diagnostic reste vide — c'est le cas du **client récurrent reformé sans nouveau R1**. Une campagne sans aucun client n'existe plus.
+   - **Les dates se saisissent en demi-journées (D-23)**, l'unité de vente de §8.1. Trois préréglages : Matin, Après-midi, Journée (= 2 demi-journées, et c'est écrit). Chaque date affiche ses demi-journées, ses heures sur site et ses heures conventionnées — le même nombre que la proposition, la convention, l'émargement et le dossier financeur.
 2. Le dirigeant diffuse le lien à son équipe (ou Start Academy l'envoie — email catégorie « Lien de pré-inscription », fail-closed).
-3. Chaque participant ouvre le lien → page publique `/rdv/[token]` : identité + statut (agent co / salarié / dirigeant) + choix de date préférée + dépôt des pièces (CNI recto/verso, RIB, attestation CFP pour les TNS — **exactement le formulaire `PreEnrollment` existant**, pré-configuré par la campagne). Chaque soumission crée un `PreEnrollment(batchId=…)` qui entre dans le pipeline existant : OCR, extraction, **validation admin** (bon / pas bon / motif de rejet / relance) — rien de nouveau à construire ici.
+3. Chaque participant ouvre le lien → page publique `/rdv/[token]`. **Précision de Laurent du 10/09/2026, qui remplace la formulation initiale : cette page NE PORTE PAS de formulaire. Elle DISTRIBUE des liens individuels.** Le participant y donne son identité minimale (prénom, nom, email) et son choix de date ; on lui remet alors SON lien `/preinscription/[token]`, et c'est ce lien-là qui porte le formulaire complet (statut, pièces CNI recto/verso, RIB, attestation CFP pour les TNS). **Motif** : tout le pipeline existant — OCR, extraction, validation admin, motif de rejet, relances des dossiers non rendus — est accroché à une pré-inscription INDIVIDUELLE. Un formulaire porté par le lien partagé aurait obligé à recréer chacune de ces briques à côté des premières, soit exactement le second pipeline que §13 interdit. Chaque demande crée un `PreEnrollment(batchId=…)` qui entre dans le pipeline existant — rien de nouveau à construire.
+   - **Idempotence sur l'email** : rouvrir le lien avec la même adresse rend le MÊME lien individuel, jamais un second. C'est ce qui permet de reprendre son dossier depuis son téléphone après l'avoir commencé sur son poste, et ça évite les doublons que l'admin devrait démêler.
 4. Le commercial et l'admin voient l'avancement AGRÉGÉ sur la fiche campagne : X pré-inscrits / Y attendus, pièces complètes / incomplètes / rejetées, votes par date. C'est l'écran « ce qui est bon ou pas bon ».
 5. À l'acceptation de la proposition (lot G) : la date retenue devient la (les) `TrainingSession`, les PreEnrollments validés sont convertis (Person/Org/LegalLink/participants) par le flux de conversion existant.
 
 ### 7.2 Règles
 
+- L'écran de campagne affiche en tête **l'agence, la formation et la date limite de dépôt** — les trois faits qui gouvernent le dossier. La liste affiche l'agence en première colonne.
 - Un participant ne voit JAMAIS le diagnostic, la proposition ou les autres participants — il ne voit que SON formulaire (doctrine « le client ne fait jamais son diagnostic », étendue : il ne voit pas non plus le chiffrage des autres).
+- **Aucun nombre d'heures ne s'affiche sans dire lequel il est** (D-25) : « 36 h sur site · 72 h conventionnées », jamais « 36 h ».
+- **Les compteurs sont exclusifs et totalisants** (D-24) : Non rendu · Pièces manquantes · Rejeté · Bon, somme = effectif attendu.
+- **Les dates s'écrivent en minuscules** — « jeudi 8 octobre 2026 ». Le formatage vient de `lib/dates-fr.ts`, jamais d'une classe CSS `capitalize`, qui majuscule chaque mot.
 - La deadline administrative est calculée et AFFICHÉE : `date de session la plus proche − AGEFICE_LEAD_DAYS_MIN (15 j)` — « pièces réunies au plus tard le … » (c'est déjà l'argument de la proposition OPTIMO réelle).
 - Compteur `usedCount`/`maxUses`, révocation (`status=ANNULEE`), pas de PII dans les URL, `Cache-Control: no-store`.
 - La campagne alimente la relance admin existante des `PreEnrollment` PENDING_FORM (lastReminderSentAt/reminderCount) — pas de second système de relance.
@@ -524,6 +821,36 @@ Garde-fous : transcript jamais dans un lien public, jamais dans le rapport clien
 Le moteur propose le **nombre de demi-journées** qui consomme le budget mobilisable — c'est le renversement commercial clé : on ne vend pas un prix, on dimensionne une formation à la hauteur des droits disponibles.
 
 Exemple canonique (validé par Laurent) : 4 agents commerciaux avec production N-1 > 7 000 € → 4 × 3 024 € (72 h conventionnées × 42 €) = **12 096 € de volume visé** → 12 096 / 336 = **36 demi-journées-participant** → le groupe de 4 avançant ensemble : **9 demi-journées de groupe**, prise en charge ≈ 100 %.
+
+> ### Observation du 11/09/2026 — enrichir le catalogue augmente le volume VENDU, à droits constants
+>
+> Constatée en écrivant trois modules réels au catalogue, sur DIAG-0001 : le
+> parcours composé est passé de **5 demi-journées à 6**, de 40 h à 48 h, et de
+> **6 720 € à 8 064 € HT**.
+>
+> **Ce n'est pas une dérive, c'est l'effet recherché — et le garde-fou §8.2 tient
+> toujours.** Le mécanisme : les modules retenus jusque-là étaient des étiquettes
+> du catalogue diagnostic, sans déroulé, qui occupaient 60 à 90 min. Les modules
+> réels qui les remplacent portent 120 à 240 min de contenu animable. **Le même
+> point de douleur justifie donc plus d'heures**, parce qu'il y a enfin de quoi
+> les remplir.
+>
+> Ce que §8.2 interdit reste interdit : **ajouter un module sans point de douleur
+> derrière**. Ici, aucun module n'a été ajouté sans justification — c'est le
+> contenu par douleur qui s'est étoffé.
+>
+> **À droits constants.** DIAG-0001 mobilise 12 096 € de droits ; 8 064 € reste
+> dessous. **Le reste à charge du dirigeant ne bouge pas**, et le client reçoit
+> une demi-journée de formation en plus. C'est exactement le renversement que
+> §8.2 décrit — on ne vend pas un prix, on convertit un budget — appliqué à la
+> profondeur du catalogue plutôt qu'au nombre d'agents.
+>
+> **La conséquence à connaître pour la suite** : chaque fois que Laurent écrira
+> un déroulé manquant, le volume justifié des dossiers concernés montera.
+> Tant que le total reste sous les droits mobilisables, c'est une bonne
+> nouvelle commerciale ; **le jour où il les dépasse, ce n'est plus une
+> conséquence automatique mais un arbitrage** — le surplus s'affiche déjà comme
+> tel, et il se présente au dirigeant.
 
 ⚠ **Nuance moteur (D-8)** : 72 h × 42 € = 3 024 € dépasse de 24 € le **plafond AGEFICE de 3 000 €/an** (vérifié le 01/09/2026). Le moteur retient toujours `min(heures × taux, plafond)` = 3 000 €/agent — l'écart (96 € pour 4 agents) apparaît explicitement en reste à charge, que le commercial facture, arrondit en réduisant le volume, ou offre (traçé comme remise). **Jamais un montant de prise en charge affiché au-dessus du plafond** — c'est exactement la « mention trompeuse de financement » que le référentiel Qualiopi 33 indicateurs sanctionne (leçon déjà payée sur l'email du stand MLS).
 
@@ -716,12 +1043,12 @@ En lot H : la couche `CoachBrainContext` du repo diag est posée telle quelle (c
 |---|---|---|---|
 | **A — Socle** | Modèles Prisma (§4) + seeds FundingRule + port questions/chapitres/light-set + tests de contrat référentiel + import catalogue (§5.3, avec M0→M6) | Aucune (après le 10/09) | M |
 | **B — Saisie R1** | Écrans diagnostic (léger/complet, page-par-chapitre, autosave, grille équipe, reprise) + synthèses financement & pipeline en direct (fonctions pures §8) | A | L |
-| **C — Transcript** | Collage/upload + job d'extraction + revue par exception | A, B | M |
+| **C — Transcript** | Collage/upload + job d'extraction + revue par exception. **Fini quand** : zéro réponse fausse parmi les retenues, ancrage de citation tenant sur le format diarisé comme sur la reformulation, et rien de non confirmé dans un document client. Le **taux** de pré-remplissage se constate et ne bloque pas (§14). | A, B | M |
 | **D — Audit** | Moteur ratios/alertes + rapport d'audit (PDF + écran) + DocType + fingerprint | A, B | M |
 | **E — Proposition** | Éditeur (modules, lignes par payeur, remise/OFFERT avec validation > 15 %), génération IA relue, PDF + lien public, envoi email, génération devis, fingerprint. **Rendu : réutilise le socle de compatibilité WeasyPrint de §9.5** — pas une seconde transposition à la main. Maquette `2026-09-01-maquette-proposition.html` = référence exacte. **Fini quand** : une proposition réelle générée depuis DIAG-0001, PDF **relu page par page**, Σ devis = Σ proposition **au centime**, heures conventionnées identiques partout, trois gates vertes. | A, B, D (utilisable sans C) | XL |
 | **F — Campagne RDV** | EnrollmentBatch + dates + page publique `/rdv/[token]` + écran d'avancement (réemploi PreEnrollment) + alertes A-1/A-2/A-3 (§11.1 — A-1/A-2 anticipables en `/quick`) **+ le bouton « Envoyer la proposition par email » (D-21)** : c'est ici que le mailer est déjà ouvert, donc ici que la catégorie fail-closed se pose, plutôt que dans un lot à part | A (parallèle à D/E) | M |
 | **G — Acceptation → session** | Acceptation de proposition → sessions sur la date retenue + **SessionPricing** (forfait entreprise ferme / lignes indés) + conversion pré-inscrits + conventions | E, F, **phase 23 SessionPricing livrée** | L |
-| **I — Composition** | **Refonte D-19/D-20 : le catalogue devient une bibliothèque de modules.** **I-1** : `TrainingModule` promu au rang d'unité recommandable (index par signal, rattachement multi-produits), `TrainingProduct` composé généré, **et la lecture des modules affranchie de l'`isActive` du conteneur** (corollaire D-19 du 10/09 : les conteneurs importés ne sont jamais activés, c'est le produit composé qui porte l'état vendable — test : reco jouée avec tous les conteneurs inactifs, elle doit encore proposer des modules) ; ② import de la formation Faros et du Drive « Formations et programmes » (008 → 074) dans la bibliothèque ; ③ moteur de recommandation au niveau MODULE (module ↔ signal ↔ réponse, traçable) ; ④ composeur de programme par blocs de 8 h avec justification obligatoire par point de douleur et arbitrage humain affiché sur le surplus d'enveloppe ; ⑤ génération du programme Qualiopi du produit composé (objectifs, durées, prérequis) ; ⑥ éditeur de proposition branché sur la composition. **Ligne rouge** : diagnostic et modules uniquement — aucun produit portant sessions ou conventions signées n'est retouché. **Fini quand** : une proposition réelle compose un programme sur mesure depuis ≥ 2 programmes sources, chaque module y est justifié par une réponse du diagnostic, le volume tombe en multiple de 8 h, et le programme Qualiopi généré est relu par Laurent. | A, D, E | **XL** |
+| **I — Composition** | **Refonte D-19/D-20 : le catalogue devient une bibliothèque de modules.** **I-1 et I-2 — ✅ livrés le 10/09/2026** (cf. bilans §5.3) : `TrainingModule` promu au rang d'unité recommandable (index par signal, rattachement multi-produits), `TrainingProduct` composé généré, **et la lecture des modules affranchie de l'`isActive` du conteneur** (corollaire D-19 du 10/09 : les conteneurs importés ne sont jamais activés, c'est le produit composé qui porte l'état vendable — test : reco jouée avec tous les conteneurs inactifs, elle doit encore proposer des modules) ; ② import de la formation Faros et du Drive « Formations et programmes » (008 → 074) dans la bibliothèque ; ③ moteur de recommandation au niveau MODULE (module ↔ signal ↔ réponse, traçable) ; ④ composeur de programme par blocs de 8 h avec justification obligatoire par point de douleur et arbitrage humain affiché sur le surplus d'enveloppe ; ⑤ génération du programme Qualiopi du produit composé (objectifs, durées, prérequis) ; ⑥ éditeur de proposition branché sur la composition. **Ligne rouge** : diagnostic et modules uniquement — aucun produit portant sessions ou conventions signées n'est retouché. **Fini quand** : une proposition réelle compose un programme sur mesure depuis ≥ 2 programmes sources, chaque module y est justifié par une réponse du diagnostic, le volume tombe en multiple de 8 h, et le programme Qualiopi généré est relu par Laurent. | A, D, E | **XL** |
 | **H — Suite** | Relances auto (J+1 lead sans proposition · proposition envoyée non vue J+3 · vue sans réponse J+7 · date limite J-5 — pattern stand MLS, cron + fail-closed) · import Plaud · Coach Brain branché · pack communication dirigeant · lien formateur · signature électronique | G + arbitrages Laurent | L |
 
 Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'eau. Le lot **I (composition, D-19/D-20)** se prend **après F**, et se chiffre à part : il touche le modèle du catalogue, le moteur de recommandation et l'éditeur de proposition — le mener dans la foulée d'un autre lot mélangerait deux refontes. La valeur tombe dès B (le R1 outillé) et devient décisive à E (la proposition qui signe).
@@ -730,7 +1057,9 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 
 - [ ] Un diagnostic LÉGER se fait en < 30 min au clavier, sans blocage réseau visible, et s'upgrade en COMPLET sans re-saisie.
 - [ ] La synthèse financement s'affiche < 1 s après la grille équipe, avec l'exemple canonique : 4 indés > 7 k€ → 36 demi-journées cumulées / 9 demi-journées de groupe / prise en charge 12 000 € (plafond) / écart de 96 € traité selon D-8.
-- [ ] Un transcript collé pré-remplit ≥ 60 % des questions du set avec justification (`quote`), et AUCUNE réponse pré-remplie non confirmée ne sort dans un document client.
+- [x] **Lot C — BLOQUANT, atteint le 11/09/2026** : ① **zéro réponse fausse** parmi les retenues — 7 sur 7 exactes sur le transcript Optimmo du 11/08, mesuré le 11/09 ; ② **l'ancrage de citation tient sur le format diarisé** (corrigé en `1d7a55e` : `depouillerTranscript` retire horodatages, libellés de locuteur et cues WebVTT, jamais la parole) **comme sur la reformulation** — « l'on ne s'en sert pas » cité « l'on ne se sert pas » reste rejeté, et un test de mutation le prouve ; ③ AUCUNE réponse pré-remplie non confirmée ne sort dans un document client (`REPONSES_CONFIRMEES` + test de contrat sur le code source).
+- [ ] **Lot C — CONSTATÉ, non bloquant** : le taux de pré-remplissage **mesure la conversation, pas le moteur**. Il se constate, il ne barre rien. Relevé du 11/09/2026 sur le transcript Optimmo : **19 % (7/37)** sur le set léger, **41 % sur les seuls chapitres abordés** (1 · Identité, 2 · Équipe & financement, 9 · Base & e-réputation, 10 · Outils & IA). Décision de Laurent du 11/09 : ce seuil ne conditionne plus la livraison du lot.
+- [ ] **Lot C — À REMESURER** sur le premier vrai R1 mené avec la trame, sans que le résultat bloque quoi que ce soit. C'est cette mesure-là qui dira ce que le mode transcript fait gagner ; celle du 11/09 dit seulement ce qu'un entretien commercial contient.
 - [ ] Rapport d'audit conforme à la maquette v2 : **≥ 15 pages**, restitution chapitre par chapitre des réponses, score global + scores par chapitre, page équipe alimentée par les fiches (objectifs + préconisations individuelles), enjeux chiffrés en €, valeur 3 000 € en couverture ; proposition conforme à sa maquette ; PDF via la chaîne existante.
 - [ ] La recommandation de programme propose au moins un programme MÉTIER pour chaque priorité métier détectée (test sur fixtures : exclusivité faible → 055/058 proposés, jamais un module IA seul).
 - [ ] Σ devis = Σ proposition ; heures conventionnées identiques proposition/convention/émargement (tests de contrat).
@@ -747,9 +1076,20 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | **D-11** | Arrondi du dimensionnement : les droits d'un agent financent 8,93 demi-journées — on arrondit comment ? | **À la demi-journée SUPÉRIEURE.** Aucun droit ne se perd : mieux vaut un dépassement visible qu'une enveloppe entamée pour rien. L'écart créé par l'arrondi apparaît en reste à charge. **Dans l'éditeur de proposition (lot E), un bouton propose de l'offrir en un clic, motif pré-rempli « arrondi de parcours »** — la remise reste tracée comme toutes les autres. | 02/09/2026 |
 | **D-12** | L'enjeu en € affiché sur un maillon faible : le calcul complet donne des montants énormes (480 000 € sur une agence à 720 000 €). Que met-on en avant ? | **La MOITIÉ du chemin vers le repère**, et uniquement tant qu'elle reste **sous 25 % du CA N-1**. Au-delà, aucun montant : on affiche le ratio et « **potentiel majeur — à chiffrer ensemble** ». Le calcul complet reste consultable dans le détail. Motif : un chiffre qu'on ne peut pas tenir en rendez-vous détruit la crédibilité de tout le reste de l'audit. | 02/09/2026 |
 
-| **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. **Corollaire du 10/09 : on n'active JAMAIS les conteneurs importés** — la reco et le composeur lisent les modules quel que soit l'`isActive` du conteneur, et c'est le produit composé qui porte l'état vendable. À traiter en I-1, cf. §5.3. | 04/09/2026 |
+| **D-19** | Les programmes métier de Laurent « manquaient » au catalogue QualiOF. Fallait-il les y créer un par un ? | **Non — ils n'y sont pas parce qu'un programme SE COMPOSE.** Le catalogue est une **bibliothèque de modules**, pas une liste de produits figés : on assemble des modules venant de plusieurs programmes selon le point de douleur de l'agence. La reco recommande donc des MODULES (module ↔ signal ↔ réponse, traçable), la proposition compose le programme sur mesure, et ce programme composé devient le produit vendu à ce client. **Remplace le mapping « signal → programme vendu »** : c'est la vraie réponse aux signaux coincés sur PROD-0675..0680. Cf. §5.3. **Corollaire du 10/09 : on n'active JAMAIS les conteneurs importés** — la reco et le composeur lisent les modules quel que soit l'`isActive` du conteneur, et c'est le produit composé qui porte l'état vendable. **Appliqué en I-1 le 10/09/2026** : `recommendModules` ne filtre nulle part sur `source.isActive`, et deux tests tiennent la règle — l'un joue la reco avec TOUS les conteneurs inactifs, l'autre vérifie que les activer ne change strictement rien au résultat. Cf. §5.3. | 04/09/2026 |
+| **D-19 bis** | Quatre rayons importés du Drive portent le même programme qu'un produit déjà vendu (`drive:055`↔`PROD-055`, `drive:053`↔`PROD-053`, `drive:046`↔`PROD-0671`, `drive:074`↔`PROD-0662`). Lequel fait foi ? | **La version VENDUE.** Le produit vendu ne bouge pas — ni sa durée, ni sa page publique « Programme détaillé », qui EST l'information préalable remise au client ; la modifier après coup crée un écart annoncé/réalisé, donc une réserve Qualiopi. C'est le RAYON qui s'efface : il reste consultable, mais **ses modules sortent du chemin de composition**. Motif : deux versions du même programme dans la bibliothèque, c'est l'occasion d'en vendre une et d'en animer une autre. **Détection** : égalité de nom normalisée, à l'import uniquement, contre les seuls produits **vendus** (non importés ET actifs) ; le lien est **persisté** dans `TrainingProduct.supersededByProductId` et **jamais recalculé ni retiré** par un import — c'est ce qui empêche un dossier Drive renommé de réintroduire le doublon. Le moteur filtre en plus, et le dit en notice. **À ne pas confondre avec `isActive`** : inactif = la norme (81 rayons sur 81), écarté = doublon (4). **Conséquence assumée** : ces quatre produits ne portant aucun module, ils deviennent invisibles à la reco au niveau module — cf. §5.3. | 10/09/2026 |
+| **D-19 ter** | « L'Agent Incomparable » (`PROD-0681`), parcours v0.9 dont le manifeste porte « NE PAS DIFFUSER AUX APPRENANTS », était proposé en tête de deux douleurs sur la liste de rattachement du 11/09. Pourquoi le filtre ne l'a-t-il pas arrêté ? | **Parce que l'interdiction n'était nulle part dans la donnée** — elle vivait dans un manifeste et dans une phrase de `programMd`. Le seul champ qui en portait la trace, `isActive`, est précisément celui sur lequel le corollaire D-19 interdit de filtrer (81 rayons sur 81 sont inactifs). **Règle** : `TrainingProduct.excludedFromClientOutputs`, même sens et même nom que la pige sur `TrainingModule`, posé un cran au-dessus — l'interdiction porte sur le PROGRAMME, donc sur tous ses modules, **y compris ceux qu'on lui ajouterait demain**. Posée par l'import (création ET réparation), tenue par `recommendModules` qui écarte et le DIT en notice. **Trois notions, trois champs** : inactif = la norme (81), écarté = doublon (4), non diffusable = interdiction (1). Quatre tests, dont un qui vérifie qu'un rayon simplement inactif n'est PAS écarté. | 11/09/2026 |
+| **D-19 bis (suite)** | D-19 bis tranche un rayon contre un produit VENDU. Entre **deux rayons**, elle est muette : rien ne les départage. `drive:008` « Face à face acheteurs » et `drive:020` « Face a face acheteurs » sont le même programme sous deux numéros. | **C'est Laurent qui désigne, et la décision est déclarée dans le code** (`RAYONS_TRANCHES`), datée et motivée — jamais passée à la main sur une base, sinon elle est perdue à la prochaine. **Arbitrage du 11/09** : garder `BIB-D008`, écarter `BIB-D020` ; motif — **008 est le numéro de ce programme dans la numérotation catalogue de Laurent** (008 → 074), 020 est une copie rangée sous un autre numéro. Le lien se pose dans le même champ que D-19 bis, donc il **n'est jamais recalculé** : un prochain import du Drive ne peut pas réintroduire le doublon. Le rayon écarté **reste en base et consultable**, et le rapport le **dit** — un doublon réglé par une décision doit rester lisible, sinon quelqu'un la reprendra depuis zéro. Refus de sécurité si le rayon gardé est introuvable. | 11/09/2026 |
 | **D-20** | Le total d'un programme composé se déduit-il de la somme des durées de ses modules ? | **Non — l'unité de vente est le bloc de 8 h** (4 h sur site × 2 formateurs, cohérent avec 336 €/participant/demi-journée). Un programme composé est un multiple de ce bloc ; les durées de modules servent uniquement à savoir ce qui TIENT dans un bloc. Clôt le sujet des 16 modules à 1 h (D-17) : le défaut ne pilote plus aucun montant vendu. **Ligne rouge** : diagnostic et modules uniquement — interdiction de retoucher la durée d'un produit portant sessions ou conventions signées (journées Faros), sinon les documents émis ne correspondent plus. | 04/09/2026 |
 | **D-21** | La proposition doit-elle partir par email, et si oui automatiquement ? | **Elle se PRÉSENTE en rendez-vous — c'est là qu'elle se vend.** Mais le commercial doit pouvoir l'envoyer : bouton **« Envoyer par email », déclenché par lui, jamais automatique**. Trois garde-fous : ① une **catégorie d'email décochable de plus** dans `TenantEmailSettings`, fail-closed comme les autres (sans la case, rien ne part) ; ② on envoie le **lien de lecture public**, jamais une fiche nominative en pièce jointe — le lien porte déjà la règle « sans PII » du lot E ; ③ l'envoi est tracé comme une remise via `markProposalSent`, donc un envoi et une remise en main propre laissent la même trace et le statut ne ment pas. Livré **dans le lot F**, où le mailer est déjà touché. Les relances AUTOMATIQUES restent au **lot H** — ce sont deux sujets, et les mélanger ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer. | 10/09/2026 |
+| **D-22** | Une campagne de pré-inscription doit-elle porter un client, et lequel ? | **Elle porte TOUJOURS une agence — `organizationId` non-null sur `EnrollmentBatch`.** `diagnosticId` et `leadId` restent facultatifs, en contexte supplémentaire, jamais comme alternatives. **Motif** : un rattachement unique et obligatoire évite d'avoir à deviner, dans chaque écran et à la conversion des pré-inscriptions, lequel de trois liens facultatifs a été renseigné. Deux chemins de création, une seule règle : depuis la fiche diagnostic (bouton « Organiser les pré-inscriptions » — l'agence, le lead et le libellé se pré-remplissent), ou depuis la liste en choisissant l'agence dans le CRM, ce qui couvre le **client récurrent reformé sans nouveau R1** — l'interdire pousserait à saisir un faux diagnostic. **La création sans aucun client disparaît.** Aucune reprise de données : la fonctionnalité n'a jamais tourné en production. | 10/09/2026 |
+| **D-23** | Un créneau de campagne se saisit-il en journées ou en demi-journées ? | **En demi-journées — c'est l'unité de vente (§8.1), et l'écran doit la dire.** Le défaut passe de 09:00–17:00 (une journée pleine, muette sur ce qu'elle vaut) à une demi-journée le matin, avec trois préréglages Matin / Après-midi / **Journée (2 × 4 h)**. Chaque date annonce en clair ses demi-journées, ses heures sur site et ses **heures conventionnées** — dérivées de `conventionedHoursPerHalfDay`, le helper qu'utilise déjà le chiffrage, jamais d'une seconde formule (ligne rouge §8.1). Le participant lit le même horaire et le même décompte sur `/rdv/[token]` : il ne pouvait pas, avant, distinguer une matinée d'une journée. Arrondi : durée du créneau ÷ durée d'une demi-journée, **au plus proche avec plancher à 1** — une journée réelle de 09:00 à 18:00 vaut 2 demi-journées et non 3, la pause déjeuner ne se facturant pas. **Les heures s'affichent en `Europe/Paris`, jamais dans le fuseau du serveur** : l'aperçu rendu en UTC annonçait « 07:00 – 11:00 » un créneau de 09:00, écart invisible depuis un poste français. | 10/09/2026 |
+| **D-24** | Les compteurs de la fiche campagne : cinq axes, ou quatre cases ? | **Quatre tuiles EXCLUSIVES et TOTALISANTES**, dans l'ordre du parcours : **Non rendu · Pièces manquantes · Rejeté · Bon**, dont la somme vaut l'effectif attendu. L'aperçu en affichait cinq dont le total faisait 5 pour 4 dossiers : « en cours de vérification » disait un STATUT, « pièces manquantes » une COMPLÉTUDE, et un même dossier tombait dans les deux. Arbitrages qui en découlent : un dossier **en vérification ET incomplet** compte comme « pièces manquantes » (la seule information actionnable) ; un dossier **rendu, complet, pas encore validé** compte comme « bon » — rien ne bloque — et le nombre de non-tranchés se dit en **sous-libellé, jamais en tuile** ; une **validation admin l'emporte** sur le contrôle automatique des pièces ; les **attendus qui n'ont pas ouvert le lien** comptent comme non rendus, sinon la somme ne vaudrait que le nombre de dossiers ouverts. Les compteurs s'accordent alors exactement avec « ce qui bloque » : une ligne de relance par dossier non bon, jamais deux. | 10/09/2026 |
+| **D-25** | Que compte `TrainingProduct.durationHours` — heures sur site ou heures conventionnées ? | **Heures CONVENTIONNÉES.** Preuve dans le catalogue réel : les journées Faros (FRM-0004..0007) valent 336 € HT — une demi-journée au tarif §8.1 — pour `durationHours = 8`. Et ce champ alimente `convention-template.ts` et `agefice-attendance-generator.ts`, donc la convention et le dossier financeur : c'est bien la valeur unique de la règle gravée n°2. **Conséquence d'écran** : aucun nombre d'heures ne s'affiche sans dire lequel il est. La page publique montrait « 36 h » nu sous le nom de la formation, juste au-dessus de dates qui, elles, distinguaient « h sur site » et « h conventionnées » ; elle affiche désormais les deux, dérivées par `decrireDureeProduit`. Un parcours de 9 demi-journées porte donc **72 h conventionnées / 36 h sur site**, le nombre même que verrouille le test de contrat de la proposition. **Précision de Laurent du 10/09/2026** : le facteur ×2 est une règle de **TARIFICATION** — il dit ce que vaut une demi-journée co-animée, pas ce que la convention doit raconter. **La convention n'a pas à nommer deux formateurs.** | 10/09/2026 |
+| **D-25 bis** | Conséquence directe de D-25, à lire avec elle | Ce même facteur de tarification fixe le **nombre d'heures déclaré au financeur** — 8 h pour 4 h sur site — et ce nombre-là **s'imprime sur la convention et sur l'attestation d'assiduité**. Autrement dit : on ne nomme pas deux formateurs, mais on déclare leurs heures. C'est exactement ce que **D-6** doit trancher, et sa question est désormais écrite en toutes lettres dans le tableau des décisions restantes. Tant que la réponse n'est pas là, le paramètre `TRAINER_COUNT_DEFAULT` reste actif et la valeur qu'il produit est la seule qui circule — aucun écran, aucun document n'en fabrique une deuxième. | 10/09/2026 |
+| **D-26** | Le nombre de formateurs est-il toujours de deux ? | **Non — Laurent anime rarement, mais parfois SEUL.** Deux formateurs restent le défaut, mais le nombre doit être **corrigeable SUR UNE SESSION, avant émission des documents** : sinon la convention et l'attestation déclarent le double de ce qui s'est réellement passé, ce qui est un faux en pièce financeur. À porter au modèle : **nombre de formateurs par session** (défaut = la règle du tenant), **heures conventionnées dérivées** de ce nombre et non plus de la seule règle, **émargement cohérent** avec lui. **À PLANIFIER APRÈS LE LOT F — pas dedans** (décision Laurent du 10/09/2026) : la campagne de RDV ne produit aucun document conventionnel, elle peut donc être fusionnée sans attendre. | 10/09/2026 |
+| **D-27** | Le rapprochement lexical acceptait un mot unique s'il était rare et long (≥ 8 caractères). Sur les 17 douleurs « couvertes » du 11/09, six lignes venaient d'un seul mot — et les six étaient fausses (« formation » → déontologie, « collecte » → e-mails, « nécessaires » → journée de tournage, « contacts » → newsletters, « régulièrement » → plan d'action, « conseiller » → cadastre). | **Deux mots pleins concordants, ou rien.** Un rapprochement fondé sur un seul mot commun n'est plus proposé du tout. Motif : une ligne fausse n'est pas neutre — elle se lit, se vérifie, se barre, et surtout elle **cache** la vérité utile, qui est que la douleur n'est pas couverte. Mieux vaut une douleur déclarée non couverte, qui dit d'écrire du contenu. **Conséquence chiffrée assumée** : les douleurs sans réponse montent de 17 à 21 — c'est le chiffre vrai. ⚠ **Ne recouvre PAS `recommendModules`** — **tranché par Laurent le 11/09 : on ne l'aligne pas.** Motif : le seuil lexical est une **béquille de relecture**, pas une doctrine de moteur ; une fois les rattachements écrits, le moteur suit les étiquettes et ne devine plus. À rouvrir seulement si des recommandations sortent encore en `source: 'lexique'` sur dossiers réels après l'écriture. | 11/09/2026 |
+| **D-28** | « Le dirigeant connaît ses droits à formation », « au moins une action de formation sur 24 mois », « part de la transaction dans l'ancien », « aucun refus de prise en charge à traiter » : quatre douleurs qui recevaient des propositions de modules, et qui en recevront toujours de mauvaises. | **Ce ne sont pas des besoins de formation.** Ce sont des faits de contexte ou de financement ; la réponse est un dossier AGEFICE, une explication en rendez-vous ou un fait de marché, jamais un programme. **Règle** : `Rule.answerableByTraining` dans le barème, exposé par `listDiagnosticPainPoints()`. Elles **restent notées** — savoir que le dirigeant ignore ses droits change le rendez-vous — mais sortent de l'exercice de rattachement : **ni proposées, ni comptées comme non couvertes**. La décision vit dans le barème et non dans le script, parce que le composeur (I-2) et l'éditeur de proposition poseront la même question. | 11/09/2026 |
 | **D-17** | Le catalogue diag déclare le même module pour trois profils (`conseiller`, `manager`, `assistant`) et ne porte la durée que sur `conseiller` — 30 modules sur 79 sortaient sans durée, et le conteneur « Usecases » à **0 h**. | **Deux étages, jamais zéro.** ① la durée déclarée pour le même module sous un autre profil (14 modules — c'est la vraie durée, simplement rangée ailleurs) ; ② 1 h par défaut pour les 16 restants, la durée la plus fréquente du catalogue déclaré, **choix conservateur** (surestimer des heures qui finiront sur une convention ou un dossier financeur est une non-conformité ; les sous-estimer n'est qu'un catalogue à affiner). Le rapport les liste une par une. Seul « L'Agent Incomparable » reste à 0 h : parcours v0.9 explicitement non diffusable, aucune durée connue — l'inventer serait pire. | 04/09/2026 |
 | **D-18** | La recommandation faisait remonter un programme « pour activité événementielle » sur l'e-réputation d'une agence immobilière. Faut-il un filtre de domaine ? | **Non — des mots-clés qui qualifient.** « marketing », « communication », « digital » sont du vocabulaire d'entreprise : ils matchent tout, donc ne qualifient rien. Le besoin e-réputation ne cherche plus que « avis », « réputation », « visible », « recommandation », « présence locale ». Et un besoin déclare désormais les **familles qu'il accepte, par ordre de préférence** : les sept besoins de la chaîne commerciale n'acceptent que `METIER` ; l'e-réputation accepte `METIER` puis `IA` (demander et suivre des avis est un sujet d'outillage autant que de méthode) — le métier passe devant, et servir une autre famille se DIT dans le rapport. | 04/09/2026 |
 | **D-15** | Le devis doit-il porter le reste à charge après remise, ou le coût pédagogique ? | **Le coût pédagogique**, et lui seul. Une remise en ligne négative sur le devis réduirait le coût déclaré, donc l'assiette des droits — le client financerait le geste qu'on lui fait. La prise en charge, le reste à charge et le geste commercial vivent dans les **notes** du devis. Σ lignes de devis = coût pédagogique de la proposition, au centime (test de contrat). Cf. §9.1. | 04/09/2026 |
@@ -767,7 +1107,7 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 | D-3 | Qui peut créer une remise > 15 % (MANAGER suffit, ou ADMIN seul ?) | MANAGER |
 | D-4 | Devis générés à l'envoi de la proposition ou à l'acceptation ? | À l'acceptation (moins de DEV-NNNN morts) |
 | D-5 | Durée de validité par défaut (30 j ?) et relance à J-5 | 30 j |
-| D-6 | Le multiplicateur co-animation (8 h conventionnées / demi-journée) — validation comptable/auditeur à documenter | Paramètre actif, note de conformité dans la convention |
+| D-6 | **Question exacte (formulée le 10/09/2026)** : « sur une demi-journée de 4 h sur site co-animée par deux formateurs, le dossier se déclare-t-il en 4 h ou en 8 h ? » À poser à l'expert-comptable et à l'auditeur Qualiopi. **Réponse et SOURCE à consigner ici** dès que Laurent l'a — une réponse sans sa source ne vaut rien le jour d'un contrôle. Enjeu : c'est le nombre qui s'imprime sur la convention, l'émargement, l'attestation d'assiduité et le dossier financeur (cf. D-25 et D-25 bis). | Paramètre `TRAINER_COUNT_DEFAULT` actif à 2 (donc 8 h), note de conformité dans la convention. Non bloquant pour le lot F, qui ne produit aucun document conventionnel. |
 | D-7 | Montants OPCO EP : 4 500 € (dit le 01/09) vs ≈ 4 000 € (proposition OPTIMO du 11/08) pour > 10 salariés | 4 500 en seed, modifiable dans Paramètres |
 | D-8 | Volume 72 h × 42 € = 3 024 € vs plafond AGEFICE 3 000 € : que faire des 24 €/agent d'écart ? | ✅ **Tranchée avec D-11** : plafonner à 3 000, afficher l'écart en reste à charge, geste commercial en un clic dans la proposition |
 | D-9 | Barème de scoring (pondérations par question → score chapitre → score global) | Barème v1 proposé avec le lot D, calibré sur 3 audits réels puis figé/versionné |

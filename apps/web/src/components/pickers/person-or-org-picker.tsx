@@ -395,11 +395,29 @@ export function PersonOrOrgPicker({
               dossier OPCO — autant les saisir maintenant.
             </p>
 
+            {/* Un bouton grisé sans motif est une impasse : l'explication vivait
+                tout en bas du panneau, hors de ce bloc, donc invisible pour qui
+                remplit le formulaire (Laurent 11/09 : « le bouton créer et
+                rattacher est grisé »). Elle est désormais À CÔTÉ du bouton. */}
+            {!roleRattachement && (
+              <p className="text-xs text-amber-700">
+                Choisis le <strong>rôle dans l&apos;entreprise</strong>, plus haut : c&apos;est
+                lui qui détermine qui paye.
+              </p>
+            )}
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={attaching || !roleRattachement || !nouvelleOrgNom.trim()}
                 onClick={creerPuisRattacher}
+                title={
+                  !roleRattachement
+                    ? "Choisis d'abord le rôle dans l'entreprise, plus haut"
+                    : !nouvelleOrgNom.trim()
+                      ? 'Saisis la raison sociale'
+                      : 'Crée cette entreprise et rattache-lui la personne'
+                }
                 className="h-9 px-3 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-50"
               >
                 Créer et rattacher

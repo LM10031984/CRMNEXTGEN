@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { ArrowRight, Stethoscope } from 'lucide-react';
+import { ArrowRight, FileText, Stethoscope, Users2 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -53,9 +53,21 @@ export default async function DiagnosticPage({
       r2PlannedAt: true,
       referentialVersion: true,
       lead: { select: { id: true, firstName: true, lastName: true, notes: true } },
+      organizationId: true,
       organization: { select: { legalName: true } },
+      // D-22 — la campagne s'ouvre depuis ici, et une seule par diagnostic
+      // (`diagnosticId` est unique) : si elle existe déjà, on y renvoie.
+      enrollmentBatch: { select: { id: true } },
       owner: { select: { firstName: true, lastName: true } },
-      answers: { select: { questionId: true, value: true, isSkipped: true } },
+      answers: {
+        select: {
+          questionId: true,
+          value: true,
+          isSkipped: true,
+          origin: true,
+          confirmedAt: true,
+        },
+      },
       participants: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -72,6 +84,16 @@ export default async function DiagnosticPage({
   });
   if (!diagnostic) notFound();
 
+  // Deux lectures des mêmes réponses, et la nuance est tout le lot C :
+  //   • la PROGRESSION compte tout ce qui est servi, extraction comprise — le
+  //     champ est rempli à l'écran, dire le contraire serait faux ;
+  //   • les CALCULS (financement, pipeline) ne prennent que le confirmé : ce
+  //     sont les chiffres qu'on montre au dirigeant en rendez-vous.
+  const estConfirmee = (a: { origin: string; confirmedAt: Date | null }) =>
+    a.origin === 'COMMERCIAL' || a.confirmedAt !== null;
+  const reponsesConfirmees = diagnostic.answers.filter(estConfirmee);
+  const aRelire = diagnostic.answers.length - reponsesConfirmees.length;
+
   const progress = computeProgress(
     diagnostic.variant,
     diagnostic.answers.map((a) => ({
@@ -86,7 +108,14 @@ export default async function DiagnosticPage({
   // explicitement, ou si le diagnostic est terminé.
   const resume = progress.firstIncompleteChapter ?? 1;
   if (vue !== 'recap' && diagnostic.status === 'EN_COURS') {
-    redirect(`/app/diagnostics/${id}/chapitre/${resume}`);
+    // Un pré-remplissage en attente passe devant la saisie : la tâche du
+    // moment n'est pas de répondre, c'est de relire (§6.4 — « on ne défile
+    // plus jamais 69 écrans »). `?vue=recap` reste la porte de sortie.
+    redirect(
+      aRelire > 0
+        ? `/app/diagnostics/${id}/transcript`
+        : `/app/diagnostics/${id}/chapitre/${resume}`,
+    );
   }
 
   // Les synthèses du récapitulatif : mêmes moteurs purs qu'en saisie, mêmes
@@ -94,7 +123,7 @@ export default async function DiagnosticPage({
   // pas découvrir autre chose en arrivant ici.
   const { values: rules } = await loadFundingRules(user.tenantId);
   const answerMap = Object.fromEntries(
-    diagnostic.answers.filter((a) => !a.isSkipped).map((a) => [a.questionId, a.value]),
+    reponsesConfirmees.filter((a) => !a.isSkipped).map((a) => [a.questionId, a.value]),
   );
   const engineParticipants = diagnostic.participants.map((p) => ({
     id: p.id,
@@ -150,15 +179,66 @@ export default async function DiagnosticPage({
           </span>
         }
         actions={
-          <Link
-            href={`/app/diagnostics/${id}/chapitre/${resume}` as Route}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
-          >
-            {progress.answeredCount === 0 ? 'Commencer' : 'Reprendre'}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              Le chemin qui manquait (relecture du 10/09/2026) : rien ne menait
+              du diagnostic à sa campagne, si bien que toutes naissaient sans
+              client. Il ne s'affiche pas tant qu'aucune agence n'est rattachée
+              au diagnostic — une campagne sans agence n'existe plus (D-22).
+            */}
+            {diagnostic.organizationId ? (
+              <Link
+                href={
+                  (diagnostic.enrollmentBatch
+                    ? `/app/campagnes/${diagnostic.enrollmentBatch.id}`
+                    : `/app/campagnes/nouvelle?diagnostic=${id}`) as Route
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-slate-50"
+              >
+                <Users2 className="h-4 w-4" />
+                {diagnostic.enrollmentBatch
+                  ? 'Voir les pré-inscriptions'
+                  : 'Organiser les pré-inscriptions'}
+              </Link>
+            ) : null}
+            <Link
+              href={`/app/diagnostics/${id}/transcript` as Route}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-slate-50"
+            >
+              <FileText className="h-4 w-4" />
+              Compte rendu
+            </Link>
+            <Link
+              href={`/app/diagnostics/${id}/chapitre/${resume}` as Route}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
+            >
+              {progress.answeredCount === 0 ? 'Commencer' : 'Reprendre'}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         }
       />
+
+      {aRelire > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+          <span>
+            <strong>
+              {aRelire} réponse{aRelire > 1 ? 's' : ''}
+            </strong>{' '}
+            {aRelire > 1 ? 'sont issues' : 'est issue'} du compte rendu et {aRelire > 1 ? 'attendent' : 'attend'}{' '}
+            votre relecture. Elles remplissent le questionnaire à l&apos;écran, mais{' '}
+            <strong>n&apos;entrent dans aucun chiffre</strong> — ni la synthèse financement, ni
+            l&apos;audit, ni la proposition — tant qu&apos;{aRelire > 1 ? 'elles ne sont pas confirmées' : "elle n'est pas confirmée"}.
+          </span>
+          <Link
+            href={`/app/diagnostics/${id}/transcript` as Route}
+            className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 px-2.5 py-1.5 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40"
+          >
+            Relire les réponses
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat

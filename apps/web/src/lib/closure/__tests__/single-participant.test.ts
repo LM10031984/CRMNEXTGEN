@@ -92,6 +92,11 @@ vi.mock('@/lib/closure/route-conventions', () => ({
 vi.mock('../../../server/actions/agefice-generator', () => ({
   generateAgeficeForParticipant: vi.fn().mockResolvedValue({ ok: true }),
 }));
+// Depuis le 11/09, le pack produit AUSSI l'attestation d'assiduité pour les
+// éligibles AGEFICE — elle n'était générée nulle part auparavant.
+vi.mock('../../../server/actions/agefice-attendance-generator', () => ({
+  generateAgeficeAttendanceForParticipant: vi.fn().mockResolvedValue({ ok: true }),
+}));
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -147,6 +152,11 @@ beforeEach(() => {
   documentFindMany.mockResolvedValue([]);
   assetFindMany.mockReset();
   assetFindMany.mockResolvedValue([]);
+  // Éligibilité AGEFICE : lue par une requête depuis le 11/09 (source unique
+  // `OU_AGEFICE`, partagée avec la fiche session). Aucun éligible ici.
+  (prisma.sessionParticipant.findMany as unknown as ReturnType<typeof vi.fn>)
+    .mockReset()
+    .mockResolvedValue([]);
   batchCreate.mockReset();
   batchCreate.mockImplementation(async ({ data, include }: any) => ({
     id: 'batch-fake',

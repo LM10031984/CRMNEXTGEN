@@ -36,7 +36,16 @@ export default async function ChapitrePage({
       reference: true,
       variant: true,
       status: true,
-      answers: { select: { questionId: true, value: true, isSkipped: true } },
+      answers: {
+        select: {
+          questionId: true,
+          value: true,
+          isSkipped: true,
+          origin: true,
+          confirmedAt: true,
+          aiQuote: true,
+        },
+      },
       participants: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -73,6 +82,10 @@ export default async function ChapitrePage({
         questionId: a.questionId,
         value: a.value,
         isSkipped: a.isSkipped,
+        // L'écran de saisie est le seul, avec la revue, à voir les réponses
+        // non confirmées : c'est ici qu'on les corrige (§6.4).
+        aRelire: a.origin === 'IA_TRANSCRIPT' && a.confirmedAt === null,
+        quote: a.aiQuote,
       }))}
       initialParticipants={diagnostic.participants.map((p) => ({
         id: p.id,

@@ -47,7 +47,17 @@ apps/web/e2e/.auth/
 apps/web/test-results/
 apps/web/playwright-report/
 
-# TypeScript incremental build artifacts (packages only — apps/web is intentionally tracked)
+# TypeScript incremental build artifacts — TOUS, `apps/` compris.
+# `apps/*` manquait longtemps à la règle : `apps/web/tsconfig.tsbuildinfo` était
+# donc suivi alors que c'est un cache de compilation incrémentale. Il entrait en
+# conflit à CHAQUE fusion, sur un contenu que personne ne relit et que `tsc`
+# régénère seul. Constat du 10/09/2026, en fusionnant le lot F.
+#
+# Fusion du 12/09/2026 : `main` avait posé les deux règles nominatives
+# (`packages/*/` + `apps/*/`), la branche signature le motif large. Le motif
+# large les COUVRE toutes les deux, y compris les `.tsbuildinfo` nommés
+# autrement par une version future de `tsc` — on le garde, et on garde le
+# constat de `main`, qui explique pourquoi la règle doit être large.
 *.tsbuildinfo
 
 # Python (doc-engine)

@@ -207,6 +207,56 @@ export function TabAvant({
     });
   }
 
+  /**
+   * « Tout regénérer » — le pendant de `handleGenerateAll` pour les pièces
+   * DÉJÀ produites. Après une correction (l'adresse du lieu, le nom d'un
+   * apprenant, le tarif), il fallait les reprendre une par une dans la matrice
+   * (Laurent 11/09).
+   *
+   * `force` est indispensable : sans lui les générateurs sautent l'existant et
+   * le bouton ne ferait rien. Ce qui est signé ou envoyé reste protégé en aval
+   * par `checkDocumentReplacement`, qui saute ces documents plutôt que de les
+   * remplacer.
+   */
+  function handleRegenerateAll(scope: DocDockItem[] = items) {
+    const deja = scope.filter((it) => it.state === 'generated');
+    if (deja.length === 0) return;
+
+    if (
+      !window.confirm(
+        `Refaire les ${deja.length} document${deja.length > 1 ? 's' : ''} de cette phase ?\n\n` +
+          `Les documents déjà signés ou envoyés sont conservés — seuls les autres sont remplacés.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyKeys((prev) => {
+      const next = new Set(prev);
+      for (const it of deja) next.add(it.key);
+      return next;
+    });
+    startTransition(async () => {
+      try {
+        const r = await dispatchGenerateMissing({
+          sessionId,
+          items: deja.map((it) => ({ docType: it.docType, participantId: it.participantId })),
+          force: true,
+        });
+        if (r.ok) {
+          toast.success(
+            `${r.success} document${r.success > 1 ? 's' : ''} regénéré${r.success > 1 ? 's' : ''}`,
+          );
+        } else {
+          toast.warning(`${r.success}/${r.total} OK · ${r.failed} échec${r.failed > 1 ? 's' : ''}`);
+        }
+        router.refresh();
+      } finally {
+        setBusyKeys(new Set());
+      }
+    });
+  }
+
   return (
     <div className="space-y-6 pt-4">
       {/* En-tête onglet : récap source unique + CTA « Tout générer ». */}
@@ -282,6 +332,7 @@ export function TabAvant({
                 missingCount={group.items.filter((it) => it.state === 'missing').length}
                 canGenerate={canGenerate}
                 onGenerateAll={() => handleGenerateAll(group.items)}
+                onRegenerateAll={() => handleRegenerateAll(group.items)}
                 busy={group.items.some((it) => busyKeys.has(it.key))}
               />
             ) : null

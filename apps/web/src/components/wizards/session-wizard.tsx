@@ -36,6 +36,7 @@ import {
   checkMultipleTrainersAvailabilityAction,
   persistSessionSlotsAction,
 } from '@/server/actions/schedule-wizard';
+import { valideEtapeWizard } from '@/lib/sessions/wizard-etapes';
 
 type TrainerAvail = {
   hasConflict: boolean;
@@ -222,23 +223,17 @@ export function SessionWizard({
   };
 
   const validateStep = (s: 1 | 2 | 3): string | null => {
-    if (s === 1 && !selectedProduct) return 'Sélectionne un produit';
-    if (s === 2) {
-      if (!startDate || !endDate) return 'Dates obligatoires';
-      if (new Date(endDate) < new Date(startDate)) return 'Date fin doit être ≥ date début';
-      if (trainerIds.length === 0) return 'Au moins un formateur est requis';
-      // Bloque si un formateur sélectionné est totalement indispo sur la plage
-      const blocking = trainerIds.find((id) => {
-        const a = trainerAvail[id];
-        return a && a.totalDates > 0 && a.availableDates === 0;
-      });
-      if (blocking) {
-        const t = initialTrainers.find((tr) => tr.id === blocking);
-        return `Formateur ${t?.firstName ?? ''} ${t?.lastName ?? ''} indisponible sur toutes les dates — change de formateur ou de dates`;
-      }
-    }
-    if (s === 3 && participants.length === 0) return 'Au moins un participant est requis';
-    return null;
+    // Règle déléguée à `lib/sessions/wizard-etapes` — module pur, donc
+    // vérifiable. C'est là qu'on lit pourquoi l'étape 3 n'exige plus d'inscrit.
+    return valideEtapeWizard(s, {
+      produitChoisi: !!selectedProduct,
+      dateDebut: startDate,
+      dateFin: endDate,
+      formateurIds: trainerIds,
+      disponibilites: trainerAvail,
+      formateurs: initialTrainers,
+      nbParticipants: participants.length,
+    });
   };
 
   const goNext = () => {
@@ -767,6 +762,14 @@ export function SessionWizard({
               Pour chaque apprenant multi-casquettes, tu choisiras la bonne organisation sponsor (qui paye et reçoit le remboursement).
             </p>
           </div>
+
+          {participants.length === 0 && (
+            <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-border p-3">
+              Aucun inscrit pour l&apos;instant — et c&apos;est très bien ainsi. Tu peux créer la
+              session maintenant et ajouter les apprenants plus tard, à la main ou par le lien
+              d&apos;inscription partageable.
+            </p>
+          )}
 
           {participants.length > 0 && (
             <ul className="space-y-2">

@@ -17,7 +17,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { prisma, Prisma } from '@qualiof/db';
+import { prisma, Prisma, Modality } from '@qualiof/db';
 import {
   ProposalContentSchema,
   ProposalPricingSchema,
@@ -26,7 +26,9 @@ import {
 import { REFERENTIAL_VERSION } from '@qualiof/shared/diagnostic';
 import type { ProposalContent, ProposalPricing } from '@qualiof/shared';
 
+import { REPONSES_CONFIRMEES } from '@/lib/diagnostic-r1/transcript/confirmees';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
+import { loadPropositionLibrary } from '@/server/proposition-library';
 import { loadOfConfig } from '@/lib/of-config';
 import { loadFundingRules } from '@/lib/financement/load-rules';
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -50,15 +52,23 @@ import {
   seedPricing,
 } from '@/lib/proposition/builder';
 import {
-  recommendProgrammes,
-  type CatalogueEntry,
-} from '@/lib/proposition/programme-matcher';
+  recommendModules,
+  type LibraryModule,
+} from '@/lib/proposition/module-matcher';
+import { composeProgramme, compositionFromAxes } from '@/lib/proposition/composer';
+import {
+  buildComposedProgramme,
+  type SourceProgrammeInfo,
+} from '@/lib/proposition/composed-programme';
+import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 import {
   compareSourceFingerprint,
   computeProposalFingerprint,
   type FingerprintComparison,
 } from '@/lib/proposition/fingerprint';
 import { hashPublicToken, PUBLIC_TOKEN_BYTES } from '@/lib/proposition/public-link';
+import { sendMail } from '@/lib/mailer';
+import { renderPropositionRemise } from '@/lib/mailer-templates/proposition-remise';
 import { renderPropositionHtml } from '@/lib/proposition/templates/proposition-template';
 import type { PropositionData } from '@/lib/proposition/templates/proposition-data';
 
@@ -149,7 +159,7 @@ async function loadDiagnosticBundle(diagnosticId: string, tenantId: string) {
       organizationId: true,
       organization: { select: { legalName: true, siret: true } },
       lead: { select: { firstName: true, lastName: true, notes: true, email: true } },
-      answers: { select: { questionId: true, value: true, isSkipped: true } },
+      answers: REPONSES_CONFIRMEES,
       participants: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -181,48 +191,6 @@ function agencyNameOf(d: DiagnosticBundle): string {
   );
 }
 
-/**
- * Le catalogue vu par le moteur de recommandation.
- *
- * Les modules interdits en sortie client (la pige) sont retirés AVANT que
- * leurs signaux n'entrent dans le calcul : un module exclu ne doit ni être
- * proposé, ni influencer ce qui l'est.
- */
-async function loadCatalogue(tenantId: string): Promise<CatalogueEntry[]> {
-  const products = await prisma.trainingProduct.findMany({
-    where: { tenantId },
-    select: {
-      id: true,
-      code: true,
-      title: true,
-      theme: true,
-      isActive: true,
-      fundingType: true,
-      durationHours: true,
-      modules: {
-        select: { diagnosticSignals: true, excludedFromClientOutputs: true },
-      },
-    },
-  });
-
-  return products.map((p) => {
-    const allowed = p.modules.filter((m) => !m.excludedFromClientOutputs);
-    const signals = allowed.flatMap((m) =>
-      Array.isArray(m.diagnosticSignals) ? (m.diagnosticSignals as unknown[]).map(String) : [],
-    );
-    return {
-      productId: p.id,
-      code: p.code,
-      title: p.title,
-      theme: p.theme,
-      isActive: p.isActive,
-      fundingType: p.fundingType,
-      durationHours: p.durationHours,
-      signals,
-      hasExcludedModule: p.modules.some((m) => m.excludedFromClientOutputs),
-    };
-  });
-}
 
 function fingerprintInputOf(
   bundle: DiagnosticBundle,
@@ -249,15 +217,15 @@ function fingerprintInputOf(
   };
 }
 
-/** Le diagnostic, ses moteurs et son catalogue — la matière de la proposition. */
+/** Le diagnostic, ses moteurs et sa bibliothèque — la matière de la proposition. */
 async function assembleFromDiagnostic(diagnosticId: string, tenantId: string) {
   const bundle = await loadDiagnosticBundle(diagnosticId, tenantId);
   if (!bundle) return null;
 
-  const [{ values: rules }, of, catalogue] = await Promise.all([
+  const [{ values: rules }, of, library] = await Promise.all([
     loadFundingRules(tenantId),
     loadOfConfig(tenantId),
-    loadCatalogue(tenantId),
+    loadPropositionLibrary(tenantId),
   ]);
 
   const participants = bundle.participants.map((p) => ({
@@ -296,7 +264,7 @@ async function assembleFromDiagnostic(diagnosticId: string, tenantId: string) {
     valueEuros: AUDIT_VALUE_EUROS,
   });
 
-  return { bundle, rules, of, catalogue, audit, participants };
+  return { bundle, rules, of, library, audit, participants };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -312,7 +280,7 @@ export async function createProposalFromDiagnostic(
 
   const assembled = await assembleFromDiagnostic(diagnosticId, user.tenantId);
   if (!assembled) return { ok: false, error: 'Diagnostic introuvable' };
-  const { bundle, rules, of, catalogue, audit, participants } = assembled;
+  const { bundle, rules, of, library, audit, participants } = assembled;
 
   if (bundle.answers.length === 0) {
     return {
@@ -329,10 +297,10 @@ export async function createProposalFromDiagnostic(
   }
 
   const agencyName = agencyNameOf(bundle);
-  const { content, match } = seedContent({
+  const { content, match, composition } = seedContent({
     audit,
     rules,
-    catalogue,
+    library,
     agencyName,
     diagnosticReference: bundle.reference,
     meetingAt: bundle.meetingAt,
@@ -343,6 +311,10 @@ export async function createProposalFromDiagnostic(
   const pricing = seedPricing({
     funding: audit.funding,
     rules,
+    // On facture ce qui est JUSTIFIÉ, pas ce que les droits permettraient : le
+    // surplus d'enveloppe est un arbitrage humain affiché (§8.2), et il figure
+    // dans les notices de composition.
+    halfDaysSold: composition.totalHalfDays,
     agencyName,
     organizationSiret: bundle.organization?.siret ?? null,
     organizationAddress: null,
@@ -445,6 +417,7 @@ async function loadProposal(proposalId: string, tenantId: string) {
       declinedAt: true,
       discountApprovedAt: true,
       discountApprovedById: true,
+      composedProductId: true,
       publicTokenHash: true,
       publicTokenExpiresAt: true,
       pdfKey: true,
@@ -488,6 +461,16 @@ export interface ProposalWorkspace {
    * manque de catalogue, pas une raison de vendre autre chose.
    */
   catalogueNotices: string[];
+  /** Le produit sur mesure généré depuis cette proposition (lot I-2). */
+  composedProduct: { code: string; durationHours: number; _count: { modules: number } } | null;
+  /** Combien de modules la proposition compose aujourd'hui. */
+  composedModuleCount: number;
+  /** Ce qui manque au programme Qualiopi avant qu'il soit remettable. */
+  composedWarnings: string[];
+  /** `true` = remettable, `false` = à ne remettre à personne, `null` = rien de composé. */
+  composedRemittable: boolean | null;
+  /** Ce qui, précisément, empêche de le remettre. */
+  composedBlockers: string[];
 }
 
 async function buildWorkspace(
@@ -499,7 +482,7 @@ async function buildWorkspace(
 
   const assembled = await assembleFromDiagnostic(proposal.diagnosticId, tenantId);
   if (!assembled) return null;
-  const { bundle, rules, of, audit, catalogue } = assembled;
+  const { bundle, rules, of, audit, library } = assembled;
 
   const content = ProposalContentSchema.parse(proposal.contentJson);
   const pricing = ProposalPricingSchema.parse(proposal.pricingJson);
@@ -522,6 +505,70 @@ async function buildWorkspace(
   const ownerLabel = [proposal.owner.firstName, proposal.owner.lastName]
     .filter(Boolean)
     .join(' ');
+
+  // Le produit composé déjà généré, s'il existe — pour que le bouton dise
+  // « régénérer » plutôt que « générer », et nomme ce qu'il va toucher.
+  const composedProduct = proposal.composedProductId
+    ? await prisma.trainingProduct.findFirst({
+        where: { id: proposal.composedProductId, tenantId },
+        select: { code: true, durationHours: true, _count: { select: { modules: true } } },
+      })
+    : null;
+
+  /**
+   * Ce qui manque au programme Qualiopi — vu depuis l'ÉCRAN, pas depuis un log.
+   *
+   * Sur DIAG-0001, huit modules sur huit n'ont aucun déroulé au catalogue (le
+   * catalogue diagnostic porte des signaux et des questions de rendez-vous, pas
+   * du contenu pédagogique). Le programme composé n'est donc pas remettable en
+   * l'état — et c'est exactement le genre de chose qu'on ne doit pas découvrir
+   * après l'avoir envoyé au financeur.
+   */
+  const composedProgramme = await (async () => {
+    const mods = content.axes.flatMap((a) => a.modules);
+    if (mods.length === 0) return null;
+    const tenantMentions = await prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: {
+        qualiopiPedagogicalMethods: true,
+        qualiopiEvaluationMethods: true,
+        qualiopiAccessibility: true,
+      },
+    });
+    const qualiopiMentions = resolveQualiopiMentions(tenantMentions, {
+      name: of.name,
+      email: of.email,
+      phone: of.phone,
+    });
+    const codes = [...new Set(mods.map((m) => m.sourceCode).filter(Boolean))];
+    const shelves = await prisma.trainingProduct.findMany({
+      where: { tenantId, code: { in: codes } },
+      select: {
+        code: true, title: true, prerequisites: true, targetAudience: true,
+        pedagogicalMethods: true, evaluationMethods: true, accessibility: true,
+        trainerProfile: true, pedagogicalSupport: true, accessConditions: true,
+        modules: { select: { id: true, contentMd: true, needIdentification: true } },
+      },
+    });
+    return buildComposedProgramme({
+      composition: compositionFromAxes(content.axes, rules),
+      rules,
+      agencyName: agencyNameOf(bundle),
+      diagnosticReference: bundle.reference,
+      sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
+      fallback: {
+        prerequisites: null,
+        trainerProfile: null,
+        pedagogicalSupport: null,
+        accessConditions: null,
+      },
+      mentions: qualiopiMentions,
+      moduleContent: new Map(shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.contentMd] as const))),
+      moduleNeedIdentification: new Map(
+        shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.needIdentification ?? ''] as const)),
+      ),
+    });
+  })();
 
   const data: PropositionData = {
     reference: proposal.reference,
@@ -582,8 +629,13 @@ async function buildWorkspace(
   const warnings: string[] = [];
   const axesHalfDays = content.axes.reduce((sum, a) => sum + a.halfDays, 0);
   if (content.axes.length > 0 && axesHalfDays !== synthesis.halfDaysMax) {
+    // Depuis la composition (lot I-2), les deux nombres partent du même volume :
+    // un écart n'est plus un arrondi de répartition, c'est une main humaine qui
+    // est passée sur l'un des deux. Le sens de l'écart change ce qu'il faut dire.
     warnings.push(
-      `Le parcours détaille ${axesHalfDays} demi-journées alors que le chiffrage en vend ${synthesis.halfDaysMax}. Le dirigeant verra l’écart : ajustez les axes ou le chiffrage.`,
+      axesHalfDays < synthesis.halfDaysMax
+        ? `Le chiffrage vend ${synthesis.halfDaysMax} demi-journées, le parcours n’en détaille que ${axesHalfDays}. Vous factureriez ${synthesis.halfDaysMax - axesHalfDays} demi-journée(s) que rien ne justifie dans le programme — c’est exactement ce qu’un contrôle OPCO regarde. Ajoutez les modules correspondants, ou ramenez le chiffrage au volume composé.`
+        : `Le parcours détaille ${axesHalfDays} demi-journées alors que le chiffrage n’en vend que ${synthesis.halfDaysMax}. Vous animeriez ${axesHalfDays - synthesis.halfDaysMax} demi-journée(s) non facturée(s) : ajustez le chiffrage ou retirez les modules en trop.`,
     );
   }
 
@@ -602,11 +654,25 @@ async function buildWorkspace(
       ? { amount: synthesis.remainderBeforeDiscount }
       : null;
 
-  const { notices } = recommendProgrammes({
-    chapterScores: audit.chapterScores.map((c) => ({ chapter: c.chapter, score: c.score })),
+  // Ce que la bibliothèque permet — et ce qu'elle ne permet pas. On rejoue la
+  // recommandation ET la composition : les deux ont des choses à dire au
+  // commercial (un besoin sans module, une enveloppe qui déborde, un surplus à
+  // arbitrer), et il n'y a aucune raison de n'en montrer qu'une moitié.
+  const { notices: recoNotices, recommendations } = recommendModules({
+    chapterScores: audit.chapterScores.map((c) => ({
+      chapter: c.chapter,
+      score: c.score,
+      breakdown: c.breakdown,
+    })),
     alerts: audit.chapters.flatMap((c) => c.alerts),
-    catalogue,
+    answers: audit.chapters.flatMap((c) => c.answers),
+    library,
   });
+  const notices = [
+    ...recoNotices,
+    ...composeProgramme({ recommendations, rules, envelopeHalfDays: audit.funding.halfDays })
+      .notices,
+  ];
 
   return {
     proposal,
@@ -620,6 +686,12 @@ async function buildWorkspace(
     roundingOffer,
     rules,
     catalogueNotices: notices,
+    composedProduct,
+    composedModuleCount: content.axes.reduce((n, a) => n + a.modules.length, 0),
+    composedWarnings: composedProgramme?.warnings ?? [],
+    /** `null` quand rien n'est composé — il n'y a alors pas de verdict à rendre. */
+    composedRemittable: composedProgramme ? composedProgramme.remittable : null,
+    composedBlockers: composedProgramme?.blockers ?? [],
   };
 }
 
@@ -1223,6 +1295,221 @@ export async function generateProposalQuotes(
  * appellera cette action pour tracer, afin qu'un envoi et une remise en main
  * propre laissent la même trace. Les relances automatiques restent au lot H.
  */
+/** Référence SUR-NNNN — un produit sur mesure, distinct des PROD/FRM/BIB. */
+async function generateComposedProductCode(tenantId: string): Promise<string> {
+  const existing = await prisma.trainingProduct.findMany({
+    where: { tenantId, code: { startsWith: 'SUR-' } },
+    select: { code: true },
+  });
+  const maxSeq = existing.reduce((m, p) => {
+    const match = p.code.match(/^SUR-0*(\d+)$/);
+    return match ? Math.max(m, Number(match[1])) : m;
+  }, 0);
+  return `SUR-${String(maxSeq + 1).padStart(4, '0')}`;
+}
+
+/**
+ * Matérialise le programme COMPOSÉ en produit vendable (lot I-2, D-19).
+ *
+ * Trois choses que cette action ne fait PAS, et chacune a coûté assez cher
+ * ailleurs pour mériter d'être écrite :
+ *
+ *   • elle ne RECOMPOSE pas depuis le diagnostic. Le composeur propose, le
+ *     commercial dispose : c'est ce que la proposition vend, axes tels qu'il
+ *     les a laissés, qui devient le produit. Recomposer écraserait sa main ;
+ *   • elle ne touche JAMAIS un produit qui porte déjà des sessions. Une fois la
+ *     convention signée, le programme est figé — le régénérer ferait diverger le
+ *     document émis de sa source, ce qui est une non-conformité en contrôle ;
+ *   • elle n'écrit aucune heure sur site dans `durationHours`. Ce champ porte
+ *     les heures CONVENTIONNÉES (D-25) et alimente la convention et
+ *     l'attestation d'assiduité.
+ */
+export async function generateComposedProduct(proposalId: string): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return { ok: false, error: g.error };
+
+  const ws = await buildWorkspace(proposalId, g.user.tenantId);
+  if (!ws) return { ok: false, error: 'Proposition introuvable' };
+
+  const axes = ws.content.axes;
+  const modules = axes.flatMap((a) => a.modules);
+  if (modules.length === 0) {
+    return {
+      ok: false,
+      error:
+        "Aucun module composé : il n'y a pas de programme à générer. Composez le parcours avant de produire son programme Qualiopi.",
+    };
+  }
+
+  const assembled = await assembleFromDiagnostic(ws.proposal.diagnosticId, g.user.tenantId);
+  if (!assembled) return { ok: false, error: 'Diagnostic source introuvable' };
+  const { bundle, rules } = assembled;
+
+  // Ce que la proposition vend, pas une recomposition.
+  const composition = compositionFromAxes(axes, rules);
+
+  // Les rayons d'origine lèguent les rubriques Qualiopi et le contenu détaillé
+  // des modules — le programme composé n'invente aucun déroulé.
+  const sourceCodes = [...new Set(modules.map((m) => m.sourceCode).filter(Boolean))];
+  const shelves = await prisma.trainingProduct.findMany({
+    where: { tenantId: g.user.tenantId, code: { in: sourceCodes } },
+    select: {
+      code: true,
+      title: true,
+      prerequisites: true,
+      targetAudience: true,
+      pedagogicalMethods: true,
+      evaluationMethods: true,
+      accessibility: true,
+      trainerProfile: true,
+      pedagogicalSupport: true,
+      accessConditions: true,
+      modules: { select: { id: true, contentMd: true, needIdentification: true } },
+    },
+  });
+
+  const [of, tenantMentions] = await Promise.all([
+    loadOfConfig(g.user.tenantId),
+    prisma.tenant.findFirst({
+      where: { id: g.user.tenantId },
+      select: {
+        qualiopiPedagogicalMethods: true,
+        qualiopiEvaluationMethods: true,
+        qualiopiAccessibility: true,
+      },
+    }),
+  ]);
+
+  const moduleContent = new Map<string, string>();
+  const moduleNeedIdentification = new Map<string, string>();
+  for (const shelf of shelves) {
+    for (const m of shelf.modules) {
+      moduleContent.set(m.id, m.contentMd);
+      moduleNeedIdentification.set(m.id, m.needIdentification ?? '');
+    }
+  }
+
+  const programme = buildComposedProgramme({
+    composition,
+    rules,
+    agencyName: agencyNameOf(bundle),
+    diagnosticReference: bundle.reference,
+    sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
+    // Ce qu'un rayon peut encore léguer. Les trois mentions Qualiopi n'en font
+    // plus partie : elles viennent de l'ORGANISME et arrivent par `mentions`,
+    // non nullables — une section blanche sur l'accessibilité handicap est une
+    // non-conformité (indicateur 26), pas un document incomplet.
+    fallback: {
+      prerequisites: null,
+      trainerProfile: null,
+      pedagogicalSupport: null,
+      accessConditions: null,
+    },
+    mentions: resolveQualiopiMentions(tenantMentions, {
+      name: of.name,
+      email: of.email,
+      phone: of.phone,
+    }),
+    moduleContent,
+    moduleNeedIdentification,
+  });
+
+  // Ligne rouge : un produit qui porte des sessions ne se régénère pas.
+  const existing = ws.proposal.composedProductId
+    ? await prisma.trainingProduct.findFirst({
+        where: { id: ws.proposal.composedProductId, tenantId: g.user.tenantId },
+        select: { id: true, code: true, _count: { select: { trainingSessions: true } } },
+      })
+    : null;
+
+  if (existing && existing._count.trainingSessions > 0) {
+    return {
+      ok: false,
+      error: `\`${existing.code}\` porte déjà ${existing._count.trainingSessions} session(s) : son programme est figé. Le régénérer ferait diverger la convention émise de sa source.`,
+    };
+  }
+
+  const code = existing?.code ?? (await generateComposedProductCode(g.user.tenantId));
+
+  const data = {
+    title: programme.title,
+    // D-25 — heures CONVENTIONNÉES, jamais les heures sur site.
+    durationHours: programme.durationHours,
+    modality: Modality.PRESENTIEL,
+    objectives: programme.objectives,
+    programMd: programme.programMd,
+    prerequisites: programme.prerequisites,
+    targetAudience: programme.targetAudience,
+    pedagogicalMethods: programme.pedagogicalMethods,
+    evaluationMethods: programme.evaluationMethods,
+    accessibility: programme.accessibility,
+    trainerProfile: programme.trainerProfile,
+    pedagogicalSupport: programme.pedagogicalSupport,
+    accessConditions: programme.accessConditions,
+    theme: 'Sur mesure',
+    // Un produit composé naît ACTIF : c'est une offre réelle (D-19).
+    isActive: true,
+    sourceRef: `proposal:${ws.proposal.reference}`,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    const product = existing
+      ? await tx.trainingProduct.update({ where: { id: existing.id }, data })
+      : await tx.trainingProduct.create({
+          data: { ...data, tenantId: g.user.tenantId, code },
+        });
+
+    // Les modules du produit composé sont RECOPIÉS, pas référencés : le
+    // parcours vendu doit survivre à une évolution de la bibliothèque.
+    await tx.trainingModule.deleteMany({ where: { productId: product.id } });
+    let order = 0;
+    for (const block of composition.blocks) {
+      for (const m of block.modules) {
+        order += 1;
+        await tx.trainingModule.create({
+          data: {
+            productId: product.id,
+            order,
+            title: m.title,
+            contentMd: moduleContent.get(m.moduleId) ?? '',
+            durationMin: m.durationMin,
+            sourceRef: `proposal:${ws.proposal.reference}#${order}`,
+          },
+        });
+      }
+    }
+
+    await tx.proposal.update({
+      where: { id: proposalId },
+      data: { composedProductId: product.id },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: g.user.tenantId,
+        userId: g.user.id,
+        entity: 'TrainingProduct',
+        entityId: product.id,
+        action: existing ? 'produit.compose.regenere' : 'produit.compose.cree',
+        diff: {
+          proposal: ws.proposal.reference,
+          code,
+          halfDays: composition.totalHalfDays,
+          conventionedHours: programme.durationHours,
+          onSiteHours: programme.onSiteHours,
+          moduleCount: order,
+          sourceProgrammes: composition.sourceProgrammes.map((s) => s.code),
+          warnings: programme.warnings,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  revalidateProposal(proposalId, ws.proposal.diagnosticId);
+  revalidatePath('/app/produits');
+  return { ok: true };
+}
+
 export async function markProposalSent(proposalId: string): Promise<ActionResult> {
   const g = await guard();
   if (!g.ok) return { ok: false, error: g.error };
@@ -1258,6 +1545,142 @@ export async function markProposalSent(proposalId: string): Promise<ActionResult
 
   revalidateProposal(proposalId, ws.proposal.diagnosticId);
   return { ok: true };
+}
+
+/**
+ * Envoyer la proposition au client par email (D-21, 10/09/2026).
+ *
+ * DÉCLENCHÉ PAR LE COMMERCIAL, JAMAIS AUTOMATIQUE. La proposition se présente
+ * en rendez-vous, c'est là qu'elle se vend ; ce bouton sert aux cas où le
+ * rendez-vous n'a pas lieu, ou pour laisser une trace écrite après coup. Les
+ * relances automatiques sont un autre sujet, et restent au lot H — les mêler
+ * ferait partir un rappel sur une proposition qu'on n'a jamais voulu envoyer.
+ *
+ * Trois portes, les mêmes que la remise en main propre : relecture humaine,
+ * validation de remise, PDF à jour. Un email ne contourne aucun contrôle.
+ *
+ * Un token PUBLIC NEUF est émis à chaque envoi, et c'est volontaire : seule
+ * l'empreinte est stockée, le lien précédent est donc irrécupérable. Émettre
+ * plutôt que tenter de relire évite le seul autre chemin possible — stocker le
+ * token en clair pour pouvoir le renvoyer.
+ *
+ * Le statut ne passe à ENVOYEE que si l'email est RÉELLEMENT parti. Un dry-run
+ * n'est pas un envoi, et une catégorie décochée non plus : dans les deux cas on
+ * le DIT au commercial au lieu de lui laisser croire que le client a reçu
+ * quelque chose. C'est la leçon de `fix(diagnostic): un dry-run n'est pas un
+ * envoi`, appliquée ici avant d'avoir eu à la réapprendre.
+ */
+export async function sendProposalByEmail(
+  proposalId: string,
+): Promise<ActionResult<{ sentTo: string }>> {
+  const g = await guard();
+  if (!g.ok) return { ok: false, error: g.error };
+
+  const ws = await buildWorkspace(proposalId, g.user.tenantId);
+  if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.blockers.length > 0) return { ok: false, error: ws.blockers[0]! };
+
+  const destinataire = await prisma.proposal.findFirst({
+    where: { id: proposalId, tenantId: g.user.tenantId },
+    select: {
+      validUntil: true,
+      title: true,
+      diagnosticId: true,
+      lead: { select: { firstName: true, email: true } },
+      owner: { select: { firstName: true } },
+    },
+  });
+  if (!destinataire) return { ok: false, error: 'Proposition introuvable' };
+
+  const email = destinataire.lead?.email?.trim();
+  if (!email) {
+    return {
+      ok: false,
+      error:
+        'Ce prospect n’a pas d’adresse email renseignée. Ajoutez-la sur la fiche lead, ou remettez la proposition par votre propre canal.',
+    };
+  }
+
+  const token = randomBytes(PUBLIC_TOKEN_BYTES).toString('hex');
+  const expiresAt = destinataire.validUntil ?? new Date(Date.now() + 30 * 24 * 3600 * 1000);
+  const base = (process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
+
+  const of = await loadOfConfig(g.user.tenantId);
+  const { subject, html, text } = renderPropositionRemise(
+    {
+      destinataireFirstName: destinataire.lead?.firstName ?? null,
+      titre: destinataire.title,
+      lienUrl: `${base}/proposition/${token}`,
+      validiteTexte: destinataire.validUntil
+        ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(destinataire.validUntil)
+        : null,
+      commercialFirstName: destinataire.owner?.firstName ?? null,
+    },
+    of,
+  );
+
+  // Le lien est posé AVANT l'envoi : un email qui porterait un lien non encore
+  // enregistré arriverait avant lui, et les premières secondes donneraient un
+  // 404 au client. L'inverse — un lien posé pour rien si l'envoi échoue — ne
+  // coûte qu'un token inutilisé.
+  await prisma.proposal.update({
+    where: { id: proposalId },
+    data: { publicTokenHash: hashPublicToken(token), publicTokenExpiresAt: expiresAt },
+  });
+
+  const envoi = await sendMail({
+    to: email,
+    subject,
+    html,
+    text,
+    context: { tenantId: g.user.tenantId, category: 'proposal_sent', sessionId: null },
+  });
+
+  if (envoi.suppressed) {
+    return {
+      ok: false,
+      error:
+        'Rien n’est parti : la catégorie « Envoi de la proposition au client » est décochée dans Paramètres › Envois d’emails. Cochez-la, puis réessayez.',
+    };
+  }
+  if (envoi.dryRun) {
+    return {
+      ok: false,
+      error:
+        'Rien n’est parti : l’application est en mode dry-run (MAIL_DRY_RUN ou SMTP non configuré).',
+    };
+  }
+  if (!envoi.ok) {
+    return { ok: false, error: `L’envoi a échoué : ${envoi.error ?? 'raison inconnue'}` };
+  }
+
+  // Parti pour de bon : on trace la remise. Même statut et même horodatage
+  // qu'une remise en main propre — le commercial ne doit pas avoir à se
+  // demander laquelle des deux il a faite.
+  await prisma.$transaction(async (tx) => {
+    await tx.proposal.update({
+      where: { id: proposalId },
+      data: { status: 'ENVOYEE', sentAt: new Date() },
+    });
+    await tx.auditLog.create({
+      data: {
+        tenantId: g.user.tenantId,
+        userId: g.user.id,
+        entity: 'Proposal',
+        entityId: proposalId,
+        action: 'proposition.sent_email',
+        diff: {
+          // L'adresse, oui — c'est la preuve de la remise. Le token, jamais.
+          sentTo: email,
+          linkExpiresAt: expiresAt.toISOString(),
+          totalHt: ws.synthesis.totalHt,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  });
+
+  revalidateProposal(proposalId, destinataire.diagnosticId);
+  return { ok: true, data: { sentTo: email } };
 }
 
 // Schémas locaux : ils référencent les schémas partagés, mais restent ici pour

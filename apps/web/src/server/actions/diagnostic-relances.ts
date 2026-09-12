@@ -119,6 +119,10 @@ export async function envoyerRelanceDiagnostic(
         data: {
           lastAction: ligne,
           lastActionAt: new Date(),
+          // A-2 (§11.1) : le marqueur repart à zéro dès qu'une action est
+          // enregistrée, pour qu'un lead re-délaissé puisse ré-alerter. Sans
+          // ça, la deuxième négligence passerait inaperçue.
+          staleAlertedAt: null,
           // On AJOUTE aux notes, on ne remplace jamais : la ligne de priorité du
           // diagnostic est en tête et sert encore au moment du rappel.
           notes: [lead.notes ?? '', '', `${new Date().toLocaleString('fr-FR')} — ${ligne} (${subject})`]

@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { Receipt, Loader2, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { createInvoiceFromParticipant } from '@/server/actions/invoices';
+import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 
 interface Props {
   participantId: string;
@@ -111,7 +112,7 @@ export function EmitInvoiceButton({
                 <span className="text-muted-foreground">Montant HT :</span>{' '}
                 <strong className="tabular-nums">{fmtEUR.format(amountHT)}</strong>
                 <span className="text-xs text-muted-foreground ml-2">
-                  (TVA non applicable — art. 261-4-4° CGI)
+                  ({MENTION_EXONERATION_TVA})
                 </span>
               </div>
             </div>
