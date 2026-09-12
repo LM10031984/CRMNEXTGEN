@@ -30,7 +30,12 @@ import {
   markOpcoSubmissionStatus,
   type SubmissionAttachment,
 } from '@/server/actions/opco-submission';
-import { LIBELLES_PIECE_DOSSIER } from '@/lib/opco/pieces-dossier';
+import {
+  LIBELLES_PIECE_DOSSIER,
+  PIECES_DONT_LA_SIGNATURE_EST_EXIGEE,
+  type KindPieceDossier,
+} from '@/lib/opco/pieces-dossier';
+import { vueDossierPret } from '@/lib/opco/etat-dossier';
 
 /**
  * Les libellés viennent du module du dossier — lot D. Cet écran en portait une
@@ -40,8 +45,40 @@ import { LIBELLES_PIECE_DOSSIER } from '@/lib/opco/pieces-dossier';
  */
 const KIND_LABELS = LIBELLES_PIECE_DOSSIER;
 
+/** Les natures de pièce qui portent une mention de signature, et elles seules. */
+const PORTE_UNE_MENTION = new Set<KindPieceDossier>(PIECES_DONT_LA_SIGNATURE_EST_EXIGEE);
+
+/**
+ * « Signée » / « Non signée », ou rien.
+ *
+ * Rien dans trois cas, et chacun a sa raison : la pièce ne se signe pas (RIB,
+ * CNI, programme), la pièce EST la preuve (certificat de signature), ou le
+ * brouillon date d'avant le lot D et ne porte pas l'information — auquel cas on
+ * se tait plutôt que d'affirmer « non signée » sur une pièce qui l'est
+ * peut-être.
+ */
+function mentionSignature(a: SubmissionAttachment) {
+  if (!PORTE_UNE_MENTION.has(a.kind) || a.signe === undefined) return null;
+  return a.signe ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-[10px] font-medium shrink-0">
+      Signée
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-800 text-[10px] font-medium shrink-0">
+      Non signée
+    </span>
+  );
+}
+
 interface Props {
   id: string;
+  /**
+   * Le RÔLE, décidé une fois côté serveur — jamais re-dérivé ici. C'est lui qui
+   * décide si l'option « Envoyer quand même » existe, et `sendOpcoSubmission`
+   * la refuse de toute façon à tout autre qu'un ADMIN : un bouton visible pour
+   * un rôle refusé est un bouton qui ment.
+   */
+  role: string;
   initial: {
     recipientEmail: string | null;
     subject: string | null;
@@ -53,7 +90,7 @@ interface Props {
   };
 }
 
-export function SubmissionEditor({ id, initial }: Props) {
+export function SubmissionEditor({ id, role, initial }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [recipient, setRecipient] = useState(initial.recipientEmail ?? '');
@@ -84,7 +121,7 @@ export function SubmissionEditor({ id, initial }: Props) {
     });
   }
 
-  function send() {
+  function send(force = false) {
     if (!recipient.trim()) {
       toast.error('Email destinataire vide');
       return;
@@ -93,7 +130,12 @@ export function SubmissionEditor({ id, initial }: Props) {
       toast.error('Aucune pièce jointe sélectionnée');
       return;
     }
-    if (!window.confirm(`Envoyer ce dossier à ${recipient} ?`)) return;
+    // La confirmation DIT ce qu'elle engage. « Envoyer quand même » sans
+    // rappeler ce qui manque ferait cliquer sans relire.
+    const question = force
+      ? `${dossier.blocage ?? ''}\n\nEnvoyer tout de même ce dossier à ${recipient} ?`
+      : `Envoyer ce dossier à ${recipient} ?`;
+    if (!window.confirm(question)) return;
     startTransition(async () => {
       // Sauvegarde puis envoi
       const u = await updateOpcoSubmissionDraft(id, {
@@ -106,7 +148,10 @@ export function SubmissionEditor({ id, initial }: Props) {
         toast.error(u.error ?? 'Erreur sauvegarde');
         return;
       }
-      const r = await sendOpcoSubmission(id);
+      // ⚠ `force` n'est JAMAIS passé par le chemin ordinaire — pas même
+      // `{ force: false }` : le serveur ne doit pas avoir à distinguer « on n'a
+      // pas demandé » de « on a demandé non ».
+      const r = force ? await sendOpcoSubmission(id, { force: true }) : await sendOpcoSubmission(id);
       if (!r.ok) {
         toast.error(r.error ?? 'Erreur envoi');
         return;
@@ -131,6 +176,11 @@ export function SubmissionEditor({ id, initial }: Props) {
   }
 
   const includedCount = attachments.filter((a) => a.included).length;
+
+  // ⚠ RIEN N'EST DÉCIDÉ ICI. `vueDossierPret` appelle `piecesNonSignees`, LA
+  // MÊME fonction que `sendOpcoSubmission` : l'écran ne peut donc pas annoncer
+  // « prêt » sur un dossier que le serveur refusera, ni l'inverse.
+  const dossier = vueDossierPret({ attachments, destinataire: recipient, role });
 
   return (
     <div className="space-y-5">
@@ -188,6 +238,27 @@ export function SubmissionEditor({ id, initial }: Props) {
         </p>
       </div>
 
+      {/* ── L'ÉTAT DU DOSSIER, avant tout clic (lot D) ──────────────────────
+          La phrase vient de `vueDossierPret`, jamais du JSX : écrite ici, elle
+          ne serait vérifiable qu'à l'œil — et c'est précisément à l'œil qu'on a
+          laissé partir des conventions vierges chez des financeurs. */}
+      {dossier.blocage === null ? (
+        <p className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            <strong>Dossier prêt</strong> — toutes les pièces exigées sont signées.
+          </span>
+        </p>
+      ) : (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{dossier.blocage}</span>
+        </p>
+      )}
+
       {/* Attachments */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -213,6 +284,13 @@ export function SubmissionEditor({ id, initial }: Props) {
                   <div className="font-medium truncate">{KIND_LABELS[a.kind]}</div>
                   <div className="text-[10px] text-muted-foreground truncate font-mono">{a.filename}</div>
                 </div>
+                {/* ⚠ SEULES LES PIÈCES DONT LA SIGNATURE EST EXIGÉE portent la
+                    mention. Le certificat de signature n'est ni « signé » ni
+                    « non signé » — il EST la preuve ; la CNI et le RIB ne se
+                    signent pas. Les marquer tous ferait chercher une signature
+                    sur un RIB. Un `signe` inconnu (brouillon d'avant le lot D)
+                    ne dit rien plutôt que de mentir. */}
+                {mentionSignature(a)}
                 {a.included ? (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                 ) : (
@@ -252,10 +330,26 @@ export function SubmissionEditor({ id, initial }: Props) {
           >
             <Mail className="h-3.5 w-3.5" /> Marquer envoyé manuellement
           </button>
+          {/* ⚠ « Envoyer quand même » EXISTE ou n'existe pas — jamais grisé
+              (discipline du bloc « Signature », décision Laurent n°3). Ici ce
+              n'est pas un réglage qui manque, c'est un RÔLE : un bouton grisé
+              ferait chercher une case à cocher qui n'existe pas. Et
+              `sendOpcoSubmission` le refuserait de toute façon à tout autre
+              qu'un ADMIN — un bouton visible pour un rôle refusé ment. */}
+          {dossier.forcagePossible && (
+            <button
+              type="button"
+              onClick={() => send(true)}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm hover:bg-amber-100 disabled:opacity-50"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" /> Envoyer quand même
+            </button>
+          )}
           <button
             type="button"
-            onClick={send}
-            disabled={pending || !recipient || includedCount === 0}
+            onClick={() => send()}
+            disabled={pending || !dossier.envoiPossible}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 disabled:opacity-50"
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}

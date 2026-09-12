@@ -77,6 +77,10 @@ export default async function ComposeOpcoPage({
 
       <SubmissionEditor
         id={sub.id}
+        // Le RBAC décidé une fois, côté serveur : c'est lui qui fait exister
+        // l'option « Envoyer quand même », et `sendOpcoSubmission` la refuse à
+        // tout autre qu'un ADMIN.
+        role={user.role}
         initial={{
           recipientEmail: sub.recipientEmail,
           subject: sub.subject,
