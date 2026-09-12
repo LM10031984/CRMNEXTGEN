@@ -217,3 +217,62 @@ mais aucune ligne SIGNÉ n'offre de lien « Certificat de signature ». À faire
 lot D (le dossier AGEFICE l'embarque) : lien à côté de « Ouvrir » sur une ligne
 signée, servi par une route équivalente à /api/documents/[id] avec nom parlant
 `…audit-trail.pdf`.
+
+## Lot D — les trois défauts d'écran soldés (12/09/2026, `feat/signature-lot-d`)
+
+Branche partie d'`origin/main` à jour. ⚠ Le dernier commit de
+`feat/signature-docs-signes` (`5785996b` — script `backfill-signer-roles.ts` et
+entrée D-C3-4 ci-dessus) n'était PAS dans `origin/main` : la PR #55 a été
+fusionnée en squash AVANT lui. Il a été reporté par cherry-pick, sans quoi le
+rattrapage de production joué le 12/09 aurait disparu du dépôt.
+
+### D-C3-3 — RÉSOLU
+
+La fiche organisation appelait `resoudreRepresentantEntreprise`, le chemin des
+AGENCES, pour une entreprise individuelle dont l'apprenant signe. Elle suit
+désormais la cascade EI_SELF, dans le même ordre que le moteur (`estEiSelf`
+avant `representative`). Le critère est le **rôle du `LegalLink`**, celui que
+`estEiSelfChezSponsor` lit aussi — pas `legalForm === 'EI'`, qui aurait été un
+second critère pour une même question. Message d'absence d'adresse réécrit : il
+envoie vers la **fiche apprenant**, jamais vers « le contact qui porte ce nom »,
+qui n'existe pas sur ce chemin.
+
+### D-C3-4 — RÉSOLU
+
+Le moteur a raison de se taire quand `regle === null` : il n'a rien
+d'INCOHÉRENT à signaler. C'est la VUE qui parle désormais — elle seule voit la
+différence entre « rien à signer » et « on ne sait pas quoi signer ».
+`construireVueSignature` reçoit `participants` (prop OBLIGATOIRE) et compose un
+encart par inscrit laissé de côté, avec la MÊME mécanique de lien que
+l'avertissement de régime. La condition `muet` du bloc intègre le cas : c'est
+là que SES-0112 s'était joué — avec zone de dépôt le bloc s'affichait mais
+réduit, sans elle il disparaissait.
+
+### D-C3-5 — RÉSOLU
+
+Route `GET /api/signature-requests/[id]/audit-trail` (décalquée de
+`/api/documents/[id]` : auth, scope tenant, 404 indiscernable, redirection
+Supabase / proxy MinIO, `?dl=1`, `no-store`) et lien « Certificat de signature »
+À CÔTÉ d'« Ouvrir ». Le lien n'existe que s'il mène quelque part : un scan
+déposé à la main est signé sans qu'aucun certificat existe.
+
+⚠ **Défaut trouvé en cours de lot** : deux certificats d'un même dossier
+portaient le même nom de fichier (un dossier AGEFICE porte deux demandes). Le
+nom porte désormais la pièce couverte — `Certificat-de-signature-Convention-…`
+vs `Certificat-de-signature-Dossier-AGEFICE-…`.
+
+### Ce qui reste à jouer sur l'aperçu
+
+Le lot D n'a pas été rejoué en recette : les trois gates sont verts
+(lint, `tsc`, 3636 tests) et toutes les mutations exécutées sont rouges, mais
+aucun envoi RÉEL n'a été fait depuis ces changements. À vérifier à la
+fusion :
+
+1. **Le certificat se télécharge** depuis une ligne signée, et porte le nom
+   attendu — c'est le seul point où la redirection Supabase peut encore faire
+   perdre le nom.
+2. **Un dossier AGEFICE composé** porte bien les pièces SIGNÉES, ses deux
+   certificats sous deux noms distincts, et le point d'accueil en destinataire.
+3. **L'alerte J-15** : au premier passage du cron horaire, vérifier qu'elle ne
+   part PAS en masse sur l'historique (la fenêtre est bornée aux sessions à
+   venir, mais aucune n'a encore de `Task` marqueur).
