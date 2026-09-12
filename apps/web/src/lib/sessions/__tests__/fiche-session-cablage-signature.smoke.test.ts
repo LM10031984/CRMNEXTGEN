@@ -106,3 +106,27 @@ describe('fiche session — les signataires de la demande remontent jusqu’au b
     expect(pageSrc).not.toMatch(/signataires: \[\],/);
   });
 });
+
+/* ── D-C3-5 — le certificat traverse-t-il la page ? ──────────────────────── */
+
+/**
+ * MÊME TROU, MÊME GARDE. `DocumentDeLaPiece.auditTrailUrl` est OBLIGATOIRE :
+ * l'oublier ne compile pas. Mais `auditTrailUrl: null` compile parfaitement et
+ * reproduit exactement l'écran d'avant — une ligne verte sans son certificat,
+ * et un dossier AGEFICE qu'il faut aller reconstituer dans sa boîte mail.
+ * C'est la SUBSTITUTION que `tsc` ne voit pas (lot C.2b-8, puis D-C3-1).
+ */
+describe('fiche session — le certificat de signature remonte jusqu’au bloc (D-C3-5)', () => {
+  it('la requête CHARGE la clé du certificat, sur la MÊME jointure que les signataires', () => {
+    // Une seconde jointure vers `signatureRequest` serait une requête de plus
+    // pour une colonne du même enregistrement.
+    expect(pageSrc).toMatch(
+      /signatureRequest: \{ select: \{ signers: true, auditTrailUrl: true \} \}/,
+    );
+  });
+
+  it('et elle est PASSÉE à la vue : la substitution par `null` doit rougir', () => {
+    expect(pageSrc).toMatch(/auditTrailUrl: d\.signatureRequest\?\.auditTrailUrl \?\? null,/);
+    expect(pageSrc).not.toMatch(/auditTrailUrl: null,/);
+  });
+});

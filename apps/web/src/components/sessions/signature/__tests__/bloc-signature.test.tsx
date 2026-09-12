@@ -135,6 +135,9 @@ function ligne(over: Partial<LigneSignature> = {}): LigneSignature {
     signatureRequestId: null,
     envoyable: true,
     signataire: null,
+    // Lot D (D-C3-5) : le certificat de la demande. Nul par défaut — la plupart
+    // des lignes n'en ont aucun, et c'est ce qui rend le lien significatif.
+    certificat: null,
     ...over,
   };
   return {
@@ -1200,5 +1203,76 @@ describe('PUISSANCE (e) — une pièce partie montre où elle en est, rang par r
     );
     expect(screen.queryAllByRole('link', { name: /signer maintenant/i })).toHaveLength(0);
     expect(document.body.textContent).not.toContain('a signé le');
+  });
+});
+
+/* ── D-C3-5 — le certificat de signature, atteignable depuis la ligne ─────── */
+
+/**
+ * LA PIÈCE QUE LES AGEFICE RÉCLAMENT, et qu'aucun écran n'offrait.
+ *
+ * Constat de mise en prod du 12/09/2026 : le certificat était produit, stocké
+ * et envoyé par email depuis le lot C.3, mais la ligne signée ne proposait que
+ * « Ouvrir » — c'est-à-dire le PDF signé seul. Monter un dossier AGEFICE
+ * obligeait donc à retrouver l'email « Votre exemplaire signé » dans sa boîte.
+ *
+ * ⚠ À CÔTÉ D'« OUVRIR », JAMAIS À LA PLACE (leçon du 10/09 sur `?dl=1`). Les
+ * deux pièces sont différentes et se rangent toutes les deux dans le dossier.
+ */
+describe('la ligne signée — le certificat de signature (D-C3-5)', () => {
+  beforeEach(() => cleanup());
+
+  it('propose le certificat quand la demande en porte un', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        vue={vue({
+          lignes: [
+            ligne({
+              etat: 'SIGNE',
+              envoyable: false,
+              documentId: 'doc-7',
+              signatureRequestId: 'req-9',
+              certificat: { signatureRequestId: 'req-9' },
+            }),
+          ],
+        })}
+      />,
+    );
+    const lien = screen.getByRole('link', { name: /Certificat de signature/i });
+    // ⚠ VALEUR LITTÉRALE (règle n°2) : c'est « vers où » qu'on garde. Comparer
+    // au retour d'un constructeur laisserait les deux côtés bouger ensemble.
+    expect(lien.getAttribute('href')).toBe('/api/signature-requests/req-9/audit-trail?dl=1');
+  });
+
+  it('n’en propose aucun sur une pièce signée par un SCAN déposé à la main', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        vue={vue({
+          lignes: [
+            ligne({ etat: 'SIGNE', envoyable: false, documentId: 'doc-7', certificat: null }),
+          ],
+        })}
+      />,
+    );
+    // Un lien qui mène à un 404 fait cesser de croire l'écran.
+    expect(screen.queryByRole('link', { name: /Certificat de signature/i })).toBeNull();
+    // « Ouvrir » reste, lui : le PDF signé existe bel et bien.
+    expect(screen.getByRole('link', { name: /Ouvrir/i })).not.toBeNull();
+  });
+
+  it('n’en propose aucun tant que la pièce n’est pas signée', () => {
+    render(
+      <BlocSignature
+        sessionId={SESSION_ID}
+        vue={vue({
+          lignes: [
+            ligne({ etat: 'ENVOYE', envoyable: false, signatureRequestId: 'req-9', certificat: null }),
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /Certificat de signature/i })).toBeNull();
   });
 });

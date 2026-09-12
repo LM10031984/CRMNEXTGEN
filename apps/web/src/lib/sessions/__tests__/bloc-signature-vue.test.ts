@@ -22,6 +22,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  certificatDeLaPiece,
   construireVueSignature,
   etatDeLaPiece,
   type DocumentDeLaPiece,
@@ -69,6 +70,9 @@ function doc(over: Partial<DocumentDeLaPiece> = {}): DocumentDeLaPiece {
     // Lot C.3 (D-C3-1) : les signataires RÉELS de la demande en cours. Vide par
     // défaut — un document qui n'est pas parti n'en a aucun.
     signataires: [],
+    // Lot D (D-C3-5) : la clé du certificat de signature, portée par la DEMANDE.
+    // Nulle par défaut — tant que rien n'est signé, aucun certificat n'existe.
+    auditTrailUrl: null,
     ...over,
   };
 }
@@ -1101,5 +1105,133 @@ describe('LigneSignature.attente — la phrase de la ligne, qui remplace la pér
     const attente = ligneAvec({}).attente ?? '';
     expect(attente).not.toContain('C.2c');
     expect(attente).not.toContain('C.3');
+  });
+});
+
+/* ── D-C3-5 — le certificat de signature, offert QUAND il existe ──────────── */
+
+/**
+ * CE QUE LA RECETTE A TROUVÉ (mise en prod du 12/09/2026). `auditTrailUrl` est
+ * renseigné depuis le lot C.3 — `signature-retour.ts` télécharge le certificat,
+ * l'écrit en bucket et le joint à l'email « Votre exemplaire signé ». Mais
+ * aucune ligne SIGNÉ ne l'offrait à l'écran, alors que c'est la pièce que les
+ * AGEFICE réclament (règle métier n°3 de la spec).
+ *
+ * DEUX SIGNÉS QUI NE SE RESSEMBLENT PAS, et c'est tout l'objet de ces tests :
+ * un scan déposé à la main (lot A) est signé sans qu'aucun certificat existe.
+ * Offrir le lien sur toutes les lignes vertes mènerait donc à un 404 sur la
+ * moitié d'entre elles — et un admin qui clique sur « Certificat » et tombe sur
+ * une erreur cesse de croire l'écran.
+ */
+describe('certificatDeLaPiece — un lien qui n’existe que s’il mène quelque part', () => {
+  it('une pièce signée par voie électronique offre son certificat', () => {
+    expect(
+      certificatDeLaPiece({
+        etat: 'SIGNE',
+        signatureRequestId: 'req-9',
+        auditTrailUrl: 'sessions/t1/SES-0112/signed/convention.audit-trail.pdf',
+      }),
+    ).toEqual({ signatureRequestId: 'req-9' });
+  });
+
+  it('un SCAN déposé à la main n’en a aucun — le lien ne doit pas exister', () => {
+    expect(
+      certificatDeLaPiece({ etat: 'SIGNE', signatureRequestId: null, auditTrailUrl: null }),
+    ).toBeNull();
+  });
+
+  it('une demande partie mais pas encore close n’en a pas non plus', () => {
+    // Le certificat n'est produit qu'à `submission.completed` : entre les deux
+    // signatures, la colonne est vide et l'offrir promettrait un fichier qui
+    // n'existe pas encore.
+    expect(
+      certificatDeLaPiece({ etat: 'ENVOYE', signatureRequestId: 'req-9', auditTrailUrl: null }),
+    ).toBeNull();
+  });
+
+  it('une demande dont le certificat est arrivé AVANT que la pièce soit signée n’offre rien', () => {
+    // Garde-fou d'ordre de lecture : c'est l'ÉTAT de la pièce qui commande, pas
+    // la seule présence de la colonne.
+    expect(
+      certificatDeLaPiece({
+        etat: 'ENVOYE',
+        signatureRequestId: 'req-9',
+        auditTrailUrl: 'sessions/t1/x.audit-trail.pdf',
+      }),
+    ).toBeNull();
+  });
+
+  it('une clé BLANCHE ne vaut pas une preuve', () => {
+    expect(
+      certificatDeLaPiece({ etat: 'SIGNE', signatureRequestId: 'req-9', auditTrailUrl: '   ' }),
+    ).toBeNull();
+  });
+
+  it('sans identifiant de demande, il n’y a rien à servir', () => {
+    // La route s'adresse à la DEMANDE : `/api/signature-requests/{id}/audit-trail`.
+    expect(
+      certificatDeLaPiece({
+        etat: 'SIGNE',
+        signatureRequestId: null,
+        auditTrailUrl: 'sessions/t1/x.audit-trail.pdf',
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('construireVueSignature — le certificat remonte jusqu’à la ligne', () => {
+  const conventionDuGroupe: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1', 'part-2'],
+    libelle: 'Convention — AGENCE MARTIN (2 participants)',
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN',
+  };
+  const dossierNominatif: EnvoiPlanifie = {
+    cle: 'AGEFICE:part-1',
+    docType: 'AGEFICE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
+  };
+
+  it('la ligne signée électroniquement porte son certificat', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [dossierNominatif], blocages: [], avertissements: [] },
+      documentParCle: new Map([
+        [
+          'AGEFICE:part-1',
+          doc({
+            status: 'signed',
+            signedPdfUrl: 'docs/signe.pdf',
+            signatureRequestId: 'req-9',
+            auditTrailUrl: 'sessions/t1/SES-0112/signed/agefice.audit-trail.pdf',
+          }),
+        ],
+      ]),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.lignes[0]!.etat).toBe('SIGNE');
+    expect(vue.lignes[0]!.certificat).toEqual({ signatureRequestId: 'req-9' });
+  });
+
+  it('la ligne signée par un SCAN n’en porte aucun', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      documentParCle: new Map(),
+      docStatusParCle: new Map([['CONVENTION:org-1', 'MANUAL_OK']]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.lignes[0]!.etat).toBe('SIGNE');
+    expect(vue.lignes[0]!.certificat).toBeNull();
   });
 });
