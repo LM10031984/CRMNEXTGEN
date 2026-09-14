@@ -201,12 +201,17 @@ function renderPlanning(data: PropositionData): string {
     </table>`;
 }
 
-function renderFundingTable(data: PropositionData): string {
+/** Exportée pour être contrôlée seule : c'est ce tableau que le financeur lit. */
+export function renderFundingTable(data: Pick<PropositionData, 'funding'>): string {
   const rows = data.funding.rows
     .map(
       (r) =>
         `<tr><td><b>${esc(r.funder)}</b></td><td>${esc(r.beneficiaries)}</td><td>${esc(r.basis)}</td><td class="num">${
-          r.isDeduction ? `&#8722; ${money(r.amount)}` : money(r.amount)
+          r.amountLabel
+            ? esc(r.amountLabel)
+            : r.isDeduction
+              ? `&#8722; ${money(r.amount)}`
+              : money(r.amount)
         }</td></tr>`,
     )
     .join('');

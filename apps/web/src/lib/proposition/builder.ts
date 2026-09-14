@@ -82,6 +82,15 @@ export interface FundingBuildInput {
 export function buildFundingSection(input: FundingBuildInput): ProposalFunding {
   const { funding, rules } = input;
   const rows: FundingRow[] = [];
+  /**
+   * « Je ne sais pas » n'est pas « il n'y a rien ».
+   *
+   * `?? 0` écrasait les deux en un seul état, et le document AFFIRMAIT au
+   * financeur une absence de consommation qu'on n'avait jamais constatée
+   * (PROP-0001 v1, page 2). Le calcul retombe toujours sur 0 — il n'a pas
+   * d'autre choix — mais le DOCUMENT, lui, dit lequel des deux il décrit.
+   */
+  const declaree = input.consumedThisYear !== undefined;
   const consumed = input.consumedThisYear ?? 0;
 
   if (funding.agefice.participantCount > 0) {
@@ -122,12 +131,15 @@ export function buildFundingSection(input: FundingBuildInput): ProposalFunding {
 
   rows.push({
     funder: 'Déduction',
-    beneficiaries:
-      consumed > 0
+    beneficiaries: !declaree
+      ? 'Financements déjà engagés sur l’exercice en cours : non renseigné — à confirmer avant dépôt du dossier'
+      : consumed > 0
         ? 'Financements déjà engagés sur l’exercice en cours'
         : 'Aucun financement engagé déclaré sur l’exercice en cours',
     basis: '—',
     amount: euros(consumed),
+    // Rien de connu, donc rien d'affirmé : un tiret, pas un « − 0 € ».
+    ...(declaree ? {} : { amountLabel: '—' }),
     isDeduction: true,
   });
 
@@ -147,7 +159,17 @@ export function buildFundingSection(input: FundingBuildInput): ProposalFunding {
     rows,
     total,
     potentialNote,
-    clientAlerts: funding.alerts.filter((a) => a.audience === 'client').map((a) => a.label),
+    clientAlerts: [
+      ...funding.alerts.filter((a) => a.audience === 'client').map((a) => a.label),
+      // Un total calculé sur une consommation inconnue est un PLAFOND. Le dire
+      // est ce qui distingue une estimation honnête d'une mention trompeuse de
+      // financement — exactement ce que le référentiel Qualiopi sanctionne.
+      ...(declaree
+        ? []
+        : [
+            'Ces montants sont un maximum : les financements éventuellement déjà engagés sur l’exercice en cours n’ont pas été renseignés et viendront s’en déduire.',
+          ]),
+    ],
     conventionedHoursPerParticipant: funding.conventionedHours,
     halfDays: funding.halfDays,
   };
