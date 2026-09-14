@@ -213,6 +213,15 @@ vérifié, c'est se garantir une divergence muette.
 
 **Un test qui n'a jamais rougi n'est pas un test, c'est une décoration.**
 
+> **Et la formulation la plus claire qu'on en ait eue** (12/09/2026, troisième
+> chute) : **on surveille un ÉCART entre deux sources. Importer la valeur
+> supprime l'écart au lieu de le détecter.**
+>
+> C'est pour ça qu'un garde qui vérifie que deux fichiers s'accordent doit lire
+> le FICHIER, pas importer sa constante. Le jour où l'import remplace la
+> lecture, le test ne peut plus échouer — et il devient vert pour la pire des
+> raisons : il ne regarde plus rien.
+
 Même famille que §4 bis — un garde-fou auquel on fait confiance et qui ne garde
 rien —, et le troisième cas est arrivé le 11/09/2026, sur le départage des
 modules à égalité de score.
@@ -277,6 +286,54 @@ et c'est le cas dès que deux opérations du même type cohabitent — il faut u
 test qui **appelle** le code. Et dans les deux cas, la mutation contre le code
 d'origine est ce qui tranche : un garde qui ne rougit pas contre le défaut
 qu'il prétend attraper ne l'attrape pas.
+
+## 4 quater. Un relevé dit ce qu'il a CHERCHÉ, pas seulement ce qu'il a trouvé
+
+Trois incidents en trois jours, et ce n'est pas trois incidents : **c'est une
+seule règle, ratée de trois façons.**
+
+| Ce qu'on annonçait | Ce qui n'allait pas | Coût |
+|---|---|---|
+| « 32 codes `PROD-` » | **un compte de PRÉFIXES** — les 7 `FRM-*` étaient invisibles au motif | « 32 → 34 » lu comme deux créations, alors qu'aucun produit n'avait été créé |
+| « 41 codes » | **un compte sans sa POPULATION** — 41 publiés contre 51 en base, les deux justes | deux relevés à refaire |
+| « public visé : 0 fiche » | **un compte au mauvais MOTIF** — on cherchait « public visé », le titre réel était `## Public` | 5 fiches déclarées saines, elles ne l'étaient pas |
+
+Les trois donnent un nombre **exact** et **faux d'intention**. Et les trois
+rassurent : zéro, ou un petit écart explicable.
+
+> **La règle : un relevé porte sa date, sa commande exacte, la liste en clair,
+> la population nommée — ET le motif qu'il a employé.** Sans le motif, on ne
+> peut pas distinguer « il n'y a rien » de « je n'ai pas su le chercher ».
+
+### Le corollaire côté code : un motif qui répond à deux choses n'est pas un motif
+
+Même famille, même jour. Un parseur cherchait `/méthodes|moyens/i` pour
+remplir la colonne des **méthodes pédagogiques**. Les programmes portent deux
+rubriques voisines — « Modalités pédagogiques » et « Moyens et supports
+pédagogiques » — et le motif attrapait la seconde.
+
+**Le script s'apprêtait à écrire un support dans la colonne des méthodes.**
+Du texte valide, au mauvais endroit, sans qu'aucune erreur ne se lève. C'est la
+forme la plus dangereuse du défaut, parce que **rien ne proteste**.
+
+La réponse tient en deux lignes de code : le titre se reconnaît **en entier**,
+et **deux titres qui répondent au même motif arrêtent tout**. Une ambiguïté
+tranchée au hasard est une écriture qu'on ne peut pas relire.
+
+### Une technique : la FORME comme traceur
+
+Quand deux sources écrivent la même information sous deux **formes**
+différentes — casse, ponctuation, accent — la forme dit laquelle a produit le
+rendu, **sans lire une ligne de code**.
+
+Cas fondateur (12/09/2026) : fallait-il croire que le `programMd` d'un produit
+était rendu sur la page publique ? Le `programMd` écrit « Julien **LAFITTE** »
+en capitales ; la constante du catalogue écrivait « Julien **Lafitte** ». Sur la
+page : `Julien` 58 fois, **`LAFITTE` zéro fois**. Les 58 venaient donc toutes de
+la constante, et le `programMd` n'était pas rendu. Une seule commande, aucune
+lecture de code, aucune supposition.
+
+À chercher dès qu'on se demande « d'où vient ce texte ? ».
 
 ## 5. Gates — les trois, dans cet ordre
 
