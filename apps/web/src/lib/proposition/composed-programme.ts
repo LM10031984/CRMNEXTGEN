@@ -173,17 +173,29 @@ function norm(s: string): string {
  *
  * Elle est relevée sur les intitulés réellement présents en base, pas devinée.
  */
+/**
+ * La liste est ASYMÉTRIQUE, et c'est voulu (doctrine, 14/09/2026).
+ *
+ * Un faux négatif — un bon titre marqué « à rédiger » — coûte une relecture
+ * humaine. Un faux positif — un titre creux accepté comme objectif — imprime
+ * « Maîtriser « Suivi » » sur une pièce qui part au financeur.
+ *
+ * La liste DOIT donc pencher vers le refus. On l'élargit au cas par cas, sur
+ * PREUVE, jamais par principe : `conduire`, `mener` et `repondre` ont été
+ * ajoutés le 14/09/2026 après mesure — 5 modules du catalogue les portent,
+ * dont 2 objectifs légitimes refusés à tort (drive:059#6, drive:060#4).
+ */
 const TITLE_VERBS: ReadonlySet<string> = new Set([
   'acquerir', 'adapter', 'analyser', 'animer', 'apprendre', 'argumenter',
   'automatiser', 'batir', 'capter', 'choisir', 'comprendre', 'conclure',
-  'construire', 'convaincre', 'creer', 'decouvrir', 'definir', 'deployer',
+  'conduire', 'construire', 'convaincre', 'creer', 'decouvrir', 'definir', 'deployer',
   'developper', 'diffuser', 'entrainer', 'etablir', 'evaluer', 'exploiter',
   'faire', 'fideliser', 'formaliser', 'generer', 'gerer', 'identifier',
-  'installer', 'integrer', 'maitriser', 'mesurer', 'mettre', 'motiver',
+  'installer', 'integrer', 'maitriser', 'mener', 'mesurer', 'mettre', 'motiver',
   'negocier',
   'optimiser', 'organiser', 'piloter', 'planifier', 'pratiquer', 'preparer',
   'presenter', 'prospecter', 'qualifier', 'realiser', 'recruter', 'rediger',
-  'relancer', 'renforcer', 'rentrer', 'ritualiser', 'savoir', 'securiser',
+  'relancer', 'renforcer', 'rentrer', 'repondre', 'ritualiser', 'savoir', 'securiser',
   'signer', 'simuler', 'structurer', 'suivre', 'synthetiser', 'traiter',
   'transformer', 'utiliser', 'valoriser', 'vendre',
 ]);
@@ -199,9 +211,31 @@ const TITLE_VERBS: ReadonlySet<string> = new Set([
  * avertissement, parce qu'un titre de module qui ne se lit pas comme un
  * objectif est un titre à réécrire au catalogue, pas un problème de rendu.
  */
+function premierMot(title: string): string {
+  return norm(title).split(' ')[0] ?? '';
+}
+
 function looksLikeInfinitive(title: string): boolean {
-  const first = norm(title).split(' ')[0] ?? '';
-  return TITLE_VERBS.has(first);
+  return TITLE_VERBS.has(premierMot(title));
+}
+
+/**
+ * Le critère, en toutes lettres — parce qu'un refus doit le NOMMER.
+ *
+ * Défaut du 14/09/2026, troisième de sa famille : trois titres réécrits par
+ * Laurent ont été refusés sur le message « le titre ne dit pas ce que le
+ * stagiaire saura faire ». C'était vrai en général et FAUX ici — les trois le
+ * disaient. Le vrai motif était que leur verbe ne figurait pas dans la liste.
+ * Un refus qui récite sa seule raison connue envoie chercher au mauvais
+ * endroit, et on réécrit indéfiniment un titre déjà bon.
+ */
+const CRITERE_OBJECTIF = 'le titre doit commencer par un verbe d’action reconnu';
+
+interface RefusObjectif {
+  title: string;
+  critere: string;
+  /** Le mot que le critère a réellement lu — sans lui, on cherche à l'aveugle. */
+  lu: string;
 }
 
 /**
@@ -217,10 +251,14 @@ function looksLikeInfinitive(title: string): boolean {
  * Le module qui ne peut pas produire d'objectif est donc RECENSÉ, pas comblé :
  * son objectif reste à rédiger, et le programme le dit.
  */
-function toObjective(title: string): string | null {
+function toObjective(
+  title: string,
+): { ok: true; objective: string } | { ok: false; refus: RefusObjectif } {
   const clean = title.trim().replace(/\s+/g, ' ');
-  if (!looksLikeInfinitive(clean)) return null;
-  return clean.charAt(0).toUpperCase() + clean.slice(1);
+  if (!looksLikeInfinitive(clean)) {
+    return { ok: false, refus: { title: clean, critere: CRITERE_OBJECTIF, lu: premierMot(clean) } };
+  }
+  return { ok: true, objective: clean.charAt(0).toUpperCase() + clean.slice(1) };
 }
 
 /**
@@ -326,22 +364,28 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
   // ── Objectifs — un par module retenu, dans l'ordre du déroulé ──────────────
   const objectives: string[] = [];
   const objectivesToWrite: string[] = [];
+  const refus: RefusObjectif[] = [];
   const seenObjective = new Set<string>();
   for (const m of modules) {
-    const text = toObjective(m.title);
-    if (text === null) {
-      if (!objectivesToWrite.includes(m.title)) objectivesToWrite.push(m.title);
+    const r = toObjective(m.title);
+    if (!r.ok) {
+      if (!objectivesToWrite.includes(m.title)) {
+        objectivesToWrite.push(m.title);
+        refus.push(r.refus);
+      }
       continue;
     }
-    if (seenObjective.has(norm(text))) continue;
-    seenObjective.add(norm(text));
-    objectives.push(text);
+    if (seenObjective.has(norm(r.objective))) continue;
+    seenObjective.add(norm(r.objective));
+    objectives.push(r.objective);
   }
-  if (objectivesToWrite.length > 0) {
+  const direLeRefus = (x: RefusObjectif) => `« ${x.title} » (mot lu : « ${x.lu} »)`;
+  if (refus.length > 0) {
     warnings.push(
-      `${objectivesToWrite.length} objectif(s) pédagogique(s) restent À RÉDIGER : le titre du module ne dit pas ce que le stagiaire saura faire (${objectivesToWrite
+      `${refus.length} objectif(s) pédagogique(s) restent À RÉDIGER. Critère : ${CRITERE_OBJECTIF}. ${refus
         .slice(0, 3)
-        .join(', ')}). Ils ne sont pas inventés — « Maîtriser « Suivi » » n'est pas un objectif, c'est une formule creuse qui donnerait l'illusion de la conformité.`,
+        .map(direLeRefus)
+        .join(' ; ')}. Ils ne sont pas inventés — « Maîtriser « Suivi » » n'est pas un objectif, c'est une formule creuse qui donnerait l'illusion de la conformité.`,
     );
   }
   if (modules.length === 0) {
@@ -392,8 +436,13 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
           ...objectives.map((o) => `- ${o}`),
         ]
       : ['_Objectifs pédagogiques à rédiger._']),
-    ...(objectivesToWrite.length > 0
-      ? ['', `_Objectifs restant à rédiger pour : ${objectivesToWrite.join(', ')}._`]
+    ...(refus.length > 0
+      ? [
+          '',
+          `_Objectifs restant à rédiger — critère : ${CRITERE_OBJECTIF}._`,
+          '',
+          ...refus.map((x) => `- ${direLeRefus(x)}`),
+        ]
       : []),
     '',
     '## Déroulé',
@@ -472,9 +521,11 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
   if (modules.length === 0) {
     blockers.push('Aucun module composé.');
   }
-  if (objectivesToWrite.length > 0) {
+  if (refus.length > 0) {
     blockers.push(
-      `${objectivesToWrite.length} objectif(s) pédagogique(s) à rédiger — un objectif dit ce que le stagiaire saura faire, il ne se déduit pas d'un titre.`,
+      `${refus.length} objectif(s) pédagogique(s) à rédiger — critère : ${CRITERE_OBJECTIF}. ${refus
+        .map(direLeRefus)
+        .join(' ; ')}.`,
     );
   }
   if (sansDeroule.length > 0) {

@@ -491,6 +491,78 @@ Le contrat ne porte **pas** sur « quel mot pour quelle variante » : il porte s
 l'**absence de tout qualificatif**, dans les deux cas, plus l'égalité stricte des
 deux rendus. Écrit autrement, il aurait laissé passer « audit léger joint ».
 
+## 4 octies. Un refus nomme son CRITÈRE et la VALEUR qu'il a lue
+
+**Troisième fois de la semaine**, et c'est ce qui en fait une règle.
+
+| Refus | Ce qu'il disait | La vraie raison |
+|---|---|---|
+| geste commercial (14/09) | « au-delà d'une demi-journée facturée, c'est une négociation » | le reste à charge valait **0**, pas 400 € |
+| objectif pédagogique (14/09) | « le titre ne dit pas ce que le stagiaire saura faire » | le **verbe** n'était pas dans la liste blanche |
+| navigation de chapitre (14/09) | *rien du tout* | une file d'attente sans borne |
+
+Les trois ont envoyé chercher au mauvais endroit. Le deuxième a coûté le plus
+cher : Laurent a réécrit quatre titres, trois ont été refusés, et le message
+décrivait un défaut que ces titres n'avaient pas. Quelqu'un qui lit ça réécrit
+**indéfiniment un titre déjà bon**.
+
+> **La règle : un refus nomme le critère qui a échoué ET la valeur qu'il a lue.
+> Un refus qui récite sa seule raison connue est une fausse piste.**
+
+En pratique : `« Atelier pratique : … » (mot lu : « atelier »)` plutôt que
+« ce titre ne convient pas ». Le lecteur sait alors quoi changer.
+
+**Testable par mutation** : retirer la mention du critère doit faire rougir un
+test qui lit le DOCUMENT rendu, pas l'objet (§4 quinquies).
+
+## 4 nonies. Une liste blanche est ASYMÉTRIQUE, et c'est voulu
+
+Corollaire du précédent, parce que la tentation après un faux refus est
+d'ouvrir la vanne.
+
+`TITLE_VERBS` (66 infinitifs, `composed-programme.ts`) décide si un titre de
+module peut devenir un objectif pédagogique. Elle refuse beaucoup. C'est le
+comportement recherché :
+
+| | Coût |
+|---|---|
+| **faux négatif** — un bon titre marqué « à rédiger » | une relecture humaine |
+| **faux positif** — un titre creux accepté comme objectif | « Maîtriser « Suivi » » **imprimé sur une pièce financeur** |
+
+> **La liste DOIT pencher vers le refus. On l'élargit au cas par cas, sur
+> PREUVE, jamais par principe.**
+
+La preuve, c'est une mesure : le 14/09/2026, `conduire`, `mener` et `repondre`
+ont été ajoutés après avoir compté ce qu'ils changeaient — **5 modules**, dont
+**2 objectifs légitimes refusés à tort**. Pas « ce sont des verbes, ajoutons-les ».
+
+### Le procédé qui va avec
+
+**Toute proposition de titre soumise à Laurent est validée contre `TITLE_VERBS`
+AVANT de lui être présentée.** S'il faut élargir la liste, on le dit dans la
+même proposition.
+
+Sinon on dépense l'attention de quelqu'un pour un résultat qui sera refusé —
+c'est arrivé le 14/09 sur quatre titres, dont trois ont dû revenir.
+
+## 4 decies. Un garde qui gêne : sépare les familles, ne desserre pas le seuil
+
+Le 14/09/2026, `mentions-organisme.test.ts` comptait **tous** les warnings de
+l'instantané (64) pour surveiller une seule chose : qu'aucun module ne soit
+nouvellement vidé. Quatre traces d'arbitrage de titre l'ont fait passer à 68.
+
+Le réflexe — écrire `68` — l'aurait rendu **aveugle** : un module réellement
+vidé se serait ensuite caché derrière un arbitrage de titre, et le garde serait
+resté vert pour la pire des raisons.
+
+> **Quand un garde légitime gêne, on EXCLUT la famille étrangère et on la compte
+> à part. Le seuil ne bouge pas.**
+
+Le garde en ressort **plus serré** qu'avant : il surveille désormais deux
+populations nommées au lieu d'un total qui mélangeait tout. C'est §4 ter
+appliqué à l'envers — au lieu de constater après coup qu'un garde ne garde rien,
+on l'empêche de le devenir.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
