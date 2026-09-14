@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ import {
   CloudOff,
   Loader2,
   RefreshCw,
+  RotateCw,
 } from 'lucide-react';
 import {
   DIAGNOSTIC_CHAPTERS,
@@ -37,7 +38,7 @@ import { FundingSynthesisPanel } from './funding-synthesis';
 import { PipelineSynthesisPanel } from './pipeline-synthesis';
 import { QuestionField } from './question-field';
 import { TeamGrid, type TeamRow } from './team-grid';
-import { useAutosave } from './use-autosave';
+import { useAutosave, type FailedWrite } from './use-autosave';
 
 /**
  * L'écran d'un chapitre — l'unité de saisie du R1.
@@ -51,6 +52,14 @@ import { useAutosave } from './use-autosave';
  * snapshot serveur, lui, est persisté en fond — c'est ce que le rapport d'audit
  * reprendra.
  */
+
+/**
+ * Ce que l'écran dit quand la borne est atteinte. Le fond du message : on a
+ * cessé d'ATTENDRE, on n'a pas cessé d'ÉCRIRE — et l'indicateur d'en-tête reste
+ * la source de vérité sur ce qui est parti.
+ */
+const ATTENTE_DEPASSEE =
+  'Enregistrement plus long que prévu — il continue en arrière-plan, rien n’est perdu.';
 
 export interface AnswerState {
   questionId: string;
@@ -87,7 +96,27 @@ export function ChapterWorkspace({
   const [answers, setAnswers] = useState<AnswerState[]>(initialAnswers);
   const [participants, setParticipants] = useState<TeamRow[]>(initialParticipants);
   const [syncing, startSync] = useTransition();
-  const { state: saveState, save, flushNow, lastError } = useAutosave();
+  const { state: saveState, save, flushNow, retryFailed, lastError, failed } = useAutosave();
+
+  /**
+   * La cible en cours de navigation — deux rôles, et les deux comptent.
+   *
+   * Le ref GARDE : trois clics sur « suivant » ne doivent produire qu'une
+   * navigation. Contre le code d'origine, ils en produisaient deux — le premier
+   * clic restait bloqué pendant que le deuxième passait, ce qui rendait le
+   * défaut incompréhensible en rendez-vous.
+   *
+   * L'état AFFICHE : le bouton cliqué s'annonce occupé dans la milliseconde.
+   * Une attente légitime ne doit jamais ressembler à un bouton mort.
+   */
+  const navigatingRef = useRef<number | 'finish' | null>(null);
+  const [navigatingTo, setNavigatingTo] = useState<number | 'finish' | null>(null);
+
+  // Arrivé au chapitre demandé : on relâche le garde.
+  useEffect(() => {
+    navigatingRef.current = null;
+    setNavigatingTo(null);
+  }, [chapter]);
 
   // Le serveur reste la source de vérité : quand il renvoie de nouvelles
   // données (ajout d'une fiche équipe, navigation), on s'y réaligne.
@@ -150,12 +179,19 @@ export function ChapterWorkspace({
         return next;
       });
       if (readOnly) return;
-      save(questionId, async () => {
-        const r = await saveDiagnosticAnswer({ diagnosticId, questionId, value, isSkipped });
-        return r.ok ? { ok: true } : { ok: false, error: r.error };
-      });
+      // Le libellé accompagne l'écriture : si elle échoue, l'écran doit pouvoir
+      // NOMMER la réponse qui n'est pas partie, pas afficher un identifiant.
+      const label = questions.find((q) => q.id === questionId)?.question ?? questionId;
+      save(
+        questionId,
+        async () => {
+          const r = await saveDiagnosticAnswer({ diagnosticId, questionId, value, isSkipped });
+          return r.ok ? { ok: true } : { ok: false, error: r.error };
+        },
+        label,
+      );
     },
-    [diagnosticId, readOnly, save],
+    [diagnosticId, questions, readOnly, save],
   );
 
   const chapterIndex = DIAGNOSTIC_CHAPTERS.findIndex((c) => c.chapter === chapter);
@@ -188,13 +224,21 @@ export function ChapterWorkspace({
    * barrage : le récapitulatif porte un bouton « Terminer quand même ».
    */
   const finish = useCallback(() => {
+    if (navigatingRef.current !== null) return;
+    navigatingRef.current = 'finish';
+    setNavigatingTo('finish');
     startSync(async () => {
-      await flushNow();
+      // Même borne qu'un changement de chapitre : « Terminer » était atteint
+      // par le même défaut — il attendait `flushNow` sans limite.
+      const complete = await flushNow();
+      if (!complete) toast.warning(ATTENTE_DEPASSEE);
       const action = resolveFinishAction(diagnosticId, progress);
       if (action.kind === 'complete') {
         const r = await completeDiagnostic(diagnosticId);
         if (!r.ok) {
           toast.error(r.error);
+          navigatingRef.current = null;
+          setNavigatingTo(null);
           return;
         }
         toast.success('Diagnostic terminé');
@@ -205,9 +249,19 @@ export function ChapterWorkspace({
 
   const goTo = useCallback(
     async (target: DiagnosticChapter) => {
-      // On vide la file d'attente AVANT de naviguer : rien ne se perd entre
-      // deux chapitres, même si la dernière frappe date d'une demi-seconde.
-      await flushNow();
+      // Un seul déplacement à la fois. Sans ce garde, trois clics lançaient
+      // trois `flushNow` et trois recalculs — et allongeaient exactement la
+      // file qui faisait paraître le bouton mort.
+      if (navigatingRef.current !== null) return;
+      navigatingRef.current = target;
+      setNavigatingTo(target);
+
+      // On pousse la file AVANT de naviguer — mais on ne l'attend PAS
+      // indéfiniment. Dépasser la borne n'abandonne rien : la file vit hors du
+      // composant et continue de se vider pendant et après la navigation.
+      const complete = await flushNow();
+      if (!complete) toast.warning(ATTENTE_DEPASSEE);
+
       if (!readOnly) {
         startSync(async () => {
           await recomputeDiagnosticSnapshot(diagnosticId);
@@ -252,12 +306,16 @@ export function ChapterWorkspace({
                 <button
                   type="button"
                   onClick={() => void goTo(c.chapter)}
-                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                  disabled={navigatingTo !== null && navigatingTo !== c.chapter}
+                  aria-busy={navigatingTo === c.chapter ? true : undefined}
+                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors disabled:opacity-50 ${
                     active ? 'bg-primary/10 font-medium' : 'hover:bg-muted'
-                  }`}
+                  } ${navigatingTo === c.chapter ? 'bg-primary/20' : ''}`}
                   aria-current={active ? 'step' : undefined}
                 >
-                  {c.isComplete ? (
+                  {navigatingTo === c.chapter ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+                  ) : c.isComplete ? (
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
                   ) : (
                     <CircleDashed
@@ -287,8 +345,15 @@ export function ChapterWorkspace({
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{meta.objective}</p>
           </div>
-          <SaveIndicator state={saveState} error={lastError} syncing={syncing} />
+          <SaveIndicator
+            state={saveState}
+            error={lastError}
+            syncing={syncing}
+            failedCount={failed.length}
+          />
         </header>
+
+        <FailedPanel failed={failed} onRetry={() => void retryFailed()} />
 
         {chapter === 2 && (
           <section className="rounded-lg border border-border p-4">
@@ -350,9 +415,15 @@ export function ChapterWorkspace({
             <button
               type="button"
               onClick={() => void goTo(previous.chapter)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted"
+              disabled={navigatingTo !== null && navigatingTo !== previous.chapter}
+              aria-busy={navigatingTo === previous.chapter ? true : undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted disabled:opacity-50"
             >
-              <ArrowLeft className="h-4 w-4" />
+              {navigatingTo === previous.chapter ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <ArrowLeft className="h-4 w-4" />
+              )}
               {previous.chapter}. {previous.title}
             </button>
           ) : (
@@ -368,19 +439,28 @@ export function ChapterWorkspace({
             <button
               type="button"
               onClick={() => void goTo(next.chapter)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20"
+              disabled={navigatingTo !== null && navigatingTo !== next.chapter}
+              aria-busy={navigatingTo === next.chapter ? true : undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
             >
               {next.chapter}. {next.title}
-              <ArrowRight className="h-4 w-4" />
+              {navigatingTo === next.chapter ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
             </button>
           ) : (
             <button
               type="button"
               onClick={finish}
-              disabled={readOnly || syncing}
+              disabled={readOnly || syncing || navigatingTo !== null}
+              aria-busy={navigatingTo === 'finish' ? true : undefined}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-primary bg-primary/10 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
             >
-              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {syncing || navigatingTo === 'finish' ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
               Terminer
               <Check className="h-4 w-4" />
             </button>
@@ -402,32 +482,40 @@ function readNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * L'état d'enregistrement, TOUJOURS affiché.
+ *
+ * Défaut du 14/09 : l'indicateur rendait `null` en état `idle`. L'écran ne
+ * disait donc jamais « tout est enregistré » — il ne parlait que quand ça allait
+ * mal, et il se taisait quand ça allait COMME quand ça bloquait. Sur un écran
+ * qu'un commercial remplit devant un dirigeant avec les chiffres de son agence,
+ * le silence n'est pas neutre : il inquiète, et il rend un blocage
+ * indiscernable d'un calme plat.
+ */
 function SaveIndicator({
   state,
   error,
   syncing,
+  failedCount,
 }: {
   state: ReturnType<typeof useAutosave>['state'];
   error: string | null;
   syncing: boolean;
+  failedCount: number;
 }) {
-  if (state === 'error') {
+  const base = 'shrink-0 inline-flex items-center gap-1.5 text-xs';
+
+  if (state === 'error' || failedCount > 0) {
     return (
-      <span
-        className="shrink-0 inline-flex items-center gap-1.5 text-xs text-red-600"
-        role="status"
-      >
+      <span className={`${base} text-red-600`} role="status">
         <CloudOff className="h-3.5 w-3.5" aria-hidden />
-        {error ?? 'Non enregistré'} — la saisie continue, elle sera rejouée
+        {error ?? 'Non enregistré'}
       </span>
     );
   }
   if (state === 'retrying') {
     return (
-      <span
-        className="shrink-0 inline-flex items-center gap-1.5 text-xs text-amber-600"
-        role="status"
-      >
+      <span className={`${base} text-amber-600`} role="status">
         <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
         Nouvel essai…
       </span>
@@ -435,25 +523,56 @@ function SaveIndicator({
   }
   if (state === 'saving' || syncing) {
     return (
-      <span
-        className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-        role="status"
-      >
+      <span className={`${base} text-muted-foreground`} role="status">
         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
         Enregistrement…
       </span>
     );
   }
-  if (state === 'saved') {
-    return (
-      <span
-        className="shrink-0 inline-flex items-center gap-1.5 text-xs text-emerald-600"
-        role="status"
-      >
-        <Check className="h-3.5 w-3.5" aria-hidden />
-        Enregistré
-      </span>
-    );
-  }
-  return null;
+  // `idle` comme `saved` : on le DIT. Rien en attente, rien en échec.
+  return (
+    <span className={`${base} text-emerald-600`} role="status">
+      <Check className="h-3.5 w-3.5" aria-hidden />
+      {state === 'saved' ? 'Enregistré' : 'À jour'}
+    </span>
+  );
+}
+
+/**
+ * Ce qui n'est PAS parti, nommé.
+ *
+ * La contrepartie de la borne : on cesse d'attendre, donc on doit dire. Une
+ * navigation silencieuse sur un enregistrement raté serait pire que le blocage
+ * qu'on corrige — le commercial repartirait en croyant sa saisie en base.
+ */
+function FailedPanel({ failed, onRetry }: { failed: FailedWrite[]; onRetry: () => void }) {
+  if (failed.length === 0) return null;
+  const rejouables = failed.some((f) => f.retryable);
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 space-y-2"
+    >
+      <p className="text-sm font-medium text-red-700 dark:text-red-400">
+        {failed.length} réponse(s) non enregistrée(s)
+      </p>
+      <ul className="text-xs text-red-700 dark:text-red-300 space-y-1">
+        {failed.map((f) => (
+          <li key={f.key}>
+            <span className="font-medium">{f.label}</span> — {f.error}
+          </li>
+        ))}
+      </ul>
+      {rejouables && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-red-400 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40"
+        >
+          <RotateCw className="h-3.5 w-3.5" aria-hidden />
+          Réessayer
+        </button>
+      )}
+    </div>
+  );
 }

@@ -46,6 +46,7 @@ vi.mock('@/server/actions/diagnostics', () => ({
 }));
 
 const { ChapterWorkspace } = await import('../chapter-workspace');
+const { resetAutosaveShared } = await import('../use-autosave');
 
 const RULES = {
   AGEFICE_THRESHOLD_CA_N1: 7000,
@@ -118,6 +119,9 @@ describe('Navigation de chapitre — une navigation ne dépend jamais d’un enr
   // testing-library ne tourne pas, et deux rendus cohabiteraient dans le DOM.
   afterEach(() => {
     cleanup();
+    // La file vit au niveau du module : sans cette remise à zéro, une écriture
+    // bloquée d'un cas fuirait dans le suivant.
+    resetAutosaveShared();
     vi.useRealTimers();
   });
 
