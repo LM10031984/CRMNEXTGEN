@@ -221,7 +221,10 @@ describe('l’heure affichée est celle de l’organisme, pas celle du serveur',
  * une demi-journée au tarif §8.1, pour `durationHours = 8`. Ce champ part sur
  * la convention (`convention-template.ts`) et sur l'attestation d'assiduité
  * AGEFICE (`agefice-attendance-generator.ts`), donc sur le dossier financeur :
- * la règle gravée n°2 impose que ce soit LA valeur unique.
+ * la **ligne rouge de cohérence du §8.1** impose que ce soit LA valeur unique,
+ * telle que D-23 et D-25 la reformulent PAR SURFACE depuis le 11/09/2026. (On
+ * nomme la section et la décision, jamais un numéro de ligne : un numéro périme
+ * au premier paragraphe ajouté.)
  *
  * L'écran ne doit donc jamais afficher « 36 h » ni « 72 h » tout court, mais
  * nommer laquelle des deux il montre.

@@ -26,7 +26,16 @@ import {
   grouperAlertesSubmission,
   type SubmissionSnapshot,
 } from '@/lib/alertes/preinscription-digest';
-import { alerterLeadsDormants, alerterPreinscriptionsDeposees } from '@/lib/alertes/notifier';
+import {
+  alerterConventionNonEnvoyee,
+  alerterLeadsDormants,
+  alerterPreinscriptionsDeposees,
+} from '@/lib/alertes/notifier';
+import {
+  JOURS_AVANT_ALERTE_CONVENTION,
+  TITRE_TACHE_CONVENTION_NON_ENVOYEE,
+  decideAlerteConventionNonEnvoyee,
+} from '@/lib/alertes/convention-non-envoyee';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +168,75 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── J-15 — les conventions qui ne sont pas parties (lot D, spec §5) ───────
+  //
+  // Une session démarre dans quinze jours, elle a des inscrits, et aucune
+  // convention n'est partie en signature. C'est le seul point du chantier où la
+  // machine est mieux placée que l'humain : la question ne se pose qu'en
+  // regardant le calendrier.
+  //
+  // Le pré-filtre SQL ne fait que réduire le volume — c'est la fonction pure qui
+  // DÉCIDE. Dupliquer la règle en SQL la ferait diverger du test.
+  const finFenetreConvention = new Date(
+    now.getTime() + (JOURS_AVANT_ALERTE_CONVENTION + 1) * 86_400_000,
+  );
+  const sessionsProches = await prisma.trainingSession.findMany({
+    where: {
+      startDate: { gte: now, lte: finFenetreConvention },
+      status: { notIn: ['DRAFT', 'CANCELLED', 'COMPLETED'] },
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      code: true,
+      name: true,
+      startDate: true,
+      status: true,
+      _count: { select: { participants: true } },
+      // Une demande sur N'IMPORTE QUELLE pièce vaut « c'est parti » : on ne
+      // réclame pas un envoi à quelqu'un qui vient d'en faire un.
+      signatureRequests: { select: { id: true }, take: 1 },
+      // ⚠ ET la convention signée À LA MAIN (lot A), qui ne crée aucune
+      // demande. Sans elle, l'alerte réclamerait un envoi pour une pièce déjà
+      // signée — et une alerte qui se trompe une fois n'est plus lue.
+      documents: {
+        where: { type: 'CONVENTION', signedPdfUrl: { not: null } },
+        select: { id: true },
+        take: 1,
+      },
+      tasks: {
+        where: { title: TITRE_TACHE_CONVENTION_NON_ENVOYEE },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  });
+
+  let conventionsAlertees = 0;
+  for (const s of sessionsProches) {
+    const decision = decideAlerteConventionNonEnvoyee(
+      {
+        startDate: s.startDate,
+        status: s.status,
+        nbParticipants: s._count.participants,
+        aUneDemandeDeSignature: s.signatureRequests.length > 0,
+        aUneConventionSignee: s.documents.length > 0,
+        dejaAlertee: s.tasks.length > 0,
+      },
+      now,
+    );
+    if (!decision.alerter) continue;
+    const r = await alerterConventionNonEnvoyee({
+      tenantId: s.tenantId,
+      sessionId: s.id,
+      libelleSession: s.code ?? s.name ?? s.id.slice(0, 8),
+      startDate: s.startDate,
+      joursRestants: decision.joursRestants,
+      nbParticipants: s._count.participants,
+    });
+    if (r.alertee) conventionsAlertees += 1;
+  }
+
   const resultat = {
     ok: true,
     at: now.toISOString(),
@@ -169,6 +247,8 @@ export async function GET(req: Request) {
     leadsExamines: candidats.length,
     alertesDossiers,
     dossiersAnnonces: deposes.length,
+    conventionsAlertees,
+    sessionsExaminees: sessionsProches.length,
   };
   console.log('[cron:alerts]', JSON.stringify(resultat));
   return NextResponse.json(resultat);

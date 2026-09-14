@@ -26,6 +26,8 @@
 import {
   resoudreEmailRepresentant,
   resoudreRepresentantEntreprise,
+  resoudreRepresentantIndividuel,
+  type Apprenant,
   type OrganisationRepresentee,
 } from '@/lib/signature/representant';
 
@@ -81,6 +83,23 @@ function avertissementSansEmail(nom: string, legalName: string): string {
   );
 }
 
+/**
+ * Même forme, autre chemin : l'ENTREPRISE INDIVIDUELLE dont l'apprenant signe.
+ *
+ * CE QU'ELLE REMPLACE, ET POURQUOI (défaut D-C3-3, recette du 11/09/2026). La
+ * fiche annonçait « renseignez son adresse sur le contact qui porte ce nom » —
+ * or il n'y a AUCUN contact à renseigner : le moteur lit la fiche APPRENANT.
+ * Envoyer l'admin vers les contacts de l'organisation, c'est l'envoyer créer
+ * une donnée qui ne servira à rien.
+ */
+function avertissementSansEmailEiSelf(nom: string): string {
+  return (
+    `Aucune adresse email pour « ${nom} », qui signe pour son entreprise individuelle : ` +
+    `aucune convention ne peut partir en signature. Renseignez son adresse sur sa fiche ` +
+    `apprenant, ou saisissez-la au moment de l’envoi.`
+  );
+}
+
 /** Même forme, autre manque : ici c'est le NOM qui n'existe pas. */
 function avertissementInconnu(legalName: string): string {
   return (
@@ -101,7 +120,55 @@ function avertissementInconnu(legalName: string): string {
  */
 export function vueResponsableOrganisation(
   org: OrganisationRepresentee,
+  /**
+   * L'APPRENANT QUI SIGNE POUR SON ENTREPRISE INDIVIDUELLE — défaut D-C3-3.
+   *
+   * Non nul quand un `LegalLink` de rôle `EI_SELF` relie cette organisation à
+   * une personne. Le moteur emprunte alors l'AUTRE chemin de la cascade
+   * (`resoudreRepresentantIndividuel`) et prend l'adresse de la fiche
+   * apprenant : la fiche organisation annonçait le chemin des agences et
+   * contredisait donc l'envoi, en promettant qu'« aucune convention ne peut
+   * partir » alors qu'elles partaient.
+   *
+   * ⚠ OBLIGATOIRE, et `null` est la valeur normale — l'immense majorité des
+   * organisations sont des agences. Ce qu'on rend impossible, c'est l'oubli :
+   * optionnel, ce paramètre se serait perdu au premier appelant et la fiche
+   * serait retombée en silence sur le chemin des agences (leçon C.2b-8).
+   */
+  apprenantEiSelf: Apprenant | null,
 ): VueResponsableOrganisation {
+  // ⚠ L'ORDRE EST CELUI DU MOTEUR. `resoudreRepresentantIndividuel` teste
+  // `estEiSelf` AVANT `representative` : le régime a déjà tranché que
+  // l'apprenant signe pour lui-même. L'inverser ici ferait diverger l'écran de
+  // l'envoi — la divergence même que cette correction supprime.
+  if (apprenantEiSelf !== null) {
+    const representant = resoudreRepresentantIndividuel({
+      org,
+      apprenant: apprenantEiSelf,
+      estEiSelf: true,
+    });
+    // Ce chemin ne refuse jamais le NOM : il y a toujours un apprenant.
+    const nom = representant.ok ? representant.nom : null;
+    const adresse = representant.ok
+      ? resoudreEmailRepresentant({
+          nom: representant.nom,
+          source: representant.source,
+          org,
+          apprenant: apprenantEiSelf,
+        })
+      : null;
+    if (nom === null) return { etat: 'INCONNU', nom: null, email: null, avertissement: avertissementInconnu(org.legalName) };
+    if (adresse === null || !adresse.ok) {
+      return {
+        etat: 'SANS_EMAIL',
+        nom,
+        email: null,
+        avertissement: avertissementSansEmailEiSelf(nom),
+      };
+    }
+    return { etat: 'COMPLET', nom, email: adresse.email, avertissement: null };
+  }
+
   const representant = resoudreRepresentantEntreprise(org);
   if (!representant.ok) {
     return {

@@ -22,6 +22,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  certificatDeLaPiece,
   construireVueSignature,
   etatDeLaPiece,
   type DocumentDeLaPiece,
@@ -69,6 +70,9 @@ function doc(over: Partial<DocumentDeLaPiece> = {}): DocumentDeLaPiece {
     // Lot C.3 (D-C3-1) : les signataires RÉELS de la demande en cours. Vide par
     // défaut — un document qui n'est pas parti n'en a aucun.
     signataires: [],
+    // Lot D (D-C3-5) : la clé du certificat de signature, portée par la DEMANDE.
+    // Nulle par défaut — tant que rien n'est signé, aucun certificat n'existe.
+    auditTrailUrl: null,
     ...over,
   };
 }
@@ -138,6 +142,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('une ligne par envoi, dans l’ordre du plan, libellé du plan repris tel quel', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe, dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -150,6 +155,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('`participantIdUnique` se lit sur la CIBLE : nominatif pour le dossier, null pour la convention', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe, dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -166,6 +172,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
         blocages: [],
         avertissements: [],
       },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -181,6 +188,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('une pièce GENERE ou ABSENT est envoyable — l’ouverture du récapitulatif génère l’absente', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe, dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([['CONVENTION:org-1', doc()]]),
       docStatusParCle: new Map(),
       canSign: true,
@@ -195,6 +203,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('une pièce ENVOYE n’est pas envoyable — `sendForSignature` la refuserait', () => {
     const vue = construireVueSignature({
       plan: { envois: [dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([
         ['AGEFICE:part-1', doc({ status: 'sent_for_signature', signatureRequestId: 'req-9' })],
       ]),
@@ -211,6 +220,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('une ligne ENVOYE porte l’identifiant de la demande — sans lui, l’annulation est inatteignable', () => {
     const vue = construireVueSignature({
       plan: { envois: [dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([
         ['AGEFICE:part-1', doc({ status: 'sent_for_signature', signatureRequestId: 'req-9' })],
       ]),
@@ -224,6 +234,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('une pièce SIGNE n’est pas envoyable, quelle que soit l’origine du signé', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe, dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([['AGEFICE:part-1', doc({ signedPdfUrl: 'docs/x.pdf' })]]),
       docStatusParCle: new Map([['CONVENTION:org-1', 'MANUAL_OK']]),
       canSign: true,
@@ -237,6 +248,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
   it('`canSign` faux ⇒ aucun bouton, même quand tout est envoyable', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: false,
@@ -268,6 +280,7 @@ describe('construireVueSignature — le bouton et les lignes', () => {
     };
     const vue = construireVueSignature({
       plan: { envois: [], blocages: [blocage], avertissements: [avertissement] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -321,6 +334,7 @@ describe('construireVueSignature — la prop `signataireOf` ne peut plus être o
     const appel = () =>
       construireVueSignature({
         plan: planVide(),
+        participants: [],
         documentParCle: new Map(),
         docStatusParCle: new Map(),
         canSign: true,
@@ -337,6 +351,7 @@ describe('construireVueSignature — la prop `signataireOf` ne peut plus être o
   it('`null` reste accepté, et n’annonce que le client', () => {
     const vue = construireVueSignature({
       plan: { envois: [CONVENTION_POUR_TYPAGE], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -381,6 +396,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
 
     const vue = construireVueSignature({
       plan,
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -406,6 +422,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
     });
     const vue = construireVueSignature({
       plan,
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -418,6 +435,7 @@ describe('PUISSANCE (a) — une session 100 % OPCO n’a rien à envoyer côté 
   it('un plan strictement vide reste une vue vide, sans bouton', () => {
     const vue = construireVueSignature({
       plan: planVide(),
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -710,6 +728,7 @@ describe('construireVueSignature — les avertissements ressortent REGROUPÉS', 
   it('la vue ne rend plus une entrée par pièce, mais une par participant', () => {
     const vue = construireVueSignature({
       plan: { ...planVide(), avertissements: [avert('CONVENTION'), avert('AGEFICE')] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -749,6 +768,7 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
   it('le couple traverse la vue jusqu’à la ligne, tel qu’il a été résolu', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -761,6 +781,7 @@ describe('LigneSignature.signataire — le couple qui se lit sur la ligne', () =
   it('une pièce dont le signataire n’a PAS pu être résolu porte `null` — jamais un nom inventé', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -840,6 +861,7 @@ describe('LigneSignature.ordre — « 1. client · 2. OF » sur la ligne du bloc
     const client = a.client === undefined ? CLIENT : a.client;
     return construireVueSignature({
       plan: { envois, blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map(),
       docStatusParCle: new Map(),
       canSign: true,
@@ -963,6 +985,7 @@ describe('LigneSignature.ordre — une pièce PARTIE lit les signataires RÉELS'
   function vuePartie(signataires: SignataireEnvoye[]) {
     return construireVueSignature({
       plan: { envois: [conventionPartie], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([
         [
           'CONVENTION:org-1',
@@ -1013,6 +1036,7 @@ describe('LigneSignature.ordre — une pièce PARTIE lit les signataires RÉELS'
   it('une pièce PRÊTE À PARTIR garde l’ordre prévu — rien n’a encore été envoyé', () => {
     const vue = construireVueSignature({
       plan: { envois: [conventionPartie], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([['CONVENTION:org-1', doc()]]),
       docStatusParCle: new Map(),
       canSign: true,
@@ -1058,6 +1082,7 @@ describe('LigneSignature.attente — la phrase de la ligne, qui remplace la pér
   }) {
     return construireVueSignature({
       plan: { envois: [assiduitePartie], blocages: [], avertissements: [] },
+      participants: [],
       documentParCle: new Map([
         [
           'ASSIDUITE:part-1',
@@ -1101,5 +1126,331 @@ describe('LigneSignature.attente — la phrase de la ligne, qui remplace la pér
     const attente = ligneAvec({}).attente ?? '';
     expect(attente).not.toContain('C.2c');
     expect(attente).not.toContain('C.3');
+  });
+});
+
+/* ── D-C3-5 — le certificat de signature, offert QUAND il existe ──────────── */
+
+/**
+ * CE QUE LA RECETTE A TROUVÉ (mise en prod du 12/09/2026). `auditTrailUrl` est
+ * renseigné depuis le lot C.3 — `signature-retour.ts` télécharge le certificat,
+ * l'écrit en bucket et le joint à l'email « Votre exemplaire signé ». Mais
+ * aucune ligne SIGNÉ ne l'offrait à l'écran, alors que c'est la pièce que les
+ * AGEFICE réclament (règle métier n°3 de la spec).
+ *
+ * DEUX SIGNÉS QUI NE SE RESSEMBLENT PAS, et c'est tout l'objet de ces tests :
+ * un scan déposé à la main (lot A) est signé sans qu'aucun certificat existe.
+ * Offrir le lien sur toutes les lignes vertes mènerait donc à un 404 sur la
+ * moitié d'entre elles — et un admin qui clique sur « Certificat » et tombe sur
+ * une erreur cesse de croire l'écran.
+ */
+describe('certificatDeLaPiece — un lien qui n’existe que s’il mène quelque part', () => {
+  it('une pièce signée par voie électronique offre son certificat', () => {
+    expect(
+      certificatDeLaPiece({
+        etat: 'SIGNE',
+        signatureRequestId: 'req-9',
+        auditTrailUrl: 'sessions/t1/SES-0112/signed/convention.audit-trail.pdf',
+      }),
+    ).toEqual({ signatureRequestId: 'req-9' });
+  });
+
+  it('un SCAN déposé à la main n’en a aucun — le lien ne doit pas exister', () => {
+    expect(
+      certificatDeLaPiece({ etat: 'SIGNE', signatureRequestId: null, auditTrailUrl: null }),
+    ).toBeNull();
+  });
+
+  it('une demande partie mais pas encore close n’en a pas non plus', () => {
+    // Le certificat n'est produit qu'à `submission.completed` : entre les deux
+    // signatures, la colonne est vide et l'offrir promettrait un fichier qui
+    // n'existe pas encore.
+    expect(
+      certificatDeLaPiece({ etat: 'ENVOYE', signatureRequestId: 'req-9', auditTrailUrl: null }),
+    ).toBeNull();
+  });
+
+  it('une demande dont le certificat est arrivé AVANT que la pièce soit signée n’offre rien', () => {
+    // Garde-fou d'ordre de lecture : c'est l'ÉTAT de la pièce qui commande, pas
+    // la seule présence de la colonne.
+    expect(
+      certificatDeLaPiece({
+        etat: 'ENVOYE',
+        signatureRequestId: 'req-9',
+        auditTrailUrl: 'sessions/t1/x.audit-trail.pdf',
+      }),
+    ).toBeNull();
+  });
+
+  it('une clé BLANCHE ne vaut pas une preuve', () => {
+    expect(
+      certificatDeLaPiece({ etat: 'SIGNE', signatureRequestId: 'req-9', auditTrailUrl: '   ' }),
+    ).toBeNull();
+  });
+
+  it('sans identifiant de demande, il n’y a rien à servir', () => {
+    // La route s'adresse à la DEMANDE : `/api/signature-requests/{id}/audit-trail`.
+    expect(
+      certificatDeLaPiece({
+        etat: 'SIGNE',
+        signatureRequestId: null,
+        auditTrailUrl: 'sessions/t1/x.audit-trail.pdf',
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('construireVueSignature — le certificat remonte jusqu’à la ligne', () => {
+  const conventionDuGroupe: EnvoiPlanifie = {
+    cle: 'CONVENTION:org-1',
+    docType: 'CONVENTION',
+    role: 'DIRIGEANT',
+    cible: { kind: 'ORGANISATION', organizationId: 'org-1' },
+    participantIds: ['part-1', 'part-2'],
+    libelle: 'Convention — AGENCE MARTIN (2 participants)',
+    concerne: 'AGENCE MARTIN',
+    organisation: 'AGENCE MARTIN',
+  };
+  const dossierNominatif: EnvoiPlanifie = {
+    cle: 'AGEFICE:part-1',
+    docType: 'AGEFICE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
+  };
+
+  it('la ligne signée électroniquement porte son certificat', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [dossierNominatif], blocages: [], avertissements: [] },
+      participants: [],
+      documentParCle: new Map([
+        [
+          'AGEFICE:part-1',
+          doc({
+            status: 'signed',
+            signedPdfUrl: 'docs/signe.pdf',
+            signatureRequestId: 'req-9',
+            auditTrailUrl: 'sessions/t1/SES-0112/signed/agefice.audit-trail.pdf',
+          }),
+        ],
+      ]),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.lignes[0]!.etat).toBe('SIGNE');
+    expect(vue.lignes[0]!.certificat).toEqual({ signatureRequestId: 'req-9' });
+  });
+
+  it('la ligne signée par un SCAN n’en porte aucun', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [conventionDuGroupe], blocages: [], avertissements: [] },
+      participants: [],
+      documentParCle: new Map(),
+      docStatusParCle: new Map([['CONVENTION:org-1', 'MANUAL_OK']]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.lignes[0]!.etat).toBe('SIGNE');
+    expect(vue.lignes[0]!.certificat).toBeNull();
+  });
+});
+
+/* ── D-C3-4 — le bloc MUET doit dire pourquoi ────────────────────────────── */
+
+/**
+ * CE QUE LA PRODUCTION A MONTRÉ (SES-0112, 12/09/2026). Cinq apprenants
+ * « Agence », conventions individuelles : le bloc « Signature » se réduisait à
+ * la zone de dépôt. `regle === null` pour tous — financeur absent sur le
+ * commanditaire — donc AUCUNE pièce ; et aucun avertissement non plus, faute de
+ * signal : pas de lien `EI_SELF`, pas d'autre organisation ouvrant la pièce.
+ *
+ * Le moteur a raison de se taire : il ne sait rien d'incohérent à signaler.
+ * C'est la VUE qui doit parler, parce qu'elle seule voit la différence entre
+ * « il n'y a rien à signer » et « on ne sait pas quoi signer ». Un écran vide
+ * se lit comme « tout va bien » — et les cinq dossiers sont partis sans
+ * convention.
+ *
+ * ⚠ MÊME MÉCANIQUE QUE `composerAvertissementRegime` : la correction mène à la
+ * fiche organisation quand c'est le financeur qui manque, à l'inscription quand
+ * c'est le commanditaire. On ne fabrique pas une troisième règle.
+ */
+describe('riensASigner — le participant pour qui il n’y a AUCUNE pièce', () => {
+  const dossierDeJean: EnvoiPlanifie = {
+    cle: 'AGEFICE:part-1',
+    docType: 'AGEFICE',
+    role: 'STAGIAIRE',
+    cible: { kind: 'PARTICIPANT', participantId: 'part-1' },
+    participantIds: ['part-1'],
+    libelle: 'Dossier AGEFICE — Jean DUPONT',
+    concerne: 'Jean DUPONT',
+    organisation: null,
+  };
+  const JEAN = { participantId: 'part-1', nomAffiche: 'Jean DUPONT' };
+  const MARION = { participantId: 'part-2', nomAffiche: 'Marion MAINO' };
+
+  const CONTEXTE_MARION: ContexteAvertissement = {
+    sponsorOrgId: 'org-9',
+    sponsorOrgLabel: 'AGENCE DU PORT',
+    financeurSansRegime: true,
+    financeursRattaches: [],
+  };
+
+  it('nomme le participant, son commanditaire, et dit qu’il n’y a rien à signer', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [], blocages: [], avertissements: [] },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map([['part-2', CONTEXTE_MARION]]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toHaveLength(1);
+    expect(vue.riensASigner[0]!.nomAffiche).toBe('Marion MAINO');
+    expect(vue.riensASigner[0]!.message).toBe(
+      'Aucun financeur renseigné pour AGENCE DU PORT : il n’y a rien à faire signer pour ' +
+        'Marion MAINO. Renseignez le financeur de cette organisation pour que ses pièces ' +
+        'existent.',
+    );
+  });
+
+  it('le lien mène à la FICHE ORGANISATION quand c’est le financeur qui manque', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [], blocages: [], avertissements: [] },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map([['part-2', CONTEXTE_MARION]]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner[0]!.correction).toEqual({
+      cible: 'ORGANISATION',
+      organizationId: 'org-9',
+      libelleOrganisation: 'AGENCE DU PORT',
+    });
+  });
+
+  it('sans commanditaire du tout, c’est l’INSCRIPTION qu’on ouvre', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [], blocages: [], avertissements: [] },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map([
+        ['part-2', { ...CONTEXTE_MARION, sponsorOrgId: null, sponsorOrgLabel: null }],
+      ]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner[0]!.correction).toEqual({ cible: 'INSCRIPTION' });
+    expect(vue.riensASigner[0]!.message).toBe(
+      'Aucun commanditaire sur l’inscription de Marion MAINO : il n’y a rien à faire ' +
+        'signer. Ouvrez l’inscription pour désigner qui commande cette formation.',
+    );
+  });
+
+  it('un participant qui A une pièce n’est JAMAIS listé', () => {
+    const vue = construireVueSignature({
+      plan: { envois: [dossierDeJean], blocages: [], avertissements: [] },
+      participants: [JEAN],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map(),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toEqual([]);
+  });
+
+  it('un participant DÉJÀ nommé par un avertissement n’est pas dit deux fois', () => {
+    // Le cas Florent HAUSSWIRTH : le moteur le signale déjà, avec sa propre
+    // phrase et sa propre correction. Ajouter « rien à signer » en dessous
+    // ferait deux encarts pour une seule correction — exactement ce que la
+    // correction n°2 de Laurent a supprimé.
+    const vue = construireVueSignature({
+      plan: {
+        envois: [],
+        blocages: [],
+        avertissements: [
+          {
+            participantId: 'part-2',
+            nomAffiche: 'Marion MAINO',
+            docType: 'AGEFICE',
+            message: 'peu importe',
+          },
+        ],
+      },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map([['part-2', CONTEXTE_MARION]]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toEqual([]);
+    expect(vue.avertissements).toHaveLength(1);
+  });
+
+  it('un participant déjà nommé par un BLOCAGE n’est pas dit deux fois non plus', () => {
+    const vue = construireVueSignature({
+      plan: {
+        envois: [],
+        blocages: [
+          {
+            participantId: 'part-2',
+            nomAffiche: 'Marion MAINO',
+            docType: 'CONVENTION',
+            message: 'peu importe',
+          },
+        ],
+        avertissements: [],
+      },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map([['part-2', CONTEXTE_MARION]]),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toEqual([]);
+  });
+
+  it('sans contexte du tout, on se tait — on ne devine pas un commanditaire', () => {
+    // Un appelant qui ne calcule pas le contexte n'a pas de quoi écrire une
+    // phrase juste : inventer « aucun financeur » serait affirmer une cause
+    // qu'on n'a pas lue.
+    const vue = construireVueSignature({
+      plan: { envois: [], blocages: [], avertissements: [] },
+      participants: [MARION],
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toEqual([]);
+  });
+
+  it('les cinq « Agence » de SES-0112 sortent tous les cinq, une ligne chacun', () => {
+    const cinq = ['p1', 'p2', 'p3', 'p4', 'p5'].map((id, i) => ({
+      participantId: id,
+      nomAffiche: `Apprenant ${i + 1}`,
+    }));
+    const vue = construireVueSignature({
+      plan: { envois: [], blocages: [], avertissements: [] },
+      participants: cinq,
+      documentParCle: new Map(),
+      docStatusParCle: new Map(),
+      contexteAvertissementParParticipant: new Map(
+        cinq.map((p) => [p.participantId, CONTEXTE_MARION] as const),
+      ),
+      canSign: true,
+      signataireOf: SANS_OF,
+    });
+    expect(vue.riensASigner).toHaveLength(5);
   });
 });

@@ -29,6 +29,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { candidatsNxtCoach, premierEmplacementPorteur } from './lib/corpus-local.js';
+import { resolveProductCode } from './lib/product-code.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
@@ -214,13 +215,17 @@ function say(line = '') {
  * (FRM-0001, PROD-055, PROD-0674, PROD-7a78c8b2) : on ne renumérote rien, on se
  * contente de continuer la série à 4 chiffres au-dessus du plus grand existant.
  */
-function nextProductCode(existingCodes: string[], offset: number): string {
-  let max = 0;
-  for (const code of existingCodes) {
-    const m = /^PROD-(\d{1,4})$/.exec(code);
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return `PROD-${String(max + 1 + offset).padStart(4, '0')}`;
+function nextProductCode(existingCodes: string[], pris: Set<string>): string {
+  // Le générateur local lisait `/^PROD-(\d{1,4})$/` — quatre chiffres MAXIMUM.
+  // `PROD-00661` en compte cinq : il était donc INVISIBLE à ce compte, alors
+  // que le module partagé et `crud-edits.ts` le lisent tous deux comme 661
+  // (`/^PROD-0*(\d+)$/`). Deux sites qui fabriquent des numéros à partir de
+  // deux lectures du même catalogue finissent par se croiser ; c'est pour
+  // fermer ça que le générateur est unique.
+  for (const c of existingCodes) pris.add(c);
+  const code = resolveProductCode({ uid: 'import-diag-catalog', customId: null }, pris);
+  pris.add(code);
+  return code;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -343,7 +348,10 @@ async function main() {
   say();
   say('| Code | Produit | Modules | Heures |');
   say('|---|---|---|---|');
-  let codeOffset = 0;
+  // Les codes déjà réclamés pendant CE plan : sans ce jeu, deux familles
+  // nouvelles demanderaient le même numéro (l'ancien `codeOffset` jouait ce
+  // rôle, en supposant que la série soit contiguë — elle ne l'est pas).
+  const codesPris = new Set<string>();
   const familyPlan: FamilyPlan[] = families.map((family) => {
     const mods = aCreer.filter((r) => r.module.family === family).map((r) => r.module);
     const allMods = catalog.filter((m) => m.family === family);
@@ -364,7 +372,7 @@ async function main() {
         existing?.code ??
         nextProductCode(
           products.map((p) => p.code),
-          codeOffset++,
+          codesPris,
         ),
     };
   });
@@ -575,6 +583,22 @@ async function applyImport(
           ageficeEvaluations: [],
         },
       });
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          userId: null,
+          entity: 'TrainingProduct',
+          entityId: product.id,
+          action: 'trainingProduct.create',
+          diff: {
+            source: 'import-diag-catalog.ts',
+            code: plan.code,
+            title: plan.title,
+            provenanceCode: 'série maison',
+            note: "conteneur d'import du catalogue diagnostic — inactif et non diffusable",
+          },
+        },
+      });
       productId = product.id;
       createdProducts += 1;
     }
@@ -713,7 +737,7 @@ async function applyImport(
       const product = await prisma.trainingProduct.create({
         data: {
           tenantId,
-          code: nextProductCode(codes, 0),
+          code: nextProductCode(codes, new Set<string>()),
           title: "L'Agent Incomparable — parcours M0 → M6",
           durationHours: 0,
           modality: Modality.MIXTE,
@@ -724,6 +748,22 @@ async function applyImport(
             "> Produit INACTIF tant que la relecture n'est pas faite.\n",
           isActive: false,
           ageficeEvaluations: [],
+        },
+      });
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          userId: null,
+          entity: 'TrainingProduct',
+          entityId: product.id,
+          action: 'trainingProduct.create',
+          diff: {
+            source: 'import-diag-catalog.ts',
+            code: product.code,
+            title: product.title,
+            provenanceCode: 'série maison',
+            note: 'parcours « L\'Agent Incomparable » — inactif, non relu',
+          },
         },
       });
       createdProducts += 1;

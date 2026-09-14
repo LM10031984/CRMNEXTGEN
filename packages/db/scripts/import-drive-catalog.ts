@@ -426,6 +426,30 @@ for (const p of snapshot.programmes) {
             data: { ...productData, tenantId: tenant.id, code },
           });
 
+      // La trace ne se pose qu'à la CRÉATION : une réexécution de l'import sur
+      // un rayon déjà en base est un `update`, et un AuditLog par rejeu
+      // noierait la naissance du produit sous le bruit. Elle est DANS la
+      // transaction — hors d'elle, un échec plus bas laisserait une trace de
+      // création pour un produit qui n'existe pas.
+      if (!existing) {
+        await tx.auditLog.create({
+          data: {
+            tenantId: tenant.id,
+            userId: null,
+            entity: 'TrainingProduct',
+            entityId: product.id,
+            action: 'trainingProduct.create',
+            diff: {
+              source: 'import-drive-catalog.ts',
+              code,
+              title: productData.title,
+              sourceRef: productData.sourceRef ?? null,
+              provenanceCode: 'rayon de bibliothèque (BIB-*)',
+            },
+          },
+        });
+      }
+
       for (const m of modulesData) {
         const current = await tx.trainingModule.findFirst({
           where: { productId: product.id, sourceRef: m.sourceRef },

@@ -574,3 +574,53 @@ describe('la configuration d’organisme est lue HORS de la boucle', () => {
     expect(pourDeux).toBe(pourUne);
   });
 });
+
+/* ── D-D-2 — le nom du document transmis au prestataire ──────────────────── */
+
+/**
+ * CE QUE LA RECETTE A VU (12/09/2026, journal d'audit DocuSeal) :
+ * « Convention — Provence Immobilier (2 participants).pdf.pdf ».
+ *
+ * `POST /submissions/pdf` ajoute l'extension lui-même ; la lui donner produit
+ * un doublon. Cosmétique en apparence — sauf que ce nom est ce qu'un financeur
+ * lit dans le journal d'audit qu'on lui remet comme preuve, et qu'une pièce
+ * nommée « .pdf.pdf » a l'air de sortir d'un envoi bricolé.
+ */
+describe('D-D-2 — le document envoyé au prestataire n’a qu’UNE extension', () => {
+  function documentEnvoye(): { name: string } {
+    return (createRequestMock.mock.calls[0]![0] as { documents: { name: string }[] }).documents[0]!;
+  }
+
+  it('le nom ne porte aucune extension — le prestataire la pose', async () => {
+    sessionAvec([salarieAgence()]);
+    docs = [
+      doc({ id: 'doc-conv', type: 'CONVENTION', entityType: 'organization', entityId: 'org-agence' }),
+    ];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: 'CONVENTION:org-agence', hashConfirme: 'hash-doc-conv' }],
+    });
+
+    expect(documentEnvoye().name).not.toMatch(/\.pdf$/i);
+  });
+
+  it('et il reste le libellé de la pièce, lisible dans le journal d’audit', async () => {
+    sessionAvec([salarieAgence()]);
+    docs = [
+      doc({ id: 'doc-conv', type: 'CONVENTION', entityType: 'organization', entityId: 'org-agence' }),
+    ];
+
+    await sendForSignature({
+      sessionId: SESSION_ID,
+      scope: 'BEFORE',
+      cibles: [{ cle: 'CONVENTION:org-agence', hashConfirme: 'hash-doc-conv' }],
+    });
+
+    // ⚠ VALEUR LITTÉRALE : c'est ce texte-là qu'un financeur lira sur la preuve.
+    // Le compte de participants RESTE — Laurent n'a relevé que l'extension
+    // doublée, et ce compte dit au signataire ce que la convention couvre.
+    expect(documentEnvoye().name).toBe('Convention — Martin Immobilier (1 participant)');
+  });
+});

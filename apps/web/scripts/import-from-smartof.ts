@@ -27,6 +27,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import { prisma, LinkRole, Modality, SessionStatus, LegalForm, Prisma } from '@qualiof/db';
+import { resolveProductCode } from '@qualiof/db/product-code';
 
 const BASE = process.env.SMARTOF_BASE_URL!;
 const FIREBASE_KEY = process.env.SMARTOF_FIREBASE_API_KEY!;
@@ -287,13 +288,23 @@ async function resolveTenantId(): Promise<string> {
   return t.id;
 }
 
+/**
+ * Le client Prisma, ou le client d'une transaction en cours.
+ *
+ * Sans ce type, `ensureExternalIdentity` ne saurait écrire que sur le client
+ * nu — et l'identité externe retomberait hors de la transaction qui crée le
+ * produit, ce qui est précisément le défaut qu'on ferme ici.
+ */
+type ClientPrisma = typeof prisma | Prisma.TransactionClient;
+
 async function ensureExternalIdentity(
   tenantId: string,
   entityType: string,
   entityId: string,
   externalId: string,
+  client: ClientPrisma = prisma,
 ): Promise<void> {
-  await prisma.externalIdentity.upsert({
+  await client.externalIdentity.upsert({
     where: { source_externalId: { source: 'smartof', externalId } },
     create: { tenantId, entityType, entityId, source: 'smartof', externalId },
     update: { entityType, entityId, tenantId },
@@ -683,6 +694,14 @@ async function importProduits(token: string, tenantId: string): Promise<ImportCo
   );
   c.pulled = produits.length;
 
+  // Les codes déjà pris — ceux de la base ET ceux alloués pendant ce run. Sans
+  // le second, deux lignes sans Custom ID réclameraient le même numéro.
+  const codesPris = new Set<string>(
+    (await prisma.trainingProduct.findMany({ where: { tenantId }, select: { code: true } })).map(
+      (x) => x.code,
+    ),
+  );
+
   for (const p of produits) {
     const uid = p.produitFormationUid ?? p.produitUid ?? p.uid;
     if (!uid) {
@@ -692,7 +711,12 @@ async function importProduits(token: string, tenantId: string): Promise<ImportCo
     try {
       const title =
         p.meta?.nom?.trim() || p.description?.intitule?.trim() || p.customId || `Produit ${uid}`;
-      const code = p.customId?.trim() || `PROD-${uid.slice(0, 8)}`;
+      // Générateur UNIQUE (`@qualiof/db/product-code`) : plus de repli
+      // hexadécimal local. Et `??` et non `||` — un Custom ID présent mais VIDE
+      // n'est pas une absence : le module le refuse en nommant la ligne source,
+      // au lieu de fabriquer un code par-dessus une source cassée.
+      const code = resolveProductCode({ uid, customId: p.customId ?? null }, codesPris);
+      codesPris.add(code);
       const durationHours = parseDurationHours(
         p.description?.dureeDeLaFormation ?? p.custom_fields?.custom_field_3,
       );
@@ -741,9 +765,33 @@ async function importProduits(token: string, tenantId: string): Promise<ImportCo
 
       if (isNew) {
         if (APPLY) {
-          const prod = await prisma.trainingProduct.create({ data });
-          productId = prod.id;
-          await ensureExternalIdentity(tenantId, 'TrainingProduct', prod.id, uid);
+          // Les TROIS écritures d'un seul geste. Séparées, un run interrompu
+          // entre la première et la deuxième laisse un produit orphelin : sans
+          // identité externe, le prochain import ne le retrouve pas par son UID
+          // et le recrée en doublon ; sans AuditLog, personne ne peut dire d'où
+          // il vient. C'est l'état exact de `PROD-cdd22466` en production,
+          // créé le 21/08/2026 à 06:14.
+          productId = await prisma.$transaction(async (tx) => {
+            const prod = await tx.trainingProduct.create({ data });
+            await ensureExternalIdentity(tenantId, 'TrainingProduct', prod.id, uid, tx);
+            await tx.auditLog.create({
+              data: {
+                tenantId,
+                userId: null,
+                entity: 'TrainingProduct',
+                entityId: prod.id,
+                action: 'trainingProduct.create',
+                diff: {
+                  source: 'import-from-smartof.ts',
+                  smartofUid: uid,
+                  code,
+                  title,
+                  provenanceCode: p.customId?.trim() ? 'customId SmartOF' : 'série maison',
+                },
+              },
+            });
+            return prod.id;
+          });
         }
         c.created++;
         c.createdSamples.push(`${code} — ${title}`);

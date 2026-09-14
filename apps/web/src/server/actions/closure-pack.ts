@@ -12,6 +12,7 @@ import {
   personFilenamePart,
 } from '@/lib/docs/download-filename';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
+import { entreesSignees } from '@/lib/closure/entrees-signees';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateGrilleObsSessionForSession } from './generate-grille-obs-session';
 import { generateProgrammeForProduct } from './programme-generator';
@@ -558,6 +559,49 @@ export async function buildClosureZipBuffer(
       console.error(`[closure-zip] skip ${job.id}: ${(e as Error).message}`);
     }
   }
+  // ── LE SOUS-DOSSIER `signes/` (lot D) ───────────────────────────────────
+  //
+  // Le ZIP ne porte que ce que le batch a GÉNÉRÉ : la convention et le dossier
+  // de financement n'y sont pas, et leurs versions signées encore moins. Or
+  // c'est exactement ce qu'un auditeur — et un financeur qui conteste —
+  // demandent avec le reste. On les ajoute à CÔTÉ des originaux, jamais à leur
+  // place : la pièce vierge reste celle qu'on re-signe après un refus.
+  //
+  // Requête à part, et assumée : elle porte sur la SESSION, pas sur le batch,
+  // parce qu'une pièce signée n'appartient à aucun lot de génération.
+  const docsSignes = await prisma.document.findMany({
+    where: {
+      tenantId: user.tenantId,
+      sessionId: batch.sessionId,
+      signedPdfUrl: { not: null },
+    },
+    select: {
+      type: true,
+      signedPdfUrl: true,
+      participant: { select: { person: { select: { firstName: true, lastName: true } } } },
+      signatureRequest: { select: { id: true, auditTrailUrl: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  for (const entree of entreesSignees({
+    sessionCode: session?.code ?? null,
+    documents: docsSignes.map((d) => ({
+      type: d.type,
+      signedPdfUrl: d.signedPdfUrl,
+      person: d.participant?.person ?? null,
+      signatureRequest: d.signatureRequest,
+    })),
+  })) {
+    try {
+      archive.append(await downloadFile(DOCS_BUCKET, entree.key), { name: entree.name });
+    } catch (e) {
+      // Une preuve introuvable ne doit pas faire échouer tout le pack : le
+      // reste de l'archive garde sa valeur, et l'absence se voit à l'œil.
+      console.error(`[closure-zip] skip signé ${entree.key}: ${(e as Error).message}`);
+    }
+  }
+
   archive.finalize();
   await finalized;
 

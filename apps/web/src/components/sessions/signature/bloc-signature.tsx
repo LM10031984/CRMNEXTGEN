@@ -86,11 +86,17 @@ import {
   OctagonAlert,
   PenLine,
   Send,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { annulerEnvoiSignature } from '@/server/actions/signature-envoi';
-import type { EtatPiece, LigneSignature, VueSignature } from '@/lib/sessions/bloc-signature-vue';
+import type {
+  CorrectionAvertissement,
+  EtatPiece,
+  LigneSignature,
+  VueSignature,
+} from '@/lib/sessions/bloc-signature-vue';
 // ⚠ Le libellé et le séparateur viennent du MÊME module que le récapitulatif :
 // « Ordre de signature : 1. … · 2. … » doit se lire à l'identique sur les deux
 // écrans. Recopier ` · ` ou le libellé dans ce JSX rouvrirait la divergence que
@@ -187,10 +193,18 @@ export function BlocSignature({
   // ⚠ « Rien à dire » inclut désormais « rien à déposer » (demande n°4). Une
   // session sans pièce e-signable garde ses feuilles d'émargement à rentrer :
   // se taire lui retirerait le seul endroit où le faire.
+  //
+  // ⚠ ET « rien à signer » EST QUELQUE CHOSE À DIRE (lot D, défaut D-C3-4).
+  // C'est ici que SES-0112 s'est joué : cinq apprenants sans aucune pièce, la
+  // zone de dépôt disponible — donc le bloc s'affichait, mais RÉDUIT à cette
+  // zone, ce qui se lit comme « tout va bien ». Et sans zone de dépôt, il
+  // aurait disparu complètement. Dans les deux cas, personne n'apprenait que
+  // cinq conventions n'existaient pas.
   const muet =
     vue.lignes.length === 0 &&
     vue.avertissements.length === 0 &&
     vue.blocages.length === 0 &&
+    vue.riensASigner.length === 0 &&
     !depotDisponible;
   if (muet) return null;
 
@@ -285,57 +299,34 @@ export function BlocSignature({
           correction à faire. `construireVueSignature` regroupe et compose ; ce
           composant, lui, continue de rendre le message TEL QUEL. */}
       {vue.avertissements.map((avertissement) => (
-        <div
+        <EncartACorriger
           key={`avert-${avertissement.participantId}`}
-          role="alert"
-          className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-          <span className="min-w-0">
-            {avertissement.message}{' '}
-            {/* ⚠ DEUX DESTINATIONS, ET LE COMPOSANT NE CHOISIT PAS : il rend ce
-                que `correctionAvertissement` a décidé (correction n°7 bis,
-                Laurent 11/09/2026). Avant, le lien menait TOUJOURS au formulaire
-                d'inscription — faux dans la moitié des cas : quand le
-                commanditaire est le bon et qu'il lui manque son code financeur
-                (Camille ROUSSEL, Marion MAINO), il n'y a rien à y corriger.
+          message={avertissement.message}
+          correction={avertissement.correction}
+          participantId={avertissement.participantId}
+          sessionId={sessionId}
+          scope={scope}
+        />
+      ))}
 
-                `typedRoutes` est actif : Link n'accepte pas une URL construite.
-                `as Route` plutôt que `as any` — on échappe au typage des routes,
-                pas au typage tout court (motif de `devis/page.tsx:209`). */}
-            {avertissement.correction.cible === 'ORGANISATION' ? (
-              <Link
-                href={
-                  lienRenseignerFinanceur({
-                    organizationId: avertissement.correction.organizationId,
-                    // Le retour suit le scope, comme pour l'autre lien : l'admin
-                    // est reposé sur l'onglet qu'il a quitté.
-                    retourVers: retourVersOnglet(
-                      sessionId,
-                      scope === 'BEFORE' ? 'avant' : 'apres',
-                    ),
-                  }) as Route
-                }
-                className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
-              >
-                {libelleLienRenseignerFinanceur(avertissement.correction.libelleOrganisation)}
-              </Link>
-            ) : (
-              <Link
-                href={
-                  lienCorrigerFinanceur({
-                    sessionId,
-                    participantId: avertissement.participantId,
-                    retour: scope === 'BEFORE' ? 'avant' : 'apres',
-                  }) as Route
-                }
-                className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
-              >
-                {LIBELLE_LIEN_CORRIGER_COMMANDITAIRE}
-              </Link>
-            )}
-          </span>
-        </div>
+      {/* ── D-C3-4 — CE QUE LE BLOC NE DISAIT PAS QUAND IL N'AVAIT RIEN ─────
+          Constat de production du 12/09/2026 (SES-0112) : cinq apprenants
+          « Agence », `regle === null` pour tous, donc aucune pièce — et aucun
+          avertissement non plus, le moteur n'ayant rien d'INCOHÉRENT à
+          signaler. Le bloc se réduisait à la zone de dépôt, ce qui se lit comme
+          « tout va bien ». Les cinq dossiers sont partis sans convention.
+
+          Même encart, même mécanique de lien : `composerRiensASigner` a déjà
+          décidé de la phrase ET de la destination. */}
+      {vue.riensASigner.map((rien) => (
+        <EncartACorriger
+          key={`rien-${rien.participantId}`}
+          message={rien.message}
+          correction={rien.correction}
+          participantId={rien.participantId}
+          sessionId={sessionId}
+          scope={scope}
+        />
       ))}
 
       {vue.lignes.length > 0 && (
@@ -432,6 +423,32 @@ export function BlocSignature({
                       className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-primary hover:bg-primary-50 transition-colors shrink-0"
                     >
                       Ouvrir <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </a>
+                  )}
+
+                  {/* ── LE CERTIFICAT DE SIGNATURE (lot D, défaut D-C3-5) ───
+                      À CÔTÉ d'« Ouvrir », jamais à la place : ce sont DEUX
+                      pièces, et un dossier AGEFICE les range toutes les deux.
+                      Il était produit, stocké et joint à l'email « Votre
+                      exemplaire signé » depuis le lot C.3 — mais le retrouver
+                      obligeait à fouiller sa boîte mail.
+
+                      ⚠ RIEN N'EST DÉCIDÉ ICI. `ligne.certificat` est nul sur
+                      une pièce signée par un scan déposé à la main : elle n'a
+                      pas de certificat, et un lien qui mène à un 404 fait
+                      cesser de croire l'écran. La règle vit dans
+                      `certificatDeLaPiece`, sous test unitaire.
+
+                      `?dl=1` : le certificat se RANGE plus qu'il ne se lit. */}
+                  {ligne.certificat && (
+                    <a
+                      href={`/api/signature-requests/${ligne.certificat.signatureRequestId}/audit-trail?dl=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors shrink-0"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Certificat de
+                      signature
                     </a>
                   )}
 
@@ -596,5 +613,76 @@ export function BlocSignature({
         />
       )}
     </section>
+  );
+}
+
+
+/**
+ * L'ENCART « À CORRIGER », partagé par l'avertissement de régime et le
+ * « rien à signer » du lot D.
+ *
+ * POURQUOI PARTAGÉ. Les deux disent la même chose sous deux causes : voici ce
+ * qui manque, voici où le corriger. Les rendre séparément aurait recopié la
+ * règle des DEUX destinations — et c'est précisément la recopie qui avait fait
+ * pointer l'avertissement TOUJOURS vers le formulaire d'inscription, faux dans
+ * la moitié des cas (correction n°7 bis, Laurent 11/09/2026).
+ *
+ * IL NE DÉCIDE RIEN : `correctionAvertissement` a déjà tranché, et le message
+ * est composé. Ce composant choisit entre deux `<Link>`, rien de plus.
+ */
+function EncartACorriger({
+  message,
+  correction,
+  participantId,
+  sessionId,
+  scope,
+}: {
+  message: string;
+  correction: CorrectionAvertissement;
+  participantId: string;
+  sessionId: string;
+  scope: ScopeEnvoi;
+}) {
+  return (
+    <div
+      role="alert"
+      className="mb-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+      <span className="min-w-0">
+        {message}{' '}
+        {/* `typedRoutes` est actif : Link n'accepte pas une URL construite.
+            `as Route` plutôt que `as any` — on échappe au typage des routes, pas
+            au typage tout court (motif de `devis/page.tsx:209`). */}
+        {correction.cible === 'ORGANISATION' ? (
+          <Link
+            href={
+              lienRenseignerFinanceur({
+                organizationId: correction.organizationId,
+                // Le retour suit le scope : l'admin est reposé sur l'onglet
+                // qu'il a quitté.
+                retourVers: retourVersOnglet(sessionId, scope === 'BEFORE' ? 'avant' : 'apres'),
+              }) as Route
+            }
+            className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
+          >
+            {libelleLienRenseignerFinanceur(correction.libelleOrganisation)}
+          </Link>
+        ) : (
+          <Link
+            href={
+              lienCorrigerFinanceur({
+                sessionId,
+                participantId,
+                retour: scope === 'BEFORE' ? 'avant' : 'apres',
+              }) as Route
+            }
+            className="whitespace-nowrap font-semibold underline underline-offset-2 hover:text-amber-950"
+          >
+            {LIBELLE_LIEN_CORRIGER_COMMANDITAIRE}
+          </Link>
+        )}
+      </span>
+    </div>
   );
 }

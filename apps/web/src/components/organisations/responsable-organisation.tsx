@@ -24,7 +24,7 @@ import {
   LIBELLE_RESPONSABLE_ORGANISATION,
   vueResponsableOrganisation,
 } from '@/lib/organisations/responsable-organisation';
-import type { OrganisationRepresentee } from '@/lib/signature/representant';
+import type { Apprenant, OrganisationRepresentee } from '@/lib/signature/representant';
 
 export interface ResponsableOrganisationProps {
   /**
@@ -34,10 +34,22 @@ export interface ResponsableOrganisationProps {
    * cascade se rabattrait sur une liste vide.
    */
   organisation: OrganisationRepresentee;
+  /**
+   * L'apprenant lié à cette organisation par un `LegalLink` de rôle `EI_SELF` —
+   * défaut D-C3-3. `null` pour une agence, c'est-à-dire presque toujours.
+   *
+   * ⚠ OBLIGATOIRE : optionnel, il se serait perdu et la fiche serait retombée
+   * en silence sur le chemin des agences — en promettant qu'« aucune convention
+   * ne peut partir » alors qu'elles partaient (recette C.3, 11/09/2026).
+   */
+  apprenantEiSelf: Apprenant | null;
 }
 
-export function ResponsableOrganisation({ organisation }: ResponsableOrganisationProps) {
-  const vue = vueResponsableOrganisation(organisation);
+export function ResponsableOrganisation({
+  organisation,
+  apprenantEiSelf,
+}: ResponsableOrganisationProps) {
+  const vue = vueResponsableOrganisation(organisation, apprenantEiSelf);
 
   return (
     <div className="sm:col-span-2">

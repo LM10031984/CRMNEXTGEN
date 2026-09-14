@@ -87,6 +87,24 @@ export default async function OrgDetailPage({
   });
   if (!org) notFound();
 
+  /**
+   * L'apprenant qui signe POUR LUI-MÊME (défaut D-C3-3).
+   *
+   * ⚠ LE RÔLE, PAS LA FORME JURIDIQUE. `legalForm === 'EI'` ne suffit pas : ce
+   * qui décide, c'est le `LegalLink` que le moteur lit lui aussi
+   * (`estEiSelfChezSponsor` dans `signature-envoi.ts`). Deux critères pour une
+   * question finiraient par répondre différemment.
+   */
+  const lienEiSelf = org.legalLinks.find((l) => l.role === 'EI_SELF') ?? null;
+  const apprenantEiSelf =
+    lienEiSelf === null
+      ? null
+      : {
+          firstName: lienEiSelf.person.firstName,
+          lastName: lienEiSelf.person.lastName,
+          email: lienEiSelf.person.email,
+        };
+
   const address = (org.address ?? null) as null | {
     street?: string;
     street2?: string;
@@ -175,6 +193,12 @@ export default async function OrgDetailPage({
                   representative: org.representative,
                   contacts: org.contacts,
                 }}
+                /* D-C3-3 — le lien `EI_SELF`, s'il existe. Sans lui, la fiche
+                   d'une entreprise individuelle annonce le chemin des agences
+                   et contredit le moteur, qui prend l'adresse de l'apprenant.
+                   Les liens sont DÉJÀ chargés ci-dessus : aucune requête de
+                   plus. */
+                apprenantEiSelf={apprenantEiSelf}
               />
               <Field label="SIRET" value={org.siret ? <code className="font-mono">{org.siret}</code> : '—'} />
               <Field label="SIREN" value={org.siren ? <code className="font-mono">{org.siren}</code> : '—'} />

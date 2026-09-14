@@ -9,11 +9,35 @@
  * que la proposition facture et que ce que la convention déclarera.
  *
  * Ce module ne corrige pas seulement un défaut : il rend le compte VISIBLE.
- * Chaque date affiche ce qu'elle vaut — demi-journées, heures sur site, heures
- * conventionnées côté admin ; demi-journées et heures sur site seulement côté
- * participant (les heures conventionnées sont une mécanique interne).
+ * Chaque date affiche ce qu'elle vaut — mais pas la même chose à tout le monde.
  *
- * ── Ligne rouge §8.1 ────────────────────────────────────────────────────────
+ * ── Trois surfaces, trois lectures ─────────────────────────────────────────
+ * Référence : spec §8.1, « ligne rouge de cohérence », et les décisions D-23 /
+ * D-25 reformulées PAR SURFACE le 11/09/2026. (On nomme la section et la
+ * décision, jamais un numéro de ligne : un numéro périme au premier paragraphe
+ * ajouté, et c'est ce genre de pointeur qui a fait croire que la ligne rouge
+ * disait « partout ».)
+ *
+ * 1. DOCUMENTS CONTRACTUELS ET FINANCEUR — proposition, convention, feuilles
+ *    d'émargement, attestation d'assiduité, dossier financeur : les heures
+ *    conventionnées y sont OBLIGATOIRES, c'est LA valeur de référence unique,
+ *    et elles ne s'y recalculent jamais.
+ * 2. ÉCRAN DE CHOIX DE CRÉNEAU (`/rdv/[token]`) — demi-journées + heures sur
+ *    site UNIQUEMENT : `decrireCreneauParticipant`, et
+ *    `decrireDureeProduitParticipant` pour la durée du produit. Le participant
+ *    y lit ce qu'il doit bloquer dans son agenda. Les heures conventionnées
+ *    sont une mécanique de financement (co-animation, assiette du financeur)
+ *    dont le lecteur est le PAYEUR — il les reçoit expliquées dans la
+ *    proposition, avant la convention. La ligne rouge n'en est pas entamée :
+ *    elle NOMME ses surfaces, et l'écran d'inscription n'en fait pas partie.
+ * 3. PARTOUT OÙ LE CHIFFRE EST MONTRÉ AU CLIENT, IL NE PARAÎT JAMAIS SEUL —
+ *    une phrase avec sa raison : « 4 h sur site animées par 2 formateurs, soit
+ *    8 h conventionnées prises en charge par votre financeur ». La page 3 de la
+ *    proposition la rend déjà, sans condition. Côté ADMIN (fiche campagne,
+ *    formulaire de création), les deux valeurs s'affichent ensemble et nommées :
+ *    `decrireCreneau`, `decrireDureeProduit`.
+ *
+ * ── La valeur unique ne se recalcule pas (ligne rouge §8.1) ────────────────
  * Les heures conventionnées ne sont JAMAIS recalculées ici. Elles viennent de
  * `conventionedHoursPerHalfDay`, le helper qu'utilise déjà `computePricing`.
  * Une deuxième formule, même juste le jour où on l'écrit, finit par diverger de
@@ -191,13 +215,16 @@ export function decrireCreneau(m: CreneauMesure): string {
 /**
  * La phrase PARTICIPANT — la page publique `/rdv/[token]`.
  *
- * Relecture du 11/09/2026 : « 8 h conventionnées » à côté de « 4 h sur site »
- * est une mécanique interne (deux formateurs, assiette du financeur). Pour le
- * client, c'est au mieux du jargon, au pire deux chiffres qui se contredisent
- * pour le même créneau. Il ne lit que ce qu'il doit bloquer dans son agenda :
- * la demi-journée et les heures sur place. Les heures conventionnées restent
- * la valeur unique de la convention et du dossier financeur — elles n'ont
- * simplement rien à faire sur un écran d'inscription.
+ * Arbitrage de Laurent du 11/09/2026, consigné dans D-23 et D-25 (règle n° 2
+ * des trois lectures, en tête de ce fichier) : « 8 h conventionnées » à côté de
+ * « 4 h sur site » est une mécanique de financement (deux formateurs, assiette
+ * du financeur). Pour le client, c'est au mieux du jargon, au pire deux
+ * chiffres qui se contredisent pour le même créneau. Il ne lit que ce qu'il
+ * doit bloquer dans son agenda : la demi-journée et les heures sur place. Les
+ * heures conventionnées restent la valeur unique des surfaces que NOMME la
+ * ligne rouge du §8.1 — proposition, convention, feuilles d'émargement,
+ * attestation d'assiduité, dossier financeur. L'écran d'inscription n'en fait
+ * pas partie.
  */
 export function decrireCreneauParticipant(m: CreneauMesure): string {
   const dj = `${m.halfDays} demi-journée${m.halfDays > 1 ? 's' : ''}`;
@@ -211,8 +238,9 @@ export function decrireCreneauParticipant(m: CreneauMesure): string {
  * ce que prouvent les journées Faros (FRM-0004..0007 : 336 € HT, soit une
  * demi-journée au tarif §8.1, pour `durationHours = 8`), et c'est cohérent avec
  * les deux endroits où ce champ finit : la convention et l'attestation
- * d'assiduité AGEFICE, donc le dossier financeur. Règle gravée n°2 : c'est LA
- * valeur unique.
+ * d'assiduité AGEFICE, donc le dossier financeur. Ligne rouge de cohérence du
+ * §8.1 (la « règle gravée n°2 » du PRD proposition v2) : c'est LA valeur
+ * unique.
  *
  * D'où la correction de la relecture du 10/09/2026 : la page publique affichait
  * « 36 h » sous le nom de la formation, sans dire de quelles heures il

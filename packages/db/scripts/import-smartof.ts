@@ -13,6 +13,9 @@
  *   3. Détection cas EI : si l'organisation rattachée porte le nom de l'apprenant, on crée
  *      un LegalLink avec rôle EI_SELF. Sinon on tente DIRIGEANT/SALARIE.
  *   4. Marquage qualité : SIRET malformé / email manquant → requiresCleanup=true.
+ *   5. Codes produits : le `Custom ID` source est repris VERBATIM (traçabilité
+ *      SmartOF, formes hétérogènes assumées) ; à défaut, le code est FABRIQUÉ
+ *      dans la série `PROD-NNNN`. Cf. `lib/product-code.ts`.
  *
  * Lancement :
  *   pnpm --filter @qualiof/db exec tsx scripts/import-smartof.ts
@@ -46,6 +49,7 @@ import {
   normalizeName,
   normalizeEmail,
 } from '@qualiof/shared';
+import { resolveProductCode } from './lib/product-code.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -407,12 +411,25 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
   let created = 0;
   let updated = 0;
 
+  // Codes déjà pris — ceux de la base, PLUS ceux alloués pendant ce run. Sans
+  // le second, deux lignes sans `Custom ID` réclameraient le même numéro.
+  // Lecture seule : la séquence vérifie avant d'écrire, elle n'écrase rien.
+  const codesPris = new Set<string>(
+    (
+      await prisma.trainingProduct.findMany({
+        where: { tenantId },
+        select: { code: true },
+      })
+    ).map((p) => p.code),
+  );
+
   for (const row of rows) {
     const uid = s(row['UID']);
     if (!uid) continue;
     if (s(row['Statut']) === 'Inactif') continue;
 
-    const code = s(row['Custom ID']) ?? `PROD-${uid.substring(0, 8)}`;
+    const code = resolveProductCode({ uid, customId: s(row['Custom ID']) }, codesPris);
+    codesPris.add(code);
     const title = s(row['Intitulé de la formation']) ?? s(row['Nom du produit']) ?? '(sans titre)';
     const durationHours = parseInt(s(row['Durée de formation (en heures)']) ?? '0', 10) || 0;
     const modality: Modality = mapModality(s(row["Mode d'organisation"]));
@@ -457,15 +474,38 @@ async function importTrainingProducts(tenantId: string): Promise<void> {
       updated++;
     } else {
       try {
-        const newProduct = await prisma.trainingProduct.create({ data });
-        await prisma.externalIdentity.create({
-          data: {
-            tenantId,
-            entityType: 'TrainingProduct',
-            entityId: newProduct.id,
-            source: 'smartof',
-            externalId: uid,
-          },
+        // Produit + identité externe + trace, ou rien. Les trois étaient des
+        // écritures séparées : un run interrompu entre la première et la
+        // deuxième laisse un produit qu'aucun import ne retrouvera par son UID,
+        // et que personne ne pourra dater. C'est l'état de `PROD-cdd22466` en
+        // production depuis le 21/08/2026.
+        await prisma.$transaction(async (tx) => {
+          const newProduct = await tx.trainingProduct.create({ data });
+          await tx.externalIdentity.create({
+            data: {
+              tenantId,
+              entityType: 'TrainingProduct',
+              entityId: newProduct.id,
+              source: 'smartof',
+              externalId: uid,
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              userId: null,
+              entity: 'TrainingProduct',
+              entityId: newProduct.id,
+              action: 'trainingProduct.create',
+              diff: {
+                source: 'import-smartof.ts',
+                smartofUid: uid,
+                code,
+                title,
+                provenanceCode: s(row['Custom ID']) ? 'Custom ID source' : 'série maison',
+              },
+            },
+          });
         });
         created++;
       } catch (err) {
