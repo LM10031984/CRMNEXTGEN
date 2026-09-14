@@ -387,6 +387,30 @@ correctif, `buildFundingSection` posait bien `amountLabel: '—'`, les six tests
 étaient verts — et **le gabarit imprimait toujours « − 0 € »**, parce qu'il
 ignorait le champ. Le contrôle doit porter sur ce que le lecteur lit.
 
+### La règle immédiate : arrêter l'hémorragie avant d'éponger
+
+Recensement du 14/09/2026, motif : toute fonction `export function render*Html`
+sous `apps/web/src/lib` (hors pieds de page), vérifiée si son nom apparaît dans
+un `*.test.ts(x)` quelconque.
+
+> **16 documents sur 26 — 62 % — ne sont rendus par AUCUN test.**
+
+Dont le **devis**, le **programme Qualiopi**, l'**attestation** et le
+**certificat**. Plusieurs ont pourtant des tests : sur leurs fonctions de
+**préparation de données**.
+
+Éponger est un chantier. Mais la dette doit cesser de croître **aujourd'hui** :
+
+> **Tout NOUVEAU test qui affirme quelque chose d'un document client ou
+> financeur porte sur le HTML RENDU, jamais sur l'objet de préparation.**
+
+Sans exception, et sans attendre que le chantier existe. Un test d'objet reste
+utile pour la logique — il ne compte simplement pas comme une preuve du document.
+
+**Corollaire pour choisir par où éponger** : on trie par EXPOSITION, pas par
+facilité. Une pièce que le financeur lit et qui porte des chiffres calculés par
+le système transforme un défaut de rendu en **dossier refusé**, pas en coquille.
+
 ## 4 sexies. Une base s'identifie par son CONTENU, jamais par son nom
 
 **Vécu le 14/09/2026**, en cherchant la prod pour une lecture autorisée.
@@ -431,6 +455,41 @@ oui** — et l'un d'eux vient d'une source écrite avant la question.
 
 `aws-0` et `aws-1` sont **deux grappes différentes**, et un chiffre d'écart dans
 un nom d'hôte est la seule chose qui sépare la production de l'aperçu.
+
+## 4 septies. Un document client ne se note jamais lui-même
+
+**Arbitrage de Laurent, 14/09/2026**, et il va plus loin que le défaut qui l'a
+déclenché.
+
+Le défaut : la proposition annonçait « **audit complet** joint » sur un
+diagnostic LÉGER. Chaîne en dur, aucune lecture de la variante.
+
+La correction évidente — lire la variante et écrire « audit **léger** joint » —
+**aurait été pire que le bug**. « Léger » dit au dirigeant qu'il a reçu la
+version au rabais. Or il n'a **aucune raison de savoir qu'il existe deux
+variantes** : ce découpage est notre affaire, pas la sienne.
+
+> **La règle : aucun texte destiné au client ou au financeur ne qualifie le
+> niveau, la version ou la complétude de la prestation. Ces mots servent en
+> interne et s'arrêtent à la porte.**
+
+L'écran a le droit de porter « Diagnostic léger » — c'est un outil de travail.
+La pièce remise, non. Elle dit **« rapport de diagnostic joint »**, pour les deux
+variantes.
+
+**Le document se NOMME, il ne se CLASSE pas.**
+
+### Ce que ça interdit, concrètement
+
+« complet », « léger », « simplifié », « intégral », « version 2 », « essentiel »,
+« premium », « standard », et tout comparatif implicite — dès qu'ils portent sur
+ce qu'on vend ou ce qu'on remet.
+
+### La forme du test qui la garde
+
+Le contrat ne porte **pas** sur « quel mot pour quelle variante » : il porte sur
+l'**absence de tout qualificatif**, dans les deux cas, plus l'égalité stricte des
+deux rendus. Écrit autrement, il aurait laissé passer « audit léger joint ».
 
 ## 5. Gates — les trois, dans cet ordre
 

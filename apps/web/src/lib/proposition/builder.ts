@@ -21,8 +21,6 @@ import type {
   ProposalPricing,
 } from '@qualiof/shared';
 
-import type { DiagnosticVariantKey } from '@qualiof/shared/diagnostic';
-
 import type { AuditData } from '@/lib/diagnostic-r1/templates/audit-data';
 import type { FundingParticipantResult, FundingSynthesis } from '@/lib/financement/types';
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -543,19 +541,22 @@ export function buildCoverHeadline(priorityTitles: readonly string[]): string {
 }
 
 /**
- * La pièce réellement jointe — jamais « complet » en dur.
+ * La pièce jointe se NOMME, elle ne se CLASSE pas.
  *
- * Relevé le 14/09/2026 : DIAG-0001 est un diagnostic LÉGER, et la proposition
- * annonçait « audit complet joint ». Le document mentait sur sa propre pièce
- * jointe, à un client qui peut l'ouvrir et compter les pages.
+ * Deux temps, le 14/09/2026. D'abord le mensonge : DIAG-0001 est un diagnostic
+ * LÉGER et la proposition annonçait « audit complet joint » — chaîne en dur,
+ * aucune lecture de `variant`.
  *
- * Le libellé suit le vocabulaire déjà employé à l'écran (« Diagnostic léger » /
- * « Diagnostic complet »), pour que le client lise le même mot d'un document à
- * l'autre.
+ * Puis l'arbitrage de Laurent, qui va plus loin que le correctif : ne PAS
+ * remplacer par « audit léger joint ». « Léger » dirait au dirigeant qu'il a
+ * reçu la version au rabais — alors qu'il n'a aucune raison de savoir qu'il
+ * existe deux variantes. Le mot est INTERNE : l'écran a le droit de le porter,
+ * la pièce client non.
+ *
+ * D'où un libellé unique, sans qualificatif, pour les deux variantes.
+ * Cf. quick.md §4 septies.
  */
-function pieceJointe(variant: DiagnosticVariantKey): string {
-  return variant === 'LEGER' ? 'audit léger joint' : 'audit complet joint';
-}
+const PIECE_JOINTE = 'rapport de diagnostic joint';
 
 export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const { audit, rules } = input;
@@ -607,8 +608,8 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     recipientLabel: '',
     contactLabel: '',
     heardIntro: input.meetingAt
-      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (${pieceJointe(audit.variant)} — ${input.diagnosticReference}), voici les enjeux identifiés :`
-      : `À la suite de notre diagnostic (${pieceJointe(audit.variant)} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
+      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`
+      : `À la suite de notre diagnostic (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
     heard,
     axesIntro:
       'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Un point de douleur métier reçoit un programme métier : l’IA n’est jamais la réponse par défaut.',
