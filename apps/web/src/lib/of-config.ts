@@ -14,6 +14,8 @@
  * (cf. drift `invoices.ts` corrigé Plan 07-01).
  */
 
+import { REFERENT_HANDICAP } from './referent-handicap';
+
 import { prisma } from '@qualiof/db';
 import type { Tenant } from '@qualiof/db';
 
@@ -175,7 +177,17 @@ export function resolveOfConfig(t: TenantInput | null): OfConfig {
     logoPath: pick(t?.logoPath, 'OF_LOGO_PATH'),
     signaturePedagoPath: pick(t?.signaturePedagoPath, 'OF_SIGNATURE_PEDAGO_PATH'),
     signatureDirigeantPath: pick(t?.signatureDirigeantPath, 'OF_SIGNATURE_DIRIGEANT_PATH'),
-    handicapReferent: pick(null, 'OF_HANDICAP_REFERENT', 'Laurent MARX'),
+    // Le référent handicap ne se configure PAS par l'environnement.
+    //
+    // Cette ligne valait `pick(null, 'OF_HANDICAP_REFERENT', 'Laurent MARX')`,
+    // et portait trois défauts : le `null` l'empêchait de lire le Tenant, la
+    // variable était absente du `.env`, donc le repli gagnait toujours — et ce
+    // repli nommait le dirigeant, pas le référent. Une variable absente avec un
+    // nom de personne en repli est le mécanisme même du défaut.
+    //
+    // Migration prévue (spec §5.5) : colonne `Tenant` le jour où un SECOND
+    // organisme utilise QualiOF, pas avant.
+    handicapReferent: REFERENT_HANDICAP.nom,
     resp,
     contact,
   };

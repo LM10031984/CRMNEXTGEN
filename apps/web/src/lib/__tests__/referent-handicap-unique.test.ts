@@ -37,6 +37,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ACCESSIBILITE_PSH } from '../catalogue-constants';
+import { REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
 
 const RACINE = path.resolve(__dirname, '../../..', '..', '..');
 
@@ -80,10 +81,20 @@ describe('Référent handicap — un seul nom dans tout le dépôt', () => {
     // formatrice dans des fixtures et des scripts d'affectation. On cherche la
     // mention qui la présente comme le RÉFÉRENT HANDICAP, c'est-à-dire son nom
     // ou son adresse à portée d'un libellé « référent handicap ».
+    // Les COMMENTAIRES sont hors sujet, et ce n'est pas une commodité : ce
+    // fichier-ci, comme `referent-handicap.ts`, raconte le défaut en nommant
+    // l'ancien référent. Une prose qui explique pourquoi un nom est parti n'est
+    // pas un nom publié. On balaie le code.
+    const estCommentaire = (l: string): boolean => {
+      const t = l.trim();
+      return t.startsWith('*') || t.startsWith('//') || t.startsWith('/*');
+    };
+
     const coupables: string[] = [];
     for (const f of fichiers) {
       const lignes = fs.readFileSync(path.join(RACINE, f), 'utf8').split('\n');
       lignes.forEach((l, i) => {
+        if (estCommentaire(l)) return;
         if (!ANCIEN_NOM.test(l) && !ANCIEN_EMAIL.test(l)) return;
         const fenetre = lignes.slice(Math.max(0, i - 2), i + 3).join(' ');
         if (/référent\s+handicap/i.test(fenetre)) coupables.push(`${f}:${i + 1}`);
@@ -97,23 +108,22 @@ describe('Référent handicap — un seul nom dans tout le dépôt', () => {
     ).toEqual([]);
   });
 
-  it('la ligne du référent est la MÊME que celle des documents de clôture', () => {
-    // Le garde qui compte : les deux surfaces que l'auditeur compare — la
-    // fiche du catalogue et la check-list de formation — doivent nommer la
-    // même personne. On relit le fichier source plutôt que d'exporter la
-    // constante : c'est l'écart entre DEUX fichiers qu'on surveille, et un
-    // import masquerait l'écart en le supprimant.
+  it('la check-list de clôture LIT la source unique, elle ne la recopie pas', () => {
+    // Ce test surveillait l'écart entre DEUX littéraux, dans deux fichiers.
+    // Depuis l'unification (spec §5.5), l'écart ne peut plus exister : les deux
+    // surfaces lisent `lib/referent-handicap.ts`. Ce qu'on garde désormais,
+    // c'est que la check-list n'ait pas RE-recopié la valeur — c'est-à-dire la
+    // dépendance elle-même, qui est ce qui les fera bouger ensemble.
     const src = fs.readFileSync(
       path.join(RACINE, 'apps/web/src/lib/closure/checklist-formation-template.ts'),
       'utf8',
     );
-    const m = src.match(/const HANDICAP_REFERENT_LINE\s*=\s*\n?\s*'([^']+)'/);
-    expect(m, 'HANDICAP_REFERENT_LINE introuvable — le garde a perdu sa référence').not.toBeNull();
+    expect(src).toMatch(/from '\.\.\/referent-handicap'/);
+    expect(src).toMatch(/HANDICAP_REFERENT_LINE\s*=\s*REFERENT_HANDICAP_LIGNE/);
 
-    const ligne = m![1]!;
-    expect(ligne).toContain(REFERENT_NOM);
-    expect(ligne).toContain(REFERENT_EMAIL);
-    // Et la réciproque : le catalogue nomme bien la personne de cette ligne-là.
-    expect(ACCESSIBILITE_PSH).toContain(ligne.split(' — ')[0]!);
+    // Et la réciproque, sur les valeurs rendues : les deux surfaces nomment la
+    // même personne.
+    expect(REFERENT_HANDICAP_LIGNE).toContain(REFERENT_NOM);
+    expect(ACCESSIBILITE_PSH).toContain(REFERENT_NOM);
   });
 });
