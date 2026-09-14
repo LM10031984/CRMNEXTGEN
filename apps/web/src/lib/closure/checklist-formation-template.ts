@@ -18,10 +18,16 @@ import {
   renderBrandHeader,
   wrapHtml,
 } from './shared-template';
+import { REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
 
-/** Référent handicap unique de l'OF (ind. 26) — identique sur tous les docs. */
-const HANDICAP_REFERENT_LINE =
-  'Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60';
+/**
+ * Référent handicap unique de l'OF (ind. 26) — identique sur tous les docs.
+ *
+ * La valeur ne vit plus ici : ce fichier a longtemps été la seule source
+ * juste, pendant que le catalogue en nommait une autre. Elle vit désormais
+ * dans `lib/referent-handicap.ts`, que les TROIS surfaces lisent.
+ */
+const HANDICAP_REFERENT_LINE = REFERENT_HANDICAP_LIGNE;
 
 /** Zone 1 — apporté par Start Academy. */
 export interface ChecklistZoneApportee {

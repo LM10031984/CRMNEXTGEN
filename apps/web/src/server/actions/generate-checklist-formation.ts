@@ -5,7 +5,7 @@
  * 1 doc par session — coches pré-remplies selon modalité + lieu + hébergement
  * formateur + accessibilité PSH (champs saisis sur la session).
  *
- * Référent handicap : Laurent (config .env OF_HANDICAP_REFERENT).
+ * Référent handicap : source unique `lib/referent-handicap.ts` (ind. 26).
  * Stockage : Document type=CHECKLIST_FORMATION, sessionId, entityType='session'.
  */
 

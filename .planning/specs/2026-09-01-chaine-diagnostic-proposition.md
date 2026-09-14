@@ -772,6 +772,60 @@ pourquoi chaque module y est ne la passe pas.
 
 ---
 
+## 5.5 Le référent handicap — une identité, trois surfaces
+
+_Posé par Laurent le 12/09/2026, après un défaut mesuré sur la page publique._
+
+Le 12/09, `/catalogue` nommait **trois personnes différentes** comme référent
+handicap : « Julien Lafitte » 58 fois (constante de texte), « Jean-Guy
+Ourmières » 2 fois (override d'un produit), « Laurent MARX » 2 fois (repli de
+`of-config`). **Deux des trois étaient faux**, et Julien Lafitte avait quitté
+l'organisme.
+
+**La cause n'était pas « deux textes ».** C'était une **identité recopiée à
+trois endroits, qu'aucun garde ne confrontait**. Le programme composé, lui,
+n'a jamais nommé personne : son contact est l'ORGANISME
+(`{of.name, of.email, of.phone}`).
+
+### Ce qu'on unifie, et ce qu'on n'unifie pas
+
+**Unifié** : le triplet d'identité — nom, adresse, téléphone —
+dans `apps/web/src/lib/referent-handicap.ts`, lu par les trois surfaces.
+
+**NON unifié, et délibérément** : les deux textes de rubrique restent
+distincts. `/catalogue` rend une phrase courte de vitrine ; le programme
+composé rend les trois paragraphes légaux relevés verbatim dans les programmes
+du Drive (`lib/docs/qualiopi-mentions.ts`). Les fondre aurait remplacé le texte
+légal d'une pièce qui part au client et au financeur, sur un champ
+d'indicateur 26, à trois semaines d'un audit.
+
+**Contrainte de sûreté tenue** : le rendu du catalogue est **identique au
+caractère** avant et après l'unification. Un test fige le texte en toutes
+lettres.
+
+### La variable d'environnement disparaît
+
+`OF_HANDICAP_REFERENT` n'existe plus. Elle valait
+`pick(null, 'OF_HANDICAP_REFERENT', 'Laurent MARX')` — trois défauts en une
+ligne : le `null` empêchait de lire le `Tenant`, la variable était absente du
+`.env`, donc le repli gagnait toujours, et ce repli nommait le dirigeant.
+
+> **Une variable d'environnement absente, avec un nom de personne en repli, est
+> le mécanisme même du défaut.** Un paramètre qu'on croit configurable et que
+> personne n'a jamais posé n'est pas un paramètre : c'est une valeur en dur avec
+> une couche d'illusion par-dessus.
+
+### Condition de migration
+
+Le système est multi-tenant, et une colonne `Tenant` est le bon foyer **à
+terme**. Elle resterait vide aujourd'hui : les `Tenant.qualiopi*` posées le
+11/09 valent `NULL` en production et **aucun écran ne permet de les remplir**.
+
+**Le référent passe en colonne `Tenant` le jour où un SECOND organisme utilise
+QualiOF, pas avant.** Même règle que le déménagement du générateur de codes
+vers `packages/shared` (§5.4) : pas de plomberie spéculative à trois semaines
+d'un audit.
+
 ## 5.4 Un code produit n'est pas une adresse
 
 _Posé par Laurent le 12/09/2026, sur constat mesuré le même jour._
