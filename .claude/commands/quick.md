@@ -325,6 +325,16 @@ il faut **rouvrir une PR neuve** vers `main`, et la relecture déjà faite est
 `--delete-branch`, ou bien **recibler la PR empilée sur `main` AVANT** de
 fusionner sa base.
 
+### La règle derrière les deux pièges
+
+**Une pile de PR n'est pas un état, c'est une dépendance vivante.** On ne
+supprime pas une base, et on ne fusionne pas une pile sans avoir rebasé
+l'étage du dessus d'abord.
+
+Le travail n'était pas perdu — reconstruire la #69 a simplement coûté plus que
+la précaution : intégrer `main`, rejouer les trois gates, rouvrir, réattendre
+la CI, et refaire relire ce qui l'avait déjà été.
+
 ## 6. Rendre compte
 
 Trois lignes : ce qui change pour l'utilisateur, ce qui a été mis de côté, ce
