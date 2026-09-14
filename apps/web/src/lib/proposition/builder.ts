@@ -21,6 +21,8 @@ import type {
   ProposalPricing,
 } from '@qualiof/shared';
 
+import type { DiagnosticVariantKey } from '@qualiof/shared/diagnostic';
+
 import type { AuditData } from '@/lib/diagnostic-r1/templates/audit-data';
 import type { FundingParticipantResult, FundingSynthesis } from '@/lib/financement/types';
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -462,6 +464,25 @@ export function planningMismatches(
  * Le titre, lui, reste thématique — il nomme les besoins servis par ce bloc.
  * C'est ce que le dirigeant lit ; le décompte, c'est ce qu'il peut vérifier.
  */
+/**
+ * Termine un constat qui n'a pas de ponctuation finale.
+ *
+ * Les constats viennent de deux formes : une ALERTE est une phrase (elle finit
+ * par un point), un couple « libellé : valeur » ne finit par rien. Joints par
+ * une simple espace, ils donnaient la bouillie relevée sur PROP-0001 v1 :
+ *
+ *   « …contre 20 attendus. Qui prospecte réellement : Certains seulement Le
+ *     suivi vendeur n'est pas ritualisé : … »
+ *
+ * On ne choisit pas un séparateur décoratif : on rend chaque constat autonome.
+ * Le lecteur voit alors où l'un s'arrête, ce qui est tout l'objet du bloc.
+ */
+function termine(constat: string): string {
+  const t = constat.trim();
+  if (t === '') return t;
+  return /[.!?…:;]$/.test(t) ? t : `${t}.`;
+}
+
 export function axisFromBlock(
   block: ComposedBlock,
   index: number,
@@ -506,7 +527,7 @@ export function axisFromBlock(
     productId: null,
     productCode: null,
     description: '',
-    why: constats.join(' ') || 'À justifier avant envoi.',
+    why: constats.map(termine).join(' ') || 'À justifier avant envoi.',
     halfDays: 1,
     periodLabel,
     matchSource: block.modules.every((m) => m.confidence === 'forte') ? 'signaux' : 'lexique',
@@ -519,6 +540,21 @@ export function buildCoverHeadline(priorityTitles: readonly string[]): string {
   if (retenues.length === 0) return 'Un parcours dimensionné sur vos droits à la formation';
   const [premier, ...suite] = retenues;
   return [premier!, ...suite.map((t) => t.charAt(0).toLowerCase() + t.slice(1))].join(', ');
+}
+
+/**
+ * La pièce réellement jointe — jamais « complet » en dur.
+ *
+ * Relevé le 14/09/2026 : DIAG-0001 est un diagnostic LÉGER, et la proposition
+ * annonçait « audit complet joint ». Le document mentait sur sa propre pièce
+ * jointe, à un client qui peut l'ouvrir et compter les pages.
+ *
+ * Le libellé suit le vocabulaire déjà employé à l'écran (« Diagnostic léger » /
+ * « Diagnostic complet »), pour que le client lise le même mot d'un document à
+ * l'autre.
+ */
+function pieceJointe(variant: DiagnosticVariantKey): string {
+  return variant === 'LEGER' ? 'audit léger joint' : 'audit complet joint';
 }
 
 export function seedContent(input: ContentSeedInput): ContentSeedOutput {
@@ -571,8 +607,8 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     recipientLabel: '',
     contactLabel: '',
     heardIntro: input.meetingAt
-      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (audit complet joint — ${input.diagnosticReference}), voici les enjeux identifiés :`
-      : `À la suite de notre diagnostic (audit complet joint — ${input.diagnosticReference}), voici les enjeux identifiés :`,
+      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (${pieceJointe(audit.variant)} — ${input.diagnosticReference}), voici les enjeux identifiés :`
+      : `À la suite de notre diagnostic (${pieceJointe(audit.variant)} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
     heard,
     axesIntro:
       'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Un point de douleur métier reçoit un programme métier : l’IA n’est jamais la réponse par défaut.',

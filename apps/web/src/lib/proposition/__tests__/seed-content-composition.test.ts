@@ -142,9 +142,9 @@ const LIBRARY: LibraryModule[] = [
 ];
 LIBRARY[5]!.excludedFromClientOutputs = true;
 
-function seed() {
+function seed(variantAudit: typeof audit = audit) {
   return seedContent({
-    audit,
+    audit: variantAudit,
     rules: RULES,
     library: LIBRARY,
     agencyName: 'Agence du Baou',
@@ -233,5 +233,42 @@ describe('seedContent — D-20 et §8.2 : on vend ce qui est justifié', () => {
 
     expect(conventionedHoursOf(axesHalfDays, RULES)).toBe(composition.totalConventionedHours);
     expect(composition.totalConventionedHours).toBe(composition.totalHalfDays * 8);
+  });
+});
+
+/**
+ * Le document ne ment pas sur sa propre pièce jointe.
+ *
+ * Relevé sur PROP-0001 v1 le 14/09/2026 : DIAG-0001 est un diagnostic LÉGER,
+ * et la proposition annonçait « audit complet joint ». La chaîne était en dur
+ * dans les DEUX branches de `heardIntro` — aucune lecture de `variant`.
+ *
+ * Le contrôle porte sur la PHRASE, pas sur le helper qui la fabrique : un test
+ * du helper serait resté vert si `heardIntro` avait cessé de l'appeler.
+ */
+describe('La pièce jointe annoncée — jamais « complet » en dur', () => {
+  it('annonce un audit LÉGER quand le diagnostic est léger', () => {
+    const { content } = seed();
+    expect(content.heardIntro).toContain('audit léger joint');
+    expect(
+      content.heardIntro,
+      'le document annonce une pièce qui n’existe pas',
+    ).not.toContain('audit complet');
+  });
+
+  it('annonce un audit COMPLET quand il l’est', () => {
+    const complet = buildAuditData({
+      reference: 'DIAG-0042',
+      agencyName: 'Agence du Baou',
+      generatedAt: new Date('2026-09-10T12:00:00Z'),
+      variant: 'COMPLET',
+      answers: ANSWERS,
+      participants: PARTICIPANTS,
+      rules: RULES,
+      of: OF,
+      valueEuros: 3000,
+    });
+    const { content } = seed(complet);
+    expect(content.heardIntro).toContain('audit complet joint');
   });
 });

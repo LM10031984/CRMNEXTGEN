@@ -387,6 +387,51 @@ correctif, `buildFundingSection` posait bien `amountLabel: '—'`, les six tests
 étaient verts — et **le gabarit imprimait toujours « − 0 € »**, parce qu'il
 ignorait le champ. Le contrôle doit porter sur ce que le lecteur lit.
 
+## 4 sexies. Une base s'identifie par son CONTENU, jamais par son nom
+
+**Vécu le 14/09/2026**, en cherchant la prod pour une lecture autorisée.
+
+Le MCP Supabase listait trois projets. L'un s'appelait **`academia-crm`** — le
+nom du CRM. C'était le candidat évident, et **ce n'était pas la prod** : la
+table `Tenant` n'y existe pas. Un `SELECT` sur un nom plausible aurait rendu une
+erreur ; sur un schéma voisin, il aurait rendu des **chiffres faux sans erreur**.
+
+Pire : le MCP **ne voyait pas la prod du tout**. Le projet réel
+(`gntlqyscahbgjrmsbzil`, pooler `aws-0-eu-west-1`) appartient à un autre compte.
+Se fier à la liste d'un outil, c'est prendre son périmètre pour le monde.
+
+> **La règle : avant toute lecture ou écriture, prouve la base par un marqueur
+> de son CONTENU, et recoupe-le avec une valeur déjà consignée.**
+
+### Le marqueur canonique de la prod QualiOF
+
+```sql
+SELECT t.id, t.name, (SELECT count(*) FROM "TrainingProduct") AS produits
+FROM "Tenant" t WHERE t.id = 'db191440-a144-48d1-93c1-767e6f647f2c';
+```
+
+Attendu — **les deux ensemble**, jamais l'un seul :
+
+| Marqueur | Valeur | Recoupement |
+|---|---|---|
+| `Tenant.name` | `Start Academy` | l'identifiant est dans tout le dossier |
+| `count(TrainingProduct)` | **51** | STATE.md « la base en porte 51 » |
+
+Le tenant seul ne suffit pas : une base d'aperçu restaurée le porte aussi. Le
+compte de produits seul ne suffit pas : il bouge. **Les deux qui concordent,
+oui** — et l'un d'eux vient d'une source écrite avant la question.
+
+### Ne jamais confondre les trois bases
+
+| Base | Hôte | Reconnaissance |
+|---|---|---|
+| **PROD** | `aws-0-eu-west-1.pooler.supabase.com` | tenant + 51 produits |
+| **APERÇU** | `aws-1`, projet `qualiof-apercu` | schéma identique, données de démo |
+| **LOCALE** | `localhost:5432/qualiof_dev*` | une base par worktree (§4) |
+
+`aws-0` et `aws-1` sont **deux grappes différentes**, et un chiffre d'écart dans
+un nom d'hôte est la seule chose qui sépare la production de l'aperçu.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
