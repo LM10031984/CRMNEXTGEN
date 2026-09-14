@@ -48,6 +48,7 @@
     "fix:depublier-coquilles": "dotenv -e ../../.env -- tsx scripts/fix-depublier-coquilles-import.ts",
     "fix:accessibilite-frm": "dotenv -e ../../.env -- tsx scripts/fix-accessibilite-tronquee-frm.ts",
     "fix:transcrire-prod0671": "dotenv -e ../../.env -- tsx scripts/fix-transcrire-prod0671.ts",
+    "fix:transcrire": "dotenv -e ../../.env -- tsx scripts/fix-transcrire-rubriques.ts",
     "db:query:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/run-readonly-sql.ts",
     "fix:d19ter-prod-00661": "dotenv -e ../../.env -- tsx scripts/fix-d19ter-prod-00661.ts",
     "seed:demo-signature": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/seed-demo-signature.ts"
