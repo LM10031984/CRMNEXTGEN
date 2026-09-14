@@ -335,6 +335,58 @@ lecture de code, aucune supposition.
 
 À chercher dès qu'on se demande « d'où vient ce texte ? ».
 
+## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
+
+**Troisième occurrence du même défaut en une semaine, relevée le 14/09/2026.**
+Ce n'est pas trois bugs : c'est une règle, ratée trois fois.
+
+| Ce que l'ÉCRAN montre | Ce que le DOCUMENT imprime |
+|---|---|
+| `contactLabel` vide | un nom — celui du propriétaire de la proposition |
+| `consumedThisYear` jamais demandé | « **Aucun** financement engagé déclaré sur l'exercice en cours — 0 € » |
+| colonne Qualiopi nulle | un texte générique |
+
+Dans les trois cas, **l'écran dit « vide » et le document dit quelque chose.**
+Le commercial relit un formulaire où il ne manque rien, et le client — ou le
+financeur — reçoit une affirmation que personne n'a formulée.
+
+> **La règle : ce que l'écran montre vide ne doit rien imprimer, ou l'écran
+> doit montrer ce qui sera imprimé. Jamais l'un sans l'autre.**
+
+### Pourquoi c'est plus grave qu'une omission
+
+Le cas de la déduction est le pire des trois, et il mérite d'être compris.
+Le document n'**omettait** pas l'information : il en **affirmait l'absence**,
+sur une pièce qui part au financeur. « Aucun financement engagé déclaré »
+énonce un constat. On ne l'avait jamais fait.
+
+C'est la même famille que le motif qui répond à deux choses (§4 quater) :
+**rien ne proteste.** Le tableau est cohérent, les totaux tombent juste, et il
+est faux.
+
+### Ce que ça donne en code
+
+`?? 0` et `|| ''` écrasent « je ne sais pas » et « il n'y en a pas » en un seul
+état. Le **calcul** n'a souvent pas d'autre choix que de retomber sur zéro — le
+**document**, lui, doit dire lequel des deux il décrit :
+
+```ts
+const declaree = input.consumedThisYear !== undefined;  // l'état, séparé
+const consumed = input.consumedThisYear ?? 0;           // le calcul, inchangé
+```
+
+Et quand un total repose sur une valeur inconnue, **il se nomme comme un
+plafond**, pas comme un montant. Un montant mobilisable annoncé sans déduire ce
+qui est déjà engagé est exactement la « mention trompeuse de financement » que
+le référentiel Qualiopi sanctionne.
+
+### Le corollaire de test
+
+Un test qui porte sur l'OBJET ne prouve rien sur le DOCUMENT. Au premier jet du
+correctif, `buildFundingSection` posait bien `amountLabel: '—'`, les six tests
+étaient verts — et **le gabarit imprimait toujours « − 0 € »**, parce qu'il
+ignorait le champ. Le contrôle doit porter sur ce que le lecteur lit.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

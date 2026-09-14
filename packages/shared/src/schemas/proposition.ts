@@ -210,6 +210,14 @@ export const FundingRowSchema = z.object({
   amount: z.number(),
   /** Une ligne de déduction s'affiche « − X € » et ne compte pas comme un droit. */
   isDeduction: z.boolean().default(false),
+  /**
+   * Ce qui s'imprime À LA PLACE du montant quand il n'y en a pas à affirmer.
+   *
+   * Ajouté le 14/09/2026 : une consommation NON RENSEIGNÉE se rendait « − 0 € »,
+   * c'est-à-dire comme une consommation nulle CONSTATÉE. Optionnel et additif —
+   * les `fundingJson` déjà persistés restent lisibles sans lui.
+   */
+  amountLabel: z.string().max(40).optional(),
 });
 export type FundingRow = z.infer<typeof FundingRowSchema>;
 
