@@ -387,6 +387,110 @@ correctif, `buildFundingSection` posait bien `amountLabel: '—'`, les six tests
 étaient verts — et **le gabarit imprimait toujours « − 0 € »**, parce qu'il
 ignorait le champ. Le contrôle doit porter sur ce que le lecteur lit.
 
+### La règle immédiate : arrêter l'hémorragie avant d'éponger
+
+Recensement du 14/09/2026, motif : toute fonction `export function render*Html`
+sous `apps/web/src/lib` (hors pieds de page), vérifiée si son nom apparaît dans
+un `*.test.ts(x)` quelconque.
+
+> **16 documents sur 26 — 62 % — ne sont rendus par AUCUN test.**
+
+Dont le **devis**, le **programme Qualiopi**, l'**attestation** et le
+**certificat**. Plusieurs ont pourtant des tests : sur leurs fonctions de
+**préparation de données**.
+
+Éponger est un chantier. Mais la dette doit cesser de croître **aujourd'hui** :
+
+> **Tout NOUVEAU test qui affirme quelque chose d'un document client ou
+> financeur porte sur le HTML RENDU, jamais sur l'objet de préparation.**
+
+Sans exception, et sans attendre que le chantier existe. Un test d'objet reste
+utile pour la logique — il ne compte simplement pas comme une preuve du document.
+
+**Corollaire pour choisir par où éponger** : on trie par EXPOSITION, pas par
+facilité. Une pièce que le financeur lit et qui porte des chiffres calculés par
+le système transforme un défaut de rendu en **dossier refusé**, pas en coquille.
+
+## 4 sexies. Une base s'identifie par son CONTENU, jamais par son nom
+
+**Vécu le 14/09/2026**, en cherchant la prod pour une lecture autorisée.
+
+Le MCP Supabase listait trois projets. L'un s'appelait **`academia-crm`** — le
+nom du CRM. C'était le candidat évident, et **ce n'était pas la prod** : la
+table `Tenant` n'y existe pas. Un `SELECT` sur un nom plausible aurait rendu une
+erreur ; sur un schéma voisin, il aurait rendu des **chiffres faux sans erreur**.
+
+Pire : le MCP **ne voyait pas la prod du tout**. Le projet réel
+(`gntlqyscahbgjrmsbzil`, pooler `aws-0-eu-west-1`) appartient à un autre compte.
+Se fier à la liste d'un outil, c'est prendre son périmètre pour le monde.
+
+> **La règle : avant toute lecture ou écriture, prouve la base par un marqueur
+> de son CONTENU, et recoupe-le avec une valeur déjà consignée.**
+
+### Le marqueur canonique de la prod QualiOF
+
+```sql
+SELECT t.id, t.name, (SELECT count(*) FROM "TrainingProduct") AS produits
+FROM "Tenant" t WHERE t.id = 'db191440-a144-48d1-93c1-767e6f647f2c';
+```
+
+Attendu — **les deux ensemble**, jamais l'un seul :
+
+| Marqueur | Valeur | Recoupement |
+|---|---|---|
+| `Tenant.name` | `Start Academy` | l'identifiant est dans tout le dossier |
+| `count(TrainingProduct)` | **51** | STATE.md « la base en porte 51 » |
+
+Le tenant seul ne suffit pas : une base d'aperçu restaurée le porte aussi. Le
+compte de produits seul ne suffit pas : il bouge. **Les deux qui concordent,
+oui** — et l'un d'eux vient d'une source écrite avant la question.
+
+### Ne jamais confondre les trois bases
+
+| Base | Hôte | Reconnaissance |
+|---|---|---|
+| **PROD** | `aws-0-eu-west-1.pooler.supabase.com` | tenant + 51 produits |
+| **APERÇU** | `aws-1`, projet `qualiof-apercu` | schéma identique, données de démo |
+| **LOCALE** | `localhost:5432/qualiof_dev*` | une base par worktree (§4) |
+
+`aws-0` et `aws-1` sont **deux grappes différentes**, et un chiffre d'écart dans
+un nom d'hôte est la seule chose qui sépare la production de l'aperçu.
+
+## 4 septies. Un document client ne se note jamais lui-même
+
+**Arbitrage de Laurent, 14/09/2026**, et il va plus loin que le défaut qui l'a
+déclenché.
+
+Le défaut : la proposition annonçait « **audit complet** joint » sur un
+diagnostic LÉGER. Chaîne en dur, aucune lecture de la variante.
+
+La correction évidente — lire la variante et écrire « audit **léger** joint » —
+**aurait été pire que le bug**. « Léger » dit au dirigeant qu'il a reçu la
+version au rabais. Or il n'a **aucune raison de savoir qu'il existe deux
+variantes** : ce découpage est notre affaire, pas la sienne.
+
+> **La règle : aucun texte destiné au client ou au financeur ne qualifie le
+> niveau, la version ou la complétude de la prestation. Ces mots servent en
+> interne et s'arrêtent à la porte.**
+
+L'écran a le droit de porter « Diagnostic léger » — c'est un outil de travail.
+La pièce remise, non. Elle dit **« rapport de diagnostic joint »**, pour les deux
+variantes.
+
+**Le document se NOMME, il ne se CLASSE pas.**
+
+### Ce que ça interdit, concrètement
+
+« complet », « léger », « simplifié », « intégral », « version 2 », « essentiel »,
+« premium », « standard », et tout comparatif implicite — dès qu'ils portent sur
+ce qu'on vend ou ce qu'on remet.
+
+### La forme du test qui la garde
+
+Le contrat ne porte **pas** sur « quel mot pour quelle variante » : il porte sur
+l'**absence de tout qualificatif**, dans les deux cas, plus l'égalité stricte des
+deux rendus. Écrit autrement, il aurait laissé passer « audit léger joint ».
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```

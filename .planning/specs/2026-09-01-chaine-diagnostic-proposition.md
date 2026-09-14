@@ -1406,3 +1406,44 @@ Ordre recommandé : **A → B → (C ∥ D) → E → F → G**, H au fil de l'e
 - `Formation Faros/SA_ADM_M001_AGEFICE_*`, `SA_ACQ_M003_TROUVER_VENDEURS_*` : modules produits finis (nomenclature SA_<FAM>_M<NNN>).
 - `sources/text/` (~100 transcripts de coachings réels 2025-2026) + `sources/pdf/` (conférences, livre) : la future base Coach Brain (lot H) — données clients réelles : anonymisation obligatoire avant toute ingestion.
 - `youtube-links.txt`, `sources/audio|video` : idem, pipeline COACHNXT existant.
+
+---
+
+## Vocabulaire du financement — deux termes, tenus partout (tranché le 14/09/2026)
+
+Deux grandeurs coexistent dans la chaîne, elles ne sont **pas** interchangeables,
+et aucun mot ne les distinguait jusqu'ici.
+
+| Terme | Ce que c'est | Où il se calcule |
+|---|---|---|
+| **droits mobilisables** | ce à quoi le client a droit, indépendamment de ce qu'on lui vend | `computeFunding` — plafond AGEFICE, enveloppe OPCO EP |
+| **prise en charge** | ce que le financeur versera **sur CE parcours** | `min(heures × taux, droits, prix vendu)` |
+
+### Le cas d'école, relevé en production sur PROP-0001
+
+Le même financeur, le même document, **deux montants**, aucun mot pour les
+séparer :
+
+| Où | Montant | Ce que c'est |
+|---|---|---|
+| §04 du PDF (`buildFundingSection`) | **2 500 €** | l'enveloppe OPCO EP — des **droits** |
+| `pricingJson` (`seedPayers`) | **2 400 €** | `min(80 h × 30 €/h, 2 500, 3 360)` — une **prise en charge** |
+
+L'écart de **100 €** est indétectable pour un lecteur, et les deux chiffres sont
+justes. C'est le mot qui manque, pas le calcul.
+
+Même défaut à l'échelle du document : la proposition totalisait
+`2 × 3 000 + 2 500 = **8 500 €**` sous le libellé « financements mobilisés »,
+quand l'audit totalisait `2 × 3 000 + 2 400 = **8 400 €**` de prise en charge.
+
+> **Un financeur qui lit « financements mobilisés : 8 500 € » sur un parcours
+> facturé 1 008 € ne lit pas la même chose que nous.**
+
+### Ce que ça impose
+
+- « financements mobilisés » est **proscrit** : il ne dit pas lequel des deux.
+- Le §04 parle de **droits mobilisables** — c'est son rôle, et c'est l'argument
+  commercial (« les droits non consommés au 31 décembre sont perdus »).
+- Le §05 parle de **prise en charge** — c'est ce qui se facture.
+- Les deux figurent **côte à côte et nommés**, jamais fondus en un seul chiffre.
+

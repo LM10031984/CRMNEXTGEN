@@ -142,9 +142,9 @@ const LIBRARY: LibraryModule[] = [
 ];
 LIBRARY[5]!.excludedFromClientOutputs = true;
 
-function seed() {
+function seed(variantAudit: typeof audit = audit) {
   return seedContent({
-    audit,
+    audit: variantAudit,
     rules: RULES,
     library: LIBRARY,
     agencyName: 'Agence du Baou',
@@ -233,5 +233,79 @@ describe('seedContent — D-20 et §8.2 : on vend ce qui est justifié', () => {
 
     expect(conventionedHoursOf(axesHalfDays, RULES)).toBe(composition.totalConventionedHours);
     expect(composition.totalConventionedHours).toBe(composition.totalHalfDays * 8);
+  });
+});
+
+/**
+ * La pièce jointe se NOMME, elle ne se CLASSE pas.
+ *
+ * Deux défauts, découverts l'un derrière l'autre le 14/09/2026.
+ *
+ * Le premier, un mensonge : DIAG-0001 est un diagnostic LÉGER et la proposition
+ * annonçait « audit complet joint » — en dur dans les deux branches, aucune
+ * lecture de `variant`. Le document mentait sur sa propre pièce jointe, à un
+ * client qui peut l'ouvrir et compter les pages.
+ *
+ * Le second, plus profond, arbitré par Laurent : le corriger en « audit léger
+ * joint » aurait été pire. « Léger » dit au dirigeant qu'il a reçu la version
+ * au rabais, alors qu'il n'a aucune raison de savoir qu'il existe deux
+ * variantes. Le mot est interne et s'arrête à la porte.
+ *
+ * D'où un contrat qui ne porte PAS sur « quel mot pour quelle variante », mais
+ * sur l'absence de tout qualificatif — dans les deux cas. Cf. §4 septies.
+ *
+ * Le contrôle porte sur la PHRASE, pas sur la constante qui la fabrique : un
+ * test de la constante resterait vert si `heardIntro` cessait de l'employer.
+ */
+describe('La pièce jointe annoncée — elle se nomme, elle ne se classe pas', () => {
+  const QUALIFICATIFS = ['complet', 'complète', 'léger', 'légère', 'intégral', 'simplifié'];
+
+  it('ne qualifie pas le niveau de la prestation sur un diagnostic LÉGER', () => {
+    const { content } = seed();
+    for (const mot of QUALIFICATIFS) {
+      expect(
+        content.heardIntro.toLowerCase(),
+        `« ${mot} » classe la prestation devant le client`,
+      ).not.toContain(mot);
+    }
+  });
+
+  it('ne la qualifie pas davantage sur un diagnostic COMPLET', () => {
+    const complet = buildAuditData({
+      reference: 'DIAG-0042',
+      agencyName: 'Agence du Baou',
+      generatedAt: new Date('2026-09-10T12:00:00Z'),
+      variant: 'COMPLET',
+      answers: ANSWERS,
+      participants: PARTICIPANTS,
+      rules: RULES,
+      of: OF,
+      valueEuros: 3000,
+    });
+    const { content } = seed(complet);
+    for (const mot of QUALIFICATIFS) {
+      expect(content.heardIntro.toLowerCase()).not.toContain(mot);
+    }
+  });
+
+  it('nomme quand même la pièce et sa référence — sans qualificatif, pas sans identité', () => {
+    const { content } = seed();
+    expect(content.heardIntro).toContain('rapport de diagnostic joint');
+    expect(content.heardIntro).toContain('DIAG-0042');
+  });
+
+  it('dit la MÊME chose pour les deux variantes', () => {
+    const complet = buildAuditData({
+      reference: 'DIAG-0042',
+      agencyName: 'Agence du Baou',
+      generatedAt: new Date('2026-09-10T10:00:00Z'),
+      variant: 'COMPLET',
+      answers: ANSWERS,
+      participants: PARTICIPANTS,
+      rules: RULES,
+      of: OF,
+      valueEuros: 3000,
+    });
+    expect(seed(complet).content.heardIntro).toBe(seed().content.heardIntro);
   });
 });

@@ -462,6 +462,25 @@ export function planningMismatches(
  * Le titre, lui, reste thématique — il nomme les besoins servis par ce bloc.
  * C'est ce que le dirigeant lit ; le décompte, c'est ce qu'il peut vérifier.
  */
+/**
+ * Termine un constat qui n'a pas de ponctuation finale.
+ *
+ * Les constats viennent de deux formes : une ALERTE est une phrase (elle finit
+ * par un point), un couple « libellé : valeur » ne finit par rien. Joints par
+ * une simple espace, ils donnaient la bouillie relevée sur PROP-0001 v1 :
+ *
+ *   « …contre 20 attendus. Qui prospecte réellement : Certains seulement Le
+ *     suivi vendeur n'est pas ritualisé : … »
+ *
+ * On ne choisit pas un séparateur décoratif : on rend chaque constat autonome.
+ * Le lecteur voit alors où l'un s'arrête, ce qui est tout l'objet du bloc.
+ */
+function termine(constat: string): string {
+  const t = constat.trim();
+  if (t === '') return t;
+  return /[.!?…:;]$/.test(t) ? t : `${t}.`;
+}
+
 export function axisFromBlock(
   block: ComposedBlock,
   index: number,
@@ -506,7 +525,7 @@ export function axisFromBlock(
     productId: null,
     productCode: null,
     description: '',
-    why: constats.join(' ') || 'À justifier avant envoi.',
+    why: constats.map(termine).join(' ') || 'À justifier avant envoi.',
     halfDays: 1,
     periodLabel,
     matchSource: block.modules.every((m) => m.confidence === 'forte') ? 'signaux' : 'lexique',
@@ -520,6 +539,24 @@ export function buildCoverHeadline(priorityTitles: readonly string[]): string {
   const [premier, ...suite] = retenues;
   return [premier!, ...suite.map((t) => t.charAt(0).toLowerCase() + t.slice(1))].join(', ');
 }
+
+/**
+ * La pièce jointe se NOMME, elle ne se CLASSE pas.
+ *
+ * Deux temps, le 14/09/2026. D'abord le mensonge : DIAG-0001 est un diagnostic
+ * LÉGER et la proposition annonçait « audit complet joint » — chaîne en dur,
+ * aucune lecture de `variant`.
+ *
+ * Puis l'arbitrage de Laurent, qui va plus loin que le correctif : ne PAS
+ * remplacer par « audit léger joint ». « Léger » dirait au dirigeant qu'il a
+ * reçu la version au rabais — alors qu'il n'a aucune raison de savoir qu'il
+ * existe deux variantes. Le mot est INTERNE : l'écran a le droit de le porter,
+ * la pièce client non.
+ *
+ * D'où un libellé unique, sans qualificatif, pour les deux variantes.
+ * Cf. quick.md §4 septies.
+ */
+const PIECE_JOINTE = 'rapport de diagnostic joint';
 
 export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const { audit, rules } = input;
@@ -571,8 +608,8 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     recipientLabel: '',
     contactLabel: '',
     heardIntro: input.meetingAt
-      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (audit complet joint — ${input.diagnosticReference}), voici les enjeux identifiés :`
-      : `À la suite de notre diagnostic (audit complet joint — ${input.diagnosticReference}), voici les enjeux identifiés :`,
+      ? `À la suite de notre diagnostic du ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' }).format(input.meetingAt)} (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`
+      : `À la suite de notre diagnostic (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
     heard,
     axesIntro:
       'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Un point de douleur métier reçoit un programme métier : l’IA n’est jamais la réponse par défaut.',
