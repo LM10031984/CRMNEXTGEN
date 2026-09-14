@@ -208,10 +208,15 @@ export default async function CataloguePage() {
             {products.map((product) => {
               const objectives = parseObjectives(product.objectives as unknown);
               const prerequisites = product.prerequisites?.trim() || 'Aucun prérequis spécifique.';
+              // D (14/09/2026) — chaque champ rend SA valeur, avec SON défaut.
+              // `targetAudience` et `accessConditions` sont deux informations
+              // distinctes : à qui la formation s'adresse, et comment on s'y
+              // inscrit. Rendre la seconde à la place de la première était faux
+              // quel que soit son contenu — le contact périmé qu'on y a trouvé
+              // n'est que ce qui l'a rendu visible. Un champ vide ne se fait pas
+              // remplacer par un voisin.
               const publicVise =
-                product.targetAudience?.trim() ||
-                product.accessConditions?.trim() ||
-                'Conseillers et agents commerciaux immobilier.';
+                product.targetAudience?.trim() || 'Conseillers et agents commerciaux immobilier.';
               const pedagogicalMethods =
                 product.pedagogicalMethods?.trim() ||
                 'Apports théoriques, mises en situation pratiques, études de cas, ateliers collectifs.';
@@ -264,7 +269,7 @@ export default async function CataloguePage() {
 
                     <div>
                       <dt className="font-semibold text-slate-800">
-                        Public visé / Conditions d'accès
+                        Public visé
                       </dt>
                       <dd className="mt-1 text-slate-700">{publicVise}</dd>
                     </div>

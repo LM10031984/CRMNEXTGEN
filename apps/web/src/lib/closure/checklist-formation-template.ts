@@ -18,7 +18,7 @@ import {
   renderBrandHeader,
   wrapHtml,
 } from './shared-template';
-import { REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
+import { REFERENT_HANDICAP, ligneContact } from '../contacts-organisme';
 
 /**
  * Référent handicap unique de l'OF (ind. 26) — identique sur tous les docs.
@@ -27,7 +27,7 @@ import { REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
  * juste, pendant que le catalogue en nommait une autre. Elle vit désormais
  * dans `lib/referent-handicap.ts`, que les TROIS surfaces lisent.
  */
-const HANDICAP_REFERENT_LINE = REFERENT_HANDICAP_LIGNE;
+const HANDICAP_REFERENT_LINE = ligneContact(REFERENT_HANDICAP);
 
 /** Zone 1 — apporté par Start Academy. */
 export interface ChecklistZoneApportee {

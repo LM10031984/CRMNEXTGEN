@@ -13,6 +13,8 @@
  * la durée de la session, cf memory "anti smart-calc sur conventions métier").
  */
 
+import { CONTACT_AGENDA, ligneContact } from '../contacts-organisme';
+
 /**
  * Horaires standard Start Academy, FIGÉS. NE JAMAIS recalculer depuis la durée.
  * Matin 9h-13h, après-midi 14h-18h.
@@ -138,7 +140,7 @@ ${programmeLine}${charteLink}
 ${riLink}
 ${cgvLink}
 
-Si vous avez la moindre question, n'hésitez pas à nous contacter à formation@start-academy.fr ou au 07 80 91 95 31.
+Si vous avez la moindre question, n'hésitez pas à nous contacter à ${ligneContact(CONTACT_AGENDA)}.
 
 Nous avons hâte de vous retrouver et vous souhaitons une excellente formation !
 

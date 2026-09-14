@@ -7,6 +7,8 @@
  * footer corporate fixe identique au DOCX.
  */
 
+import { REFERENT_HANDICAP, ligneContact } from './contacts-organisme';
+
 import { marked } from 'marked';
 
 import type { OfConfig } from './of-config';
@@ -312,8 +314,7 @@ const DEFAULT_ACCESSIBILITY =
  * Référent handicap unique de l'OF (ind. 26) — DOIT être identique sur tous les
  * docs (analyse besoin, programme…). Laurent 17/06 : Jean-Guy Ourmières.
  */
-const HANDICAP_REFERENT_LINE =
-  'Référent handicap : Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60.';
+const HANDICAP_REFERENT_LINE = `${REFERENT_HANDICAP.role} : ${ligneContact(REFERENT_HANDICAP)}.`;
 
 /**
  * Nettoie la liste d'objectifs (champ SmartOF souvent brouillé) :

@@ -37,7 +37,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ACCESSIBILITE_PSH } from '../catalogue-constants';
-import { REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
+import { REFERENT_HANDICAP, ligneContact } from '../contacts-organisme';
 
 const RACINE = path.resolve(__dirname, '../../..', '..', '..');
 
@@ -118,12 +118,12 @@ describe('Référent handicap — un seul nom dans tout le dépôt', () => {
       path.join(RACINE, 'apps/web/src/lib/closure/checklist-formation-template.ts'),
       'utf8',
     );
-    expect(src).toMatch(/from '\.\.\/referent-handicap'/);
-    expect(src).toMatch(/HANDICAP_REFERENT_LINE\s*=\s*REFERENT_HANDICAP_LIGNE/);
+    expect(src).toMatch(/from '\.\.\/contacts-organisme'/);
+    expect(src).toMatch(/HANDICAP_REFERENT_LINE\s*=\s*ligneContact\(REFERENT_HANDICAP\)/);
 
     // Et la réciproque, sur les valeurs rendues : les deux surfaces nomment la
     // même personne.
-    expect(REFERENT_HANDICAP_LIGNE).toContain(REFERENT_NOM);
+    expect(ligneContact(REFERENT_HANDICAP)).toContain(REFERENT_NOM);
     expect(ACCESSIBILITE_PSH).toContain(REFERENT_NOM);
   });
 });

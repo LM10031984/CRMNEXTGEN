@@ -11,6 +11,8 @@
  *    competences_visees[], freins_identifies[], motivation }`
  */
 
+import { REFERENT_HANDICAP, ligneContact } from '../contacts-organisme';
+
 import {
   type ClosureContext,
   BRAND_DARK,
@@ -88,7 +90,7 @@ ${renderBrandHeader()}
 
   <h2 class="section">Situation de handicap</h2>
   <p class="paragraph">À la question «&nbsp;Avez-vous besoin d'une adaptation en rapport avec un handicap ou une maladie invalidante&nbsp;?&nbsp;», ${normalizeGender(ctx.apprenantCivility) === 'F' ? 'la stagiaire a répondu' : 'le stagiaire a répondu'} <strong>&#9745; NON</strong> — aucun besoin d'adaptation signalé.</p>
-  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>Jean-Guy Ourmières</strong> — jean-guy@start-academy.fr — 06 10 23 00 60 (responsable pédagogique, référent handicap).</p>
+  <p style="font-size: 9pt; color: #475569; margin-top: 6px;">Référent handicap : <strong>${escapeHtml(REFERENT_HANDICAP.nom ?? "")}</strong> — ${escapeHtml(ligneContact({ ...REFERENT_HANDICAP, nom: null }))} (responsable pédagogique, référent handicap).</p>
 
   ${(() => {
     const seed = `${ctx.sessionId ?? ''}${ctx.apprenantNom}${ctx.apprenantPrenom}`;

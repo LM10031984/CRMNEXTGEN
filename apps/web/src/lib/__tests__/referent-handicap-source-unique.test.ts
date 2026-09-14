@@ -39,7 +39,7 @@ import { describe, it, expect, afterEach } from 'vitest';
  * l'identité, jamais le texte.
  */
 
-import { REFERENT_HANDICAP, REFERENT_HANDICAP_LIGNE } from '../referent-handicap';
+import { REFERENT_HANDICAP, ligneContact } from '../contacts-organisme';
 import { ACCESSIBILITE_PSH } from '../catalogue-constants';
 import { resolveOfConfig } from '../of-config';
 
@@ -62,7 +62,7 @@ describe('Référent handicap — une identité, trois surfaces', () => {
     expect(REFERENT_HANDICAP.nom).toBe('Jean-Guy Ourmières');
     expect(REFERENT_HANDICAP.email).toBe('jean-guy@start-academy.fr');
     expect(REFERENT_HANDICAP.telephone).toBe('06 10 23 00 60');
-    expect(REFERENT_HANDICAP_LIGNE).toBe(
+    expect(ligneContact(REFERENT_HANDICAP)).toBe(
       'Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60',
     );
   });
@@ -87,8 +87,8 @@ describe('Référent handicap — une identité, trois surfaces', () => {
       path.join(__dirname, '..', 'catalogue-constants.ts'),
       'utf8',
     );
-    expect(src).toMatch(/from '\.\/referent-handicap'/);
-    expect(src).toMatch(/REFERENT_HANDICAP(_COURT)?\b/);
+    expect(src).toMatch(/from '\.\/contacts-organisme'/);
+    expect(src).toMatch(/REFERENT_HANDICAP\b/);
     expect(
       /Jean-Guy Ourmières/.test(src),
       'catalogue-constants.ts répète le nom au lieu de le référencer',
@@ -114,7 +114,7 @@ describe('Référent handicap — une identité, trois surfaces', () => {
     const surfaces = [
       ACCESSIBILITE_PSH,
       resolveOfConfig(null).handicapReferent,
-      REFERENT_HANDICAP_LIGNE,
+      ligneContact(REFERENT_HANDICAP),
     ];
     for (const s of surfaces) expect(s).toContain(REFERENT_HANDICAP.nom);
   });
