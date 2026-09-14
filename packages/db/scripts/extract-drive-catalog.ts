@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 
 import { candidatsNxtCoach, premierEmplacementPorteur } from './lib/corpus-local.js';
 import { retirerMentionsOrganisme } from './lib/mentions-organisme.js';
+import { appliquerTitresTranches } from './lib/titres-tranches.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(HERE, 'data/drive-programmes-catalog.json');
@@ -800,6 +801,17 @@ if (parOrigine.drive === 0 || parOrigine.faros === 0) {
     `   Monter la source manquante (ou poser DRIVE_CATALOG_DIR / FAROS_DIR), puis relancer.\n`,
   );
   process.exit(1);
+}
+
+// Les titres tranchés par Laurent, appliqués ICI et pas en base : un titre
+// écrit à la main en base revient au premier import du Drive, parce que le
+// titre vient légitimement du document source (constaté le 11/09 avec un point
+// final réapparu tout seul). La table est datée, motivée, et elle REFUSE de
+// s'appliquer quand la source a changé depuis l'arbitrage.
+const journalTitres = appliquerTitresTranches(programmes);
+if (journalTitres.length > 0) {
+  console.log('\n── Titres tranchés ──');
+  for (const ligne of journalTitres) console.log(`   ${ligne}`);
 }
 
 const snapshot = {
