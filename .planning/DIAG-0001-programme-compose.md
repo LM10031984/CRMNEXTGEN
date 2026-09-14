@@ -11,13 +11,11 @@ Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) s
 - Maîtriser les techniques de découverte vendeur
 - Rédiger des compromis de vente efficaces
 - Installer un rythme de suivi vendeur qui tient jusqu'à la vente
-- Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
-- Gérer les objections et trouver des solutions de compromis
-- Préparer un Excellent Dossier de Suivi Vendeur
-- Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
 - Faire des avis clients une source de mandats
+- Gérer les objections et trouver des solutions de compromis
+- Préparer un dossier de suivi vendeur complet
 
-_Objectifs restant à rédiger pour : Atelier pratique : Simulation de réponse aux avis clients.._
+_Objectifs restant à rédiger pour : Conduire une découverte acheteur par le questionnement et l’écoute active, Mener une découverte du projet acheteur-vendeur en situation, Répondre aux avis clients en ligne, positifs comme négatifs._
 
 ## Déroulé
 
@@ -69,57 +67,7 @@ _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec S
 
 ### Demi-journée 4 — 4 h sur site (8 h conventionnées)
 
-#### Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur
-
-_Répond au besoin : Qualifier et sécuriser les acquéreurs._
-
-- Pratiquer la vente d’un rendez vous découverte à un acheteur
-- Pratiquer la découverte acheteur
-- Faire face à une situation imprévue
-- Débriefing du passage avec axes d’améliorations
-
-_Source : Face à face acheteurs (BIB-D008)._
-
-#### Atelier pratique : Simulation de réponse aux avis clients.
-
-_Répond au besoin : Faire travailler la base et la réputation._
-
-**Objectif.** À l'issue, le stagiaire est capable de formuler une demande d'avis adaptée à chaque moment de satisfaction rencontré dans son activité, et de rédiger puis publier une réponse à un avis — positif ou négatif — conforme au cadre légal et fidèle à sa voix.
-
-- **Rappel du cadre (10 min).** Ce qu'on ne fait jamais, et ce qu'on vérifie avant de publier : aucune donnée confidentielle, aucun ton défensif, jamais deux réponses identiques.
-- **Série 1 — demander (25 min).** Trois situations tirées de leur semaine réelle : un client qui vient de dire « vous avez fait un travail sérieux » en fin d'estimation, un acquéreur accompagné qui n'a rien acheté chez eux, un propriétaire en gestion depuis des années. Chacun écrit sa demande pour les trois, s'aide de ChatGPT, puis corrige pour que ça sonne comme lui.
-- **Série 2 — les avis positifs (25 min).** Trois avis réels de son agence. Réponse courte, personnalisée. Lecture croisée en binôme : on repère les tournures qui se répètent d'une réponse à l'autre.
-- **Série 3 — les avis négatifs (40 min).** Trois cas : le reproche fondé, le reproche injuste, et l'avis qui ne concerne pas le conseiller. Écriture, lecture à voix haute, correction collective. On travaille le passage en privé sans se justifier en public.
-- **Ce qui se publie (15 min).** Relecture croisée, puis publication accompagnée d'une réponse réelle pour chaque participant.
-- **Repartir avec son rituel (5 min).** Ses variantes enregistrées, et la règle qu'il se donne : qui répond, sous quel délai, qui relit.
-
-_Source : Pack Digital 60h (BIB-D047)._
-
-### Demi-journée 5 — 4 h sur site (8 h conventionnées)
-
-#### Gérer les objections et trouver des solutions de compromis
-
-_Répond au besoin : Rentrer des mandats en exclusivité, au bon prix._
-
-- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
-- Répondre : Techniques pour répondre aux objections de manière constructive
-- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
-
-_Source : Négociation et compromis (BIB-D034)._
-
-#### Préparer un Excellent Dossier de Suivi Vendeur
-
-_Répond au besoin : Piloter le stock et le suivi vendeur._
-
-- Collecter de manière exhaustive toutes les informations pertinentes sur les biens immobiliers à vendre.
-- Créer des dossiers de suivi complets et personnalisés pour chaque vendeur, en mettant en avant leurs besoins et leurs objectifs spécifiques.
-- Utiliser des outils modernes pour gérer et mettre à jour efficacement les dossiers de suivi
-
-_Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
-
-### Demi-journée 6 — 4 h sur site (8 h conventionnées)
-
-#### Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :
+#### Conduire une découverte acheteur par le questionnement et l’écoute active
 
 _Répond au besoin : Qualifier et sécuriser les acquéreurs._
 
@@ -176,6 +124,56 @@ _Répond au besoin : Faire travailler la base et la réputation._
 - **Répondre à tous les avis (20 min).** Le positif : court, personnalisé, jamais deux fois le même. Le négatif : accuser réception au calme, ne pas polémiquer, proposer de poursuivre en privé — et le faire même quand l'avis est injuste. ChatGPT propose, le conseiller relit et publie. Atelier sur des avis réels apportés par les participants.
 - **Se situer face à son secteur (10 min).** Un carnet NotebookLM au nom de sa ville, une recherche approfondie sur les agences visibles du secteur : volume d'avis, points forts cités, irritants récurrents, positionnement. Ce qui en sort : une table comparative et les irritants des concurrents — qui sont exactement vos arguments de différenciation en rendez-vous. Rituel trimestriel.
 - **Le cadre légal, la ligne rouge (5 min).** Jamais de faux avis, jamais d'avis acheté ni obtenu par contrepartie ; on sollicite l'avis et on facilite le geste, on n'écrit pas l'avis du client ; on ne dénigre pas un concurrent nommément — le benchmark sert la stratégie interne, pas l'attaque publique.
+
+_Source : Pack Digital 60h (BIB-D047)._
+
+### Demi-journée 5 — 4 h sur site (8 h conventionnées)
+
+#### Mener une découverte du projet acheteur-vendeur en situation
+
+_Répond au besoin : Formaliser la découverte et l’estimation vendeur._
+
+- Pratiquer la vente d’un rendez vous découverte à un acheteur
+- Pratiquer la découverte acheteur
+- Faire face à une situation imprévue
+- Débriefing du passage avec axes d’améliorations
+
+_Source : Face à face acheteurs (BIB-D008)._
+
+#### Gérer les objections et trouver des solutions de compromis
+
+_Répond au besoin : Rentrer des mandats en exclusivité, au bon prix._
+
+- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
+- Répondre : Techniques pour répondre aux objections de manière constructive
+- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
+
+_Source : Négociation et compromis (BIB-D034)._
+
+### Demi-journée 6 — 4 h sur site (8 h conventionnées)
+
+#### Préparer un dossier de suivi vendeur complet
+
+_Répond au besoin : Piloter le stock et le suivi vendeur._
+
+- Collecter de manière exhaustive toutes les informations pertinentes sur les biens immobiliers à vendre.
+- Créer des dossiers de suivi complets et personnalisés pour chaque vendeur, en mettant en avant leurs besoins et leurs objectifs spécifiques.
+- Utiliser des outils modernes pour gérer et mettre à jour efficacement les dossiers de suivi
+
+_Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
+
+#### Répondre aux avis clients en ligne, positifs comme négatifs
+
+_Répond au besoin : Faire travailler la base et la réputation._
+
+**Objectif.** À l'issue, le stagiaire est capable de formuler une demande d'avis adaptée à chaque moment de satisfaction rencontré dans son activité, et de rédiger puis publier une réponse à un avis — positif ou négatif — conforme au cadre légal et fidèle à sa voix.
+
+- **Rappel du cadre (10 min).** Ce qu'on ne fait jamais, et ce qu'on vérifie avant de publier : aucune donnée confidentielle, aucun ton défensif, jamais deux réponses identiques.
+- **Série 1 — demander (25 min).** Trois situations tirées de leur semaine réelle : un client qui vient de dire « vous avez fait un travail sérieux » en fin d'estimation, un acquéreur accompagné qui n'a rien acheté chez eux, un propriétaire en gestion depuis des années. Chacun écrit sa demande pour les trois, s'aide de ChatGPT, puis corrige pour que ça sonne comme lui.
+- **Série 2 — les avis positifs (25 min).** Trois avis réels de son agence. Réponse courte, personnalisée. Lecture croisée en binôme : on repère les tournures qui se répètent d'une réponse à l'autre.
+- **Série 3 — les avis négatifs (40 min).** Trois cas : le reproche fondé, le reproche injuste, et l'avis qui ne concerne pas le conseiller. Écriture, lecture à voix haute, correction collective. On travaille le passage en privé sans se justifier en public.
+- **Ce qui se publie (15 min).** Relecture croisée, puis publication accompagnée d'une réponse réelle pour chaque participant.
+- **Repartir avec son rituel (5 min).** Ses variantes enregistrées, et la règle qu'il se donne : qui répond, sous quel délai, qui relit.
 
 _Source : Pack Digital 60h (BIB-D047)._
 

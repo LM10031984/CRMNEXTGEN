@@ -648,8 +648,25 @@ describe('Famille 8 — l’instantané après le lot 1 bis', () => {
   });
 
   it('le compte de warnings ne bouge pas : 64 — aucun module nouvellement vidé', () => {
-    const warnings = instantane.programmes.reduce((n, p) => n + p.warnings.length, 0);
+    // Ce garde porte sur les modules VIDÉS. Depuis le 14/09/2026 l'instantané
+    // porte une autre famille de traces — les titres tranchés par Laurent — et
+    // les compter ici desserrerait le garde : un module réellement vidé
+    // passerait pour un arbitrage de titre. On EXCLUT cette famille plutôt que
+    // de monter le seuil, et on la compte séparément juste en dessous.
+    const warnings = instantane.programmes.reduce(
+      (n, p) => n + p.warnings.filter((w) => !w.includes('titre tranché')).length,
+      0,
+    );
     expect(warnings).toBe(64);
+  });
+
+  it('exactement 4 traces de titre tranché — les quatre arbitrés le 14/09/2026', () => {
+    const traces = instantane.programmes.flatMap((p) =>
+      p.warnings.filter((w) => w.includes('titre tranché')),
+    );
+    expect(traces).toHaveLength(4);
+    // Un arbitrage NON appliqué (source réécrite depuis) doit se voir ici.
+    expect(traces.filter((w) => w.includes('NON appliqué'))).toHaveLength(0);
   });
 
   it('plus aucun titre de gabarit dans un déroulé de l’instantané', () => {

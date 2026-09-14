@@ -1,5 +1,5 @@
 {
-  "extractedAt": "2026-09-11T15:12:29.919Z",
+  "extractedAt": "2026-09-14T17:59:51.171Z",
   "sources": {
     "drive": "Formations et programmes",
     "faros": "Formation Faros"
@@ -417,7 +417,7 @@
         {
           "sourceRef": "drive:008#1",
           "order": 1,
-          "title": "Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur",
+          "title": "Mener une découverte du projet acheteur-vendeur en situation",
           "contentMd": "- Pratiquer la vente d’un rendez vous découverte à un acheteur\n- Pratiquer la découverte acheteur\n- Faire face à une situation imprévue\n- Débriefing du passage avec axes d’améliorations",
           "durationMin": 75,
           "durationSource": "horaire"
@@ -447,7 +447,9 @@
           "durationSource": "horaire"
         }
       ],
-      "warnings": []
+      "warnings": [
+        "drive:008#1 — titre tranché par Laurent le 14/09/2026 : « Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur » → « Mener une découverte du projet acheteur-vendeur en situation » (capitales de milieu de phrase)"
+      ]
     },
     {
       "sourceRef": "drive:009",
@@ -663,14 +665,15 @@
         {
           "sourceRef": "drive:012#2",
           "order": 2,
-          "title": "Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :",
+          "title": "Conduire une découverte acheteur par le questionnement et l’écoute active",
           "contentMd": "- Comprendre le déroulement du rendez-vous.\n- Poser des questions pertinentes et approfondir les discussions.\n- Établir un lien de confiance solide.\n- Générer des opportunités de vente additionnelles.\n- Favoriser les actions de prospection.\n- Finaliser des mandats de recherche.\n- Évaluer, comparer et choisir les biens appropriés en fonction des critères des acheteurs :\n- Utiliser de nouveaux outils pour optimiser les recherches.\n- Communiquer efficacement avec les acheteurs.\n- Faire preuve de teasing pour susciter l'intérêt envers de nouveaux biens à visiter.\n- Organiser des tournées de visites pour faciliter la prise de décision par comparaison.\n- Après-midi :\n- Préparer les visites de manière professionnelle, guider les acheteurs et mettre en valeur les points forts des propriétés :\n- Avoir une connaissance approfondie des biens à visiter.\n- Maîtriser les éléments clés de la vente tels que les diagnostics et les points de vente du bien.\n- Projeter une image professionnelle.\n- Préparer des dossiers complets pour les clients.\n- Planifier l'itinéraire à l'avance.\n- Définir une stratégie de visite en fonction des différents types de biens.\n- S'équiper d'une trousse à outils complète.\n- Recueillir des feedbacks de qualité après les visites pour mieux comprendre les acheteurs et les orienter vers une offre d'achat :\n- Faire le point avec les acheteurs en identifiant les points positifs et négatifs.\n- Proposer des solutions d'achat.\n- Comprendre les raisons du manque d'engagement.\n- Réexaminer la découverte initiale.\n- Réorganiser les visites en fonction des retours.\n- Cultiver un lien fort pour fidéliser les clients.\n- Établir un système et une stratégie performants pour assurer un suivi efficace des acquéreurs motivés :\n- Paramétrer des alertes sur différentes plateformes.\n- Utiliser des outils de messagerie instantanée pour rester en contact.\n- Maintenir des contacts fréquents chaque semaine.\n- Effectuer de la prospection au nom du client.\n- Organiser des visites même en l'absence de biens à présenter aux clients de type A.",
           "durationMin": null,
           "durationSource": "inconnue"
         }
       ],
       "warnings": [
-        "2 module(s) sans durée lisible — défaut appliqué à l'import."
+        "2 module(s) sans durée lisible — défaut appliqué à l'import.",
+        "drive:012#2 — titre tranché par Laurent le 14/09/2026 : « Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs : » → « Conduire une découverte acheteur par le questionnement et l’écoute active » (deux-points final, et 108 caractères)"
       ]
     },
     {
@@ -2080,7 +2083,7 @@
         {
           "sourceRef": "drive:037#2",
           "order": 2,
-          "title": "Préparer un Excellent Dossier de Suivi Vendeur",
+          "title": "Préparer un dossier de suivi vendeur complet",
           "contentMd": "- Collecter de manière exhaustive toutes les informations pertinentes sur les biens immobiliers à vendre.\n- Créer des dossiers de suivi complets et personnalisés pour chaque vendeur, en mettant en avant leurs besoins et leurs objectifs spécifiques.\n- Utiliser des outils modernes pour gérer et mettre à jour efficacement les dossiers de suivi",
           "durationMin": null,
           "durationSource": "inconnue"
@@ -2095,7 +2098,8 @@
         }
       ],
       "warnings": [
-        "3 module(s) sans durée lisible — défaut appliqué à l'import."
+        "3 module(s) sans durée lisible — défaut appliqué à l'import.",
+        "drive:037#2 — titre tranché par Laurent le 14/09/2026 : « Préparer un Excellent Dossier de Suivi Vendeur » → « Préparer un dossier de suivi vendeur complet » (capitales de milieu de phrase, et « Excellent » n’est pas évaluable)"
       ]
     },
     {
@@ -2771,7 +2775,7 @@
         {
           "sourceRef": "drive:047#20",
           "order": 20,
-          "title": "Atelier pratique : Simulation de réponse aux avis clients.",
+          "title": "Répondre aux avis clients en ligne, positifs comme négatifs",
           "contentMd": "",
           "durationMin": 90,
           "durationSource": "horaire"
@@ -2865,7 +2869,9 @@
           "durationSource": "horaire"
         }
       ],
-      "warnings": []
+      "warnings": [
+        "drive:047#20 — titre tranché par Laurent le 14/09/2026 : « Atelier pratique : Simulation de réponse aux avis clients. » → « Répondre aux avis clients en ligne, positifs comme négatifs » (n’est pas un objectif — le moteur refuse de l’inventer et le dit)"
+      ]
     },
     {
       "sourceRef": "drive:048",
