@@ -806,6 +806,26 @@ Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
 
+### Un gate dont le code de sortie est AVALÉ n'est pas un gate
+
+Cas du 15/09/2026, et c'est §4 ter appliqué à la ligne de commande.
+
+```bash
+pnpm run test 2>&1 | tail -4 && git commit …     # ❌
+```
+
+Le `&&` lit le code de sortie du **pipeline**, donc celui de `tail` — qui vaut
+`0` quoi qu'il arrive. La suite était **rouge**, six tests, et le commit est
+parti quand même. Le pipe ne « raccourcit » pas la sortie : **il remplace le
+verdict.**
+
+> **La règle : un gate se lance SEUL et son code de sortie se lit.** Pour
+> abréger l'affichage sans perdre le verdict : `${PIPESTATUS[0]}`, ou relancer
+> la commande nue.
+
+Même famille que le garde qui ne garde rien : ici, ce n'est pas le test qui a
+cessé de regarder, c'est **celui qui lisait le test**.
+
 ## 5 bis. Une PR verte peut ne rien faire — vérifie sa BASE
 
 Deux pièges de fusion, tous deux rencontrés le 12/09/2026, et qu'aucune gate

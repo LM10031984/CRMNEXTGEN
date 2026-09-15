@@ -200,3 +200,49 @@ Seuil que le constat désigne — **A + B + C, −26 modules sur 298 (8,7 %)** :
 **C est le point à arbitrer** : 18 modules minces écartés pour 1 résidu attrapé.
 Écarter tout « horaire en tête » (−49) ou tout « ≤ 2 puces » (−77) frapperait
 massivement du contenu réel — §4 quaterdecies.
+
+---
+
+## ⑧ Deux fichiers d'intégration BDD tombent en timeout sous charge
+
+**Statut : PRÉ-EXISTANT, non causé par ce lot. Non corrigé (§5).**
+
+| | |
+|---|---|
+| `scripts/__tests__/dedupe.merge.test.ts` | 3 tests, base `qualiof_test` |
+| `src/server/actions/__tests__/invoices-lines-contract.test.ts` | 3 tests, requête « le parc » |
+
+Le 15/09/2026 à 16:16, les six ont échoué **en timeout à 5 000 ms** au sein de
+la suite complète. Ce run-là a duré **37 s** contre ~11 s d'habitude : la
+machine était chargée.
+
+**Preuve que ce n'est pas une régression** :
+
+- chaque fichier passe **seul** — `dedupe` 3/3 en 64 ms, `invoices-lines` 3/3
+  en 48 ms ;
+- la suite complète est verte **avant** (15:49 et 16:07) et **après** (18:43),
+  354 fichiers / 3780 tests ;
+- aucun fichier de ce lot ne touche aux factures ni au dédoublonnage.
+
+### Ce qui reste à faire
+
+Ces deux fichiers sont les seuls de la suite à **ouvrir une vraie connexion
+Postgres**. Leur timeout de 5 000 ms est un pari sur la charge de la machine,
+pas sur le code. Deux pistes, à arbitrer :
+
+| Piste | Effet |
+|---|---|
+| Relever le `testTimeout` de ces deux fichiers | le plus simple, masque la vraie fragilité |
+| Les sortir de la suite unitaire (tâche `test:integration`) | sépare les familles — §4 decies |
+
+**La seconde est la bonne** : une suite unitaire qui dépend de la charge de la
+machine finit par être relancée « pour voir », et c'est comme ça qu'un rouge
+réel se fait ignorer.
+
+### Et la cause de ce qu'on a failli ne pas voir
+
+Le commit `e5015946` est parti **pendant que la suite était rouge**, parce que
+la commande était `pnpm run test | tail -4 && git commit` : le `&&` lisait le
+code de `tail`, toujours `0`. Règle écrite dans `quick.md` §5 — un gate dont le
+code de sortie est avalé n'est pas un gate. L'arbre commité est vert (vérifié
+deux fois depuis), mais il l'est par chance, pas par contrôle.
