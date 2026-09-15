@@ -103,3 +103,73 @@ export function verifierChangementProduit(
 
   return { autorise: true, avertissements };
 }
+
+// ─── Ce qui SUIT le produit ──────────────────────────────────────────────
+
+/**
+ * `TrainingSession.name` et `pricePerLearner` sont COPIÉS du produit à la
+ * création (`createSession` : `name: product.title`, `pricePerLearner:
+ * product.priceHT`). Changer le produit sans les toucher laisserait une
+ * session intitulée « Communication digitale » sur un programme d'IA —
+ * et c'est ce nom-là que lisent la convention et la convocation.
+ *
+ * Mais les écraser aveuglément serait pire. Un nom saisi à la main
+ * (« IA — promo OPTIMMO ») ou un tarif négocié à 2 500 € disparaîtraient sans
+ * un mot. D'où la règle déjà éprouvée ailleurs dans le dépôt pour le
+ * renommage des auto-entreprises : ON NE REMPLACE QUE SI LA VALEUR ACTUELLE
+ * EST EXACTEMENT CELLE HÉRITÉE DE L'ANCIEN PRODUIT. Le moindre écart signifie
+ * que quelqu'un a décidé, et on ne défait pas une décision en silence : on
+ * laisse en place et on prévient.
+ */
+export interface SuiviDuProduitInput {
+  nomActuel: string | null;
+  titreAncienProduit: string | null;
+  titreNouveauProduit: string;
+  /** Tarif par apprenant de la session. `null` = jamais renseigné. */
+  prixActuel: number | null;
+  prixAncienProduit: number | null;
+  prixNouveauProduit: number | null;
+}
+
+export interface SuiviDuProduitResultat {
+  /** Nouveau nom à écrire, ou `null` s'il ne faut PAS y toucher. */
+  nouveauNom: string | null;
+  /** Nouveau tarif à écrire, ou `null` s'il ne faut PAS y toucher. */
+  nouveauPrix: number | null;
+  avertissements: string[];
+}
+
+/** Comparaison tolérante aux espaces de bord : un titre recopié reste hérité. */
+const memeTexte = (a: string | null, b: string | null): boolean =>
+  (a ?? '').trim() === (b ?? '').trim();
+
+export function suiviDuProduit(input: SuiviDuProduitInput): SuiviDuProduitResultat {
+  const avertissements: string[] = [];
+
+  const nomHerite = memeTexte(input.nomActuel, input.titreAncienProduit);
+  const nouveauNom = nomHerite ? input.titreNouveauProduit : null;
+  if (!nomHerite && input.nomActuel) {
+    avertissements.push(
+      `Le nom « ${input.nomActuel} » a été saisi à la main : il est conservé tel quel.`,
+    );
+  }
+
+  // Un tarif jamais renseigné ne « suit » rien : y poser le prix du produit
+  // inventerait un chiffre d'affaires que personne n'a négocié (cas des
+  // sessions importées de SmartOF, dont le tarif arrive vide).
+  let nouveauPrix: number | null = null;
+  if (input.prixActuel !== null && input.prixNouveauProduit !== null) {
+    const prixHerite = input.prixActuel === input.prixAncienProduit;
+    const prixDiffere = input.prixNouveauProduit !== input.prixActuel;
+    if (prixHerite && prixDiffere) {
+      nouveauPrix = input.prixNouveauProduit;
+    } else if (!prixHerite && prixDiffere) {
+      avertissements.push(
+        `Le tarif ${input.prixActuel} € a été négocié (le nouveau programme est à ` +
+          `${input.prixNouveauProduit} €) : il est conservé tel quel.`,
+      );
+    }
+  }
+
+  return { nouveauNom, nouveauPrix, avertissements };
+}

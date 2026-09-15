@@ -55,6 +55,14 @@ export const SessionInternalNotesSchema = z.string().nullable();
 export const UpdateSessionDetailsInputSchema = z
   .object({
     sessionId: z.string().uuid('sessionId doit être un UUID valide'),
+    // Le PROGRAMME de la session. Absent de ce schéma jusqu'au 15/09/2026 :
+    // le produit n'était posé qu'à la création, et une erreur de sélection se
+    // payait par la suppression de la session — donc la perte des créneaux, du
+    // formateur et du lien public déjà diffusé. La décision d'accepter ou non
+    // le changement n'est PAS ici (un schéma ne connaît ni le statut de la
+    // session ni ses factures) : elle est dans `lib/sessions/changement-produit`,
+    // appliquée par `updateSessionDetails`.
+    productId: z.string().uuid('productId doit être un UUID valide').optional(),
     name: SessionNameSchema.optional(),
     startDate: DateOnlyString.optional(),
     endDate: DateOnlyString.optional(),

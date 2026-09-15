@@ -1359,6 +1359,28 @@ export default async function SessionDetailPage({
   // rôles à faire diverger.
   const canEdit = canSign;
 
+  // ── Changer le PROGRAMME d'une session (15/09/2026) ───────────────────
+  // Le catalogue n'est chargé QUE si le changement est permis : brouillon et
+  // aucune facture partie. Sur une session vendue, la liste ne servirait qu'à
+  // faire miroiter un champ que la server action refuserait de toute façon —
+  // et à charger le catalogue entier dans chaque fiche session pour rien.
+  // `timelineInvoices` couvre déjà les factures de la session ET celles de ses
+  // inscrits (`OR` sur sessionId / participant.sessionId) : pas de seconde requête.
+  // `isActive` + tri par titre : MÊME filtre et MÊME ordre que `searchProducts`,
+  // qui alimente le wizard de création. Deux listes de programmes qui ne
+  // s'accordent pas sur ce qu'est un programme disponible, c'est un programme
+  // qu'on peut choisir à la création et plus jamais retrouver ensuite.
+  const facturesEmises = timelineInvoices.filter((i) => i.status !== 'DRAFT').length;
+  const peutChangerDeProgramme = canEdit && session.status === 'DRAFT' && facturesEmises === 0;
+  const programmesSelectionnables = peutChangerDeProgramme
+    ? await prisma.trainingProduct.findMany({
+        where: { tenantId: user.tenantId, isActive: true },
+        select: { id: true, code: true, title: true, durationHours: true },
+        orderBy: { title: 'asc' },
+        take: 300,
+      })
+    : [];
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -1407,7 +1429,9 @@ export default async function SessionDetailPage({
             {canEdit && (
               <EditSessionDetailsDialog
                 sessionId={session.id}
+                produits={programmesSelectionnables}
                 initial={{
+                  productId: session.product?.id ?? null,
                   name: session.name,
                   startDate: session.startDate,
                   endDate: session.endDate,
@@ -1751,7 +1775,9 @@ export default async function SessionDetailPage({
                     {canEdit && (
                       <EditSessionDetailsDialog
                         sessionId={session.id}
+                        produits={programmesSelectionnables}
                         initial={{
+                          productId: session.product?.id ?? null,
                           name: session.name,
                           startDate: session.startDate,
                           endDate: session.endDate,

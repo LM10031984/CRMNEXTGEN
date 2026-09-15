@@ -24,6 +24,10 @@ import {
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { normalizeNullableText } from '@/lib/sessions/normalize-nullable-text';
+import {
+  verifierChangementProduit,
+  suiviDuProduit,
+} from '@/lib/sessions/changement-produit';
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
 import { generateClosurePack } from './closure-pack';
 import { applyPriceCascade } from '@/lib/pricing/cascade';
@@ -1226,7 +1230,7 @@ export async function searchTrainerCandidates(query: string) {
  */
 export async function updateSessionDetails(
   input: UpdateSessionDetailsInput,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; avertissements?: string[] } | { ok: false; error: string }> {
   // 1) Validation Zod en premier (avant tout I/O)
   const parsed = UpdateSessionDetailsInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -1274,6 +1278,88 @@ export async function updateSessionDetails(
   // Normalisation "champ vidé" — SOURCE UNIQUE importée depuis
   // `lib/sessions/normalize-nullable-text.ts`. Consommée par CHAQUE chemin
   // d'écriture (modale, inline, futur SettingsDrawer).
+
+  // productId — le PROGRAMME de la session.
+  //
+  // TRAITÉ EN PREMIER, ET C'EST VOULU : changer de programme entraîne le nom et
+  // le tarif de la session, qui en sont COPIÉS à la création. Les blocs `name`
+  // et `pricePerLearner` qui suivent peuvent encore écraser ce que le produit a
+  // proposé — c'est la bonne précédence : ce que l'admin a tapé dans la même
+  // modale l'emporte sur ce dont le produit a hérité.
+  //
+  // Le DROIT de changer n'est pas décidé ici mais dans le module pur
+  // `verifierChangementProduit` (brouillon + aucune facture émise), pour que la
+  // règle soit testable sans base et énoncée à un seul endroit.
+  const avertissements: string[] = [];
+  if (data.productId !== undefined && data.productId !== session.productId) {
+    const nouveauProduit = await prisma.trainingProduct.findFirst({
+      where: { id: data.productId, tenantId: user.tenantId },
+      select: { id: true, code: true, title: true, durationHours: true, priceHT: true },
+    });
+    if (!nouveauProduit) return { ok: false, error: 'Programme introuvable.' };
+
+    const ancienProduit = session.productId
+      ? await prisma.trainingProduct.findFirst({
+          where: { id: session.productId, tenantId: user.tenantId },
+          select: { code: true, title: true, durationHours: true, priceHT: true },
+        })
+      : null;
+
+    // Les factures comptées sont celles de la session ET celles de ses inscrits :
+    // une facture par stagiaire (le cas AGEFICE courant) porte `participant`, pas
+    // `sessionId`. Ne regarder que `sessionId` laisserait changer le programme
+    // d'une formation déjà facturée stagiaire par stagiaire.
+    const [facturesEmises, creneaux, documentsGeneres] = await Promise.all([
+      prisma.invoice.count({
+        where: {
+          tenantId: user.tenantId,
+          status: { not: 'DRAFT' },
+          OR: [{ sessionId: session.id }, { participant: { sessionId: session.id } }],
+        },
+      }),
+      prisma.sessionSlot.count({ where: { sessionId: session.id } }),
+      prisma.document.count({ where: { sessionId: session.id } }),
+    ]);
+
+    const verdict = verifierChangementProduit({
+      sessionStatus: session.status,
+      facturesEmises,
+      dureeActuelleHeures: ancienProduit?.durationHours ?? null,
+      dureeCibleHeures: nouveauProduit.durationHours,
+      creneaux,
+      documentsGeneres,
+    });
+    if (!verdict.autorise) return { ok: false, error: verdict.raison };
+    avertissements.push(...verdict.avertissements);
+
+    updateData.product = { connect: { id: nouveauProduit.id } };
+    // Le CODE produit, pas l'uuid : un journal d'audit se lit à l'œil nu, et
+    // « PROD-00661 → PROD-0042 » dit ce qu'un couple d'uuid ne dira jamais.
+    before.productCode = ancienProduit?.code ?? null;
+    after.productCode = nouveauProduit.code;
+
+    const suivi = suiviDuProduit({
+      nomActuel: session.name,
+      titreAncienProduit: ancienProduit?.title ?? null,
+      titreNouveauProduit: nouveauProduit.title,
+      prixActuel: session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+      prixAncienProduit: ancienProduit ? Number(ancienProduit.priceHT) : null,
+      prixNouveauProduit: Number(nouveauProduit.priceHT),
+    });
+    avertissements.push(...suivi.avertissements);
+
+    if (suivi.nouveauNom !== null) {
+      updateData.name = suivi.nouveauNom;
+      before.name = session.name;
+      after.name = suivi.nouveauNom;
+    }
+    if (suivi.nouveauPrix !== null) {
+      updateData.pricePerLearner = new Prisma.Decimal(suivi.nouveauPrix);
+      before.pricePerLearner =
+        session.pricePerLearner === null ? null : Number(session.pricePerLearner);
+      after.pricePerLearner = suivi.nouveauPrix;
+    }
+  }
 
   // name (nullable)
   if (data.name !== undefined) {
@@ -1414,5 +1500,5 @@ export async function updateSessionDetails(
   }
 
   revalidatePath(`/app/sessions/${data.sessionId}`);
-  return { ok: true };
+  return avertissements.length > 0 ? { ok: true, avertissements } : { ok: true };
 }

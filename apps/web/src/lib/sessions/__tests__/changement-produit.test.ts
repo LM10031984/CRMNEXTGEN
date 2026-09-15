@@ -100,3 +100,100 @@ describe('verifierChangementProduit — autorisations', () => {
     expect(v.avertissements.join(' | ')).not.toContain('72');
   });
 });
+
+/**
+ * Ce qui SUIT le produit, et ce qui ne le suit pas.
+ *
+ * `TrainingSession.name` et `pricePerLearner` sont COPIÉS du produit à la
+ * création (`createSession` : `name: product.title`, `pricePerLearner:
+ * product.priceHT`). Changer le produit sans les toucher laisserait une
+ * session intitulée « Communication digitale » sur un programme d'IA.
+ *
+ * Mais les écraser aveuglément est pire : un nom saisi à la main (« IA — promo
+ * OPTIMMO ») ou un tarif négocié seraient perdus sans un mot. D'où la règle
+ * déjà éprouvée ailleurs dans le dépôt (renommage auto-entreprise) : on ne
+ * remplace QUE si la valeur actuelle est EXACTEMENT celle héritée de l'ancien
+ * produit. Sinon on n'y touche pas — et on le dit.
+ */
+
+import { suiviDuProduit } from '../changement-produit';
+
+describe('suiviDuProduit — le nom', () => {
+  it("adopte le nouveau titre quand le nom n'a jamais été personnalisé", () => {
+    const r = suiviDuProduit({
+      nomActuel: 'Communication digitale',
+      titreAncienProduit: 'Communication digitale',
+      titreNouveauProduit: "L'intelligence artificielle au service des conseillers",
+      prixActuel: null,
+      prixAncienProduit: null,
+      prixNouveauProduit: null,
+    });
+    expect(r.nouveauNom).toBe("L'intelligence artificielle au service des conseillers");
+  });
+
+  it('ne touche pas à un nom saisi à la main, et le signale', () => {
+    const r = suiviDuProduit({
+      nomActuel: 'IA — promo OPTIMMO',
+      titreAncienProduit: 'Communication digitale',
+      titreNouveauProduit: "L'intelligence artificielle",
+      prixActuel: null,
+      prixAncienProduit: null,
+      prixNouveauProduit: null,
+    });
+    expect(r.nouveauNom).toBeNull();
+    expect(r.avertissements.join(' | ')).toContain('IA — promo OPTIMMO');
+  });
+
+  it('ignore les espaces de bord — un titre recopié avec un blanc reste hérité', () => {
+    const r = suiviDuProduit({
+      nomActuel: '  Communication digitale  ',
+      titreAncienProduit: 'Communication digitale',
+      titreNouveauProduit: 'IA',
+      prixActuel: null,
+      prixAncienProduit: null,
+      prixNouveauProduit: null,
+    });
+    expect(r.nouveauNom).toBe('IA');
+  });
+});
+
+describe('suiviDuProduit — le tarif', () => {
+  it('adopte le nouveau tarif quand le tarif est celui hérité', () => {
+    const r = suiviDuProduit({
+      nomActuel: 'X', titreAncienProduit: 'X', titreNouveauProduit: 'X',
+      prixActuel: 3024, prixAncienProduit: 3024, prixNouveauProduit: 1800,
+    });
+    expect(r.nouveauPrix).toBe(1800);
+  });
+
+  it('ne touche pas à un tarif négocié, et le signale avec les deux montants', () => {
+    const r = suiviDuProduit({
+      nomActuel: 'X', titreAncienProduit: 'X', titreNouveauProduit: 'X',
+      prixActuel: 2500, prixAncienProduit: 3024, prixNouveauProduit: 1800,
+    });
+    expect(r.nouveauPrix).toBeNull();
+    const texte = r.avertissements.join(' | ');
+    expect(texte).toContain('2500');
+    expect(texte).toContain('1800');
+  });
+
+  it('ne propose rien quand les deux produits ont le même tarif', () => {
+    // Cas réel SES-0114 : PROD-00661 et PROD-0042 sont tous deux à 3024 €.
+    const r = suiviDuProduit({
+      nomActuel: 'X', titreAncienProduit: 'X', titreNouveauProduit: 'X',
+      prixActuel: 3024, prixAncienProduit: 3024, prixNouveauProduit: 3024,
+    });
+    expect(r.nouveauPrix).toBeNull();
+    expect(r.avertissements.join(' | ')).not.toContain('3024');
+  });
+
+  it('ne se prononce pas quand le tarif de session est vide', () => {
+    // Session importée de SmartOF : tarif VIDE. Y poser le prix produit
+    // inventerait un chiffre d'affaires que personne n'a négocié.
+    const r = suiviDuProduit({
+      nomActuel: 'X', titreAncienProduit: 'X', titreNouveauProduit: 'X',
+      prixActuel: null, prixAncienProduit: 3024, prixNouveauProduit: 1800,
+    });
+    expect(r.nouveauPrix).toBeNull();
+  });
+});
