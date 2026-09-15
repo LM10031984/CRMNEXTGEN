@@ -8,6 +8,12 @@
  * SessionParticipant. Si le payeur ne peut pas être déterminé sans ambiguïté
  * (salarié dont l'entreprise est inconnue), la ligne bascule sur un sélecteur
  * d'organisation au lieu de créer un doublon.
+ *
+ * L'ÉTAT AFFICHÉ NE VIENT PLUS DU STATUT SEUL. Un dossier converti depuis
+ * /app/inscriptions passe à CONVERTED sans inscrire personne : ce composant
+ * affichait alors « Inscrite » sur une session vide, et masquait le bouton, ce
+ * qui rendait le dossier intraitable. Le verdict est désormais rendu par
+ * `lib/enrollment/etat-demande`, qui tranche sur l'existence du participant.
  */
 
 import { useState, useTransition } from 'react';
@@ -18,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { enrollFromRequest } from '@/server/actions/enroll-from-request';
 import { searchOrganizations } from '@/server/actions/legal-links';
 import { ageficeRights } from '@/lib/enrollment/agefice-rights';
+import { etatDemande } from '@/lib/enrollment/etat-demande';
 
 export interface EnrollmentRequestRow {
   id: string;
@@ -34,17 +41,24 @@ export interface EnrollmentRequestRow {
   contributionCfp: number | null;
   hasRib: boolean;
   hasCfp: boolean;
+  /**
+   * Un `SessionParticipant` existe-t-il pour cette personne sur cette session ?
+   * C'est la SEULE preuve d'inscription : `status === 'CONVERTED'` dit
+   * seulement que l'apprenant a été créé quelque part.
+   */
+  estInscrit: boolean;
 }
 
-const LIBELLE_STATUT: Record<string, { texte: string; classe: string }> = {
-  SUBMITTED: { texte: 'Reçue', classe: 'bg-blue-50 text-blue-700' },
-  EXTRACTING: { texte: 'Lecture en cours', classe: 'bg-amber-50 text-amber-700' },
-  EXTRACTED: { texte: 'À valider', classe: 'bg-emerald-50 text-emerald-700' },
-  VALIDATED: { texte: 'Validée', classe: 'bg-emerald-50 text-emerald-700' },
-  CONVERTED: { texte: 'Inscrite', classe: 'bg-muted text-muted-foreground' },
-  REJECTED: { texte: 'Rejetée', classe: 'bg-red-50 text-red-700' },
-  PENDING_FORM: { texte: 'En attente', classe: 'bg-muted text-muted-foreground' },
-  EXPIRED: { texte: 'Expirée', classe: 'bg-muted text-muted-foreground' },
+/**
+ * Le TON sortant de `etatDemande` → la couleur. Le module pur ne connaît pas
+ * Tailwind, et c'est voulu : la règle métier ne doit pas changer parce qu'une
+ * palette change.
+ */
+const CLASSE_PAR_TON: Record<string, string> = {
+  neutre: 'bg-muted text-muted-foreground',
+  attente: 'bg-blue-50 text-blue-700',
+  alerte: 'bg-amber-50 text-amber-800',
+  refus: 'bg-red-50 text-red-700',
 };
 
 export function SessionEnrollmentRequests({
@@ -56,7 +70,7 @@ export function SessionEnrollmentRequests({
 }) {
   if (requests.length === 0) return null;
 
-  const aTraiter = requests.filter((r) => r.status !== 'CONVERTED' && r.status !== 'REJECTED');
+  const aTraiter = requests.filter((r) => etatDemande(r).actionPossible);
 
   return (
     <section className="rounded-2xl border border-border bg-white p-5 space-y-3">
@@ -93,12 +107,12 @@ function LigneDemande({
   const [recherche, setRecherche] = useState('');
   const [resultats, setResultats] = useState<Array<{ id: string; legalName: string }>>([]);
 
-  const statut = LIBELLE_STATUT[demande.status] ?? {
-    texte: demande.status,
-    classe: 'bg-muted text-muted-foreground',
-  };
+  const etat = etatDemande(demande);
   const nom = [demande.firstName, demande.lastName].filter(Boolean).join(' ') || '(sans nom)';
-  const dejaTraitee = demande.status === 'CONVERTED' || demande.status === 'REJECTED';
+  // Un dossier converti mais pas inscrit RESTE actionnable : c'est tout l'objet
+  // du correctif du 15/09/2026. `enrollFromRequest` sait repartir de la
+  // personne déjà créée au lieu de refuser une seconde conversion.
+  const libelleAction = demande.status === 'CONVERTED' ? 'Inscrire à la session' : 'Valider et inscrire';
 
   function valider(overrideSponsorOrgId?: string) {
     startTransition(async () => {
@@ -133,8 +147,13 @@ function LigneDemande({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{nom}</span>
-            <span className={cn('text-[11px] px-2 py-0.5 rounded-full font-medium', statut.classe)}>
-              {statut.texte}
+            <span
+              className={cn(
+                'text-[11px] px-2 py-0.5 rounded-full font-medium',
+                CLASSE_PAR_TON[etat.ton] ?? CLASSE_PAR_TON.neutre,
+              )}
+            >
+              {etat.libelle}
             </span>
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
@@ -162,7 +181,7 @@ function LigneDemande({
           >
             Détail <ExternalLink className="h-3 w-3" />
           </a>
-          {canWrite && !dejaTraitee && (
+          {canWrite && etat.actionPossible && (
             <button
               type="button"
               onClick={() => valider()}
@@ -173,7 +192,7 @@ function LigneDemande({
               )}
             >
               {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
-              Valider et inscrire
+              {libelleAction}
             </button>
           )}
         </div>

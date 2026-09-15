@@ -1027,6 +1027,10 @@ export default async function SessionDetailPage({
       submittedAt: true,
       companyName: true,
       professionalStatus: true,
+      // La personne créée à la conversion : c'est elle qu'on cherche dans les
+      // inscrits pour savoir si la demande est VRAIMENT inscrite (le statut du
+      // dossier, lui, ment — cf. lib/enrollment/etat-demande).
+      convertedToPersonId: true,
       cniKey: true,
       cniVersoKey: true,
       extractedData: true,
@@ -1037,8 +1041,13 @@ export default async function SessionDetailPage({
   const pendingEnrollmentCount = enrollmentRequests.filter((r) =>
     ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'].includes(r.status),
   ).length;
+  // Une demande n'est « inscrite » que si sa personne figure dans les
+  // participants de CETTE session. Se fier au statut CONVERTED affichait
+  // « Inscrite » sur une session à zéro inscrit (SES-0114, 15/09/2026).
+  const personIdsInscrits = new Set(session.participants.map((p) => p.personId));
   const enrollmentRequestRows = enrollmentRequests.map((r) => ({
     id: r.id,
+    estInscrit: Boolean(r.convertedToPersonId && personIdsInscrits.has(r.convertedToPersonId)),
     firstName: r.firstName,
     lastName: r.lastName,
     email: r.email,

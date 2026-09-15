@@ -139,3 +139,101 @@ describe('enrollFromRequest', () => {
     expect(m.participantCreate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * REPRISE D'UN DOSSIER DÉJÀ CONVERTI — l'impasse du 15/09/2026.
+ *
+ * Constaté en production sur SES-0114 : 3 demandes au statut CONVERTED, 0
+ * inscrit. Convertir depuis /app/inscriptions crée bien Person + Organization,
+ * mais AUCUN SessionParticipant. Et comme `convertPreEnrollment` refuse net un
+ * dossier déjà converti (« Déjà convertie en apprenant »), repasser par
+ * « Valider et inscrire » était impossible : l'apprenant existait, la session
+ * restait vide, et plus rien ne pouvait les rapprocher.
+ *
+ * La conversion est donc désormais une ÉTAPE FRANCHIE, pas un verrou : quand
+ * elle est déjà faite, on repart de `convertedToPersonId` / `convertedToOrgId`
+ * au lieu de la refaire.
+ */
+const DEJA_CONVERTIE = {
+  ...DEMANDE,
+  status: 'CONVERTED',
+  convertedToPersonId: 'per-deja',
+  convertedToOrgId: 'org-deja',
+};
+
+describe('enrollFromRequest — dossier déjà converti', () => {
+  beforeEach(() => {
+    // FIDÉLITÉ AU RÉEL, et c'est tout l'intérêt de ce bloc : en production
+    // `convertPreEnrollment` REFUSE un dossier déjà converti. Laisser le mock
+    // répondre « ok » rendrait ces tests verts même si le code reconvertissait
+    // bêtement — ils ne prouveraient plus rien.
+    m.convertPreEnrollment.mockResolvedValue({
+      ok: false,
+      error: 'Déjà convertie en apprenant',
+    });
+  });
+
+  it('inscrit sans reconvertir, en repartant de la personne déjà créée', async () => {
+    m.preEnrollmentFindFirst.mockResolvedValue(DEJA_CONVERTIE);
+    const r = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(r).toEqual({ ok: true, participantId: 'part-1' });
+    expect(m.convertPreEnrollment).not.toHaveBeenCalled();
+    const data = m.participantCreate.mock.calls[0]![0].data;
+    expect(data.personId).toBe('per-deja');
+    expect(data.sponsorOrgId).toBe('org-deja');
+  });
+
+  it('cherche le doublon sur la personne DÉJÀ convertie, pas sur une nouvelle', async () => {
+    // Le test de puissance de la reprise : si le garde-fou anti-doublon
+    // interrogeait encore `conv.personId`, il chercherait `undefined` et
+    // laisserait créer une seconde inscription pour la même personne.
+    m.preEnrollmentFindFirst.mockResolvedValue(DEJA_CONVERTIE);
+    await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(m.participantFindUnique.mock.calls[0]![0].where).toEqual({
+      sessionId_personId: { sessionId: 'ses-1', personId: 'per-deja' },
+    });
+  });
+
+  it('refuse le doublon quand la personne convertie est déjà inscrite', async () => {
+    m.preEnrollmentFindFirst.mockResolvedValue(DEJA_CONVERTIE);
+    m.participantFindUnique.mockResolvedValue({ id: 'part-existant' });
+    const r = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(r.ok).toBe(false);
+    expect(m.participantCreate).not.toHaveBeenCalled();
+  });
+
+  it('convertie sans organisation payeuse : demande le payeur, sans rien créer', async () => {
+    // Cas réel Rúben Oliveira : agent commercial sans SIRET, converti depuis
+    // /app/inscriptions, donc sans EI. On ne peut pas deviner qui paye.
+    m.preEnrollmentFindFirst.mockResolvedValue({
+      ...DEJA_CONVERTIE,
+      convertedToOrgId: null,
+      companySiret: null,
+      companyName: null,
+    });
+    const r = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+    expect(r).toMatchObject({ ok: false, needsSponsor: true });
+    expect(m.participantCreate).not.toHaveBeenCalled();
+  });
+
+  it('convertie sans payeur mais payeur choisi par l’admin : inscription faite', async () => {
+    m.preEnrollmentFindFirst.mockResolvedValue({
+      ...DEJA_CONVERTIE,
+      convertedToOrgId: null,
+      companySiret: null,
+      companyName: null,
+    });
+    const r = await enrollFromRequest({
+      preEnrollmentId: 'pe-1',
+      overrideSponsorOrgId: 'org-choisie',
+    });
+    expect(r.ok).toBe(true);
+    expect(m.participantCreate.mock.calls[0]![0].data.sponsorOrgId).toBe('org-choisie');
+  });
+
+  it('le payeur choisi par l’admin l’emporte sur celui de la conversion', async () => {
+    m.preEnrollmentFindFirst.mockResolvedValue(DEJA_CONVERTIE);
+    await enrollFromRequest({ preEnrollmentId: 'pe-1', overrideSponsorOrgId: 'org-corrigee' });
+    expect(m.participantCreate.mock.calls[0]![0].data.sponsorOrgId).toBe('org-corrigee');
+  });
+});
