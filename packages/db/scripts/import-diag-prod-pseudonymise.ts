@@ -36,16 +36,69 @@
  * nom. La source doit porter le tenant de production ; la cible doit être
  * locale ET porter la bibliothèque, sinon composer n'aurait aucun sens.
  *
+ * ## Le texte libre s'arrête, il ne se caviarde pas
+ *
+ * Les champs structurés sont sûrs par construction ; le texte libre est
+ * exactement l'endroit où un nom de personne se glisse sans avoir été demandé.
+ * Le script BALAYE toutes les réponses avant d'écrire et s'ARRÊTE sur ce qui
+ * ressemble à un nom, une adresse, un téléphone ou un e-mail — il rend ce qu'il
+ * a trouvé et attend un arbitrage, réponse par réponse
+ * (`--textes-libres-arbitres=`). Il ne caviarde jamais seul : ces réponses
+ * pilotent les douleurs, donc la composition.
+ *
+ * ## Le dossier dit ce qu'il est
+ *
+ * `DIAG-R001` porte la mention « COPIE PSEUDONYMISÉE — ne pas remettre » dans
+ * son LIBELLÉ d'agence, celui que `nomAgence()` rend à toutes les pièces. Il
+ * entre aux `deferred-items` pour suppression une fois le programme relu : une
+ * base de travail n'est pas un endroit où les dossiers clients s'accumulent,
+ * même pseudonymisés.
+ *
  * Dry-run par défaut. `--apply` pour écrire, en local uniquement.
  */
 
 import { PrismaClient } from '@prisma/client';
 
+// Module PUR (aucun accès base, réseau ni fichier) : import statique sans risque.
+import { balayerTextesLibres, MOTIFS, textesDe } from './lib/balayage-donnees-personnelles.js';
+
 const APPLY = process.argv.includes('--apply');
+
+/**
+ * Les réponses dont Laurent a confirmé qu'elles sont du texte d'ENTREPRISE.
+ *
+ * L'arbitrage se donne réponse par réponse, et sur la ligne de commande — comme
+ * `PROD_READ_URL`, pour la même raison : c'est une décision, pas un défaut. Une
+ * liste écrite en dur dans le fichier se périmerait au dossier suivant en
+ * gardant l'air d'être à jour.
+ */
+const ARBITREES = new Set(
+  (process.argv.find((a) => a.startsWith('--textes-libres-arbitres='))?.slice(25) ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 const REF_SOURCE = process.argv.find((a) => a.startsWith('--ref='))?.slice(6) ?? 'DIAG-0001';
 /** Référence DISTINCTE : la locale porte déjà un DIAG-0001, qui est un autre dossier. */
 const REF_CIBLE = process.argv.find((a) => a.startsWith('--ref-cible='))?.slice(12) ?? 'DIAG-R001';
 const TENANT_PROD = 'db191440-a144-48d1-93c1-767e6f647f2c';
+
+/**
+ * Le dossier porte dans son LIBELLÉ ce qu'il est.
+ *
+ * Pas dans un champ technique, pas dans une note de bas de page : dans le nom
+ * d'agence lui-même, parce que c'est `nomAgence()` — résolution UNIQUE, celle
+ * de la production (§4 bis) — qui titre la proposition, le programme composé et
+ * toute pièce qui sortirait d'ici. Une mention posée ailleurs ne suivrait pas
+ * le document ; celle-ci ne peut pas s'en détacher.
+ *
+ * C'est la leçon du 14/09 (§4 terdecies) poussée d'un cran : un programme
+ * composé en local s'est relu comme celui de la production. L'en-tête de
+ * provenance de la sonde coiffe le FICHIER ; ceci marque la DONNÉE. Un dossier
+ * pseudonymisé qui ressemble à un vrai dossier finit par être traité comme un
+ * vrai dossier.
+ */
+const LIBELLE_AGENCE = 'Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)';
 
 const URL_SOURCE = process.env.PROD_READ_URL ?? '';
 const URL_CIBLE = process.env.DATABASE_URL ?? '';
@@ -85,10 +138,32 @@ if (!/localhost|127\.0\.0\.1/.test(hoteCible)) {
   console.error(`\n⛔ La CIBLE n'est pas locale (${hoteCible}). Ce script n'écrit qu'en local.\n`);
   process.exit(1);
 }
-const modulesCible = await cible.trainingModule.count();
-if (modulesCible < 300) {
+/**
+ * §4 quater — un compte sans sa POPULATION n'est pas un relevé.
+ *
+ * « 490 modules » et « 402 modules » se sont contredits le 15/09/2026. Aucun
+ * des deux n'était faux : la BASE porte tout ce qui y a jamais été importé,
+ * la BIBLIOTHÈQUE DU DRIVE n'en est qu'une origine parmi d'autres. C'est le cas
+ * d'école du tableau de §4 quater — « 41 publiés contre 51 en base, les deux
+ * justes » — et il a coûté le même quart d'heure de doute.
+ *
+ * Et la garde comptait la MAUVAISE population : 490 modules dont aucun ne
+ * viendrait du Drive passeraient le seuil sans qu'aucun ne soit composable.
+ * Elle porte désormais sur la bibliothèque elle-même.
+ */
+const modulesTotal = await cible.trainingModule.count();
+const parOrigine = async (prefixe: string): Promise<number> =>
+  cible.trainingModule.count({ where: { sourceRef: { startsWith: prefixe } } });
+const [modulesDrive, modulesFaros, modulesDiag] = await Promise.all([
+  parOrigine('drive:'),
+  parOrigine('faros:'),
+  parOrigine('diag:'),
+]);
+const modulesBibliotheque = modulesDrive + modulesFaros;
+if (modulesBibliotheque < 300) {
   console.error(
-    `\n⛔ La CIBLE ne porte que ${modulesCible} modules. Sans la bibliothèque, composer n'a aucun sens.\n` +
+    `\n⛔ La CIBLE porte ${modulesTotal} modules, mais seulement ${modulesBibliotheque} issus de la\n` +
+      `   bibliothèque (Drive + Faros). Sans elle, composer n'a aucun sens.\n` +
       `   Lancer d'abord : pnpm --filter @qualiof/db run import:drive-catalog:local -- --apply\n`,
   );
   process.exit(1);
@@ -97,7 +172,14 @@ if (modulesCible < 300) {
 console.log(`\n🛡  SOURCE (lecture seule) : ${baseDe(URL_SOURCE)} @ ${hoteDe(URL_SOURCE)}`);
 console.log(`    tenant « ${tenantSource.name} » · ${produitsSource} produits`);
 console.log(`🛡  CIBLE  (écriture)      : ${baseDe(URL_CIBLE)} @ ${hoteCible}`);
-console.log(`    ${modulesCible} modules en bibliothèque`);
+console.log(`    ${modulesTotal} modules — POPULATION : TOUS les TrainingModule de la base,`);
+console.log(`      toutes origines confondues. Ce n'est PAS le compte de la bibliothèque :`);
+console.log(`        ${String(modulesDrive).padStart(4)} instantané Drive     (sourceRef « drive:… »)`);
+console.log(`        ${String(modulesFaros).padStart(4)} Faros                (« faros:… »)`);
+console.log(`        ${String(modulesDiag).padStart(4)} catalogue diagnostic (« diag:… »)`);
+console.log(
+  `        ${String(modulesTotal - modulesBibliotheque - modulesDiag).padStart(4)} hors import          (sourceRef nul)`,
+);
 
 // ── Lecture — strictement ce qui pilote la composition ──────────────────────
 
@@ -139,7 +221,7 @@ if (!d) {
 
 const LIBRE = new Set(['mgmt-top3-priorities', 'mgmt-top3-difficulties', 'tools-metier']);
 const libres = d.answers.filter(
-  (a) => LIBRE.has(a.questionId) || (typeof a.value === 'string' && a.value.length > 25),
+  (a) => LIBRE.has(a.questionId) || textesDe(a.value).some((t) => t.trim().length > 25),
 );
 
 console.log(`\n=== CE QUI EST LU en production (lecture seule) ===`);
@@ -163,7 +245,8 @@ for (const l of [
 }
 
 console.log(`\n=== PSEUDONYMISATION appliquée à l'écriture ===`);
-console.log(`  Agence     → « Agence A »        (Lead.notes = « Agence : Agence A »)`);
+console.log(`  Agence     → « ${LIBELLE_AGENCE} »`);
+console.log(`               (Lead.notes — donc nomAgence(), donc TOUT titre issu de ce dossier)`);
 console.log(`  Contact    → aucun nom, aucun email, aucun téléphone`);
 for (const [i] of d.participants.entries()) console.log(`  Fiche #${i + 1}   → « Personne ${i + 1} »`);
 
@@ -172,10 +255,57 @@ if (libres.length === 0) console.log('  (aucune)');
 for (const a of libres) {
   console.log(`  • ${a.questionId}\n      ${JSON.stringify(a.value)}`);
 }
-console.log(
-  `\n  ⚠ Ce sont les seules valeurs saisies à la main. Aucune ne contient de nom de\n` +
-    `    personne — relevé le 15/09/2026 — mais c'est à Laurent de le confirmer.`,
+
+// ── Le balayage, et il s'arrête ─────────────────────────────────────────────
+//
+// Les champs STRUCTURÉS sont sûrs par construction — un enum, un nombre, un
+// booléen ne portent pas le nom de quelqu'un. Le texte libre, si : c'est là
+// qu'un « j'en ai parlé à Sophie » se glisse sans que le formulaire l'ait
+// demandé. Sur CE dossier il n'y en a aucun ; le garde s'écrit quand même
+// maintenant, parce qu'au deuxième import personne ne relira trois réponses.
+//
+// Il balaye TOUTES les réponses, pas seulement les trois longues : un prénom
+// tient en six lettres et passerait sous le seuil des 25 caractères.
+const trouvailles = balayerTextesLibres(
+  d.answers.map((a) => ({ questionId: a.questionId, valeur: a.value })),
 );
+const nonArbitrees = trouvailles.filter((t) => !ARBITREES.has(t.questionId));
+
+console.log(`\n=== BALAYAGE — ce qui a été CHERCHÉ, pas seulement trouvé (§4 quater) ===`);
+for (const m of MOTIFS) console.log(`  · ${m.genre.padEnd(9)} ${m.libelle}`);
+console.log(
+  `  ${d.answers.length} réponses balayées jusqu'aux feuilles JSON · ${trouvailles.length} trouvaille(s)` +
+    (ARBITREES.size > 0 ? ` · ${ARBITREES.size} réponse(s) arbitrée(s)` : ''),
+);
+
+if (trouvailles.length > 0) {
+  console.log(`\n=== TROUVAILLES ===`);
+  for (const t of trouvailles) {
+    const etat = ARBITREES.has(t.questionId) ? '✓ arbitrée' : '⛔ À ARBITRER';
+    console.log(
+      `  ${etat.padEnd(13)} ${t.questionId.padEnd(24)} ${t.genre.padEnd(9)} « ${t.extrait} »  ← ${t.motif}`,
+    );
+  }
+}
+
+if (nonArbitrees.length > 0) {
+  const aArbitrer = [...new Set(nonArbitrees.map((t) => t.questionId))];
+  console.error(
+    `\n⛔ ${nonArbitrees.length} trouvaille(s) NON ARBITRÉE(S). Rien ne sera écrit.\n\n` +
+      `   Le script ne caviarde pas tout seul : un caviardage automatique sur du texte\n` +
+      `   métier en abîmerait le sens, et ces réponses pilotent les douleurs, donc la\n` +
+      `   composition. Une ambiguïté tranchée au hasard est une écriture qu'on ne peut\n` +
+      `   plus relire.\n\n` +
+      `   Relire les extraits ci-dessus. Pour celles qui sont bien du texte d'entreprise :\n` +
+      `     --textes-libres-arbitres=${aArbitrer.join(',')}\n`,
+  );
+  if (APPLY) {
+    await source.$disconnect();
+    await cible.$disconnect();
+    process.exit(1);
+  }
+  console.error(`   (dry-run : le rapport continue, mais --apply refusera en l'état.)\n`);
+}
 
 // ── Cible : ce qui serait écrit ─────────────────────────────────────────────
 
@@ -210,7 +340,10 @@ if (!APPLY) {
   console.log(`\n⏸  DRY-RUN — rien n'a été écrit. Relancer avec --apply pour appliquer.\n`);
   await source.$disconnect();
   await cible.$disconnect();
-  process.exit(0);
+  // Le code de sortie porte le refus : un dry-run vert alors que l'apply
+  // refuserait serait exactement le genre de rapport rassurant et faux que
+  // §4 quater décrit.
+  process.exit(nonArbitrees.length > 0 ? 1 : 0);
 }
 
 // ── Écriture ────────────────────────────────────────────────────────────────
@@ -220,8 +353,8 @@ await cible.$transaction(async (tx) => {
   const lead = await tx.lead.create({
     data: {
       tenantId: tenantCible.id,
-      source: 'Import pseudonymisé depuis la production',
-      notes: 'Agence : Agence A',
+      source: 'Import pseudonymisé depuis la production — prévisualisation interne',
+      notes: `Agence : ${LIBELLE_AGENCE}`,
       ownerUserId: ownerCible.id,
     },
     select: { id: true },
@@ -286,6 +419,11 @@ await cible.$transaction(async (tx) => {
         answers: d.answers.length,
         participants: d.participants.length,
         pseudonymise: true,
+        libelle: LIBELLE_AGENCE,
+        // Ce que le balayage a trouvé, et ce que Laurent a arbitré. Sans ça,
+        // « 0 trouvaille » en base ne dit pas si on a cherché.
+        balayageTrouvailles: trouvailles.length,
+        textesLibresArbitres: [...ARBITREES],
       },
     },
   });

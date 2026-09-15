@@ -103,9 +103,13 @@ const products = await prisma.trainingProduct.findMany({
 const codeById = new Map(products.map((p) => [p.id, p.code]));
 
 // Le mapping vivait ici en double (puis en quadruple) : il vit désormais
-// dans `server/proposition-library.ts`, sous le regard de tsc — ce
-// dossier `scripts/` n'est PAS couvert par tsconfig, donc une
-// divergence y reste muette jusqu'à ce qu'un dossier réel la révèle.
+// dans `server/proposition-library.ts`, source unique.
+//
+// Le commentaire d'origine ajoutait que ce dossier `scripts/` n'était pas
+// type-vérifié — ce n'est plus vrai depuis `58e28736` : `tsconfig.scripts.json`
+// le couvre et il est branché sur `pnpm lint`. La raison de garder le mapping
+// ailleurs reste entière (une définition, pas quatre), mais la divergence n'est
+// plus muette.
 const library: LibraryModule[] = await loadPropositionLibrary(d.tenantId);
 
 const participants = d.participants.map((p) => ({
@@ -140,8 +144,37 @@ const { content, composition, match } = seedContent({
 });
 
 // ── Le parcours ──────────────────────────────────────────────────────────────
+// §4 quater — un compte sans sa POPULATION n'est pas un relevé. Trois chiffres
+// circulent sur cette base, tous justes, et ils ne comptent pas la même chose.
+// Le 15/09/2026 « 490 » et « 402 » se sont contredits une demi-heure durant,
+// exactement comme « 41 publiés contre 51 en base » du tableau de §4 quater.
+// La sonde les nomme donc, comme elle nomme déjà sa base et son UUID.
+const parOrigine = async (prefixe: string | null): Promise<number> =>
+  prisma.trainingModule.count({
+    where: {
+      product: { tenantId: d.tenantId },
+      sourceRef: prefixe === null ? null : { startsWith: prefixe },
+    },
+  });
+const modulesBase = await prisma.trainingModule.count({ where: { product: { tenantId: d.tenantId } } });
+const [nDrive, nFaros, nDiag, nSansRef] = await Promise.all([
+  parOrigine('drive:'),
+  parOrigine('faros:'),
+  parOrigine('diag:'),
+  parOrigine(null),
+]);
+
 console.log(`\n=== BASE : ${ouTourne()} ===`);
-console.log(`=== ${ref} (${d.id}) — ${agencyName} · bibliothèque de ${match.libraryModuleCount} modules ===\n`);
+console.log(`=== ${ref} (${d.id}) — ${agencyName} ===\n`);
+console.log(`Modules — plusieurs populations, tous les chiffres justes :`);
+console.log(`  ${String(modulesBase).padStart(4)}  en BASE        tous les TrainingModule du tenant, toutes origines`);
+console.log(`        dont ${String(nDrive).padStart(4)}  instantané Drive      (sourceRef « drive:… »)`);
+console.log(`        dont ${String(nFaros).padStart(4)}  Faros                 (« faros:… »)`);
+console.log(`        dont ${String(nDiag).padStart(4)}  catalogue diagnostic  (« diag:… »)`);
+console.log(`        dont ${String(nSansRef).padStart(4)}  sans sourceRef        (saisis hors import)`);
+console.log(`  ${String(match.libraryModuleCount).padStart(4)}  COMPOSABLES    offerts au calcul, pige, non-diffusables, rayons en`);
+console.log(`        doublon et modules sans déroulé déduits — c'est CE chiffre que`);
+console.log(`        le moteur a eu sous la main.\n`);
 console.log(`Enveloppe dimensionnée par le moteur budget : ${audit.funding.halfDays} demi-journées`);
 console.log(`Parcours COMPOSÉ                            : ${composition.totalHalfDays} demi-journées`);
 console.log(`  → ${composition.totalOnSiteHours} h sur site · ${composition.totalConventionedHours} h CONVENTIONNÉES`);
