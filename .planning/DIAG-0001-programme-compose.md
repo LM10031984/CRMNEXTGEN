@@ -11,11 +11,12 @@ Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) s
 - Maîtriser les techniques de découverte vendeur
 - Rédiger des compromis de vente efficaces
 - Installer un rythme de suivi vendeur qui tient jusqu'à la vente
+- Conduire une découverte acheteur par le questionnement et l’écoute active
 - Faire des avis clients une source de mandats
+- Mener une découverte du projet acheteur-vendeur en situation
 - Gérer les objections et trouver des solutions de compromis
 - Préparer un dossier de suivi vendeur complet
-
-_Objectifs restant à rédiger pour : Conduire une découverte acheteur par le questionnement et l’écoute active, Mener une découverte du projet acheteur-vendeur en situation, Répondre aux avis clients en ligne, positifs comme négatifs._
+- Répondre aux avis clients en ligne, positifs comme négatifs
 
 ## Déroulé
 

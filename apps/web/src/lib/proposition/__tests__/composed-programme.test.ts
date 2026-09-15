@@ -215,8 +215,13 @@ describe('buildComposedProgramme — les objectifs viennent des modules retenus'
 
     expect(programme.objectives).toEqual([]);
     expect(programme.objectivesToWrite).toEqual(['Suivi acheteur']);
-    expect(programme.programMd).toContain('Objectifs restant à rédiger pour : Suivi acheteur');
+    // Formulation changée le 14/09/2026 : le document NOMME le critère et le
+    // mot lu. L'assertion est durcie au passage — elle vérifiait qu'une phrase
+    // existait, elle vérifie maintenant qu'elle est ACTIONNABLE.
+    expect(programme.programMd).toContain('critère : le titre doit commencer par un verbe d’action reconnu');
+    expect(programme.programMd).toContain('« Suivi acheteur » (mot lu : « suivi »)');
     expect(programme.warnings.some((w) => w.includes('restent À RÉDIGER'))).toBe(true);
+    expect(programme.warnings.some((w) => w.includes('verbe d’action reconnu'))).toBe(true);
   });
 });
 
@@ -574,5 +579,90 @@ describe('CONTRAT — un programme composé ne contient JAMAIS un module sans d�
     expect(composition.blocks.flatMap((b) => b.modules)).toEqual([]);
     expect(reco.recommendations.some((r) => r.unmet)).toBe(true);
     expect(reco.notices.some((n) => n.includes('aucun déroulé pédagogique'))).toBe(true);
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Un refus nomme son CRITÈRE et la VALEUR qu'il a lue (14/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Troisième fois de la semaine qu'un refus récite sa seule raison connue.
+ *
+ * Laurent a réécrit quatre titres de modules ; trois ont été refusés sans que
+ * rien ne dise pourquoi. Le message disait « le titre ne dit pas ce que le
+ * stagiaire saura faire » — vrai en général, faux ici : les trois titres
+ * DISAIENT exactement cela. Le vrai motif était que leur verbe (`conduire`,
+ * `mener`, `répondre`) ne figurait pas dans `TITLE_VERBS`.
+ *
+ * Quelqu'un qui lit ce message réécrit un titre déjà bon, indéfiniment.
+ *
+ * Même famille que le refus du geste commercial qui citait « au-delà d'une
+ * demi-journée » quand la vraie raison était « reste à zéro ».
+ */
+function programmeAvecTitre(titre: string) {
+  const composition = composeProgramme({
+    recommendations: [reco('mandat_exclusivite', [candidat('m1', titre, 120, VENDEUR)])],
+    rules: RULES,
+    envelopeHalfDays: 6,
+  });
+  return buildComposedProgramme({
+    composition,
+    rules: RULES,
+    agencyName: 'Agence des Oliviers',
+    diagnosticReference: 'DIAG-0001',
+    sources: SOURCES,
+    fallback: FALLBACK,
+    mentions: MENTIONS,
+    moduleContent: new Map([['m1', '- Une puce']]),
+  });
+}
+
+describe('Un refus d’objectif nomme son critère et la valeur qu’il a lue', () => {
+  it('nomme LE CRITÈRE dans le programme remis, pas une généralité', () => {
+    const p = programmeAvecTitre('Atelier pratique : simulation de réponse aux avis');
+    expect(
+      p.programMd,
+      'le lecteur doit savoir QUEL critère a échoué, sinon il réécrit un titre déjà bon',
+    ).toContain('verbe d’action reconnu');
+  });
+
+  it('dit le MOT qu’il a lu — sans quoi on cherche au mauvais endroit', () => {
+    const p = programmeAvecTitre('Atelier pratique : simulation de réponse aux avis');
+    expect(p.programMd).toContain('atelier');
+  });
+
+  it('le blocage et l’avertissement nomment le même critère que le document', () => {
+    const p = programmeAvecTitre('Atelier pratique : simulation de réponse aux avis');
+    expect(p.blockers.join(' ')).toContain('verbe d’action reconnu');
+    expect(p.warnings.join(' ')).toContain('verbe d’action reconnu');
+  });
+
+  it('ne refuse RIEN quand le titre commence par un verbe reconnu', () => {
+    const p = programmeAvecTitre('Signer plus de mandats exclusifs');
+    expect(p.objectivesToWrite).toEqual([]);
+    expect(p.programMd).not.toContain('verbe d’action reconnu');
+  });
+
+  /**
+   * Les trois verbes ajoutés le 14/09/2026, sur PREUVE et non par principe :
+   * 5 modules du catalogue les portent, dont 2 objectifs légitimes qui étaient
+   * refusés à tort (drive:059#6, drive:060#4).
+   *
+   * La liste reste ASYMÉTRIQUE et le restera : un faux négatif coûte une
+   * relecture, un faux positif imprime une formule creuse sur une pièce
+   * financeur. On élargit au cas par cas, jamais par principe.
+   */
+  it.each([
+    ['Conduire une découverte acheteur par le questionnement et l’écoute active'],
+    ['Mener une découverte du projet acheteur-vendeur en situation'],
+    ['Répondre aux avis clients en ligne, positifs comme négatifs'],
+  ])('accepte « %s » comme objectif', (titre) => {
+    const p = programmeAvecTitre(titre);
+    expect(p.objectivesToWrite, `« ${titre} » devrait produire un objectif`).toEqual([]);
+    expect(p.objectives.some((o) => o.toLowerCase().startsWith(titre.slice(0, 6).toLowerCase()))).toBe(
+      true,
+    );
   });
 });
