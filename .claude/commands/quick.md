@@ -662,6 +662,23 @@ Et les **sept** ne sont pas sept défauts : c'est **la même résolution du nom
 d'agence, dupliquée**, avec cinq comportements différents pour la même question.
 Voir §4 bis — dupliquer un mapping garantit la divergence.
 
+### Le patron, et il vaut pour tous les balayages
+
+> **Un balayage qui compte des OCCURRENCES compte des symptômes. Celui qui
+> compte des CAUSES trouve souvent qu'il n'y en a qu'une.**
+
+Ici : 25 occurrences, puis 7 après classement par mécanisme, puis **1** après
+avoir regardé ce que les 7 avaient en commun. Le chiffre qui décide de l'action
+n'est aucun des deux premiers.
+
+Le geste qui fait la différence est le **tableau par mécanisme** — pas la liste.
+Une liste de 25 lignes se lit comme un chantier ; trois catégories nommées se
+lisent comme une décision. Et tant qu'on n'a pas nommé le mécanisme, on ne sait
+pas si on regarde 25 problèmes ou un seul, recopié.
+
+À faire donc systématiquement : **classer avant de compter, et compter les
+causes avant d'annoncer un volume.**
+
 ## 4 terdecies. Une RÉFÉRENCE n'est pas une IDENTITÉ entre deux bases (§5.4 étendue)
 
 `DIAG-0001` désigne **« Agence des Oliviers », 4 fiches** en local, et
