@@ -176,10 +176,25 @@ describe('buildComposedProgramme — D-25 : durationHours porte les heures CONVE
     expect(programme.durationHours).toBe(4);
   });
 
-  it('dit les deux durées dans le déroulé, sans jamais en laisser une nue', () => {
+  /**
+   * RENVERSÉ le 15/09/2026 — et l'ancienne assertion est gardée en mémoire.
+   *
+   * Ce test exigeait les DEUX durées dans le déroulé (« 8 h conventionnées »,
+   * « 4 h sur site »), « sans jamais en laisser une nue ». La règle était juste
+   * tant qu'on croyait le programme destiné au financeur. Il ne l'est pas : c'est
+   * une pièce CLIENT (carte des destinataires, spec §9 — sorties documentaires), donc aucune heure.
+   *
+   * Ce qui SURVIT de la règle, et qui était son vrai fond : une heure ne
+   * s'affiche jamais sans dire laquelle elle est. Le programme ne choisit donc
+   * pas « celle qui parle le mieux » — il n'en affiche AUCUNE, et les valeurs
+   * restent intactes dans les champs.
+   */
+  it('n’affiche aucune des deux durées — mais les porte toutes les deux', () => {
     const { programme } = programmeReel();
-    expect(programme.programMd).toContain('8 h conventionnées');
-    expect(programme.programMd).toContain('4 h sur site');
+    expect(programme.programMd).not.toContain('8 h conventionnées');
+    expect(programme.programMd).not.toContain('4 h sur site');
+    expect(programme.durationHours).toBe(8);
+    expect(programme.onSiteHours).toBe(4);
   });
 });
 
@@ -791,5 +806,74 @@ describe('Les prérequis du parcours — rien de déclaré ne veut pas dire « a
     const { programme } = programmeReel();
     expect(programme.prerequisites.toLowerCase()).not.toContain('non renseigné');
     expect(programme.warnings.some((w) => w.toLowerCase().includes('prérequis'))).toBe(false);
+  });
+});
+
+/**
+ * Le programme composé est une pièce CLIENT (arbitrage Laurent, 15/09/2026).
+ *
+ * Il ne part PAS au financeur — la correction de la croyance inverse a coûté
+ * deux erreurs de suite cette semaine. Aucune contrainte d'indicateur ne s'y
+ * applique donc, et « heures conventionnées », « heures sur site » et
+ * « co-animation » sont trois mots d'INTERNE : le dirigeant les rencontre dans
+ * la PROPOSITION, expliqués, là où on parle d'argent.
+ *
+ * ⚠ La ligne rouge §8.1 est intacte : on retire un AFFICHAGE, jamais une
+ * VALEUR. `durationHours` continue d'alimenter la convention, l'émargement,
+ * l'attestation d'assiduité et les dossiers financeurs — c'est l'objet du test
+ * de contrat en fin de bloc.
+ */
+describe('programme composé — pièce CLIENT : aucune heure sur le document', () => {
+  it('annonce les demi-journées et le lieu, et rien d’autre', () => {
+    const { programme } = programmeReel();
+    expect(programme.programMd).toContain('**1 demi-journée, dans vos locaux.**');
+  });
+
+  it('accorde le pluriel', () => {
+    const composition = composeProgramme({
+      recommendations: [
+        reco('mandat_exclusivite', [candidat('m1', 'Signer plus de mandats exclusifs', 240, VENDEUR)]),
+        reco('acquereurs', [candidat('m2', 'Pratiquer les visites en situation réelle', 240, ACHETEUR)]),
+      ],
+      rules: RULES,
+      envelopeHalfDays: 6,
+    });
+    const programme = buildComposedProgramme({
+      composition, rules: RULES, agencyName: 'X', diagnosticReference: 'DIAG-0001',
+      sources: SOURCES, fallback: FALLBACK, mentions: MENTIONS,
+    });
+    expect(programme.programMd).toContain(`**${composition.totalHalfDays} demi-journées, dans vos locaux.**`);
+  });
+
+  it('ne dit NULLE PART « conventionnées », « sur site » ni « co-animation »', () => {
+    const { programme } = programmeReel();
+    const md = programme.programMd.toLowerCase();
+    expect(md).not.toContain('conventionn');
+    expect(md).not.toContain('sur site');
+    expect(md).not.toContain('co-anim');
+    expect(md).not.toContain('formateur(s)');
+  });
+
+  it('les titres de demi-journée ne portent plus d’horaire', () => {
+    const { programme } = programmeReel();
+    for (const ligne of programme.programMd.split('\n')) {
+      if (ligne.startsWith('### Demi-journée')) expect(ligne).toMatch(/^### Demi-journée \d+$/);
+    }
+    expect(programme.programMd).toContain('### Demi-journée 1');
+  });
+
+  /**
+   * LE TEST DE CONTRAT (§8.1) — c'est lui qui autorise le retrait.
+   *
+   * Retirer l'affichage ne change AUCUN chiffre contractuel : `durationHours`
+   * porte toujours les heures conventionnées, `onSiteHours` toujours l'assiette
+   * du prix. Si ce test rougit, c'est qu'on a retiré une valeur et pas un mot.
+   */
+  it('CONTRAT : les valeurs qui alimentent la convention ne bougent pas', () => {
+    const { composition, programme } = programmeReel();
+    expect(programme.durationHours).toBe(composition.totalConventionedHours);
+    expect(programme.onSiteHours).toBe(composition.totalOnSiteHours);
+    expect(programme.durationHours).toBe(8);
+    expect(programme.onSiteHours).toBe(4);
   });
 });

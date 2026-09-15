@@ -8,11 +8,25 @@
  *
  * ## Trois règles de fabrication
  *
- * 1. **`durationHours` porte les heures CONVENTIONNÉES** (D-25). C'est ce champ
- *    qui alimente `convention-template.ts` et `agefice-attendance-generator.ts` :
- *    la convention et l'attestation d'assiduité déclarent ce nombre. Les heures
- *    sur site s'affichent **à côté**, jamais à la place — un écran qui montre un
- *    nombre d'heures sans dire lequel il est finit par en faire signer un faux.
+ * 1. **`durationHours` porte les heures CONVENTIONNÉES** (D-25, ligne rouge
+ *    §8.1). C'est ce champ qui alimente `convention-template.ts` et
+ *    `agefice-attendance-generator.ts` : la convention, l'émargement,
+ *    l'attestation d'assiduité et les dossiers financeurs déclarent ce nombre,
+ *    et il reste la valeur UNIQUE. Partout où deux unités s'affichent côte à
+ *    côte, elles se nomment — un écran qui montre un nombre d'heures sans dire
+ *    lequel il est finit par en faire signer un faux.
+ *
+ *    **Mais ce document-ci n'en affiche AUCUNE** (arbitrage Laurent,
+ *    15/09/2026). Le programme composé est une pièce CLIENT : il ne part pas au
+ *    financeur, aucune contrainte d'indicateur ne s'y applique, et « heures
+ *    conventionnées », « heures sur site » et « co-animation » sont trois mots
+ *    d'interne dont le dirigeant n'a rien à faire. Il les rencontre dans la
+ *    PROPOSITION, expliqués, là où on parle d'argent.
+ *
+ *    On retire un AFFICHAGE, jamais une valeur : `durationHours` et
+ *    `onSiteHours` sont inchangés, et un test de contrat le prouve
+ *    (`composed-programme.test.ts`, « les valeurs qui alimentent la convention
+ *    ne bougent pas »).
  *
  * 2. **Les objectifs dérivent des MODULES retenus, pas des programmes sources.**
  *    Un rayon déclare les objectifs de ses dix modules ; on n'en retient parfois
@@ -23,10 +37,17 @@
  * 3. **Le déroulé nomme le BESOIN, jamais les chiffres du client.** La
  *    justification détaillée — « votre exclusivité est à 25 % contre 30 %
  *    attendus » — vit dans la proposition, qui s'adresse au dirigeant. Le
- *    programme, lui, s'attache à la convention et part au financeur : il porte
- *    « Rentrer des mandats en exclusivité, au bon prix », ce qui suffit à
- *    montrer la cohérence besoin ↔ programme ↔ durée qu'un contrôle regarde,
- *    sans lui livrer les ratios commerciaux de l'agence.
+ *    programme porte « Rentrer des mandats en exclusivité, au bon prix », ce
+ *    qui montre la cohérence besoin ↔ programme sans étaler les ratios
+ *    commerciaux de l'agence dans une pièce qui circule.
+ *
+ *    ⚠ **Correction du 15/09/2026.** Ce commentaire affirmait que le programme
+ *    « s'attache à la convention et part au financeur ». C'est FAUX, et cette
+ *    croyance a produit deux erreurs de suite : elle faisait appliquer au
+ *    programme des contraintes d'indicateur qui ne le concernent pas. Le
+ *    programme composé va au CLIENT. La règle 3 reste bonne — la discrétion sur
+ *    les ratios vaut pour toute pièce qui circule — mais sa raison était
+ *    fausse. Qui reçoit quoi : carte des destinataires, spec §9 — sorties documentaires.
  */
 
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -35,6 +56,7 @@ import type { QualiopiMentions } from '@/lib/docs/qualiopi-mentions';
 
 import type { ComposeOutput, ComposedModule } from './composer';
 import { isAnimable } from './module-matcher';
+import { plural } from './plural';
 
 /** Ce qu'un rayon source peut léguer au produit composé. */
 export interface SourceProgrammeInfo {
@@ -436,15 +458,17 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
 
   // ── Le déroulé ─────────────────────────────────────────────────────────────
   const title = `Parcours sur mesure — ${input.agencyName}`;
-  const onSite = formatHours(composition.totalOnSiteHours);
-  const conventioned = formatHours(composition.totalConventionedHours);
 
   const md: string[] = [
     `# ${title}`,
     '',
-    `Parcours composé à partir du diagnostic **${input.diagnosticReference}**, en ${composition.totalHalfDays} demi-journée(s) sur site.`,
+    `Parcours composé à partir du diagnostic **${input.diagnosticReference}**.`,
     '',
-    `**Durée : ${conventioned} conventionnées** (${onSite} sur site, co-animation ${rules.TRAINER_COUNT_DEFAULT} formateur(s)).`,
+    // La durée, telle que le CLIENT la lit : ce qu'il va vivre. Les heures
+    // conventionnées, les heures sur site et la co-animation sont trois mots
+    // d'interne — il les rencontre dans la PROPOSITION, expliqués, là où on
+    // parle d'argent. Voir le bloc de doctrine en tête de fichier.
+    `**${plural(composition.totalHalfDays, 'demi-journée')}, dans vos locaux.**`,
     '',
     '## Objectifs pédagogiques',
     '',
@@ -470,7 +494,7 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
 
   for (const block of composition.blocks) {
     md.push(
-      `### Demi-journée ${block.index} — ${formatHours(rules.HALF_DAY_ONSITE_HOURS)} sur site (${formatHours(block.conventionedHours)} conventionnées)`,
+      `### Demi-journée ${block.index}`,
       '',
     );
     for (const m of block.modules) {
