@@ -29,6 +29,7 @@ import { buildComposedProgramme } from '../src/lib/proposition/composed-programm
 import { computePricing } from '../src/lib/proposition/pricing';
 import { buildQuoteDrafts } from '../src/lib/proposition/quotes';
 import { loadPropositionLibrary } from '../src/server/proposition-library';
+import { nomAgence } from '../src/lib/nom-agence';
 import type { LibraryModule } from '../src/lib/proposition/module-matcher';
 
 const ref = process.argv[2] ?? 'DIAG-0001';
@@ -38,6 +39,7 @@ const d = await prisma.diagnostic.findFirst({
   select: {
     id: true, reference: true, variant: true, tenantId: true,
     organization: { select: { legalName: true } },
+    lead: { select: { notes: true, firstName: true, lastName: true } },
     answers: { select: { questionId: true, value: true, isSkipped: true } },
     participants: { orderBy: { createdAt: 'asc' }, select: { id: true, displayName: true, statut: true, caN1: true, objectiveCa: true, strengths: true, priorityNeed: true, opcoEligible: true, trainings24mFunded: true, includedInProposal: true } },
   },
@@ -90,7 +92,12 @@ const participants = d.participants.map((p) => ({
   trainings24mFunded: p.trainings24mFunded === null ? null : Number(p.trainings24mFunded),
 }));
 const retenus = participants.filter((p) => p.includedInProposal);
-const agencyName = d.organization?.legalName ?? 'Agence';
+// La MÊME résolution que la production — surtout pas un repli local. Le repli
+// `?? 'Agence'` qui vivait ici a fait relire à Laurent, le 14/09, un programme
+// intitulé « Parcours sur mesure — Agence » alors que la proposition portait
+// « BATI BATI OURMIERES ». Une sonde qui ne calcule pas comme la production ne
+// sonde rien.
+const agencyName = nomAgence(d);
 
 const audit = buildAuditData({
   reference: d.reference, agencyName, generatedAt: new Date(), variant: d.variant,
@@ -177,11 +184,7 @@ const programme = buildComposedProgramme({
     prerequisites: null, trainerProfile: null,
     pedagogicalSupport: null, accessConditions: null,
   },
-  mentions: resolveQualiopiMentions(tenantMentions, {
-    name: of.name,
-    email: of.email,
-    phone: of.phone,
-  }),
+  mentions: resolveQualiopiMentions(tenantMentions),
   moduleContent: new Map(products.flatMap((p) => p.modules.map((m) => [m.id, m.contentMd] as const))),
   moduleNeedIdentification: new Map(
     products.flatMap((p) =>

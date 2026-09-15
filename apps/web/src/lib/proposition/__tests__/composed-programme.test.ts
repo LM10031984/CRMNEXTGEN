@@ -717,11 +717,79 @@ describe('Le référent handicap du programme composé — une personne, celle d
    */
   it('annonce le MÊME référent que le catalogue public', () => {
     const { programme } = programmeReel();
-    const duCatalogue = resolveOfConfig().handicapReferent;
+    const duCatalogue = resolveOfConfig(null).handicapReferent;
     expect(duCatalogue.trim().length, 'le catalogue doit nommer quelqu’un').toBeGreaterThan(0);
     expect(
       programme.accessibility,
       `le catalogue annonce « ${duCatalogue} », le programme remis annonce autre chose`,
     ).toContain(duCatalogue);
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Les prérequis — une absence ne s'imprime pas en affirmation (15/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Quatrième fois de la semaine (§4 quinquies).
+ *
+ * Le programme composé de DIAG-0001 imprimait « Aucun prérequis » en en-tête
+ * pendant que deux de ses modules déclaraient, dans leur déroulé, « Un compte
+ * ChatGPT actif ; savoir dicter sur son téléphone ».
+ *
+ * Personne n'a constaté qu'il n'y avait pas de prérequis : AUCUN rayon source
+ * n'en déclare, et `TrainingModule` n'a pas de champ pour en porter. Le
+ * document affirmait donc une absence qu'on n'a jamais vérifiée — et un
+ * stagiaire qui arrive sans compte ChatGPT perd la demi-journée.
+ *
+ * Le document se tait et renvoie au déroulé. Il ne comble pas.
+ */
+describe('Les prérequis du parcours — rien de déclaré ne veut pas dire « aucun »', () => {
+  /** Le cas RÉEL de DIAG-0001 : aucun rayon source ne déclare de prérequis. */
+  function sansPrerequisDeclare() {
+    const composition = composeProgramme({
+      recommendations: [
+        reco('mandat_exclusivite', [candidat('m1', 'Signer plus de mandats exclusifs', 120, VENDEUR)]),
+      ],
+      rules: RULES,
+      envelopeHalfDays: 6,
+    });
+    return buildComposedProgramme({
+      composition,
+      rules: RULES,
+      agencyName: 'Agence des Oliviers',
+      diagnosticReference: 'DIAG-0001',
+      sources: SOURCES.map((s) => ({ ...s, prerequisites: null })),
+      fallback: FALLBACK,
+      mentions: MENTIONS,
+      moduleContent: new Map([['m1', '- Une puce']]),
+    });
+  }
+
+  it('n’affirme PAS « aucun prérequis » quand aucune source n’en déclare', () => {
+    const programme = sansPrerequisDeclare();
+    expect(
+      programme.prerequisites.toLowerCase(),
+      'le document affirme une absence que personne n’a constatée',
+    ).not.toContain('aucun prérequis');
+    expect(programme.programMd.toLowerCase()).not.toContain('aucun prérequis');
+  });
+
+  it('DIT que rien n’est renseigné et renvoie au déroulé', () => {
+    const programme = sansPrerequisDeclare();
+    expect(programme.prerequisites.toLowerCase()).toContain('non renseigné');
+    expect(programme.prerequisites.toLowerCase()).toContain('déroulé');
+  });
+
+  it('le signale à l’écran — sinon personne ne va le chercher', () => {
+    const programme = sansPrerequisDeclare();
+    expect(programme.warnings.some((w) => w.toLowerCase().includes('prérequis'))).toBe(true);
+  });
+
+  it('rend les prérequis DÉCLARÉS tels quels, sans les noyer ni avertir', () => {
+    const { programme } = programmeReel();
+    expect(programme.prerequisites.toLowerCase()).not.toContain('non renseigné');
+    expect(programme.warnings.some((w) => w.toLowerCase().includes('prérequis'))).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-# Parcours sur mesure — Agence
+# Parcours sur mesure — Agence des Oliviers
 
 Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) sur site.
 
@@ -180,11 +180,11 @@ _Source : Pack Digital 60h (BIB-D047)._
 
 ## Public visé
 
-Conseillers immobiliers. Parcours composé pour Agence à partir de son diagnostic : il n’est pas transposable tel quel à une autre agence.
+Conseillers immobiliers. Parcours composé pour Agence des Oliviers à partir de son diagnostic : il n’est pas transposable tel quel à une autre agence.
 
 ## Prérequis
 
-Aucun prérequis.
+Prérequis non renseignés au catalogue pour les programmes sources — à vérifier avant l’émission de la convention. Le déroulé de chaque module précise, le cas échéant, ses propres prérequis.
 
 ## Moyens pédagogiques et techniques
 
@@ -204,5 +204,5 @@ Un livret de formation est remis à chaque participant en début de formation. L
 
 La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l’accès à l’emploi des personnes en situation de handicap.
 Notre organisme donne à tous les mêmes chances d’accéder ou de maintenir l’emploi. Nous pouvons adapter certaines de nos modalités de formation : pour cela, nous étudions ensemble vos besoins.
-Pour toute question relative à une situation de handicap, contactez notre référent : Start Academy · formation@start-academy.fr · 0631056390.
+Pour toute question relative à une situation de handicap, contactez notre référent : Jean-Guy Ourmières — jean-guy@start-academy.fr — 06 10 23 00 60.
 

@@ -327,6 +327,25 @@ function inherit(
  * suivre. Quand plusieurs sources en déclarent, on les cumule — c'est le sens
  * d'un parcours composé.
  */
+/**
+ * Ce que le document dit quand AUCUNE source ne déclare de prérequis.
+ *
+ * Défaut du 15/09/2026, quatrième de la famille (§4 quinquies) : le parcours
+ * imprimait « Aucun prérequis » pendant que deux de ses modules déclaraient,
+ * dans leur déroulé, « Un compte ChatGPT actif ; savoir dicter sur son
+ * téléphone ».
+ *
+ * Personne n'avait constaté cette absence : aucun rayon source n'en déclare, et
+ * `TrainingModule` n'a PAS de champ pour en porter — les prérequis de module
+ * vivent dans le `contentMd`, en texte. Le document affirmait donc une absence
+ * invérifiée, et un stagiaire qui arrive sans compte ChatGPT perd la
+ * demi-journée.
+ *
+ * Il se tait et renvoie au déroulé. Il ne comble pas.
+ */
+const PREREQUIS_NON_RENSEIGNES =
+  'Prérequis non renseignés au catalogue pour les programmes sources — à vérifier avant l’émission de la convention. Le déroulé de chaque module précise, le cas échéant, ses propres prérequis.';
+
 function mergePrerequisites(
   sources: readonly SourceProgrammeInfo[],
   fallback: ProgrammeFallback,
@@ -342,7 +361,7 @@ function mergePrerequisites(
     seen.add(norm(v));
     out.push(v);
   }
-  if (out.length === 0) return fallback.prerequisites ?? 'Aucun prérequis.';
+  if (out.length === 0) return fallback.prerequisites ?? null;
   return out.join(' ');
 }
 
@@ -481,7 +500,15 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
   }
 
   const targetAudience = deriveTargetAudience(modules, input.agencyName);
-  const prerequisites = mergePrerequisites(sources, input.fallback) ?? 'Aucun prérequis.';
+  // `null` = rien de déclaré NULLE PART. On ne comble pas : on le dit, et on
+  // le signale à l'écran pour que quelqu'un aille vérifier.
+  const prerequisDeclares = mergePrerequisites(sources, input.fallback);
+  const prerequisites = prerequisDeclares ?? PREREQUIS_NON_RENSEIGNES;
+  if (prerequisDeclares === null) {
+    warnings.push(
+      'Aucun programme source ne déclare de prérequis : le parcours ne peut pas affirmer qu’il n’y en a pas. À vérifier avant l’émission de la convention — certains modules en déclarent dans leur déroulé.',
+    );
+  }
 
   md.push(
     '## Public visé',
