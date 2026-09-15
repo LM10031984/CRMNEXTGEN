@@ -14,7 +14,7 @@
  * (cf. drift `invoices.ts` corrigé Plan 07-01).
  */
 
-import { REFERENT_HANDICAP } from './referent-handicap';
+import { REFERENT_HANDICAP } from './contacts-organisme';
 
 import { prisma } from '@qualiof/db';
 import type { Tenant } from '@qualiof/db';
@@ -187,7 +187,7 @@ export function resolveOfConfig(t: TenantInput | null): OfConfig {
     //
     // Migration prévue (spec §5.5) : colonne `Tenant` le jour où un SECOND
     // organisme utilise QualiOF, pas avant.
-    handicapReferent: REFERENT_HANDICAP.nom,
+    handicapReferent: REFERENT_HANDICAP.nom ?? '',
     resp,
     contact,
   };

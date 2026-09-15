@@ -3,7 +3,7 @@
  * Centralisés ici pour pouvoir être édités sans toucher au render.
  */
 
-import { REFERENT_HANDICAP_COURT } from './referent-handicap';
+import { REFERENT_HANDICAP, ligneContactCourte } from './contacts-organisme';
 
 export const DELAI_ACCES =
   "À partir de 11 jours ouvrés après contractualisation (délai légal de rétractation et préparation pédagogique).";
@@ -19,5 +19,5 @@ export const DELAI_ACCES =
  */
 export const ACCESSIBILITE_PSH =
   `Formation accessible aux personnes en situation de handicap. Référent handicap : ` +
-  `${REFERENT_HANDICAP_COURT} — Adaptations sur demande (matériel, rythme, supports). ` +
+  `${ligneContactCourte(REFERENT_HANDICAP)} — Adaptations sur demande (matériel, rythme, supports). ` +
   `Réseau partenaires : Agefiph, Cap emploi 06, MDPH 06.`;

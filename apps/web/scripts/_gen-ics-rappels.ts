@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { CONTACT_AGENDA, ligneContact } from '../src/lib/contacts-organisme';
 const { prisma } = await import('@qualiof/db');
 
 const CGV = 'https://drive.google.com/file/d/11mfi7rl8BQFhETty4vGat3GmoGclBuFx/view';
@@ -62,7 +63,7 @@ for (const s of sessions) {
   const partNames = s.participants.map(p=>`${p.person.firstName} ${p.person.lastName}`).join(', ');
   const siege=isSiege(s.location);
   const accessBlock = siege ? `\n🛣️ Accès transports : Cannes https://maps.app.goo.gl/s5KgRixyx2JLNut76 · Menton https://maps.app.goo.gl/FwbStuapPLrejoKJ9\n🚌 Accès route : Cannes https://maps.app.goo.gl/HQfYZeSWCJZrCk4h6 · Menton https://maps.app.goo.gl/bpU7iYeoCHqFT7Fn7\n🍽️ Restauration : le NEOSUD (6 place du Grand Jardin) · Le VIETNAM-&-Sushi-Là (14 av. Henri Isnard) · Les Petits Tabliers (7 av. Marcellin Maurel)\n🛏️ Hébergement : https://www.booking.com/city/fr/vence.fr.html\n` : '';
-  const rappelDesc = `Rappel – Votre formation ${titre} commence bientôt !\n\nBonjour,\n\nNous vous rappelons que votre formation ${titre} débutera le ${fr(start)} à 8h00${end>start?` et se terminera le ${fr(end)} à 18h`:''}.\n\n📍 Lieu : ${loc}\n⏳ Durée : ${duree}\n👨‍🏫 Formateur : ${formateurNom}\n👥 Participants : ${partNames}\n${accessBlock}\nPour un bon déroulement, merci de :\n✔️ Vérifier que vous avez reçu tous les documents\n✔️ Préparer votre matériel (ordinateur, cahier, stylo)\n✔️ Anticiper votre trajet\n\nDocuments à lire :\nCharte accueil handicap : ${CHARTE}\nRèglement intérieur : ${RI}\nConditions générales de vente : ${CGV}\n\nQuestion ? formation@start-academy.fr — 07 80 91 95 31\n\nÀ très bientôt à l'Académie de Start !\nEmma de Start Academy`;
+  const rappelDesc = `Rappel – Votre formation ${titre} commence bientôt !\n\nBonjour,\n\nNous vous rappelons que votre formation ${titre} débutera le ${fr(start)} à 8h00${end>start?` et se terminera le ${fr(end)} à 18h`:''}.\n\n📍 Lieu : ${loc}\n⏳ Durée : ${duree}\n👨‍🏫 Formateur : ${formateurNom}\n👥 Participants : ${partNames}\n${accessBlock}\nPour un bon déroulement, merci de :\n✔️ Vérifier que vous avez reçu tous les documents\n✔️ Préparer votre matériel (ordinateur, cahier, stylo)\n✔️ Anticiper votre trajet\n\nDocuments à lire :\nCharte accueil handicap : ${CHARTE}\nRèglement intérieur : ${RI}\nConditions générales de vente : ${CGV}\n\nQuestion ? formation@start-academy.fr — ${ligneContact(CONTACT_AGENDA)}\n\nÀ très bientôt à l'Académie de Start !\nEmma de Start Academy`;
 
   out.push(...vevent(`${s.code}-formation@start-academy.fr`, { allDay:true, start:ymd(start), end:ymd(addDays(end,1)), summary:`Formation ${titre} — ${s.code}`, location:loc, desc:rappelDesc, attendees:formateurAtt })); nForm++;
   const j15=addDays(start,-15);
