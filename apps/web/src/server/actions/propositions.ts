@@ -541,11 +541,7 @@ async function buildWorkspace(
         qualiopiAccessibility: true,
       },
     });
-    const qualiopiMentions = resolveQualiopiMentions(tenantMentions, {
-      name: of.name,
-      email: of.email,
-      phone: of.phone,
-    });
+    const qualiopiMentions = resolveQualiopiMentions(tenantMentions);
     const codes = [...new Set(mods.map((m) => m.sourceCode).filter(Boolean))];
     const shelves = await prisma.trainingProduct.findMany({
       where: { tenantId, code: { in: codes } },
@@ -1412,11 +1408,7 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
       pedagogicalSupport: null,
       accessConditions: null,
     },
-    mentions: resolveQualiopiMentions(tenantMentions, {
-      name: of.name,
-      email: of.email,
-      phone: of.phone,
-    }),
+    mentions: resolveQualiopiMentions(tenantMentions),
     moduleContent,
     moduleNeedIdentification,
   });

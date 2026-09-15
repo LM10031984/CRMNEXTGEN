@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { FundingRuleValues } from '@/lib/financement/types';
 
 import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
+import { REFERENT_HANDICAP } from '@/lib/contacts-organisme';
+import { resolveOfConfig } from '@/lib/of-config';
 
 import { buildComposedProgramme, type SourceProgrammeInfo } from '../composed-programme';
 import { composeProgramme } from '../composer';
@@ -116,11 +118,7 @@ const FALLBACK = {
 };
 
 /** Les mentions de l'organisme — le tenant n'a rien saisi, donc le texte standard. */
-const MENTIONS = resolveQualiopiMentions(null, {
-  name: 'Julien LAFITTE',
-  email: 'julien@start-academy.fr',
-  phone: '06 22 80 65 09',
-});
+const MENTIONS = resolveQualiopiMentions(null);
 
 function programmeReel() {
   const composition = composeProgramme({
@@ -664,5 +662,66 @@ describe('Un refus d’objectif nomme son critère et la valeur qu’il a lue', 
     expect(p.objectives.some((o) => o.toLowerCase().startsWith(titre.slice(0, 6).toLowerCase()))).toBe(
       true,
     );
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Le référent handicap du programme composé (15/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Indicateur Qualiopi 26 : une PERSONNE nommée et joignable, pas une raison
+ * sociale.
+ *
+ * Relevé sur le programme composé de DIAG-0001 : il rendait « notre référent :
+ * Start Academy · formation@start-academy.fr · 0631056390 » — l'organisme —
+ * pendant que le catalogue rendait « Jean-Guy Ourmières ». Deux pièces du même
+ * organisme, deux référents, et aucune n'est fausse prise isolément.
+ *
+ * La cause était le PARAMÈTRE : `resolveQualiopiMentions` acceptait un contact
+ * injectable, documenté « le contact référent handicap », et les TROIS sites
+ * d'appel lui passaient autre chose — les deux de production l'organisme, le
+ * test un littéral (« Julien LAFITTE »), qui n'est pas le référent non plus.
+ *
+ * Un paramètre que personne n'a jamais rempli correctement n'est pas un point
+ * d'extension, c'est un trou. Il disparaît : le référent vient du module de
+ * contacts, comme tout nom de personne dans un texte client ou financeur.
+ */
+describe('Le référent handicap du programme composé — une personne, celle du module', () => {
+  it('nomme le référent du module de contacts, pas l’organisme', () => {
+    const { programme } = programmeReel();
+    expect(programme.accessibility).toContain(REFERENT_HANDICAP.nom!);
+    expect(programme.accessibility).toContain(REFERENT_HANDICAP.email);
+    expect(programme.programMd).toContain(REFERENT_HANDICAP.nom!);
+  });
+
+  it('ne nomme AUCUNE autre personne physique dans le document remis', () => {
+    const { programme } = programmeReel();
+    const intrus = ['Julien LAFITTE', 'Julien Lafitte', 'Laurent MARX', 'Angélique', 'Béatrice'];
+    for (const nom of intrus) {
+      expect(programme.programMd, `« ${nom} » n’a rien à faire dans un programme client`).not.toContain(
+        nom,
+      );
+    }
+  });
+
+  /**
+   * Le vrai garde : il compare DEUX SURFACES, il n'importe pas une constante.
+   *
+   * §4 ter — on surveille un ÉCART entre ce que le CATALOGUE public annonce et
+   * ce que le PROGRAMME remis annonce. Importer `REFERENT_HANDICAP` des deux
+   * côtés supprimerait l'écart au lieu de le détecter : c'est exactement ce
+   * défaut qui a laissé le catalogue nommer Jean-Guy Ourmières pendant que le
+   * programme nommait l'organisme.
+   */
+  it('annonce le MÊME référent que le catalogue public', () => {
+    const { programme } = programmeReel();
+    const duCatalogue = resolveOfConfig().handicapReferent;
+    expect(duCatalogue.trim().length, 'le catalogue doit nommer quelqu’un').toBeGreaterThan(0);
+    expect(
+      programme.accessibility,
+      `le catalogue annonce « ${duCatalogue} », le programme remis annonce autre chose`,
+    ).toContain(duCatalogue);
   });
 });

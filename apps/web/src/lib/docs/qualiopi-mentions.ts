@@ -26,12 +26,27 @@
  * le remplacer (colonnes `Tenant.qualiopi*`) ; il ne peut pas l'effacer.
  */
 
-/** Le contact « référent handicap » — Qualiopi 26 exige de savoir à qui écrire. */
-export interface OrganismContact {
-  name: string;
-  email: string;
-  phone: string;
-}
+import { REFERENT_HANDICAP, ligneContact } from '@/lib/contacts-organisme';
+
+
+/**
+ * ── Pourquoi il n'y a PLUS de paramètre « contact » (15/09/2026) ───────────
+ *
+ * Il y en avait un, documenté « le contact référent handicap ». **Les trois
+ * sites d'appel lui passaient autre chose** : les deux de production
+ * l'ORGANISME (`of.name / of.email / of.phone`), le test un littéral
+ * (« Julien LAFITTE »), qui n'est pas le référent non plus.
+ *
+ * Résultat en production : le programme composé annonçait « notre référent :
+ * Start Academy · formation@start-academy.fr » — une raison sociale — quand
+ * l'indicateur 26 exige une PERSONNE nommée et joignable, et que le catalogue,
+ * lui, nommait bien Jean-Guy Ourmières. Deux pièces du même organisme, deux
+ * référents.
+ *
+ * Un paramètre que personne n'a jamais rempli correctement n'est pas un point
+ * d'extension, c'est un trou. Le référent vient donc du module de contacts,
+ * comme TOUT nom de personne dans un texte client ou financeur.
+ */
 
 /** Ce qu'un tenant a éventuellement saisi à la place du texte standard. */
 export interface TenantQualiopiOverrides {
@@ -70,8 +85,8 @@ const DEFAULT_EVALUATION_METHODS = [
 ].join('\n');
 
 /** Texte standard Start Academy — accessibilité (indicateur Qualiopi 26). */
-function defaultAccessibility(contact: OrganismContact): string {
-  const joignable = [contact.name, contact.email, contact.phone].filter((s) => s.trim()).join(' · ');
+function defaultAccessibility(): string {
+  const joignable = ligneContact(REFERENT_HANDICAP);
   return [
     'La loi du 5 septembre 2018 pour la « liberté de choisir son avenir professionnel » a pour objectif de faciliter l’accès à l’emploi des personnes en situation de handicap.',
     'Notre organisme donne à tous les mêmes chances d’accéder ou de maintenir l’emploi. Nous pouvons adapter certaines de nos modalités de formation : pour cela, nous étudions ensemble vos besoins.',
@@ -93,15 +108,12 @@ function useful(value: string | null | undefined): string | null {
  * Jamais de troisième branche. Il n'existe aucune combinaison d'entrées qui
  * rende une chaîne vide — c'est toute la raison d'être de cette fonction.
  */
-export function resolveQualiopiMentions(
-  tenant: TenantQualiopiOverrides | null,
-  contact: OrganismContact,
-): QualiopiMentions {
+export function resolveQualiopiMentions(tenant: TenantQualiopiOverrides | null): QualiopiMentions {
   return {
     pedagogicalMethods:
       useful(tenant?.qualiopiPedagogicalMethods) ?? DEFAULT_PEDAGOGICAL_METHODS,
     evaluationMethods: useful(tenant?.qualiopiEvaluationMethods) ?? DEFAULT_EVALUATION_METHODS,
-    accessibility: useful(tenant?.qualiopiAccessibility) ?? defaultAccessibility(contact),
+    accessibility: useful(tenant?.qualiopiAccessibility) ?? defaultAccessibility(),
   };
 }
 
