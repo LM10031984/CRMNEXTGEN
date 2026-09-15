@@ -1,0 +1,72 @@
+> dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-verbes-objectifs.ts
+
+
+=== BASE : LOCALE — qualiof_dev @ localhost ===
+=== Population : 298 modules COMPOSABLES (dossier DIAG-R001, 454b58e6-7f88-4d95-adf6-5fc6c16ab838)
+    sur 490 en bibliothèque — pige, non-diffusables, rayons en doublon
+    et modules sans déroulé déduits. C'est la population des objectifs.
+
+=== LA LISTE ===
+  actuelle  : 68 verbes, élargie au cas par cas
+  candidate : 131 verbes = 86 socle Bloom + 39 métier + 6 non observables
+  ajoute 63 · retire 0
+
+  1 · Mémoriser    12 verbes, dont 10 neufs : citer, decrire, enumerer, lister, nommer, rappeler, reconnaitre, relever, reperer, situer
+  2 · Comprendre   12 verbes, dont 10 neufs : associer, classer, comparer, distinguer, expliquer, illustrer, interpreter, reformuler, resumer, traduire
+  3 · Appliquer    16 verbes, dont  8 neufs : appliquer, calculer, demontrer, employer, executer, manipuler, resoudre, transposer
+  4 · Analyser     10 verbes, dont  9 neufs : auditer, decomposer, diagnostiquer, differencier, examiner, explorer, questionner, tester, tracer
+  5 · Évaluer      16 verbes, dont 12 neufs : apprecier, arbitrer, controler, critiquer, hierarchiser, juger, justifier, prioriser, recommander, selectionner, valider, verifier
+  6 · Créer        20 verbes, dont  8 neufs : assembler, composer, concevoir, elaborer, formuler, inventer, produire, proposer
+
+  AJOUTÉS (63) : accompagner, appliquer, apprecier, arbitrer, assembler, associer, auditer, calculer, citer, classer, comparer, composer, concevoir, controler, coordonner, critiquer, decomposer, decrire, demontrer, diagnostiquer, differencier, distinguer, elaborer, employer, enumerer, examiner, executer, expliquer, explorer, former, formuler, guider, hierarchiser, illustrer, interpreter, inventer, juger, justifier, lister, manipuler, mobiliser, nommer, prioriser, produire, proposer, questionner, rappeler, recommander, reconnaitre, reformuler, relever, reperer, resoudre, resumer, selectionner, sensibiliser, situer, tester, tracer, traduire, transposer, valider, verifier
+
+  RETIRÉS (0) : — aucun : tout verbe déjà admis trouve son bloc.
+
+=== L'EFFET, SUR LES 298 MODULES COMPOSABLES ===
+  objectif rendu tel quel   : 75 (25.2 %)  →  81 (27.2 %)
+  « à rédiger »             : 223 (74.8 %)  →  217 (72.8 %)
+  ① BASCULENT vers objectif : 6
+  ⚠ RÉGRESSENT              : 0
+
+=== ① LES 6 TITRES QUI BASCULENT — à juger un par un ===
+    (c'est le chiffre ② qui décide : combien sont DOUTEUX ?)
+
+  ▸ elaborer (A/Bloom) — 2 module(s)
+      BIB-D016  Élaborer des stratégies adaptées aux besoins des acquéreurs
+      BIB-D014  Élaborer des activités interactives pour encourager la participation de l'équipe et favoriser la cohésion.
+  ▸ concevoir (A/Bloom) — 1 module(s)
+      BIB-D025  Concevoir un événement de prestige : Créez un événement professionnel qui marquera les esprits et attirera l'attention des meilleurs candidats.
+  ▸ proposer (A/Bloom) — 1 module(s)
+      BIB-D007  Proposer des services annexes pour gagner avec les acheteurs
+  ▸ appliquer (A/Bloom) — 1 module(s)
+      BIB-D014  Appliquer des techniques de feedback constructif pour guider l'équipe vers l'amélioration continue.
+  ▸ differencier (A/Bloom) — 1 module(s)
+      BIB-D033  Différencier les divers types de bases de données utilisées dans l'immobilier.
+
+=== CE QUI RESTE REFUSÉ APRÈS (217) — le vrai fond du catalogue ===
+  111 premiers mots distincts. Les 25 plus fréquents :
+     18 × synthese
+     16 × introduction
+      9 × mise
+      9 × atelier
+      7 × outils
+      7 × creation
+      7 × |
+      5 × gestion
+      5 × les
+      4 × automatisation
+      3 × optimisation
+      3 × etude
+      3 × techniques
+      3 × presentation
+      3 × ia,
+      3 × fondamentaux
+      3 × chatgpt
+      2 × panorama
+      2 × le
+      2 × redaction
+      2 × strategies
+      2 × utilisation
+      2 × propulsez
+      2 × suivi
+      2 × prospection

@@ -45,28 +45,68 @@ et il expose.
 
 ---
 
-## ② Le libellé porte l'avertissement — et il déborde dans les titres
+## ② Le libellé porte l'avertissement — **TRANCHÉ, FERMÉ le 15/09/2026**
 
-**Statut : voulu, à confirmer par Laurent.**
+**Décision Laurent : on garde la mention dans le titre, telle quelle.**
 
-Le nom d'agence est résolu par `nomAgence()` — **une seule** résolution, celle
-de la production (§4 bis). Y poser la mention garantit qu'aucune pièce issue de
-ce dossier ne peut s'en détacher. Conséquence directe et assumée :
+> Un document qui ne doit pas circuler porte sa marque partout ; on n'échange
+> jamais un marqueur de sûreté contre de l'esthétique.
 
-```
-titre : Parcours sur mesure — Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
-```
+Le titre lit donc `Parcours sur mesure — Agence A (COPIE PSEUDONYMISÉE — ne pas
+remettre)`, et c'est le comportement voulu : en passant par `nomAgence()` —
+résolution unique, celle de la production (§4 bis) — la mention suit **toute**
+pièce issue du dossier, pas seulement le fichier de sonde.
 
-C'est laid, et c'est le but : §4 terdecies est né d'un programme composé en
-local relu comme s'il venait de la production. L'en-tête de provenance de la
-sonde coiffe le **fichier** ; ceci marque la **donnée**, qui voyage plus loin
-que le fichier.
-
-**Si Laurent préfère un titre propre pour sa relecture**, la mention se déplace
-dans `Lead.source` seul — mais alors elle ne suit plus les documents, et la
-protection retombe sur la seule discipline de celui qui les manipule.
+Aucune action. L'item reste écrit pour que la question ne se rouvre pas au
+prochain import.
 
 ---
+
+## ②bis Les 4 demi-journées non consommées = **4 032 € de droits qui expirent**
+
+**Statut : chiffre à porter au point 5. Aucune action sur le moteur.**
+
+Le moteur compose 6 demi-journées quand le budget en finance 10, et refuse de
+combler l'écart. **Il a raison, et pour la bonne raison** : un module sans point
+de douleur derrière ne passerait pas un contrôle OPCO (§8.2). Le garde-fou fait
+exactement son travail.
+
+Mais ce n'est pas un non-événement, et il faut le nommer :
+
+| | |
+|---|---|
+| Droits ouverts | 10 demi-journées |
+| Parcours composé | 6 demi-journées |
+| Écart | **4 demi-journées × 1 008 € = 4 032 €** |
+| Échéance | 31 décembre — non consommés, perdus |
+
+**Ce n'est pas un défaut de moteur : c'est la mesure exacte de ce que la
+bibliothèque sait répondre aujourd'hui**, sur ce client. Le chiffre ne se
+corrige pas en desserrant le seuil ; il se corrige en écrivant les modules qui
+manquent. C'est l'argument chiffré du point 5.
+
+---
+
+## ②ter BIB-D070 — huit « modules » qui sont des cellules d'un tableau horaire
+
+**Statut : trouvaille du relevé des verbes (15/09/2026). Non corrigé.**
+
+Huit titres du rayon `BIB-D070` commencent par `|` : le découpage a pris les
+lignes d'un **tableau de déroulé horaire** pour des modules.
+
+```
+| Accueil & mise en confiance              | Prospection & crédibilité marché
+| Comprendre l'IA et ChatGPT (sans jargon) | Rendez-vous vendeur & image pro
+| Écrire plus vite et mieux au quotidien   | Suivi client, annonces & administratif
+| Synthèse & plan d'action personnel       | Pause déjeuner
+```
+
+**« Pause déjeuner » est enregistré comme un module de formation.** Le refus
+d'objectif les a rendus visibles — c'est exactement le rôle d'une liste blanche
+qui penche vers le refus (§4 nonies).
+
+À reprendre au découpage (`extract-drive-catalog.ts`), pas à la main en base :
+un prochain import réintroduirait les mêmes huit lignes.
 
 ## ③ L'arbitrage du balayage est lié au `questionId`, pas au TEXTE
 

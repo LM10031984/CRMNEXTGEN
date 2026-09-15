@@ -185,7 +185,7 @@ function norm(s: string): string {
  * ajoutés le 14/09/2026 après mesure — 5 modules du catalogue les portent,
  * dont 2 objectifs légitimes refusés à tort (drive:059#6, drive:060#4).
  */
-const TITLE_VERBS: ReadonlySet<string> = new Set([
+export const TITLE_VERBS: ReadonlySet<string> = new Set([
   'acquerir', 'adapter', 'analyser', 'animer', 'apprendre', 'argumenter',
   'automatiser', 'batir', 'capter', 'choisir', 'comprendre', 'conclure',
   'conduire', 'construire', 'convaincre', 'creer', 'decouvrir', 'definir', 'deployer',
@@ -211,7 +211,7 @@ const TITLE_VERBS: ReadonlySet<string> = new Set([
  * avertissement, parce qu'un titre de module qui ne se lit pas comme un
  * objectif est un titre à réécrire au catalogue, pas un problème de rendu.
  */
-function premierMot(title: string): string {
+export function premierMot(title: string): string {
   return norm(title).split(' ')[0] ?? '';
 }
 

@@ -702,6 +702,50 @@ En pratique : le nom de la base et l'hôte en tête de sortie, et l'**identifian
 technique** à côté de la référence lisible. C'est l'UUID qui tranche, jamais le
 `DIAG-NNNN`.
 
+## 4 quaterdecies. Un garde qui crie au loup finit débranché
+
+Pendant de §4 ter. Là-bas, un garde était vert parce qu'il ne regardait plus
+rien. Ici, il regarde tout — et c'est l'autre façon de ne plus rien garder.
+
+Cas fondateur (15/09/2026), le balayage des données personnelles avant import
+d'un dossier réel. Il faut arrêter sur un nom de personne glissé dans une
+réponse en texte libre — « j'en ai parlé à Sophie ». Le motif le plus couvrant
+est évident : **tout mot capitalisé en milieu de phrase**. Il n'aurait laissé
+passer aucun prénom.
+
+Il aurait aussi arrêté sur `Septeo`, `Netty` et `ChatGPT`. À chaque import. Sur
+un corpus où les réponses parlent de logiciels, l'alarme serait devenue le cas
+NORMAL — et un opérateur qui voit la même alarme à chaque passage apprend en
+trois fois à la faire taire sans la lire. Le garde le plus couvrant du dépôt
+aurait fini derrière un `--force` permanent.
+
+> **Le calibrage d'un garde se juge sur la CRÉDIBILITÉ de son alarme, pas sur sa
+> couverture théorique. Un garde désarmé protège moins qu'un garde étroit.**
+
+Ce qui a été retenu à la place : un **vocabulaire** de prénoms usuels. Il
+attrape « Sophie » et « Marc », il ignore « Netty ». Il est plus étroit sur le
+papier — un prénom rare lui échappe — et strictement plus protecteur en vrai,
+parce qu'il reste branché. Relevé du 15/09 : 37 réponses balayées, **0
+trouvaille**, aucune alarme dépensée pour rien.
+
+### Le réglage, en une ligne
+
+**Large à la DÉTECTION, strict à l'ACTION.** Les deux moitiés comptent :
+
+- large, parce qu'un faux positif coûte trente secondes de lecture quand un faux
+  négatif coûte une donnée personnelle en base — c'est §4 nonies, l'asymétrie ;
+- mais **l'action reste l'arrêt, jamais la correction automatique**. Le script
+  rend ce qu'il a trouvé et attend un arbitrage. Caviarder tout seul du texte
+  métier en abîmerait le sens — et c'est §4 quater : une ambiguïté tranchée au
+  hasard est une écriture qu'on ne peut plus relire.
+
+### Le test qui révèle le cas
+
+Avant d'élargir un motif, se demander **sur quoi il va crier dans le corpus
+réel, et à quelle fréquence**. Si la réponse est « souvent, et légitimement »,
+le motif est trop large — non pas parce qu'il se trompe, mais parce que
+personne ne le lira plus.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
