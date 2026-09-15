@@ -182,7 +182,7 @@ describe('buildComposedProgramme — D-25 : durationHours porte les heures CONVE
    * Ce test exigeait les DEUX durées dans le déroulé (« 8 h conventionnées »,
    * « 4 h sur site »), « sans jamais en laisser une nue ». La règle était juste
    * tant qu'on croyait le programme destiné au financeur. Il ne l'est pas : c'est
-   * une pièce CLIENT (carte des destinataires, spec §9 — sorties documentaires), donc aucune heure.
+   * une pièce CLIENT (carte des destinataires, spec §9.6), donc aucune heure.
    *
    * Ce qui SURVIT de la règle, et qui était son vrai fond : une heure ne
    * s'affiche jamais sans dire laquelle elle est. Le programme ne choisit donc
@@ -854,12 +854,23 @@ describe('programme composé — pièce CLIENT : aucune heure sur le document', 
     expect(md).not.toContain('formateur(s)');
   });
 
-  it('les titres de demi-journée ne portent plus d’horaire', () => {
+  /**
+   * La demi-journée garde SA durée — arbitrage Laurent du 15/09/2026, second
+   * tour, après que j'eus étendu à tort le retrait de l'en-tête aux six titres.
+   *
+   * Le chiffre n'était pas l'intrus : c'est ce que le dirigeant bloque dans son
+   * agenda. L'intrus était le mot « conventionnées », qui est de l'interne. On
+   * garde donc « — 4 h » et rien d'autre : pas de « sur site » (par rapport à
+   * quoi ?), pas de seconde unité entre parenthèses.
+   */
+  it('les titres de demi-journée gardent leur durée, nue', () => {
     const { programme } = programmeReel();
     for (const ligne of programme.programMd.split('\n')) {
-      if (ligne.startsWith('### Demi-journée')) expect(ligne).toMatch(/^### Demi-journée \d+$/);
+      if (ligne.startsWith('### Demi-journée')) {
+        expect(ligne).toMatch(/^### Demi-journée \d+ — \d+(,\d)? h$/);
+      }
     }
-    expect(programme.programMd).toContain('### Demi-journée 1');
+    expect(programme.programMd).toContain('### Demi-journée 1 — 4 h');
   });
 
   /**

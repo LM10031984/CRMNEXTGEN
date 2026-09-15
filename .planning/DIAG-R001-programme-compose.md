@@ -3,7 +3,7 @@
   Base      : LOCALE — qualiof_dev @ localhost
   Dossier   : DIAG-R001 — 454b58e6-7f88-4d95-adf6-5fc6c16ab838
   Agence    : Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
-  Généré le : 2026-09-15T17:11:59.677Z
+  Généré le : 2026-09-15T17:19:06.740Z
 -->
 
 > ⚠ **Sortie de sonde**, base **LOCALE — qualiof_dev @ localhost**, dossier `DIAG-R001` (`454b58e6-7f88-4d95-adf6-5fc6c16ab838`), agence « Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) ».
@@ -33,7 +33,7 @@ _Objectifs restant à rédiger — critère : le titre doit commencer par un ver
 
 ## Déroulé
 
-### Demi-journée 1
+### Demi-journée 1 — 4 h
 
 #### Apprendre à vendre un rendez-vous découverte au téléphone
 
@@ -48,7 +48,7 @@ _Répond au besoin : Générer des contacts vendeurs._
 
 _Source : Acquisition et traitement Leads acquéreurs (BIB-D006)._
 
-### Demi-journée 2
+### Demi-journée 2 — 4 h
 
 #### Maîtriser les techniques de découverte vendeur
 
@@ -60,7 +60,7 @@ _Répond au besoin : Formaliser la découverte et l’estimation vendeur._
 
 _Source : Découverte vendeur et estimation percutante (BIB-D017)._
 
-### Demi-journée 3
+### Demi-journée 3 — 4 h
 
 #### Installer un rythme de suivi vendeur qui tient jusqu'à la vente
 
@@ -82,7 +82,7 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Demi-journée 4
+### Demi-journée 4 — 4 h
 
 #### Rédiger des compromis de vente efficaces
 
@@ -103,7 +103,7 @@ _Répond au besoin : Piloter par les chiffres et animer l’équipe._
 
 _Source : Boostez, animez et fidélisez les performances de votre équipe (BIB-D014)._
 
-### Demi-journée 5
+### Demi-journée 5 — 4 h
 
 #### Mener une découverte du projet acheteur-vendeur en situation
 
@@ -126,7 +126,7 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Demi-journée 6
+### Demi-journée 6 — 4 h
 
 #### Gérer les objections et trouver des solutions de compromis
 

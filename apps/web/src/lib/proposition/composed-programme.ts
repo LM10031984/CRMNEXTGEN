@@ -47,7 +47,7 @@
  *    programme des contraintes d'indicateur qui ne le concernent pas. Le
  *    programme composé va au CLIENT. La règle 3 reste bonne — la discrétion sur
  *    les ratios vaut pour toute pièce qui circule — mais sa raison était
- *    fausse. Qui reçoit quoi : carte des destinataires, spec §9 — sorties documentaires.
+ *    fausse. Qui reçoit quoi : carte des destinataires, spec §9.6.
  */
 
 import type { FundingRuleValues } from '@/lib/financement/types';
@@ -494,7 +494,11 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
 
   for (const block of composition.blocks) {
     md.push(
-      `### Demi-journée ${block.index}`,
+      // La durée de la demi-journée RESTE : c'est ce que le dirigeant bloque
+      // dans son agenda. Nue, sans « sur site » — par rapport à quoi ? — et
+      // sans les heures conventionnées entre parenthèses, qui sont de
+      // l'interne. L'intrus était le mot, pas le chiffre.
+      `### Demi-journée ${block.index} — ${formatHours(rules.HALF_DAY_ONSITE_HOURS)}`,
       '',
     );
     for (const m of block.modules) {

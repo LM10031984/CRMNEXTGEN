@@ -1,7 +1,7 @@
 # Qui reçoit quoi — carte des destinataires
 
-**15/09/2026 — PROPOSITION. Rien n'est figé dans la spec.**
-C'est Laurent qui sait ; le code ne fait que montrer ce qu'il croit aujourd'hui.
+**15/09/2026 — deuxième tour. Trois arbitrages rendus, deux questions ouvertes.**
+À figer en **§9.6**, dans *Les sorties documentaires* (pointeur confirmé).
 
 ---
 
@@ -18,8 +18,8 @@ des **écrans internes** (`/app/campagnes`, `funding-synthesis`,
 | # | Pièce | Ce qu'elle dit | Verdict |
 |---|---|---|---|
 | 1 | **Programme composé** `composed-programme.ts` | « Durée : 48 h conventionnées (24 h sur site, co-animation 2 formateurs) » + chaque demi-journée titrée « 4 h sur site (8 h conventionnées) » | ✅ **APPLIQUÉ** — tranché par toi |
-| 2 | **Rapport d'audit** `audit-template.ts:667‑675` | Trois tuiles en page financement : « Volume proposé / 6 demi-journées / 24 h sur site », « Heures conventionnées / 48 h / *La valeur portée sur la convention, l'émargement et le dossier financeur* » | ⏸ **À TRANCHER — je propose de GARDER** |
-| 3 | **Devis** `quotes.ts:84‑86` | Libellé de ligne : « … — 6 demi-journées de 4 h sur site, 3 participants, 48 h conventionnées par participant » | ⏸ **À TRANCHER — je propose de GARDER** |
+| 2 | **Rapport d'audit** `audit-template.ts:667‑675` | Trois tuiles en page financement : « Volume proposé / 6 demi-journées / 24 h sur site », « Heures conventionnées / 48 h / *La valeur portée sur la convention, l'émargement et le dossier financeur* » | ✅ **GARDÉE** — tranché : page d'argent, là où le dirigeant VEUT comprendre le compte |
+| 3 | **Devis** `quotes.ts:84‑86` | Libellé de ligne : « … — 6 demi-journées de 4 h sur site, 3 participants, 48 h conventionnées par participant » | ✅ **GARDÉE** — tranché : pièce CONTRACTUELLE |
 
 ### Pourquoi je propose de garder les deux
 
@@ -33,12 +33,11 @@ là où on parle d'argent. »* Les deux y répondent :
   facturé et sur quelle base. Une quantité sans son unité y serait pire
   qu'ailleurs.
 
-**Et un doute honnête sur le devis** : il n'est pas la proposition. Il naît
-*après* acceptation (D-4) et sert d'assiette à la facture — pièce plutôt
-contractuelle que commerciale. Si tu le classes « client » au même titre que le
-programme, sa ligne doit maigrir ; si tu le classes « contractuel », elle reste.
-**C'est le seul des trois où ta carte change la réponse**, et c'est pour ça
-qu'elle manquait.
+**Le doute sur le devis est LEVÉ** (Laurent, 15/09) : il est **contractuel**,
+donc il garde les heures conventionnées. Le raisonnement qui portait le doute
+est celui qui le tranche — il naît après acceptation (D-4) et sert d'assiette à
+la facture, et **une pièce qui fonde une facture porte l'unité qui fonde le
+remboursement**. Ne pas y toucher.
 
 ### Ce que le balayage a aussi montré — un précédent qui te donne raison
 
@@ -55,55 +54,68 @@ fonctions au lieu d'être dans la spec.**
 
 ---
 
-# Partie 2 — La carte, à valider
+# Partie 2 — La carte
 
-**Légende des destinataires** : `DIR` dirigeant · `PART` participant ·
-`FIN` financeur · `AUD` auditeur Qualiopi · `INT` interne.
-
-La colonne **« ce que le code sait »** dit sur quoi je m'appuie. La colonne
-**confiance** dit si j'ai une preuve ou une déduction — **ne valide pas les
-lignes ⚠ sans les lire.**
-
-| Document | Destinataires proposés | Ce que le code sait | Confiance |
-|---|---|---|---|
-| **Rapport d'audit** (`DIAGNOSTIC_AUDIT`) | **DIR** | Spec §9.2 : « remis en R2, ≥ 15 pages, valorisé 3 000 € ». Aucun envoi financeur dans le code | ✅ preuve |
-| **Proposition** (`PROPOSITION`) | **DIR** | Spec §9.1. Lien public sans PII, adressé au dirigeant. Porte la phrase des 5 surfaces | ✅ preuve |
-| **Programme composé** | **DIR** (+ **PART** ?) | Tranché par toi aujourd'hui. ⚠ *Le participant le reçoit-il aussi, en information préalable ?* | ⚠ à dire |
-| **Devis** (`DEV-NNNN`) | **DIR** | D-4 : généré à l'acceptation, sert d'assiette à la facture | ⚠ **et FIN ?** |
-| **Convention** (`CONVENTION`) | **DIR** + **FIN** + **AUD** | Signée ; porte `durationHours` ; pièce du dossier financeur | ✅ preuve |
-| **Convocation** (`CONVOCATION`) | **PART** | Nommée par son objet | ✅ preuve |
-| **Émargement** (`EMARGEMENT`) | **PART** (signe) → **FIN** + **AUD** | Signé par demi-journée ; pièce de dossier | ✅ preuve |
-| **Attestation d'assiduité** (`ASSIDUITE`) | **FIN** | `agefice-attendance-generator.ts` ; demandée par l'AGEFICE | ✅ preuve |
-| **Attestation de fin** (`ATTESTATION_FIN`) | **PART** + **FIN** | ⚠ *Les deux, ou seulement le participant ?* | ⚠ à dire |
-| **Certificat de réalisation** (`CERTIFICAT_REALISATION`) | **PART** | Remis « à chaque participant à l'issue » (gabarit programme) | ✅ preuve |
-| **Dossier AGEFICE** (`AGEFICE`) | **FIN** | 92 champs du formulaire officiel | ✅ preuve |
-| **Dossier OPCO EP** (`PRE_ACCORD_OPCO`, `VALIDATION_OPCO`) | **FIN** | Workflow `OpcoSubmission` | ✅ preuve |
-
-### Les quatre questions qui restent, et elles sont pour toi
-
-1. **Le participant reçoit-il le programme composé ?** L'information préalable
-   du stagiaire est un attendu Qualiopi. Si oui, la pièce a **deux** lecteurs et
-   « dans vos locaux » devient « dans les locaux de l'agence ».
-2. **Le devis part-il au financeur ?** Tu viens de dire que non — je le note,
-   mais c'est la ligne qui décide du sort de `quotes.ts` (Partie 1, #3).
-3. **L'attestation de fin va-t-elle au financeur, ou seulement au stagiaire ?**
-   Le code ne tranche pas ; la distinction avec le certificat est floue.
-4. **L'auditeur Qualiopi est-il un destinataire, ou un lecteur d'archive ?**
-   Il ne *reçoit* rien : il **consulte** ce qui est déjà produit. S'il est une
-   colonne à part, elle ne dit pas « à qui on envoie » mais « ce qui doit tenir
-   en contrôle » — deux règles différentes, et il vaut mieux ne pas les mêler.
-
-### Où la figer, une fois validée
-
-**Pas en §8** — le budget n'a rien à voir, et `§8.3` est déjà « La main sur le
-prix » (j'ai d'abord écrit ce mauvais pointeur dans deux commentaires, corrigé).
-
-→ **§9.6 « La carte des destinataires »**, en fin de §9 *Les sorties
-documentaires*, avec un renvoi depuis §9.0. Pas de renumérotation : d'autres
-documents pointent déjà §9.1 et §9.2.
-
-Et une phrase à mettre en tête, parce que c'est la leçon de la semaine :
+## Le principe, en tête de section
 
 > **Le vocabulaire permis sur une pièce est décidé par son DESTINATAIRE, pas par
-> son contenu.** Deux erreurs de suite sont venues de la croyance qu'un document
-> « sérieux » va au financeur.
+> son contenu.**
+
+Deux erreurs de suite, cette semaine, sont venues de la croyance qu'un document
+« sérieux » va au financeur. Le devis n'y va pas. Le programme composé non plus.
+
+## Deux règles, deux colonnes — et surtout pas une seule
+
+**L'auditeur Qualiopi n'est PAS un destinataire** (tranché, 15/09). Il ne reçoit
+rien : il **consulte** ce qui a été produit. En faire une colonne de
+destinataires mélangerait deux règles qui ne se ressemblent que de loin :
+
+| | Ce que ça décide |
+|---|---|
+| **Destinataire** | à qui la pièce est REMISE — donc quel vocabulaire y est permis |
+| **Opposable en contrôle** | ce qui doit TENIR si un auditeur l'ouvre — donc quelles mentions y sont obligatoires |
+
+Une pièce peut être opposable sans être remise à personne (l'émargement archivé),
+et remise sans être opposable (le rapport d'audit commercial). **Les mêler
+produirait exactement l'erreur qu'on répare** : appliquer à une pièce client des
+contraintes d'indicateur.
+
+## La carte
+
+`DIR` dirigeant · `PART` participant · `FIN` financeur · `INT` interne.
+**⚖** = opposable en contrôle Qualiopi.
+
+| Document | Destinataires | ⚖ | Ce que le code sait | Confiance |
+|---|---|:-:|---|---|
+| **Rapport d'audit** (`DIAGNOSTIC_AUDIT`) | DIR | | Spec §9.2 : remis en R2, ≥ 15 pages, valorisé 3 000 €. Aucun envoi financeur | ✅ |
+| **Proposition** (`PROPOSITION`) | DIR | | Spec §9.1. Porte la phrase des cinq surfaces | ✅ |
+| **Programme composé** | DIR | ⚖ | Pièce client — tranché 15/09. Aucune heure affichée | ✅ |
+| **Devis** (`DEV-NNNN`) | DIR | ⚖ | **Contractuel** — tranché 15/09. Ne part PAS au financeur | ✅ |
+| **Convention** (`CONVENTION`) | DIR · FIN | ⚖ | Signée ; porte `durationHours` ; pièce du dossier financeur | ✅ |
+| **Convocation** (`CONVOCATION`) | PART | | Nommée par son objet | ✅ |
+| **Émargement** (`EMARGEMENT`) | PART *(signe)* · FIN | ⚖ | Signé par demi-journée ; pièce de dossier | ✅ |
+| **Attestation d'assiduité** (`ASSIDUITE`) | FIN | ⚖ | `agefice-attendance-generator.ts` ; exigée par l'AGEFICE | ✅ |
+| **Attestation de fin** (`ATTESTATION_FIN`) | PART · **FIN ?** | ⚖ | ⚠ *ouverte* | ⚠ |
+| **Certificat de réalisation** (`CERTIFICAT_REALISATION`) | PART | ⚖ | « remis à chaque participant à l'issue » | ✅ |
+| **Dossier AGEFICE** (`AGEFICE`) | FIN | ⚖ | 92 champs du formulaire officiel | ✅ |
+| **Dossier OPCO EP** (`PRE_ACCORD_OPCO`, `VALIDATION_OPCO`) | FIN | ⚖ | Workflow `OpcoSubmission` | ✅ |
+
+## Les deux questions qui restent — pour Laurent
+
+### 1. Le PARTICIPANT reçoit-il le programme composé ?
+
+L'information préalable du stagiaire est un attendu Qualiopi. Aujourd'hui la
+carte ne lui donne que la convocation.
+
+**Ce que la réponse change concrètement** : « **dans vos locaux** » ne marche
+que si le lecteur est le dirigeant. Si le participant le reçoit aussi, la phrase
+devient « dans les locaux de l'agence » — et la pièce a deux lecteurs, donc le
+vocabulaire se cale sur le moins informé des deux.
+
+### 2. L'attestation de fin va-t-elle au FINANCEUR, ou au seul stagiaire ?
+
+Le code ne tranche pas, et sa frontière avec le **certificat de réalisation**
+est floue : deux `DocType` distincts, deux gabarits, et aucun commentaire ne dit
+ce qui les sépare. Si l'un va au financeur et l'autre au stagiaire, c'est
+précisément le genre de fait métier qui doit être écrit ici plutôt que deviné —
+§4 sexdecies.

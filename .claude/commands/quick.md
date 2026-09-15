@@ -319,6 +319,28 @@ test qui **appelle** le code. Et dans les deux cas, la mutation contre le code
 d'origine est ce qui tranche : un garde qui ne rougit pas contre le défaut
 qu'il prétend attraper ne l'attrape pas.
 
+### Retourner une règle : on RENVERSE le test, on ne le supprime pas
+
+Quand un arbitrage inverse une règle, le test qui la tenait devient rouge. La
+tentation est de l'effacer — après tout, il teste une règle morte.
+
+**Il se renverse.** L'assertion devient son contraire, et le commentaire garde
+l'ANCIENNE assertion, la date du renversement et son motif.
+
+Cas du 15/09/2026 : `dit les deux durées dans le déroulé, sans jamais en laisser
+une nue` devient `n'affiche aucune des deux durées — mais les porte toutes les
+deux`. Trois choses sont sauvées, qu'une suppression aurait perdues :
+
+- **la trace de l'ancienne règle** — sans quoi la prochaine session la
+  réintroduira de bonne foi, croyant corriger un oubli ;
+- **le fond qui survit** — ici « une heure ne s'affiche jamais sans dire
+  laquelle elle est » reste vrai ; seule son application change ;
+- **la preuve que le renversement était voulu** — un test supprimé ne dit pas
+  s'il gênait ou s'il avait tort.
+
+> Un test rouge après un arbitrage n'est pas un déchet : c'est la règle
+> précédente qui demande ce qu'elle devient.
+
 ## 4 quater. Un relevé dit ce qu'il a CHERCHÉ, pas seulement ce qu'il a trouvé
 
 Trois incidents en trois jours, et ce n'est pas trois incidents : **c'est une
@@ -366,6 +388,36 @@ la constante, et le `programMd` n'était pas rendu. Une seule commande, aucune
 lecture de code, aucune supposition.
 
 À chercher dès qu'on se demande « d'où vient ce texte ? ».
+
+### Le pendant : une CONSIGNE dit ce qu'elle COUVRE
+
+Un relevé dit ce qu'il a cherché. Une consigne dit ce qu'elle nomme — et rien
+de plus.
+
+Cas du 15/09/2026. Laurent tranche **une** ligne : l'accroche de durée en tête
+du programme composé, « 48 h conventionnées (24 h sur site, co-animation) », qui
+part. Six titres de demi-journée portaient la même construction — « 4 h sur site
+(8 h conventionnées) ». Je les ai retirés aussi, au motif que c'était « la même
+phrase ».
+
+**C'était le même MOTIF, pas la même DÉCISION.** Et la décision qu'il aurait
+fallu demander avait une autre réponse : la durée d'une demi-journée reste,
+parce que c'est ce que le dirigeant bloque dans son agenda. L'intrus était le
+mot « conventionnées », pas le chiffre.
+
+> **Une consigne porte sur ce qu'elle nomme. Ce qu'elle ne nomme pas se
+> redemande** — même quand le motif semble identique, surtout quand il semble
+> identique.
+
+Le coût des deux erreurs n'est pas le même, et c'est ce qui tranche : demander
+coûte une phrase, étendre coûte un aller-retour et une correction déjà
+commitée. C'est aussi pourquoi l'extension ne se rattrape pas « en expliquant »
+— elle se rattrape en n'ayant pas eu lieu.
+
+**Le signe qui doit alerter** : se dire « c'est la même chose ailleurs ».
+Quatre fois sur cinq c'est vrai, et la cinquième est celle qui coûte. Le
+recensement se REND — « j'ai trouvé six autres occurrences du même motif,
+est-ce qu'elles suivent ? » — il ne s'applique pas.
 
 ## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
 
@@ -793,6 +845,77 @@ Il se pose là où vit le défaut. Ici : `isAnimable` exige un déroulé **non v
 poser, sur mesure et non sur intuition (relevé `probe-deroules.ts`,
 15/09/2026 : 7 modules dont le déroulé n'est QUE de l'horaire, 25 à une seule
 puce, sur 298 composables).
+
+## 4 sexdecies. Un commentaire qui énonce un fait MÉTIER doit être vérifiable
+
+Un commentaire qui explique du CODE se vérifie en lisant le code d'à côté. Un
+commentaire qui énonce un fait du MÉTIER — qui reçoit ce document, ce que le
+financeur exige, ce qu'un contrôle regarde — ne se vérifie nulle part. Il est
+donc cru.
+
+Cas fondateur, 15/09/2026. `composed-programme.ts` portait, dans son bloc de
+doctrine :
+
+> « Le programme s'attache à la convention et **part au financeur**. »
+
+**C'est faux.** Le programme composé est une pièce client. Et la phrase n'a pas
+seulement traîné : elle a été **lue et appliquée deux fois en deux jours**, par
+deux lecteurs différents, chacun en tirant des contraintes d'indicateur qui ne
+concernaient pas ce document. Écrite dans le code, elle était devenue **la
+source** — plus consultée que la spec, parce qu'elle était sous les yeux.
+
+> **La règle : un commentaire qui énonce un fait métier cite sa source — une
+> décision datée, une section de spec — ou il ne l'énonce pas.** « Part au
+> financeur » se remplace par « destinataires : cf. spec §9.6 », et le fait
+> vit à UN endroit.
+
+### Pourquoi c'est pire qu'une spec fausse
+
+Une spec fausse se corrige une fois. Un commentaire faux se **recopie** : il
+voyage avec la fonction qu'on déplace, il inspire le test qu'on écrit à côté, et
+il survit aux relectures parce qu'il a l'air d'expliquer. Les trois lecteurs
+suivants hériteront de l'erreur sans jamais voir la spec.
+
+### Le test qui révèle le cas
+
+Relire ses propres commentaires en se demandant : **« si c'est faux, qu'est-ce
+qui me le dirait ? »** Si la réponse est « rien », le commentaire énonce un fait
+métier sans source — il cite, ou il se tait.
+
+## 4 septdecies. Une règle qui vit dans le CODE ne protège que son fichier
+
+Même jour, même dossier, et c'est le thème de la semaine dans sa forme la plus
+pure.
+
+`creneaux.ts` distingue depuis toujours deux lectures de la durée, et les
+NOMME :
+
+```ts
+decrireDureeProduitParticipant()  // heures sur site      → /rdv/[token], public
+decrireDureeProduit()             // + heures conventionnées → /app/campagnes, interne
+```
+
+La règle « le vocabulaire dépend du destinataire » était donc **déjà trouvée,
+déjà comprise, déjà appliquée** — une fois, dans un fichier, sous la forme de
+deux fonctions bien nommées. Et **écrite nulle part.**
+
+Résultat : le programme composé, écrit trois mois plus tard par quelqu'un qui
+n'avait pas ouvert `creneaux.ts`, a mélangé les deux unités sur une pièce
+client. La règle n'avait protégé que le fichier où elle était née.
+
+> **Une décision qui vit dans une paire de fonctions ne protège que le fichier
+> où elle est née. Ce qui généralise, c'est la spec.**
+
+### Comment on la repère
+
+Une belle paire de fonctions dont les NOMS portent une distinction métier —
+`…Participant` / `…Admin`, `…Client` / `…Interne`, `public…` / `…Complet` — est
+presque toujours une règle non écrite. Elle a coûté une réflexion à quelqu'un ;
+elle mérite trois lignes de spec, et le commentaire du fichier y renvoie.
+
+C'est le corollaire de §4 bis (dupliquer un mapping garantit la divergence) :
+ici on n'a pas dupliqué, on a **sous-diffusé**. Les deux défauts ont la même
+racine — une seule définition, mais introuvable depuis ailleurs.
 
 ## 5. Gates — les trois, dans cet ordre
 
