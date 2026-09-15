@@ -1,3 +1,13 @@
+<!--
+  SORTIE DE SONDE — ne pas remettre à un client.
+  Base      : LOCALE — qualiof_dev @ localhost
+  Dossier   : DIAG-0001 — d8956337-02cd-4f5e-8f29-9ac876e56493
+  Agence    : Agence des Oliviers
+  Généré le : 2026-09-15T13:15:53.140Z
+-->
+
+> ⚠ **Sortie de sonde**, base **LOCALE — qualiof_dev @ localhost**, dossier `DIAG-0001` (`d8956337-02cd-4f5e-8f29-9ac876e56493`), agence « Agence des Oliviers ».
+> Une référence lisible ne désigne pas le même dossier d’une base à l’autre.
 # Parcours sur mesure — Agence des Oliviers
 
 Parcours composé à partir du diagnostic **DIAG-0001**, en 6 demi-journée(s) sur site.
