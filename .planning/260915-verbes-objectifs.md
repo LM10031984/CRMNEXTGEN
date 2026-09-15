@@ -1,6 +1,26 @@
 # `TITLE_VERBS` — une passe raisonnée, pas une troisième goutte
 
-**15/09/2026 — PROPOSITION. Non appliquée.** La liste candidate vit dans
+> # ⛔ PROPOSITION RETIRÉE — 15/09/2026, arbitrage Laurent
+>
+> **Ne pas appliquer. `TITLE_VERBS` n'est PAS la cause.**
+>
+> La mesure ci-dessous est juste et reste rejouable, mais elle répondait à la
+> mauvaise question. Les deux modules refusés — `BIB-D014` « Appliquer… » et
+> « Élaborer… » — **ne sont pas des modules** : l'un a pour tout déroulé
+> « - Après-midi : » suivi d'une puce, l'autre une puce unique sans rapport avec
+> son titre. Ce sont des résidus de découpage.
+>
+> Élargir la liste les aurait fait **passer**, et aurait effacé le seul signal
+> qui les désignait. C'est §4 quindecies : un garde qui attrape le bon cas par
+> le mauvais critère n'attrapera pas le suivant — et le « réparer » le rend
+> muet.
+>
+> Le défaut est dans le DÉROULÉ, pas dans le verbe. Relevé :
+> `260915-deroules-releve.md`.
+>
+> Ce document reste au dépôt comme trace de l'analyse et de son écartement.
+
+**15/09/2026 — analyse conservée pour mémoire.** La liste candidate vit dans
 `apps/web/scripts/probe-verbes-objectifs.ts`, qui la MESURE sans rien écrire.
 Relevé brut : `260915-verbes-objectifs-releve.txt`, rejouable par
 `pnpm --filter @qualiof/web probe:verbes-objectifs:local`.

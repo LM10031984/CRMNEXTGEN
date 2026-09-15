@@ -139,3 +139,64 @@ l'arbitrage à une empreinte du texte (même mécanique que
 Le script d'import et la sonde les nomment maintenant. **Le reste du dépôt
 n'a pas été balayé** : toute autre sortie qui annonce « N modules » sans dire
 laquelle de ces quatre populations elle compte porte le même défaut (§4 quater).
+
+---
+
+## ⑤ « Piloter par les chiffres et animer l'équipe » — douleur à ÉCRIRE
+
+**Statut : besoin réellement non couvert, constaté le 15/09/2026.**
+
+Ce besoin n'était couvert, dans le parcours de DIAG-R001, que par les deux
+modules `BIB-D014` — qui sont des résidus de découpage (§⑥). Et les deux
+parlaient d'**animation d'équipe**, pas de *piloter par les chiffres*.
+
+> Une fois les deux retirés, le besoin devient NON COUVERT. **C'est la vérité,
+> et elle vaut mieux que deux coquilles.**
+
+Aucun module de la bibliothèque ne traite le pilotage par les indicateurs. C'est
+un **contenu à écrire**, pas un rattachement à trouver.
+
+Effet chiffré si les deux modules sortent : parcours de 6 → 5 demi-journées,
+droits non consommés de 4 032 € → **5 040 €** (cf. §②bis).
+
+---
+
+## ⑥ `BIB-D014` et `BIB-D047` — le découpage a agrafé deux listes
+
+**Statut : mesuré, NON corrigé (relevé `260915-deroules-releve.md`).**
+
+`drive:014`, motif `liste-imbriquee`, 4 modules : les titres viennent de la liste
+des objectifs, les déroulés de la liste horaire, **appariés deux à deux**. Aucun
+déroulé ne correspond à son titre ; le module 4 n'a pas de déroulé du tout.
+
+`BIB-D047` porte 7 modules dont le déroulé est le mot « Après-midi », rien
+d'autre.
+
+**Un module dont le contenu appartient à un autre module est plus dangereux
+qu'un module vide : le vide se voit, le décalage se lit comme du contenu.**
+Aucun compteur ne l'attrape — la réparation est au découpage
+(`extract-drive-catalog.ts`), pas en base.
+
+Portent la même signature de décalage : `BIB-D010`, `BIB-D033`, `BIB-D038`.
+
+---
+
+## ⑦ Le seuil d'`isAnimable` — à poser, arbitrage ouvert
+
+**Statut : mesuré, NON appliqué.**
+
+`isAnimable` teste le vide **littéral** : « - Après-midi : » n'est pas vide, donc
+c'est un déroulé. La règle 4 dit « une étiquette n'est pas un contenu » ; le code
+dit « une chaîne non vide est un contenu ».
+
+Seuil que le constat désigne — **A + B + C, −26 modules sur 298 (8,7 %)** :
+
+| | Règle | Coût |
+|---|---|---|
+| A | déroulé fait uniquement de fragments d'horaire | −7 |
+| B | horaire en tête **ET** ≤ 2 puces (la conjonction, pas l'un des deux) | −1 |
+| C | déroulé d'une seule puce | −18 |
+
+**C est le point à arbitrer** : 18 modules minces écartés pour 1 résidu attrapé.
+Écarter tout « horaire en tête » (−49) ou tout « ≤ 2 puces » (−77) frapperait
+massivement du contenu réel — §4 quaterdecies.

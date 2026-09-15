@@ -746,6 +746,54 @@ réel, et à quelle fréquence**. Si la réponse est « souvent, et légitimemen
 le motif est trop large — non pas parce qu'il se trompe, mais parce que
 personne ne le lira plus.
 
+## 4 quindecies. Un garde qui attrape le bon cas par le MAUVAIS CRITÈRE n'attrapera pas le suivant
+
+Cas fondateur, 15/09/2026, et il a failli coûter cher **parce que le garde avait
+raison**.
+
+Deux modules de `BIB-D014` ont été programmés dans un parcours client. Le
+refus d'objectif les a signalés : « le titre doit commencer par un verbe d'action
+reconnu », `appliquer` et `elaborer` n'y étaient pas.
+
+Les deux modules ne valaient effectivement rien — l'un a pour tout déroulé
+« - Après-midi :\n- Animer des réunions commerciales », l'autre une puce unique
+sans rapport avec son titre. **Le garde a désigné les bons modules.**
+
+Mais son critère parlait du **VERBE**. Or `appliquer` et `élaborer` sont des
+verbes de la taxonomie de Bloom, ceux qu'on enseigne pour rédiger un objectif :
+le critère était faux, et il est tombé juste par coïncidence.
+
+### Ce que la coïncidence a failli produire
+
+Le correctif « évident » était de reconstruire la liste des verbes. Il était
+mesuré, il ne cassait rien — et **il aurait fait PASSER les deux modules**. Le
+seul signal qui désignait deux résidus de découpage aurait été réparé en
+silence, et le parcours client les aurait gardés avec un objectif bien formé
+par-dessus.
+
+> **La règle : quand un garde attrape un vrai défaut, vérifier que son CRITÈRE
+> désigne bien CE défaut. S'ils ne coïncident pas, il y a deux choses à faire,
+> pas une — et les confondre en supprime une.**
+
+### Le test qui révèle le cas
+
+**À quoi ressemblerait le PROCHAIN cas ?** Un module aussi corrompu, mais
+intitulé « Maîtriser la relation client », serait passé sans un bruit :
+`maitriser` est dans la liste depuis toujours. Le garde avait donc, sur le
+défaut réel, un rappel proche de **zéro** — il n'en attrapait que la fraction
+qui portait par hasard un verbe absent.
+
+Un garde dont on ne sait pas dire ce qu'il RATE n'est pas évalué, il est
+seulement observé les jours où il sonne.
+
+### Et le vrai garde, alors
+
+Il se pose là où vit le défaut. Ici : `isAnimable` exige un déroulé **non vide**
+— il n'exige pas un déroulé qui **tienne debout**. C'est ce seuil-là qu'il faut
+poser, sur mesure et non sur intuition (relevé `probe-deroules.ts`,
+15/09/2026 : 7 modules dont le déroulé n'est QUE de l'horaire, 25 à une seule
+puce, sur 298 composables).
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
