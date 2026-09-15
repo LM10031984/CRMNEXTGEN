@@ -13,6 +13,7 @@
  *   • aucun chiffre n'est calculé ici. Les moteurs purs ont déjà tranché.
  */
 
+import { nomAgence } from '@/lib/nom-agence';
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
@@ -77,14 +78,6 @@ async function loadDiagnosticForAudit(diagnosticId: string, tenantId: string) {
   });
 }
 
-function agencyNameOf(d: NonNullable<Awaited<ReturnType<typeof loadDiagnosticForAudit>>>): string {
-  return (
-    d.organization?.legalName ??
-    d.lead.notes?.replace(/^Agence\s*:\s*/, '').trim() ??
-    [d.lead.firstName, d.lead.lastName].filter(Boolean).join(' ') ??
-    d.reference
-  );
-}
 
 /** Les données du rapport, telles qu'elles seront rendues — et leur empreinte. */
 async function assemble(diagnosticId: string, tenantId: string) {
@@ -201,7 +194,7 @@ export async function generateDiagnosticAudit(
 
   const data = buildAuditData({
     reference: diagnostic.reference,
-    agencyName: agencyNameOf(diagnostic),
+    agencyName: nomAgence(diagnostic),
     generatedAt: new Date(),
     variant: diagnostic.variant,
     answers,

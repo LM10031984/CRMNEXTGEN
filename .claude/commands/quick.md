@@ -255,6 +255,38 @@ Corollaire, pour les tests bâtis sur une égalité : **ASSERTE l'égalité**, n
 suppose pas. Un départage testé sur deux candidats qu'on croyait à égalité, et
 qui ne l'étaient pas, ne teste aucun départage.
 
+### L'exemple canonique : comparer deux SURFACES, pas une constante
+
+Le 15/09/2026, le référent handicap. Le catalogue public annonçait « Jean-Guy
+Ourmières », le programme composé annonçait « Start Academy · formation@… » —
+l'organisme. Deux pièces du même OF, deux référents, et **aucune n'est fausse
+prise isolément**.
+
+Le garde naïf, celui qui vient spontanément :
+
+```ts
+expect(programme.accessibility).toContain(REFERENT_HANDICAP.nom);
+```
+
+Il passe dès qu'on corrige la surface qu'on regarde — et il aurait laissé les
+deux diverger à nouveau au prochain repli. Il importe la valeur des deux côtés :
+**il supprime l'écart au lieu de le détecter.**
+
+Le garde qui tient :
+
+```ts
+const duCatalogue = resolveOfConfig(null).handicapReferent;   // surface 1
+expect(duCatalogue.trim().length).toBeGreaterThan(0);          // elle dit quelque chose
+expect(programme.accessibility).toContain(duCatalogue);        // surface 2 s'y accorde
+```
+
+Il ne sait pas qui est le référent, et **c'est exactement pour ça qu'il marche** :
+il mesure l'accord entre deux chemins de résolution indépendants. Le jour où
+l'un change, il rougit en nommant les deux côtés.
+
+> **Quand deux surfaces doivent dire la même chose, le test compare les deux
+> surfaces. Il n'importe la valeur d'aucune.**
+
 ### Le cas vécu, plus instructif que la formule
 
 La première tentative de mutation sur le garde des chemins en dur est restée
@@ -562,6 +594,96 @@ Le garde en ressort **plus serré** qu'avant : il surveille désormais deux
 populations nommées au lieu d'un total qui mélangeait tout. C'est §4 ter
 appliqué à l'envers — au lieu de constater après coup qu'un garde ne garde rien,
 on l'empêche de le devenir.
+
+## 4 undecies. Un point d'extension sans appelant correct est un TROU
+
+`resolveQualiopiMentions` offrait un paramètre `contact`, documenté en toutes
+lettres « **le contact référent handicap** ». **Les quatre appelants lui
+passaient autre chose** : trois l'organisme (`of.name / of.email / of.phone`),
+le test un littéral — « Julien LAFITTE », qui n'est le référent de rien.
+
+Ce n'était pas de la souplesse. C'était une **branche jamais exercée
+correctement qui avait l'air d'une fonctionnalité**, et qui a produit, sur une
+pièce Qualiopi, une raison sociale là où l'indicateur 26 exige une personne.
+
+> **La règle : un paramètre optionnel qu'aucun appelant ne remplit correctement
+> se RETIRE. Il ne se documente pas mieux.**
+
+Mieux documenter aurait laissé le trou ouvert pour le cinquième appelant. Le
+retirer le referme structurellement : la valeur vient de sa source unique, et
+plus personne ne peut se tromper en la passant.
+
+**Le test qui révèle le cas** : si écrire le test oblige à inventer une valeur
+pour un paramètre — un nom de personne, une adresse — c'est que ce paramètre
+n'a pas de source légitime chez l'appelant. Il n'en a pas besoin.
+
+## 4 duodecies. `??` ne protège que de `null` et `undefined`
+
+Cinquième membre de la famille « une absence se présente comme une présence »,
+trouvé le 15/09/2026 en extrayant la résolution du nom d'agence :
+
+```ts
+[d.lead.firstName, d.lead.lastName].filter(Boolean).join(' ') ?? d.reference
+```
+
+`.join()` rend **toujours** une chaîne. Avec deux `null`, elle rend `''` — qui
+n'est **pas** nullish. Le repli sur la référence du dossier ne pouvait donc
+**JAMAIS** se déclencher, et un dossier sans nom sortait en **chaîne vide** sur
+une pièce client.
+
+> **Toute gauche de `??` qui est une chaîne CONSTRUITE — `join`, `concat`,
+> template, `replace`, `trim` sur du non-nullable — est suspecte. Une chaîne
+> construite n'est jamais nullish ; elle est vide.**
+
+Le bon geste est une chaîne de candidats et le premier **non vide** :
+
+```ts
+for (const c of candidats) { const v = c?.trim(); if (v) return v; }
+return d.reference;
+```
+
+### Le balayage du 15/09/2026, et ce qu'il a vraiment trouvé
+
+**Motif** : un `??` dont la gauche porte `.join(` / `.concat(` / `.trim()` /
+`.replace(` / un template. **Population** : `apps/web/src`, `apps/web/scripts`,
+`packages/*/src`, `packages/db/scripts`, hors `__tests__`.
+
+**25 occurrences brutes — mais le compte brut trompe.** `x?.trim() ?? ''` est
+SAIN : la gauche y vaut `undefined`, pas `''`. Le relevé utile est le
+classement :
+
+| Catégorie | Compte | Mécanisme |
+|---|---|---|
+| **le `??` est MORT** | 2 | la gauche ne peut jamais être nullish |
+| **une chaîne vide gagne avant le repli** | 5 | `replace` qui vide, pas de `trim` |
+| sain | 18 | `?.trim() ?? ''`, `?? null` dans les imports |
+
+Et les **sept** ne sont pas sept défauts : c'est **la même résolution du nom
+d'agence, dupliquée**, avec cinq comportements différents pour la même question.
+Voir §4 bis — dupliquer un mapping garantit la divergence.
+
+## 4 terdecies. Une RÉFÉRENCE n'est pas une IDENTITÉ entre deux bases (§5.4 étendue)
+
+`DIAG-0001` désigne **« Agence des Oliviers », 4 fiches** en local, et
+**« BATI BATI OURMIERES », 3 fiches** en production. Deux dossiers, deux UUID,
+deux clients — une seule référence.
+
+Même cause que `PROD-0681` qui désignait deux produits : **chaque base séquence
+de son côté**. §5.4 disait « un code produit n'est pas une adresse » ; ça vaut
+pour toute référence lisible par un humain, dans toute base.
+
+Le coût, le 15/09 : un programme composé a été rendu à Laurent pour relecture
+sans dire d'où il venait. Sa revue tient sur la FORME — un module à 33 puces,
+des prérequis affirmés, un référent erroné — mais **tout ce qui est propre au
+client concernait une autre agence que la sienne**.
+
+> **La règle : toute sonde ou tout script qui nomme un dossier DIT dans sa
+> sortie sur quelle base il a tourné.** Un relevé dit ce qu'il a cherché — et
+> **où**.
+
+En pratique : le nom de la base et l'hôte en tête de sortie, et l'**identifiant
+technique** à côté de la référence lisible. C'est l'UUID qui tranche, jamais le
+`DIAG-NNNN`.
 
 ## 5. Gates — les trois, dans cet ordre
 

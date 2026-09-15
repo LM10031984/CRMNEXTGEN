@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { FundingRuleValues } from '@/lib/financement/types';
 
 import { resolveQualiopiMentions } from '@/lib/docs/qualiopi-mentions';
+import { REFERENT_HANDICAP } from '@/lib/contacts-organisme';
+import { resolveOfConfig } from '@/lib/of-config';
 
 import { buildComposedProgramme, type SourceProgrammeInfo } from '../composed-programme';
 import { composeProgramme } from '../composer';
@@ -116,11 +118,7 @@ const FALLBACK = {
 };
 
 /** Les mentions de l'organisme — le tenant n'a rien saisi, donc le texte standard. */
-const MENTIONS = resolveQualiopiMentions(null, {
-  name: 'Julien LAFITTE',
-  email: 'julien@start-academy.fr',
-  phone: '06 22 80 65 09',
-});
+const MENTIONS = resolveQualiopiMentions(null);
 
 function programmeReel() {
   const composition = composeProgramme({
@@ -664,5 +662,134 @@ describe('Un refus d’objectif nomme son critère et la valeur qu’il a lue', 
     expect(p.objectives.some((o) => o.toLowerCase().startsWith(titre.slice(0, 6).toLowerCase()))).toBe(
       true,
     );
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Le référent handicap du programme composé (15/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Indicateur Qualiopi 26 : une PERSONNE nommée et joignable, pas une raison
+ * sociale.
+ *
+ * Relevé sur le programme composé de DIAG-0001 : il rendait « notre référent :
+ * Start Academy · formation@start-academy.fr · 0631056390 » — l'organisme —
+ * pendant que le catalogue rendait « Jean-Guy Ourmières ». Deux pièces du même
+ * organisme, deux référents, et aucune n'est fausse prise isolément.
+ *
+ * La cause était le PARAMÈTRE : `resolveQualiopiMentions` acceptait un contact
+ * injectable, documenté « le contact référent handicap », et les TROIS sites
+ * d'appel lui passaient autre chose — les deux de production l'organisme, le
+ * test un littéral (« Julien LAFITTE »), qui n'est pas le référent non plus.
+ *
+ * Un paramètre que personne n'a jamais rempli correctement n'est pas un point
+ * d'extension, c'est un trou. Il disparaît : le référent vient du module de
+ * contacts, comme tout nom de personne dans un texte client ou financeur.
+ */
+describe('Le référent handicap du programme composé — une personne, celle du module', () => {
+  it('nomme le référent du module de contacts, pas l’organisme', () => {
+    const { programme } = programmeReel();
+    expect(programme.accessibility).toContain(REFERENT_HANDICAP.nom!);
+    expect(programme.accessibility).toContain(REFERENT_HANDICAP.email);
+    expect(programme.programMd).toContain(REFERENT_HANDICAP.nom!);
+  });
+
+  it('ne nomme AUCUNE autre personne physique dans le document remis', () => {
+    const { programme } = programmeReel();
+    const intrus = ['Julien LAFITTE', 'Julien Lafitte', 'Laurent MARX', 'Angélique', 'Béatrice'];
+    for (const nom of intrus) {
+      expect(programme.programMd, `« ${nom} » n’a rien à faire dans un programme client`).not.toContain(
+        nom,
+      );
+    }
+  });
+
+  /**
+   * Le vrai garde : il compare DEUX SURFACES, il n'importe pas une constante.
+   *
+   * §4 ter — on surveille un ÉCART entre ce que le CATALOGUE public annonce et
+   * ce que le PROGRAMME remis annonce. Importer `REFERENT_HANDICAP` des deux
+   * côtés supprimerait l'écart au lieu de le détecter : c'est exactement ce
+   * défaut qui a laissé le catalogue nommer Jean-Guy Ourmières pendant que le
+   * programme nommait l'organisme.
+   */
+  it('annonce le MÊME référent que le catalogue public', () => {
+    const { programme } = programmeReel();
+    const duCatalogue = resolveOfConfig(null).handicapReferent;
+    expect(duCatalogue.trim().length, 'le catalogue doit nommer quelqu’un').toBeGreaterThan(0);
+    expect(
+      programme.accessibility,
+      `le catalogue annonce « ${duCatalogue} », le programme remis annonce autre chose`,
+    ).toContain(duCatalogue);
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Les prérequis — une absence ne s'imprime pas en affirmation (15/09/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Quatrième fois de la semaine (§4 quinquies).
+ *
+ * Le programme composé de DIAG-0001 imprimait « Aucun prérequis » en en-tête
+ * pendant que deux de ses modules déclaraient, dans leur déroulé, « Un compte
+ * ChatGPT actif ; savoir dicter sur son téléphone ».
+ *
+ * Personne n'a constaté qu'il n'y avait pas de prérequis : AUCUN rayon source
+ * n'en déclare, et `TrainingModule` n'a pas de champ pour en porter. Le
+ * document affirmait donc une absence qu'on n'a jamais vérifiée — et un
+ * stagiaire qui arrive sans compte ChatGPT perd la demi-journée.
+ *
+ * Le document se tait et renvoie au déroulé. Il ne comble pas.
+ */
+describe('Les prérequis du parcours — rien de déclaré ne veut pas dire « aucun »', () => {
+  /** Le cas RÉEL de DIAG-0001 : aucun rayon source ne déclare de prérequis. */
+  function sansPrerequisDeclare() {
+    const composition = composeProgramme({
+      recommendations: [
+        reco('mandat_exclusivite', [candidat('m1', 'Signer plus de mandats exclusifs', 120, VENDEUR)]),
+      ],
+      rules: RULES,
+      envelopeHalfDays: 6,
+    });
+    return buildComposedProgramme({
+      composition,
+      rules: RULES,
+      agencyName: 'Agence des Oliviers',
+      diagnosticReference: 'DIAG-0001',
+      sources: SOURCES.map((s) => ({ ...s, prerequisites: null })),
+      fallback: FALLBACK,
+      mentions: MENTIONS,
+      moduleContent: new Map([['m1', '- Une puce']]),
+    });
+  }
+
+  it('n’affirme PAS « aucun prérequis » quand aucune source n’en déclare', () => {
+    const programme = sansPrerequisDeclare();
+    expect(
+      programme.prerequisites.toLowerCase(),
+      'le document affirme une absence que personne n’a constatée',
+    ).not.toContain('aucun prérequis');
+    expect(programme.programMd.toLowerCase()).not.toContain('aucun prérequis');
+  });
+
+  it('DIT que rien n’est renseigné et renvoie au déroulé', () => {
+    const programme = sansPrerequisDeclare();
+    expect(programme.prerequisites.toLowerCase()).toContain('non renseigné');
+    expect(programme.prerequisites.toLowerCase()).toContain('déroulé');
+  });
+
+  it('le signale à l’écran — sinon personne ne va le chercher', () => {
+    const programme = sansPrerequisDeclare();
+    expect(programme.warnings.some((w) => w.toLowerCase().includes('prérequis'))).toBe(true);
+  });
+
+  it('rend les prérequis DÉCLARÉS tels quels, sans les noyer ni avertir', () => {
+    const { programme } = programmeReel();
+    expect(programme.prerequisites.toLowerCase()).not.toContain('non renseigné');
+    expect(programme.warnings.some((w) => w.toLowerCase().includes('prérequis'))).toBe(false);
   });
 });

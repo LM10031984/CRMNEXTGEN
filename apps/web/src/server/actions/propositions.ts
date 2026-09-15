@@ -15,6 +15,7 @@
  *   3. un PDF à jour — pas un document périmé qui traîne depuis trois jours.
  */
 
+import { nomAgence } from '@/lib/nom-agence';
 import { createHash, randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma, Modality } from '@qualiof/db';
@@ -183,14 +184,6 @@ async function loadDiagnosticBundle(diagnosticId: string, tenantId: string) {
 
 type DiagnosticBundle = NonNullable<Awaited<ReturnType<typeof loadDiagnosticBundle>>>;
 
-function agencyNameOf(d: DiagnosticBundle): string {
-  return (
-    d.organization?.legalName ??
-    d.lead.notes?.replace(/^Agence\s*:\s*/, '').trim() ??
-    [d.lead.firstName, d.lead.lastName].filter(Boolean).join(' ') ??
-    d.reference
-  );
-}
 
 
 function fingerprintInputOf(
@@ -244,7 +237,7 @@ async function assembleFromDiagnostic(diagnosticId: string, tenantId: string) {
 
   const audit = buildAuditData({
     reference: bundle.reference,
-    agencyName: agencyNameOf(bundle),
+    agencyName: nomAgence(bundle),
     generatedAt: new Date(),
     variant: bundle.variant,
     answers: bundle.answers.map((a) => ({
@@ -297,7 +290,7 @@ export async function createProposalFromDiagnostic(
     };
   }
 
-  const agencyName = agencyNameOf(bundle);
+  const agencyName = nomAgence(bundle);
   const { content, match, composition } = seedContent({
     audit,
     rules,
@@ -493,7 +486,7 @@ async function buildWorkspace(
   const funding = buildFundingSection({
     funding: audit.funding,
     rules,
-    agencyName: agencyNameOf(bundle),
+    agencyName: nomAgence(bundle),
     declaredEmployeeCount: audit.declaredEmployeeCount,
   });
 
@@ -541,11 +534,7 @@ async function buildWorkspace(
         qualiopiAccessibility: true,
       },
     });
-    const qualiopiMentions = resolveQualiopiMentions(tenantMentions, {
-      name: of.name,
-      email: of.email,
-      phone: of.phone,
-    });
+    const qualiopiMentions = resolveQualiopiMentions(tenantMentions);
     const codes = [...new Set(mods.map((m) => m.sourceCode).filter(Boolean))];
     const shelves = await prisma.trainingProduct.findMany({
       where: { tenantId, code: { in: codes } },
@@ -559,7 +548,7 @@ async function buildWorkspace(
     return buildComposedProgramme({
       composition: compositionFromAxes(content.axes, rules),
       rules,
-      agencyName: agencyNameOf(bundle),
+      agencyName: nomAgence(bundle),
       diagnosticReference: bundle.reference,
       sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
       fallback: {
@@ -579,7 +568,7 @@ async function buildWorkspace(
   const data: PropositionData = {
     reference: proposal.reference,
     version: proposal.version,
-    agencyName: agencyNameOf(bundle),
+    agencyName: nomAgence(bundle),
     generatedAt: new Date(),
     validUntil: proposal.validUntil,
     ownerLabel,
@@ -761,7 +750,7 @@ async function persistAndReprint(args: {
   const funding = buildFundingSection({
     funding: audit.funding,
     rules,
-    agencyName: agencyNameOf(bundle),
+    agencyName: nomAgence(bundle),
     declaredEmployeeCount: audit.declaredEmployeeCount,
   });
 
@@ -1399,7 +1388,7 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
   const programme = buildComposedProgramme({
     composition,
     rules,
-    agencyName: agencyNameOf(bundle),
+    agencyName: nomAgence(bundle),
     diagnosticReference: bundle.reference,
     sources: shelves.map((sh) => ({ ...sh }) as SourceProgrammeInfo),
     // Ce qu'un rayon peut encore léguer. Les trois mentions Qualiopi n'en font
@@ -1412,11 +1401,7 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
       pedagogicalSupport: null,
       accessConditions: null,
     },
-    mentions: resolveQualiopiMentions(tenantMentions, {
-      name: of.name,
-      email: of.email,
-      phone: of.phone,
-    }),
+    mentions: resolveQualiopiMentions(tenantMentions),
     moduleContent,
     moduleNeedIdentification,
   });

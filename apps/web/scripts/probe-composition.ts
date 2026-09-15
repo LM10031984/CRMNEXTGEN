@@ -29,15 +29,40 @@ import { buildComposedProgramme } from '../src/lib/proposition/composed-programm
 import { computePricing } from '../src/lib/proposition/pricing';
 import { buildQuoteDrafts } from '../src/lib/proposition/quotes';
 import { loadPropositionLibrary } from '../src/server/proposition-library';
+import { nomAgence } from '../src/lib/nom-agence';
 import type { LibraryModule } from '../src/lib/proposition/module-matcher';
 
 const ref = process.argv[2] ?? 'DIAG-0001';
+
+/**
+ * Sur quelle BASE cette sonde a-t-elle tourné ? (§4 terdecies, 15/09/2026)
+ *
+ * `DIAG-0001` désigne « Agence des Oliviers » en local et « BATI BATI
+ * OURMIERES » en production. Un programme composé a été rendu à Laurent pour
+ * relecture sans le dire : sa revue tenait sur la forme, mais tout ce qui était
+ * propre au client concernait une autre agence que la sienne.
+ *
+ * Une référence lisible n'est pas une identité entre deux bases. La sortie dit
+ * donc la base, l'hôte, ET l'identifiant technique du dossier — c'est l'UUID
+ * qui tranche, jamais le `DIAG-NNNN`.
+ *
+ * Le mot de passe n'est jamais imprimé : seuls l'hôte et le nom de la base.
+ */
+function ouTourne(): string {
+  const url = process.env.DATABASE_URL ?? '';
+  const m = /@([^/:]+)(?::\d+)?\/([^?]+)/.exec(url);
+  if (!m) return 'base INCONNUE (DATABASE_URL illisible)';
+  const [, hote, base] = m;
+  const nature = /localhost|127\.0\.0\.1/.test(hote!) ? 'LOCALE' : 'DISTANTE';
+  return `${nature} — ${base} @ ${hote}`;
+}
 
 const d = await prisma.diagnostic.findFirst({
   where: { reference: ref },
   select: {
     id: true, reference: true, variant: true, tenantId: true,
     organization: { select: { legalName: true } },
+    lead: { select: { notes: true, firstName: true, lastName: true } },
     answers: { select: { questionId: true, value: true, isSkipped: true } },
     participants: { orderBy: { createdAt: 'asc' }, select: { id: true, displayName: true, statut: true, caN1: true, objectiveCa: true, strengths: true, priorityNeed: true, opcoEligible: true, trainings24mFunded: true, includedInProposal: true } },
   },
@@ -90,7 +115,12 @@ const participants = d.participants.map((p) => ({
   trainings24mFunded: p.trainings24mFunded === null ? null : Number(p.trainings24mFunded),
 }));
 const retenus = participants.filter((p) => p.includedInProposal);
-const agencyName = d.organization?.legalName ?? 'Agence';
+// La MÊME résolution que la production — surtout pas un repli local. Le repli
+// `?? 'Agence'` qui vivait ici a fait relire à Laurent, le 14/09, un programme
+// intitulé « Parcours sur mesure — Agence » alors que la proposition portait
+// « BATI BATI OURMIERES ». Une sonde qui ne calcule pas comme la production ne
+// sonde rien.
+const agencyName = nomAgence(d);
 
 const audit = buildAuditData({
   reference: d.reference, agencyName, generatedAt: new Date(), variant: d.variant,
@@ -110,7 +140,8 @@ const { content, composition, match } = seedContent({
 });
 
 // ── Le parcours ──────────────────────────────────────────────────────────────
-console.log(`\n=== ${ref} — ${agencyName} · bibliothèque de ${match.libraryModuleCount} modules ===\n`);
+console.log(`\n=== BASE : ${ouTourne()} ===`);
+console.log(`=== ${ref} (${d.id}) — ${agencyName} · bibliothèque de ${match.libraryModuleCount} modules ===\n`);
 console.log(`Enveloppe dimensionnée par le moteur budget : ${audit.funding.halfDays} demi-journées`);
 console.log(`Parcours COMPOSÉ                            : ${composition.totalHalfDays} demi-journées`);
 console.log(`  → ${composition.totalOnSiteHours} h sur site · ${composition.totalConventionedHours} h CONVENTIONNÉES`);
@@ -177,11 +208,7 @@ const programme = buildComposedProgramme({
     prerequisites: null, trainerProfile: null,
     pedagogicalSupport: null, accessConditions: null,
   },
-  mentions: resolveQualiopiMentions(tenantMentions, {
-    name: of.name,
-    email: of.email,
-    phone: of.phone,
-  }),
+  mentions: resolveQualiopiMentions(tenantMentions),
   moduleContent: new Map(products.flatMap((p) => p.modules.map((m) => [m.id, m.contentMd] as const))),
   moduleNeedIdentification: new Map(
     products.flatMap((p) =>
@@ -202,7 +229,24 @@ if (programme.objectivesToWrite.length > 0) {
 for (const w of programme.warnings) console.log(`  ⚠ ${w}`);
 
 const out = path.resolve(process.cwd(), `../../.planning/${ref}-programme-compose.md`);
-writeFileSync(out, `${programme.programMd}\n`, 'utf8');
+// L'en-tête de PROVENANCE ne fait PAS partie du document client : il coiffe le
+// fichier de relecture, qui est une sortie de sonde. Sans lui, un programme
+// composé en local se relit comme s'il était celui de la production — c'est
+// arrivé le 14/09 sur DIAG-0001 (§4 terdecies).
+const provenance = [
+  '<!--',
+  `  SORTIE DE SONDE — ne pas remettre à un client.`,
+  `  Base      : ${ouTourne()}`,
+  `  Dossier   : ${ref} — ${d.id}`,
+  `  Agence    : ${agencyName}`,
+  `  Généré le : ${new Date().toISOString()}`,
+  '-->',
+  '',
+  `> ⚠ **Sortie de sonde**, base **${ouTourne()}**, dossier \`${ref}\` (\`${d.id}\`), agence « ${agencyName} ».`,
+  '> Une référence lisible ne désigne pas le même dossier d’une base à l’autre.',
+  '',
+].join('\n');
+writeFileSync(out, `${provenance}${programme.programMd}\n`, 'utf8');
 console.log(`\n  Programme écrit pour relecture : ${path.relative(process.cwd(), out)}\n`);
 
 console.log('--- notices de composition ---');
