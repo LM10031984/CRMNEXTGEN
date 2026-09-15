@@ -18,10 +18,11 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserCheck, Loader2, FileText, CreditCard, Building2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { UserCheck, Loader2, FileText, CreditCard, Building2, ExternalLink, AlertTriangle, Link2 as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { enrollFromRequest } from '@/server/actions/enroll-from-request';
+import { rattacherDemandeASession } from '@/server/actions/rattacher-demande-session';
 import { searchOrganizations } from '@/server/actions/legal-links';
 import { ageficeRights } from '@/lib/enrollment/agefice-rights';
 import { etatDemande } from '@/lib/enrollment/etat-demande';
@@ -61,14 +62,33 @@ const CLASSE_PAR_TON: Record<string, string> = {
   refus: 'bg-red-50 text-red-700',
 };
 
+/** Un dossier déposé ailleurs, proposé au rattachement sur cette session. */
+export interface DossierRattachable {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  status: string;
+  /** Code de la session où il pointe aujourd'hui, `null` s'il est orphelin. */
+  sessionCode: string | null;
+}
+
 export function SessionEnrollmentRequests({
+  sessionId,
   requests,
+  candidats = [],
   canWrite,
 }: {
+  sessionId: string;
   requests: EnrollmentRequestRow[];
+  candidats?: DossierRattachable[];
   canWrite: boolean;
 }) {
-  if (requests.length === 0) return null;
+  // Le bloc s'affiche aussi quand la session n'a encore aucune demande, à la
+  // seule condition qu'il y ait quelque chose à y rattacher : c'est le seul
+  // endroit d'où récupérer un dossier déposé sur le mauvais lien.
+  const peutRattacher = canWrite && candidats.length > 0;
+  if (requests.length === 0 && !peutRattacher) return null;
 
   const aTraiter = requests.filter((r) => etatDemande(r).actionPossible);
 
@@ -78,19 +98,100 @@ export function SessionEnrollmentRequests({
         <h2 className="font-semibold text-base inline-flex items-center gap-2">
           <UserCheck className="h-4 w-4 text-primary" /> Demandes d'inscription
         </h2>
-        {aTraiter.length > 0 && (
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">
-            {aTraiter.length} à traiter
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {aTraiter.length > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">
+              {aTraiter.length} à traiter
+            </span>
+          )}
+          {peutRattacher && <RattacherDossier sessionId={sessionId} candidats={candidats} />}
+        </div>
       </div>
 
-      <div className="divide-y divide-border">
-        {requests.map((r) => (
-          <LigneDemande key={r.id} demande={r} canWrite={canWrite} />
-        ))}
-      </div>
+      {requests.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Aucune demande sur le lien de cette session. Si quelqu'un a déposé son dossier
+          ailleurs — sur un lien « Nouveau formulaire », une campagne, ou le lien d'une autre
+          session — rattache-le ici.
+        </p>
+      ) : (
+        <div className="divide-y divide-border">
+          {requests.map((r) => (
+            <LigneDemande key={r.id} demande={r} canWrite={canWrite} />
+          ))}
+        </div>
+      )}
     </section>
+  );
+}
+
+/**
+ * « Rattacher un dossier ». Liste déroulante native plutôt qu'un Radix Dialog :
+ * un clic imbriqué dans un Dialog reste parfois sans effet dans ce dépôt
+ * (cf. le garde-fou `window.confirm` de SessionEnrollmentBlock), et il n'y a
+ * rien ici qui mérite une modale.
+ */
+function RattacherDossier({
+  sessionId,
+  candidats,
+}: {
+  sessionId: string;
+  candidats: DossierRattachable[];
+}) {
+  const router = useRouter();
+  const [ouvert, setOuvert] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function rattacher(preEnrollmentId: string) {
+    startTransition(async () => {
+      const r = await rattacherDemandeASession({ preEnrollmentId, sessionId });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success('Dossier rattaché à cette session');
+      // L'inscription, elle, n'a pas bougé : on le dit longuement, sinon
+      // l'ancienne session garde un inscrit dont plus personne ne sait l'origine.
+      if (r.avertissement) toast.warning(r.avertissement, { duration: 12_000 });
+      setOuvert(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOuvert((o) => !o)}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-input text-xs font-medium hover:bg-muted/40"
+      >
+        <LinkIcon className="h-3.5 w-3.5" /> Rattacher un dossier
+      </button>
+      {ouvert && (
+        <div className="absolute right-0 z-20 mt-1 w-80 max-h-72 overflow-y-auto rounded-lg border border-border bg-white shadow-lg">
+          <p className="px-3 py-2 text-[11px] text-muted-foreground border-b border-border">
+            Dossiers déposés ailleurs. Le rattachement déplace le DOSSIER, jamais une
+            inscription déjà créée.
+          </p>
+          <ul className="divide-y divide-border">
+            {candidats.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => rattacher(c.id)}
+                  disabled={pending}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/40 disabled:opacity-60"
+                >
+                  <span className="block text-xs font-medium">
+                    {[c.firstName, c.lastName].filter(Boolean).join(' ') || '(sans nom)'}
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {c.email ?? '—'} · {c.sessionCode ? `sur ${c.sessionCode}` : 'sans session'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

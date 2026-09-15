@@ -1073,6 +1073,7 @@ export default async function SessionDetailPage({
     ? buildPublicEnrollmentUrl(session.publicToken)
     : null;
 
+
   const timelineInvoiceRows = timelineInvoices.map((inv) => ({
     id: inv.id,
     number: inv.number,
@@ -1245,6 +1246,46 @@ export default async function SessionDetailPage({
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+
+  // Dossiers déposés AILLEURS (autre session, ou aucune) qu'on peut rattacher
+  // à celle-ci. Sans cette liste, un dossier déposé sur le mauvais lien — ou né
+  // d'un lien « Nouveau formulaire » / d'une campagne, qui ne posent jamais de
+  // session — restait à jamais inscriptible seulement à la main.
+  //
+  // PENDING_FORM est volontairement EXCLU : ces lignes sont des liens envoyés
+  // et jamais remplis, sans nom ni email. Les proposer noierait les vrais
+  // dossiers sous une liste de « (sans nom) ».
+  //
+  // Le `OR` est explicite plutôt qu'un `not: session.id` : sur une colonne
+  // nullable, un `<>` SQL écarte les NULL — donc précisément les orphelins
+  // qu'on cherche.
+  const dossiersRattachables = canWrite
+    ? await prisma.preEnrollment.findMany({
+        where: {
+          tenantId: user.tenantId,
+          status: { in: ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED', 'CONVERTED'] },
+          OR: [{ intendedSessionId: null }, { intendedSessionId: { not: session.id } }],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          status: true,
+          intendedSession: { select: { code: true } },
+        },
+      })
+    : [];
+  const dossiersRattachablesRows = dossiersRattachables.map((d) => ({
+    id: d.id,
+    firstName: d.firstName,
+    lastName: d.lastName,
+    email: d.email,
+    status: d.status,
+    sessionCode: d.intendedSession?.code ?? null,
+  }));
   // Quick 260817-mm0 — commanditaires PERSONNES MORALES de la session, pour la
   // convention groupe. Les auto-payeurs sont exclus : ils relèvent du contrat
   // de formation individuel (chantier suivant du todo du 12/08).
@@ -1730,7 +1771,9 @@ export default async function SessionDetailPage({
               canWrite={canWrite}
             />
             <SessionEnrollmentRequests
+              sessionId={session.id}
               requests={enrollmentRequestRows}
+              candidats={dossiersRattachablesRows}
               canWrite={canWrite}
             />
             {/* Status select + dates editor — gardés sous le hero pour édition
