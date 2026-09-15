@@ -1027,6 +1027,10 @@ export default async function SessionDetailPage({
       submittedAt: true,
       companyName: true,
       professionalStatus: true,
+      // La personne créée à la conversion : c'est elle qu'on cherche dans les
+      // inscrits pour savoir si la demande est VRAIMENT inscrite (le statut du
+      // dossier, lui, ment — cf. lib/enrollment/etat-demande).
+      convertedToPersonId: true,
       cniKey: true,
       cniVersoKey: true,
       extractedData: true,
@@ -1037,8 +1041,13 @@ export default async function SessionDetailPage({
   const pendingEnrollmentCount = enrollmentRequests.filter((r) =>
     ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED'].includes(r.status),
   ).length;
+  // Une demande n'est « inscrite » que si sa personne figure dans les
+  // participants de CETTE session. Se fier au statut CONVERTED affichait
+  // « Inscrite » sur une session à zéro inscrit (SES-0114, 15/09/2026).
+  const personIdsInscrits = new Set(session.participants.map((p) => p.personId));
   const enrollmentRequestRows = enrollmentRequests.map((r) => ({
     id: r.id,
+    estInscrit: Boolean(r.convertedToPersonId && personIdsInscrits.has(r.convertedToPersonId)),
     firstName: r.firstName,
     lastName: r.lastName,
     email: r.email,
@@ -1063,6 +1072,7 @@ export default async function SessionDetailPage({
   const enrollmentUrl = session.publicToken
     ? buildPublicEnrollmentUrl(session.publicToken)
     : null;
+
 
   const timelineInvoiceRows = timelineInvoices.map((inv) => ({
     id: inv.id,
@@ -1236,6 +1246,46 @@ export default async function SessionDetailPage({
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+
+  // Dossiers déposés AILLEURS (autre session, ou aucune) qu'on peut rattacher
+  // à celle-ci. Sans cette liste, un dossier déposé sur le mauvais lien — ou né
+  // d'un lien « Nouveau formulaire » / d'une campagne, qui ne posent jamais de
+  // session — restait à jamais inscriptible seulement à la main.
+  //
+  // PENDING_FORM est volontairement EXCLU : ces lignes sont des liens envoyés
+  // et jamais remplis, sans nom ni email. Les proposer noierait les vrais
+  // dossiers sous une liste de « (sans nom) ».
+  //
+  // Le `OR` est explicite plutôt qu'un `not: session.id` : sur une colonne
+  // nullable, un `<>` SQL écarte les NULL — donc précisément les orphelins
+  // qu'on cherche.
+  const dossiersRattachables = canWrite
+    ? await prisma.preEnrollment.findMany({
+        where: {
+          tenantId: user.tenantId,
+          status: { in: ['SUBMITTED', 'EXTRACTING', 'EXTRACTED', 'VALIDATED', 'CONVERTED'] },
+          OR: [{ intendedSessionId: null }, { intendedSessionId: { not: session.id } }],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          status: true,
+          intendedSession: { select: { code: true } },
+        },
+      })
+    : [];
+  const dossiersRattachablesRows = dossiersRattachables.map((d) => ({
+    id: d.id,
+    firstName: d.firstName,
+    lastName: d.lastName,
+    email: d.email,
+    status: d.status,
+    sessionCode: d.intendedSession?.code ?? null,
+  }));
   // Quick 260817-mm0 — commanditaires PERSONNES MORALES de la session, pour la
   // convention groupe. Les auto-payeurs sont exclus : ils relèvent du contrat
   // de formation individuel (chantier suivant du todo du 12/08).
@@ -1359,6 +1409,28 @@ export default async function SessionDetailPage({
   // rôles à faire diverger.
   const canEdit = canSign;
 
+  // ── Changer le PROGRAMME d'une session (15/09/2026) ───────────────────
+  // Le catalogue n'est chargé QUE si le changement est permis : brouillon et
+  // aucune facture partie. Sur une session vendue, la liste ne servirait qu'à
+  // faire miroiter un champ que la server action refuserait de toute façon —
+  // et à charger le catalogue entier dans chaque fiche session pour rien.
+  // `timelineInvoices` couvre déjà les factures de la session ET celles de ses
+  // inscrits (`OR` sur sessionId / participant.sessionId) : pas de seconde requête.
+  // `isActive` + tri par titre : MÊME filtre et MÊME ordre que `searchProducts`,
+  // qui alimente le wizard de création. Deux listes de programmes qui ne
+  // s'accordent pas sur ce qu'est un programme disponible, c'est un programme
+  // qu'on peut choisir à la création et plus jamais retrouver ensuite.
+  const facturesEmises = timelineInvoices.filter((i) => i.status !== 'DRAFT').length;
+  const peutChangerDeProgramme = canEdit && session.status === 'DRAFT' && facturesEmises === 0;
+  const programmesSelectionnables = peutChangerDeProgramme
+    ? await prisma.trainingProduct.findMany({
+        where: { tenantId: user.tenantId, isActive: true },
+        select: { id: true, code: true, title: true, durationHours: true },
+        orderBy: { title: 'asc' },
+        take: 300,
+      })
+    : [];
+
   return (
     <div className="space-y-6 max-w-5xl">
       <RecordRecentVisit
@@ -1407,7 +1479,9 @@ export default async function SessionDetailPage({
             {canEdit && (
               <EditSessionDetailsDialog
                 sessionId={session.id}
+                produits={programmesSelectionnables}
                 initial={{
+                  productId: session.product?.id ?? null,
                   name: session.name,
                   startDate: session.startDate,
                   endDate: session.endDate,
@@ -1697,7 +1771,9 @@ export default async function SessionDetailPage({
               canWrite={canWrite}
             />
             <SessionEnrollmentRequests
+              sessionId={session.id}
               requests={enrollmentRequestRows}
+              candidats={dossiersRattachablesRows}
               canWrite={canWrite}
             />
             {/* Status select + dates editor — gardés sous le hero pour édition
@@ -1751,7 +1827,9 @@ export default async function SessionDetailPage({
                     {canEdit && (
                       <EditSessionDetailsDialog
                         sessionId={session.id}
+                        produits={programmesSelectionnables}
                         initial={{
+                          productId: session.product?.id ?? null,
                           name: session.name,
                           startDate: session.startDate,
                           endDate: session.endDate,

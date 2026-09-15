@@ -8,6 +8,11 @@
  * Organization + LegalLink + AgeficeProfile, mais n'inscrivait personne dans
  * la session visée.
  *
+ * Un dossier DÉJÀ converti (typiquement depuis /app/inscriptions, qui ne sait
+ * que convertir) n'est pas reconverti : on repart de `convertedToPersonId` et
+ * `convertedToOrgId`. Sans cela il restait bloqué pour toujours — la
+ * conversion refuse de se rejouer, et rien d'autre ne créait le participant.
+ *
  * Le formulaire public ne touche JAMAIS au prix. En revanche l'inscrit hérite
  * du tarif de la session : poser 0 en dur fabriquait une convention à zéro
  * euro dès la validation, puisque `prepareTrainingForSession` génère les
@@ -63,44 +68,80 @@ export async function enrollFromRequest(input: {
     matchedOrganizationId: matched?.id ?? null,
   });
 
-  if (decision.kind === 'a-confirmer') {
-    return { ok: false, error: decision.raison, needsSponsor: true };
-  }
+  // 2. Personne + organisation payeuse.
+  //
+  //    LA CONVERSION EST UNE ÉTAPE FRANCHIE, PAS UN VERROU. Un dossier converti
+  //    depuis /app/inscriptions a bien sa Person et son Organization, mais aucun
+  //    SessionParticipant — et `convertPreEnrollment` refuse net d'y repasser
+  //    (« Déjà convertie en apprenant »). Jusqu'au 15/09/2026 ce dossier était
+  //    perdu : l'apprenant existait, la session restait vide, et plus rien ne
+  //    pouvait les rapprocher (constaté sur SES-0114, 3 demandes « Inscrite »
+  //    pour 0 inscrit). On repart donc de ce que la conversion a laissé.
+  const dejaConvertie = pe.status === 'CONVERTED' && Boolean(pe.convertedToPersonId);
 
-  // 2. Conversion en apprenant (Person, Org EI, LegalLink, AgeficeProfile).
-  const conv = await convertPreEnrollment({
-    preEnrollmentId: pe.id,
-    firstName: pe.firstName ?? '',
-    lastName: pe.lastName ?? '',
-    birthName: pe.birthName,
-    email: pe.email ?? '',
-    phone: pe.phone,
-    birthDate: pe.birthDate ? pe.birthDate.toISOString().slice(0, 10) : null,
-    birthPlace: pe.birthPlace,
-    professionalStatus: pe.professionalStatus,
-    createEiOrg: decision.kind === 'creer-ei',
-    eiSiret: decision.kind === 'creer-ei' ? decision.siret : null,
-    eiLegalName: decision.kind === 'creer-ei' ? decision.legalName : null,
-    eiAddress: pe.address,
-    eiCity: pe.city,
-    eiPostalCode: pe.postalCode,
-  });
-  if (!conv.ok || !conv.personId) {
-    return { ok: false, error: conv.error ?? 'Conversion échouée' };
-  }
+  let personId: string;
+  let sponsorOrgId: string | null;
 
-  const sponsorOrgId = decision.kind === 'org-existante' ? decision.organizationId : conv.orgId;
-  if (!sponsorOrgId) {
-    return {
-      ok: false,
-      error: 'Organisation payeuse introuvable après conversion',
-      needsSponsor: true,
-    };
+  if (dejaConvertie) {
+    personId = pe.convertedToPersonId!;
+    //  Ordre de priorité du payeur : ce que l'admin vient de choisir l'emporte
+    //  (c'est une correction explicite), puis ce que la conversion avait posé,
+    //  puis une organisation déjà connue par son SIRET.
+    sponsorOrgId =
+      input.overrideSponsorOrgId ??
+      pe.convertedToOrgId ??
+      (decision.kind === 'org-existante' ? decision.organizationId : null);
+    if (!sponsorOrgId) {
+      return {
+        ok: false,
+        error:
+          decision.kind === 'a-confirmer'
+            ? decision.raison
+            : "Ce dossier a été converti sans organisation payeuse",
+        needsSponsor: true,
+      };
+    }
+  } else {
+    if (decision.kind === 'a-confirmer') {
+      return { ok: false, error: decision.raison, needsSponsor: true };
+    }
+
+    // Conversion en apprenant (Person, Org EI, LegalLink, AgeficeProfile).
+    const conv = await convertPreEnrollment({
+      preEnrollmentId: pe.id,
+      firstName: pe.firstName ?? '',
+      lastName: pe.lastName ?? '',
+      birthName: pe.birthName,
+      email: pe.email ?? '',
+      phone: pe.phone,
+      birthDate: pe.birthDate ? pe.birthDate.toISOString().slice(0, 10) : null,
+      birthPlace: pe.birthPlace,
+      professionalStatus: pe.professionalStatus,
+      createEiOrg: decision.kind === 'creer-ei',
+      eiSiret: decision.kind === 'creer-ei' ? decision.siret : null,
+      eiLegalName: decision.kind === 'creer-ei' ? decision.legalName : null,
+      eiAddress: pe.address,
+      eiCity: pe.city,
+      eiPostalCode: pe.postalCode,
+    });
+    if (!conv.ok || !conv.personId) {
+      return { ok: false, error: conv.error ?? 'Conversion échouée' };
+    }
+
+    personId = conv.personId;
+    sponsorOrgId = decision.kind === 'org-existante' ? decision.organizationId : (conv.orgId ?? null);
+    if (!sponsorOrgId) {
+      return {
+        ok: false,
+        error: 'Organisation payeuse introuvable après conversion',
+        needsSponsor: true,
+      };
+    }
   }
 
   // 3. Inscription — jamais deux fois la même personne sur la même session.
   const deja = await prisma.sessionParticipant.findUnique({
-    where: { sessionId_personId: { sessionId, personId: conv.personId } },
+    where: { sessionId_personId: { sessionId, personId } },
     select: { id: true },
   });
   if (deja) {
@@ -128,7 +169,7 @@ export async function enrollFromRequest(input: {
   const participant = await prisma.sessionParticipant.create({
     data: {
       sessionId,
-      personId: conv.personId,
+      personId,
       sponsorOrgId,
       priceHT: new Prisma.Decimal(defaultPrice.priceHT),
       enrollmentStatus: 'PRE_ENROLLED',
