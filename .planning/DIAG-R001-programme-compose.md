@@ -3,7 +3,7 @@
   Base      : LOCALE — qualiof_dev @ localhost
   Dossier   : DIAG-R001 — 454b58e6-7f88-4d95-adf6-5fc6c16ab838
   Agence    : Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
-  Généré le : 2026-09-15T17:19:06.740Z
+  Généré le : 2026-09-15T17:31:25.408Z
 -->
 
 > ⚠ **Sortie de sonde**, base **LOCALE — qualiof_dev @ localhost**, dossier `DIAG-R001` (`454b58e6-7f88-4d95-adf6-5fc6c16ab838`), agence « Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) ».
@@ -12,7 +12,7 @@
 
 Parcours composé à partir du diagnostic **DIAG-R001**.
 
-**6 demi-journées, dans vos locaux.**
+**6 journées — 48 heures.**
 
 ## Objectifs pédagogiques
 
@@ -33,7 +33,7 @@ _Objectifs restant à rédiger — critère : le titre doit commencer par un ver
 
 ## Déroulé
 
-### Demi-journée 1 — 4 h
+### Journée 1 — 8 h
 
 #### Apprendre à vendre un rendez-vous découverte au téléphone
 
@@ -48,7 +48,7 @@ _Répond au besoin : Générer des contacts vendeurs._
 
 _Source : Acquisition et traitement Leads acquéreurs (BIB-D006)._
 
-### Demi-journée 2 — 4 h
+### Journée 2 — 8 h
 
 #### Maîtriser les techniques de découverte vendeur
 
@@ -60,7 +60,7 @@ _Répond au besoin : Formaliser la découverte et l’estimation vendeur._
 
 _Source : Découverte vendeur et estimation percutante (BIB-D017)._
 
-### Demi-journée 3 — 4 h
+### Journée 3 — 8 h
 
 #### Installer un rythme de suivi vendeur qui tient jusqu'à la vente
 
@@ -82,7 +82,7 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Demi-journée 4 — 4 h
+### Journée 4 — 8 h
 
 #### Rédiger des compromis de vente efficaces
 
@@ -103,7 +103,7 @@ _Répond au besoin : Piloter par les chiffres et animer l’équipe._
 
 _Source : Boostez, animez et fidélisez les performances de votre équipe (BIB-D014)._
 
-### Demi-journée 5 — 4 h
+### Journée 5 — 8 h
 
 #### Mener une découverte du projet acheteur-vendeur en situation
 
@@ -126,7 +126,7 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Demi-journée 6 — 4 h
+### Journée 6 — 8 h
 
 #### Gérer les objections et trouver des solutions de compromis
 

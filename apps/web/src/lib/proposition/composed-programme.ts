@@ -464,11 +464,11 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
     '',
     `Parcours composé à partir du diagnostic **${input.diagnosticReference}**.`,
     '',
-    // La durée, telle que le CLIENT la lit : ce qu'il va vivre. Les heures
-    // conventionnées, les heures sur site et la co-animation sont trois mots
-    // d'interne — il les rencontre dans la PROPOSITION, expliqués, là où on
-    // parle d'argent. Voir le bloc de doctrine en tête de fichier.
-    `**${plural(composition.totalHalfDays, 'demi-journée')}, dans vos locaux.**`,
+    // La durée, dans l'unité de celui qui INSTRUIT le dossier (§8.1) : le
+    // programme est une pièce Qualiopi, le financeur la lit, il compte en
+    // JOURNÉES et en HEURES. Un créneau co-animé vaut une journée de 8 h.
+    // Le client, lui, lit des demi-journées — dans la proposition.
+    `**${plural(composition.totalHalfDays, 'journée')} — ${composition.totalConventionedHours} heures.**`,
     '',
     '## Objectifs pédagogiques',
     '',
@@ -494,11 +494,10 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
 
   for (const block of composition.blocks) {
     md.push(
-      // La durée de la demi-journée RESTE : c'est ce que le dirigeant bloque
-      // dans son agenda. Nue, sans « sur site » — par rapport à quoi ? — et
-      // sans les heures conventionnées entre parenthèses, qui sont de
-      // l'interne. L'intrus était le mot, pas le chiffre.
-      `### Demi-journée ${block.index} — ${formatHours(rules.HALF_DAY_ONSITE_HOURS)}`,
+      // Un bloc est une JOURNÉE pour le financeur, et il porte ses heures.
+      // Le chiffre reste, le mot d'interne part : ni « sur site » — par
+      // rapport à quoi ? — ni « conventionnées » entre parenthèses.
+      `### Journée ${block.index} — ${formatHours(block.conventionedHours)}`,
       '',
     );
     for (const m of block.modules) {

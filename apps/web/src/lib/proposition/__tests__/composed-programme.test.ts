@@ -823,13 +823,30 @@ describe('Les prérequis du parcours — rien de déclaré ne veut pas dire « a
  * l'attestation d'assiduité et les dossiers financeurs — c'est l'objet du test
  * de contrat en fin de bloc.
  */
-describe('programme composé — pièce CLIENT : aucune heure sur le document', () => {
-  it('annonce les demi-journées et le lieu, et rien d’autre', () => {
+describe('programme composé — unité FINANCEUR : journées et heures', () => {
+  /**
+   * « Une prestation se dit dans l'unité de celui qui la lit » — doctrine
+   * Laurent du 15/09/2026, en tête de §8.1.
+   *
+   * Le programme composé est une pièce Qualiopi : le financeur l'instruit, donc
+   * c'est SON unité qui gouverne — des JOURNÉES et des HEURES, une demi-journée
+   * co-animée valant une journée de 8 h. Le client, lui, lit des DEMI-JOURNÉES
+   * dans la proposition. Même parcours, calculé une fois, deux unités
+   * d'affichage.
+   *
+   * Les mots « conventionné », « sur site » et « co-animation » ne paraissent
+   * sur AUCUNE pièce : ce sont des mots d'interne.
+   *
+   * ⚠ Ligne rouge §8.1 intacte — on change l'unité d'AFFICHAGE, jamais la
+   * source ni la valeur. Le test de contrat en fin de bloc le prouve par
+   * MUTATION.
+   */
+  it('annonce des journées et des heures', () => {
     const { programme } = programmeReel();
-    expect(programme.programMd).toContain('**1 demi-journée, dans vos locaux.**');
+    expect(programme.programMd).toContain('**1 journée — 8 heures.**');
   });
 
-  it('accorde le pluriel', () => {
+  it('accorde le pluriel et suit le volume', () => {
     const composition = composeProgramme({
       recommendations: [
         reco('mandat_exclusivite', [candidat('m1', 'Signer plus de mandats exclusifs', 240, VENDEUR)]),
@@ -842,7 +859,8 @@ describe('programme composé — pièce CLIENT : aucune heure sur le document', 
       composition, rules: RULES, agencyName: 'X', diagnosticReference: 'DIAG-0001',
       sources: SOURCES, fallback: FALLBACK, mentions: MENTIONS,
     });
-    expect(programme.programMd).toContain(`**${composition.totalHalfDays} demi-journées, dans vos locaux.**`);
+    expect(composition.totalHalfDays).toBe(2);
+    expect(programme.programMd).toContain('**2 journées — 16 heures.**');
   });
 
   it('ne dit NULLE PART « conventionnées », « sur site » ni « co-animation »', () => {
@@ -855,36 +873,68 @@ describe('programme composé — pièce CLIENT : aucune heure sur le document', 
   });
 
   /**
-   * La demi-journée garde SA durée — arbitrage Laurent du 15/09/2026, second
-   * tour, après que j'eus étendu à tort le retrait de l'en-tête aux six titres.
+   * L'EXCEPTION, NOMMÉE — et le test la verrouille à UNE.
    *
-   * Le chiffre n'était pas l'intrus : c'est ce que le dirigeant bloque dans son
-   * agenda. L'intrus était le mot « conventionnées », qui est de l'interne. On
-   * garde donc « — 4 h » et rien d'autre : pas de « sur site » (par rapport à
-   * quoi ?), pas de seconde unité entre parenthèses.
+   * Il reste un « demi-journée » dans le programme, et il ne vient pas d'ici :
+   * c'est la mention d'organisme « Une liste d'émargement est signée à la
+   * demi-journée » (`qualiopi-mentions.ts`), partagée par TOUTES les pièces
+   * Qualiopi. Elle décrit un RYTHME DE SIGNATURE, pas un volume vendu.
+   *
+   * Laurent n'a pas nommé cette mention dans son arbitrage, et une mention
+   * partagée ne se change pas pour un seul document (§4 quater : une consigne
+   * dit ce qu'elle couvre). Le test la fige donc à une occurrence : si une
+   * SECONDE apparaît, c'est que le cadre du programme s'est remis à parler en
+   * demi-journées, et il rougit.
    */
-  it('les titres de demi-journée gardent leur durée, nue', () => {
+  it('le seul « demi-journée » restant est la mention d’émargement de l’organisme', () => {
+    const { programme } = programmeReel();
+    const occurrences = programme.programMd.match(/demi-journée/gi) ?? [];
+    expect(occurrences).toHaveLength(1);
+    expect(programme.programMd).toContain('émargement est signée à la demi-journée');
+  });
+
+  it('les blocs sont des JOURNÉES et portent leurs heures', () => {
     const { programme } = programmeReel();
     for (const ligne of programme.programMd.split('\n')) {
-      if (ligne.startsWith('### Demi-journée')) {
-        expect(ligne).toMatch(/^### Demi-journée \d+ — \d+(,\d)? h$/);
-      }
+      if (ligne.startsWith('### ')) expect(ligne).toMatch(/^### Journée \d+ — \d+(,\d)? h$/);
     }
-    expect(programme.programMd).toContain('### Demi-journée 1 — 4 h');
+    expect(programme.programMd).toContain('### Journée 1 — 8 h');
   });
 
   /**
-   * LE TEST DE CONTRAT (§8.1) — c'est lui qui autorise le retrait.
+   * LE TEST DE CONTRAT (§8.1), VÉRIFIÉ PAR MUTATION.
    *
-   * Retirer l'affichage ne change AUCUN chiffre contractuel : `durationHours`
-   * porte toujours les heures conventionnées, `onSiteHours` toujours l'assiette
-   * du prix. Si ce test rougit, c'est qu'on a retiré une valeur et pas un mot.
+   * Il joue DEUX volumes. Un test à un seul volume passerait sur un nombre
+   * codé en dur — c'est §4 ter : ce qui donne sa valeur au test, c'est la
+   * variante qui le ferait rougir. Si l'affichage cessait de dériver des
+   * créneaux, le second cas tomberait.
+   *
+   * (Un module ne peut pas dépasser la capacité d'un bloc : on fait donc varier
+   * la durée des modules, pas leur nombre, et deux points suffisent.)
    */
-  it('CONTRAT : les valeurs qui alimentent la convention ne bougent pas', () => {
-    const { composition, programme } = programmeReel();
-    expect(programme.durationHours).toBe(composition.totalConventionedHours);
-    expect(programme.onSiteHours).toBe(composition.totalOnSiteHours);
-    expect(programme.durationHours).toBe(8);
-    expect(programme.onSiteHours).toBe(4);
+  it('CONTRAT : les deux unités dérivent du même nombre de créneaux', () => {
+    for (const [minutes, creneaux] of [[120, 1], [240, 2]] as const) {
+      const composition = composeProgramme({
+        recommendations: [
+          reco('mandat_exclusivite', [candidat('m1', 'Signer plus de mandats exclusifs', minutes, VENDEUR)]),
+          reco('acquereurs', [candidat('m2', 'Pratiquer les visites en situation réelle', minutes, ACHETEUR)]),
+        ],
+        rules: RULES,
+        envelopeHalfDays: 12,
+      });
+      const programme = buildComposedProgramme({
+        composition, rules: RULES, agencyName: 'X', diagnosticReference: 'DIAG-0001',
+        sources: SOURCES, fallback: FALLBACK, mentions: MENTIONS,
+      });
+
+      expect(composition.totalHalfDays).toBe(creneaux);
+      // Le créneau, lu par le client — c'est ce que la proposition affiche.
+      expect(programme.halfDays).toBe(creneaux);
+      // Le même créneau, lu par le financeur — ce que le programme affiche.
+      expect(programme.programMd).toContain(`${creneaux * 8} heures.`);
+      // Et la VALEUR contractuelle ne bouge pas d'un iota au passage.
+      expect(programme.durationHours).toBe(composition.totalConventionedHours);
+      expect(programme.onSiteHours).toBe(composition.totalOnSiteHours);
+    }
   });
 });
