@@ -3,7 +3,7 @@
   Base      : LOCALE — qualiof_dev @ localhost
   Dossier   : DIAG-R001 — 454b58e6-7f88-4d95-adf6-5fc6c16ab838
   Agence    : Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
-  Généré le : 2026-09-15T17:31:25.408Z
+  Généré le : 2026-09-16T05:12:15.348Z
 -->
 
 > ⚠ **Sortie de sonde**, base **LOCALE — qualiof_dev @ localhost**, dossier `DIAG-R001` (`454b58e6-7f88-4d95-adf6-5fc6c16ab838`), agence « Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) ».
@@ -21,10 +21,10 @@ Parcours composé à partir du diagnostic **DIAG-R001**.
 - Apprendre à vendre un rendez-vous découverte au téléphone
 - Maîtriser les techniques de découverte vendeur
 - Installer un rythme de suivi vendeur qui tient jusqu'à la vente
-- Rédiger des compromis de vente efficaces
+- Gérer les objections et trouver des solutions de compromis
 - Mener une découverte du projet acheteur-vendeur en situation
 - Préparer un dossier de suivi vendeur complet
-- Gérer les objections et trouver des solutions de compromis
+- Convaincre le vendeur avec des arguments solides
 
 _Objectifs restant à rédiger — critère : le titre doit commencer par un verbe d’action reconnu._
 
@@ -84,13 +84,13 @@ _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec S
 
 ### Journée 4 — 8 h
 
-#### Rédiger des compromis de vente efficaces
+#### Gérer les objections et trouver des solutions de compromis
 
 _Répond au besoin : Transformer visites et offres en actes._
 
-- Comprendre : Les éléments clés et les clauses essentielles d’un compromis de vente
-- Rédiger : Des compromis de vente clairs et juridiquement solides
-- Sécuriser : Les transactions en vérifiant la conformité des documents et en anticipant les risques juridiques
+- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
+- Répondre : Techniques pour répondre aux objections de manière constructive
+- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
 
 _Source : Négociation et compromis (BIB-D034)._
 
@@ -128,15 +128,15 @@ _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec S
 
 ### Journée 6 — 8 h
 
-#### Gérer les objections et trouver des solutions de compromis
+#### Convaincre le vendeur avec des arguments solides
 
 _Répond au besoin : Transformer visites et offres en actes._
 
-- Identifier : Les objections courantes et les conflits potentiels lors de la négociation
-- Répondre : Techniques pour répondre aux objections de manière constructive
-- Trouver : Des solutions de compromis acceptables pour toutes les parties, favorisant la conclusion de la vente
+- Élaborer : Construction d'argumentaires basés sur les données et l'estimation
+- Adapter : Personnalisation de la présentation en fonction du profil du vendeur
+- Répondre : Techniques pour gérer les objections et rassurer le vendeur
 
-_Source : Négociation et compromis (BIB-D034)._
+_Source : Découverte vendeur et estimation percutante (BIB-D017)._
 
 #### Élaborer des activités interactives pour encourager la participation de l'équipe et favoriser la cohésion.
 

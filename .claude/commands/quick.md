@@ -1007,6 +1007,48 @@ verdict.**
 Même famille que le garde qui ne garde rien : ici, ce n'est pas le test qui a
 cessé de regarder, c'est **celui qui lisait le test**.
 
+## 5 ter. Le rapprochement métier ne se valide pas par une gate
+
+**Étape du processus, pas aveu de faiblesse.** Tant que la bibliothèque n'est
+pas mûre, **un programme composé se relit par un humain du métier, dossier par
+dossier, avant d'être proposé à un client.** C'est une étape, elle se planifie,
+et elle a un coût connu — vingt minutes de Laurent par dossier.
+
+### Pourquoi aucune gate ne peut la remplacer
+
+Cas fondateur, 16/09/2026. « Rédiger des compromis de vente efficaces » était
+proposé sur le besoin « Transformer visites et offres en actes ». Le
+rapprochement est **lexicalement parfait** : le module parle de vente, le besoin
+aussi. Il est **sémantiquement faux** : la douleur porte sur le suivi de la
+réception des pièces entre l'offre et l'acte, et **un conseiller ne rédige pas
+un compromis** — c'est le notaire.
+
+Aucun test n'aurait pu l'attraper, et pas par négligence : il fallait **savoir
+ce que fait un conseiller immobilier**. Ce n'est pas une information qui vit
+dans le dépôt.
+
+> **Une gate vérifie une règle qu'on a su formuler. Elle ne vérifie jamais une
+> règle qu'on ne connaît pas encore.** Le métier n'est pas encore entièrement
+> écrit ; la relecture est le seul endroit où il entre.
+
+### Ce que la relecture produit, et qui la rend rentable
+
+Elle ne jette pas un rapprochement : elle **écrit une règle**. Le refus entre au
+registre (`arbitrages-rattachement.ts`) avec son motif intégral, keyé sur le
+`sourceRef` — l'identité stable qui survit à un ré-import. Le moteur ne le
+repropose plus jamais, **même si le catalogue bouge**.
+
+Chaque relecture rend donc la suivante plus courte. C'est ce qui distingue cette
+étape d'une corvée permanente : **elle se résorbe.**
+
+### Quand elle s'arrêtera
+
+Quand le registre cessera de se remplir. Tant qu'une relecture sur deux produit
+un refus, la bibliothèque n'est pas mûre — et le relevé des appuis uniques
+(`probe-homonymes.ts`) dit pourquoi : **87 % des rapprochements ne tiennent que
+par un seul mot.** Un rapprochement à appui unique n'a pas de second témoin ;
+si ce mot se trompe de sens, rien ne le rattrape.
+
 ## 5 bis. Une PR verte peut ne rien faire — vérifie sa BASE
 
 Deux pièges de fusion, tous deux rencontrés le 12/09/2026, et qu'aucune gate

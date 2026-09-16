@@ -47,6 +47,7 @@ export async function loadPropositionLibrary(tenantId: string): Promise<LibraryM
         orderBy: { order: 'asc' },
         select: {
           id: true,
+          sourceRef: true,
           title: true,
           family: true,
           targetProfile: true,
@@ -67,6 +68,7 @@ export async function loadPropositionLibrary(tenantId: string): Promise<LibraryM
     p.modules.map(
       (m): LibraryModule => ({
         moduleId: m.id,
+        sourceRef: m.sourceRef,
         title: m.title,
         family: m.family,
         targetProfile: m.targetProfile,

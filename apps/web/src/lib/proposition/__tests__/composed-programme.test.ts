@@ -498,6 +498,7 @@ describe('CONTRAT — un programme composé ne contient JAMAIS un module sans d�
       // L'étiquette : tous les signaux, aucun contenu.
       {
         ...base,
+        sourceRef: null,
         moduleId: 'm-vide',
         title: 'Suivi',
         signals: [SIGNAL],
@@ -507,6 +508,7 @@ describe('CONTRAT — un programme composé ne contient JAMAIS un module sans d�
       // Le module réel, moins bien doté en signaux.
       {
         ...base,
+        sourceRef: null,
         moduleId: 'm-reel',
         title: 'Signer plus de mandats exclusifs',
         signals: [SIGNAL],

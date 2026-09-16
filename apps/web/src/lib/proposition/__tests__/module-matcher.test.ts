@@ -49,6 +49,8 @@ function mod(
   opts: Partial<LibraryModule> = {},
 ): LibraryModule {
   return {
+    // Par défaut, pas d'identité de source : les tests qui arbitrent la posent.
+    sourceRef: null,
     moduleId,
     title,
     family: null,
@@ -787,5 +789,64 @@ describe('recommendModules — départage d’une égalité de score (arbitrage 
     expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
     expect(axe.candidates.map((c) => c.matchedTerms)).toEqual([['mandat'], ['mandat']]);
     expect(axe.candidates.map((c) => c.moduleId)).toEqual(['m-alpha-a', 'm-alpha-z']);
+  });
+});
+
+/**
+ * Le registre des arbitrages — un refus de Laurent ne se rejoue pas.
+ *
+ * Cas fondateur (16/09/2026) : « Rédiger des compromis de vente efficaces »
+ * (`drive:034#2`) était proposé sur « Transformer visites et offres en actes ».
+ * La douleur porte sur le SUIVI DE LA RÉCEPTION DES PIÈCES entre l'offre et
+ * l'acte ; le module parle de rédiger un compromis, ce que le conseiller ne
+ * fait pas.
+ *
+ * Le rapprochement est lexicalement parfait et sémantiquement faux — et il
+ * n'était même pas attrapable par une relecture de la trace : le terme qui a
+ * matché est « vente », pas « compromis ».
+ */
+describe('arbitrages de rattachement — un refus métier survit au catalogue', () => {
+  const BESOIN = 'transformation';
+  const REFUSE = 'drive:034#2';
+
+  function bibliotheque(sourceRef: string | null): LibraryModule[] {
+    return [
+      mod('m-compromis', 'Rédiger des compromis de vente efficaces', VENDEUR, {
+        sourceRef,
+        contentMd: '- Les clauses essentielles\n- Sécuriser la transaction\n- Cas pratique',
+      }),
+    ];
+  }
+
+  const entree = (library: LibraryModule[]) => ({
+    answers: REPONSES,
+    alerts: [],
+    chapterScores: [chapitre(8, 30)],
+    library,
+  });
+
+  function reco(library: LibraryModule[]) {
+    return recommendModules(entree(library)).recommendations.find((r) => r.need.code === BESOIN);
+  }
+
+  it('ne propose plus le module refusé sur CE besoin', () => {
+    const r = reco(bibliotheque(REFUSE));
+    expect(r?.candidates.map((c) => c.moduleId)).not.toContain('m-compromis');
+  });
+
+  it('le DIT au commercial — un module écarté en silence est un module qu’on rajoute', () => {
+    const out = recommendModules(entree(bibliotheque(REFUSE)));
+    expect(out.notices.join(' ')).toMatch(/arbitrage|refus/i);
+    expect(out.notices.join(' ')).toContain('Rédiger des compromis de vente efficaces');
+  });
+
+  /**
+   * LE TEST DE PUISSANCE — sans lui, le premier test passerait aussi si le
+   * module était écarté pour une tout autre raison (score nul, déroulé
+   * manquant). Le MÊME module, la MÊME bibliothèque, seule l'identité change.
+   */
+  it('le même module SANS son sourceRef reste proposé — c’est bien l’arbitrage qui écarte', () => {
+    const r = reco(bibliotheque('drive:034#9'));
+    expect(r?.candidates.map((c) => c.moduleId)).toContain('m-compromis');
   });
 });

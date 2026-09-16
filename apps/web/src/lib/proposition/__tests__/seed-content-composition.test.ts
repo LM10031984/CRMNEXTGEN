@@ -112,6 +112,7 @@ function mod(
 ): LibraryModule {
   return {
     moduleId,
+    sourceRef: null,
     title,
     family: null,
     targetProfile: null,
