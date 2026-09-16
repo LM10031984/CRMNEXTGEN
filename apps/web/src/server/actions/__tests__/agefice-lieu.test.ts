@@ -28,6 +28,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const findFirstParticipant = vi.fn();
 
 vi.mock('@qualiof/db', () => ({
+  // L'enum est une VALEUR lue à l'exécution par `repartirHeuresAgefice` (le
+  // `switch` porte sur `Modality.PRESENTIEL`, pas sur une chaîne). Un mock qui
+  // ne l'expose pas fait échouer l'import, pas l'assertion.
+  Modality: {
+    PRESENTIEL: 'PRESENTIEL',
+    DISTANCIEL: 'DISTANCIEL',
+    MIXTE: 'MIXTE',
+    ELEARNING: 'ELEARNING',
+  },
   prisma: {
     document: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),

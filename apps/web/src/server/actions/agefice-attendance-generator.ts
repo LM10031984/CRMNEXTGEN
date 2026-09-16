@@ -27,7 +27,7 @@ import {
 } from '@/lib/closure/agefice-attendance-template';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
-import { splitDureeByModality } from '@/lib/agefice/duree-par-modalite';
+import { repartirHeuresAgefice } from '@/lib/agefice/duree-par-modalite';
 
 
 export async function generateAgeficeAttendanceForParticipant(
@@ -140,7 +140,10 @@ export async function generateAgeficeAttendanceForParticipant(
 
   // ── Durées (prévues seulement V1 — réalisées vides) ───────────
   const totalHours = participant.session.product.durationHours;
-  const split = splitDureeByModality(participant.session.modality, totalHours);
+  const repartition = repartirHeuresAgefice(participant.session.modality, totalHours);
+  // Même règle que le dossier AGEFICE : pas de répartition, pas de pièce.
+  if (!repartition.ok) return { ok: false, error: repartition.motif, warnings };
+  const split = repartition;
 
   // ── Règlement ────────────────────────────────────────────────
   // Source : priceHT du participant (Decimal en euros, schéma 553).

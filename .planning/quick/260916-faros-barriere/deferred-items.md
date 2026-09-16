@@ -6,9 +6,13 @@
 en échec, délibérément.** Tout le reste est vert : 362 fichiers, 3 867 tests.
 
 ```
-Test Files  1 failed | 362 passed (363)
-     Tests  3 failed | 3867 passed | 2 skipped (3872)
+Test Files  1 failed | 363 passed (364)
+     Tests  3 failed | 3879 passed | 2 skipped (3884)
 ```
+
+_Compte actualisé le 16/09 au soir, après la correction de la modalité AGEFICE
+(12 tests ajoutés, tous verts). Les trois rouges sont les mêmes, et ce sont les
+seuls._
 
 **Pourquoi.** Laurent a arbitré le 16/09 : *aucun contenu Faros n'est importé au
 catalogue*. Le test tient cette décision. Il ne se supprime pas ; il se lève en
@@ -31,3 +35,40 @@ champ est une décision de Laurent.
 Tant que cette barrière est en place, la règle « aucun commit de fin sans les
 trois vertes » (`quick.md` §5) se lit : **lint et tsc verts, `pnpm test` vert À
 L'EXCEPTION de ce fichier**. Toute AUTRE rougeur reste bloquante.
+
+---
+
+# Différé — la répartition horaire d'une session MIXTE
+
+**Posé le 16/09/2026, en même temps que le refus qu'il remplacera.**
+
+`repartirHeuresAgefice` **refuse** la modalité `MIXTE` : la répartition des heures
+entre présentiel et distanciel n'est renseignée nulle part. Mesuré le même jour,
+en lecture seule sur la production : **0 module sur 86** porte une répartition
+horaire (`presentielCollectifHours`, `distancielSyncHours`,
+`distancielAsyncHours` — les trois colonnes sont nulles partout).
+
+Le refus est donc juste **tant qu'il n'existe pas de source**. Son successeur est
+nommé :
+
+> **Un champ de répartition sur `TrainingSession`** — trois entiers nullables, et
+> la règle « leur somme vaut la durée du produit ». `repartirHeuresAgefice` lit
+> ce champ pour `MIXTE`, et ne refuse plus que s'il est vide.
+
+**Condition de levée : la première session MIXTE vendue.** Pas avant — une
+migration posée pour un cas qui n'existe pas est une colonne nulle de plus, et
+c'est exactement ce qu'on vient de constater sur les quatre colonnes d'heures
+existantes.
+
+**Ce qui n'est PAS différé, et qui est fait** : `ELEARNING → foadAsync`,
+`DISTANCIEL → foadSync`, la disparition du `default`, et la source unique.
+
+## Une case qui n'est alimentée par rien
+
+`presIndiv` — « Durée ( Présentiel Individuel ) » du Cerfa — vaut **0 pour les
+quatre modalités**. Aucune ne la renseigne, et ce n'est pas un oubli de la
+correction : il n'existe aujourd'hui aucune prestation en présentiel individuel
+au catalogue. La case part donc à zéro sur tous les dossiers.
+
+**Noté, pas inventé.** Le jour où du présentiel individuel se vend, cette case
+n'a pas de source non plus — elle rejoindra le même différé que `MIXTE`.

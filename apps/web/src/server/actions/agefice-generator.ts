@@ -21,7 +21,7 @@ import {
 import { isCanonicalExperience } from '@/lib/agefice-options';
 import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
-import { splitDureeByModality } from '@/lib/agefice/duree-par-modalite';
+import { repartirHeuresAgefice } from '@/lib/agefice/duree-par-modalite';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -211,7 +211,12 @@ export async function generateAgeficeForParticipant(
 
   // ── Construit le payload ─────────────────────────────────────
   const totalHours = product.durationHours;
-  const duree = splitDureeByModality(session.modality, totalHours);
+  const repartition = repartirHeuresAgefice(session.modality, totalHours);
+  // Une répartition qu'on ne sait pas établir ne s'imprime pas : le dossier
+  // n'est pas produit, et le motif remonte au commercial. Inventer des heures
+  // sur une pièce qui part au financeur est le défaut que §4 quinquies nomme.
+  if (!repartition.ok) return { ok: false, error: repartition.motif, warnings };
+  const duree = repartition;
   const formateur = session.trainers
     .map((t) => `${t.person.firstName} ${t.person.lastName}`)
     .join(', ');

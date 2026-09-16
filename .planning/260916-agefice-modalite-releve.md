@@ -79,3 +79,56 @@ Gates : `lint` et `tsc` à `exit=0`. `pnpm test` porte **12 rouges assumés**
   session réellement mixte aurait déjà été déclarée présentielle.
 - Les dossiers AGEFICE **déjà déposés** : je n'ai pas vérifié ce que portent les
   PDF archivés dans MinIO, seulement ce que le code produirait aujourd'hui.
+
+---
+
+## 5 · Arbitrage rendu le 16/09/2026 (soir)
+
+_On cite, on ne remplace pas. Le §3 disait des étapes 3 et 4 : « ⏸ **attend
+l'arbitrage** ». Elles sont tranchées._
+
+### Le `default` ne devient pas plus prudent — il DISPARAÎT
+
+L'arbitrage a écarté mes deux propositions, et il avait raison de les écarter :
+elles cherchaient toutes deux le bon comportement d'une branche **inatteignable**.
+`TrainingSession.modality` est un enum **fermé et non nullable**
+(`schema.prisma:582`, idem `:403` pour `TrainingProduct`), et les deux appelants
+passent ce champ. Le paramètre était pourtant typé `string | null | undefined` :
+**la branche `default` n'existait que parce que la signature avait ouvert un
+ensemble fermé.**
+
+Le `case 'BLENDED'` en était la preuve — cette valeur n'est dans aucun enum.
+C'était du code mort invité par le typage.
+
+Ce qui remplace le `default` n'est pas une branche : c'est un **contrôle
+d'exhaustivité** (`const _exhaustif: never`). Une cinquième valeur de `Modality`
+casse `tsc` **au build**, pas la génération devant un commercial.
+
+> La leçon, et elle vaut au-delà d'ici : **avant de choisir le comportement d'un
+> cas, vérifier qu'il peut se produire.** J'ai proposé deux options pour une
+> branche que le type interdit.
+
+### Les quatre cases, et celle que rien n'alimente
+
+| Case AGEFICE | Alimentée par |
+|---|---|
+| Présentiel individuel | **rien** — voir ci-dessous |
+| Présentiel collectif | `PRESENTIEL` |
+| FOAD synchrone | `DISTANCIEL` — du distanciel **en direct** |
+| FOAD asynchrone | `ELEARNING` — à son rythme |
+
+`DISTANCIEL` et `ELEARNING` ne tombent pas dans la même case : l'AGEFICE
+distingue le synchrone de l'asynchrone. Les confondre déclarerait au financeur
+une nature de prestation autre que celle vendue.
+
+**`presIndiv` vaut 0 pour les quatre modalités.** Ce n'est pas un oubli de la
+correction : aucune prestation en présentiel individuel n'existe au catalogue,
+et rien ne renseigne cette case. **Noté comme non alimentée, pas inventé** —
+inscrit au différé avec `MIXTE`.
+
+### `MIXTE` refuse, et son successeur est nommé
+
+Le refus dit ce qui manque et quoi faire — **sans porter la mesure**. « 0 module
+sur 86 » est un relevé daté ; un message d'erreur ne peut pas porter de date,
+donc il ne porte pas de mesure. Le champ de répartition sur la session est
+différé, condition de levée écrite : **la première session MIXTE vendue**.
