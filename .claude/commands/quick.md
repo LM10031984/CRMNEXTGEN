@@ -910,6 +910,34 @@ Relire ses propres commentaires en se demandant : **« si c'est faux, qu'est-ce
 qui me le dirait ? »** Si la réponse est « rien », le commentaire énonce un fait
 métier sans source — il cite, ou il se tait.
 
+### Et quand le document a déjà menti : on CITE, on ne remplace pas
+
+Le pendant, pour un document qui décrit un ÉTAT et que l'état a dépassé.
+
+Cas du 16/09/2026. L'ordre de marche du 14/09 portait « ⚠ **Ces propositions ne
+sont PAS appliquées** » à propos de quatre titres de modules. Les quatre étaient
+en base depuis, sous la formulation proposée. Le réflexe est de réécrire la
+ligne.
+
+**Il ne faut pas.** La correction se pose À CÔTÉ de la phrase d'origine, qui est
+citée, et elle porte sa date :
+
+> **L'effacer aurait produit un document juste aujourd'hui et faux sur son
+> passé.**
+
+Ce qu'on perd en effaçant, et qu'on ne récupère jamais : la trace de ce qui
+était vrai quand la décision suivante a été prise. Quelqu'un qui relit un
+arbitrage du 14/09 doit pouvoir savoir ce que son auteur avait sous les yeux —
+sinon l'arbitrage devient incompréhensible, et on le rejoue.
+
+C'est la même mécanique que « on RENVERSE le test, on ne le supprime pas »
+(§4 ter) : l'ancienne assertion reste en commentaire avec la date et le motif du
+renversement. Un document se corrige comme un test se renverse.
+
+**En pratique** : un bloc daté, la phrase d'origine entre guillemets, ce qui a
+changé, et la commande ou le relevé qui l'établit. Trois lignes, et le document
+cesse de mentir sans se mettre à mentir sur lui-même.
+
 ## 4 septdecies. Une règle qui vit dans le CODE ne protège que son fichier
 
 Même jour, même dossier, et c'est le thème de la semaine dans sa forme la plus
