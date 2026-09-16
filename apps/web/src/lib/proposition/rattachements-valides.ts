@@ -36,12 +36,83 @@
  * que l'absence soit lisible plutôt que silencieuse.
  */
 
-/** Le module visé, désigné comme Laurent le désigne : son programme et son titre. */
+/**
+ * Le module visé.
+ *
+ * ⚠ **La clé est le `sourceRef`, jamais le titre.** Ce fichier a désigné ses
+ * modules par `{ programme, module: titre }` jusqu'au 16/09/2026, et quatre des
+ * sept décisions ont cessé de s'appliquer le 14/09 — le jour où quatre titres
+ * ont été réécrits, sur arbitrage de Laurent et par le bon chemin
+ * (`TITRES_TRANCHES`, keyé lui sur `sourceRef#order`).
+ *
+ * Ses arbitrages ont été détachés en appliquant ses arbitrages, et rien ne
+ * s'est levé : un registre keyé sur un libellé se vide en silence le jour où
+ * quelqu'un améliore le libellé. Or améliorer un libellé est son destin.
+ */
 export interface CibleRattachement {
-  /** Le code du programme d'origine — `BIB-D034`, `BIB-D017`. */
+  /** L'identité STABLE du module dans sa source — `drive:034#2`. Elle désigne. */
+  sourceRef: string;
+  /** Le code du programme d'origine — pour relire. */
   programme: string;
-  /** Le titre du module, tel qu'il est au catalogue. */
-  module: string;
+  /** Le titre AU MOMENT de la décision — pour relire, jamais pour identifier. */
+  titreAuMomentDeLaDecision: string;
+}
+
+/** Un module du catalogue, tel que `resoudreCibles` a besoin de le voir. */
+export interface ModuleDuCatalogue {
+  sourceRef: string | null;
+  programme: string;
+  titre: string;
+}
+
+/** Une décision qui ne retrouve plus sa cible. */
+export interface DecisionOrpheline {
+  /** Le `sourceRef` cherché, et introuvable. */
+  sourceRef: string;
+  /** Le titre au moment de la décision — pour que la ligne se lise. */
+  libelle: string;
+  /** La douleur pour laquelle la décision avait été prise. */
+  pour: string;
+}
+
+/** Une cible retrouvée, avec le titre qu'elle porte AUJOURD'HUI. */
+export interface CibleResolue {
+  cible: CibleRattachement;
+  pour: string;
+  titreActuel: string;
+}
+
+/**
+ * Apparie les cibles au catalogue **par leur identité**, et dit ce qu'elle
+ * n'a pas retrouvé.
+ *
+ * Le second point n'est pas un confort : c'est la moitié de la règle. Un
+ * registre qui ne sait pas dire ce qu'il a perdu n'est pas un registre — c'est
+ * précisément le signalement des orphelines qui a rendu visible le défaut du
+ * 14/09, après quatre jours de silence.
+ */
+export function resoudreCibles(
+  rattachements: readonly Pick<RattachementValide, 'douleur' | 'cibles'>[],
+  catalogue: readonly ModuleDuCatalogue[],
+): { trouvees: CibleResolue[]; orphelines: DecisionOrpheline[] } {
+  const parRef = new Map(
+    catalogue.filter((m) => m.sourceRef !== null).map((m) => [m.sourceRef as string, m]),
+  );
+  const trouvees: CibleResolue[] = [];
+  const orphelines: DecisionOrpheline[] = [];
+  for (const r of rattachements) {
+    for (const cible of r.cibles) {
+      const m = parRef.get(cible.sourceRef);
+      if (m) trouvees.push({ cible, pour: r.douleur, titreActuel: m.titre });
+      else
+        orphelines.push({
+          sourceRef: cible.sourceRef,
+          libelle: cible.titreAuMomentDeLaDecision,
+          pour: r.douleur,
+        });
+    }
+  }
+  return { trouvees, orphelines };
 }
 
 export interface RattachementValide {
@@ -83,7 +154,11 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     // n'a pas serait la première ligne fausse du fichier.
     signal: "Prospection — pas de trame d'appel commune : au téléphone, chacun y va au talent",
     cibles: [
-      { programme: 'BIB-D006', module: 'Apprendre à vendre un rendez-vous découverte au téléphone' },
+      {
+        sourceRef: 'drive:006#1',
+        programme: 'BIB-D006',
+        titreAuMomentDeLaDecision: 'Apprendre à vendre un rendez-vous découverte au téléphone',
+      },
     ],
   },
   {
@@ -92,10 +167,16 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     signal:
       'Découverte vendeur — chacun sa méthode au rendez-vous vendeur, pas de trame de découverte avant estimation',
     cibles: [
-      { programme: 'BIB-D017', module: 'Maîtriser les techniques de découverte vendeur' },
       {
+        sourceRef: 'drive:017#1',
+        programme: 'BIB-D017',
+        titreAuMomentDeLaDecision: 'Maîtriser les techniques de découverte vendeur',
+      },
+      {
+        sourceRef: 'drive:008#1',
         programme: 'BIB-D008',
-        module: 'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
+        titreAuMomentDeLaDecision:
+          'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
       },
     ],
   },
@@ -104,7 +185,11 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     douleur: 'Les conseillers tiennent le prix de rentrée',
     signal:
       'Mandat — le prix de rentrée se lâche pour ne pas perdre l’affaire : la négociation du mandat ne se tient pas',
-    cibles: [{ programme: 'BIB-D017', module: 'Convaincre le vendeur avec des arguments solides' }],
+    cibles: [{
+      sourceRef: 'drive:017#3',
+      programme: 'BIB-D017',
+      titreAuMomentDeLaDecision: 'Convaincre le vendeur avec des arguments solides',
+    }],
   },
   {
     ruleId: 'suivi-vendeur',
@@ -112,7 +197,11 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     signal:
       "Suivi vendeur — aucun rythme organisé : le vendeur entend parler de l'agence quand il y a du neuf",
     cibles: [
-      { programme: 'BIB-D037', module: 'Préparer un Excellent Dossier de Suivi Vendeur' },
+      {
+        sourceRef: 'drive:037#2',
+        programme: 'BIB-D037',
+        titreAuMomentDeLaDecision: 'Préparer un Excellent Dossier de Suivi Vendeur',
+      },
     ],
     reserve:
       'La douleur porte sur le RITUEL de suivi, le module sur la PRÉPARATION du dossier. Retenu comme le meilleur contenu existant, et repéré comme un endroit où écrire.',
@@ -124,12 +213,15 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
       "Acquéreur — l'acheteur part en visite sans qu'on ait compris son projet : pas de face à face de qualification",
     cibles: [
       {
+        sourceRef: 'drive:008#1',
         programme: 'BIB-D008',
-        module: 'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
+        titreAuMomentDeLaDecision:
+          'Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur',
       },
       {
+        sourceRef: 'drive:012#2',
         programme: 'BIB-D012',
-        module:
+        titreAuMomentDeLaDecision:
           'Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs :',
       },
     ],
@@ -140,8 +232,16 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     signal:
       'Transformation — trop d’offres ne deviennent pas des compromis : la négociation de l’offre décroche',
     cibles: [
-      { programme: 'BIB-D034', module: 'Rédiger des compromis de vente efficaces' },
-      { programme: 'BIB-D034', module: 'Gérer les objections et trouver des solutions de compromis' },
+      {
+        sourceRef: 'drive:034#2',
+        programme: 'BIB-D034',
+        titreAuMomentDeLaDecision: 'Rédiger des compromis de vente efficaces',
+      },
+      {
+        sourceRef: 'drive:034#3',
+        programme: 'BIB-D034',
+        titreAuMomentDeLaDecision: 'Gérer les objections et trouver des solutions de compromis',
+      },
     ],
   },
   {
@@ -150,8 +250,16 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
     signal:
       'Transformation — trop de compromis n’arrivent pas à l’acte : la vente se perd après la signature',
     cibles: [
-      { programme: 'BIB-D034', module: 'Rédiger des compromis de vente efficaces' },
-      { programme: 'BIB-D034', module: 'Gérer les objections et trouver des solutions de compromis' },
+      {
+        sourceRef: 'drive:034#2',
+        programme: 'BIB-D034',
+        titreAuMomentDeLaDecision: 'Rédiger des compromis de vente efficaces',
+      },
+      {
+        sourceRef: 'drive:034#3',
+        programme: 'BIB-D034',
+        titreAuMomentDeLaDecision: 'Gérer les objections et trouver des solutions de compromis',
+      },
     ],
   },
 ];

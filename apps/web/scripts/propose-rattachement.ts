@@ -65,6 +65,7 @@ import { cheminReleve } from '../src/lib/releve-fichier';
 import {
   REFUS_RATTACHEMENT,
   candidatsSurvivants,
+  refusOrphelins,
   type RefusDeCouple,
 } from '../src/lib/proposition/refus-rattachement';
 
@@ -99,7 +100,7 @@ import {
 type Arbitrage =
   | {
       verdict: 'retenu';
-      unites: { titre: string; origine: string }[];
+      unites: { sourceRef: string | null; titre: string; origine: string }[];
       /**
        * Ce que Laurent a voulu dire en retenant ce module — une réserve, une
        * intention d'écriture. Un rattachement « le meilleur contenu existant »
@@ -122,7 +123,11 @@ const ARBITRAGES: Record<string, Arbitrage> = {
       r.ruleId,
       {
         verdict: 'retenu',
-        unites: r.cibles.map((c) => ({ titre: c.module, origine: c.programme })),
+        unites: r.cibles.map((c) => ({
+          sourceRef: c.sourceRef,
+          titre: c.titreAuMomentDeLaDecision,
+          origine: c.programme,
+        })),
         note: r.reserve,
       },
     ]),
@@ -137,7 +142,12 @@ const ARBITRAGES: Record<string, Arbitrage> = {
         verdict: 'retenu',
         unites: r.retenu.map((x) => {
           const [code, ...reste] = x.split(' — ');
-          return { titre: reste.join(' — '), origine: code! };
+          // `sourceRef: null` — un PRODUIT vendu pris comme un tout n'a pas
+          // d'identité de module. C'est le seul appariement par libellé qui
+          // reste dans ce circuit, et il est ici parce qu'il n'y a rien d'autre
+          // à quoi s'accrocher : ces deux décisions ne sont de toute façon pas
+          // écrivables (le produit ne porte aucun module).
+          return { sourceRef: null, titre: reste.join(' — '), origine: code! };
         }),
         note: `⚠️ **Pas encore écrit en base.** ${r.obstacle}`,
       },
@@ -548,7 +558,10 @@ propositions.sort(parPriorite);
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface UniteRetenue {
+  sourceRef: string | null;
+  /** Le titre au moment de la décision — pour relire. Le titre ACTUEL peut différer. */
   titre: string;
+  titreActuel: string | null;
   origine: string;
   trouvee: boolean;
 }
@@ -568,16 +581,30 @@ for (const p of propositions) {
 
   if (arbitrage?.verdict === 'retenu') {
     const unites = arbitrage.unites.map((u) => {
-      const trouvee = units.some(
-        (unit) =>
-          unit.originCode === u.origine && catalogueTitleKey(unit.title) === catalogueTitleKey(u.titre),
-      );
-      if (!trouvee) {
+      // Par l'IDENTITÉ, jamais par le titre : un titre s'améliore, et le 14/09
+      // quatre décisions ont décroché parce qu'on l'avait amélioré.
+      const unit =
+        u.sourceRef !== null
+          ? units.find((x) => x.sourceRef === u.sourceRef)
+          : // Produit vendu : pas d'identité de module, on retombe sur le
+            // libellé. Signalé comme tel plutôt que passé sous silence.
+            units.find(
+              (x) =>
+                x.originCode === u.origine &&
+                catalogueTitleKey(x.title) === catalogueTitleKey(u.titre),
+            );
+      if (!unit) {
         perdues.push(
-          `« ${u.titre} » (${u.origine}), retenue pour « ${p.douleur.label} », **n'est plus une unité animable du catalogue**.`,
+          `${u.sourceRef ? `\`${u.sourceRef}\` ` : ''}« ${u.titre} » (${u.origine}), retenue pour « ${p.douleur.label} », **n'est plus une unité animable du catalogue**.`,
         );
       }
-      return { titre: u.titre, origine: u.origine, trouvee };
+      return {
+        sourceRef: u.sourceRef,
+        titre: u.titre,
+        titreActuel: unit?.title ?? null,
+        origine: u.origine,
+        trouvee: unit !== undefined,
+      };
     });
     retenues.push({ douleur: p.douleur, unites, note: arbitrage.note });
     continue;
@@ -596,6 +623,22 @@ for (const p of propositions) {
 function sansReponse(p: Proposition): boolean {
   if (ARBITRAGES[p.douleur.ruleId]) return false;
   return candidatsSurvivants(avecRef(p), REFUS_RATTACHEMENT[p.douleur.ruleId] ?? []).length === 0;
+}
+
+// Tout registre dit ce qu'il a perdu — sinon ce n'est pas un registre.
+const refsConnues = new Set(
+  units.map((u) => u.sourceRef).filter((r): r is string => r !== null),
+);
+for (const o of refusOrphelins(refsConnues)) {
+  // La population cherchée est celle des unités ANIMABLES, pas le catalogue
+  // entier : un module au déroulé vide en sort sans avoir disparu. Dire
+  // « introuvable » enverrait chercher au mauvais endroit (§4 octies).
+  perdues.push(
+    `refus \`${o.refus.moduleSourceRef}\` « ${o.refus.moduleTitre} », posé le ${o.refus.date} ` +
+      `sur « ${o.ruleId} », **ne figure pas parmi les ${units.length} unités animables** — ` +
+      `soit le module a quitté le catalogue, soit son déroulé est vide. ` +
+      `Dans les deux cas le refus est sans objet, et il peut rester : il ne coûte rien.`,
+  );
 }
 
 const sansProposition = propositions.filter(sansReponse);

@@ -96,3 +96,17 @@ export function arbitrageRefusant(
   if (!moduleSourceRef) return null;
   return PAR_BESOIN.get(needCode)?.get(moduleSourceRef) ?? null;
 }
+
+/**
+ * Les arbitrages qui ne retrouvent plus leur module.
+ *
+ * Même garde que `refusOrphelins` et `resoudreCibles`, pour la même raison :
+ * **un registre qui ne sait pas dire ce qu'il a perdu n'est pas un registre.**
+ * Un `sourceRef` mal saisi n'arbitre rien, et rien ne le signale.
+ */
+export function arbitragesOrphelins(
+  refsConnues: ReadonlySet<string>,
+  registre: readonly ArbitrageRattachement[] = ARBITRAGES_RATTACHEMENT,
+): ArbitrageRattachement[] {
+  return registre.filter((a) => !refsConnues.has(a.moduleSourceRef));
+}

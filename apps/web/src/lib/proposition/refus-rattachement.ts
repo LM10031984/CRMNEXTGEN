@@ -105,3 +105,28 @@ export function candidatsSurvivants<T extends { sourceRef: string | null }>(
   // refus de MODULE ne le vise pas.
   return candidats.filter((c) => c.sourceRef === null || !refuses.has(c.sourceRef));
 }
+
+/**
+ * Les refus qui ne retrouvent plus leur module.
+ *
+ * Seconde moitié de la règle, et elle n'est pas décorative : un registre qui ne
+ * sait pas dire ce qu'il a perdu n'est pas un registre. C'est le signalement
+ * des orphelines qui a rendu visible, le 16/09, le décrochage de quatre
+ * décisions vieux de quatre jours.
+ *
+ * Un refus orphelin n'est pas grave en soi — le module refusé a pu quitter le
+ * catalogue, et le refus devient alors sans objet. Ce qui serait grave, c'est
+ * de ne pas le savoir : un `sourceRef` mal saisi ne refuse rien, en silence.
+ */
+export function refusOrphelins(
+  refsConnues: ReadonlySet<string>,
+  registre: Readonly<Record<string, readonly RefusDeCouple[]>> = REFUS_RATTACHEMENT,
+): { ruleId: string; refus: RefusDeCouple }[] {
+  const orphelins: { ruleId: string; refus: RefusDeCouple }[] = [];
+  for (const [ruleId, liste] of Object.entries(registre)) {
+    for (const r of liste) {
+      if (!refsConnues.has(r.moduleSourceRef)) orphelins.push({ ruleId, refus: r });
+    }
+  }
+  return orphelins;
+}
