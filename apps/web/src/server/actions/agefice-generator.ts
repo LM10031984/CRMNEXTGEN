@@ -21,6 +21,7 @@ import {
 import { isCanonicalExperience } from '@/lib/agefice-options';
 import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
+import { splitDureeByModality } from '@/lib/agefice/duree-par-modalite';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -50,25 +51,6 @@ function inferExperience(raw: string | null | undefined): ExperienceTranche | nu
   return null;
 }
 
-// Map TrainingSession.modality → 4 cases AGEFICE (heures)
-function splitDureeByModality(
-  modality: string | null | undefined,
-  totalHours: number,
-): { presIndiv: number; presColl: number; foadSync: number; foadAsync: number } {
-  switch ((modality ?? '').toUpperCase()) {
-    case 'PRESENTIEL':
-      return { presIndiv: 0, presColl: totalHours, foadSync: 0, foadAsync: 0 };
-    case 'DISTANCIEL':
-      return { presIndiv: 0, presColl: 0, foadSync: totalHours, foadAsync: 0 };
-    case 'MIXTE':
-    case 'BLENDED': {
-      const half = Math.round(totalHours / 2);
-      return { presIndiv: 0, presColl: half, foadSync: totalHours - half, foadAsync: 0 };
-    }
-    default:
-      return { presIndiv: 0, presColl: totalHours, foadSync: 0, foadAsync: 0 };
-  }
-}
 
 export async function generateAgeficeForParticipant(
   participantId: string,

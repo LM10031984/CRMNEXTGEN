@@ -26,12 +26,25 @@
  * la pire instance de §4 quinquies : *une absence rendue par une affirmation
  * positive*.
  *
- * ## Le défaut mesuré, et il est déjà en base
+ * ## Le défaut de modalité : RÉEL et LATENT — corrigé en portée le 16/09 (soir)
  *
  * Les deux produits `faros:` déclarent `modality = PRESENTIEL`. Personne ne l'a
  * décidé : `import-drive-catalog.ts` le pose en dur pour TOUS les produits — et
  * la ligne SUIVANTE branche sur `p.origin === 'faros'` pour choisir le thème.
  * L'importeur sait que c'est Faros ; il ne le sait pas pour la modalité.
+ *
+ * **Mais AUCUNE pièce ne le lit aujourd'hui, et ce test l'a d'abord surévalué.**
+ * Relevé des lectures : le programme, la convention, la convocation, les factures
+ * et les deux générateurs AGEFICE lisent tous `session.modality`.
+ * `product.modality` n'est lu qu'à TROIS endroits — deux badges d'admin
+ * (`app/produits/page.tsx:231`, `app/produits/[id]/page.tsx:187`) et
+ * `/catalogue` (`app/catalogue/page.tsx:300`), qui filtre `isActive: true`
+ * alors que l'import pose `isActive: false`.
+ *
+ * Zéro pièce atteinte. Le défaut est une **mine**, pas un incendie : il
+ * s'allumerait le jour où un produit `faros:` serait activé, ou le jour où une
+ * pièce se mettrait à lire la modalité du produit. **Un garde qui annonce plus
+ * que ce qu'il constate finit débranché** (§4 quaterdecies) — d'où ce cadrage.
  *
  * Et leurs deux modules sont **animables aujourd'hui** (`isAnimable` = true,
  * 55 434 et 6 887 caractères) — vérifié en lecture seule sur `qualiof_dev` le
@@ -77,8 +90,15 @@ describe('⛔ Faros ne peut pas entrer au composeur', () => {
       enDur && saitQueCestFaros,
       "`import-drive-catalog.ts` stampe `Modality.PRESENTIEL` sur TOUS les " +
         "produits, et distingue pourtant `origin === 'faros'` à la ligne " +
-        "suivante pour le thème. Un parcours filmé, non tourné, déclaré " +
-        'présentiel est une valeur que personne n’a affirmée (§4 quinquies).',
+        'suivante pour le thème. Un parcours filmé, non tourné, déclaré ' +
+        'présentiel est une valeur que personne n’a affirmée (§4 quinquies).\n' +
+        'PORTÉE — aucune pièce n’est atteinte AUJOURD’HUI : programme, ' +
+        'convention, convocation, factures et AGEFICE lisent tous ' +
+        '`session.modality`. `product.modality` n’est lu que par deux badges ' +
+        'd’admin et /catalogue, qui filtre `isActive: true` quand l’import pose ' +
+        '`isActive: false`. Le défaut est LATENT : il s’allume à la première ' +
+        'activation d’un produit faros, ou à la première pièce qui lira la ' +
+        'modalité du produit. C’est une mine, pas un incendie.',
     ).toBe(false);
   });
 

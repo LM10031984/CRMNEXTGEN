@@ -182,3 +182,55 @@ celui qui vend, pas celui qui pilote ceux qui vendent.
    d'un script de capsule — pas de copier le script.
 3. **Les 3 douleurs de dirigeant** n'ont de source nulle part. Elles s'écrivent
    depuis zéro, ou elles sortent du diagnostic.
+
+---
+
+## 7 · Corrections datées du 16/09/2026 (soir)
+
+_On cite, on ne remplace pas._
+
+### ① Le tableau du §4 était exact et incomplet
+
+Il disait, colonne de droite : « **la capsule qui porte le même code** ». C'était
+vrai — il montrait la collision. Il ne disait pas à quelle capsule le livret
+correspond *vraiment*. Vérification faite : `M2-A1-preparer-r1` correspond à la
+capsule **A4** (« Atelier : prépare ton prochain R1 »), et **il n'existe aucune
+capsule A5** alors qu'il existe un livret `M2-A5`. Le décalage n'est donc pas un
+simple désordre : les deux numérotations n'ont pas le même cardinal. Deux
+numérotations qui partagent un alphabet ne se rapprochent pas, elles
+collisionnent.
+
+### ② « Rien dans Faros — 3 » devient « rien dans Faros — 2, et une différée »
+
+Le §5 disait de trois douleurs : « **Rien dans Faros — 3** ». Relevé
+contradictoire du 16/09, population élargie à tout le dossier (595 fichiers,
+537 Mo, 149 PDF extraits) :
+
+- **Signature électronique en place** → rien, confirmé. Aucun Yousign, DocuSign
+  ni parapheur ; les seules « signature » du corpus sont celles du compromis et
+  du mandat.
+- **Part de l'équipe qui prospecte réellement** → rien de nommé, confirmé.
+- **Rythme de réunion d'équipe** → **la conclusion était fausse**. Faros le
+  nomme : `conception/00-MAPPING.md:38` porte « Prépa réunion d'équipe » dans un
+  « M7 — Pack IA Agence / Manager », marqué « hors MVP 7 — listé pour mémoire ».
+  Et le dossier contient un module écrit sur le sujet —
+  `phase2_formation_ia_nestenn (1).pdf`, « MODULE 2 — Brief Immo · Préparez et
+  animez efficacement vos réunions d'équipe grâce à l'IA · 60 minutes » — qui est
+  un livrable **client Nestenn**, pas une pièce du parcours Faros.
+
+**La famille tient toujours, et mieux.** Je concluais : « Faros forme celui qui
+vend, pas celui qui pilote ceux qui vendent. » Le corpus le dit désormais avec
+ses propres mots : le pack manager existe, il s'appelle M7, et il est
+explicitement hors périmètre. Ce n'était pas un oubli, c'est un arbitrage de
+conception — et il est de Laurent, pas de la formation.
+
+### ③ Deux motifs de recherche avaient mordu à faux
+
+Relevés par la session contradictoire, et corrigés avant conclusion :
+`e-signature` matchait à l'intérieur de « formule-signature » ; `qui prospecte`
+matchait le préfixe de « qui prospect**er** » — qui cibler, le sens inverse.
+
+### ④ Angles morts déclarés
+
+Le `.mp3` du 31/08 n'est pas transcrit · les 14 `.zip` ne sont pas dépliés · les
+`.png` et `.xlsx` ne sont pas lus. Dit, plutôt que supposé.
