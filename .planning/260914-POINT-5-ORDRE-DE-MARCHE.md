@@ -89,9 +89,32 @@ titres sur neuf ne sont pas remettables en l'état.
 | `BIB-D012` | Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs **:** | deux-points final, 108 caractères | **Conduire une découverte acheteur par le questionnement et l'écoute active** |
 | `BIB-D047` | Atelier pratique : Simulation de réponse aux avis clients. | **n'est pas un objectif** — le moteur refuse de l'inventer et le dit | **Répondre aux avis clients en ligne, positifs comme négatifs** |
 
-⚠ **Ces propositions ne sont PAS appliquées.** Elles sont là pour que Laurent
-tranche en lecture, pas pour être écrites. Un titre de module part dans un
-programme remis à un dirigeant et à un financeur.
+> ### ✅ Corrigé le 16/09/2026 — les quatre titres SONT appliqués
+>
+> Ce paragraphe disait « ⚠ **Ces propositions ne sont PAS appliquées.** Elles
+> sont là pour que Laurent tranche en lecture, pas pour être écrites. » C'était
+> vrai le 14/09 ; ça ne l'est plus. Relevé en base locale `qualiof_dev` le
+> 16/09/2026, lecture seule :
+>
+> | Code | Titre en base au 16/09 |
+> |---|---|
+> | `BIB-D008` | Mener une découverte du projet acheteur-vendeur en situation |
+> | `BIB-D012` | Conduire une découverte acheteur par le questionnement et l'écoute active |
+> | `BIB-D037` | Préparer un dossier de suivi vendeur complet |
+> | `BIB-D047` | Répondre aux avis clients en ligne, positifs comme négatifs |
+>
+> Les quatre portent la formulation proposée ci-dessus. La table reste ici comme
+> trace de l'arbitrage — elle ne décrit plus un travail à faire.
+>
+> **Pourquoi cette correction est datée et non substituée** : un document qui
+> décrit un état doit dire QUAND il l'a décrit. Réécrire la ligne en silence
+> aurait produit un document juste aujourd'hui et faux sur son propre passé —
+> même famille que le générateur qui écrasait un relevé daté (`quick.md`
+> §4 quater). La phrase d'origine est donc citée, pas effacée.
+
+La règle de fond n'a pas bougé : un titre de module part dans un programme remis
+à un dirigeant et à un financeur, donc il se tranche en lecture avant d'être
+écrit.
 
 **Les cinq autres titres sont bons** et n'appellent aucun arbitrage.
 
