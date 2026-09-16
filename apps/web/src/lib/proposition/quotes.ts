@@ -81,9 +81,12 @@ export function buildQuoteDrafts(args: {
       return {
         order: index,
         description:
-          `${line.description} — ${plural(line.halfDays, 'demi-journée')} de ${args.onsiteHoursPerHalfDay} h sur site, ` +
-          `${plural(p.payer.participantCount, 'participant')}, ` +
-          `${line.conventionedHours} h conventionnées par participant`,
+          // Le devis est lu par le DIRIGEANT (§9.6), pas par le financeur : il
+          // compte en demi-journées. Les heures conventionnées ne disparaissent
+          // pas du système — elles restent la valeur unique de la convention —
+          // elles ne se DISENT simplement pas ici. Et le montant ne bouge pas :
+          // l'assiette de la facture est inchangée.
+          `${line.description} — ${plural(p.payer.participantCount, 'participant')}`,
         quantity,
         unitPriceHt: line.unitPriceHt,
         vatRate: 0,

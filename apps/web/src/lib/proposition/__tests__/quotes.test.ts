@@ -8,6 +8,7 @@ import { computePricing } from '../pricing';
 import { MENTION_EXONERATION_TVA } from '@/lib/tva-exoneration';
 
 import { buildQuoteDrafts, quotesMatchProposal } from '../quotes';
+import { libelleVolumeClient } from '../builder';
 
 const RULES = Object.fromEntries(
   FUNDING_RULE_SEEDS.map((s) => [s.key, s.valueNumeric]),
@@ -21,7 +22,8 @@ const RULES = Object.fromEntries(
  */
 function optimo(): ProposalPricing {
   const parcours = (halfDays: number) => [
-    { id: 'l1', description: 'Parcours co-animé sur site', halfDays, unitPriceHt: 336 },
+    // Le MÊME libellé que la production — pas un littéral qui divergerait (§4 bis).
+    { id: 'l1', description: libelleVolumeClient(halfDays), halfDays, unitPriceHt: 336 },
   ];
   return {
     payers: [
@@ -89,15 +91,37 @@ describe('Σ devis = Σ proposition, au centime', () => {
     expect(quotesMatchProposal(dc, sc)).toBe(true);
   });
 
-  it('porte les mêmes heures conventionnées que la proposition', () => {
+  /**
+   * RENVERSÉ le 16/09/2026 — §8.1, « une prestation se dit dans l'unité de
+   * celui qui la lit ».
+   *
+   * Ce test exigeait que CHAQUE ligne de devis porte « … h conventionnées par
+   * participant », et vérifiait 72 h et 48 h en toutes lettres. C'était la
+   * preuve LISIBLE que le devis et la proposition parlaient du même volume.
+   *
+   * Le devis est lu par le DIRIGEANT (§9.6), pas par le financeur : il compte
+   * en demi-journées, et « conventionnées » est un mot d'interne. La preuve ne
+   * disparaît pas pour autant — elle change de support : elle se fait sur la
+   * VALEUR, où elle est d'ailleurs plus solide qu'une chaîne de caractères.
+   *
+   * ⚠ Ce qui n'a pas bougé : le montant. Le devis reste l'assiette de la
+   * facture, au centime — c'est le premier test de ce bloc qui le tient.
+   */
+  it('dit le volume en DEMI-JOURNÉES, et porte la même valeur que la proposition', () => {
     for (const d of drafts) {
       for (const l of d.lines) {
-        expect(l.description).toMatch(/h conventionnées par participant/);
+        expect(l.description).not.toMatch(/conventionn/i);
+        expect(l.description).not.toMatch(/sur site/i);
+        expect(l.description).not.toMatch(/co-anim/i);
+        expect(l.description).toMatch(/demi-journée/);
       }
     }
-    // 9 demi-journées × 4 h × 2 formateurs = 72 h, la valeur de référence unique.
-    expect(drafts[0]!.lines[0]!.description).toContain('72 h conventionnées');
-    expect(drafts[4]!.lines[0]!.description).toContain('48 h conventionnées');
+    expect(drafts[0]!.lines[0]!.description).toContain('Parcours de 9 demi-journées');
+    expect(drafts[4]!.lines[0]!.description).toContain('Parcours de 6 demi-journées');
+
+    // La VALEUR, elle, est intacte et reste unique — 9 × 4 h × 2 formateurs.
+    expect(s.conventionedHoursMax).toBe(72);
+    expect(quotesMatchProposal(drafts, s)).toBe(true);
   });
 });
 

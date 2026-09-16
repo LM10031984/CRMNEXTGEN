@@ -306,9 +306,38 @@ describe('Financement — les garde-fous du document remis', () => {
     );
   });
 
-  it('porte les heures conventionnées, la valeur de référence unique', () => {
-    expect(html).toContain(`${data.funding.conventionedHours} h`);
-    expect(html).toContain('convention');
+  /**
+   * RENVERSÉ le 16/09/2026 — §8.1, « une prestation se dit dans l'unité de
+   * celui qui la lit ».
+   *
+   * Ce test exigeait que le rapport d'audit AFFICHE les heures conventionnées.
+   * L'audit est une pièce CLIENT : il compte en demi-journées, et le mot
+   * « conventionnées » est de l'interne. Ce qui a remplacé les heures n'est pas
+   * un autre nombre d'heures, c'est l'ARGENT — le dirigeant comprend un montant
+   * sans taux horaire.
+   *
+   * ⚠ CE QUI NE CHANGE PAS : la valeur. `funding.conventionedHours` est
+   * inchangée et reste la référence unique de la convention, de l'émargement,
+   * de l'assiduité et des dossiers financeurs. On a retiré un AFFICHAGE.
+   */
+  it('compte en DEMI-JOURNÉES et referme le compte en euros, sans dire les heures', () => {
+    // Le volume, dans l'unité du lecteur.
+    expect(html).toContain(`${data.funding.halfDays}<small>&#160;demi-journées</small>`);
+    // L'argent à la place des heures — et le compte tombe juste.
+    expect(html).toContain('Pris en charge');
+    expect(html).toContain('Reste à charge');
+    expect(data.funding.totalCoverage + data.funding.totalRemainder).toBeCloseTo(
+      data.funding.totalPrice,
+      2,
+    );
+
+    // Les mots d'interne ont quitté le document…
+    expect(html).not.toMatch(/conventionn/i);
+    expect(html).not.toMatch(/sur site/i);
+
+    // …mais PAS la valeur, qui reste calculée et disponible.
+    expect(data.funding.conventionedHours).toBeGreaterThan(0);
+    expect(data.funding.conventionedHours).toBe(data.funding.onsiteHours * 2);
   });
 
   it('mentionne les deux dossiers distincts et l’absence d’avance de trésorerie', () => {

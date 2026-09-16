@@ -650,6 +650,17 @@ function pageFunding(data: AuditData): string {
          dès que le ou les salariés concernés seront cartographiés.</p>`
       : '';
 
+  // Les trois tuiles — §8.1, arbitrage du 16/09/2026.
+  //
+  // L'audit est une pièce CLIENT : il compte en DEMI-JOURNÉES, et les mots
+  // « conventionnées » et « sur site » n'y paraissent pas. Ce qui remplace les
+  // heures n'est PAS un autre nombre d'heures, c'est l'ARGENT — le dirigeant
+  // comprend un montant sans avoir besoin d'un taux horaire, les heures étaient
+  // un détour. Les trois tuiles referment le compte : pris en charge + reste à
+  // charge = prix HT.
+  //
+  // La VALEUR conventionnée n'a pas bougé : elle reste dans `conventionedHours`
+  // et sur la convention, qui la déclare au financeur (ligne rouge §8.1).
   return page(
     17,
     `<div class="sec"><h2><span class="no">17</span> Votre potentiel de financement</h2>
@@ -667,10 +678,10 @@ function pageFunding(data: AuditData): string {
       <div class="grid3" style="margin-top:5mm">
         <div class="tile"><div class="lbl">Volume proposé</div>
           <div class="display">${f.halfDays}<small>&#160;demi-journées</small></div>
-          <p>${f.onsiteHours} h sur site</p></div>
-        <div class="tile"><div class="lbl">Heures conventionnées</div>
-          <div class="display">${f.conventionedHours} h</div>
-          <p>La valeur portée sur la convention, l'émargement et le dossier financeur</p></div>
+          <p>Dans vos locaux</p></div>
+        <div class="tile"><div class="lbl">Pris en charge</div>
+          <div class="display">${money(f.totalCoverage)}</div>
+          <p>Par vos financeurs — montage et dépôt des dossiers compris</p></div>
         <div class="tile"><div class="lbl">Reste à charge</div>
           <div class="display">${money(f.totalRemainder)}</div>
           <p>Sur ${money(f.totalPrice)} HT</p></div>

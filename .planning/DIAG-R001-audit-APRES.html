@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Audit de performance — Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) · DIAG-R001</title>
+<style>
+:root{
+    --brand-deep:#00527A; --brand-vif:#3EA9FF; --brand-deep-08:rgba(0,82,122,.08);
+    --ink:#1c2733; --ink-2:#4a5a68; --ink-3:#7b8894; --line:#dde4ea; --paper:#ffffff; --wash:#f4f8fb;
+    --ok:#1a7f37; --warn:#9a5b00; --alert:#b42318; --ok-bg:#e8f5ec; --warn-bg:#fdf3e1; --alert-bg:#fdebe9;
+    --gold:#9a6b00; --gold-bg:#fdf6e3;
+  }
+  *{box-sizing:border-box; margin:0}
+  html{background:#e9edf1}
+  body{font-family:'Montserrat',system-ui,Segoe UI,Arial,sans-serif; color:#1c2733; font-size:10pt; line-height:1.5; background:#e9edf1; padding:24px 0}
+  h1,h2,h3,h4,.display{font-family:'Rajdhani','Montserrat',system-ui,sans-serif}
+  .page{width:210mm; min-height:297mm; margin:0 auto 24px; background:#ffffff; padding:15mm 16mm 24mm; position:relative; box-shadow:0 2px 14px rgba(16,42,67,.14); overflow:hidden}
+  .page>*{position:relative; z-index:1}
+  @page{size:A4; margin:0}
+  @media print{ html,body{background:#fff; padding:0} .page{box-shadow:none; margin:0; page-break-after:always} }
+
+  .page > .footer{position:absolute; left:16mm; right:16mm; bottom:7mm; display:flex; justify-content:space-between; font-size:7.5pt; color:#7b8894; border-top:1px solid #dde4ea; padding-top:2mm}
+  .foot-brand{font-family:'Rajdhani'; font-weight:600; letter-spacing:.14em; color:#00527A}
+
+  .kicker{font-family:'Rajdhani'; font-weight:600; letter-spacing:.22em; font-size:9.5pt; text-transform:uppercase; color:#3EA9FF}
+  .sec{margin-top:7mm}
+  .sec>h2, .chap-title{font-size:15.5pt; font-weight:700; color:#00527A; border-bottom:2px solid #00527A; padding-bottom:1.5mm; margin-bottom:3.5mm; display:flex; align-items:baseline; gap:3mm}
+  .sec>h2 .no, .chap-title .no{font-size:10pt; color:#3EA9FF; font-weight:600; letter-spacing:.08em}
+  h4{font-family:'Rajdhani'; font-size:9.5pt; text-transform:uppercase; letter-spacing:.12em; color:#00527A; margin-bottom:1.5mm}
+  .muted{color:#7b8894; font-size:8.5pt}
+  .lead{color:#4a5a68}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:5mm}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm}
+
+  .tile{border:1px solid #dde4ea; border-radius:3mm; padding:3.5mm 4.5mm; background:#ffffff}
+  .tile .display{font-size:18pt; font-weight:700; color:#00527A; line-height:1.1}
+  .tile .display small{font-size:9.5pt; color:#7b8894; font-weight:500}
+  .tile p{font-size:8.3pt; color:#4a5a68; margin-top:1mm}
+  .tile .lbl{font-size:7.8pt; text-transform:uppercase; letter-spacing:.12em; color:#7b8894; font-weight:600}
+
+  .chip{display:inline-flex; align-items:center; gap:1.2mm; font-size:8pt; font-weight:600; padding:.6mm 2.4mm; border-radius:99px; white-space:nowrap}
+  .chip.ok{color:#1a7f37; background:#e8f5ec} .chip.warn{color:#9a5b00; background:#fdf3e1} .chip.alert{color:#b42318; background:#fdebe9}
+
+  blockquote{border-left:3px solid #3EA9FF; background:#f4f8fb; padding:3mm 5mm; font-style:italic; color:#4a5a68; border-radius:0 2mm 2mm 0; margin:2mm 0; font-size:9.5pt}
+  blockquote footer{font-style:normal; font-size:8.3pt; color:#7b8894; margin-top:1.2mm}
+
+  table{width:100%; border-collapse:collapse; font-size:8.8pt; margin-top:2mm}
+  th{font-family:'Rajdhani'; font-size:8.3pt; text-transform:uppercase; letter-spacing:.1em; text-align:left; color:#fff; background:#00527A; padding:2mm 2.8mm; font-weight:600}
+  td{padding:1.9mm 2.8mm; border-bottom:1px solid #dde4ea; vertical-align:top}
+  tr:nth-child(even) td{background:#f4f8fb}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  /* Restitution « ce que vous nous avez dit » */
+  table.qa td:first-child{width:52mm; color:#7b8894; font-size:8.3pt}
+  table.qa td:nth-child(2){font-weight:500}
+
+  /* Scorecard */
+  .scorebars{display:grid; gap:1.8mm; margin-top:2.5mm}
+  .srow{display:grid; grid-template-columns:52mm 1fr 24mm; align-items:center; gap:3mm}
+  .srow .slabel{font-size:8.8pt; font-weight:600}
+  .srow .slabel small{display:block; font-weight:400; color:#7b8894; font-size:7.4pt}
+  .sbarwrap{background:#f4f8fb; border-radius:1.2mm; height:6.5mm; position:relative}
+  .sbar{height:100%; background:#00527A; border-radius:1.2mm; display:flex; align-items:center; justify-content:flex-end}
+  .sbar span{color:#fff; font-size:8pt; font-weight:700; padding-right:2mm; font-variant-numeric:tabular-nums}
+  .srow .schip{text-align:left}
+
+  .scorehero{display:flex; align-items:center; gap:6mm; border:1px solid #dde4ea; border-left:5px solid #00527A; border-radius:2.5mm; padding:4mm 6mm; background:#f4f8fb}
+  .scorehero .big{font-family:'Rajdhani'; font-size:30pt; font-weight:700; color:#00527A; line-height:1; white-space:nowrap}
+  .scorehero .big small{font-size:13pt; color:#7b8894}
+  .scorehero p{font-size:9pt; color:#4a5a68}
+
+  /* Chapitres */
+  .chap-head{display:flex; justify-content:space-between; align-items:flex-start; gap:5mm}
+  .chap-meta{text-align:right; white-space:nowrap}
+  .chap-meta .score{font-family:'Rajdhani'; font-size:20pt; font-weight:700; color:#00527A; line-height:1}
+  .chap-meta .score small{font-size:10pt; color:#7b8894}
+  .chap-meta .answered{font-size:7.6pt; color:#7b8894; margin-top:.5mm}
+
+  .lecture{margin-top:2mm; color:#4a5a68; font-size:9.3pt}
+  .lecture b{color:#1c2733}
+
+  .euro{border:1.5px solid #9a6b00; background:#fdf6e3; border-radius:2.5mm; padding:3mm 4.5mm; margin-top:3mm; display:flex; gap:4mm; align-items:baseline}
+  .euro .amount{font-family:'Rajdhani'; font-size:16pt; font-weight:700; color:#9a6b00; white-space:nowrap}
+  .euro p{font-size:8.6pt; color:#4a5a68}
+
+  .lever{border:1.5px solid #1a7f37; background:#e8f5ec; border-radius:2.5mm; padding:3mm 4.5mm; margin-top:3mm}
+  .lever h4{color:#1a7f37}
+  .lever p{font-size:8.8pt; color:#4a5a68}
+
+  /* Funnel */
+  .funnel{display:grid; gap:2px; margin-top:2.5mm}
+  .frow{display:grid; grid-template-columns:42mm 1fr 26mm; align-items:center; gap:3mm}
+  .frow .stage{font-size:8.8pt; font-weight:600}
+  .frow .stage small{display:block; font-weight:400; color:#7b8894; font-size:7.3pt}
+  .barwrap{background:#f4f8fb; border-radius:1.2mm; height:7mm; position:relative}
+  .bar{height:100%; background:#00527A; border-radius:1.2mm; display:flex; align-items:center; justify-content:flex-end}
+  .bar span{color:#fff; font-size:8.3pt; font-weight:600; padding-right:2.3mm; font-variant-numeric:tabular-nums}
+  .outlbl{position:absolute; top:50%; transform:translateY(-50%); color:#1c2733; font-size:8.3pt; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums}
+  .conv{font-size:8.3pt; color:#4a5a68}
+
+  /* Priorités */
+  .prio{display:grid; gap:3mm; margin-top:2.5mm}
+  .pcard{display:grid; grid-template-columns:11mm 1fr; gap:4mm; border:1px solid #dde4ea; border-left:4px solid #00527A; border-radius:2mm; padding:3.5mm 4.5mm; background:#ffffff}
+  .pcard .n{font-family:'Rajdhani'; font-size:20pt; font-weight:700; color:#3EA9FF; line-height:1}
+  .pcard h3{font-size:11pt; color:#00527A; font-weight:700}
+  .pcard p{font-size:8.8pt; color:#4a5a68; margin-top:1mm}
+  .pcard .link{font-size:7.8pt; color:#7b8894; margin-top:1.2mm}
+
+  /* Couverture */
+  .cover-band{background:#00527A; color:#fff; margin:-15mm -16mm 0; padding:24mm 16mm 18mm}
+  .cover-band h1{font-size:31pt; font-weight:700; line-height:1.08; margin-top:6mm; color:#fff}
+  .cover-band .agency{font-size:15pt; font-weight:500; color:#cfe7f7; margin-top:3mm}
+  .cover-meta{display:flex; flex-wrap:wrap; gap:9mm; margin-top:12mm; font-size:8.8pt; color:#a9c9dd}
+  .cover-meta b{display:block; color:#fff; font-size:10pt; font-weight:600}
+  .valuecard{margin-top:9mm; border:1.5px solid #9a6b00; background:#fdf6e3; border-radius:2.5mm; padding:4mm 6mm; display:flex; align-items:center; gap:6mm}
+  .valuecard .v{font-family:'Rajdhani'; font-size:21pt; font-weight:700; color:#9a6b00; white-space:nowrap}
+  .valuecard p{font-size:8.8pt; color:#4a5a68}
+  .cover-badges{display:flex; gap:4mm; margin-top:8mm; flex-wrap:wrap}
+  .cbadge{border:1px solid #dde4ea; border-radius:99px; padding:1.6mm 4.5mm; font-size:8.5pt; color:#4a5a68; background:#f4f8fb; font-weight:600}
+
+  /* Sommaire */
+  .toc{columns:2; column-gap:8mm; margin-top:3mm}
+  .toc div{break-inside:avoid; display:flex; justify-content:space-between; gap:3mm; padding:1.7mm 0; border-bottom:1px dotted #dde4ea; font-size:9pt}
+  .toc div b{color:#00527A; font-family:'Rajdhani'; margin-right:2mm}
+  .toc div span:last-child{color:#7b8894; font-variant-numeric:tabular-nums}
+
+  .idgrid{display:grid; grid-template-columns:1fr 1fr; gap:0 8mm; margin-top:2mm}
+  .idgrid div{display:flex; justify-content:space-between; gap:4mm; padding:1.6mm 0; border-bottom:1px dotted #dde4ea; font-size:8.8pt}
+  .idgrid div span:first-child{color:#7b8894}
+  .idgrid div span:last-child{font-weight:600; text-align:right}
+
+  /* ══════════════════════════════════════════════════════════════════════
+     Compatibilité moteur PDF (WeasyPrint 60)
+     ─────────────────────────────────────────────────────────────────────
+     Ce qui vaut pour TOUT document vit dans lib/docs/weasyprint-base.ts —
+     le socle commun de la spec §9.5, interpolé ici. Ne reste ci-dessous que
+     ce qui est propre au gabarit de l'audit (chapitres, scores, entonnoir,
+     couverture, format condensé).
+     ─────────────────────────────────────────────────────────────────────
+     Ajouté APRÈS la maquette, jamais à sa place : la maquette reste la
+     référence de rendu à l'écran, ce bloc ne corrige que ce que le moteur
+     d'impression ne sait pas faire.
+
+     La règle unique dont découle presque tout ce bloc : **WeasyPrint
+     n'implémente NI CSS Grid NI « gap »** — ni en grid, ni en flex. Les deux
+     échouent en silence : une grille s'empile en une colonne, un « gap »
+     disparaît et les blocs se touchent ou se chevauchent. Toute mise en page
+     de la maquette exprimée en grid/gap est donc transposée ici en
+     flex + marges explicites, ou en table/table-cell quand il faut des
+     colonnes qui ne se chevauchent JAMAIS (blocs héros à gros chiffre).
+
+     Trois autres manques, tous silencieux eux aussi :
+       • « min-height » n'établit pas le bloc conteneur d'un enfant en
+         « position:absolute » : un footer en « bottom:0 » retombait dans le flux,
+         collé au contenu, avec une demi-page blanche dessous. D'où le passage
+         du pied de page en boîte de marge « @page » (voir ci-dessous) ;
+       • le conteneur ne possède QUE les fontes Liberation. « DejaVu Sans »,
+         « Montserrat », « system-ui » et même le générique « sans-serif » tombent
+         tous sur Liberation **Mono** (chasse fixe). Seuls « Liberation Sans »,
+         « Helvetica » et « Arial » (alias fontconfig) donnent une proportionnelle ;
+       • un espace en tête d'un élément inline (« <small> / 100</small> ») est
+         mangé : « 81/ 100 ». D'où l'insécable côté template + la marge ici.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* ── Le modèle de page ────────────────────────────────────────────────
+     Le pied de page est une boîte de marge « @page », pas un bloc absolu dans
+     la page. Trois raisons, dans cet ordre :
+       1. c'est le seul mécanisme qui l'ancre vraiment en bas (cf. min-height) ;
+       2. il donne « counter(page) / counter(pages) » — la numérotation devient
+          juste sans que personne ait à la connaître d'avance, ce qu'exige le
+          format condensé où le nombre de pages dépend du contenu ;
+       3. il rend « .page » inutile en tant que boîte de hauteur fixe : plus de
+          « overflow:hidden », donc plus de contenu tronqué en silence. Un
+          débordement produit une page de plus — un défaut qui se VOIT.
+     Le texte du pied, lui, est injecté par « renderAuditPageRule() » : il
+     dépend du dossier. */
+  
+  @page{ size:A4; margin:15mm 16mm 20mm }
+
+  .page{ width:auto; height:auto; min-height:0; margin:0; padding:0;
+         overflow:visible; box-shadow:none; background:transparent;
+         break-after:page; page-break-after:always }
+  body > :last-child{ break-after:auto; page-break-after:auto }
+
+  @media print{ html,body{ background:#fff; padding:0 } .page{ box-shadow:none; margin:0 } }
+
+  /* ── Fontes réellement présentes dans le conteneur ────────────────────
+     « !important » assumé : la maquette pose la police sur des sélecteurs plus
+     spécifiques (« .tile .display », « .chap-meta .score »). Sans forcer, les
+     chiffres mis en avant retombent en chasse fixe. C'est une couche de
+     compatibilité générée, pas du style écrit à la main. */
+  
+  body, h1, h2, h3, h4, .kicker, th, .foot-brand,
+  .display, .agency, .chap-title, .score, .big, .v, .cover-meta b{
+    font-family: 'Liberation Sans', Helvetica, Arial !important;
+  }
+
+  /* ── Titres : le numéro ne colle plus au titre (grid/gap → marge) ─────
+     La maquette met « display:flex; gap:3mm » sur le titre et son numéro. Sans
+     « gap », on lisait « 02Pourquoi », « 17Votre potentiel ». En bloc + numéro
+     inline-block, le titre reprend son propre fil : il peut passer à la ligne
+     sans décrocher du numéro (le cas « Outils & IA »). */
+  .sec>h2, .chap-title{ display:block }
+  .sec>h2 .no, .chap-title .no{ display:inline-block; margin-right:3mm }
+
+  /* ── En-tête de chapitre : titre à gauche, note à droite, sans contact ── */
+  .chap-head{ display:table; width:100%; table-layout:auto }
+  .chap-head .chap-title{ display:table-cell; vertical-align:top }
+  .chap-head .chap-meta{ display:table-cell; vertical-align:top; width:1%;
+                         white-space:nowrap; text-align:right; padding-left:5mm }
+  .chap-meta .score small{ margin-left:1.2mm }
+  /* La couleur de la note dit la même chose que la pastille du chapitre. */
+  .chap-meta .score.is-alert{ color:#b42318 }
+  .chap-meta .score.is-warn{ color:#9a5b00 }
+  .chap-meta .score.is-ok{ color:#00527A }
+  /* Un chapitre non noté affiche « non noté » : un tiret cadratin à 20pt
+     ressemble à une barre pleine, pas à une absence de note. */
+  .chap-meta .score.is-none{ font-size:10.5pt; font-weight:600; color:#7b8894 }
+
+  /* ── Blocs héros (gros chiffre + phrase) ──────────────────────────────
+     En flex sans « gap », le chiffre en « white-space:nowrap » débordait sur la
+     phrase : « 63 / 100 » recouvrait « comparé », « 900 000 € » mangeait le
+     début du texte. En table à largeur automatique, la colonne du chiffre
+     prend sa largeur réelle et la phrase occupe le reste — quel que soit le
+     nombre affiché. */
+  
+  .scorehero, .valuecard, .euro{ display:table; width:100%; table-layout:auto }
+  .scorehero .big, .valuecard .v, .euro .amount{
+    display:table-cell; vertical-align:middle; white-space:nowrap; padding-right:6mm; width:1% }
+  .scorehero p, .valuecard p, .euro p{ display:table-cell; vertical-align:middle }
+
+  /* ── Grilles de tuiles : flex + marges (grid non implémenté) ──────────── */
+  .grid2, .grid3{ display:flex; flex-wrap:wrap; align-items:stretch }
+  .grid2 > *{ flex:1 1 46%; max-width:48%; margin:0 2% 4mm 0 }
+  .grid3 > *{ flex:1 1 30%; max-width:31%; margin:0 2% 4mm 0 }
+
+  .idgrid{ display:flex; flex-wrap:wrap }
+  .idgrid > div{ flex:1 1 46%; max-width:48%; margin-right:2% }
+
+  .toc{ columns:auto; display:flex; flex-wrap:wrap }
+  .toc > div{ flex:0 0 47%; max-width:47%; margin-right:3%;
+              display:flex; justify-content:space-between }
+
+  /* ── Barres de score et entonnoir ─────────────────────────────────────
+     « gap » perdu → marges explicites entre les lignes. Et le libellé n'est
+     plus un enfant flex de la barre (il ne s'affichait pas du tout) : il est
+     positionné dans la piste, à l'intérieur de la barre quand elle est assez
+     large, à l'extérieur sinon — le mécanisme « .outlbl » de la maquette. */
+  .scorebars{ display:block }
+  .scorebars > .srow{ margin-bottom:1mm }
+  .srow{ display:flex; align-items:center }
+  /* 58mm et non 52mm : à la largeur de la maquette, la moitié des titres de
+     chapitre passaient sur deux lignes et la section débordait d'une page. */
+  .srow .slabel{ flex:0 0 58mm; padding-right:3mm }
+  .srow .sbarwrap{ flex:1 1 auto; margin-right:3mm }
+  .srow .schip{ flex:0 0 22mm }
+
+  .funnel{ display:block }
+  .funnel > .frow{ margin-bottom:2px }
+  .frow{ display:flex; align-items:center }
+  .frow .stage{ flex:0 0 42mm; padding-right:3mm }
+  .frow .barwrap{ flex:1 1 auto; margin-right:3mm }
+  .frow .conv{ flex:0 0 26mm }
+
+  .sbar, .bar{ display:block }
+  .sbarwrap, .barwrap{ position:relative }
+  .outlbl, .inlbl{ position:absolute; white-space:nowrap; line-height:1;
+                   font-variant-numeric:tabular-nums; font-weight:600 }
+  /* « top » posé à la main : le décalage vaut (hauteur de piste − hauteur de
+     ligne) / 2. Ni « transform » ni « align-items » ne sont fiables ici. */
+  .sbarwrap .outlbl, .sbarwrap .inlbl{ top:1.6mm; font-size:8pt }
+  .barwrap .outlbl, .barwrap .inlbl{ top:1.8mm; font-size:8.3pt }
+  .outlbl{ color:#1c2733 }
+  .inlbl{ color:#fff }
+
+  /* ── Priorités ────────────────────────────────────────────────────────── */
+  .prio{ display:block }
+  .prio > .pcard{ margin-bottom:3mm }
+  .pcard{ display:flex; align-items:flex-start }
+  .pcard .n{ flex:0 0 11mm; margin-right:4mm }
+
+  /* ── Couverture ───────────────────────────────────────────────────────── */
+  .cover-meta{ display:flex; flex-wrap:wrap }
+  .cover-meta > div{ margin-right:9mm; margin-bottom:3mm }
+  .cover-badges{ display:flex; flex-wrap:wrap }
+  .cover-badges .cbadge{ margin:0 4mm 3mm 0 }
+
+  
+  .sec>h2{ display:block }
+  .sec>h2 .no{ display:inline-block; margin-right:3mm }
+
+  .chip{ display:inline; padding:.4mm 2.2mm }
+
+  /* ── Format condensé (diagnostic léger) ───────────────────────────────
+     Les chapitres s'enchaînent au fil de l'eau au lieu d'occuper une page
+     chacun. « break-inside:avoid » porte l'interdiction de couper un chapitre
+     en deux ; c'est le moteur qui décide combien tiennent par page, ce qui
+     évite d'estimer des hauteurs (et de tronquer quand l'estimation rate). */
+  .flow{ display:block; break-after:page; page-break-after:always }
+  .flow > .chap{ break-inside:avoid; page-break-inside:avoid; margin-bottom:7mm }
+  .flow > .chap:last-child{ margin-bottom:0 }
+</style>
+<style>@page{
+    @bottom-left{
+      content:"START ACADEMY"; border-top:1px solid #dde4ea; padding-top:2mm; vertical-align:top;
+               font-family:'Liberation Sans', Helvetica, Arial; font-size:7.5pt;
+      color:#00527A; font-weight:600; letter-spacing:.14em; text-align:left }
+    @bottom-center{
+      content:"Audit de performance — Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) · DIAG-R001"; border-top:1px solid #dde4ea; padding-top:2mm; vertical-align:top;
+               font-family:'Liberation Sans', Helvetica, Arial; font-size:7.5pt; color:#7b8894; text-align:center }
+    @bottom-right{
+      content:counter(page) " / " counter(pages); border-top:1px solid #dde4ea; padding-top:2mm; vertical-align:top;
+               font-family:'Liberation Sans', Helvetica, Arial; font-size:7.5pt;
+      color:#7b8894; text-align:right }
+  }
+/* Le sommaire ne connaît pas les pages : c'est le moteur d'impression qui les
+   résout, une fois la pagination faite. Indispensable au format condensé, où
+   le numéro de section ne vaut plus numéro de page. */
+.toc .pno{ color:#7b8894; font-variant-numeric:tabular-nums; text-decoration:none }
+.toc .pno::after{ content:target-counter(attr(href), page) }</style>
+</head>
+<body>
+<section class="page" id="s-01"><div class="cover-band">
+      <div class="kicker">Start Academy · Diagnostic d'agence immobilière</div>
+      <h1>Audit de performance<br>commerciale &amp; organisation</h1>
+      <div class="agency">Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)</div>
+      <div class="cover-meta">
+        <div><span>Restitué le</span><b>16 septembre 2026</b></div>
+        <div><span>Référence</span><b>DIAG-R001</b></div>
+        <div><span>Score global</span><b>67 / 100</b></div>
+        <div><span>Barème</span><b>bareme-v1-2026-09</b></div>
+      </div>
+    </div>
+
+    <div class="valuecard">
+      <div class="v">3 000 € HT</div>
+      <p><b>Valeur de la prestation d'audit</b> — entretien structuré, analyse de votre chaîne
+      commerciale complète, de vos actifs et de votre potentiel de financement, restitution écrite
+      et plan de priorités. <b>Offerte dans le cadre de votre accompagnement Start Academy.</b></p>
+    </div>
+
+    <div class="cover-badges">
+      <span class="cbadge">37 réponses · 11 chapitres</span>
+      <span class="cbadge">3 personnes cartographiées</span>
+      <span class="cbadge">5 ratios mesurés face aux repères</span>
+      <span class="cbadge">Potentiel de financement chiffré</span>
+      <span class="cbadge">3 priorités + plan 90 jours</span>
+    </div>
+
+    <div class="sec">
+      <p class="lead" style="font-size:10.5pt">Ce document restitue, mot pour mot quand ils comptent,
+      ce que vous nous avez dit — puis ce que vos chiffres disent de votre agence quand on les met
+      face aux repères du métier. Il se termine par les trois priorités qui, à volume de travail
+      constant, changent votre résultat — et par le plan pour les traiter dans les 90 jours.</p>
+    </div></section>
+<section class="page" id="s-02"><div class="sec"><h2><span class="no">02</span> Pourquoi cet audit — et comment le lire</h2>
+      <p class="lead">Une agence immobilière est une chaîne : des contacts entrent, des actes
+      sortent, et entre les deux chaque maillon retient ou laisse filer. Cet audit mesure chaque
+      maillon, le compare à ce qu'on observe ailleurs, et chiffre ce que les écarts coûtent.</p>
+      <div class="grid3" style="margin-top:5mm">
+        <div class="tile"><div class="lbl">Ce que vous nous avez dit</div>
+          <p>Vos réponses, restituées telles quelles. Vous devez pouvoir vous y reconnaître —
+          si un chiffre vous surprend, c'est qu'il mérite d'être revérifié ensemble.</p></div>
+        <div class="tile"><div class="lbl">Notre lecture</div>
+          <p>Ce que ces réponses disent de votre organisation, et ce qu'elles vous coûtent.
+          C'est notre analyse, pas une vérité : elle se discute.</p></div>
+        <div class="tile"><div class="lbl">Le premier levier</div>
+          <p>L'action qui rapporte le plus vite sur ce chapitre. Une seule, volontairement :
+          un plan de vingt actions ne se met jamais en œuvre.</p></div>
+      </div>
+      <h4 style="margin-top:6mm">Comment lire les scores</h4>
+      <p class="lead">Chaque chapitre est noté sur 100 selon un barème versionné
+      (<b>bareme-v1-2026-09</b>). Une question restée sans réponse ne compte ni en votre
+      faveur ni en votre défaveur : elle réduit la couverture du chapitre, affichée à côté du
+      score. Un chapitre noté 70 sur une couverture de 40 % vaut moins qu'un 65 sur 100 %.</p>
+      <h4 style="margin-top:5mm">Sommaire</h4>
+      <div class="toc">
+        <div><span><b>03</b>Votre agence en un coup d’œil</span><a class="pno" href="#s-03"></a></div><div><span><b>04</b>Synthèse dirigeant</span><a class="pno" href="#s-04"></a></div><div><span><b>05</b>Votre chaîne commerciale</span><a class="pno" href="#s-05"></a></div><div><span><b>06</b>Prospection &amp; entrées vendeurs</span><a class="pno" href="#s-06"></a></div><div><span><b>07</b>RDV vendeur, découverte &amp; estimation</span><a class="pno" href="#s-07"></a></div><div><span><b>08</b>Mandats &amp; exclusivité</span><a class="pno" href="#s-08"></a></div><div><span><b>09</b>Commercialisation &amp; suivi vendeur</span><a class="pno" href="#s-09"></a></div><div><span><b>10</b>Acquéreurs</span><a class="pno" href="#s-10"></a></div><div><span><b>11</b>Visites, offres &amp; transformation</span><a class="pno" href="#s-11"></a></div><div><span><b>12</b>Base de données &amp; e-réputation</span><a class="pno" href="#s-12"></a></div><div><span><b>13</b>Outils &amp; IA</span><a class="pno" href="#s-13"></a></div><div><span><b>14</b>Management, pilotage &amp; vision</span><a class="pno" href="#s-14"></a></div><div><span><b>15</b>La performance de votre équipe</span><a class="pno" href="#s-15"></a></div><div><span><b>16</b>Un objectif, trois priorités, 90 jours</span><a class="pno" href="#s-16"></a></div><div><span><b>17</b>Votre potentiel de financement</span><a class="pno" href="#s-17"></a></div>
+      </div>
+      <p class="muted" style="margin-top:3mm">À gauche le numéro de section, à droite la page.</p>
+    </div></section>
+<section class="page" id="s-03"><div class="sec"><h2><span class="no">03</span> Votre agence en un coup d'œil</h2>
+      <h4>Identité &amp; contexte</h4>
+      <div class="idgrid">
+        <div><span>Activités exercées</span><span>Transaction ancien, Transaction neuf</span></div><div><span>Part de la transaction dans l'ancien</span><span>90 %</span></div>
+      </div>
+      <div class="grid3" style="margin-top:6mm">
+        <div class="tile"><div class="lbl">Chiffre d'affaires N-1</div>
+          <div class="display">245 000 €</div></div>
+        <div class="tile"><div class="lbl">Objectif déclaré</div>
+          <div class="display">275 000 €</div></div>
+        <div class="tile"><div class="lbl">Collaborateurs</div>
+          <div class="display">3<small>&#160;fiches</small></div></div>
+      </div>
+      <h4 style="margin-top:4mm">Ce que vous nous avez dit — contexte</h4>
+    <table class="qa"><tbody>
+      <tr><td>Activités exercées</td><td>Transaction ancien, Transaction neuf</td></tr><tr><td>Part de la transaction dans l'ancien</td><td>90 %</td></tr><tr><td>Ventes réalisées N-1</td><td>20</td></tr><tr><td>Chiffre d'affaires N-1</td><td>245 000 €</td></tr><tr><td>Objectif de chiffre d'affaires</td><td>275 000 €</td></tr>
+    </tbody></table>
+      <h4 style="margin-top:4mm">Équipe &amp; historique de financement</h4>
+    <table class="qa"><tbody>
+      <tr><td>Effectif total</td><td>4</td></tr><tr><td>Salariés</td><td>1</td></tr><tr><td>Agents commerciaux indépendants</td><td>3</td></tr><tr><td>Direction</td><td>1</td></tr><tr><td>Droits AGEFICE déjà mobilisés</td><td>Oui</td></tr><tr><td>OPCO déjà sollicité</td><td>Non</td></tr><tr><td>Refus de prise en charge antérieurs</td><td>Non, jamais</td></tr>
+    </tbody></table>
+    </div></section>
+<section class="page" id="s-04"><div class="sec"><h2><span class="no">04</span> Synthèse dirigeant</h2>
+      <blockquote>« Manque de production et cout des diffuseurs »<footer>Vos mots, notés pendant le rendez-vous</footer></blockquote><blockquote>« plus de mandats en stock et plus de vente et pourquoi pas depasser le CA est atteindre les 300K »<footer>Vos mots, notés pendant le rendez-vous</footer></blockquote>
+      <div class="scorehero" style="margin-top:5mm">
+        <div class="big">67<small>&#160;/ 100</small></div>
+        <p>Score global de performance commerciale et d'organisation, calculé sur
+        37 réponses.
+        Il n'a de sens que comparé à lui-même dans six mois : c'est un point de départ,
+        pas un jugement.</p>
+      </div>
+      <h4 style="margin-top:4mm">Vos trois chapitres les plus fragiles</h4>
+      <div class="scorebars">
+        <div class="srow">
+    <div class="slabel">Commercialisation &amp; suivi vendeur<small>couverture 60 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:2.0%; background:#b42318"></div><span class="outlbl" style="left:3.5%">0</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div><div class="srow">
+    <div class="slabel">RDV vendeur, découverte &amp; estimation<small>couverture 75 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:32.0%; background:#b42318"></div><span class="inlbl" style="right:69.5%">32</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div><div class="srow">
+    <div class="slabel">Management, pilotage &amp; vision<small>couverture 27 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:33.0%; background:#b42318"></div><span class="inlbl" style="right:68.5%">33</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div>
+      </div>
+      <h4 style="margin-top:4mm">Tous les chapitres</h4>
+      <div class="scorebars">
+        <div class="srow">
+    <div class="slabel">1. Identité &amp; contexte<small>couverture 100 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:100.0%"></div><span class="inlbl" style="right:1.5%">100</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">2. Équipe &amp; financement<small>couverture 33 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:100.0%"></div><span class="inlbl" style="right:1.5%">100</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">3. Prospection &amp; entrées vendeurs<small>couverture 80 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:66.0%"></div><span class="inlbl" style="right:35.5%">66</span></div>
+    <div class="schip"><span class="chip warn">à travailler</span></div>
+  </div><div class="srow">
+    <div class="slabel">4. RDV vendeur, découverte &amp; estimation<small>couverture 75 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:32.0%; background:#b42318"></div><span class="inlbl" style="right:69.5%">32</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div><div class="srow">
+    <div class="slabel">5. Mandats &amp; exclusivité<small>couverture 67 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:70.0%"></div><span class="inlbl" style="right:31.5%">70</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">6. Commercialisation &amp; suivi vendeur<small>couverture 60 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:2.0%; background:#b42318"></div><span class="outlbl" style="left:3.5%">0</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div><div class="srow">
+    <div class="slabel">7. Acquéreurs<small>couverture 57 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:100.0%"></div><span class="inlbl" style="right:1.5%">100</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">8. Visites, offres &amp; transformation<small>couverture 100 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:89.0%"></div><span class="inlbl" style="right:12.5%">89</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">9. Base de données &amp; e-réputation<small>couverture 33 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:100.0%"></div><span class="inlbl" style="right:1.5%">100</span></div>
+    <div class="schip"><span class="chip ok">au niveau</span></div>
+  </div><div class="srow">
+    <div class="slabel">10. Outils &amp; IA<small>couverture 0 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:2.0%"></div><span class="outlbl" style="left:3.5%">non noté</span></div>
+    <div class="schip"><span class="chip">non noté</span></div>
+  </div><div class="srow">
+    <div class="slabel">11. Management, pilotage &amp; vision<small>couverture 27 %</small></div>
+    <div class="sbarwrap"><div class="sbar" style="width:33.0%; background:#b42318"></div><span class="inlbl" style="right:68.5%">33</span></div>
+    <div class="schip"><span class="chip alert">prioritaire</span></div>
+  </div>
+      </div>
+    </div></section>
+<section class="page" id="s-05"><div class="sec"><h2><span class="no">05</span> Votre chaîne commerciale — vue d'ensemble</h2>
+      <p class="muted">Moyennes mensuelles déclarées · repères Start Academy.
+      Les deux maillons les plus faibles sont signalés.</p>
+      <div class="funnel">
+    <div class="frow">
+          <div class="stage">Contacts vendeurs</div>
+          <div class="barwrap"><div class="bar" style="width:100.0%"></div><span class="inlbl" style="right:1.5%">50 / mois</span></div>
+          <div class="conv"><span class="muted">non comparé</span></div>
+        </div><div class="frow">
+          <div class="stage">RDV estimation</div>
+          <div class="barwrap"><div class="bar" style="width:16.0%; background:#b42318"></div><span class="outlbl" style="left:17.5%">8 / mois</span></div>
+          <div class="conv"><span class="chip alert">16 %</span></div>
+        </div><div class="frow">
+          <div class="stage">Mandats rentrés</div>
+          <div class="barwrap"><div class="bar" style="width:4.0%; background:#b42318"></div><span class="outlbl" style="left:5.5%">2 / mois</span></div>
+          <div class="conv"><span class="chip alert">25 %</span></div>
+        </div><div class="frow">
+          <div class="stage">Visites</div>
+          <div class="barwrap"><div class="bar" style="width:40.0%"></div><span class="inlbl" style="right:61.5%">20 / mois</span></div>
+          <div class="conv"><span class="muted">non comparé</span></div>
+        </div><div class="frow">
+          <div class="stage">Offres</div>
+          <div class="barwrap"><div class="bar" style="width:4.0%; background:#b42318"></div><span class="outlbl" style="left:5.5%">2 / mois</span></div>
+          <div class="conv"><span class="chip alert">10 %</span></div>
+        </div><div class="frow">
+          <div class="stage">Compromis</div>
+          <div class="barwrap"><div class="bar" style="width:2.0%; background:#b42318"></div><span class="outlbl" style="left:3.5%">1 / mois</span></div>
+          <div class="conv"><span class="chip alert">50 %</span></div>
+        </div><div class="frow">
+          <div class="stage">Actes</div>
+          <div class="barwrap"><div class="bar" style="width:2.0%"></div><span class="outlbl" style="left:3.5%">1 / mois</span></div>
+          <div class="conv"><span class="chip ok">100 %</span></div>
+        </div>
+  </div>
+  <p class="muted" style="margin-top:1.5mm">Chaque barre est proportionnelle au volume mensuel
+  déclaré ; le pourcentage mesure la conversion depuis l'étape précédente, face au repère du
+  métier — en vert quand il est tenu, en rouge quand il ne l'est pas.</p>
+      <h4 style="margin-top:5mm">Le détail, face aux repères</h4>
+      <table>
+        <thead><tr><th>Étape</th><th class="num">Volume / mois</th><th class="num">Taux de passage</th><th class="num">Repère</th><th>État</th></tr></thead>
+        <tbody>
+          <tr>
+              <td>Contacts vendeurs</td>
+              <td class="num">50</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td><span class="chip">non comparé</span></td>
+            </tr><tr>
+              <td>RDV estimation</td>
+              <td class="num">8</td>
+              <td class="num">16 %</td>
+              <td class="num">20 %</td>
+              <td><span class="chip alert">en retard</span></td>
+            </tr><tr>
+              <td>Mandats rentrés</td>
+              <td class="num">2</td>
+              <td class="num">25 %</td>
+              <td class="num">40 %</td>
+              <td><span class="chip alert">en retard</span></td>
+            </tr><tr>
+              <td>Visites</td>
+              <td class="num">20</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td><span class="chip">non comparé</span></td>
+            </tr><tr>
+              <td>Offres</td>
+              <td class="num">2</td>
+              <td class="num">10 %</td>
+              <td class="num">25 %</td>
+              <td><span class="chip alert">en retard</span></td>
+            </tr><tr>
+              <td>Compromis</td>
+              <td class="num">1</td>
+              <td class="num">50 %</td>
+              <td class="num">60 %</td>
+              <td><span class="chip alert">en retard</span></td>
+            </tr><tr>
+              <td>Actes</td>
+              <td class="num">1</td>
+              <td class="num">100 %</td>
+              <td class="num">85 %</td>
+              <td><span class="chip ok">conforme</span></td>
+            </tr>
+        </tbody>
+      </table>
+      <div class="grid2" style="margin-top:5mm">
+        <div class="tile"><div class="lbl">Part d'exclusivité</div>
+          <div class="display">30 %</div>
+          <p>Repère 30 %</p></div>
+        <div class="tile"><div class="lbl">CA moyen par vente</div>
+          <div class="display">12 250 €</div>
+          <p>Déclaré au chapitre 1</p></div>
+      </div>
+      <h4 style="margin-top:6mm">Là où la chaîne fuit le plus</h4>
+             <div class="tile" style="margin-top:2mm">
+                 <b>Offres</b> — 10 % contre 25 % attendus.
+                 <p><b>Potentiel majeur — à chiffrer ensemble.</b></p>
+               </div><div class="tile" style="margin-top:2mm">
+                 <b>Mandats rentrés</b> — 25 % contre 40 % attendus.
+                 <p>Reprendre la moitié du chemin vaudrait de l'ordre de <b>44 100 €</b> de chiffre d'affaires supplémentaire sur un an.</p>
+               </div>
+             <p class="muted" style="margin-top:2mm">Projection à tunnel inchangé par ailleurs,
+             sur les volumes déclarés — un ordre de grandeur pour situer l'enjeu, pas un engagement.</p>
+    </div></section>
+<div class="flow">
+  <div class="chap" id="s-06"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">06</span> Prospection &amp; entrées vendeurs
+      </div>
+      <div class="chap-meta">
+        <div class="score is-warn">66<small>&#160;/ 100</small></div>
+        <div class="answered">3 questions · 3 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Vos sources de contacts vendeurs</td><td>Recommandation, Notoriété</td></tr><tr><td>Qui prospecte réellement</td><td>Certains seulement</td></tr><tr><td>Contacts vendeurs générés par mois</td><td>50</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Prospection &amp; entrées vendeurs tient, sans être un point fort. Sur 100 contacts vendeurs, 16 obtiennent un rendez-vous, contre 20 attendus.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Sur 100 contacts vendeurs, 16 obtiennent un rendez-vous, contre 20 attendus. <span class="chip warn">écart</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Un rituel de prospection hebdomadaire sur créneau fixe, avec une trame d'appel commune : l'objectif n'est pas de prospecter plus, mais que toute l'équipe le fasse.</p></div>
+    </div></div>
+  <div class="chap" id="s-07"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">07</span> RDV vendeur, découverte &amp; estimation
+      </div>
+      <div class="chap-meta">
+        <div class="score is-alert">32<small>&#160;/ 100</small></div>
+        <div class="answered">2 questions · 2 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Rendez-vous estimation par mois</td><td>8</td></tr><tr><td>Découverte vendeur formalisée</td><td>Chacun sa méthode</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">RDV vendeur, découverte &amp; estimation est le point le plus fragile de votre organisation. 25 % de vos rendez-vous estimation se transforment en mandat, contre 40 % attendus. La découverte vendeur n'est pas formalisée : la qualité du rendez-vous dépend de qui le mène. Sans trame de découverte, la qualité du rendez-vous dépend de qui le mène — et se transmet mal aux nouveaux arrivants.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>25 % de vos rendez-vous estimation se transforment en mandat, contre 40 % attendus. <span class="chip warn">écart</span><br>La découverte vendeur n'est pas formalisée : la qualité du rendez-vous dépend de qui le mène. <span class="chip warn">écart</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Une trame de découverte vendeur écrite, utilisée par tous, et un avis de valeur remis systématiquement par écrit — c'est ce qui fait la différence entre une estimation et un mandat.</p></div>
+    </div></div>
+  <div class="chap" id="s-08"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">08</span> Mandats &amp; exclusivité
+      </div>
+      <div class="chap-meta">
+        <div class="score is-ok">70<small>&#160;/ 100</small></div>
+        <div class="answered">4 questions · 4 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Mandats actifs en portefeuille</td><td>16</td></tr><tr><td>Mandats rentrés par mois</td><td>2</td></tr><tr><td>Part de l'exclusivité dans les rentrées</td><td>30 %</td></tr><tr><td>Attitude face à un prix au-dessus du marché</td><td>Souvent, pour rentrer le mandat</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Mandats &amp; exclusivité tient, sans être un point fort. Aucun écart marquant n'est ressorti sur ce chapitre : les pratiques déclarées sont conformes à ce qu'on attend d'une agence qui tourne.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Aucun écart signalé sur ce chapitre <span class="chip ok">au niveau</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Un argumentaire d'exclusivité travaillé en entraînement, et une règle claire sur le prix de rentrée : on ne prend pas un mandat à 10 % au-dessus du marché pour « ne pas perdre l'affaire ».</p></div>
+    </div></div>
+  <div class="chap" id="s-09"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">09</span> Commercialisation &amp; suivi vendeur
+      </div>
+      <div class="chap-meta">
+        <div class="score is-alert">0<small>&#160;/ 100</small></div>
+        <div class="answered">2 questions · 2 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Rythme de suivi vendeur</td><td>Jamais</td></tr><tr><td>Baisse de prix mensuelle moyenne</td><td>1 %</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Commercialisation &amp; suivi vendeur est le point le plus fragile de votre organisation. Le suivi vendeur n'est pas ritualisé : sans point régulier, la baisse de prix se négocie dans l'urgence, quand le mandat est déjà froid. Sans rythme de suivi, la baisse de prix arrive trop tard, quand le bien s'est déjà usé sur le marché.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Le suivi vendeur n'est pas ritualisé : sans point régulier, la baisse de prix se négocie dans l'urgence, quand le mandat est déjà froid. <span class="chip warn">écart</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Un point vendeur à date fixe dès la signature du mandat, avec un compte rendu écrit : la baisse de prix se prépare, elle ne s'improvise pas au troisième mois.</p></div>
+    </div></div>
+  <div class="chap" id="s-10"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">10</span> Acquéreurs
+      </div>
+      <div class="chap-meta">
+        <div class="score is-ok">100<small>&#160;/ 100</small></div>
+        <div class="answered">2 questions · 2 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Contacts acquéreurs par mois</td><td>20</td></tr><tr><td>Vérification du financement acquéreur</td><td>Vérifié avant visites</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Acquéreurs est un point d'appui de votre agence. Aucun écart marquant n'est ressorti sur ce chapitre : les pratiques déclarées sont conformes à ce qu'on attend d'une agence qui tourne.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Aucun écart signalé sur ce chapitre <span class="chip ok">au niveau</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Une qualification financière systématique avant la première visite : c'est le geste qui supprime la majorité des compromis qui tombent.</p></div>
+    </div></div>
+  <div class="chap" id="s-11"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">11</span> Visites, offres &amp; transformation
+      </div>
+      <div class="chap-meta">
+        <div class="score is-ok">89<small>&#160;/ 100</small></div>
+        <div class="answered">4 questions · 4 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Visites par mois</td><td>20</td></tr><tr><td>Offres par mois</td><td>2</td></tr><tr><td>Compromis par mois</td><td>1</td></tr><tr><td>Actes par mois</td><td>1</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Visites, offres &amp; transformation est un point d'appui de votre agence. 50 % de vos offres se concrétisent en compromis, contre 60 % attendus. Il faut 20 visites pour une vente, contre 15 attendues : le temps commercial part en visites qui n'aboutissent pas.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>50 % de vos offres se concrétisent en compromis, contre 60 % attendus. <span class="chip warn">écart</span><br>Il faut 20 visites pour une vente, contre 15 attendues : le temps commercial part en visites qui n'aboutissent pas. <span class="chip warn">écart</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Un suivi nominatif des dossiers entre compromis et acte, avec relance du courtier et du notaire aux échéances : les ventes ne se perdent pas, elles s'oublient.</p></div>
+    </div></div>
+  <div class="chap" id="s-12"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">12</span> Base de données &amp; e-réputation
+      </div>
+      <div class="chap-meta">
+        <div class="score is-ok">100<small>&#160;/ 100</small></div>
+        <div class="answered">3 questions · 3 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Volume de la base de contacts</td><td>1500</td></tr><tr><td>Nombre d'avis en ligne</td><td>23</td></tr><tr><td>Note moyenne en ligne</td><td>5 / 5</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Base de données &amp; e-réputation est un point d'appui de votre agence. Aucun écart marquant n'est ressorti sur ce chapitre : les pratiques déclarées sont conformes à ce qu'on attend d'une agence qui tourne.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Aucun écart signalé sur ce chapitre <span class="chip ok">au niveau</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Une demande d'avis déclenchée à chaque acte signé, au moment où le client est content — puis une exploitation régulière de la base pour la faire travailler.</p></div>
+    </div></div>
+  <div class="chap" id="s-13"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">13</span> Outils &amp; IA
+      </div>
+      <div class="chap-meta">
+        <div class="score is-none">non noté</div>
+        <div class="answered">2 questions · 2 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Logiciel métier</td><td>Septeo netty tres bien mais trop compliqué aujourd'hui les agents sans servent uniquement pour publier les mandats</td></tr><tr><td>Usages de l'IA en place</td><td>Rédaction d'annonces</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Ce chapitre n'a pas été suffisamment renseigné pour être noté. Un outil installé mais non paramétré coûte du temps au lieu d'en faire gagner : chacun réinvente sa méthode, et les résultats sont inégaux.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Aucun écart signalé sur ce chapitre <span class="chip ok">au niveau</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Instructions personnalisées, modèles de prompts communs et réflexe de vérification : c'est ce qui fait que toute l'équipe obtient le même niveau de résultat.</p></div>
+    </div></div>
+  <div class="chap" id="s-14"><div class="chap-head">
+      <div class="chap-title" style="border:none; margin:0; padding:0">
+        <span class="no">14</span> Management, pilotage &amp; vision
+      </div>
+      <div class="chap-meta">
+        <div class="score is-alert">33<small>&#160;/ 100</small></div>
+        <div class="answered">3 questions · 3 renseignées</div>
+      </div>
+    </div>
+    <hr style="border:none; border-top:2px solid #00527A; margin:2mm 0 4mm">
+    <h4 style="margin-top:4mm">Ce que vous nous avez dit</h4>
+    <table class="qa"><tbody>
+      <tr><td>Indicateurs suivis</td><td>Chiffre d'affaires</td></tr><tr><td>Les trois difficultés citées</td><td>Manque de production et cout des diffuseurs</td></tr><tr><td>Les trois priorités citées</td><td>plus de mandats en stock et plus de vente et pourquoi pas depasser le CA est atteindre les 300K</td></tr>
+    </tbody></table>
+    <h4 style="margin-top:4mm">Notre lecture</h4>
+    <p class="lecture">Management, pilotage &amp; vision est le point le plus fragile de votre organisation.</p>
+    <div class="grid2" style="margin-top:3mm">
+      <div class="tile"><div class="lbl">Repères</div>
+        <p>Aucun écart signalé sur ce chapitre <span class="chip ok">au niveau</span></p></div>
+      <div class="lever"><h4>Premier levier</h4><p>Trois indicateurs suivis chaque semaine, affichés devant l'équipe, et un point individuel mensuel : le pilotage commence par ce qui se mesure.</p></div>
+    </div></div>
+</div>
+<section class="page" id="s-15"><div class="sec"><h2><span class="no">15</span> La performance de votre équipe — personne par personne</h2>
+      <p class="muted">Issu des fiches individuelles du diagnostic. Ce tableau vous est destiné :
+      il n'apparaît sur aucun lien partagé.</p>
+      <table>
+        <thead><tr><th>Collaborateur</th><th>Statut</th><th class="num">Production N-1</th><th class="num">Objectif proposé</th><th>Constats &amp; préconisation</th></tr></thead>
+        <tbody>
+          <tr>
+              <td>Personne 1</td>
+              <td>Agent commercial</td>
+              <td class="num">87 000 €</td>
+              <td class="num">98 000 €</td>
+              <td>Meilleure production de l'équipe (184 % de la moyenne). À faire essaimer : binôme sur les découvertes vendeur et partage de méthode.</td>
+            </tr><tr>
+              <td>Personne 2</td>
+              <td>Salarié</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td>—</td>
+            </tr><tr>
+              <td>Personne 3</td>
+              <td>Agent commercial</td>
+              <td class="num">7 500 €</td>
+              <td class="num">8 000 €</td>
+              <td>Production à 16 % de la moyenne de l'équipe : c'est là que le point d'écart est le plus grand. Reprendre la régularité de la prospection avant tout autre chantier.</td>
+            </tr>
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:4mm">Les objectifs proposés reprennent, pour chacun,
+             l'ambition de croissance de l'agence (+12 % entre le chiffre
+             d'affaires N-1 et votre objectif déclaré). Ce sont des points de départ d'entretien,
+             pas des quotas : ils se valident avec la personne concernée.</p>
+    </div></section>
+<section class="page" id="s-16"><div class="sec"><h2><span class="no">16</span> Un objectif, trois priorités, un plan de 90 jours</h2>
+      <div class="scorehero">
+        <div class="big">275 000 €</div>
+        <p>Votre objectif déclaré pour l'année (+ 12 % par rapport à l'an dernier).
+        Les trois priorités ci-dessous sont celles qui pèsent le plus sur cet écart.</p>
+      </div>
+      <div style="margin-top:5mm">
+        <div class="tile" style="margin-top:3mm">
+            <div class="lbl">Priorité 1 · Jours 1 à 30</div>
+            <b>Formaliser la découverte vendeur</b>
+            <p>25 % de vos rendez-vous estimation se transforment en mandat, contre 40 % attendus.</p>
+          </div><div class="tile" style="margin-top:3mm">
+            <div class="lbl">Priorité 2 · Jours 31 à 60</div>
+            <b>Programmer le suivi vendeur</b>
+            <p>Le suivi vendeur n'est pas ritualisé : sans point régulier, la baisse de prix se négocie dans l'urgence, quand le mandat est déjà froid.</p>
+          </div><div class="tile" style="margin-top:3mm">
+            <div class="lbl">Priorité 3 · Jours 61 à 90</div>
+            <b>Piloter sur trois indicateurs</b>
+            <p>Management, pilotage &amp; vision est noté 33 / 100 : c'est le chapitre où l'effort rapporte le plus vite.</p>
+          </div>
+      </div>
+      <h4 style="margin-top:6mm">Les 90 prochains jours</h4>
+      <table>
+        <thead><tr><th>Échéance</th><th>Ce qui se met en place</th></tr></thead>
+        <tbody>
+          <tr><td>Jours 1 à 30</td><td>Formaliser la découverte vendeur — mise en place et premiers rituels.</td></tr>
+          <tr><td>Jours 31 à 60</td><td>Programmer le suivi vendeur — déploiement à toute l'équipe.</td></tr>
+          <tr><td>Jours 61 à 90</td><td>Piloter sur trois indicateurs — puis première mesure des écarts.</td></tr>
+        </tbody>
+      </table>
+    </div></section>
+<section class="page" id="s-17"><div class="sec"><h2><span class="no">17</span> Votre potentiel de financement</h2>
+      <table>
+        <thead><tr><th>Financeur</th><th>Bénéficiaires</th><th class="num">Droits mobilisables</th><th class="num">Prise en charge</th></tr></thead>
+        <tbody>
+          <tr><td>AGEFICE</td><td>2 agent(s) commercial(aux)</td>
+            <td class="num">6 000 €</td><td class="num">6 000 €</td></tr>
+          <tr><td>OPCO EP</td><td>1 salarié(s)</td>
+            <td class="num">2 500 €</td>
+            <td class="num">2 400 €</td></tr>
+        </tbody>
+      </table>
+      
+      <div class="grid3" style="margin-top:5mm">
+        <div class="tile"><div class="lbl">Volume proposé</div>
+          <div class="display">10<small>&#160;demi-journées</small></div>
+          <p>Dans vos locaux</p></div>
+        <div class="tile"><div class="lbl">Pris en charge</div>
+          <div class="display">8 400 €</div>
+          <p>Par vos financeurs — montage et dépôt des dossiers compris</p></div>
+        <div class="tile"><div class="lbl">Reste à charge</div>
+          <div class="display">1 680 €</div>
+          <p>Sur 10 080 € HT</p></div>
+      </div>
+      <h4 style="margin-top:6mm">À savoir</h4><p>Droits AGEFICE estimés à partir de la production déclarée. À confirmer par l'attestation CFP — une estimation n'est pas un droit acquis.<br>Le volume dépasse le plafond annuel AGEFICE : l'écart apparaît en reste à charge, il n'est pas pris en charge.<br>Deux dossiers administratifs distincts seront montés (AGEFICE pour les indépendants, OPCO EP pour les salariés) — pour un seul reste à charge.</p>
+      <h4 style="margin-top:6mm">Ce que nous prenons en charge</h4>
+      <p class="lead">Le montage administratif est assuré de bout en bout par Start Academy :
+      constitution des dossiers, dépôt dans les délais, suivi jusqu'au règlement. Aucune avance de
+      trésorerie ne vous est demandée. Deux dossiers distincts sont montés selon les statuts, pour
+      un seul reste à charge.</p>
+      <p class="muted" style="margin-top:4mm">Montants indicatifs, établis sur les éléments
+      déclarés pendant le rendez-vous et sur les règles de financement en vigueur au
+      16 septembre 2026. Ils sont confirmés à l'instruction de chaque
+      dossier. Les droits non consommés au 31 décembre sont perdus.</p>
+      <p class="muted" style="margin-top:3mm">Start Academy.
+      Analyse produite le 16 septembre 2026 · barème bareme-v1-2026-09 · rédaction heuristique.</p>
+    </div></section>
+</body>
+</html>

@@ -45,52 +45,56 @@ conservés. Le test de contrat joue **deux volumes** pour être mutation-safe.
 
 ---
 
-## C. Trois points qui demandent ton arbitrage
+## C. Les trois points — TRANCHÉS le 16/09/2026
 
-### ① La chaîne « co-animé, sur site » est PARTAGÉE entre proposition et devis
+### ① « co-animé, sur site » — DISSOCIÉ, et le devis suit
 
-`builder.ts:276` et `:304` produisent le libellé de ligne :
+Arbitrage : le devis garde la **valeur** (l'assiette de la facture), pas les
+**mots**. Son lecteur est le dirigeant, pas le financeur. Donc proposition
+**et** devis disent « Parcours de 6 demi-journées ».
 
-```
-Parcours de 6 demi-journées, co-animé, sur site
-```
+**Vérification faite AVANT, comme demandé — rien en aval n'exige des heures :**
 
-Il alimente **à la fois** la colonne « Désignation » de la proposition (pièce
-client) **et** la ligne du devis (pièce contractuelle, que tu m'as dit de ne pas
-toucher).
-
-**Conséquence : la proposition porte encore « sur site ».** Je ne l'ai pas
-changée — une chaîne partagée ne se modifie pas pour satisfaire une pièce sans
-décider pour l'autre. Deux sorties possibles :
-
-- **dissocier** : un libellé client (`Parcours de 6 demi-journées`) et un libellé
-  contractuel (inchangé) — c'est le patron `decrireDureeProduit` de
-  `creneaux.ts`, déjà éprouvé ;
-- **aligner** : un seul libellé sans les mots d'interne, sur les deux pièces.
-
-### ② Deux arbitrages d'il y a une heure sont contredits par la règle neuve
-
-Tu avais dit **garder** ces deux-là. La règle « ces mots ne paraissent sur
-aucune pièce » les vise désormais. Je ne tranche pas à ta place.
-
-| Pièce | Ce qu'elle porte encore |
+| Ce qui aurait pu l'exiger | Constat |
 |---|---|
-| **Rapport d'audit**, tuiles de la page financement | `24 h sur site` · `Heures conventionnées` · *« La valeur portée sur la convention, l'émargement et le dossier financeur »* |
-| **Devis**, libellé de ligne | `… de 4 h sur site, … 48 h conventionnées par participant` |
+| La **facture** | Elle ne naît pas du devis : aucun `quoteId` sur `Invoice`. Le libellé de ligne est reconstruit (`invoice-snapshot.ts:361`, `invoices.ts:590` = nom du stagiaire) |
+| La **facturation électronique** (Factur-X / PDP) | `InvoiceLine.unit` est délibérément **C62** (unité), quantité 1. Le fichier écrit pourquoi HUR est refusé : *« le prix de QualiOF est une place de formation, pas un tarif horaire ; mettre la durée en quantité avec l'unité HUR ferait dire à la facture un prix unitaire que personne n'a négocié »* |
+| Une **mention légale** du devis | `quote-template.ts` ne porte aucune mention en heures |
 
-Lecture possible : la règle neuve les emporte, et le devis dirait « 6 journées —
-48 heures ». Lecture inverse : ton « garde-la » nommait ces pièces, la règle
-neuve nommait les deux autres — **et une consigne dit ce qu'elle couvre**
-(§4 quater). C'est la raison pour laquelle je te la pose au lieu d'étendre.
+→ Appliqué. Le libellé vit désormais dans **`libelleVolumeClient(halfDays)`**
+(`builder.ts`), une fonction nommée plutôt qu'un littéral recopié deux fois —
+c'est le patron `decrireDureeProduit`, et c'est §4 septdecies appliqué.
 
-### ③ Une mention d'organisme dit « demi-journée » sur toutes les pièces Qualiopi
+### ② Le rapport d'audit — pièce CLIENT, l'argent remplace les heures
 
-`qualiopi-mentions.ts:81`, rubrique *Modalités d'évaluation* :
+Les trois tuiles de la page 17 :
 
-> « Une liste d'émargement est signée **à la demi-journée** ; »
+| | Avant | Après |
+|---|---|---|
+| 1 | Volume proposé · **10 demi-journées** · *40 h sur site* | Volume proposé · **10 demi-journées** · *Dans vos locaux* |
+| 2 | **Heures conventionnées** · *80 h* · *La valeur portée sur la convention…* | **Pris en charge** · *8 400 €* · *Par vos financeurs — montage et dépôt compris* |
+| 3 | Reste à charge · *1 680 € sur 10 080 € HT* | inchangé |
 
-Elle sort dans le programme composé — et dans toute pièce qui hérite des
-mentions. Elle décrit un **rythme de signature**, pas un volume vendu, donc elle
-n'est probablement pas visée. Mais c'est la seule occurrence restante, et un
-test la **fige à une** : si une seconde apparaît, le cadre du programme s'est
-remis à parler en demi-journées et le test rougit.
+**Le compte se referme désormais en euros** : 8 400 + 1 680 = 10 080 € HT. Le
+document rendu ne contient plus **aucune** occurrence de « conventionnées » ni
+de « sur site » — vérifié sur le HTML produit.
+
+Rendus joints : `DIAG-R001-audit-AVANT.html` et `DIAG-R001-audit-APRES.html`.
+
+**Un point de conception reste ouvert.** Ta phrase — *« 3 000 € par personne et
+par an »* — n'est pas dans la page. Deux raisons :
+
+- elle n'est vraie que pour les **bénéficiaires AGEFICE** : sur ce dossier, 2
+  agents à 3 000 € mais 1 salarié relevant de l'OPCO EP (2 500 €). Une tuile qui
+  annoncerait « 3 000 € par personne » serait fausse pour un tiers de l'équipe ;
+- le plafond est une **`FundingRule`** (`AGEFICE_ANNUAL_CAP`), pas une
+  constante — et le gabarit ne reçoit pas les règles aujourd'hui.
+
+Proposition : la porter **dans la ligne AGEFICE du tableau**, où elle est vraie
+(« 2 agents commerciaux · 3 000 € par personne et par an »), ce qui suppose de
+passer les règles au gabarit. À confirmer.
+
+### ③ La mention d'émargement — NON TOUCHÉE
+
+Hors visée, comme tranché : elle décrit un rythme de signature et elle est
+exacte. Le garde qui la **fige à une occurrence** reste en place.

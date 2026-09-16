@@ -917,6 +917,43 @@ C'est le corollaire de §4 bis (dupliquer un mapping garantit la divergence) :
 ici on n'a pas dupliqué, on a **sous-diffusé**. Les deux défauts ont la même
 racine — une seule définition, mais introuvable depuis ailleurs.
 
+### Troisième occurrence en une semaine — et la conclusion n'est pas « documenter »
+
+**16/09/2026.** Avant d'appliquer la règle d'unité d'affichage aux pièces
+contractuelles, on a relevé ce que chacune disait déjà. Verdict : **les cinq
+étaient déjà justes.** La convention rendait `48 heures (6 journées de 8
+heures)` — l'unité du financeur, exactement — depuis toujours, et **la spec
+l'ignorait**.
+
+| Occurrence | Où la règle vivait | Ce que ça a coûté |
+|---|---|---|
+| `creneaux.ts` | deux fonctions nommées, participant vs interne | le programme composé a mélangé les unités |
+| `convention-template.ts` | `formatDuree`, `%7` et `%8` | on a failli « corriger » une pièce juste |
+| `invoice-snapshot.ts` | convention n°1, quantité 1 / unité C62 | — (trouvée à temps) |
+
+> **Quand une pièce fait quelque chose de juste que la spec ignore, ce n'est
+> pas la pièce qui a raison par hasard : c'est quelqu'un qui a su et qui n'a pas
+> écrit.**
+
+La nuance compte. « Il faut documenter » est un vœu ; ceci est un **constat sur
+la provenance** — il y a eu une décision, elle a été prise correctement, et elle
+est restée dans un fichier. Le savoir existe, il est simplement **rangé au
+mauvais endroit**. On ne le crée pas, on le **déplace**.
+
+### La méthode qui en découle
+
+> **Avant d'appliquer une règle neuve, on relève qui la respectait déjà.**
+
+Le relevé coûte une demi-heure et rapporte trois choses :
+
+1. **il évite de « corriger » ce qui était juste** — le risque n'est pas
+   théorique, `formatDuree` était sur la liste des pièces à changer ;
+2. **il dit où la règle était déjà comprise**, donc qui l'avait trouvée et ce
+   qu'il savait de plus que la spec ;
+3. **il transforme la règle neuve en CONSTAT** : elle ne s'impose plus au
+   dépôt, elle nomme ce que le dépôt fait déjà — et une règle qui décrit se
+   discute mieux qu'une règle qui prescrit.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
