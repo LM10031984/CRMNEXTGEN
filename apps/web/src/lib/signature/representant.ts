@@ -173,7 +173,7 @@ function refusSaisie(nom: string, saisie: string): string {
  * prestataire, où le dossier n'avancerait jamais sans que personne sache
  * pourquoi. La validation de saisie complète appartient au schéma Zod de C.2b.
  */
-function estUneAdresseEmail(valeur: string): boolean {
+export function estUneAdresseEmail(valeur: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valeur);
 }
 

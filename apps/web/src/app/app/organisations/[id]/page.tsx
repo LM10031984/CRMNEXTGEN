@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EditOrganizationButton } from '@/components/forms/edit-organization-button';
 import { ResponsableOrganisation } from '@/components/organisations/responsable-organisation';
 import { AddPersonToOrgButton } from '@/components/editors/add-person-to-org-button';
+import { ContactsOrganisation } from '@/components/organisations/contacts-organisation';
 import { Badge } from '@/components/ui/badge';
 import { BackToListLink } from '@/components/ui/back-to-list-link';
 import { withFrom } from '@/lib/nav/from-link';
@@ -228,6 +229,23 @@ export default async function OrgDetailPage({
               )}
             </dl>
           </section>
+
+          {/* Les CONTACTS — le chemin que le bloc « Responsable » réclamait sans
+              qu'il existe : « renseignez son adresse sur le contact qui porte ce
+              nom » n'était réalisable nulle part dans l'app avant le 16/09/2026. */}
+          <ContactsOrganisation
+            organizationId={org.id}
+            representative={org.representative}
+            contacts={org.contacts.map((c) => ({
+              id: c.id,
+              firstName: c.firstName,
+              lastName: c.lastName,
+              email: c.email,
+              phone: c.phone,
+              function: c.function,
+              isPrimary: c.isPrimary,
+            }))}
+          />
 
           <section className="rounded-2xl border border-border bg-white p-6">
             <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
