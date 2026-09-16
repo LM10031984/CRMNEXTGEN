@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { resoudreTarifProgramme, resoudrePrixProgramme } from '../tarif-programme';
+import {
+  resoudreTarifProgramme,
+  resoudrePrixProgramme,
+  programmeDoitEtrePropreALaSession,
+} from '../tarif-programme';
 import { Prisma } from '@qualiof/db';
 
 /**
@@ -133,5 +137,70 @@ describe('resoudrePrixProgramme — total entreprise vs prix par stagiaire', () 
     expect(
       resoudrePrixProgramme({ inscrits: [], tarifSession: null, prixProduit: 2500 }),
     ).toEqual({ mode: 'PAR_STAGIAIRE', montantHT: 2500 });
+  });
+});
+
+/**
+ * ASSALIT SYNDIC (SES-0107), 11/09 : huit salariés à 312,50 €, forfait de
+ * 2 500 € pour l'entreprise. Le mode TOTAL_ENTREPRISE existait déjà, mais aucun
+ * bouton n'y menait — tous généraient le programme de CATALOGUE, qui annonce le
+ * prix par tête. D'où cette règle, partagée par tous les points d'entrée.
+ */
+describe('programmeDoitEtrePropreALaSession', () => {
+  const salarie = (priceHT: number, sponsorOrgId = 'org-assalit') => ({
+    priceHT,
+    sponsorOrgId,
+    couvertParConvention: true,
+  });
+  const autoPayeur = (priceHT: number, sponsorOrgId = 'org-ei') => ({
+    priceHT,
+    sponsorOrgId,
+    couvertParConvention: false,
+  });
+
+  it('SES-0107 : forfait d’entreprise SANS tarif de session ⇒ programme de la session', () => {
+    expect(
+      programmeDoitEtrePropreALaSession({
+        inscrits: Array.from({ length: 8 }, () => salarie(312.5)),
+        tarifSession: null,
+        prixProduit: 2500,
+      }),
+    ).toBe(true);
+  });
+
+  it('tarif négocié pour la session ⇒ programme de la session, même hors convention d’entreprise', () => {
+    expect(
+      programmeDoitEtrePropreALaSession({
+        inscrits: [autoPayeur(1800), autoPayeur(1800, 'org-ei-2')],
+        tarifSession: 1800,
+        prixProduit: 2500,
+      }),
+    ).toBe(true);
+  });
+
+  it('session inter d’auto-payeurs au prix catalogue ⇒ le programme de catalogue suffit', () => {
+    expect(
+      programmeDoitEtrePropreALaSession({
+        inscrits: [autoPayeur(2500), autoPayeur(2500, 'org-ei-2')],
+        tarifSession: null,
+        prixProduit: 2500,
+      }),
+    ).toBe(false);
+  });
+
+  it('session sans inscrit ⇒ catalogue (rien à totaliser)', () => {
+    expect(
+      programmeDoitEtrePropreALaSession({ inscrits: [], tarifSession: 0, prixProduit: 2500 }),
+    ).toBe(false);
+  });
+
+  it('salle mixte salariés + agent commercial ⇒ catalogue (un total ne vaudrait que pour une partie)', () => {
+    expect(
+      programmeDoitEtrePropreALaSession({
+        inscrits: [salarie(312.5), autoPayeur(312.5)],
+        tarifSession: null,
+        prixProduit: 2500,
+      }),
+    ).toBe(false);
   });
 });

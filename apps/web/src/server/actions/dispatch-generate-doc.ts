@@ -20,8 +20,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
-import { generateProgrammeForProduct } from './programme-generator';
-import { generateProgrammeForSessionCore } from '@/lib/closure/programme-core';
+import { generateProgrammeForSessionOrProductCore } from '@/lib/closure/programme-core';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateChecklistForSession } from './generate-checklist-formation';
 import { generateConventionForParticipant } from './convention-generator';
@@ -61,14 +60,13 @@ export async function dispatchGenerateDoc(
       // ─── Docs partagés produit/session ──────────────────────────
       case 'PROGRAMME': {
         if (!session.productId) return { ok: false, error: 'Produit manquant' };
-        // Tarif négocié pour cette session ⇒ programme DE SESSION, sinon le
-        // programme de catalogue. Sans ça, le programme annonce le prix produit
-        // pendant que la convention du même dossier annonce le prix consenti
-        // (constat SES-0109 : 2 500 € au programme, 2 200 € à la convention).
-        const tarifSession = Number(session.pricePerLearner ?? 0);
-        const r = tarifSession > 0
-          ? await generateProgrammeForSessionCore(user.tenantId, session.id, { force: input.force })
-          : await generateProgrammeForProduct(session.productId, { force: input.force });
+        // Programme DE SESSION dès que le montant à annoncer n'est pas celui du
+        // catalogue — tarif négocié (SES-0109 : 2 500 € au programme contre
+        // 2 200 € à la convention) ou forfait d'entreprise (SES-0107). La règle
+        // vit dans le cœur, partagée avec tous les autres boutons.
+        const r = await generateProgrammeForSessionOrProductCore(user.tenantId, session.id, {
+          force: input.force,
+        });
         revalidatePath(`/app/sessions/${input.sessionId}`);
         return { ok: r.ok, error: r.error, docId: r.documentId, resourceKind: 'document' };
       }

@@ -15,7 +15,7 @@ import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { entreesSignees } from '@/lib/closure/entrees-signees';
 import { generateDerouleForProduct } from './deroule-product-generator';
 import { generateGrilleObsSessionForSession } from './generate-grille-obs-session';
-import { generateProgrammeForProduct } from './programme-generator';
+import { generateProgrammeForSession } from './programme-generator';
 import {
   routeConventionsByPayerRule,
   ROUTABLE_PARTICIPANT_SELECT,
@@ -170,7 +170,7 @@ export async function generateClosurePack(
     generateDerouleForProduct(session.product.id).catch((e) => {
       console.warn('[closure-pack] déroulé produit non généré :', e?.message ?? e);
     }),
-    generateProgrammeForProduct(session.product.id).catch((e) => {
+    generateProgrammeForSession(sessionId).catch((e) => {
       console.warn('[closure-pack] programme produit non généré :', e?.message ?? e);
     }),
   ]);
