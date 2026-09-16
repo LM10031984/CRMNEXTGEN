@@ -133,6 +133,34 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 - Web : Vercel (`apps/web/vercel.json` — région + crons ; build `next build`, aucune migration). Worker : Railway (`railway.json` → `docker/worker/Dockerfile`). CI : `.github/workflows/ci.yml` (PR + push main — drift de schéma, lint, tsc, tests). Migrations prod : `.github/workflows/deploy.yml` (push main → `prisma migrate deploy`)
 - `production` mode toggled via `NODE_ENV=production`; Lucia secure cookies switch on
 - BullMQ worker runs as separate process (script: `apps/web/scripts/closure-worker.ts`, intended for systemd/pm2/docker per its header comment)
+## Worktrees — `files` est le DÉPÔT, les `files-*` sont des worktrees
+
+`~/Projects/CRM Next gen/files` est le **dépôt principal** : c'est lui qui porte
+`.git`. `git worktree remove` le refuse (« is a main working tree »). Les autres
+— `files-inscriptions`, `files-signature`, `files-assiduite`, `files-chaine` —
+sont des worktrees LIÉS, eux supprimables.
+
+Le nom trompe : `files` ressemble à un worktree parmi d'autres, il n'en est pas
+un. Écrit ici le 16/09/2026 après une demande de « nettoyer le worktree
+`files` » — git a refusé, mais rien dans le dépôt ne disait pourquoi.
+
+Deux conséquences :
+
+- **Ne jamais supprimer `files`.** Ça emporterait `.git`, donc TOUS les
+  worktrees liés d'un coup.
+- **Une branche checkoutée quelque part n'est ni supprimable, ni réutilisable
+  ailleurs.** Après le merge d'une branche portée par `files`, il faut d'abord
+  y rebasculer sur `main` — ce qui suppose qu'aucun worktree lié ne squatte
+  `main`. Si c'est le cas, détacher le worktree lié (`git checkout --detach
+  origin/main`) AVANT, sinon les deux opérations se bloquent l'une l'autre.
+
+⚠ Les fichiers NON SUIVIS d'un worktree disparaissent avec lui. `.planning/` est
+versionné par politique (cf. `.gitignore`, « leçon Phase 9.3 »), mais des
+artefacts peuvent y séjourner non commités pendant des jours : vérifier
+`git status` du worktree avant toute suppression, pas seulement ses commits.
+
+Chaque worktree a sa propre base `qualiof_dev_<worktree>` — voir `/quick`.
+
 ## Repository Layout (high level)
 <!-- GSD:stack-end -->
 
