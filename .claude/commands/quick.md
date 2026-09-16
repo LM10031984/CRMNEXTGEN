@@ -540,6 +540,34 @@ oui** — et l'un d'eux vient d'une source écrite avant la question.
 `aws-0` et `aws-1` sont **deux grappes différentes**, et un chiffre d'écart dans
 un nom d'hôte est la seule chose qui sépare la production de l'aperçu.
 
+### Et pour LIRE : le lanceur en lecture seule, jamais le client nu
+
+Savoir quelle base on vise ne suffit pas — il reste à ne pas pouvoir y écrire
+par accident. **Toute lecture d'une base qu'on n'a pas le droit d'écrire passe
+par `db:query:prod` / `db:query:local`**, jamais par un `PrismaClient` monté à
+la main dans un script jetable.
+
+```bash
+pnpm --filter @qualiof/db run db:query:prod  <fichier.sql>   # production
+pnpm --filter @qualiof/db run db:query:local <fichier.sql>   # locale
+```
+
+Il imprime sa cible, puis tourne dans une transaction `SET TRANSACTION READ ONLY`
+terminée par `ROLLBACK`. Trois verrous en série : le fichier SQL est refusé s'il
+contient un mot-clé d'écriture ; la connexion passe par `DIRECT_URL` (`:5432`),
+pas par la poolée (`:6543`) qui ne tient pas les transactions interactives ; et
+Postgres lui-même rejette tout ordre d'écriture qui aurait franchi le premier.
+
+**Pourquoi une commande et pas une consigne.** « Ne fais pas de `UPDATE` en prod »
+dépend de l'attention de celui qui tape ; `SET TRANSACTION READ ONLY` n'en dépend
+pas. C'est le même raisonnement que `assert-db-target.ts` pour les migrations :
+**un garde qui rend l'erreur impossible vaut mieux qu'une consigne qui la
+déconseille** — et il tient les jours de fatigue, qui sont ceux qui comptent.
+
+Le corollaire, en lisant : une sonde dit sur quelle base elle a tourné (§4
+terdecies), et le lanceur l'imprime pour elle. Un inventaire sans sa cible en
+tête n'est pas un inventaire, c'est un nombre.
+
 ## 4 septies. Un document client ne se note jamais lui-même
 
 **Arbitrage de Laurent, 14/09/2026**, et il va plus loin que le défaut qui l'a
