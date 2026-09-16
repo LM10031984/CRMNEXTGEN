@@ -27,27 +27,8 @@ import {
 } from '@/lib/closure/agefice-attendance-template';
 import { renderHtmlToPdf } from '@/lib/pdf-render';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
+import { splitDureeByModality } from '@/lib/agefice/duree-par-modalite';
 
-// Map TrainingSession.modality → 4 cases AGEFICE (heures).
-// Clone du helper agefice-generator.ts (déduplication possible plus tard).
-function splitDureeByModality(
-  modality: string | null | undefined,
-  totalHours: number,
-): { presIndiv: number; presColl: number; foadSync: number; foadAsync: number } {
-  switch ((modality ?? '').toUpperCase()) {
-    case 'PRESENTIEL':
-      return { presIndiv: 0, presColl: totalHours, foadSync: 0, foadAsync: 0 };
-    case 'DISTANCIEL':
-      return { presIndiv: 0, presColl: 0, foadSync: totalHours, foadAsync: 0 };
-    case 'MIXTE':
-    case 'BLENDED': {
-      const half = Math.round(totalHours / 2);
-      return { presIndiv: 0, presColl: half, foadSync: totalHours - half, foadAsync: 0 };
-    }
-    default:
-      return { presIndiv: 0, presColl: totalHours, foadSync: 0, foadAsync: 0 };
-  }
-}
 
 export async function generateAgeficeAttendanceForParticipant(
   participantId: string,
