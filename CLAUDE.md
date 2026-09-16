@@ -17,7 +17,8 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 ### Constraints
 
 - **Tech stack** : Next.js 14 App Router + Prisma + BullMQ + Ollama — figé. Pas de migration React Native ni Remix prévue.
-- **Runtime** : Mac M-series local (Ollama natif Metal). Pas de production cloud court terme.
+- **Runtime** : deux cibles. **Production cloud** — l'app web sur **Vercel** (https://qualiof.vercel.app/, déploiement automatique au merge sur `main`, région `cdg1`, crons dans `apps/web/vercel.json`), le worker sur **Railway** (`railway.json` → `docker/worker/Dockerfile`), la base sur **Supabase** (migrations appliquées par `.github/workflows/deploy.yml`). **Développement local** — Mac M-series, Ollama natif Metal.
+- **⚠ Migration et build ne sont pas ordonnés** : au merge sur `main`, Vercel et `deploy.yml` réagissent au MÊME push, indépendamment. Une version de l'app peut donc être servie avant que sa migration soit appliquée. Une migration qui conditionne du code se fusionne donc dans une PR SÉPARÉE, fusionnée et confirmée avant celle qui l'utilise.
 - **Performance LLM** : concurrency=3 sur worker closure, timeout 600s. Ne pas augmenter sans observer impact stub rate.
 - **PDF rendering** : Gotenberg sans footer natif (illisible), footer en HTML dans body. Ne pas régresser ce pattern.
 - **Multi-tenant** : Tenant table + tenantId FK partout. Toute nouvelle server action DOIT scope par tenantId.
@@ -129,7 +130,7 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 - Docker Compose for Postgres 16, Redis 7, MinIO, Gotenberg, WeasyPrint (`docker-compose.yml`)
 - Make targets: `make up`, `make down`, `make pull-models`, `make db-migrate`, etc. (`Makefile`)
 - Native Ollama with at least these models pulled: `mistral-small:24b`, `qwen3:30b-a3b`, `qwen2.5vl:7b`
-- Not specified in repo (no Dockerfile for Next, no `vercel.json`, no GitHub Actions workflows in tree)
+- Web : Vercel (`apps/web/vercel.json` — région + crons ; build `next build`, aucune migration). Worker : Railway (`railway.json` → `docker/worker/Dockerfile`). CI : `.github/workflows/ci.yml` (PR + push main — drift de schéma, lint, tsc, tests). Migrations prod : `.github/workflows/deploy.yml` (push main → `prisma migrate deploy`)
 - `production` mode toggled via `NODE_ENV=production`; Lucia secure cookies switch on
 - BullMQ worker runs as separate process (script: `apps/web/scripts/closure-worker.ts`, intended for systemd/pm2/docker per its header comment)
 ## Repository Layout (high level)
