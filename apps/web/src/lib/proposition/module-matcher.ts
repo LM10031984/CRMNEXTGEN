@@ -48,6 +48,7 @@
 import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
 
 import { arbitrageRefusant, type ArbitrageRattachement } from './arbitrages-rattachement';
+import { direLesAppuis } from './appuis';
 import {
   IA_PATTERN,
   PROGRAMME_NEEDS,
@@ -724,7 +725,7 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
 
     if (candidates.length > 0 && candidates.every((c) => c.confidence === 'faible')) {
       notices.push(
-        `« ${need.label} » : le rapprochement avec « ${candidates[0]!.title} » repose sur les mots de son intitulé, pas sur un signal du catalogue. À vérifier avant de l’envoyer.`,
+        `« ${need.label} » : ${direLesAppuis(candidates[0]!.matchedTerms)} de « ${candidates[0]!.title} », pas sur un signal du catalogue. À vérifier avant de l’envoyer.`,
       );
     }
 

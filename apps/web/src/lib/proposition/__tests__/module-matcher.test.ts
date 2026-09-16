@@ -326,7 +326,12 @@ describe('recommendModules — ce qui ne se comble pas se dit', () => {
 
     const axe = out.recommendations.find((r) => r.need.code === 'prospection')!;
     expect(axe.candidates.every((c) => c.confidence === 'faible')).toBe(true);
-    expect(out.notices.some((n) => n.includes('les mots de son intitulé'))).toBe(true);
+    // RENVERSÉ le 16/09/2026 : la notice disait « repose sur les mots de son
+    // intitulé » SANS dire lesquels. Elle les nomme désormais — c'est ce qui
+    // rend la relecture métier (§5 ter) praticable. L'assertion garde son fond :
+    // le commercial est prévenu que le rapprochement est lexical.
+    expect(out.notices.some((n) => n.includes('l’intitulé'))).toBe(true);
+    expect(out.notices.some((n) => /mot(s)? «/.test(n))).toBe(true);
   });
 });
 
@@ -848,5 +853,54 @@ describe('arbitrages de rattachement — un refus métier survit au catalogue', 
   it('le même module SANS son sourceRef reste proposé — c’est bien l’arbitrage qui écarte', () => {
     const r = reco(bibliotheque('drive:034#9'));
     expect(r?.candidates.map((c) => c.moduleId)).toContain('m-compromis');
+  });
+});
+
+/**
+ * La notice NOMME le ou les mots qui ont fait le rapprochement.
+ *
+ * Avant le 16/09/2026 elle disait « repose sur les mots de son intitulé » —
+ * sans dire LESQUELS. C'est ce qui a rendu invisible le refus du compromis :
+ * le mot d'appui était « vente », et personne ne pouvait le savoir sans relire
+ * le module entier.
+ *
+ * Ce changement ne corrige aucun défaut. Il rend la relecture — l'étape qui
+ * PRODUIT les règles, §5 ter — dix fois plus rapide : Laurent voit un appui
+ * unique en une seconde au lieu d'ouvrir le module.
+ */
+describe('notice de rapprochement lexical — elle nomme ses mots', () => {
+  const BESOIN = 'transformation';
+
+  function noticesPour(titre: string): string {
+    return recommendModules({
+      answers: REPONSES,
+      alerts: [],
+      chapterScores: [chapitre(8, 30)],
+      library: [
+        mod('m-lex', titre, VENDEUR, {
+          contentMd: '- Un vrai déroulé\n- Avec plusieurs puces\n- Et du contenu',
+        }),
+      ],
+    }).notices.join(' | ');
+  }
+
+  it('cite le mot unique quand le rapprochement ne tient que par lui', () => {
+    const n = noticesPour('Rédiger des compromis de vente efficaces');
+    expect(n).toContain('le seul mot');
+    expect(n).toContain('« vente »');
+  });
+
+  it('cite les mots quand il y en a plusieurs — et ne dit plus « le seul »', () => {
+    const n = noticesPour('Technique de vente : closing et négociation');
+    expect(n).not.toContain('le seul mot');
+    expect(n).toMatch(/mots «/);
+    expect(n).toContain('vente');
+  });
+
+  it('la notice reste attachée au besoin et au module — on doit pouvoir la situer', () => {
+    const n = noticesPour('Rédiger des compromis de vente efficaces');
+    expect(n).toContain('Transformer visites et offres en actes');
+    expect(n).toContain('Rédiger des compromis de vente efficaces');
+    expect(BESOIN).toBe('transformation');
   });
 });

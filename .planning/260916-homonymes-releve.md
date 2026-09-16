@@ -4,8 +4,14 @@
 Sonde `apps/web/scripts/probe-homonymes.ts`, 100 % lecture, rejouable.
 Sortie brute : `260916-homonymes-releve.txt`.
 
-Population : **276 rapprochements possibles** (298 modules composables × 24
-besoins, score non nul).
+Population : **276 rapprochements possibles** (298 modules composables × **9
+besoins de composition**, score non nul).
+
+> ⚠ **Correction du 16/09** : ce document a d'abord écrit « 24 besoins ». Le
+> chiffre était supposé, pas relevé — `PROGRAMME_NEEDS` en compte **9**. Et ce
+> ne sont pas les **34 douleurs** du barème, qui sont une autre population
+> (§4 quater : un compte sans sa population n'est pas un relevé). Les
+> pourcentages, eux, portaient déjà sur les 276 et sont inchangés.
 
 ---
 

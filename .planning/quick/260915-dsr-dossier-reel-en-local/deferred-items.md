@@ -246,3 +246,36 @@ la commande était `pnpm run test | tail -4 && git commit` : le `&&` lisait le
 code de `tail`, toujours `0`. Règle écrite dans `quick.md` §5 — un gate dont le
 code de sortie est avalé n'est pas un gate. L'arbre commité est vert (vérifié
 deux fois depuis), mais il l'est par chance, pas par contrôle.
+
+---
+
+## ⑨ CONTENUS À ÉCRIRE — « suivi de dossier entre l'offre et l'acte »
+
+**Statut : douleur identifiée, contenu inexistant. Constat du 16/09/2026.**
+
+Besoin : **« Transformer visites et offres en actes »**, tel que Laurent le
+définit — et sa définition n'est pas celle que le catalogue avait comprise :
+
+> Cette douleur porte sur le **SUIVI DE LA RÉCEPTION DES PIÈCES** pour le bon
+> déroulé du dossier entre l'offre et l'acte. Pas sur la rédaction d'un
+> compromis — que le conseiller ne rédige pas.
+
+### Ce qui existe, et pourquoi ça ne suffit pas
+
+| Piste | Constat |
+|---|---|
+| **Faros M3 « Commercialiser » / M4 « Suivi vendeur »** | **Absents de la base** — Faros n'y a que deux coquilles, `faros:SA-ACQ-M003#1` et `faros:SA-ADM-M001#1`, intitulées « LIVRABLE 003 » et « LIVRABLE 001 ». C'est le **point 5**, atteint pour la troisième fois en deux jours depuis une question qui n'avait rien à voir |
+| `PROD-0676` « Automatisation Boîte mail » | **Nomme le besoin sans le dérouler** : « le traitement des demandes clients, **notaires, diagnostiqueurs** et vendeurs ». C'est une question d'identification, pas un contenu — `isAnimable` l'écarte, à raison |
+| `BIB-D037` « Installer un rythme de suivi vendeur » | **Le patron transposable** : journal tenu au fil de l'eau, commandes qui produisent un livrable, rythme hebdomadaire écrit. Traite le suivi VENDEUR ; la discipline se transpose au suivi de DOSSIER |
+| `BIB-D005`, `BIB-D007` | Suivi vendeur, suivi acquéreurs — relationnel, pas administratif |
+
+### Ce qu'il y a à écrire
+
+Un module de **suivi de dossier** : les pièces attendues entre l'offre et la
+signature, qui les fournit, à quelle échéance, comment on relance sans harceler,
+et ce qu'on dit au vendeur quand une pièce manque. Le patron de `BIB-D037` —
+journal, commandes, relances datées — s'y transpose directement.
+
+**En attendant, la douleur se déclare NON COUVERTE.** C'est la vérité, et elle
+vaut mieux que deux coquilles : une proposition fausse ne couvrait rien, elle le
+**cachait**.

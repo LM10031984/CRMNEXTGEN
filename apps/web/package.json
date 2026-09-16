@@ -27,6 +27,7 @@
     "probe:deroules:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-deroules.ts",
     "probe:audit:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-audit.ts",
     "probe:homonymes:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-homonymes.ts",
+    "probe:d27:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-d27.ts",
     "propose:rattachement": "dotenv -e ../../.env -- tsx scripts/propose-rattachement.ts",
     "propose:rattachement:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/propose-rattachement.ts",
     "smoke:closure": "dotenv -e ../../.env -- tsx scripts/closure-smoke-test.ts",
