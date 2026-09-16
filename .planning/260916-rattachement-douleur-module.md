@@ -1,6 +1,6 @@
-# Quel module pour quelle douleur — à relire (v2)
+# Quel module pour quelle douleur — liste VALIDÉE (v2)
 
-_Régénérée le 2026-09-16 · tenant « Start Academy ». **Les rattachements ne sont pas encore écrits en base.**_
+_Régénérée le 2026-09-16 · tenant « Start Academy ». **Tous les rattachements sont écrits en base** (12 cible(s) sur 12). Compté à la génération, pas supposé._
 
 ## Ce qui a changé depuis ta relecture
 
@@ -21,8 +21,8 @@ _Régénérée le 2026-09-16 · tenant « Start Academy ». **Les rattachements 
 
 - **336 unités animables** au catalogue (298 modules, 38 produits vendus)
 - **30 douleurs** entrent dans l'exercice du rattachement (4 en sortent : contexte et financement)
-- **9 douleurs rattachées** — ton tri, applicable tel quel
-- **1 douleur à relire** — nouvelle proposition, pas encore jugée
+- **10 douleurs rattachées** — ton tri, applicable tel quel
+- **aucune douleur en attente de relecture** — tout ce qui reçoit une proposition est tranché
 - **20 douleurs restent sans réponse** — rien d'animable ne leur répond, refus de paire appliqués. C'est là que du contenu reste à écrire.
 - **4 douleur(s) portent un refus de paire** — 0 ont malgré tout un candidat qui survit et repart en relecture.
 - **Écarté d'office** : 108 module(s) sans déroulé, 7 de pige, 7 d'un programme non diffusable (D-19 ter), 70 d'un rayon en doublon — d'un produit vendu (D-19 bis) ou d'un autre rayon que tu as tranché
@@ -31,7 +31,7 @@ _Régénérée le 2026-09-16 · tenant « Start Academy ». **Les rattachements 
 
 ## 1 · Rattaché — ton tri du 11/09
 
-Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en base à ta validation.
+Rien à faire ici, sauf si tu changes d’avis. Ces rattachements sont écrits en base.
 
 | # | Douleur | Posée à | Module retenu | D’où il vient |
 |---|---|---|---|---|
@@ -43,26 +43,23 @@ Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en ba
 | | _ta réserve_ | | La douleur porte sur le RITUEL de suivi, le module sur la PRÉPARATION du dossier. Retenu comme le meilleur contenu existant, et repéré comme un endroit où écrire. | |
 | 4 | **Transformation offres → compromis**<br><small>ch. 8 — Visites, offres & transformation</small> | tous | Rédiger des compromis de vente efficaces | BIB-D034 |
 | | _puis_ | | Gérer les objections et trouver des solutions de compromis | BIB-D034 |
-| 5 | **Les conseillers tiennent le prix de rentrée**<br><small>ch. 5 — Mandats & exclusivité</small> | complet seulement | Convaincre le vendeur avec des arguments solides | BIB-D017 |
-| 6 | **Découverte acquéreur formalisée**<br><small>ch. 7 — Acquéreurs</small> | complet seulement | Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
+| 5 | **Avis en ligne rapportés aux ventes**<br><small>ch. 9 — Base de données & e-réputation</small> | tous | Répondre aux avis clients en ligne, positifs comme négatifs | BIB-D047 |
+| 6 | **Les conseillers tiennent le prix de rentrée**<br><small>ch. 5 — Mandats & exclusivité</small> | complet seulement | Convaincre le vendeur avec des arguments solides | BIB-D017 |
+| 7 | **Découverte acquéreur formalisée**<br><small>ch. 7 — Acquéreurs</small> | complet seulement | Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
 | | _puis_ | | Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs : | BIB-D012 |
-| 7 | **Modèles de prompts communs à l'équipe**<br><small>ch. 10 — Outils & IA</small> | complet seulement | L'intelligence artificielle au service des conseillers immobiliers (72h) | PROD-0042 |
+| 8 | **Modèles de prompts communs à l'équipe**<br><small>ch. 10 — Outils & IA</small> | complet seulement | L'intelligence artificielle au service des conseillers immobiliers (72h) | PROD-0042 |
 | | _puis_ | | L'intelligence artificielle au service des conseillers immobiliers - 16h | PROD-0066 |
 | | _puis_ | | L'IA au service des conseillers immobiliers (8h) | PROD-0058 |
-| | _ta réserve_ | | ⚠️ **Pas encore écrit en base.** Ces trois produits sont VENDUS et ne portent aucun module : leur programme vit dans `programMd`. Un signal se pose sur un module — il n’y a rien où le poser. | |
-| 8 | **Coaching individuel régulier**<br><small>ch. 11 — Management, pilotage & vision</small> | complet seulement | Coaching Indiv | PROD-c0c85e08 |
-| | _ta réserve_ | | ⚠️ **Pas encore écrit en base.** Même cas : produit vendu, aucun module, contenu dans `programMd`. | |
-| 9 | **Trame d'appel commune**<br><small>ch. 3 — Prospection & entrées vendeurs</small> | complet seulement | Apprendre à vendre un rendez-vous découverte au téléphone | BIB-D006 |
+| | _ta réserve_ | | ⛔ **Non écrivable en l'état.** Ces trois produits sont VENDUS et ne portent aucun module : leur programme vit dans `programMd`. Un signal se pose sur un module — il n’y a rien où le poser. | |
+| 9 | **Coaching individuel régulier**<br><small>ch. 11 — Management, pilotage & vision</small> | complet seulement | Coaching Indiv | PROD-c0c85e08 |
+| | _ta réserve_ | | ⛔ **Non écrivable en l'état.** Même cas : produit vendu, aucun module, contenu dans `programMd`. | |
+| 10 | **Trame d'appel commune**<br><small>ch. 3 — Prospection & entrées vendeurs</small> | complet seulement | Apprendre à vendre un rendez-vous découverte au téléphone | BIB-D006 |
 
 ---
 
 ## 2 · À relire — ce qui n’a pas encore été jugé
 
-Deux mots pleins au minimum ont fait chacun de ces rapprochements. Tu corriges, tu barres, tu valides.
-
-| # | Douleur | Posée à | Proposition | D’où elle vient | Pourquoi |
-|---|---|---|---|---|---|
-| 1 | **Avis en ligne rapportés aux ventes**<br><small>ch. 9 — Base de données & e-réputation</small> | tous | Répondre aux avis clients en ligne, positifs comme négatifs | Pack Digital 60h (BIB-D047) | avis, ligne |
+_Vide, et c’est le but : toutes les douleurs qui reçoivent une proposition ont été jugées le 11/09. Une ligne réapparaîtra ici le jour où le catalogue bougera assez pour produire un rapprochement neuf à deux mots pleins._
 
 ---
 
@@ -154,7 +151,7 @@ _Pour mémoire : **6 autres doublons** sont réglés par D-19 bis — le rayon s
 
 ## Ce qu’il se passe après ta relecture
 
-1. Tu relis le §2. Le reste est déjà décidé.
-2. On écrit le rattachement : le module retenu reçoit le **signal** de sa douleur, et devient donc recommandable **avec** son déroulé.
+1. **Rien ne t’attend dans ce document** — tout est tranché. **Tous les rattachements sont écrits en base** (12 cible(s) sur 12).
+2. Les modules retenus portent le **signal** de leur douleur : ils sont recommandables **avec** leur déroulé.
 3. Le parcours composé cesse de sortir « déroulé à compléter », et son programme Qualiopi redevient remettable.
 

@@ -37,6 +37,17 @@ import {
   type RattachementValide,
 } from '../src/lib/proposition/rattachements-valides';
 import { normalize } from '../src/lib/proposition/programme-matcher';
+import { DIAGNOSTIC_CHAPTERS } from '@qualiof/shared/diagnostic';
+import { listDiagnosticPainPoints } from '../src/lib/diagnostic-r1/scoring';
+
+/** `ruleId` → « 9 — Base de données & e-réputation ». Le barème fait foi. */
+const TITRE_CHAPITRE = new Map(DIAGNOSTIC_CHAPTERS.map((c) => [c.chapter, c.title]));
+const CHAPITRE = new Map(
+  listDiagnosticPainPoints().map((d) => [
+    d.ruleId,
+    `${d.chapter} — ${TITRE_CHAPITRE.get(d.chapter as never) ?? '?'}`,
+  ]),
+);
 
 const APPLY = process.argv.includes('--apply');
 
@@ -51,13 +62,29 @@ console.log(
 
 interface Resultat {
   douleur: string;
+  ruleId: string;
   programme: string;
+  /** Le titre au moment de la décision — ce que Laurent a relu. */
   module: string;
+  /** Le titre que le module porte AUJOURD'HUI. Peut différer : §5.4. */
+  titreActuel?: string;
+  sourceRef: string;
   verdict: 'posé' | 'déjà posé' | 'introuvable' | 'ambigu';
   detail?: string;
 }
 
+/** Une écriture retenue, appliquée plus tard dans UNE transaction. */
+interface AEcrire {
+  moduleId: string;
+  sourceRef: string;
+  titreActuel: string;
+  douleur: string;
+  signalsAvant: string[];
+  signal: string;
+}
+
 const resultats: Resultat[] = [];
+const aEcrire: AEcrire[] = [];
 
 for (const r of RATTACHEMENTS_VALIDES) {
   for (const cible of r.cibles) {
@@ -128,41 +155,92 @@ for (const r of RATTACHEMENTS_VALIDES) {
     const deja = actuels.some((s) => normalize(s).trim() === normalize(r.signal).trim());
 
     if (deja) {
-      resultats.push({ ...ligne(r, cible), verdict: 'déjà posé' });
+      resultats.push({ ...ligne(r, cible), titreActuel: module.title, verdict: 'déjà posé' });
       continue;
     }
 
-    if (APPLY) {
-      await prisma.trainingModule.update({
-        where: { id: module.id },
-        data: { diagnosticSignals: [...actuels, r.signal] },
-      });
-    }
+    // On ne touche à rien ici : les écritures sont appliquées ensemble, plus
+    // bas, dans UNE transaction. Un rattachement à moitié posé laisserait des
+    // douleurs couvertes et d'autres non, sans qu'on sache lesquelles.
+    aEcrire.push({
+      moduleId: module.id,
+      sourceRef: cible.sourceRef,
+      titreActuel: module.title,
+      douleur: r.douleur,
+      signalsAvant: actuels,
+      signal: r.signal,
+    });
     resultats.push({
       ...ligne(r, cible),
+      titreActuel: module.title,
       verdict: 'posé',
       detail: `${actuels.length} signal(aux) déjà là, +1`,
     });
   }
 }
 
+if (APPLY && aEcrire.length > 0) {
+  // UNE transaction : les 8 rattachements entrent ensemble ou pas du tout.
+  // L'AuditLog est écrit DANS la même transaction que la donnée — un journal
+  // qui survit à un échec d'écriture raconterait une écriture qui n'a pas eu
+  // lieu.
+  await prisma.$transaction(async (tx) => {
+    for (const e of aEcrire) {
+      await tx.trainingModule.update({
+        where: { id: e.moduleId },
+        data: { diagnosticSignals: [...e.signalsAvant, e.signal] },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: tenant.id,
+          userId: null,
+          entity: 'TrainingModule',
+          entityId: e.moduleId,
+          action: 'diagnostic.rattachement.pose',
+          diff: {
+            sourceRef: e.sourceRef,
+            titre: e.titreActuel,
+            douleur: e.douleur,
+            before: { diagnosticSignals: e.signalsAvant },
+            after: { diagnosticSignals: [...e.signalsAvant, e.signal] },
+            source: 'scripts/ecrire-rattachements.ts',
+          },
+        },
+      });
+    }
+  });
+}
+
 function ligne(r: RattachementValide, c: CibleRattachement) {
-  return { douleur: r.douleur, programme: c.programme, module: c.titreAuMomentDeLaDecision };
+  return {
+    douleur: r.douleur,
+    ruleId: r.ruleId,
+    programme: c.programme,
+    module: c.titreAuMomentDeLaDecision,
+    sourceRef: c.sourceRef,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 for (const r of RATTACHEMENTS_VALIDES) {
   console.log(`● ${r.douleur}`);
-  console.log(`    signal : « ${r.signal} »`);
-  if (r.reserve) console.log(`    réserve: ${r.reserve}`);
+  console.log(`    chapitre : ${CHAPITRE.get(r.ruleId) ?? '?'}`);
+  console.log(`    signal   : « ${r.signal} »`);
+  if (r.reserve) console.log(`    réserve  : ${r.reserve}`);
   for (const res of resultats.filter((x) => x.douleur === r.douleur)) {
-    const marque =
-      res.verdict === 'posé' ? '✅' : res.verdict === 'déjà posé' ? '·' : '❌';
+    const marque = res.verdict === 'posé' ? '✅' : res.verdict === 'déjà posé' ? '·' : '❌';
+    // Le TITRE, pas seulement le code : un code n'est pas une adresse (§5.4).
+    // Et le titre ACTUEL quand il a bougé depuis la décision — c'est ce que
+    // Laurent lira dans le catalogue, pas ce qu'il a relu le 11/09.
+    const titre = res.titreActuel ?? res.module;
+    console.log(`    ${marque} ${titre}`);
     console.log(
-      `    ${marque} ${res.programme.padEnd(10)} ${res.module.slice(0, 62)}${
-        res.detail ? `  (${res.detail})` : ''
-      }`,
+      `       ${res.sourceRef.padEnd(14)} ${res.programme}${
+        res.titreActuel && res.titreActuel !== res.module
+          ? `  ⟵ relu sous « ${res.module.slice(0, 44)} »`
+          : ''
+      }${res.detail ? `  (${res.detail})` : ''}`,
     );
   }
   console.log('');
@@ -186,7 +264,11 @@ console.log(
   `  ${poses} signal(aux) ${APPLY ? 'posé(s)' : 'à poser'} · ${dejaPoses} déjà en place · ${rates.length} en échec`,
 );
 console.log(
-  `  ${RATTACHEMENTS_VALIDES.length} douleurs écrites · ${RATTACHEMENTS_IMPOSSIBLES.length} impossibles (produits vendus sans modules)`,
+  `  ${RATTACHEMENTS_VALIDES.length} douleurs écrivables · ${resultats.length} cible(s) de module`,
+);
+console.log(
+  `  ${RATTACHEMENTS_IMPOSSIBLES.length} douleur(s) NON écrivables — produit vendu sans aucun module,` +
+    ` un signal se pose sur un module : il n'y a rien où le poser`,
 );
 if (rates.length > 0) {
   console.log('\n  ❌ Lignes en échec — RIEN n’a été écrit pour elles :');

@@ -35,12 +35,13 @@ const cat = (rows: [string, string, string][]) =>
   rows.map(([sourceRef, programme, titre]) => ({ sourceRef, programme, titre }));
 
 describe('RATTACHEMENTS_VALIDES — chaque cible porte une identité stable', () => {
-  it('les SEPT décisions écrivables sont là', () => {
-    // Sept, pas neuf. Le relevé annonce « 9 douleurs rattachées » : sept vivent
-    // ici, deux dans `RATTACHEMENTS_IMPOSSIBLES` — des produits vendus sans
-    // modules, sur lesquels aucun signal ne peut se poser. Deux populations,
-    // un seul total : les confondre est l'erreur que §4 quater nomme.
-    expect(RATTACHEMENTS_VALIDES).toHaveLength(7);
+  it('les HUIT décisions écrivables sont là', () => {
+    // Sept du tri du 11/09, plus « Avis en ligne rapportés aux ventes »
+    // tranchée le 16/09. Deux autres vivent dans `RATTACHEMENTS_IMPOSSIBLES` —
+    // des produits vendus sans modules, sur lesquels aucun signal ne peut se
+    // poser. Deux populations, un seul total de 10 : les confondre est l'erreur
+    // que §4 quater nomme.
+    expect(RATTACHEMENTS_VALIDES).toHaveLength(8);
   });
 
   it('toute cible est désignée par un sourceRef `drive:NNN#i`', () => {

@@ -149,7 +149,10 @@ const ARBITRAGES: Record<string, Arbitrage> = {
           // écrivables (le produit ne porte aucun module).
           return { sourceRef: null, titre: reste.join(' — '), origine: code! };
         }),
-        note: `⚠️ **Pas encore écrit en base.** ${r.obstacle}`,
+        // « Pas ENCORE écrit » annonçait une action en attente. L'obstacle est
+        // STRUCTUREL : un signal se pose sur un module, ces produits n'en ont
+        // aucun. Rien n'attend — il n'y a rien où poser.
+        note: `⛔ **Non écrivable en l'état.** ${r.obstacle}`,
       },
     ]),
   ),
@@ -648,10 +651,49 @@ const tombees = propositions.filter((p) => sansReponse(p) && p.tombesAvecDeuxMot
 // Le rapport
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// L'état d'écriture — MESURÉ, jamais affirmé
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Ce bloc remplace une CONSTANTE : « **Les rattachements ne sont pas encore
+// écrits en base.** », en gras, collée à une date réelle qui lui donnait l'air
+// d'une mesure. Le générateur affirmait un état de la base qu'il ne lisait
+// jamais. Il a induit en erreur le 16/09/2026 — les sept rattachements du 11/09
+// étaient écrits depuis le jour même.
+//
+// Un relevé dit ce qu'il a CHERCHÉ (§4 quater). Il compte désormais.
+const ciblesAttendues = RATTACHEMENTS_VALIDES.flatMap((r) =>
+  r.cibles.map((c) => ({ sourceRef: c.sourceRef, signal: r.signal })),
+);
+const modulesCibles = await prisma.trainingModule.findMany({
+  where: {
+    sourceRef: { in: ciblesAttendues.map((c) => c.sourceRef) },
+    product: { tenantId: tenant.id },
+  },
+  select: { sourceRef: true, diagnosticSignals: true },
+});
+const signauxPar = new Map(
+  modulesCibles.map((m) => [
+    m.sourceRef ?? '',
+    (Array.isArray(m.diagnosticSignals) ? (m.diagnosticSignals as unknown[]) : []).map((x) =>
+      normalize(String(x)).trim(),
+    ),
+  ]),
+);
+const ciblesPosees = ciblesAttendues.filter((c) =>
+  (signauxPar.get(c.sourceRef) ?? []).includes(normalize(c.signal).trim()),
+).length;
+const etatEcriture =
+  ciblesPosees === 0
+    ? `**Aucun rattachement n'est écrit en base** (0 cible sur ${ciblesAttendues.length}).`
+    : ciblesPosees === ciblesAttendues.length
+      ? `**Tous les rattachements sont écrits en base** (${ciblesAttendues.length} cible(s) sur ${ciblesAttendues.length}).`
+      : `**${ciblesPosees} cible(s) sur ${ciblesAttendues.length} sont écrites en base** — les autres attendent \`ecrire:rattachements\`.`;
+
 const md: string[] = [
   `# Quel module pour quelle douleur — ${aRelire.length === 0 && doublonsATrancher.length === 0 ? 'liste VALIDÉE' : 'à relire'} (v2)`,
   '',
-  `_Régénérée le ${new Date().toISOString().slice(0, 10)} · tenant « ${tenant.name} ». **Les rattachements ne sont pas encore écrits en base.**_`,
+  `_Régénérée le ${new Date().toISOString().slice(0, 10)} · tenant « ${tenant.name} ». ${etatEcriture} Compté à la génération, pas supposé._`,
   '',
   '## Ce qui a changé depuis ta relecture',
   '',
@@ -692,7 +734,13 @@ md.push(
   '',
   '## 1 · Rattaché — ton tri du 11/09',
   '',
-  'Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en base à ta validation.',
+  `Rien à faire ici, sauf si tu changes d’avis. ${
+    ciblesPosees === ciblesAttendues.length
+      ? 'Ces rattachements sont écrits en base.'
+      : ciblesPosees === 0
+        ? 'Aucun n’est encore écrit en base.'
+        : `${ciblesPosees} de ces cibles sur ${ciblesAttendues.length} sont écrites en base.`
+  }`,
   '',
   '| # | Douleur | Posée à | Module retenu | D’où il vient |',
   '|---|---|---|---|---|',
@@ -897,8 +945,10 @@ md.push(
   '',
   aRelire.length > 0 || doublonsATrancher.length > 0
     ? `1. Tu relis le §2${doublonsATrancher.length > 0 ? ' et tu tranches le §7' : ''}. Le reste est déjà décidé.`
-    : '1. **Rien ne t’attend dans ce document** — tout est tranché. Il est ici comme trace de ce qui va être écrit.',
-  '2. On écrit le rattachement : le module retenu reçoit le **signal** de sa douleur, et devient donc recommandable **avec** son déroulé.',
+    : `1. **Rien ne t’attend dans ce document** — tout est tranché. ${etatEcriture}`,
+  ciblesPosees === ciblesAttendues.length
+    ? '2. Les modules retenus portent le **signal** de leur douleur : ils sont recommandables **avec** leur déroulé.'
+    : '2. On écrit le rattachement (`ecrire:rattachements`) : le module retenu reçoit le **signal** de sa douleur, et devient recommandable **avec** son déroulé.',
   '3. Le parcours composé cesse de sortir « déroulé à compléter », et son programme Qualiopi redevient remettable.',
   '',
 );

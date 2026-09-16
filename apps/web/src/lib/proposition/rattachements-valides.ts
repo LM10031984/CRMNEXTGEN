@@ -262,6 +262,25 @@ export const RATTACHEMENTS_VALIDES: readonly RattachementValide[] = [
       },
     ],
   },
+  {
+    ruleId: 'avis-par-vente',
+    douleur: 'Avis en ligne rapportés aux ventes',
+    // Distinct du signal posé par `ecrire-modules-rediges.ts` sur le même
+    // module, qui porte le MOMENT de la demande (« les avis ne se demandent pas
+    // au moment où le client exprime sa satisfaction »). Celui-ci porte le
+    // RATIO du barème : peu d'avis rapportés au nombre de ventes. Deux facettes
+    // d'une même famille, deux règles distinctes — les fondre ferait répondre
+    // un seul signal à deux questions (§4 quater).
+    signal:
+      "Réputation — peu d'avis en ligne au regard du nombre de ventes : la demande d'avis n'est pas systématique",
+    cibles: [
+      {
+        sourceRef: 'drive:047#20',
+        programme: 'BIB-D047',
+        titreAuMomentDeLaDecision: 'Répondre aux avis clients en ligne, positifs comme négatifs',
+      },
+    ],
+  },
 ];
 
 export const RATTACHEMENTS_IMPOSSIBLES: readonly RattachementImpossible[] = [
