@@ -4,7 +4,7 @@ import { DIAGNOSTIC_QUESTIONS } from '@qualiof/shared/diagnostic';
 
 import { buildAuditData } from '../audit-builder';
 import { AUDIT_STYLES } from '../templates/audit-styles';
-import { renderAuditHtml } from '../templates/audit-template';
+import { money, renderAuditHtml } from '../templates/audit-template';
 
 /**
  * Contrats du rapport d'audit (spec §9.2 et §14).
@@ -338,6 +338,35 @@ describe('Financement — les garde-fous du document remis', () => {
     // …mais PAS la valeur, qui reste calculée et disponible.
     expect(data.funding.conventionedHours).toBeGreaterThan(0);
     expect(data.funding.conventionedHours).toBe(data.funding.onsiteHours * 2);
+  });
+
+  /**
+   * Chaque montant dit D'OÙ IL SORT — arbitrage Laurent du 16/09/2026.
+   *
+   * Le dirigeant lit « 6 000 € de droits » pour deux agents sans savoir que
+   * c'est 3 000 € chacun et par an. La phrase est vraie DANS SA LIGNE et fausse
+   * en général — le salarié du même dossier relève de l'OPCO EP, à 2 500 €.
+   * Elle se porte donc ligne par ligne, jamais en tuile.
+   *
+   * ⚠ ET ELLE NE S'ÉCRIT PAS EN DUR. `AGEFICE_ANNUAL_CAP` est une
+   * `FundingRule` : un plafond figé dans un gabarit ment le jour où la règle
+   * bouge, sans que rien ne proteste. Le test le VÉRIFIE en comparant au
+   * champ calculé, pas à un littéral.
+   */
+  it('la ligne AGEFICE dit son plafond par personne et par an, depuis la règle', () => {
+    expect(data.funding.agefice.annualCapPerPerson).toBeGreaterThan(0);
+    expect(html).toContain(`${money(data.funding.agefice.annualCapPerPerson)} par personne et par an`);
+  });
+
+  it('la ligne OPCO EP dit son enveloppe, ou pourquoi elle est incalculable', () => {
+    const env = data.funding.opcoEp.envelope;
+    if (env !== null) {
+      expect(html).toContain(`${money(env)} d’enveloppe annuelle entreprise`);
+    } else {
+      // Jamais « 0 € » : une valeur inconnue ne s'imprime pas comme une valeur
+      // positive (§4 quinquies).
+      expect(html).toContain('au-delà de 50 salariés');
+    }
   });
 
   it('mentionne les deux dossiers distincts et l’absence d’avance de trésorerie', () => {

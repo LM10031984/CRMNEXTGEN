@@ -1,15 +1,30 @@
 /**
- * Le rapport d'audit RENDU, sur un dossier réel — pour être relu (lot I-2).
+ * Le rapport d'audit RENDU, sur un dossier réel — pour être relu.
  *
- *   pnpm --filter @qualiof/web probe:audit:local DIAG-R001 [suffixe]
+ *   pnpm --filter @qualiof/web probe:audit:local            # DIAG-R001
+ *   pnpm --filter @qualiof/web probe:audit:local DIAG-0001 -AVANT
  *
  * 100 % lecture. Aucune écriture en base, aucun `Document` créé, aucun dépôt
- * MinIO. Le HTML est écrit dans `.planning/` et rien d'autre ne bouge.
+ * MinIO, aucun envoi. Le HTML est écrit dans `.planning/` et rien d'autre ne
+ * bouge.
  *
- * Pourquoi elle existe : l'audit est le document commercial principal de
- * Laurent, et il n'était lisible qu'en lançant l'application et en cliquant. Le
- * relire avant de toucher à une de ses pages — ce qu'a demandé l'arbitrage du
- * 16/09/2026 sur la page financement — supposait de pouvoir le sortir.
+ * ## Pourquoi elle existe, et pourquoi elle reste
+ *
+ * L'audit est le **document commercial principal** de Start Academy : 17 pages,
+ * valorisé 3 000 €, remis au dirigeant en R2. Et jusqu'au 16/09/2026 il n'était
+ * lisible qu'en **montant toute la pile** — base, application, navigateur,
+ * clics. C'est très probablement pourquoi les défauts qu'on y a trouvés l'ont
+ * été *par accident* plutôt que par relecture : personne ne relit ce qu'il faut
+ * déployer pour voir.
+ *
+ * > Une pièce client qui ne se rend pas hors application ne se relit pas, et ce
+ * > qui ne se relit pas dérive.
+ *
+ * Elle n'est donc pas un outil jetable : elle se range à côté de
+ * `probe-composition.ts`, et elle porte la même **bannière de provenance**
+ * (§4 terdecies). Un rapport d'audit sorti d'ici ressemble trait pour trait à
+ * celui qu'on remet à un client — c'est exactement ce qui a fait relire à
+ * Laurent, le 14/09, un programme composé qui n'était pas le sien.
  */
 import { writeFileSync } from 'node:fs';
 import * as path from 'node:path';
@@ -86,8 +101,31 @@ console.log(`  [non affiché, intact] ${f.conventionedHours} h conventionnées �
 console.log(`  AGEFICE ............ ${f.agefice.participantCount} agent(s) · droits ${f.agefice.budget.toFixed(2)} €`);
 console.log(`  OPCO EP ............ ${f.opcoEp.participantCount} salarié(s) · droits ${f.opcoEp.budget.toFixed(2)} €`);
 
+/**
+ * La bannière — VISIBLE, et en tête du document (§4 terdecies).
+ *
+ * Pas un commentaire HTML : un commentaire ne se lit pas, et le risque ici
+ * n'est pas qu'on ignore d'où vient le fichier — c'est qu'on ne se pose PAS la
+ * question, parce que le document a l'air vrai. Elle reste donc visible à
+ * l'impression : une sortie de sonde ne doit jamais pouvoir passer pour la
+ * pièce remise.
+ */
+const banniere = `<div style="background:#7f1d1d;color:#fff;padding:10px 14px;font:600 12pt/1.4 system-ui,sans-serif">
+  ⚠ SORTIE DE SONDE — ne pas remettre à un client.<br>
+  <span style="font-weight:400;font-size:10pt">
+    Base : ${ouTourne()} · Dossier : ${ref} (${d.id}) · Agence : ${audit.agencyName}<br>
+    Généré le ${new Date().toISOString()} par <code>probe:audit:local</code>.
+    Une référence lisible ne désigne pas le même dossier d’une base à l’autre.
+  </span>
+</div>`;
+
+const html = renderAuditHtml(audit).replace(/(<body[^>]*>)/i, `$1\n${banniere}`);
+if (!html.includes('SORTIE DE SONDE')) {
+  throw new Error('La bannière de provenance n’a pas pu être posée — balise <body> introuvable.');
+}
+
 const out = path.resolve(process.cwd(), `../../.planning/${ref}-audit${suffixe}.html`);
-writeFileSync(out, renderAuditHtml(audit), 'utf8');
+writeFileSync(out, html, 'utf8');
 console.log(`\n  Rapport écrit pour relecture : ${path.relative(process.cwd(), out)}\n`);
 
 await prisma.$disconnect();

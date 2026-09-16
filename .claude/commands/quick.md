@@ -931,6 +931,15 @@ l'ignorait**.
 | `convention-template.ts` | `formatDuree`, `%7` et `%8` | on a failli « corriger » une pièce juste |
 | `invoice-snapshot.ts` | convention n°1, quantité 1 / unité C62 | — (trouvée à temps) |
 
+Et **quatrième, le même jour** : le commentaire d'`InvoiceLine.unit` explique
+pourquoi le code `HUR` est refusé — *« le prix de QualiOF est une place de
+formation, pas un tarif horaire ; mettre la durée en quantité avec l'unité HUR
+ferait dire à la facture un prix unitaire que personne n'a négocié »*. C'est la
+doctrine d'unité de Laurent, écrite dans la facturation électronique **avant
+d'être énoncée**. Elle a servi de réponse à la vérification aval du devis : la
+règle neuve n'avait rien à démontrer, elle était déjà tenue, et là encore par
+écrit au mauvais endroit.
+
 > **Quand une pièce fait quelque chose de juste que la spec ignore, ce n'est
 > pas la pièce qui a raison par hasard : c'est quelqu'un qui a su et qui n'a pas
 > écrit.**
@@ -953,6 +962,18 @@ Le relevé coûte une demi-heure et rapporte trois choses :
 3. **il transforme la règle neuve en CONSTAT** : elle ne s'impose plus au
    dépôt, elle nomme ce que le dépôt fait déjà — et une règle qui décrit se
    discute mieux qu'une règle qui prescrit.
+
+### Et le geste inverse : poser le patron AVANT la divergence
+
+Les quatre occurrences ci-dessus ont été trouvées **après** que la divergence a
+coûté quelque chose. Le 16/09, le libellé de volume a été extrait en
+`libelleVolumeClient()` alors qu'il n'existait encore qu'en **deux littéraux
+identiques** — avant, donc, qu'ils ne se mettent à différer.
+
+C'est la première fois de la semaine que le patron est posé sur une duplication
+qui n'a **pas encore** divergé. Le signe qui l'a déclenché est simple et vaut
+comme règle : **deux littéraux identiques qui portent une règle métier sont une
+fonction qui n'a pas encore été écrite.** Ne pas attendre le troisième.
 
 ## 5. Gates — les trois, dans cet ordre
 

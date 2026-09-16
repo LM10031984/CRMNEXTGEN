@@ -97,7 +97,21 @@ export interface FundingSynthesis {
    */
   conventionedHours: number;
   participants: FundingParticipantResult[];
-  agefice: { participantCount: number; budget: number; coverage: number };
+  agefice: {
+    participantCount: number;
+    budget: number;
+    coverage: number;
+    /**
+     * Le PLAFOND annuel par personne — `AGEFICE_ANNUAL_CAP`, une `FundingRule`.
+     *
+     * Il descend avec la synthèse plutôt que d'être relu par chaque gabarit :
+     * un plafond figé dans un document est la famille de défaut qu'on démonte
+     * depuis une semaine — le jour où l'AGEFICE passe à 3 200 €, la pièce ment
+     * et rien ne proteste. Ici, le document rend ce que le moteur a calculé
+     * AVEC, donc les deux ne peuvent pas diverger.
+     */
+    annualCapPerPerson: number;
+  };
   opcoEp: {
     participantCount: number;
     /** null = non calculable (plus de 50 salariés) — surtout pas 0. */
