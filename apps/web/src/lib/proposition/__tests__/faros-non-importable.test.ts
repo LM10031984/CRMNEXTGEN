@@ -1,0 +1,101 @@
+/**
+ * ⛔ BARRIÈRE — aucune unité `faros:` n'entre au composeur sans modalité explicite.
+ *
+ * ## CE TEST EST ROUGE, ET C'EST VOULU. NE LE SUPPRIMEZ PAS.
+ *
+ * Il ne signale pas une régression : il tient une **décision de Laurent du
+ * 16/09/2026** — *aucun contenu Faros n'est importé au catalogue, ni la capsule,
+ * ni le groupe de lettres*. Il redeviendra vert le jour où quelqu'un aura fait le
+ * travail qu'il décrit, et pas avant. Le rendre vert autrement, c'est verser au
+ * catalogue un parcours qui se déclare lui-même non diffusable.
+ *
+ * Pour le lever, il faut les DEUX :
+ *   ① `TrainingModule` porte une modalité explicite (le champ n'existe pas) ;
+ *   ② les produits `faros:` cessent de déclarer `PRESENTIEL` par défaut.
+ *
+ * ## Ce que le corpus dit de lui-même (relevé du 16/09, 538 Mo, lecture seule)
+ *
+ * - `AGENT-INCOMPARABLE…/LIVRAISON_PARCOURS`, v0.9 : « **NE PAS DIFFUSER AUX
+ *   APPRENANTS** — relecture et levée des ⚠️ requises » ;
+ * - `TOURNAGE-PAR-MODULE` : un pack **de tournage**, « à tourner » ;
+ * - **zéro fichier vidéo** dans les 538 Mo (`*.mp4`, `*.mov`, `*.m4v`, `*.avi`).
+ *
+ * Une capsule dure 5 à 15 minutes et se regarde seule ; une unité QualiOF se vend
+ * en demi-journées co-animées sur site. Les mettre dans le même sac ferait sortir
+ * un programme annonçant à un financeur des heures qui n'ont pas été tournées —
+ * la pire instance de §4 quinquies : *une absence rendue par une affirmation
+ * positive*.
+ *
+ * ## Le défaut mesuré, et il est déjà en base
+ *
+ * Les deux produits `faros:` déclarent `modality = PRESENTIEL`. Personne ne l'a
+ * décidé : `import-drive-catalog.ts` le pose en dur pour TOUS les produits — et
+ * la ligne SUIVANTE branche sur `p.origin === 'faros'` pour choisir le thème.
+ * L'importeur sait que c'est Faros ; il ne le sait pas pour la modalité.
+ *
+ * Et leurs deux modules sont **animables aujourd'hui** (`isAnimable` = true,
+ * 55 434 et 6 887 caractères) — vérifié en lecture seule sur `qualiof_dev` le
+ * 16/09/2026. Rien ne les empêche d'entrer dans un parcours composé.
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { isAnimable } from '../module-matcher';
+
+const RACINE = path.resolve(__dirname, '../../../..', '..', '..');
+const SCHEMA = path.join(RACINE, 'packages/db/prisma/schema.prisma');
+const IMPORT_DRIVE = path.join(RACINE, 'packages/db/scripts/import-drive-catalog.ts');
+
+/** Le bloc `model TrainingModule { … }` du schéma, lu au FICHIER. */
+function modelTrainingModule(): string {
+  const s = fs.readFileSync(SCHEMA, 'utf8');
+  const m = /model TrainingModule \{([\s\S]*?)\n\}/.exec(s);
+  expect(m, 'model TrainingModule introuvable dans schema.prisma').not.toBeNull();
+  return m![1]!;
+}
+
+describe('⛔ Faros ne peut pas entrer au composeur', () => {
+  it('① TrainingModule porte une modalité explicite', () => {
+    // `TrainingProduct` et `TrainingSession` ont `modality: Modality`. Le MODULE,
+    // qui est l'unité recommandable depuis le lot I-1, n'a rien : seulement
+    // quatre compteurs d'heures nullables, tous nuls sur les unités faros.
+    expect(
+      modelTrainingModule(),
+      "Le champ n'existe pas — donc aucune unité `faros:` ne peut déclarer " +
+        "qu'elle est du distanciel asynchrone, et aucune ne doit être animable. " +
+        'Cette barrière se lève en créant le champ, pas en supprimant le test.',
+    ).toMatch(/^\s*modalit[ey]\s/m);
+  });
+
+  it("② l'import ne pose pas une modalité en dur sur un produit faros", () => {
+    const src = fs.readFileSync(IMPORT_DRIVE, 'utf8');
+    const enDur = /modality:\s*Modality\.PRESENTIEL/.test(src);
+    const saitQueCestFaros = /origin === 'faros'/.test(src);
+    expect(
+      enDur && saitQueCestFaros,
+      "`import-drive-catalog.ts` stampe `Modality.PRESENTIEL` sur TOUS les " +
+        "produits, et distingue pourtant `origin === 'faros'` à la ligne " +
+        "suivante pour le thème. Un parcours filmé, non tourné, déclaré " +
+        'présentiel est une valeur que personne n’a affirmée (§4 quinquies).',
+    ).toBe(false);
+  });
+
+  it('③ une unité faros: est refusée par le filtre du composeur', () => {
+    // `isAnimable` ne regarde que le déroulé. Les deux modules faros en ont un
+    // (55 434 et 6 887 car.) : ils passent. Le filtre doit apprendre à lire
+    // l'origine, ou la modalité quand elle existera.
+    const farosEnBase = {
+      sourceRef: 'faros:SA-ADM-M001#1',
+      contentMd: 'LIVRABLE 001 — 55 434 caractères de livret HTML concaténé',
+      needIdentification: null,
+    };
+    expect(
+      isAnimable(farosEnBase),
+      'Le module `faros:SA-ADM-M001#1` est animable : rien ne l’empêche ' +
+        "d'entrer dans un parcours composé et de partir chez un financeur, " +
+        'alors que la vidéo qu’il décrit n’est pas tournée.',
+    ).toBe(false);
+  });
+});
