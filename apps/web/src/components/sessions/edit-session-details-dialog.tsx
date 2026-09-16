@@ -46,9 +46,30 @@ const MODALITY_LABELS: Record<UpdateSessionDetailsInput['modality'] & string, st
   ELEARNING: 'E-learning',
 };
 
+/**
+ * Un programme proposé au changement. Le parent (Server Component) ne charge
+ * cette liste QUE si le changement est permis — inutile de faire voyager le
+ * catalogue entier vers le navigateur sur chaque fiche session.
+ */
+export interface ProgrammeOption {
+  id: string;
+  code: string;
+  title: string;
+  durationHours: number;
+}
+
 interface Props {
   sessionId: string;
+  /**
+   * Programmes sélectionnables. VIDE = le sélecteur n'est pas rendu du tout,
+   * ce qui est la façon la plus honnête de dire « pas ici » : un champ grisé
+   * inviterait à cliquer pour rien. La décision est prise côté serveur
+   * (brouillon + aucune facture émise) et refaite par `updateSessionDetails` —
+   * cacher un champ n'a jamais protégé une donnée.
+   */
+  produits?: ProgrammeOption[];
   initial: {
+    productId: string | null;
     name: string | null;
     startDate: Date;
     endDate: Date;
@@ -71,13 +92,18 @@ function toDateInput(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
+export function EditSessionDetailsDialog({ sessionId, produits = [], initial }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
+  const peutChangerDeProgramme = produits.length > 0;
+
   const defaultValues = {
     sessionId,
+    // `undefined` et non `null` quand le champ n'est pas proposé : le schéma
+    // attend un uuid optionnel, et `null` le ferait échouer à la validation.
+    productId: peutChangerDeProgramme ? (initial.productId ?? undefined) : undefined,
     name: initial.name ?? '',
     startDate: toDateInput(initial.startDate),
     endDate: toDateInput(initial.endDate),
@@ -104,6 +130,12 @@ export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
       const res = await updateSessionDetails(data);
       if (res.ok) {
         toast.success('Session mise à jour');
+        // Les avertissements ne sont PAS des erreurs : le changement est
+        // enregistré. Mais « tes 18 créneaux ne couvrent plus la durée » doit
+        // rester lisible plus de 4 secondes, sinon autant ne rien dire.
+        if (res.avertissements?.length) {
+          toast.warning(res.avertissements.join('\n'), { duration: 12_000 });
+        }
         setOpen(false);
         reset(defaultValues as UpdateSessionDetailsInput);
         router.refresh();
@@ -146,6 +178,35 @@ export function EditSessionDetailsDialog({ sessionId, initial }: Props) {
 
           <form onSubmit={onSubmit} className="space-y-4 mt-4">
             <input type="hidden" {...register('sessionId')} />
+
+            {/* 0. Programme — rendu UNIQUEMENT si le parent l'autorise. */}
+            {peutChangerDeProgramme && (
+              <div>
+                <label htmlFor="productId" className="block text-sm font-medium mb-1">
+                  Programme
+                </label>
+                <select
+                  id="productId"
+                  {...register('productId')}
+                  className="w-full h-9 px-3 rounded-md border border-input bg-white text-sm"
+                  aria-invalid={!!errors.productId}
+                >
+                  {produits.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.title} ({p.durationHours} h)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Changer de programme change ce qui sera écrit sur la convention et le
+                  certificat. Possible tant que la session est au brouillon et qu'aucune
+                  facture n'est partie.
+                </p>
+                {errors.productId && (
+                  <p className="text-xs text-red-600 mt-1">{errors.productId.message}</p>
+                )}
+              </div>
+            )}
 
             {/* 1. Nom de la session */}
             <div>
