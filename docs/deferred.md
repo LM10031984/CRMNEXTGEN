@@ -56,6 +56,116 @@ aujourd'hui.
 
 ---
 
+## D-2 · `groupFlatPrice` obsolète — `priceHT` porte le forfait
+
+**Posé le** 16/09/2026, en réduisant le périmètre du chantier « mode de prix ».
+
+### Le cas
+
+Le produit portera un `pricingMode` (`PAR_STAGIAIRE` | `FORFAIT_ENTREPRISE`). Dès
+lors, **un seul montant suffit** : `priceHT`, que le mode dit comment lire. La
+colonne `groupFlatPrice` fait double emploi.
+
+### Ce qui est décidé, et non fait
+
+Décision de Laurent du 16/09/2026 : `groupFlatPrice` devient obsolète. Le
+chantier devait, en plus de la colonne `pricingMode` :
+
+1. rétro-remplir `priceHT` depuis `groupFlatPrice` sur les produits passés en
+   `FORFAIT_ENTREPRISE` **quand les deux divergent** ;
+2. basculer `resolveDefaultParticipantPrice` — son déclencheur passerait de
+   « `groupFlatPrice` non nul » à « `pricingMode = FORFAIT_ENTREPRISE` », le
+   montant venant de `priceHT` ;
+3. supprimer la colonne dans un lot ultérieur.
+
+### Pourquoi c'est différé
+
+Mesure faite le 16/09 sur la base de production : **`groupFlatPrice` n'est
+renseigné que sur 2 produits (PROD-0674 et PROD-cdd22466), et il vaut exactement
+`priceHT` dans les deux cas.** Le point 1 porte donc sur zéro ligne, et le point
+2 ne change aucun comportement observable aujourd'hui.
+
+Le comportement de `resolveDefaultParticipantPrice` reste par ailleurs juste :
+il rend `priceHT: 0` + `needsReview` + « forfait à répartir entre les inscrits »,
+ce qui est la bonne sémantique. Seul son DÉCLENCHEUR est mal nommé.
+
+⚠ Point de vigilance pour le jour où : la suppression de la colonne est une
+migration DESTRUCTIVE. Elle casserait l'ancienne version de l'app encore servie
+si elle partait avant que `deploy.yml` n'ordonne migration et déploiement.
+Ne pas la lancer avant que le Deploy Hook Vercel soit en place.
+
+### Ce qui le rouvrira
+
+Un produit dont le forfait diffère réellement du prix par tête — c'est-à-dire le
+premier `groupFlatPrice ≠ priceHT` en base. Ou la suppression de la colonne,
+quand on voudra solder la dette.
+
+---
+
+## D-3 · Geler le mode de prix dès qu'une session est rattachée
+
+**Posé le** 16/09/2026.
+
+### Le cas
+
+Changer le `pricingMode` d'un produit qui porte déjà des sessions change
+rétroactivement ce que leurs programmes annonceront à la prochaine
+régénération — le même défaut que celui constaté sur `programMd` le 16/09
+(cf. `lib/closure/freeze-product-assets.ts` : un produit = un programme pour
+TOUTES ses sessions).
+
+Décision de Laurent : le champ est **modifiable tant qu'aucune session n'est
+rattachée, figé ensuite**, avec un message qui dit de créer un nouveau produit.
+
+### Pourquoi c'est différé
+
+Le garde protège d'un geste qu'aucune interface ne propose encore : le champ
+n'existe pas, donc personne ne peut le changer. Il n'a de sens qu'avec le
+formulaire, et le formulaire n'est pas dans le périmètre réduit.
+
+En attendant, le mode est posé par la migration de rétro-remplissage, sous
+contrôle humain, produit par produit.
+
+### Ce qui le rouvrira
+
+L'ajout du champ au formulaire produit. Les deux partent ensemble : exposer le
+champ sans le garde, c'est rouvrir l'écart E-1 sur le tarif.
+
+---
+
+## D-4 · Avertir quand un second commanditaire arrive sur une session au forfait
+
+**Posé le** 16/09/2026.
+
+### Le cas
+
+Un produit `FORFAIT_ENTREPRISE` sur une session qui porte deux commanditaires ne
+peut pas annoncer un total : il ne concernerait qu'une partie de la salle. Le
+périmètre réduit traite ce cas par un **refus nommé à la génération du
+programme**.
+
+Décision de Laurent : y ajouter un avertissement **plus tôt**, au moment où l'on
+rattache un second commanditaire à une telle session — ton du bandeau formateur,
+**aucun blocage**.
+
+### Pourquoi c'est différé
+
+Le refus nommé ferme déjà le trou : aucune pièce fausse ne peut sortir.
+L'avertissement à l'inscription est un gain d'ergonomie — il déplace la
+découverte du problème de « au moment de générer » à « au moment de créer » —
+mais il ne change pas ce qui part chez le financeur.
+
+Et il demande de choisir son point d'accrochage : `addParticipant`,
+`enroll-from-request`, le wizard, la reprise SmartOF. Quatre chemins, donc une
+règle à poser une seule fois, au bon endroit — pas à recopier quatre fois.
+
+### Ce qui le rouvrira
+
+Un refus nommé rencontré en vrai sur une session déjà constituée. C'est le
+signal que l'avertissement serait arrivé trop tard, donc qu'il vaut son coût.
+
+---
+
 ## Antécédent — pourquoi le découpage plutôt que le programme par payeur
 
 Une autre approche avait été instruite le 16/09/2026 : générer **un programme
