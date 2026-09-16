@@ -36,7 +36,7 @@ import {
   checkMultipleTrainersAvailabilityAction,
   persistSessionSlotsAction,
 } from '@/server/actions/schedule-wizard';
-import { valideEtapeWizard } from '@/lib/sessions/wizard-etapes';
+import { valideEtapeWizard, avertissementsEtapeWizard } from '@/lib/sessions/wizard-etapes';
 
 type TrainerAvail = {
   hasConflict: boolean;
@@ -221,6 +221,22 @@ export function SessionWizard({
       setProductResults(r as Product[]);
     });
   };
+
+  /**
+   * Ce que l'étape signale sans l'interdire — formateur déjà rattaché ailleurs,
+   * notamment. Volontairement distinct de `validateStep` : les confondre
+   * rétablirait le blocage retiré le 16/09/2026 (cf. `wizard-etapes`).
+   */
+  const stepWarnings = (s: 1 | 2 | 3): string[] =>
+    avertissementsEtapeWizard(s, {
+      produitChoisi: !!selectedProduct,
+      dateDebut: startDate,
+      dateFin: endDate,
+      formateurIds: trainerIds,
+      disponibilites: trainerAvail,
+      formateurs: initialTrainers,
+      nbParticipants: participants.length,
+    });
 
   const validateStep = (s: 1 | 2 | 3): string | null => {
     // Règle déléguée à `lib/sessions/wizard-etapes` — module pur, donc
@@ -687,10 +703,11 @@ export function SessionWizard({
                     <button
                       key={t.id}
                       type="button"
-                      disabled={allBusy && !selected}
+                      /* Plus de `disabled` : dédoubler une session par régime de
+                         paiement suppose de reprendre le MÊME formateur aux
+                         MÊMES dates. Le conflit s'affiche, il ne s'oppose plus. */
                       title={conflictTooltip || undefined}
                       onClick={() => {
-                        if (allBusy && !selected) return;
                         setTrainerIds(
                           selected ? trainerIds.filter((id) => id !== t.id) : [...trainerIds, t.id],
                         );
@@ -700,7 +717,7 @@ export function SessionWizard({
                         selected
                           ? 'border-primary-300 bg-primary-50 text-primary-800'
                           : allBusy
-                            ? 'border-red-200 bg-red-50/50 text-red-700 cursor-not-allowed opacity-60'
+                            ? 'border-amber-300 bg-amber-50/60 text-amber-800 hover:border-amber-400'
                             : 'border-border bg-white hover:border-primary-200',
                       )}
                     >
@@ -713,8 +730,8 @@ export function SessionWizard({
                           {trainerAvailLoading && !avail ? (
                             <span className="text-[10px] text-muted-foreground">…</span>
                           ) : allBusy ? (
-                            <Badge variant="danger" className="text-[10px]">
-                              Indispo
+                            <Badge variant="warning" className="text-[10px]">
+                              Déjà pris
                             </Badge>
                           ) : conflictCount > 0 ? (
                             <Badge variant="warning" className="text-[10px]">
@@ -738,6 +755,18 @@ export function SessionWizard({
                 Disponibilités croisées avec les sessions existantes sur les{' '}
                 {proposedDates.length} jour(s) prévu(s).
               </p>
+            )}
+            {/* Le chevauchement s'affiche et ne s'oppose plus : dédoubler une
+                session par régime de paiement reprend le même formateur aux
+                mêmes dates (16/09/2026). */}
+            {stepWarnings(2).length > 0 && (
+              <ul className="mt-2 space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2">
+                {stepWarnings(2).map((a) => (
+                  <li key={a} className="text-[11px] text-amber-800">
+                    {a}
+                  </li>
+                ))}
+              </ul>
             )}
           </Field>
 

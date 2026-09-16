@@ -60,9 +60,19 @@ export interface InscritPourPrix {
  *    additionnerait des gens qui ne se connaissent pas ;
  *  - session mixte (salariés + agents commerciaux de la même agence) → le
  *    programme est un document partagé, il ne peut pas annoncer un total qui
- *    ne concerne qu'une partie de la salle ;
+ *    ne concerne qu'une partie de la salle.
+ *    ⚠ DEPUIS LE 16/09/2026, ce repli n'est plus le mode de fonctionnement
+ *    visé, seulement un filet : une session mixte se SCINDE désormais en deux
+ *    sessions (88 h entreprise / 72 h indépendants), qui partagent dates,
+ *    salle et formateur. Les deux populations n'ayant pas le même tarif,
+ *    chacune a ses propres pièces. Le repli reste en place pour les sessions
+ *    déjà mixtes en base, et parce qu'un total partiel serait faux ;
  *  - un prix manquant → le total serait faux et sous-estimerait l'engagement.
  *    La convention refusera d'ailleurs, en nommant qui compléter.
+ *
+ * Le cas DEUX ENTREPRISES à deux forfaits sur une même session reste non
+ * traité, délibérément : cf. `docs/deferred.md` § D-1 (piste `SessionPricing`
+ * par commanditaire, et ce qui la rouvrira).
  */
 export function resoudrePrixProgramme(input: {
   inscrits: ReadonlyArray<InscritPourPrix>;
