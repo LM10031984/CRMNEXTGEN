@@ -480,6 +480,17 @@ portant sur un PRODUIT vendu pris comme un tout : il n'a pas d'identité de
 module, il n'y a rien d'autre où s'accrocher. Il est commenté comme tel à
 l'endroit où il vit — une exception nommée n'est pas une dette oubliée.
 
+### Deuxième cas fondateur — Faros, 16/09/2026
+
+Les livrets apprenant `M2-A1` … `M2-A5` **ne sont pas** les capsules `A1` … `A5` :
+le `A` du livret est un numéro d'**annexe**, celui de la capsule est la lettre de
+son **chapitre de tournage**. `M2-A1-preparer-r1` correspond à la capsule `A4`,
+pas à `A1` — et il n'existe aucune capsule `A5`.
+
+**Un import qui apparierait sur la chaîne « A1 » réussirait toujours, et serait
+toujours faux** : deux numérotations distinctes qui partagent un alphabet ne se
+rapprochent pas, elles collisionnent. Rien ne protesterait.
+
 ## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
 
 **Troisième occurrence du même défaut en une semaine, relevée le 14/09/2026.**

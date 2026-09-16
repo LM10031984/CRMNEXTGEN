@@ -45,11 +45,33 @@ porte bien davantage : **8 dossiers de modules et 29 livrets HTML** sous
 `AGENT-INCOMPARABLE-CONTENU-20260817/LIVRAISON_PARCOURS/` (M0 → M6), plus les
 dossiers de livraison `SA_ACQ_M003_…` et `SA_ADM_M001_…`.
 
-**Ce qu'il faut établir** : pourquoi l'extraction n'en voit que 2. Piste
-mesurée — `PROD-0682` (« L'Agent Incomparable — parcours M0 → M6 ») existe en
-prod avec 7 modules dont le `contentMd` tient en **une ligne de renvoi** :
-« Ressources : 9 livret(s) HTML dans `M1_TROUVER_VENDEURS`. » (≈ 50 caractères).
-Le contenu réel (177 Ko pour le seul M1) **n'est pas en base**.
+> ### ✅ CAUSE A FERMÉE le 16/09/2026 — il n'y avait pas de défaut d'extraction
+>
+> Ce paragraphe demandait : « **Ce qu'il faut établir** : pourquoi l'extraction
+> n'en voit que 2. Piste mesurée — `PROD-0682` […] Le contenu réel (177 Ko pour
+> le seul M1) **n'est pas en base**. »
+>
+> **La réponse n'est pas technique.** Les deux corpus extraits,
+> `SA_ADM_M001_AGEFICE` et `SA_ACQ_M003_TROUVER_VENDEURS`, sont **exactement les
+> deux seuls dont le manifeste dit « G3 prêt à produire »**. Le troisième,
+> `AGENT-INCOMPARABLE…/LIVRAISON_PARCOURS` (M0 → M6), est en **v0.9** et porte
+> dans son propre manifeste : « **NE PAS DIFFUSER AUX APPRENANTS** — relecture et
+> levée des ⚠️ requises ». Le pack `TOURNAGE-PAR-MODULE` est un pack **de
+> tournage** : « à tourner », pas « tourné ». Relevé le 16/09 sur les 538 Mo du
+> corpus : **zéro fichier vidéo** (`*.mp4`, `*.mov`, `*.m4v`, `*.avi`).
+>
+> L'extraction n'a pas raté 15 programmes : **le corpus s'est refusé lui-même**,
+> et l'extracteur l'a respecté. Il n'y a rien à réparer de ce côté.
+>
+> Relevé complet : `.planning/260916-faros-releve-17-blocs.md`. Décision de
+> Laurent, même jour : **aucun contenu Faros n'est importé au catalogue** — ni la
+> capsule, ni le groupe de lettres. Faros sert de **matière rédactionnelle** pour
+> écrire les modules manquants, pas de catalogue.
+>
+> **Pourquoi la phrase d'origine est citée et non effacée** : l'effacer aurait
+> produit un document juste aujourd'hui et faux sur son passé (`quick.md`
+> §4 sexdecies, « on CITE, on ne remplace pas »). Quelqu'un qui relit un arbitrage
+> du 14/09 doit pouvoir savoir ce que son auteur avait sous les yeux.
 
 ⚠ Et son conteneur est marqué **non diffusable** (D-19 ter) : manifeste « trous
 🔴/🟠 NON levés — NE PAS DIFFUSER AUX APPRENANTS ». Deux barrières, pas une.
