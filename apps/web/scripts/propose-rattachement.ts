@@ -62,6 +62,11 @@ import {
 import { catalogueTitleKey } from '@qualiof/shared/helpers';
 
 import { cheminReleve } from '../src/lib/releve-fichier';
+import {
+  REFUS_RATTACHEMENT,
+  candidatsSurvivants,
+  type RefusDeCouple,
+} from '../src/lib/proposition/refus-rattachement';
 
 import { listDiagnosticPainPoints } from '../src/lib/diagnostic-r1/scoring';
 import {
@@ -102,8 +107,7 @@ type Arbitrage =
        * et le rapport doit porter la différence.
        */
       note?: string;
-    }
-  | { verdict: 'ecarte'; motif: string };
+    };
 
 const ARBITRAGES: Record<string, Arbitrage> = {
   // ── Gardées ───────────────────────────────────────────────────────────────
@@ -142,21 +146,9 @@ const ARBITRAGES: Record<string, Arbitrage> = {
 
   // ── Barrées ───────────────────────────────────────────────────────────────
   //
-  // Elles n'intéressent que ce rapport : on n'écrit rien pour une douleur dont
-  // la proposition était fausse.
-  'contacts-vers-rdv': {
-    verdict: 'ecarte',
-    motif: 'le mot « contacts » menait à une formation aux newsletters',
-  },
-  indicateurs: { verdict: 'ecarte', motif: 'accroché au seul mot « régulièrement »' },
-  'visites-par-vente': {
-    verdict: 'ecarte',
-    motif: 'le mot « nécessaires » menait à une synthèse de journée de tournage',
-  },
-  'collecte-avis': {
-    verdict: 'ecarte',
-    motif: 'le mot « collecte » menait à une collecte d’e-mails, pas d’avis',
-  },
+  // Elles ne sont plus ici : un refus porte sur une PAIRE (douleur × module) et
+  // vit dans `lib/proposition/refus-rattachement.ts`, keyé sur le `sourceRef`.
+  // Les garder sur le `ruleId` stérilisait le besoin tout entier.
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,6 +157,13 @@ const ARBITRAGES: Record<string, Arbitrage> = {
 
 interface RealUnit {
   kind: 'module' | 'produit';
+  /**
+   * L'identité STABLE du module dans sa source — `drive:NNN#i`. C'est la clé
+   * des refus (`refus-rattachement.ts`) : elle survit à un ré-import et à un
+   * renommage, ce que le titre ne fait pas. `null` pour un produit vendu pris
+   * comme un tout — un refus de module ne le vise pas.
+   */
+  sourceRef: string | null;
   /** Ce qu'on lit sur la liste : « Prospecter autrement… ». */
   title: string;
   /** D'où il vient : « Drive 058 Booster vendeur », « PROD-055 (vendu) ». */
@@ -303,6 +302,7 @@ for (const p of products) {
     };
     units.push({
       kind: 'module',
+      sourceRef: m.sourceRef,
       title: m.title,
       origin: `${p.title} (${p.code})`,
       originCode: p.code,
@@ -324,6 +324,7 @@ for (const p of products) {
   if (p.isActive && p.sourceRef === null && p.modules.length === 0 && p.programMd.trim().length > 50) {
     units.push({
       kind: 'produit',
+      sourceRef: null,
       title: p.title,
       origin: `${p.code} — produit vendu`,
       originCode: p.code,
@@ -552,18 +553,18 @@ interface UniteRetenue {
   trouvee: boolean;
 }
 
+/** Un candidat, augmenté de l'identité qui sert à le refuser. */
+function avecRef(p: Proposition) {
+  return p.candidats.map((c) => ({ ...c, sourceRef: c.unit.sourceRef }));
+}
+
 const retenues: { douleur: Douleur; unites: UniteRetenue[]; note?: string }[] = [];
-const barrees: { douleur: Douleur; motif: string }[] = [];
+const barrees: { douleur: Douleur; refus: readonly RefusDeCouple[]; survivants: number }[] = [];
 const aRelire: Proposition[] = [];
 const perdues: string[] = [];
 
 for (const p of propositions) {
   const arbitrage = ARBITRAGES[p.douleur.ruleId];
-
-  if (arbitrage?.verdict === 'ecarte') {
-    barrees.push({ douleur: p.douleur, motif: arbitrage.motif });
-    continue;
-  }
 
   if (arbitrage?.verdict === 'retenu') {
     const unites = arbitrage.unites.map((u) => {
@@ -582,15 +583,23 @@ for (const p of propositions) {
     continue;
   }
 
-  if (p.candidats.length > 0) aRelire.push(p);
+  // Un refus retire le MODULE qu'il nomme, pas le besoin. Ce qui survit repart
+  // en relecture ; si plus rien ne survit, la douleur retombe « sans réponse »
+  // au §6 — ce qui est vrai, et se compte.
+  const refus = REFUS_RATTACHEMENT[p.douleur.ruleId] ?? [];
+  const survivants = candidatsSurvivants(avecRef(p), refus);
+  if (refus.length > 0) barrees.push({ douleur: p.douleur, refus, survivants: survivants.length });
+  if (survivants.length > 0) aRelire.push({ ...p, candidats: survivants });
 }
 
-const sansProposition = propositions.filter(
-  (p) => !ARBITRAGES[p.douleur.ruleId] && p.candidats.length === 0,
-);
-const tombees = propositions.filter(
-  (p) => !ARBITRAGES[p.douleur.ruleId] && p.candidats.length === 0 && p.tombesAvecDeuxMots.length > 0,
-);
+/** Rien d'animable ne lui répond : ni candidat neuf, ni candidat survivant. */
+function sansReponse(p: Proposition): boolean {
+  if (ARBITRAGES[p.douleur.ruleId]) return false;
+  return candidatsSurvivants(avecRef(p), REFUS_RATTACHEMENT[p.douleur.ruleId] ?? []).length === 0;
+}
+
+const sansProposition = propositions.filter(sansReponse);
+const tombees = propositions.filter((p) => sansReponse(p) && p.tombesAvecDeuxMots.length > 0);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le rapport
@@ -606,7 +615,8 @@ const md: string[] = [
   `- **« L'Agent Incomparable » ne peut plus être proposé** — ni lui, ni aucun de ses modules. Le parcours est marqué non diffusable dans la donnée, pas seulement dans son manifeste, et le moteur de recommandation le tient aussi (${ecartesNonDiffusable} module(s) écartés d'office).`,
   `- **Deux mots pleins concordants, ou rien.** Un rapprochement à un seul mot n'est plus proposé du tout. C'est ce qui faisait remonter de la déontologie sur « droits à formation » et une collecte d'e-mails sur « collecte d'avis ».`,
   `- **Quatre douleurs sortent de l'exercice** : elles décrivent un contexte ou un financement, aucun module n'y répondra jamais (§5). Elles ne sont plus comptées comme « non couvertes ».`,
-  `- **Le chiffre du contenu à écrire monte à ${sansProposition.length + barrees.length}**, et c'est voulu. Les 4 douleurs hors champ en sortent, mais les ${barrees.length} que tu as barrées y entrent, plus les ${tombees.length} tombées avec la règle des deux mots : une proposition fausse ne couvrait rien, elle le cachait. 17 était le chiffre rassurant ; ${sansProposition.length + barrees.length} est le chiffre vrai.`,
+  `- **Un refus porte désormais sur une PAIRE (douleur × module), plus sur la douleur seule.** Les ${Object.keys(REFUS_RATTACHEMENT).length} barrages du 11/09 visaient chacun UN module mal rapproché — aucun ne disait « cette douleur n'est pas un besoin de formation ». Enregistrés sur le besoin, ils le stérilisaient : le bon module, écrit depuis, ne pouvait plus l'atteindre.`,
+  `- **Le chiffre du contenu à écrire est de ${sansProposition.length}**, et il se lit à un seul endroit : les douleurs auxquelles rien d'animable ne répond, une fois les refus de paire appliqués. Dont ${tombees.length} tombée(s) avec la règle des deux mots. Les 4 douleurs hors champ (D-28) n'y sont pas — elles ne se forment pas.`,
   `- **Ton tri du 11/09 fait foi** : ce que tu as retenu est ici, ce que tu as barré ne revient pas.`,
   '',
 ];
@@ -631,7 +641,8 @@ md.push(
   aRelire.length === 0
     ? `- **aucune douleur en attente de relecture** — tout ce qui reçoit une proposition est tranché`
     : `- **${aRelire.length} douleur${aRelire.length > 1 ? 's' : ''} à relire** — ${aRelire.length > 1 ? 'nouvelles propositions, pas encore jugées' : 'nouvelle proposition, pas encore jugée'}`,
-  `- **${sansProposition.length + barrees.length} douleurs restent sans réponse** — ${sansProposition.length} sans aucune proposition, plus ${barrees.length} dont la proposition était fausse et que tu as barrée. C'est là que du contenu reste à écrire.`,
+  `- **${sansProposition.length} douleurs restent sans réponse** — rien d'animable ne leur répond, refus de paire appliqués. C'est là que du contenu reste à écrire.`,
+  `- **${barrees.length} douleur(s) portent un refus de paire** — ${barrees.filter((b) => b.survivants > 0).length} ont malgré tout un candidat qui survit et repart en relecture.`,
   `- **Écarté d'office** : ${ecartesSansDeroule} module(s) sans déroulé, ${ecartesPige} de pige, ${ecartesNonDiffusable} d'un programme non diffusable (D-19 ter), ${ecartesDoublon} d'un rayon en doublon — d'un produit vendu (D-19 bis) ou d'un autre rayon que tu as tranché`,
   '',
   '---',
@@ -689,15 +700,21 @@ if (barrees.length > 0) {
   md.push(
     '---',
     '',
-    '## 3 · Barré le 11/09 — ne revient plus',
+    '## 3 · Barré le 11/09 — la PAIRE refusée, pas la douleur',
     '',
-    'Ces rapprochements sont enregistrés comme refusés. Le moteur ne les reproposera pas, même si le catalogue bouge.',
+    'Chaque ligne refuse **un module** pour **une douleur**. Le moteur ne repropose plus ce couple, même si le catalogue bouge — la clé est le `sourceRef`, pas le titre. La douleur, elle, reste dans l’exercice : un autre module peut la servir.',
     '',
-    '| Douleur | Chapitre | Pourquoi c’était faux |',
-    '|---|---|---|',
+    '| Douleur | Chapitre | Module refusé | Pourquoi c’était faux | Un autre candidat ? |',
+    '|---|---|---|---|---|',
   );
   for (const b of barrees) {
-    md.push(`| ${b.douleur.label} | ${b.douleur.chapter} — ${b.douleur.chapterTitle} | ${b.motif} |`);
+    for (const r of b.refus) {
+      md.push(
+        `| ${b.douleur.label} | ${b.douleur.chapter} — ${b.douleur.chapterTitle} ` +
+          `| ${r.moduleTitre} <br><small>\`${r.moduleSourceRef}\`</small> | ${r.motif} ` +
+          `| ${b.survivants > 0 ? `oui — ${b.survivants}, au §2` : 'non — la douleur est au §6'} |`,
+      );
+    }
   }
   md.push('');
 }
@@ -750,7 +767,7 @@ md.push(
   '',
   `**${sansProposition.length} douleurs** n'ont aucun module ni produit animable qui leur réponde. Aucun rapprochement n'a été inventé pour elles : c'est ici que du contenu reste à écrire.`,
   '',
-  `Les **${barrees.length} douleurs barrées** du §3 sont à ajouter à cette liste : leur proposition était fausse, elles ne sont donc pas couvertes non plus. Soit **${sansProposition.length + barrees.length} douleurs** au total.`,
+  `Les refus de paire du §3 sont DÉJÀ pris en compte ici : une douleur dont tous les candidats sont refusés y figure, une douleur dont un candidat survit n'y figure pas — elle est au §2, en attente de relecture.`,
   '',
   '| Douleur | Chapitre | Posée à | Famille attendue |',
   '|---|---|---|---|',
