@@ -1,0 +1,199 @@
+> dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-deroules.ts
+
+
+=== BASE : LOCALE — qualiof_dev @ localhost ===
+=== POPULATIONS (§4 quater) ===
+   490  en bibliothèque, tous rayons
+   406  après retrait pige / non-diffusables / doublons
+   298  COMPOSABLES — ceux qu'`isAnimable` laisse passer aujourd'hui
+        et c'est cette population-là qu'on mesure.
+
+=== ① DISTRIBUTION DU NOMBRE DE PUCES (sur les 298 composables) ===
+   1 puce(s) :  25    8.4 %  ████████
+   2 puce(s) :  52   17.4 %  █████████████████
+   3 puce(s) :  61   20.5 %  ████████████████████
+   4 puce(s) :  46   15.4 %  ███████████████
+   5 puce(s) :  39   13.1 %  █████████████
+  6+ puce(s) :  75   25.2 %  █████████████████████████
+
+=== ② LE NOUVEAU SIGNAL, ET CE QU'IL VAUT SEUL ===
+  déroulé d'UNE ou DEUX puces              :  77  (25.8 %)
+  PREMIÈRE puce = fragment d'horaire seul  :  49  ← le signal demandé
+  fragment d'horaire n'importe où          :  73
+  ─────────────────────────────────────────────
+  UNION (≤ 2 puces OU horaire en tête)     : 118  (39.6 %)
+
+  ⚠ MAIS le signal « horaire en tête » NE DISCRIMINE PAS seul : BIB-D071
+    le porte quatorze fois avec 6 à 9 puces de vrai contenu, BIB-D049 avec 46.
+    Le refuser coûterait 49 modules pour en viser une poignée — §4 quaterdecies.
+
+=== ②bis LES DEUX SIGNATURES QUI, ELLES, DISCRIMINENT ===
+  déroulé fait UNIQUEMENT de fragments d'horaire :   7  ← aucun contenu pédagogique
+  horaire en tête ET ≤ 2 puces                   :   8  ← la signature de BIB-D014 / D047
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+      BIB-D047  1 puce(s) — « Après-midi »
+
+=== ③ LES 49 DÉROULÉS QUI S'OUVRENT SUR UN HORAIRE ===
+  BIB-D014  2 puce(s) · « Après-midi : »
+            titre : Appliquer des techniques de feedback constructif pour guider l'équipe vers l'améli
+  BIB-D015  17 puce(s) · « Matin : »
+            titre : Conquête vendeurs
+  BIB-D027  6 puce(s) · « Après-midi : »
+            titre : Structurer l'agenda de manière à optimiser la progression vers les objectifs fixés
+  BIB-D033  9 puce(s) · « Après-midi : »
+            titre : Évaluer la pertinence et l'efficacité des canaux de génération de leads.
+  BIB-D038  12 puce(s) · « Après midi : »
+            titre : Mettre en avant les avantages et les opportunités offertes par le poste.
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Fonctionnement des moteurs de recherche et analyse des facteurs de classement (on-
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Stratégies de création de backlinks et recherche de partenariats.
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Atelier pratique : Conception de supports visuels pour une campagne fictive.
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Génération de textes optimisés et intégration dans des stratégies marketing.
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Outils de suivi de la réputation en ligne : Google Alerts, Mention, ReviewTrackers
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Création de scénarios automatisés pour la relation client.
+  BIB-D047  1 puce(s) · « Après-midi »
+            titre : Intégration des scénarios avec d'autres outils marketing.
+  BIB-D048  23 puce(s) · « Matin : 9h-13h »
+            titre : Propulsez votre performance immobilière avec l'IA et ChatGPT
+  BIB-D049  46 puce(s) · « Matin : »
+            titre : Propulsez votre expertise immobilière avec l’IA - Annonces, relation client et nég
+  BIB-D050  10 puce(s) · « Matin (9h à 12h) : »
+            titre : Visibilité des Biens et Techniques Digitales
+  BIB-D050  10 puce(s) · « Matin (9h à 12h) : »
+            titre : Suivi des Acquéreurs et Visites
+  BIB-D050  10 puce(s) · « Matin (9h à 12h) : »
+            titre : Négociation et Suivi Contractuel
+  BIB-D050  10 puce(s) · « Matin (9h à 12h) : »
+            titre : Vente et Fidélisation des Clients
+  BIB-D050  11 puce(s) · « Matin (9h à 12h) : »
+            titre : Conclusion, Plan d’Action et Suivi
+  BIB-D050  8 puce(s) · « Matin (9h à 12h) : »
+            titre : Atelier Pratique (5h)
+  BIB-D052  8 puce(s) · « Matin (9h-12h) »
+            titre : Comprendre les bases de l’IA et son potentiel
+  BIB-D052  8 puce(s) · « Matin (9h-12h) »
+            titre : Automatisation et intégration de l’IA dans les processus internes
+  BIB-D052  8 puce(s) · « Matin (9h-12h) »
+            titre : Plan d’action et perspectives stratégiques
+  BIB-D056  23 puce(s) · « Matin : 9h-13h »
+            titre : LES OBJECTIFS PÉDAGOGIQUES DE FORMATION
+  BIB-D070  8 puce(s) · « Accueil des participants »
+            titre : | Accueil & mise en confiance
+  BIB-D071  9 puce(s) · « 9h00 – 13h00 »
+            titre : Fondamentaux de l’IA et cadrage
+  BIB-D071  8 puce(s) · « 9h00 – 13h00 »
+            titre : Comprendre le fonctionnement des IA génératives
+  BIB-D071  8 puce(s) · « 9h00 – 13h00 »
+            titre : Bases solides du prompting
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : ChatGPT : usages professionnels fondamentaux
+  BIB-D071  7 puce(s) · « 9h00 – 13h00 »
+            titre : ChatGPT : usages avancés et qualité des livrables
+  BIB-D071  7 puce(s) · « 9h00 – 13h00 »
+            titre : IA et organisation personnelle du dirigeant
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Création de contenus avec l’IA
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : IA et communication d’entreprise
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Identifier les tâches à automatiser
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Introduction aux automatisations simples
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : IA, données et reporting
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Sécurité, RGPD et usage responsable
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Déployer l’IA dans son entreprise
+  BIB-D071  6 puce(s) · « 9h00 – 13h00 »
+            titre : Autonomie et veille IA
+  BIB-D071  7 puce(s) · « 9h00 – 13h00 »
+            titre : Synthèse et plan d’action final
+  BIB-D072  10 puce(s) · « 9h00 – 12h00 »
+            titre : Fondamentaux de l’IA et cadrage
+  BIB-D072  8 puce(s) · « 9h00 – 12h00 »
+            titre : Comprendre le fonctionnement des IA génératives
+  BIB-D072  8 puce(s) · « 9h00 – 12h00 »
+            titre : Bases solides du prompting
+  BIB-D072  7 puce(s) · « 9h00 – 12h00 »
+            titre : ChatGPT : usages professionnels
+  BIB-D072  7 puce(s) · « 9h00 – 12h00 »
+            titre : Organisation, contenus et communication avec l’IA
+  BIB-D072  7 puce(s) · « 9h00 – 12h00 »
+            titre : Identifier et structurer les automatisations
+  BIB-D072  7 puce(s) · « 9h00 – 12h00 »
+            titre : IA, données et aide à la décision
+  BIB-D072  8 puce(s) · « 9h00 – 12h00 »
+            titre : Sécurité, RGPD et déploiement en entreprise
+  BIB-D072  9 puce(s) · « 9h00 – 12h00 »
+            titre : Autonomie, veille et plan d’action final
+
+=== ④ LES DÉROULÉS D'UNE SEULE PUCE (25) ===
+  BIB-D010  « Préparer et structurer un plan d’action efficace. »
+            titre : Adopter une vision optimiste pour surmonter les défis et maintenir une motivation 
+  BIB-D014  « Mettre en place des coachings et des jeux de rôle pour renforcer les »
+            titre : Utiliser des outils d'analyse pour identifier les tendances et les opportunités d'
+  BIB-D014  « Prendre la parole devant son équipe avec assurance et gagner en infl »
+            titre : Élaborer des activités interactives pour encourager la participation de l'équipe e
+  BIB-D018  « Analyse de cas réels d'entreprises et leurs stratégies sur les résea »
+            titre : Cas pratiques.
+  BIB-D019  « Mise en situation : optimisez une fiche d'établissement »
+            titre : Ateliers de mise en pratique
+  BIB-D024  « Vidéos & Stories - Les Fondamentaux »
+            titre : Introduction et Objectifs de la Journée
+  BIB-D024  « Présentation des outils essentiels pour la création vidéo. »
+            titre : Outils Vidéos
+  BIB-D024  « Atelier 1 : Conception et réalisation d'un set de stories. »
+            titre : Atelier Pratique
+  BIB-D024  « Atelier 2 : Création d'un réel impactant de A à Z. »
+            titre : Atelier Pratique
+  BIB-D032  « Mise en situation : optimisez une fiche d'établissement ou travaille »
+            titre : Atelier pratique.
+  BIB-D032  « Analyse de réussites et d'échecs en termes de référencement et e-rép »
+            titre : Étude de cas.
+  BIB-D032  « Comment combiner SEO et e-réputation pour une image de marque puissa »
+            titre : Élaboration d'une stratégie digitale.
+  BIB-D033  « Appliquer des stratégies de génération de leads pour enrichir la bas »
+            titre : Différencier les divers types de bases de données utilisées dans l'immobilier.
+  BIB-D038  « Rédiger de manière percutante la présentation de sa société et des a »
+            titre : Analyser les avantages et les limites de chaque support.
+  BIB-D041  « Révision des concepts et compétences abordés. »
+            titre : Synthèse et évaluation
+  BIB-D043  « Simulation : Cas pratique final intégrant les compétences de la form »
+            titre : Synthèse et mise en pratique des acquis
+  BIB-D047  « Après-midi »
+            titre : Fonctionnement des moteurs de recherche et analyse des facteurs de classement (on-
+  BIB-D047  « Après-midi »
+            titre : Stratégies de création de backlinks et recherche de partenariats.
+  BIB-D047  « Après-midi »
+            titre : Atelier pratique : Conception de supports visuels pour une campagne fictive.
+  BIB-D047  « Après-midi »
+            titre : Génération de textes optimisés et intégration dans des stratégies marketing.
+  BIB-D047  « Après-midi »
+            titre : Outils de suivi de la réputation en ligne : Google Alerts, Mention, ReviewTrackers
+  BIB-D047  « Après-midi »
+            titre : Création de scénarios automatisés pour la relation client.
+  BIB-D047  « Après-midi »
+            titre : Intégration des scénarios avec d'autres outils marketing.
+  BIB-D061  « JOUR 2 – Produire des contenus et les planifier »
+            titre : Synthèse de la journée Retour sur les enseignements clés Préparation des éléments 
+  BIB-D061  « JOUR 3 – Monter, diffuser et sponsoriser »
+            titre : Visionnage collectif, feedback des paires Choix des vidéos à monter Préparation de
+
+=== ⑤ CE QUE COÛTERAIT CHAQUE SEUIL — avant d'en poser un ===
+  aujourd’hui (déroulé non vide)     298 composables  (−0)
+  A · déroulé 100 % horaire          291 composables  (−7)
+  A + horaire en tête ET ≤ 2 puces   290 composables  (−8)
+  A + B + refuser 1 puce             272 composables  (−26)
+  refuser tout horaire en tête       249 composables  (−49)
+  refuser ≤ 2 puces                  221 composables  (−77)

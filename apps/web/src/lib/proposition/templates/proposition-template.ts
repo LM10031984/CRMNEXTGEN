@@ -281,7 +281,11 @@ function pageDetailAndSteps(data: PropositionData): string {
     ${sectionTitle(5, 'Le détail chiffré — par payeur')}
     ${renderPricingTable(data)}
     ${renderOffert(data)}
-    <p class="muted" style="margin-top:2.5mm">Les ${data.funding.conventionedHoursPerParticipant} heures conventionnées par participant (${plural(data.funding.halfDays, 'demi-journée')} de ${data.onsiteHoursPerHalfDay} h sur site, co-animées par ${plural(data.trainerCount, 'formateur')}) figurent à l’identique sur la convention, les feuilles d’émargement, l’attestation d’assiduité et les dossiers financeurs.</p>
+    <!-- La phrase des cinq surfaces vivait ici. Retirée le 15/09/2026 (§8.1) :
+         elle portait « conventionnées », « sur site » et « co-animées » sur une
+         pièce CLIENT. Le client lit des demi-journées. La VALEUR, elle, n'a pas
+         bougé — elle reste au tableau chiffré et reste unique pour la
+         convention, l'émargement, l'assiduité et les dossiers financeurs. -->
     ${renderQuoteNote(data)}
   </div>
 
@@ -369,7 +373,7 @@ function renderPricingTable(data: PropositionData): string {
   );
 
   return `<table class="pricing">
-      <thead><tr><th>Désignation</th><th class="num">Particip.</th><th class="num">Demi-journées</th><th class="num">Heures conv.</th><th class="num">PU HT</th><th class="num">Total HT</th></tr></thead>
+      <thead><tr><th>Désignation</th><th class="num">Particip.</th><th class="num">Demi-journées</th><th class="num">Heures</th><th class="num">PU HT</th><th class="num">Total HT</th></tr></thead>
       <tbody>${rows.join('')}</tbody>
     </table>`;
 }

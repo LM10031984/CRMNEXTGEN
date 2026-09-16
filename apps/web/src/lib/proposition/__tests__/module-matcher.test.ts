@@ -49,6 +49,8 @@ function mod(
   opts: Partial<LibraryModule> = {},
 ): LibraryModule {
   return {
+    // Par défaut, pas d'identité de source : les tests qui arbitrent la posent.
+    sourceRef: null,
     moduleId,
     title,
     family: null,
@@ -324,7 +326,12 @@ describe('recommendModules — ce qui ne se comble pas se dit', () => {
 
     const axe = out.recommendations.find((r) => r.need.code === 'prospection')!;
     expect(axe.candidates.every((c) => c.confidence === 'faible')).toBe(true);
-    expect(out.notices.some((n) => n.includes('les mots de son intitulé'))).toBe(true);
+    // RENVERSÉ le 16/09/2026 : la notice disait « repose sur les mots de son
+    // intitulé » SANS dire lesquels. Elle les nomme désormais — c'est ce qui
+    // rend la relecture métier (§5 ter) praticable. L'assertion garde son fond :
+    // le commercial est prévenu que le rapprochement est lexical.
+    expect(out.notices.some((n) => n.includes('l’intitulé'))).toBe(true);
+    expect(out.notices.some((n) => /mot(s)? «/.test(n))).toBe(true);
   });
 });
 
@@ -787,5 +794,113 @@ describe('recommendModules — départage d’une égalité de score (arbitrage 
     expect(axe.candidates.map((c) => c.score)).toEqual([5, 5]);
     expect(axe.candidates.map((c) => c.matchedTerms)).toEqual([['mandat'], ['mandat']]);
     expect(axe.candidates.map((c) => c.moduleId)).toEqual(['m-alpha-a', 'm-alpha-z']);
+  });
+});
+
+/**
+ * Le registre des arbitrages — un refus de Laurent ne se rejoue pas.
+ *
+ * Cas fondateur (16/09/2026) : « Rédiger des compromis de vente efficaces »
+ * (`drive:034#2`) était proposé sur « Transformer visites et offres en actes ».
+ * La douleur porte sur le SUIVI DE LA RÉCEPTION DES PIÈCES entre l'offre et
+ * l'acte ; le module parle de rédiger un compromis, ce que le conseiller ne
+ * fait pas.
+ *
+ * Le rapprochement est lexicalement parfait et sémantiquement faux — et il
+ * n'était même pas attrapable par une relecture de la trace : le terme qui a
+ * matché est « vente », pas « compromis ».
+ */
+describe('arbitrages de rattachement — un refus métier survit au catalogue', () => {
+  const BESOIN = 'transformation';
+  const REFUSE = 'drive:034#2';
+
+  function bibliotheque(sourceRef: string | null): LibraryModule[] {
+    return [
+      mod('m-compromis', 'Rédiger des compromis de vente efficaces', VENDEUR, {
+        sourceRef,
+        contentMd: '- Les clauses essentielles\n- Sécuriser la transaction\n- Cas pratique',
+      }),
+    ];
+  }
+
+  const entree = (library: LibraryModule[]) => ({
+    answers: REPONSES,
+    alerts: [],
+    chapterScores: [chapitre(8, 30)],
+    library,
+  });
+
+  function reco(library: LibraryModule[]) {
+    return recommendModules(entree(library)).recommendations.find((r) => r.need.code === BESOIN);
+  }
+
+  it('ne propose plus le module refusé sur CE besoin', () => {
+    const r = reco(bibliotheque(REFUSE));
+    expect(r?.candidates.map((c) => c.moduleId)).not.toContain('m-compromis');
+  });
+
+  it('le DIT au commercial — un module écarté en silence est un module qu’on rajoute', () => {
+    const out = recommendModules(entree(bibliotheque(REFUSE)));
+    expect(out.notices.join(' ')).toMatch(/arbitrage|refus/i);
+    expect(out.notices.join(' ')).toContain('Rédiger des compromis de vente efficaces');
+  });
+
+  /**
+   * LE TEST DE PUISSANCE — sans lui, le premier test passerait aussi si le
+   * module était écarté pour une tout autre raison (score nul, déroulé
+   * manquant). Le MÊME module, la MÊME bibliothèque, seule l'identité change.
+   */
+  it('le même module SANS son sourceRef reste proposé — c’est bien l’arbitrage qui écarte', () => {
+    const r = reco(bibliotheque('drive:034#9'));
+    expect(r?.candidates.map((c) => c.moduleId)).toContain('m-compromis');
+  });
+});
+
+/**
+ * La notice NOMME le ou les mots qui ont fait le rapprochement.
+ *
+ * Avant le 16/09/2026 elle disait « repose sur les mots de son intitulé » —
+ * sans dire LESQUELS. C'est ce qui a rendu invisible le refus du compromis :
+ * le mot d'appui était « vente », et personne ne pouvait le savoir sans relire
+ * le module entier.
+ *
+ * Ce changement ne corrige aucun défaut. Il rend la relecture — l'étape qui
+ * PRODUIT les règles, §5 ter — dix fois plus rapide : Laurent voit un appui
+ * unique en une seconde au lieu d'ouvrir le module.
+ */
+describe('notice de rapprochement lexical — elle nomme ses mots', () => {
+  const BESOIN = 'transformation';
+
+  function noticesPour(titre: string): string {
+    return recommendModules({
+      answers: REPONSES,
+      alerts: [],
+      chapterScores: [chapitre(8, 30)],
+      library: [
+        mod('m-lex', titre, VENDEUR, {
+          contentMd: '- Un vrai déroulé\n- Avec plusieurs puces\n- Et du contenu',
+        }),
+      ],
+    }).notices.join(' | ');
+  }
+
+  it('cite le mot unique quand le rapprochement ne tient que par lui', () => {
+    const n = noticesPour('Rédiger des compromis de vente efficaces');
+    expect(n).toContain('le seul mot');
+    expect(n).toContain('« vente »');
+  });
+
+  it('cite les mots quand il y en a plusieurs — et ne dit plus « le seul »', () => {
+    const n = noticesPour('Technique de vente : closing et négociation');
+    expect(n).not.toContain('le seul mot');
+    expect(n).toMatch(/mots «/);
+    expect(n).toContain('vente');
+  });
+
+  it('la notice reste attachée au besoin et au module — on doit pouvoir la situer', () => {
+    const n = noticesPour('Rédiger des compromis de vente efficaces');
+    expect(n).toContain('Transformer visites et offres en actes');
+    expect(n).toContain('Rédiger des compromis de vente efficaces');
+    expect(BESOIN).toBe('transformation');
   });
 });

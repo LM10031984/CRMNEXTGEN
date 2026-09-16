@@ -1,0 +1,41 @@
+
+> @qualiof/web@0.1.0 probe:d27:local /Users/laurentmarx/Projects/CRM Next gen/files-chaine/apps/web
+> dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-d27.ts
+
+
+=== BASE : LOCALE — qualiof_dev @ localhost ===
+=== DIAG-R001 (454b58e6-7f88-4d95-adf6-5fc6c16ab838) — Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
+
+=== ① LES RAPPROCHEMENTS POSSIBLES — 276 sur 298 modules × 9 besoins
+    POPULATION : besoins de COMPOSITION (9), pas les 34 douleurs du barème (§4 quater).
+
+  variante A :  35 / 276 survivent (12.7 %) — 241 tombent
+  variante B :  51 / 276 survivent (18.5 %) — 225 tombent
+
+=== ② LES BESOINS QUI N'ONT PLUS AUCUN CANDIDAT (sur les 9) ===
+  actuel  :  0 besoin(s) sans aucun candidat
+  A       :  0 besoin(s) sans aucun candidat
+  B       :  0 besoin(s) sans aucun candidat
+
+=== ③ LE PARCOURS DE DIAG-R001 ===
+  actuel  :  6 journée(s) · 5/5 besoins déclenchés servis · 0 non couvert(s) · 6 programmes sources
+  A       :  4 journée(s) · 3/5 besoins déclenchés servis · 2 non couvert(s) · 5 programmes sources
+             ✖ Générer des contacts vendeurs (aucun-module)
+             ✖ Piloter par les chiffres et animer l’équipe (aucun-module)
+  B       :  5 journée(s) · 4/5 besoins déclenchés servis · 1 non couvert(s) · 5 programmes sources
+             ✖ Piloter par les chiffres et animer l’équipe (aucun-module)
+
+=== ④ LES APPUIS DES MODULES RETENUS — « Transformer visites et offres en actes » ===
+  BIB-D034  signaux  forte   mots « vente », « negociation », « offre »
+            Gérer les objections et trouver des solutions de compromis
+  BIB-D017  signaux  forte   SEUL mot « negociation »
+            Convaincre le vendeur avec des arguments solides
+  BIB-D059  lexique  faible  mots « negociation », « offre »
+            Mener la négociation vers l’offre
+  BIB-D023  lexique  faible  mots « negociation », « technique »
+            Augmenter le pourcentage de mandats exclusifs en immobilier en appliquant des techniques de persuasion et de négociation.
+  BIB-D034  lexique  faible  mots « negociation », « technique »
+            Maîtriser les techniques de négociation en immobilier
+
+  (« journée » = un créneau, l'unité financeur — §8.1. L'enveloppe de droits
+   est de 10, elle ne bouge pas : seul ce qu'on sait remplir change.)

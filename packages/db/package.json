@@ -51,7 +51,8 @@
     "fix:transcrire": "dotenv -e ../../.env -- tsx scripts/fix-transcrire-rubriques.ts",
     "db:query:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/run-readonly-sql.ts",
     "fix:d19ter-prod-00661": "dotenv -e ../../.env -- tsx scripts/fix-d19ter-prod-00661.ts",
-    "seed:demo-signature": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/seed-demo-signature.ts"
+    "seed:demo-signature": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/seed-demo-signature.ts",
+    "import:diag-prod-pseudonymise:local": "dotenv -e ../../.env.local -e ../../.env -- tsx scripts/import-diag-prod-pseudonymise.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "5.22.0",

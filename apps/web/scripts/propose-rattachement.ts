@@ -248,9 +248,9 @@ const products = await prisma.trainingProduct.findMany({
     modules: {
       orderBy: { order: 'asc' },
       select: {
-        id: true, title: true, contentMd: true, needIdentification: true, family: true,
-        targetProfile: true, durationMin: true, diagnosticSignals: true, isFoundation: true,
-        excludedFromClientOutputs: true,
+        id: true, sourceRef: true, title: true, contentMd: true, needIdentification: true,
+        family: true, targetProfile: true, durationMin: true, diagnosticSignals: true,
+        isFoundation: true, excludedFromClientOutputs: true,
       },
     },
   },
@@ -289,7 +289,8 @@ for (const p of products) {
       continue;
     }
     const lib: LibraryModule = {
-      moduleId: m.id, title: m.title, family: m.family, targetProfile: m.targetProfile,
+      moduleId: m.id, sourceRef: m.sourceRef, title: m.title, family: m.family,
+      targetProfile: m.targetProfile,
       signals: [], needIdentification: m.needIdentification, isFoundation: m.isFoundation,
       durationMin: m.durationMin, excludedFromClientOutputs: false, contentMd: m.contentMd,
       source: {

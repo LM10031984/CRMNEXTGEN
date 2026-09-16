@@ -55,7 +55,8 @@ function esc(value: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-function money(n: number | null | undefined): string {
+/** Exporté pour que les tests lisent le MÊME formateur — §4 bis. */
+export function money(n: number | null | undefined): string {
   return n === null || n === undefined ? '—' : eur.format(n);
 }
 
@@ -642,6 +643,14 @@ function pageFunding(data: AuditData): string {
     : f.opcoEp.manualValidationRequired
       ? 'à valider'
       : money(f.opcoEp.budget);
+  // D'où sort chaque montant — le dirigeant doit pouvoir le lire (16/09/2026).
+  // L'enveloppe OPCO EP est une donnée de BRANCHE à paliers (§8.2) : au-delà de
+  // 50 salariés elle n'est pas calculable, et `null` ne s'imprime alors pas
+  // comme un zéro (§4 quinquies).
+  const opcoOrigine =
+    f.opcoEp.envelope !== null
+      ? `${money(f.opcoEp.envelope)} d’enveloppe annuelle entreprise`
+      : 'enveloppe non calculable au-delà de 50 salariés';
   const declared = data.declaredEmployeeCount;
   const opcoNote =
     !opcoHasBeneficiaries && declared !== null && declared > 0
@@ -650,15 +659,28 @@ function pageFunding(data: AuditData): string {
          dès que le ou les salariés concernés seront cartographiés.</p>`
       : '';
 
+  // Les trois tuiles — §8.1, arbitrage du 16/09/2026.
+  //
+  // L'audit est une pièce CLIENT : il compte en DEMI-JOURNÉES, et les mots
+  // « conventionnées » et « sur site » n'y paraissent pas. Ce qui remplace les
+  // heures n'est PAS un autre nombre d'heures, c'est l'ARGENT — le dirigeant
+  // comprend un montant sans avoir besoin d'un taux horaire, les heures étaient
+  // un détour. Les trois tuiles referment le compte : pris en charge + reste à
+  // charge = prix HT.
+  //
+  // La VALEUR conventionnée n'a pas bougé : elle reste dans `conventionedHours`
+  // et sur la convention, qui la déclare au financeur (ligne rouge §8.1).
   return page(
     17,
     `<div class="sec"><h2><span class="no">17</span> Votre potentiel de financement</h2>
       <table>
         <thead><tr><th>Financeur</th><th>Bénéficiaires</th><th class="num">Droits mobilisables</th><th class="num">Prise en charge</th></tr></thead>
         <tbody>
-          <tr><td>AGEFICE</td><td>${f.agefice.participantCount} agent(s) commercial(aux)</td>
+          <tr><td>AGEFICE</td><td>${f.agefice.participantCount} agent(s) commercial(aux)
+            <br><span class="muted">${money(f.agefice.annualCapPerPerson)} par personne et par an</span></td>
             <td class="num">${money(f.agefice.budget)}</td><td class="num">${money(f.agefice.coverage)}</td></tr>
-          <tr><td>OPCO EP</td><td>${f.opcoEp.participantCount} salarié(s)</td>
+          <tr><td>OPCO EP</td><td>${f.opcoEp.participantCount} salarié(s)
+            <br><span class="muted">${opcoOrigine}</span></td>
             <td class="num">${opcoRights}</td>
             <td class="num">${money(f.opcoEp.coverage)}</td></tr>
         </tbody>
@@ -667,10 +689,10 @@ function pageFunding(data: AuditData): string {
       <div class="grid3" style="margin-top:5mm">
         <div class="tile"><div class="lbl">Volume proposé</div>
           <div class="display">${f.halfDays}<small>&#160;demi-journées</small></div>
-          <p>${f.onsiteHours} h sur site</p></div>
-        <div class="tile"><div class="lbl">Heures conventionnées</div>
-          <div class="display">${f.conventionedHours} h</div>
-          <p>La valeur portée sur la convention, l'émargement et le dossier financeur</p></div>
+          <p>Dans vos locaux</p></div>
+        <div class="tile"><div class="lbl">Pris en charge</div>
+          <div class="display">${money(f.totalCoverage)}</div>
+          <p>Par vos financeurs — montage et dépôt des dossiers compris</p></div>
         <div class="tile"><div class="lbl">Reste à charge</div>
           <div class="display">${money(f.totalRemainder)}</div>
           <p>Sur ${money(f.totalPrice)} HT</p></div>

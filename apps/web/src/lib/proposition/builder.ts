@@ -273,7 +273,7 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
         'Chaque dossier est monté et déposé par nos soins. Aucune avance de trésorerie.',
       participantIds: [p.id],
       participantCount: 1,
-      lines: lineFor(`Parcours de ${plural(halfDays, 'demi-journée')}, co-animé, sur site`),
+      lines: lineFor(libelleVolumeClient(halfDays)),
       coverages,
     });
   }
@@ -301,7 +301,7 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
       groupNote: 'Un dossier unique pour l’entreprise, monté et déposé par nos soins.',
       participantIds: salaries.map((p) => p.id),
       participantCount: salaries.length,
-      lines: lineFor(`Parcours de ${plural(halfDays, 'demi-journée')}, co-animé, sur site`),
+      lines: lineFor(libelleVolumeClient(halfDays)),
       coverages,
     });
   }
@@ -660,6 +660,26 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
 }
 
 /** Les heures conventionnées du parcours — la valeur unique, exposée une fois. */
+/**
+ * Le volume tel que le DIRIGEANT le lit — sur la proposition comme sur le devis.
+ *
+ * Doctrine §8.1 : « une prestation se dit dans l'unité de celui qui la lit ».
+ * Le client compte en DEMI-JOURNÉES, c'est ce qu'il bloque dans son agenda. Les
+ * mots « co-animé » et « sur site » sont partis le 15/09/2026 : ce sont des
+ * mots d'interne, et le multiplicateur de co-animation ne le concerne pas.
+ *
+ * **La VALEUR ne bouge pas** : le devis reste l'assiette de la facture, au même
+ * prix. Le devis dira « 6 demi-journées » et la convention « 48 heures » —
+ * même parcours, même montant, deux lecteurs.
+ *
+ * Elle est une FONCTION et pas une interpolation recopiée, et c'est délibéré
+ * (§4 septdecies) : la règle vit désormais dans un nom qu'on peut chercher, au
+ * lieu de vivre deux fois dans deux littéraux.
+ */
+export function libelleVolumeClient(halfDays: number): string {
+  return `Parcours de ${plural(halfDays, 'demi-journée')}`;
+}
+
 export function conventionedHoursOf(halfDays: number, rules: FundingRuleValues): number {
   return halfDays * conventionedHoursPerHalfDay(rules);
 }

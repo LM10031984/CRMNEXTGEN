@@ -1,0 +1,55 @@
+
+> @qualiof/web@0.1.0 probe:homonymes:local /Users/laurentmarx/Projects/CRM Next gen/files-chaine/apps/web
+> dotenv -e ../../.env.local -e ../../.env -- tsx scripts/probe-homonymes.ts
+
+
+=== BASE : LOCALE — qualiof_dev @ localhost ===
+=== POPULATION ===
+  298 modules composables × 9 besoins
+  → 276 rapprochements possibles (score non nul)
+
+=== ① LES HOMONYMES PEUVENT-ILS SEULEMENT RAPPROCHER ? ===
+    (un mot qui n'est mot-clé d'aucun besoin ne produit AUCUN rapprochement)
+
+  ✖ compromis    PAS un mot-clé — ne rapproche rien
+  ✔ mandat       mot-clé
+  ✖ acte         PAS un mot-clé — ne rapproche rien
+  ✔ offre        mot-clé
+  ✖ bien         PAS un mot-clé — ne rapproche rien
+  ✔ exclusivite  mot-clé
+  ✔ estimation   mot-clé
+  ✖ dossier      PAS un mot-clé — ne rapproche rien
+  ✔ suivi        mot-clé
+
+=== ② RAPPROCHEMENTS QUI NE TIENNENT QUE PAR UN MOT AMBIGU ===
+  mot          seul appui   total   exemples
+
+  compromis             0       0   terrain d’entente / avant-contrat de vente
+  mandat               12      15   mandat de vente / mandat de recherche / de gestion
+      BIB-D007  Renforcer la relation pour obtenir des recommandatio → « Rentrer des mandats en exclusivité, au b »
+      BIB-D042  Gestion des mandats et reporting avancé              → « Rentrer des mandats en exclusivité, au b »
+      BIB-D047  Faire des avis clients une source de mandats         → « Rentrer des mandats en exclusivité, au b »
+      … et 9 autre(s)
+  acte                  0       0   acte authentique / agir / passer à l’acte
+  offre                 2       5   offre d’achat / offre commerciale de l’agence
+      BIB-D023  Générer : Générer du CA additionnel en créant des of → « Transformer visites et offres en actes »
+      BIB-D008  Entraîner à la Prise d'Offre et à la Clôture         → « Transformer visites et offres en actes »
+  bien                  0       0   un bien immobilier / adverbe — « bien vendre »
+  exclusivite           0       0   mandat exclusif / exclusivité commerciale
+  estimation            4       7   avis de valeur vendeur / chiffrage d’un budget
+      BIB-D017  Réaliser des estimations précises et percutantes     → « Formaliser la découverte et l’estimation »
+      BIB-D003  Générer du business supplémentaire avec les dossiers → « Formaliser la découverte et l’estimation »
+      BIB-D021  Mise en pratique de la remise d’estimation           → « Formaliser la découverte et l’estimation »
+      … et 1 autre(s)
+  dossier               0       0   dossier de vente / dossier de financement
+  suivi                11      16   suivi vendeur / suivi de dossier / de pièces
+      BIB-D042  Ajustement des prix et suivi des performances        → « Piloter le stock et le suivi vendeur »
+      BIB-D018  Outils de suivi et d'analyse.                        → « Piloter le stock et le suivi vendeur »
+      BIB-D023  Maîtrisez le suivi des acheteurs grâce à des techniq → « Piloter le stock et le suivi vendeur »
+      … et 8 autre(s)
+
+=== ③ LA MESURE QUI TRANCHE ===
+  rapprochements ne tenant que par UN mot, quel qu'il soit : 241 / 276 (87.3 %)
+  dont l'appui unique est un mot AMBIGU de la liste ......... 29
+  rapprochements purement LEXICAUX (aucun signal catalogue) . 245 (88.8 %)
+  …et tenant sur un seul mot — les plus fragiles ............ 225

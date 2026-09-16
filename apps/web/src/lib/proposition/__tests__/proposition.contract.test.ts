@@ -167,17 +167,39 @@ describe('Conformité à la maquette 2026-09-01-maquette-proposition.html', () =
   });
 });
 
-describe('Les heures conventionnées — LA valeur unique', () => {
-  it('affiche le même nombre au détail chiffré et dans la mention de cohérence', () => {
+/**
+ * RENVERSÉ le 15/09/2026 — doctrine §8.1, « une prestation se dit dans l'unité
+ * de celui qui la lit ».
+ *
+ * Ce test exigeait, sur la PROPOSITION, la phrase « Les 72 heures
+ * conventionnées par participant (9 demi-journées de 4 h sur site, co-animées
+ * par 2 formateurs) figurent à l'identique sur la convention… ». Elle était la
+ * meilleure explication du dépôt sur la ligne rouge — et elle porte trois mots
+ * d'INTERNE sur une pièce CLIENT. Le client lit des demi-journées ; il n'a pas
+ * à connaître le multiplicateur de co-animation.
+ *
+ * ⚠ CE QUI NE CHANGE PAS, et c'est tout l'objet de ce qui suit : la VALEUR. Les
+ * 72 heures restent dans les données, restent dans le tableau chiffré, et
+ * restent la valeur unique de la convention, de l'émargement, de l'attestation
+ * d'assiduité et des dossiers financeurs. On a retiré une PHRASE, pas un
+ * nombre.
+ */
+describe('Les heures conventionnées — LA valeur unique, sans le mot', () => {
+  it('garde la valeur au détail chiffré, et ne la nomme plus « conventionnée »', () => {
     const data = build();
+    // La valeur : intacte, et toujours unique.
     expect(data.funding.conventionedHoursPerParticipant).toBe(72);
-    // La colonne « Heures conv. » du tableau de vente…
     expect(html).toContain('<td class="num">72 h</td>');
-    // …et la phrase qui engage la convention, l'émargement et le dossier.
-    expect(html).toContain(
-      'Les 72 heures conventionnées par participant',
-    );
-    expect(html).toContain('figurent à l’identique sur la convention');
+
+    // Le mot : parti de la pièce client.
+    expect(html).not.toContain('Les 72 heures conventionnées par participant');
+    expect(html).not.toContain('figurent à l’identique sur la convention');
+    expect(html).not.toContain('Heures conv.');
+    expect(html).toContain('<th class="num">Heures</th>');
+  });
+
+  it('la pièce client compte en DEMI-JOURNÉES', () => {
+    expect(html).toContain('Demi-journées');
   });
 });
 

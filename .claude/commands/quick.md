@@ -319,6 +319,28 @@ test qui **appelle** le code. Et dans les deux cas, la mutation contre le code
 d'origine est ce qui tranche : un garde qui ne rougit pas contre le défaut
 qu'il prétend attraper ne l'attrape pas.
 
+### Retourner une règle : on RENVERSE le test, on ne le supprime pas
+
+Quand un arbitrage inverse une règle, le test qui la tenait devient rouge. La
+tentation est de l'effacer — après tout, il teste une règle morte.
+
+**Il se renverse.** L'assertion devient son contraire, et le commentaire garde
+l'ANCIENNE assertion, la date du renversement et son motif.
+
+Cas du 15/09/2026 : `dit les deux durées dans le déroulé, sans jamais en laisser
+une nue` devient `n'affiche aucune des deux durées — mais les porte toutes les
+deux`. Trois choses sont sauvées, qu'une suppression aurait perdues :
+
+- **la trace de l'ancienne règle** — sans quoi la prochaine session la
+  réintroduira de bonne foi, croyant corriger un oubli ;
+- **le fond qui survit** — ici « une heure ne s'affiche jamais sans dire
+  laquelle elle est » reste vrai ; seule son application change ;
+- **la preuve que le renversement était voulu** — un test supprimé ne dit pas
+  s'il gênait ou s'il avait tort.
+
+> Un test rouge après un arbitrage n'est pas un déchet : c'est la règle
+> précédente qui demande ce qu'elle devient.
+
 ## 4 quater. Un relevé dit ce qu'il a CHERCHÉ, pas seulement ce qu'il a trouvé
 
 Trois incidents en trois jours, et ce n'est pas trois incidents : **c'est une
@@ -366,6 +388,36 @@ la constante, et le `programMd` n'était pas rendu. Une seule commande, aucune
 lecture de code, aucune supposition.
 
 À chercher dès qu'on se demande « d'où vient ce texte ? ».
+
+### Le pendant : une CONSIGNE dit ce qu'elle COUVRE
+
+Un relevé dit ce qu'il a cherché. Une consigne dit ce qu'elle nomme — et rien
+de plus.
+
+Cas du 15/09/2026. Laurent tranche **une** ligne : l'accroche de durée en tête
+du programme composé, « 48 h conventionnées (24 h sur site, co-animation) », qui
+part. Six titres de demi-journée portaient la même construction — « 4 h sur site
+(8 h conventionnées) ». Je les ai retirés aussi, au motif que c'était « la même
+phrase ».
+
+**C'était le même MOTIF, pas la même DÉCISION.** Et la décision qu'il aurait
+fallu demander avait une autre réponse : la durée d'une demi-journée reste,
+parce que c'est ce que le dirigeant bloque dans son agenda. L'intrus était le
+mot « conventionnées », pas le chiffre.
+
+> **Une consigne porte sur ce qu'elle nomme. Ce qu'elle ne nomme pas se
+> redemande** — même quand le motif semble identique, surtout quand il semble
+> identique.
+
+Le coût des deux erreurs n'est pas le même, et c'est ce qui tranche : demander
+coûte une phrase, étendre coûte un aller-retour et une correction déjà
+commitée. C'est aussi pourquoi l'extension ne se rattrape pas « en expliquant »
+— elle se rattrape en n'ayant pas eu lieu.
+
+**Le signe qui doit alerter** : se dire « c'est la même chose ailleurs ».
+Quatre fois sur cinq c'est vrai, et la cinquième est celle qui coûte. Le
+recensement se REND — « j'ai trouvé six autres occurrences du même motif,
+est-ce qu'elles suivent ? » — il ne s'applique pas.
 
 ## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
 
@@ -662,6 +714,23 @@ Et les **sept** ne sont pas sept défauts : c'est **la même résolution du nom
 d'agence, dupliquée**, avec cinq comportements différents pour la même question.
 Voir §4 bis — dupliquer un mapping garantit la divergence.
 
+### Le patron, et il vaut pour tous les balayages
+
+> **Un balayage qui compte des OCCURRENCES compte des symptômes. Celui qui
+> compte des CAUSES trouve souvent qu'il n'y en a qu'une.**
+
+Ici : 25 occurrences, puis 7 après classement par mécanisme, puis **1** après
+avoir regardé ce que les 7 avaient en commun. Le chiffre qui décide de l'action
+n'est aucun des deux premiers.
+
+Le geste qui fait la différence est le **tableau par mécanisme** — pas la liste.
+Une liste de 25 lignes se lit comme un chantier ; trois catégories nommées se
+lisent comme une décision. Et tant qu'on n'a pas nommé le mécanisme, on ne sait
+pas si on regarde 25 problèmes ou un seul, recopié.
+
+À faire donc systématiquement : **classer avant de compter, et compter les
+causes avant d'annoncer un volume.**
+
 ## 4 terdecies. Une RÉFÉRENCE n'est pas une IDENTITÉ entre deux bases (§5.4 étendue)
 
 `DIAG-0001` désigne **« Agence des Oliviers », 4 fiches** en local, et
@@ -685,6 +754,227 @@ En pratique : le nom de la base et l'hôte en tête de sortie, et l'**identifian
 technique** à côté de la référence lisible. C'est l'UUID qui tranche, jamais le
 `DIAG-NNNN`.
 
+## 4 quaterdecies. Un garde qui crie au loup finit débranché
+
+Pendant de §4 ter. Là-bas, un garde était vert parce qu'il ne regardait plus
+rien. Ici, il regarde tout — et c'est l'autre façon de ne plus rien garder.
+
+Cas fondateur (15/09/2026), le balayage des données personnelles avant import
+d'un dossier réel. Il faut arrêter sur un nom de personne glissé dans une
+réponse en texte libre — « j'en ai parlé à Sophie ». Le motif le plus couvrant
+est évident : **tout mot capitalisé en milieu de phrase**. Il n'aurait laissé
+passer aucun prénom.
+
+Il aurait aussi arrêté sur `Septeo`, `Netty` et `ChatGPT`. À chaque import. Sur
+un corpus où les réponses parlent de logiciels, l'alarme serait devenue le cas
+NORMAL — et un opérateur qui voit la même alarme à chaque passage apprend en
+trois fois à la faire taire sans la lire. Le garde le plus couvrant du dépôt
+aurait fini derrière un `--force` permanent.
+
+> **Le calibrage d'un garde se juge sur la CRÉDIBILITÉ de son alarme, pas sur sa
+> couverture théorique. Un garde désarmé protège moins qu'un garde étroit.**
+
+Ce qui a été retenu à la place : un **vocabulaire** de prénoms usuels. Il
+attrape « Sophie » et « Marc », il ignore « Netty ». Il est plus étroit sur le
+papier — un prénom rare lui échappe — et strictement plus protecteur en vrai,
+parce qu'il reste branché. Relevé du 15/09 : 37 réponses balayées, **0
+trouvaille**, aucune alarme dépensée pour rien.
+
+### Le réglage, en une ligne
+
+**Large à la DÉTECTION, strict à l'ACTION.** Les deux moitiés comptent :
+
+- large, parce qu'un faux positif coûte trente secondes de lecture quand un faux
+  négatif coûte une donnée personnelle en base — c'est §4 nonies, l'asymétrie ;
+- mais **l'action reste l'arrêt, jamais la correction automatique**. Le script
+  rend ce qu'il a trouvé et attend un arbitrage. Caviarder tout seul du texte
+  métier en abîmerait le sens — et c'est §4 quater : une ambiguïté tranchée au
+  hasard est une écriture qu'on ne peut plus relire.
+
+### Le test qui révèle le cas
+
+Avant d'élargir un motif, se demander **sur quoi il va crier dans le corpus
+réel, et à quelle fréquence**. Si la réponse est « souvent, et légitimement »,
+le motif est trop large — non pas parce qu'il se trompe, mais parce que
+personne ne le lira plus.
+
+## 4 quindecies. Un garde qui attrape le bon cas par le MAUVAIS CRITÈRE n'attrapera pas le suivant
+
+Cas fondateur, 15/09/2026, et il a failli coûter cher **parce que le garde avait
+raison**.
+
+Deux modules de `BIB-D014` ont été programmés dans un parcours client. Le
+refus d'objectif les a signalés : « le titre doit commencer par un verbe d'action
+reconnu », `appliquer` et `elaborer` n'y étaient pas.
+
+Les deux modules ne valaient effectivement rien — l'un a pour tout déroulé
+« - Après-midi :\n- Animer des réunions commerciales », l'autre une puce unique
+sans rapport avec son titre. **Le garde a désigné les bons modules.**
+
+Mais son critère parlait du **VERBE**. Or `appliquer` et `élaborer` sont des
+verbes de la taxonomie de Bloom, ceux qu'on enseigne pour rédiger un objectif :
+le critère était faux, et il est tombé juste par coïncidence.
+
+### Ce que la coïncidence a failli produire
+
+Le correctif « évident » était de reconstruire la liste des verbes. Il était
+mesuré, il ne cassait rien — et **il aurait fait PASSER les deux modules**. Le
+seul signal qui désignait deux résidus de découpage aurait été réparé en
+silence, et le parcours client les aurait gardés avec un objectif bien formé
+par-dessus.
+
+> **La règle : quand un garde attrape un vrai défaut, vérifier que son CRITÈRE
+> désigne bien CE défaut. S'ils ne coïncident pas, il y a deux choses à faire,
+> pas une — et les confondre en supprime une.**
+
+### Le test qui révèle le cas
+
+**À quoi ressemblerait le PROCHAIN cas ?** Un module aussi corrompu, mais
+intitulé « Maîtriser la relation client », serait passé sans un bruit :
+`maitriser` est dans la liste depuis toujours. Le garde avait donc, sur le
+défaut réel, un rappel proche de **zéro** — il n'en attrapait que la fraction
+qui portait par hasard un verbe absent.
+
+Un garde dont on ne sait pas dire ce qu'il RATE n'est pas évalué, il est
+seulement observé les jours où il sonne.
+
+### Et le vrai garde, alors
+
+Il se pose là où vit le défaut. Ici : `isAnimable` exige un déroulé **non vide**
+— il n'exige pas un déroulé qui **tienne debout**. C'est ce seuil-là qu'il faut
+poser, sur mesure et non sur intuition (relevé `probe-deroules.ts`,
+15/09/2026 : 7 modules dont le déroulé n'est QUE de l'horaire, 25 à une seule
+puce, sur 298 composables).
+
+## 4 sexdecies. Un commentaire qui énonce un fait MÉTIER doit être vérifiable
+
+Un commentaire qui explique du CODE se vérifie en lisant le code d'à côté. Un
+commentaire qui énonce un fait du MÉTIER — qui reçoit ce document, ce que le
+financeur exige, ce qu'un contrôle regarde — ne se vérifie nulle part. Il est
+donc cru.
+
+Cas fondateur, 15/09/2026. `composed-programme.ts` portait, dans son bloc de
+doctrine :
+
+> « Le programme s'attache à la convention et **part au financeur**. »
+
+**C'est faux.** Le programme composé est une pièce client. Et la phrase n'a pas
+seulement traîné : elle a été **lue et appliquée deux fois en deux jours**, par
+deux lecteurs différents, chacun en tirant des contraintes d'indicateur qui ne
+concernaient pas ce document. Écrite dans le code, elle était devenue **la
+source** — plus consultée que la spec, parce qu'elle était sous les yeux.
+
+> **La règle : un commentaire qui énonce un fait métier cite sa source — une
+> décision datée, une section de spec — ou il ne l'énonce pas.** « Part au
+> financeur » se remplace par « destinataires : cf. spec §9.6 », et le fait
+> vit à UN endroit.
+
+### Pourquoi c'est pire qu'une spec fausse
+
+Une spec fausse se corrige une fois. Un commentaire faux se **recopie** : il
+voyage avec la fonction qu'on déplace, il inspire le test qu'on écrit à côté, et
+il survit aux relectures parce qu'il a l'air d'expliquer. Les trois lecteurs
+suivants hériteront de l'erreur sans jamais voir la spec.
+
+### Le test qui révèle le cas
+
+Relire ses propres commentaires en se demandant : **« si c'est faux, qu'est-ce
+qui me le dirait ? »** Si la réponse est « rien », le commentaire énonce un fait
+métier sans source — il cite, ou il se tait.
+
+## 4 septdecies. Une règle qui vit dans le CODE ne protège que son fichier
+
+Même jour, même dossier, et c'est le thème de la semaine dans sa forme la plus
+pure.
+
+`creneaux.ts` distingue depuis toujours deux lectures de la durée, et les
+NOMME :
+
+```ts
+decrireDureeProduitParticipant()  // heures sur site      → /rdv/[token], public
+decrireDureeProduit()             // + heures conventionnées → /app/campagnes, interne
+```
+
+La règle « le vocabulaire dépend du destinataire » était donc **déjà trouvée,
+déjà comprise, déjà appliquée** — une fois, dans un fichier, sous la forme de
+deux fonctions bien nommées. Et **écrite nulle part.**
+
+Résultat : le programme composé, écrit trois mois plus tard par quelqu'un qui
+n'avait pas ouvert `creneaux.ts`, a mélangé les deux unités sur une pièce
+client. La règle n'avait protégé que le fichier où elle était née.
+
+> **Une décision qui vit dans une paire de fonctions ne protège que le fichier
+> où elle est née. Ce qui généralise, c'est la spec.**
+
+### Comment on la repère
+
+Une belle paire de fonctions dont les NOMS portent une distinction métier —
+`…Participant` / `…Admin`, `…Client` / `…Interne`, `public…` / `…Complet` — est
+presque toujours une règle non écrite. Elle a coûté une réflexion à quelqu'un ;
+elle mérite trois lignes de spec, et le commentaire du fichier y renvoie.
+
+C'est le corollaire de §4 bis (dupliquer un mapping garantit la divergence) :
+ici on n'a pas dupliqué, on a **sous-diffusé**. Les deux défauts ont la même
+racine — une seule définition, mais introuvable depuis ailleurs.
+
+### Troisième occurrence en une semaine — et la conclusion n'est pas « documenter »
+
+**16/09/2026.** Avant d'appliquer la règle d'unité d'affichage aux pièces
+contractuelles, on a relevé ce que chacune disait déjà. Verdict : **les cinq
+étaient déjà justes.** La convention rendait `48 heures (6 journées de 8
+heures)` — l'unité du financeur, exactement — depuis toujours, et **la spec
+l'ignorait**.
+
+| Occurrence | Où la règle vivait | Ce que ça a coûté |
+|---|---|---|
+| `creneaux.ts` | deux fonctions nommées, participant vs interne | le programme composé a mélangé les unités |
+| `convention-template.ts` | `formatDuree`, `%7` et `%8` | on a failli « corriger » une pièce juste |
+| `invoice-snapshot.ts` | convention n°1, quantité 1 / unité C62 | — (trouvée à temps) |
+
+Et **quatrième, le même jour** : le commentaire d'`InvoiceLine.unit` explique
+pourquoi le code `HUR` est refusé — *« le prix de QualiOF est une place de
+formation, pas un tarif horaire ; mettre la durée en quantité avec l'unité HUR
+ferait dire à la facture un prix unitaire que personne n'a négocié »*. C'est la
+doctrine d'unité de Laurent, écrite dans la facturation électronique **avant
+d'être énoncée**. Elle a servi de réponse à la vérification aval du devis : la
+règle neuve n'avait rien à démontrer, elle était déjà tenue, et là encore par
+écrit au mauvais endroit.
+
+> **Quand une pièce fait quelque chose de juste que la spec ignore, ce n'est
+> pas la pièce qui a raison par hasard : c'est quelqu'un qui a su et qui n'a pas
+> écrit.**
+
+La nuance compte. « Il faut documenter » est un vœu ; ceci est un **constat sur
+la provenance** — il y a eu une décision, elle a été prise correctement, et elle
+est restée dans un fichier. Le savoir existe, il est simplement **rangé au
+mauvais endroit**. On ne le crée pas, on le **déplace**.
+
+### La méthode qui en découle
+
+> **Avant d'appliquer une règle neuve, on relève qui la respectait déjà.**
+
+Le relevé coûte une demi-heure et rapporte trois choses :
+
+1. **il évite de « corriger » ce qui était juste** — le risque n'est pas
+   théorique, `formatDuree` était sur la liste des pièces à changer ;
+2. **il dit où la règle était déjà comprise**, donc qui l'avait trouvée et ce
+   qu'il savait de plus que la spec ;
+3. **il transforme la règle neuve en CONSTAT** : elle ne s'impose plus au
+   dépôt, elle nomme ce que le dépôt fait déjà — et une règle qui décrit se
+   discute mieux qu'une règle qui prescrit.
+
+### Et le geste inverse : poser le patron AVANT la divergence
+
+Les quatre occurrences ci-dessus ont été trouvées **après** que la divergence a
+coûté quelque chose. Le 16/09, le libellé de volume a été extrait en
+`libelleVolumeClient()` alors qu'il n'existait encore qu'en **deux littéraux
+identiques** — avant, donc, qu'ils ne se mettent à différer.
+
+C'est la première fois de la semaine que le patron est posé sur une duplication
+qui n'a **pas encore** divergé. Le signe qui l'a déclenché est simple et vaut
+comme règle : **deux littéraux identiques qui portent une règle métier sont une
+fonction qui n'a pas encore été écrite.** Ne pas attendre le troisième.
+
 ## 5. Gates — les trois, dans cet ordre
 
 ```
@@ -696,6 +986,68 @@ pnpm test
 Aucun commit de fin sans les trois verts. Si un test échoue et qu'il échouait
 déjà avant ta modif, dis-le explicitement et consigne-le dans
 `.planning/*/deferred-items.md` — ne le « répare » pas au passage.
+
+### Un gate dont le code de sortie est AVALÉ n'est pas un gate
+
+Cas du 15/09/2026, et c'est §4 ter appliqué à la ligne de commande.
+
+```bash
+pnpm run test 2>&1 | tail -4 && git commit …     # ❌
+```
+
+Le `&&` lit le code de sortie du **pipeline**, donc celui de `tail` — qui vaut
+`0` quoi qu'il arrive. La suite était **rouge**, six tests, et le commit est
+parti quand même. Le pipe ne « raccourcit » pas la sortie : **il remplace le
+verdict.**
+
+> **La règle : un gate se lance SEUL et son code de sortie se lit.** Pour
+> abréger l'affichage sans perdre le verdict : `${PIPESTATUS[0]}`, ou relancer
+> la commande nue.
+
+Même famille que le garde qui ne garde rien : ici, ce n'est pas le test qui a
+cessé de regarder, c'est **celui qui lisait le test**.
+
+## 5 ter. Le rapprochement métier ne se valide pas par une gate
+
+**Étape du processus, pas aveu de faiblesse.** Tant que la bibliothèque n'est
+pas mûre, **un programme composé se relit par un humain du métier, dossier par
+dossier, avant d'être proposé à un client.** C'est une étape, elle se planifie,
+et elle a un coût connu — vingt minutes de Laurent par dossier.
+
+### Pourquoi aucune gate ne peut la remplacer
+
+Cas fondateur, 16/09/2026. « Rédiger des compromis de vente efficaces » était
+proposé sur le besoin « Transformer visites et offres en actes ». Le
+rapprochement est **lexicalement parfait** : le module parle de vente, le besoin
+aussi. Il est **sémantiquement faux** : la douleur porte sur le suivi de la
+réception des pièces entre l'offre et l'acte, et **un conseiller ne rédige pas
+un compromis** — c'est le notaire.
+
+Aucun test n'aurait pu l'attraper, et pas par négligence : il fallait **savoir
+ce que fait un conseiller immobilier**. Ce n'est pas une information qui vit
+dans le dépôt.
+
+> **Une gate vérifie une règle qu'on a su formuler. Elle ne vérifie jamais une
+> règle qu'on ne connaît pas encore.** Le métier n'est pas encore entièrement
+> écrit ; la relecture est le seul endroit où il entre.
+
+### Ce que la relecture produit, et qui la rend rentable
+
+Elle ne jette pas un rapprochement : elle **écrit une règle**. Le refus entre au
+registre (`arbitrages-rattachement.ts`) avec son motif intégral, keyé sur le
+`sourceRef` — l'identité stable qui survit à un ré-import. Le moteur ne le
+repropose plus jamais, **même si le catalogue bouge**.
+
+Chaque relecture rend donc la suivante plus courte. C'est ce qui distingue cette
+étape d'une corvée permanente : **elle se résorbe.**
+
+### Quand elle s'arrêtera
+
+Quand le registre cessera de se remplir. Tant qu'une relecture sur deux produit
+un refus, la bibliothèque n'est pas mûre — et le relevé des appuis uniques
+(`probe-homonymes.ts`) dit pourquoi : **87 % des rapprochements ne tiennent que
+par un seul mot.** Un rapprochement à appui unique n'a pas de second témoin ;
+si ce mot se trompe de sens, rien ne le rattrape.
 
 ## 5 bis. Une PR verte peut ne rien faire — vérifie sa BASE
 

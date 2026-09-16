@@ -46,6 +46,9 @@
  */
 
 import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
+
+import { arbitrageRefusant, type ArbitrageRattachement } from './arbitrages-rattachement';
+import { direLesAppuis } from './appuis';
 import {
   IA_PATTERN,
   PROGRAMME_NEEDS,
@@ -105,6 +108,14 @@ export interface ModuleSourceProgramme {
 /** Un module de la bibliothèque, vu par le moteur de recommandation. */
 export interface LibraryModule {
   moduleId: string;
+  /**
+   * L'identité STABLE du module dans sa source — `drive:034#2`.
+   *
+   * L'`id` est recréé à chaque import, le titre peut être retouché : seul le
+   * `sourceRef` traverse. C'est la clé des arbitrages de rattachement, qui
+   * doivent survivre à un ré-import du catalogue.
+   */
+  sourceRef: string | null;
   title: string;
   /** Famille du catalogue Start Academy (« Acquisition », « Management »…). */
   family: string | null;
@@ -342,7 +353,7 @@ function haystack(m: LibraryModule): string {
  * il n'y a qu'un petit échantillon. En dessous du seuil, tous les mots valent
  * donc plein tarif : mieux vaut ne pas pondérer que pondérer au hasard.
  */
-function discriminationWeights(
+export function discriminationWeights(
   library: readonly LibraryModule[],
   needs: readonly ProgrammeNeed[],
 ): Map<string, number> {
@@ -371,7 +382,7 @@ const MIN_LIBRARY_FOR_WEIGHTING = 30;
 /** Au-dessous, un rapprochement ne repose que sur des mots passe-partout. */
 const QUALIFYING_WEIGHT = 1;
 
-function scoreModule(
+export function scoreModule(
   m: LibraryModule,
   need: ProgrammeNeed,
   weights: ReadonlyMap<string, number>,
@@ -608,8 +619,19 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
     }
 
     // ── Les candidats ────────────────────────────────────────────────────────
+    //
+    // Les rapprochements ARBITRÉS sont écartés AVANT le score, et le refus est
+    // dit (§4 decies : on ne desserre pas un seuil, on nomme une famille à
+    // part). Un module retiré en silence est un module que le commercial
+    // rajoute à la main la semaine suivante.
+    const refusesIci: ArbitrageRattachement[] = [];
     const scored = library
       .map((m) => {
+        const arbitrage = arbitrageRefusant(need.code, m.sourceRef);
+        if (arbitrage) {
+          refusesIci.push(arbitrage);
+          return null;
+        }
         const s = scoreModule(m, need, weights);
         if (!s) return null;
         const candidate: ModuleCandidate = {
@@ -629,6 +651,13 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
         return candidate;
       })
       .filter((c): c is ModuleCandidate => c !== null);
+
+    for (const a of refusesIci) {
+      notices.push(
+        `« ${a.moduleTitle} » n’est pas proposé sur « ${need.label} » : rapprochement ` +
+          `refusé par arbitrage du ${a.date}. ${a.motif}`,
+      );
+    }
 
     // On sert dans la PREMIÈRE famille acceptée qui a des candidats (D-18). Un
     // besoin métier ne se sert donc jamais avec de l'IA tant qu'il n'a pas
@@ -696,7 +725,7 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
 
     if (candidates.length > 0 && candidates.every((c) => c.confidence === 'faible')) {
       notices.push(
-        `« ${need.label} » : le rapprochement avec « ${candidates[0]!.title} » repose sur les mots de son intitulé, pas sur un signal du catalogue. À vérifier avant de l’envoyer.`,
+        `« ${need.label} » : ${direLesAppuis(candidates[0]!.matchedTerms)} de « ${candidates[0]!.title} », pas sur un signal du catalogue. À vérifier avant de l’envoyer.`,
       );
     }
 

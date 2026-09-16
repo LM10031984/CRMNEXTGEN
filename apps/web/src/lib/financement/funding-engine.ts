@@ -343,6 +343,9 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
       participantCount: ageficeRows.length,
       budget: euros(ageficeRows.reduce((s, r) => s + r.budget, 0)),
       coverage: ageficeCoverage,
+      // La MÊME règle que celle qui a servi au calcul, ligne 59 — pas une
+      // seconde lecture qui pourrait diverger.
+      annualCapPerPerson: rules.AGEFICE_ANNUAL_CAP,
     },
     opcoEp: {
       participantCount: opcoRows.length,

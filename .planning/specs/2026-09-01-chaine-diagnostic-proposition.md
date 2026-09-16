@@ -1023,6 +1023,39 @@ Deux enseignements qui, eux, portent sur le moteur : le chapitre 2 — celui qui
 
 ### 8.1 La règle de tarification Start Academy
 
+> ## L'unité d'affichage — doctrine Laurent, 15/09/2026
+>
+> **Une prestation se dit dans l'unité de celui qui la lit.**
+>
+> - Le **client** lit des **DEMI-JOURNÉES** — c'est ce qu'il bloque dans son
+>   agenda.
+> - Le **financeur** lit des **JOURNÉES et des HEURES** — une demi-journée
+>   co-animée vaut une journée de 8 h.
+> - Les mots **« conventionné »** et **« sur site »** ne paraissent sur
+>   **AUCUNE** pièce : ce sont des mots d'interne.
+>
+> Cette formulation **remplace** celle, embrouillée, qui se déduisait de D-23 et
+> D-25 — « le chiffre ne paraît jamais seul », « les deux valeurs se nomment ».
+> Elles disaient comment ACCOMPAGNER un nombre ; la règle dit quel nombre
+> METTRE, et elle se décide par le LECTEUR.
+>
+> **Ce qui en découle, pièce par pièce** (destinataires : §9.6) :
+>
+> | Pièce | Ce qu'elle affiche |
+> |---|---|
+> | Proposition | « 6 demi-journées » |
+> | Programme composé | « 6 journées — 48 heures », blocs « Journée 1 — 8 h » |
+> | Convention, émargement, assiduité, dossiers financeurs | heures et journées |
+>
+> **⚠ Et c'est la ligne rouge ci-dessous qui rend ça possible** : 6
+> demi-journées et 6 journées de 8 h sont **le même parcours calculé une fois**.
+> On change l'unité d'AFFICHAGE, jamais la source ni la valeur. Un test de
+> contrat le vérifie **par mutation** — proposition et programme dérivent du
+> même nombre de créneaux, et si l'un pouvait bouger sans l'autre il rougirait
+> (`composed-programme.test.ts`, « les deux unités dérivent du même nombre de
+> créneaux »).
+
+
 - **Une demi-journée de formation (4 h sur site, co-animée par 2 formateurs) est facturée 336 € HT par participant.**
 - Le dossier de financement correspondant est monté sur **8 heures conventionnées** (4 h × 2 formateurs — « à deux, ça avance plus vite ») : paramètres `TRAINER_COUNT_DEFAULT = 2` et `heures conventionnées = heures sur site × nb formateurs`.
 - Équivalence : 336 € = 8 h conventionnées × 42 €/h — soit, côté AGEFICE présentiel, **une prise en charge de 100 %** de la demi-journée pour un indé éligible.

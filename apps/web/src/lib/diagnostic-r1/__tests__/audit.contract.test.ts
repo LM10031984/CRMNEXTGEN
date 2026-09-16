@@ -4,7 +4,7 @@ import { DIAGNOSTIC_QUESTIONS } from '@qualiof/shared/diagnostic';
 
 import { buildAuditData } from '../audit-builder';
 import { AUDIT_STYLES } from '../templates/audit-styles';
-import { renderAuditHtml } from '../templates/audit-template';
+import { money, renderAuditHtml } from '../templates/audit-template';
 
 /**
  * Contrats du rapport d'audit (spec §9.2 et §14).
@@ -306,9 +306,67 @@ describe('Financement — les garde-fous du document remis', () => {
     );
   });
 
-  it('porte les heures conventionnées, la valeur de référence unique', () => {
-    expect(html).toContain(`${data.funding.conventionedHours} h`);
-    expect(html).toContain('convention');
+  /**
+   * RENVERSÉ le 16/09/2026 — §8.1, « une prestation se dit dans l'unité de
+   * celui qui la lit ».
+   *
+   * Ce test exigeait que le rapport d'audit AFFICHE les heures conventionnées.
+   * L'audit est une pièce CLIENT : il compte en demi-journées, et le mot
+   * « conventionnées » est de l'interne. Ce qui a remplacé les heures n'est pas
+   * un autre nombre d'heures, c'est l'ARGENT — le dirigeant comprend un montant
+   * sans taux horaire.
+   *
+   * ⚠ CE QUI NE CHANGE PAS : la valeur. `funding.conventionedHours` est
+   * inchangée et reste la référence unique de la convention, de l'émargement,
+   * de l'assiduité et des dossiers financeurs. On a retiré un AFFICHAGE.
+   */
+  it('compte en DEMI-JOURNÉES et referme le compte en euros, sans dire les heures', () => {
+    // Le volume, dans l'unité du lecteur.
+    expect(html).toContain(`${data.funding.halfDays}<small>&#160;demi-journées</small>`);
+    // L'argent à la place des heures — et le compte tombe juste.
+    expect(html).toContain('Pris en charge');
+    expect(html).toContain('Reste à charge');
+    expect(data.funding.totalCoverage + data.funding.totalRemainder).toBeCloseTo(
+      data.funding.totalPrice,
+      2,
+    );
+
+    // Les mots d'interne ont quitté le document…
+    expect(html).not.toMatch(/conventionn/i);
+    expect(html).not.toMatch(/sur site/i);
+
+    // …mais PAS la valeur, qui reste calculée et disponible.
+    expect(data.funding.conventionedHours).toBeGreaterThan(0);
+    expect(data.funding.conventionedHours).toBe(data.funding.onsiteHours * 2);
+  });
+
+  /**
+   * Chaque montant dit D'OÙ IL SORT — arbitrage Laurent du 16/09/2026.
+   *
+   * Le dirigeant lit « 6 000 € de droits » pour deux agents sans savoir que
+   * c'est 3 000 € chacun et par an. La phrase est vraie DANS SA LIGNE et fausse
+   * en général — le salarié du même dossier relève de l'OPCO EP, à 2 500 €.
+   * Elle se porte donc ligne par ligne, jamais en tuile.
+   *
+   * ⚠ ET ELLE NE S'ÉCRIT PAS EN DUR. `AGEFICE_ANNUAL_CAP` est une
+   * `FundingRule` : un plafond figé dans un gabarit ment le jour où la règle
+   * bouge, sans que rien ne proteste. Le test le VÉRIFIE en comparant au
+   * champ calculé, pas à un littéral.
+   */
+  it('la ligne AGEFICE dit son plafond par personne et par an, depuis la règle', () => {
+    expect(data.funding.agefice.annualCapPerPerson).toBeGreaterThan(0);
+    expect(html).toContain(`${money(data.funding.agefice.annualCapPerPerson)} par personne et par an`);
+  });
+
+  it('la ligne OPCO EP dit son enveloppe, ou pourquoi elle est incalculable', () => {
+    const env = data.funding.opcoEp.envelope;
+    if (env !== null) {
+      expect(html).toContain(`${money(env)} d’enveloppe annuelle entreprise`);
+    } else {
+      // Jamais « 0 € » : une valeur inconnue ne s'imprime pas comme une valeur
+      // positive (§4 quinquies).
+      expect(html).toContain('au-delà de 50 salariés');
+    }
   });
 
   it('mentionne les deux dossiers distincts et l’absence d’avance de trésorerie', () => {
