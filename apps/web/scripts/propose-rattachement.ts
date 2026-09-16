@@ -50,7 +50,7 @@
  *  4. **Le tri de Laurent fait foi** : ce qu'il a retenu est retenu, ce qu'il a
  *     barré ne revient pas. Le moteur ne repropose pas ce qui a déjà été jugé.
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { prisma } from '@qualiof/db';
@@ -60,6 +60,8 @@ import {
   isInLightSet,
 } from '@qualiof/shared/diagnostic';
 import { catalogueTitleKey } from '@qualiof/shared/helpers';
+
+import { cheminReleve } from '../src/lib/releve-fichier';
 
 import { listDiagnosticPainPoints } from '../src/lib/diagnostic-r1/scoring';
 import {
@@ -841,8 +843,19 @@ md.push(
   '',
 );
 
-const out = path.resolve(process.cwd(), '../../.planning/260911-rattachement-douleur-module.md');
+// Le relevé porte la date de SON run et ne recouvre jamais un rendu existant
+// (§4 quater au niveau du fichier). Un chemin figé ferait annoncer au fichier
+// le jour de sa première écriture en portant le contenu de la dernière.
+const RACINE_DEPOT = path.resolve(process.cwd(), '../..');
+const relatif = cheminReleve({
+  dossier: '.planning',
+  base: 'rattachement-douleur-module',
+  maintenant: new Date(),
+  existe: (c) => existsSync(path.resolve(RACINE_DEPOT, c)),
+});
+const out = path.resolve(RACINE_DEPOT, relatif);
 writeFileSync(out, `${md.join('\n')}\n`, 'utf8');
+console.log(`\n📄 ${relatif}`);
 
 console.log(`\n=== ${units.length} unités animables · ${douleurs.length} douleurs dans l'exercice ===`);
 console.log(`    ${retenues.length} rattachées (ton tri) · ${aRelire.length} à relire · ${barrees.length} barrées · ${sansProposition.length} sans proposition`);
