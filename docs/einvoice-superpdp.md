@@ -74,7 +74,68 @@ Factur-X France (PDF + XML CII attaché), UBL France, CII France, Peppol BIS/UBL
 
 ## 8. Conséquences pour la spec du 02/09
 
-1. `adapters/superpdp.ts` : OAuth client_credentials avec cache du token (30 min) ; `submit()` = `POST /invoices` (PDF Factur-X, `external_id = Invoice.number`) ; `validate()` = `POST /validation_reports` ; `getStatus()` = `GET /invoice_events?invoice_id=` ; `lookupDirectory(siren)` = `GET /french_directory/entries?number=` ; `ping()` = `GET /oauth2_sessions/me`.
+1. `adapters/superpdp.ts` : OAuth client_credentials avec cache du token (30 min) ; `submit()` = `POST /invoices` (**XML CII** — corrigé le 16/09/2026, cf. §9.1 : le Factur-X n'est pas requis pour transmettre —, `external_id = Invoice.number`) ; `validate()` = `POST /validation_reports` ; `getStatus()` = `GET /invoice_events?invoice_id=` ; `lookupDirectory(siren)` = `GET /french_directory/entries?number=` ; `ping()` = `GET /oauth2_sessions/me`.
 2. Secrets : `SUPERPDP_CLIENT_ID`, `SUPERPDP_CLIENT_SECRET` (remplacent `SUPERPDP_API_KEY`), `SUPERPDP_BASE_URL` (défaut `https://api.superpdp.tech`). Un jeu bac à sable et un jeu production = deux applications distinctes dans l'interface.
 3. Lot 3 : pas de route webhook ; polling `starting_after_id` dans le worker, curseur persistant par tenant.
 4. D-1 (confirmer Super PDP) : l'API couvre tout ce que la spec demande (envoi, validation, statuts, annuaire, sandbox isolé). Rien ne justifie de basculer Iopole.
+
+---
+
+## 9. Périmètre réel du lot 2 — gelé le 16/09/2026
+
+### 9.1 Le Factur-X n'est pas nécessaire pour transmettre
+
+`POST /invoices` accepte `application/xml` (CII ou UBL) — cf. §3. Le PDF/A-3 ne
+sert donc **qu'à envoyer un Factur-X AU CLIENT**, jamais à transmettre à la
+plateforme.
+
+Conséquence, tranchée par Laurent le 16/09/2026 : **le lot 2 se réduit au builder
+EN 16931** (`src/lib/einvoice/builder/invoice-to-en16931.ts` — XML CII construit
+depuis `InvoiceSource`). Sont retirés du lot 2, et ne seront pas écrits :
+
+- la conversion PDF/A-3 (Ghostscript `-dPDFA=3` ou équivalent) ;
+- l'attachement `factur-x.xml` + `/AFRelationship /Data` ;
+- les métadonnées XMP Factur-X ;
+- tout microservice Java (Mustangproject) ou Python (`factur-x`).
+
+L'enrobage PDF/A-3 devient un **lot optionnel et séparé**, à n'ouvrir que si un
+client l'exige nommément.
+
+### 9.2 Start Academy est hors champ en émission (D-3)
+
+Start Academy est exonérée de TVA (art. 261-4-4°a CGI). D-3 : **hors champ de
+l'obligation d'émission, y compris après le 01/09/2027**. Il n'y a donc aucune
+facture à débloquer : les factures partent par mail, en PDF, comme les
+précédentes. L'obligation de *réception*, elle, demeure — c'est le lot 4.
+
+### 9.3 Comportement documenté — le refus au dépôt manuel
+
+Déposer un PDF QualiOF dans l'interface Super PDP renvoie :
+
+> Le fichier ne contient pas un et un seul fichier factur-x.xml ou xrechnung.xml
+
+**C'est correct et attendu. Ce n'est pas un incident, et il n'y a rien à
+corriger.** Le PDF de QualiOF est rendu par Chrome headless
+(`apps/web/src/lib/pdf-render.ts`) : `%PDF-1.4`, `Producer Skia/PDF m149`, aucune
+pièce jointe. Vérifié le 16/09/2026 sur FAC-000023 (Marc TOURNECUILLERT) :
+`pdfdetach -list` → `0 embedded files`. Super PDP cherche exactement un
+`factur-x.xml` ou `xrechnung.xml`, n'en trouve aucun, et refuse.
+
+Le même message apparaît aussi si le PDF contient **deux** XML, ou un XML au
+mauvais nom (`facturx.xml`, `ZUGFeRD-invoice.xml`…). Utile à savoir le jour où
+le lot optionnel PDF/A-3 sera ouvert.
+
+À ne pas faire, et pour une raison : ni saisie manuelle dans Super PDP, ni
+Factur-X fabriqué à la main. Les deux produiraient une pièce divergente du
+snapshot `InvoiceSource` sans que rien ne le signale — précisément l'écart E-1
+que le lot 1 a été écrit pour fermer.
+
+### 9.4 Ce qui rouvrira le lot 2
+
+Deux déclencheurs, et seulement eux :
+
+1. **un client qui exige le Factur-X** ;
+2. **la première facture non exonérée** émise par Start Academy.
+
+Pas avant. L'API est en **1.30.0.beta** : coder aujourd'hui contre une bêta, pour
+une obligation qui ne s'applique pas, c'est coder deux fois.

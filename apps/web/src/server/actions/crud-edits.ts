@@ -14,6 +14,7 @@ import { revalidatePath } from 'next/cache';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { buildEiLegalName, classifyEiRename } from '@/lib/persons/ei-organization-name';
+import { estUneAdresseEmail } from '@/lib/signature/representant';
 
 // ── Person ────────────────────────────────────────────────────────────────
 export async function updatePerson(input: {
@@ -1151,5 +1152,164 @@ export async function validateAiDraftProduct(productId: string): Promise<{
 
   revalidatePath('/app/produits');
   revalidatePath(`/app/produits/${productId}`);
+  return { ok: true };
+}
+
+// ── Contact d'organisation ────────────────────────────────────────────────
+
+/**
+ * Créer / éditer / supprimer un CONTACT d'organisation.
+ *
+ * CE QUE ÇA RÉPARE. Le bloc « Responsable — signe les conventions » demande
+ * noir sur blanc de « renseigner son adresse sur le contact qui porte ce nom ».
+ * Or aucune écriture sur `Contact` n'existait dans `src/` — le message décrivait
+ * un geste que l'application ne permettait pas, et l'admin tournait en rond.
+ * Cas fondateur, 16/09/2026, SAS NS ANTIBES IMMOBILIER : l'adresse de son
+ * responsable était sur sa fiche APPRENANT, que le chemin « entreprise » du
+ * moteur ne lit jamais, et l'organisation n'avait aucun contact.
+ *
+ * ⚠ `isPrimary` EST EXCLUSIF, et c'est une règle du MOTEUR, pas un confort
+ * d'affichage : `resoudreRepresentantEntreprise` prend le PREMIER contact
+ * principal quand `representative` est vide. Deux principaux feraient dépendre
+ * le signataire de `createdAt`, donc de l'ordre de saisie. Les autres sont
+ * démotés dans la MÊME transaction.
+ *
+ * ⚠ L'EMAIL EST VALIDÉ PAR `estUneAdresseEmail`, le prédicat du moteur d'envoi
+ * lui-même. Un second contrôle écrit ici divergerait, et la fiche finirait par
+ * accepter une adresse que l'envoi refuse.
+ */
+function texteContactNonVide(valeur: string | null | undefined): string | null {
+  const nettoye = (valeur ?? '').trim();
+  return nettoye.length > 0 ? nettoye : null;
+}
+
+/** Nom + email : les deux seuls champs dont dépend la résolution du signataire. */
+function validerIdentiteContact(input: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): { ok: true; firstName: string; lastName: string; email: string | null } | { ok: false; error: string } {
+  const firstName = texteContactNonVide(input.firstName);
+  const lastName = texteContactNonVide(input.lastName);
+  if (firstName === null || lastName === null) {
+    return { ok: false, error: 'Prénom et nom sont obligatoires : le moteur rapproche le contact du responsable par son NOM.' };
+  }
+  const email = texteContactNonVide(input.email);
+  if (email !== null && !estUneAdresseEmail(email)) {
+    return { ok: false, error: `« ${email} » n’est pas une adresse email valide.` };
+  }
+  return { ok: true, firstName, lastName, email };
+}
+
+export async function createOrganizationContact(input: {
+  organizationId: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  fonction?: string | null;
+  isPrimary?: boolean;
+}): Promise<{ ok: boolean; error?: string; contactId?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const org = await prisma.organization.findFirst({
+    where: { id: input.organizationId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!org) return { ok: false, error: 'Organisation introuvable.' };
+
+  const identite = validerIdentiteContact(input);
+  if (!identite.ok) return { ok: false, error: identite.error };
+
+  const contact = await prisma.$transaction(async (tx) => {
+    if (input.isPrimary === true) {
+      await tx.contact.updateMany({
+        where: { organizationId: org.id, isPrimary: true },
+        data: { isPrimary: false },
+      });
+    }
+    return tx.contact.create({
+      data: {
+        tenantId: user.tenantId,
+        organizationId: org.id,
+        firstName: identite.firstName,
+        lastName: identite.lastName,
+        email: identite.email,
+        phone: texteContactNonVide(input.phone),
+        function: texteContactNonVide(input.fonction),
+        isPrimary: input.isPrimary === true,
+      },
+      select: { id: true },
+    });
+  });
+
+  revalidatePath(`/app/organisations/${org.id}`);
+  revalidatePath('/app/organisations');
+  return { ok: true, contactId: contact.id };
+}
+
+export async function updateOrganizationContact(input: {
+  contactId: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  fonction?: string | null;
+  isPrimary?: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: input.contactId, tenantId: user.tenantId },
+    select: { id: true, organizationId: true },
+  });
+  if (!contact) return { ok: false, error: 'Contact introuvable.' };
+
+  const identite = validerIdentiteContact(input);
+  if (!identite.ok) return { ok: false, error: identite.error };
+
+  await prisma.$transaction(async (tx) => {
+    if (input.isPrimary === true) {
+      await tx.contact.updateMany({
+        where: { organizationId: contact.organizationId, isPrimary: true, id: { not: contact.id } },
+        data: { isPrimary: false },
+      });
+    }
+    await tx.contact.update({
+      where: { id: contact.id },
+      data: {
+        firstName: identite.firstName,
+        lastName: identite.lastName,
+        email: identite.email,
+        phone: texteContactNonVide(input.phone),
+        function: texteContactNonVide(input.fonction),
+        isPrimary: input.isPrimary === true,
+      },
+    });
+  });
+
+  revalidatePath(`/app/organisations/${contact.organizationId}`);
+  revalidatePath('/app/organisations');
+  return { ok: true };
+}
+
+export async function deleteOrganizationContact(input: {
+  contactId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { user } = await validateRequest();
+  if (!user) return { ok: false, error: 'Non authentifié.' };
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: input.contactId, tenantId: user.tenantId },
+    select: { id: true, organizationId: true },
+  });
+  if (!contact) return { ok: false, error: 'Contact introuvable.' };
+
+  await prisma.contact.delete({ where: { id: contact.id } });
+
+  revalidatePath(`/app/organisations/${contact.organizationId}`);
+  revalidatePath('/app/organisations');
   return { ok: true };
 }
