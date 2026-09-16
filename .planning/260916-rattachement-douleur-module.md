@@ -15,10 +15,7 @@ _Régénérée le 2026-09-16 · tenant « Start Academy ». **Les rattachements 
 >
 > Le catalogue a bougé depuis ta relecture. Plutôt que de laisser tomber ta décision en silence :
 >
-> - « Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur » (BIB-D008), retenue pour « Découverte vendeur formalisée », **n'est plus une unité animable du catalogue**.
-> - « Préparer un Excellent Dossier de Suivi Vendeur » (BIB-D037), retenue pour « Rythme de suivi vendeur », **n'est plus une unité animable du catalogue**.
-> - « Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur » (BIB-D008), retenue pour « Découverte acquéreur formalisée », **n'est plus une unité animable du catalogue**.
-> - « Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs : » (BIB-D012), retenue pour « Découverte acquéreur formalisée », **n'est plus une unité animable du catalogue**.
+> - refus `drive:010#2` « Apprendre à réévaluer régulièrement le plan d'action en fonction des résultats obtenus et des changements de situation. », posé le 2026-09-11 sur « indicateurs », **ne figure pas parmi les 336 unités animables** — soit le module a quitté le catalogue, soit son déroulé est vide. Dans les deux cas le refus est sans objet, et il peut rester : il ne coûte rien.
 
 ## En un coup d’œil
 
@@ -41,14 +38,14 @@ Rien à faire ici, sauf si tu changes d’avis. C’est ce qui sera écrit en ba
 | 1 | **Transformation compromis → acte**<br><small>ch. 8 — Visites, offres & transformation</small> | tous | Rédiger des compromis de vente efficaces | BIB-D034 |
 | | _puis_ | | Gérer les objections et trouver des solutions de compromis | BIB-D034 |
 | 2 | **Découverte vendeur formalisée**<br><small>ch. 4 — RDV vendeur, découverte & estimation</small> | tous | Maîtriser les techniques de découverte vendeur | BIB-D017 |
-| | _puis_ | | ⚠️ Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
-| 3 | **Rythme de suivi vendeur**<br><small>ch. 6 — Commercialisation & suivi vendeur</small> | tous | ⚠️ Préparer un Excellent Dossier de Suivi Vendeur | BIB-D037 |
+| | _puis_ | | Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
+| 3 | **Rythme de suivi vendeur**<br><small>ch. 6 — Commercialisation & suivi vendeur</small> | tous | Préparer un Excellent Dossier de Suivi Vendeur | BIB-D037 |
 | | _ta réserve_ | | La douleur porte sur le RITUEL de suivi, le module sur la PRÉPARATION du dossier. Retenu comme le meilleur contenu existant, et repéré comme un endroit où écrire. | |
 | 4 | **Transformation offres → compromis**<br><small>ch. 8 — Visites, offres & transformation</small> | tous | Rédiger des compromis de vente efficaces | BIB-D034 |
 | | _puis_ | | Gérer les objections et trouver des solutions de compromis | BIB-D034 |
 | 5 | **Les conseillers tiennent le prix de rentrée**<br><small>ch. 5 — Mandats & exclusivité</small> | complet seulement | Convaincre le vendeur avec des arguments solides | BIB-D017 |
-| 6 | **Découverte acquéreur formalisée**<br><small>ch. 7 — Acquéreurs</small> | complet seulement | ⚠️ Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
-| | _puis_ | | ⚠️ Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs : | BIB-D012 |
+| 6 | **Découverte acquéreur formalisée**<br><small>ch. 7 — Acquéreurs</small> | complet seulement | Mettre en Pratique des Situations de Découverte du Projet Acheteur-Vendeur | BIB-D008 |
+| | _puis_ | | Pratiquer une découverte acheteur de qualité en questionnant et écoutant activement les besoins des acheteurs : | BIB-D012 |
 | 7 | **Modèles de prompts communs à l'équipe**<br><small>ch. 10 — Outils & IA</small> | complet seulement | L'intelligence artificielle au service des conseillers immobiliers (72h) | PROD-0042 |
 | | _puis_ | | L'intelligence artificielle au service des conseillers immobiliers - 16h | PROD-0066 |
 | | _puis_ | | L'IA au service des conseillers immobiliers (8h) | PROD-0058 |

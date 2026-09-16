@@ -33,6 +33,7 @@ import { prisma } from '@qualiof/db';
 import {
   RATTACHEMENTS_IMPOSSIBLES,
   RATTACHEMENTS_VALIDES,
+  type CibleRattachement,
   type RattachementValide,
 } from '../src/lib/proposition/rattachements-valides';
 import { normalize } from '../src/lib/proposition/programme-matcher';
@@ -67,7 +68,15 @@ for (const r of RATTACHEMENTS_VALIDES) {
         code: true,
         excludedFromClientOutputs: true,
         supersededByProductId: true,
-        modules: { select: { id: true, title: true, diagnosticSignals: true, contentMd: true } },
+        modules: {
+          select: {
+            id: true,
+            sourceRef: true,
+            title: true,
+            diagnosticSignals: true,
+            contentMd: true,
+          },
+        },
       },
     });
 
@@ -97,18 +106,17 @@ for (const r of RATTACHEMENTS_VALIDES) {
       continue;
     }
 
-    const cle = normalize(cible.module).trim();
-    const trouves = produit.modules.filter((m) => normalize(m.title).trim() === cle);
+    // On apparie sur l'IDENTITÉ, jamais sur le titre. Un titre s'améliore — et
+    // quand il l'a été, le 14/09, quatre décisions ont cessé de s'appliquer en
+    // silence. Un `sourceRef` est unique : la branche « ambigu » disparaît avec
+    // l'appariement par libellé qui la rendait possible.
+    const trouves = produit.modules.filter((m) => m.sourceRef === cible.sourceRef);
 
     if (trouves.length === 0) {
-      resultats.push({ ...ligne(r, cible), verdict: 'introuvable', detail: 'module absent' });
-      continue;
-    }
-    if (trouves.length > 1) {
       resultats.push({
         ...ligne(r, cible),
-        verdict: 'ambigu',
-        detail: `${trouves.length} modules portent ce titre`,
+        verdict: 'introuvable',
+        detail: `aucun module ${cible.sourceRef} dans ce programme`,
       });
       continue;
     }
@@ -138,8 +146,8 @@ for (const r of RATTACHEMENTS_VALIDES) {
   }
 }
 
-function ligne(r: RattachementValide, c: { programme: string; module: string }) {
-  return { douleur: r.douleur, programme: c.programme, module: c.module };
+function ligne(r: RattachementValide, c: CibleRattachement) {
+  return { douleur: r.douleur, programme: c.programme, module: c.titreAuMomentDeLaDecision };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

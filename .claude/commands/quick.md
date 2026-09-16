@@ -419,6 +419,67 @@ Quatre fois sur cinq c'est vrai, et la cinquième est celle qui coûte. Le
 recensement se REND — « j'ai trouvé six autres occurrences du même motif,
 est-ce qu'elles suivent ? » — il ne s'applique pas.
 
+## 4 quater bis. Une décision s'attache à une IDENTITÉ, jamais à un LIBELLÉ
+
+**Elle gouverne les trois règles de registre qui suivent, et elle a coûté plus
+cher qu'aucune autre cette semaine.**
+
+Un libellé s'améliore. C'est même son destin : un titre de module mal écrit
+finit par être réécrit, et c'est une bonne chose. Le jour où quelqu'un le fait,
+**un registre keyé sur ce libellé se vide en silence** — pas d'erreur, pas de
+test rouge, juste des décisions qui cessent de s'appliquer.
+
+### Le cas fondateur, et il est à charge (16/09/2026)
+
+`RATTACHEMENTS_VALIDES` désignait ses modules par `{ programme, module: titre }`.
+Le 14/09, quatre titres ont été réécrits — **sur arbitrage de Laurent, et par le
+bon chemin** (`TITRES_TRANCHES`, keyé lui sur `sourceRef#order`, avec une garde
+sur le texte source).
+
+**Quatre de ses sept décisions ont cessé de s'appliquer.** Ses arbitrages ont
+été détachés en appliquant ses arbitrages. Et les deux consommateurs du registre
+étaient touchés : le rapport, qui ne les affichait plus, **et le script
+d'écriture en base**, qui les aurait sautées.
+
+C'est resté muet **quatre jours**. Ce qui l'a révélé n'est pas une relecture :
+c'est le registre lui-même, le jour où il a su dire ce qu'il avait perdu.
+
+### Les deux moitiés — la seconde n'est pas un confort
+
+> **① La clé est l'identité stable** — `drive:NNN#i`, jamais le titre, jamais un
+> code lisible. Le libellé reste dans le registre, nommé pour ce qu'il est
+> (`titreAuMomentDeLaDecision`) : il sert à RELIRE, pas à désigner.
+>
+> **② Le registre SIGNALE ses décisions orphelines au lancement.** Sans ②, ① ne
+> se vérifie jamais : un `sourceRef` mal saisi ne désigne rien, en silence,
+> exactement comme un titre périmé.
+
+**Un registre qui ne sait pas dire ce qu'il a perdu n'est pas un registre.**
+
+### Ce que le signalement doit dire
+
+La population qu'il a cherchée, pas seulement l'échec (§4 quater, §4 octies).
+« Introuvable » envoie chercher au mauvais endroit : un module peut être au
+catalogue et **hors de la population animable** parce que son déroulé est vide.
+Le premier lancement du garde, le 16/09, a justement trouvé ce cas — et le
+message dit désormais « ne figure pas parmi les 336 unités animables — soit le
+module a quitté le catalogue, soit son déroulé est vide ».
+
+### L'état du dépôt au 16/09/2026
+
+| Registre | Ce qu'il attache | Clé | Orphelines |
+|---|---|---|---|
+| `titres-tranches.ts` | un titre retenu à un module | `sourceRef#order` | garde sur le texte source |
+| `RAYONS_TRANCHES` | un rayon effacé au rayon qui fait foi | `drive:NNN` | — |
+| `arbitrages-rattachement.ts` | un refus/confirmation à un couple besoin × module | `needCode` × `sourceRef` | `arbitragesOrphelins()` |
+| `refus-rattachement.ts` | un refus à un couple douleur × module | `ruleId` × `sourceRef` | `refusOrphelins()` |
+| `rattachements-valides.ts` | un module retenu à une douleur | `sourceRef` | `resoudreCibles()` |
+
+**Le seul appariement par libellé qui subsiste** est celui des deux décisions
+portant sur un PRODUIT vendu pris comme un tout : il n'a pas d'identité de
+module, il n'y a rien d'autre où s'accrocher. Il est commenté comme tel à
+l'endroit où il vit — une exception nommée n'est pas une dette oubliée.
+
 ## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
 
 **Troisième occurrence du même défaut en une semaine, relevée le 14/09/2026.**
