@@ -191,9 +191,9 @@ export async function updateLegalLink(input: EditLinkInput): Promise<LinkChangeR
       });
       for (const participant of participants) {
         let oldRole: string | null = null;
-        try { const old = legalLinkAtSession(siblings, link.organizationId, participant.session); oldRole = old ? JSON.stringify([old.role, old.function]) : null; } catch { oldRole = 'ambiguous'; }
+        try { const old = legalLinkAtSession(siblings, link.organizationId, { startDate: participant.session.startDate, endDate: participant.session.endDate }); oldRole = old ? JSON.stringify([old.role, old.function]) : null; } catch { oldRole = 'ambiguous'; }
         let newRole: string | null = null;
-        try { const updated = legalLinkAtSession(proposed, link.organizationId, participant.session); newRole = updated ? JSON.stringify([updated.role, updated.function]) : null; }
+        try { const updated = legalLinkAtSession(proposed, link.organizationId, { startDate: participant.session.startDate, endDate: participant.session.endDate }); newRole = updated ? JSON.stringify([updated.role, updated.function]) : null; }
         catch (e) { throw new Error(`${participant.session.code} : ${(e as Error).message}`); }
         if (oldRole === newRole) continue;
         const docs = [...participant.agreementDocs, ...participant.session.documents];

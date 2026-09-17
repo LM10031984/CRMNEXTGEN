@@ -1,4 +1,5 @@
 'use server';
+import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -7,7 +8,7 @@ import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { prepareSession } from './prepare-training';
 import { synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
-import { sessionTotalHT, type SessionRegime } from '@/lib/sessions/session-regime';
+import { validateDeclaredSessionPrice, type SessionRegime } from '@/lib/sessions/session-regime';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 export interface CreateSessionInput {
@@ -129,10 +130,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     throw e;
   }
 
-  if (input.regime && !['ENTREPRISE', 'INDIVIDUEL'].includes(input.regime)) return { ok: false, error: 'Régime invalide.' };
-  if (input.regime === 'ENTREPRISE') {
-    try { sessionTotalHT(input, []); } catch (e) { return { ok: false, error: (e as Error).message }; }
-  }
+  const priceError = validateDeclaredSessionPrice(input);
+  if (priceError) return { ok: false, error: priceError };
   // Validations
   if (!input.productId) return { ok: false, error: 'Produit obligatoire' };
   if (!input.startDate || !input.endDate) return { ok: false, error: 'Dates obligatoires' };
@@ -147,6 +146,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     select: { id: true, title: true, priceHT: true, groupFlatPrice: true, capacityMax: true },
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
+
+  try { await assertSessionPayersTx(prisma, { tenantId: user.tenantId, regime: input.regime, startDate: start, endDate: end }, input.participants); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   // Location optionnelle
   let locationId: string | null = null;
@@ -203,7 +204,9 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   const legalFormParOrg = new Map(sponsorOrgs.map((o) => [o.id, o.legalForm]));
 
   // Création atomique
-  const session = await prisma.$transaction(async (tx) => {
+  let session;
+  try { session = await prisma.$transaction(async (tx) => {
+    await assertSessionPayersTx(tx, { tenantId: user.tenantId, regime: input.regime, startDate: start, endDate: end }, input.participants);
     const created = await tx.trainingSession.create({
       data: {
         tenantId: user.tenantId,
@@ -262,8 +265,10 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     }
 
     await synchronizeCompanyPriceTx(tx, created, user.id);
+    await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.create', diff: { regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, participantsCreated: createdParticipantIds.length, population: createdParticipantIds } } });
     return { created, createdParticipantIds };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   // Auto-trigger préparation pédagogique complète (programme + déroulé +
   // checklist + convention/convocation/analyse besoin par participant).

@@ -111,7 +111,7 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import {
   blocagesDocsEntreprise,
   type BlocageDocEntreprise,
@@ -145,8 +145,8 @@ function releveDeLaConventionPour(p: {
   sponsorOrgId: string;
   sponsorOrg: { legalForm: string };
   person: { legalLinks: PeriodLink[] };
-}, session: SessionPeriod): boolean {
-  return releveDeLaConvention({
+}, session: SessionPeriod & { regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null }): boolean {
+  return sessionUsesCompanyAgreement(session, {
     sponsorLegalForm: p.sponsorOrg.legalForm,
     roleChezSponsor:
       legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role ?? null,
@@ -1481,6 +1481,7 @@ export default async function SessionDetailPage({
           <>
             {canEdit && (
               <EditSessionDetailsDialog
+                declaredRegime={!!session.regime}
                 sessionId={session.id}
                 produits={programmesSelectionnables}
                 initial={{
@@ -1720,6 +1721,8 @@ export default async function SessionDetailPage({
               sessionId={session.id}
               sessionCode={session.code}
               sourceStartDate={session.startDate}
+              sourceRegime={session.regime}
+              sourcePrice={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum}
             />
             <DeleteSessionButton
               sessionId={session.id}
@@ -1829,6 +1832,7 @@ export default async function SessionDetailPage({
                   <>
                     {canEdit && (
                       <EditSessionDetailsDialog
+                declaredRegime={!!session.regime}
                         sessionId={session.id}
                         produits={programmesSelectionnables}
                         initial={{
@@ -1848,6 +1852,7 @@ export default async function SessionDetailPage({
                     )}
                     {canWrite && (
                       <AddParticipantDialog
+                        regime={session.regime}
                         sessionId={session.id}
                         defaultPrice={session.pricePerLearner === null ? null : Number(session.pricePerLearner)}
                         excludePersonIds={session.participants.map((p) => p.personId)}

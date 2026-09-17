@@ -237,3 +237,11 @@ describe('enrollFromRequest — dossier déjà converti', () => {
     expect(m.participantCreate.mock.calls[0]![0].data.sponsorOrgId).toBe('org-corrigee');
   });
 });
+
+it('refuse une demande indépendante avant conversion lorsque la session est ENTREPRISE', async () => {
+  m.sessionFindFirst.mockResolvedValue({ id: 'ses-1', tenantId: 'tenant-1', regime: 'ENTREPRISE', priceTotalHT: 240, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') });
+  const result = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+  expect(result).toMatchObject({ ok: false, error: expect.stringContaining('Jean Martin') });
+  expect(m.convertPreEnrollment).not.toHaveBeenCalled();
+  expect(m.participantCreate).not.toHaveBeenCalled();
+});

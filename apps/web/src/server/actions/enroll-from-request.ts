@@ -25,6 +25,9 @@ import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { resolveSponsorOrg, cleanSiret } from '@/lib/enrollment/sponsor-org';
+import { refusalForSessionPayer } from '@/lib/sessions/session-regime';
+import { assertCompanyPriceEditable } from '@/lib/pricing/company-session-price';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 import { convertPreEnrollment } from './preinscription-convert';
@@ -47,6 +50,15 @@ export async function enrollFromRequest(input: {
     return { ok: false, error: "Cette demande n'est rattachée à aucune session" };
   }
   const sessionId = pe.intendedSessionId;
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      id: true, tenantId: true, startDate: true, endDate: true, priceTotalHT: true, regime: true,
+      pricePerLearner: true,
+      product: { select: { priceHT: true, groupFlatPrice: true } },
+    },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
 
   // 1. Qui paye ? — la recherche par SIRET est faite ici, la décision est
   //    déléguée au module pur (testable sans base).
@@ -79,6 +91,20 @@ export async function enrollFromRequest(input: {
   //    pouvait les rapprocher (constaté sur SES-0114, 3 demandes « Inscrite »
   //    pour 0 inscrit). On repart donc de ce que la conversion a laissé.
   const dejaConvertie = pe.status === 'CONVERTED' && Boolean(pe.convertedToPersonId);
+
+  // Refus du PAYEUR avant conversion de la demande. Le contrôle complet est
+  // rejoué dans la transaction d'inscription avec les rattachements réels.
+  if (session.regime) {
+    const targetId = input.overrideSponsorOrgId ?? pe.convertedToOrgId ?? (decision.kind === 'org-existante' ? decision.organizationId : null);
+    const target = targetId ? await prisma.organization.findFirst({ where: { id: targetId, tenantId: user.tenantId, archived: false }, select: { legalForm: true, legalName: true } }) : null;
+    const person = pe.convertedToPersonId ? await prisma.person.findFirst({ where: { id: pe.convertedToPersonId, tenantId: user.tenantId }, include: { legalLinks: true } }) : null;
+    try {
+      const role = targetId && person ? legalLinkAtSession(person.legalLinks, targetId, session)?.role : decision.kind === 'creer-ei' ? 'EI_SELF' : null;
+      const refusal = refusalForSessionPayer(session.regime, { name: `${pe.firstName ?? ''} ${pe.lastName ?? ''}`, sponsorLegalForm: target?.legalForm ?? (decision.kind === 'creer-ei' ? 'EI' : null), roleChezSponsor: role });
+      if (refusal) return { ok: false, error: refusal, needsSponsor: true };
+      await assertCompanyPriceEditable(prisma, session);
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
 
   let personId: string;
   let sponsorOrgId: string | null;
@@ -151,14 +177,7 @@ export async function enrollFromRequest(input: {
 
   // Tarif hérité de la session (jamais du formulaire public), via la source
   // unique de la règle. Scopé tenant comme toute lecture de ce module.
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, tenantId: user.tenantId },
-    select: {
-      regime: true,
-      pricePerLearner: true,
-      product: { select: { priceHT: true, groupFlatPrice: true } },
-    },
-  });
+
   const sponsorOrg = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId: user.tenantId },
     select: { legalForm: true },

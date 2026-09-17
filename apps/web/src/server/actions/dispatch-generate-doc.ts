@@ -29,7 +29,7 @@ import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import type {
   DispatchableDocType,
   DispatchGenerateDocInput,
@@ -129,13 +129,13 @@ export async function dispatchGenerateDoc(
           select: {
             id: true,
             sponsorOrgId: true,
-            session: { select: { startDate: true, endDate: true } },
+            session: { select: { startDate: true, endDate: true, regime: true } },
             sponsorOrg: { select: { legalName: true, legalForm: true } },
             person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
           },
         });
         if (!participant) return { ok: false, error: 'Inscription introuvable' };
-        const relèveEntreprise = releveDeLaConvention({
+        const relèveEntreprise = sessionUsesCompanyAgreement(participant.session, {
           sponsorLegalForm: participant.sponsorOrg?.legalForm,
           roleChezSponsor:
             legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,

@@ -416,6 +416,7 @@ export async function generateProgrammeForSessionOrProductCore(
   if (!session.productId) return { ok: false, error: 'Produit lié à la session manquant' };
 
   const propreALaSession = programmeDoitEtrePropreALaSession({
+    regimeSession: session.regime, prixTotalSession: session.priceTotalHT,
     modeProduit: session.product?.pricingMode ?? 'PAR_STAGIAIRE',
     inscrits: session.participants.map((p) => ({
       priceHT: Number(p.priceHT),

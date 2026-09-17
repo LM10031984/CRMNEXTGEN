@@ -17,14 +17,19 @@ export function DuplicateSessionButton({
   sessionId,
   sessionCode,
   sourceStartDate,
+  sourceRegime, sourcePrice,
 }: {
   sessionId: string;
   sessionCode: string;
   sourceStartDate: Date | string;
+  sourceRegime?: 'ENTREPRISE' | 'INDIVIDUEL' | null;
+  sourcePrice?: number | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [regime, setRegime] = useState(sourceRegime ?? '');
+  const [price, setPrice] = useState(sourceRegime && sourcePrice != null ? String(sourcePrice) : '');
 
   const defaultDate = plusOneMonth(typeof sourceStartDate === 'string' ? sourceStartDate : sourceStartDate.toISOString());
   const [newStartDate, setNewStartDate] = useState(defaultDate);
@@ -39,6 +44,7 @@ export function DuplicateSessionButton({
       const r = await duplicateSession({
         sessionId,
         newStartDate,
+        regime: regime as 'ENTREPRISE' | 'INDIVIDUEL', priceHT: Number(price.replace(',', '.')),
         recurrence: recurring
           ? { count: Math.max(1, parseInt(count, 10) || 1), intervalMonths: Math.max(1, parseInt(intervalMonths, 10) || 1) }
           : undefined,
@@ -77,6 +83,10 @@ export function DuplicateSessionButton({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+          <div className="mb-4 space-y-2">
+            <label className="block text-sm">Régime de la nouvelle session<select className="w-full rounded border p-2" value={regime} onChange={(e) => { setRegime(e.target.value); setPrice(''); }}><option value="">Choisir…</option><option value="ENTREPRISE">Entreprise — prix total</option><option value="INDIVIDUEL">Individuel — prix par stagiaire</option></select></label>
+            <label className="block text-sm">{regime === 'ENTREPRISE' ? 'Prix total HT (€)' : 'Prix par stagiaire HT (€)'}<input className="w-full rounded border p-2" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} /></label>
+          </div>
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-lg font-semibold">Dupliquer la session</Dialog.Title>

@@ -33,6 +33,8 @@
  * financeur dit PAR QUI l'inscription est portée.
  */
 
+import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
+import { assertCompanyPriceEditable } from '@/lib/pricing/company-session-price';
 import { prisma, type Prisma } from '@qualiof/db';
 import { revalidatePath } from 'next/cache';
 import {
@@ -195,7 +197,7 @@ export async function changerFinanceurInscription(input: {
       sponsorOrgId: true,
       sponsorOrg: { select: { id: true, legalName: true, brandName: true } },
       person: { select: { id: true, firstName: true, lastName: true } },
-      session: { select: { id: true, tenantId: true } },
+      session: { select: { id: true, tenantId: true, regime: true, priceTotalHT: true, startDate: true, endDate: true } },
       opcoSubmissions: {
         select: {
           id: true,
@@ -283,7 +285,13 @@ export async function changerFinanceurInscription(input: {
   // rattachement qui aboutit sans trace, ou une trace sans rattachement, sont
   // tous deux pires que l'échec : c'est précisément ce champ qu'un financeur
   // ou un audit Qualiopi viendra contester.
-  await prisma.$transaction(async (tx) => {
+  try { await prisma.$transaction(async (tx) => {
+    if (inscription.session.regime) {
+      const current = await tx.trainingSession.findFirst({ where: { id: inscription.session.id, tenantId: user.tenantId } });
+      if (!current) throw new Error('Session introuvable.');
+      await assertSessionPayersTx(tx, current, [{ personId: inscription.person.id, sponsorOrgId }], participantId);
+      await assertCompanyPriceEditable(tx, current);
+    }
     await tx.sessionParticipant.update({
       where: { id: participantId },
       data: { sponsorOrgId: cible.id },
@@ -306,7 +314,8 @@ export async function changerFinanceurInscription(input: {
         } as Prisma.InputJsonValue,
       },
     });
-  });
+  }, { isolationLevel: 'Serializable' });
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath(`/app/sessions/${inscription.session.id}`);
   return { ok: true };

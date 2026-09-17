@@ -57,7 +57,7 @@ import {
   groupConventionAnyShapeWhere,
   GROUP_CONVENTION_ENTITY_TYPE,
 } from '@/lib/docs/convention-coverage';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import {
   generateConventionCore,
   generateConventionEntrepriseCore,
@@ -285,7 +285,7 @@ async function chargerContexte(
           }
         : null,
       estEiSelfChezSponsor: lienSponsor?.role === 'EI_SELF',
-      relevantDeLaConvention: releveDeLaConvention({
+      relevantDeLaConvention: sessionUsesCompanyAgreement(session, {
         sponsorLegalForm: p.sponsorOrg?.legalForm,
         roleChezSponsor: lienSponsor?.role ?? null,
       }),

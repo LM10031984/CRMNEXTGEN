@@ -57,7 +57,7 @@ export interface ParticipantAgeficeLike {
   session?: SessionPeriod & { regime?: SessionRegime | null };
   sponsorOrg?: { opcoCode?: string | null; ageficeProfile?: unknown } | null;
   person?: {
-    legalLinks?: (Partial<PeriodLink> & { role: string; organization?: { ageficeProfile?: unknown } | null })[] | null;
+    legalLinks?: (Partial<PeriodLink> & { role: string; organization?: { id?: string; ageficeProfile?: unknown } | null })[] | null;
   } | null;
 }
 
