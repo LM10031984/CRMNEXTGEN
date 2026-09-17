@@ -160,6 +160,18 @@ versionné par politique (cf. `.gitignore`, « leçon Phase 9.3 »), mais des
 artefacts peuvent y séjourner non commités pendant des jours : vérifier
 `git status` du worktree avant toute suppression, pas seulement ses commits.
 
+**AUCUN worktree ne doit stationner sur `main`.** Chacun vit sur sa branche ;
+`main` reste libre. Ce n'est pas de l'hygiène, c'est opérationnel : une branche
+checkoutée quelque part est verrouillée pour tout le monde, donc un worktree
+posé sur `main` empêche les quatre autres d'y revenir.
+
+Le piège, constaté le 17/09/2026 : **`gh pr merge` laisse silencieusement le
+worktree sur `main`** après avoir supprimé la branche mergée. On croit avoir
+simplement fermé une PR, et on vient de verrouiller `main` pour les autres
+sessions. Réflexe après un merge : repartir tout de suite sur une branche
+(`git checkout -B <suite> origin/main`) ou se détacher
+(`git checkout --detach origin/main`).
+
 Chaque worktree a sa propre base `qualiof_dev_<worktree>` — voir `/quick`.
 
 ## Repository Layout (high level)
