@@ -46,6 +46,20 @@ interface Props {
   contacts: ContactAffiche[];
   /** `Organization.representative` — sert à pré-remplir le premier contact. */
   representative: string | null;
+  /**
+   * Les COORDONNÉES de l'organisation (`Organization.email` / `.phone`).
+   *
+   * Servent à pré-remplir le PREMIER contact, et lui seul. Sur une agence, ces
+   * coordonnées sont presque toujours celles de son responsable — le recopier à
+   * la main est du travail que l'écran a déjà sous les yeux.
+   *
+   * ⚠ Pas au-delà du premier : un second contact qui hériterait de l'adresse
+   * générique se verrait attribuer celle d'une autre personne. Et comme le lien
+   * de signature part à l'adresse du contact retenu, ce serait son email à LUI
+   * qui figurerait dans le certificat.
+   */
+  organisationEmail: string | null;
+  organisationPhone: string | null;
 }
 
 interface Brouillon {
@@ -69,7 +83,13 @@ function decouperNom(nom: string | null): { firstName: string; lastName: string 
 const CHAMP_CLS = 'w-full px-3 py-2 border border-border rounded-lg text-sm';
 const LABEL_CLS = 'block text-xs font-medium text-muted-foreground mb-1';
 
-export function ContactsOrganisation({ organizationId, contacts, representative }: Props) {
+export function ContactsOrganisation({
+  organizationId,
+  contacts,
+  representative,
+  organisationEmail,
+  organisationPhone,
+}: Props) {
   const router = useRouter();
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,17 +99,20 @@ export function ContactsOrganisation({ organizationId, contacts, representative 
 
   function ouvrirCreation() {
     const { firstName, lastName } = decouperNom(representative);
+    // PREMIER contact : on hérite des coordonnées de l'organisation. Au-delà,
+    // on part vide — cf. le commentaire de `organisationEmail`.
+    const premier = contacts.length === 0;
     setError(null);
     setBrouillon({
       contactId: null,
       firstName,
       lastName,
-      email: '',
-      phone: '',
+      email: premier ? (organisationEmail ?? '') : '',
+      phone: premier ? (organisationPhone ?? '') : '',
       fonction: '',
       // Le premier contact d'une organisation est son principal par défaut :
       // sans `representative`, c'est lui que le moteur retiendra.
-      isPrimary: contacts.length === 0,
+      isPrimary: premier,
     });
   }
 
@@ -297,7 +320,9 @@ export function ContactsOrganisation({ organizationId, contacts, representative 
                   className={CHAMP_CLS}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Sans elle, aucune convention ne part en signature pour cette organisation.
+                  {brouillon.contactId === null && contacts.length === 0 && organisationEmail
+                    ? 'Reprise des coordonnées de l’organisation — corrigez-la si le responsable a sa propre adresse : c’est à elle que part le lien de signature.'
+                    : 'Sans elle, aucune convention ne part en signature pour cette organisation.'}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
