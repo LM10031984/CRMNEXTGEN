@@ -17,7 +17,11 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { renderProgrammeHtml, type ProgrammeData } from '@/lib/programme-template';
 import { loadOfConfig } from '@/lib/of-config';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
-import { resoudrePrixProgramme, programmeDoitEtrePropreALaSession } from './tarif-programme';
+import {
+  resoudrePrixProgramme,
+  refusForfaitNonConfirme,
+  programmeDoitEtrePropreALaSession,
+} from './tarif-programme';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
@@ -215,17 +219,28 @@ export async function generateProgrammeForSessionCore(
   if (!product) return { ok: false, error: 'Produit lié à la session manquant' };
 
   // Une convention d'entreprise engage sur un montant GLOBAL : le programme doit
-  // annoncer ce total, pas un prix par tête (correction du 02/09).
+  // annoncer ce total, pas un prix par tête (correction du 02/09). Depuis le
+  // 17/09, c'est le MODE DU PRODUIT qui en décide ; ce qui suit ne fait que
+  // confirmer — ou refuser, en nommant ce qui cloche.
+  const inscrits = session.participants.map((p) => ({
+    priceHT: Number(p.priceHT),
+    sponsorOrgId: p.sponsorOrgId,
+    couvertParConvention: releveDeLaConvention({
+      sponsorLegalForm: p.sponsorOrg?.legalForm,
+      roleChezSponsor:
+        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+    }),
+  }));
+
+  // ⚠ AVANT de résoudre le montant. Un produit vendu au forfait sur une session
+  // qui ne le confirme pas ne retombe PAS sur un prix par tête : on refuse, et
+  // on dit à qui peut corriger quoi corriger.
+  const refus = refusForfaitNonConfirme({ modeProduit: product.pricingMode, inscrits });
+  if (refus !== null) return { ok: false, error: refus };
+
   const prix = resoudrePrixProgramme({
-    inscrits: session.participants.map((p) => ({
-      priceHT: Number(p.priceHT),
-      sponsorOrgId: p.sponsorOrgId,
-      couvertParConvention: releveDeLaConvention({
-        sponsorLegalForm: p.sponsorOrg?.legalForm,
-        roleChezSponsor:
-          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
-      }),
-    })),
+    modeProduit: product.pricingMode,
+    inscrits,
     tarifSession: session.pricePerLearner,
     prixProduit: product.priceHT,
   });
@@ -376,7 +391,7 @@ export async function generateProgrammeForSessionOrProductCore(
     select: {
       productId: true,
       pricePerLearner: true,
-      product: { select: { priceHT: true } },
+      product: { select: { priceHT: true, pricingMode: true } },
       participants: {
         select: {
           priceHT: true,
@@ -391,6 +406,7 @@ export async function generateProgrammeForSessionOrProductCore(
   if (!session.productId) return { ok: false, error: 'Produit lié à la session manquant' };
 
   const propreALaSession = programmeDoitEtrePropreALaSession({
+    modeProduit: session.product?.pricingMode ?? 'PAR_STAGIAIRE',
     inscrits: session.participants.map((p) => ({
       priceHT: Number(p.priceHT),
       sponsorOrgId: p.sponsorOrgId,
