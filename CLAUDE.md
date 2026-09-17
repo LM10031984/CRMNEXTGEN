@@ -18,7 +18,8 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 
 - **Tech stack** : Next.js 14 App Router + Prisma + BullMQ + Ollama — figé. Pas de migration React Native ni Remix prévue.
 - **Runtime** : deux cibles. **Production cloud** — l'app web sur **Vercel** (https://qualiof.vercel.app/, déploiement automatique au merge sur `main`, région `cdg1`, crons dans `apps/web/vercel.json`), le worker sur **Railway** (`railway.json` → `docker/worker/Dockerfile`), la base sur **Supabase** (migrations appliquées par `.github/workflows/deploy.yml`). **Développement local** — Mac M-series, Ollama natif Metal.
-- **⚠ Migration et build ne sont pas ordonnés** : au merge sur `main`, Vercel et `deploy.yml` réagissent au MÊME push, indépendamment. Une version de l'app peut donc être servie avant que sa migration soit appliquée. Une migration qui conditionne du code se fusionne donc dans une PR SÉPARÉE, fusionnée et confirmée avant celle qui l'utilise.
+- **Migration et build sont ordonnés depuis le 17/09/2026** : `main` ne se déploie plus au push (`git.deploymentEnabled.main = false` dans `apps/web/vercel.json`). `deploy.yml` part sur la FIN de `CI`, et seulement si elle est verte, applique `prisma migrate deploy`, puis appelle le Deploy Hook Vercel. Les previews de PR sont inchangées.
+- **⚠ Il reste une fenêtre, une seule** : le Deploy Hook déploie la tête de `main` au moment de l'appel, pas le commit migré. **Règle : jamais deux PR à migration à moins de 10 minutes d'écart.** Détail et piste de correction dans `docs/deferred.md` § D-5.
 - **Performance LLM** : concurrency=3 sur worker closure, timeout 600s. Ne pas augmenter sans observer impact stub rate.
 - **PDF rendering** : Gotenberg sans footer natif (illisible), footer en HTML dans body. Ne pas régresser ce pattern.
 - **Multi-tenant** : Tenant table + tenantId FK partout. Toute nouvelle server action DOIT scope par tenantId.

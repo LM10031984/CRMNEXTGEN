@@ -166,6 +166,66 @@ signal que l'avertissement serait arrivé trop tard, donc qu'il vaut son coût.
 
 ---
 
+## D-5 · Le Deploy Hook déploie la tête de `main`, pas le commit migré
+
+**Posé le** 17/09/2026, en validant l'infrastructure de déploiement ordonné.
+
+### Le cas
+
+`deploy.yml` fait, dans l'ordre : `checkout` du commit que la CI vient de
+valider → `prisma migrate deploy` → `POST` sur le Deploy Hook Vercel.
+
+Les deux premières étapes sont épinglées sur `workflow_run.head_sha`. **La
+troisième ne l'est pas** : un Deploy Hook dit « déploie `main` », et Vercel
+résout la tête de `main` AU MOMENT DE L'APPEL. Le SHA migré et le SHA déployé
+peuvent donc différer.
+
+**Constaté le jour même de la mise en place.** Deux PR mergées à 3 secondes
+d'écart (#86 `ed2b943`, #88 `4c6f6c7`) : les deux déploiements de production
+portent `4c6f6c7`, alors que le premier workflow avait validé et migré depuis
+`ed2b943`.
+
+### Pourquoi c'est un risque, et lequel exactement
+
+Ici, sans conséquence : aucune migration en attente, et aucun changement
+applicatif dans les deux commits.
+
+Le scénario qui mord : deux PR portant chacune une migration, mergées coup sur
+coup. `concurrency: deploy-main` sérialise bien les migrations (Ma puis Mb),
+mais **le hook du premier run part entre les deux** et déploie déjà le code B —
+qui a besoin de Mb, pas encore appliquée. La fenêtre dure le temps du second run
+(install + migrate, une à deux minutes).
+
+C'est une version RÉDUITE du problème que tout ce dispositif a supprimé, pas sa
+réapparition : il fallait auparavant zéro coordination pour le déclencher, il
+faut maintenant deux migrations à quelques minutes d'intervalle.
+
+### La règle en attendant (Laurent, 17/09/2026)
+
+**Jamais deux PR à migration à moins de 10 minutes d'écart.** Une PR sans
+migration ne compte pas : elle ne peut pas décaler ce qui n'existe pas.
+
+### La piste propre
+
+Remplacer le hook par `vercel deploy --prod` **épinglé sur le commit migré**,
+depuis le workflow — l'arbre est déjà checkouté au bon SHA à cette étape. Coût :
+trois secrets de plus (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) et
+un build qui migre du côté de Vercel vers celui de GitHub Actions, donc des
+durées et un cache à réobserver.
+
+Variante plus légère, si le CLI s'avère coûteux : **ne pas appeler le hook quand
+`workflow_run.head_sha` n'est plus la tête de `main`**. Le run en retard se tait,
+le dernier déploie — et le dernier déploiement correspond alors toujours à la
+dernière migration appliquée. Ça ne supprime pas la fenêtre, ça supprime les
+déploiements redondants et fait converger l'état final.
+
+### Ce qui le rouvrira
+
+La première fois que deux PR à migration doivent partir le même jour — ou le
+premier incident, si la règle des 10 minutes est oubliée.
+
+---
+
 ## Antécédent — pourquoi le découpage plutôt que le programme par payeur
 
 Une autre approche avait été instruite le 16/09/2026 : générer **un programme
