@@ -394,6 +394,25 @@ enum Modality {
   ELEARNING
 }
 
+/// Comment se VEND un produit — et donc ce que son programme doit annoncer.
+///
+/// `PAR_STAGIAIRE` : le prix est celui d'une place. Indépendants, agents
+/// commerciaux, sessions inter. C'est le défaut, et le cas le plus courant.
+///
+/// `FORFAIT_ENTREPRISE` : le produit se vend au forfait pour l'ensemble des
+/// salariés inscrits. `priceHT` porte alors CE forfait, pas un prix par tête —
+/// c'est le mode qui dit comment lire le montant, pas une seconde colonne.
+///
+/// ⚠ C'est une propriété du PRODUIT, pas du document ni de la session. Le mode
+/// devient le point de départ ; la composition de la session ne sert plus qu'à
+/// CONFIRMER (tous sous convention, un seul commanditaire, tous avec un prix).
+/// La partition personne morale / personne physique reste dans `payer-rule.ts`
+/// et n'est recalculée nulle part ailleurs.
+enum ProductPricingMode {
+  PAR_STAGIAIRE
+  FORFAIT_ENTREPRISE
+}
+
 model TrainingProduct {
   id                   String             @id @default(uuid())
   tenantId             String
@@ -417,6 +436,9 @@ model TrainingProduct {
   pedagogicalSupport   String?
   accessConditions     String?
   priceHT              Decimal            @default(0) @db.Decimal(10, 2)
+  /// Comment lire `priceHT` — cf. `ProductPricingMode`. Défaut `PAR_STAGIAIRE` :
+  /// c'est le comportement historique, et le cas de 118 produits sur 123.
+  pricingMode          ProductPricingMode @default(PAR_STAGIAIRE)
   vatRate              Decimal            @default(0) @db.Decimal(5, 2)
   groupFlatPrice       Decimal?           @db.Decimal(10, 2) // Tarif_forfait_groupe
   theme                String? // "Acquisition", "Stratégie", "Management", "IA", etc.
