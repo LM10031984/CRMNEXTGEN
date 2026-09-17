@@ -21,6 +21,7 @@ import {
   resoudrePrixProgramme,
   refusForfaitNonConfirme,
   programmeDoitEtrePropreALaSession,
+  prixModeDuProduit,
 } from './tarif-programme';
 import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
@@ -92,6 +93,11 @@ export async function generateProgrammeForProductCore(
     produitCode: product.code,
     produitDureeHeures: product.durationHours,
     produitPriceHT: Number(product.priceHT),
+    // Le catalogue dit enfin comment ce produit se vend. Sans ce champ il
+    // tombait sur `undefined`, donc sur « par stagiaire » — et un produit vendu
+    // au forfait annonçait un prix de place, dans un document qui part chez le
+    // financeur.
+    prixMode: prixModeDuProduit(product.pricingMode),
     produitObjectifs: objectives,
     produitProgrammeMd: programmeMd,
     produitPrerequisites: product.prerequisites,
