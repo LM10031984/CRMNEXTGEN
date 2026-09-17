@@ -202,8 +202,18 @@ faut maintenant deux migrations à quelques minutes d'intervalle.
 
 ### La règle en attendant (Laurent, 17/09/2026)
 
-**Jamais deux PR à migration à moins de 10 minutes d'écart.** Une PR sans
-migration ne compte pas : elle ne peut pas décaler ce qui n'existe pas.
+**Rien ne se merge dans les 10 minutes qui PRÉCÈDENT une PR à migration.**
+
+La première formulation disait « jamais deux PR à migration à moins de 10
+minutes d'écart », en ajoutant qu'une PR sans migration ne compte pas. **C'est
+faux, et Laurent l'a corrigé le 17/09.** Le hook déploie la tête de `main`, pas
+le commit migré : une PR SANS migration mergée juste avant une PR À migration
+déploie, par son propre hook, un `main` qui contient déjà le code de la
+migration — laquelle n'est pas encore appliquée.
+
+Le sens de la course est inversé par rapport à l'intuition, d'où l'erreur : ce
+n'est pas la PR à migration qui est en retard, c'est **la PR anodine qui est en
+avance**, et qui emporte du code qui ne lui appartient pas.
 
 ### La piste propre
 
