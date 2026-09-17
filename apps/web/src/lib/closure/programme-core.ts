@@ -242,10 +242,11 @@ export async function generateProgrammeForSessionCore(
   // ⚠ AVANT de résoudre le montant. Un produit vendu au forfait sur une session
   // qui ne le confirme pas ne retombe PAS sur un prix par tête : on refuse, et
   // on dit à qui peut corriger quoi corriger.
-  const refus = refusForfaitNonConfirme({ modeProduit: product.pricingMode, inscrits });
+  const refus = refusForfaitNonConfirme({ modeProduit: product.pricingMode, regimeSession: session.regime, prixTotalSession: session.priceTotalHT, inscrits });
   if (refus !== null) return { ok: false, error: refus };
 
   const prix = resoudrePrixProgramme({
+    regimeSession: session.regime, prixTotalSession: session.priceTotalHT,
     modeProduit: product.pricingMode,
     inscrits,
     tarifSession: session.pricePerLearner,
@@ -398,6 +399,7 @@ export async function generateProgrammeForSessionOrProductCore(
     select: {
       startDate: true, endDate: true,
       productId: true,
+      regime: true, priceTotalHT: true,
       pricePerLearner: true,
       product: { select: { priceHT: true, pricingMode: true } },
       participants: {

@@ -115,6 +115,7 @@ export function SessionWizard({
   const [locationPostalCode, setLocationPostalCode] = useState('');
   const [locationCity, setLocationCity] = useState('');
   const [trainerIds, setTrainerIds] = useState<string[]>([]);
+  const [regime, setRegime] = useState<'ENTREPRISE' | 'INDIVIDUEL' | ''>('');
   const [pricePerLearner, setPricePerLearner] = useState<string>('');
   const [capacityMax, setCapacityMax] = useState<string>('');
   const [internalNotes, setInternalNotes] = useState('');
@@ -271,6 +272,7 @@ export function SessionWizard({
 
   const handleSubmit = () => {
     if (!selectedProduct) return;
+    if (!regime) { setError('Choisissez Entreprise ou Individuel dans les paramètres de la session.'); setStep(2); return; }
     const err = validateStep(3);
     if (err) {
       setError(err);
@@ -290,7 +292,9 @@ export function SessionWizard({
       locationCity: locationCity.trim() || null,
       trainerPersonIds: trainerIds,
       capacityMax: capacityMax ? parseInt(capacityMax, 10) : undefined,
-      pricePerLearner: pricePerLearner ? parseFloat(pricePerLearner) : null,
+      regime,
+      priceTotalHT: regime === 'ENTREPRISE' ? Number(pricePerLearner) : null,
+      pricePerLearner: regime === 'ENTREPRISE' ? null : pricePerLearner ? Number(pricePerLearner) : null,
       internalNotes: internalNotes.trim() || null,
       participants: participants.map((p) => ({
         personId: p.personId,
@@ -347,8 +351,8 @@ export function SessionWizard({
 
   const totalHT = useMemo(() => {
     const price = parseFloat(pricePerLearner || '0');
-    return Number.isFinite(price) ? price * participants.length : 0;
-  }, [pricePerLearner, participants.length]);
+    return Number.isFinite(price) ? price * (regime === 'ENTREPRISE' ? 1 : participants.length) : 0;
+  }, [pricePerLearner, participants.length, regime]);
 
   return (
     <div className="space-y-6">
@@ -581,7 +585,14 @@ export function SessionWizard({
                 className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm"
               />
             </Field>
-            <Field label="Tarif par apprenant (€ HT)" className="md:col-span-2">
+            <Field label="Régime de la session" className="md:col-span-2">
+              <select value={regime} onChange={(e) => { setRegime(e.target.value as typeof regime); setPricePerLearner(''); }} className="w-full h-10 px-3 rounded-md border border-input bg-white text-sm">
+                <option value="">Choisir le régime…</option>
+                <option value="ENTREPRISE">Entreprise — convention et prix total</option>
+                <option value="INDIVIDUEL">Individuel — contrat et prix par stagiaire</option>
+              </select>
+            </Field>
+            <Field label={regime === 'ENTREPRISE' ? 'Prix total entreprise (€ HT)' : 'Tarif par apprenant (€ HT)'} className="md:col-span-2">
               <input
                 type="number"
                 min={0}

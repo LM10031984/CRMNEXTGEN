@@ -31,6 +31,8 @@ import {
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
 import { generateClosurePack } from './closure-pack';
 import { applyPriceCascade } from '@/lib/pricing/cascade';
+import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
+import { assertCompanyPriceEditable, synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 // Zod schema pour unenrollParticipant — UUID strict pour participantId
@@ -102,7 +104,7 @@ export async function addParticipant(input: {
   const defaultPrice = resolveDefaultParticipantPrice(session, session.product, sponsor);
 
   try {
-    const part = await prisma.sessionParticipant.upsert({
+    const part = session.regime ? await createDeclaredParticipant(user, { sessionId: input.sessionId, personId: input.personId, sponsorOrgId: input.sponsorOrgId }) : await prisma.sessionParticipant.upsert({
       where: { sessionId_personId: { sessionId: input.sessionId, personId: input.personId } },
       create: {
         sessionId: input.sessionId,
@@ -161,7 +163,7 @@ export async function addParticipant(input: {
         routeConventionsByPayerRule(user.tenantId, input.sessionId, [
           {
             id: part.id,
-            session: { startDate: session.startDate, endDate: session.endDate },
+            session: { startDate: session.startDate, endDate: session.endDate, regime: session.regime },
             sponsorOrgId: input.sponsorOrgId,
             sponsorOrg: {
               id: sponsor.id,
@@ -260,7 +262,7 @@ export async function unenrollParticipant(
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: validatedId },
     include: {
-      session: { select: { tenantId: true, id: true } },
+      session: { select: { tenantId: true, id: true, regime: true, priceTotalHT: true } },
       person: { select: { firstName: true, lastName: true } },
     },
   });
@@ -268,6 +270,20 @@ export async function unenrollParticipant(
     return { ok: false, error: 'Inscription introuvable.' };
   }
 
+  // Forfait : suppression et repartage atomiques, interdits si déjà engagé.
+  if (part.session.regime === 'ENTREPRISE') {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const current = await tx.trainingSession.findFirst({ where: { id: part.session.id, tenantId: user.tenantId } });
+        if (!current) throw new Error('Session introuvable.');
+        await assertCompanyPriceEditable(tx, current);
+        const deleted = await tx.sessionParticipant.deleteMany({ where: { id: validatedId, sessionId: current.id } });
+        if (deleted.count) await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'SessionParticipant', entityId: validatedId,
+          action: 'sessionParticipants.delete', diff: { sessionId: current.id, personId: part.personId, deleted: deleted.count } } });
+        await synchronizeCompanyPriceTx(tx, current, user.id);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
+  } else {
   // 4) Transaction atomique : delete + auditLog
   await prisma.$transaction([
     prisma.sessionParticipant.delete({ where: { id: validatedId } }),
@@ -289,6 +305,8 @@ export async function unenrollParticipant(
       },
     }),
   ]);
+
+  }
 
   revalidatePath(`/app/sessions/${part.session.id}`);
   return { ok: true };
@@ -335,12 +353,13 @@ export async function updateParticipant(input: {
 
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: input.participantId },
-    include: { session: { select: { tenantId: true, id: true } } },
+    include: { session: { select: { tenantId: true, id: true, regime: true, priceTotalHT: true } } },
   });
   if (!part || part.session.tenantId !== user.tenantId) {
     return { ok: false, error: 'Inscription introuvable.' };
   }
 
+  if (part.session.regime === 'ENTREPRISE' && input.priceHT !== undefined) return { ok: false, error: 'Le prix est un forfait total. Modifiez-le dans le régime de la fiche session.' };
   const data: Prisma.SessionParticipantUpdateInput = {};
   // E-4 (audit 2026-08-28) — cette action ecrivait sans laisser de trace, alors
   // qu'elle touche precisement les champs contestables en audit ou par un
@@ -619,6 +638,7 @@ export async function duplicateSession(input: {
         modality: source.modality,
         capacityMin: source.capacityMin,
         capacityMax: source.capacityMax,
+        regime: source.regime, priceTotalHT: source.priceTotalHT,
         pricePerLearner: source.pricePerLearner,
         locationId: source.locationId,
         internalNotes: source.internalNotes,
@@ -1354,7 +1374,7 @@ export async function updateSessionDetails(
       before.name = session.name;
       after.name = suivi.nouveauNom;
     }
-    if (suivi.nouveauPrix !== null) {
+    if (!session.regime && suivi.nouveauPrix !== null) {
       updateData.pricePerLearner = new Prisma.Decimal(suivi.nouveauPrix);
       before.pricePerLearner =
         session.pricePerLearner === null ? null : Number(session.pricePerLearner);
@@ -1426,7 +1446,8 @@ export async function updateSessionDetails(
 
   // pricePerLearner (nullable Decimal). Comparaison via Number() pour éviter
   // les égalités Decimal vs number qui sont toujours différentes.
-  if (data.pricePerLearner !== undefined) {
+  if (data.pricePerLearner !== undefined && session.regime && data.pricePerLearner !== (session.pricePerLearner == null ? null : Number(session.pricePerLearner))) return { ok: false, error: 'Modifiez le prix dans le régime de la fiche session pour prévisualiser la modification.' };
+  if (data.pricePerLearner !== undefined && !session.regime) {
     const newPrice =
       data.pricePerLearner === null ? null : new Prisma.Decimal(data.pricePerLearner);
     const oldNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);

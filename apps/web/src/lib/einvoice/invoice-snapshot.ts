@@ -327,6 +327,7 @@ export interface TrainingLinesInput {
   vatRate: number;
   /** `Tenant.vatExemptionText`, défaut applicatif `MENTION_EXONERATION_TVA`. */
   vatExemptionText: string | null;
+  companyTotalHT?: number;
   participants: TrainingLineParticipant[];
 }
 
@@ -345,7 +346,8 @@ export function buildTrainingLines(input: TrainingLinesInput): LineSnapshot[] {
   const fin = jour(input.endDate);
   const periode = debut && fin ? (debut === fin ? `le ${debut}` : `du ${debut} au ${fin}`) : null;
 
-  return input.participants.map((p, i) => {
+  const participants = input.companyTotalHT == null ? input.participants : [{ participantId: null, personFirstName: 'Forfait entreprise', personLastName: '', priceHT: input.companyTotalHT }];
+  return participants.map((p, i) => {
     const prix = centimes(p.priceHT);
     const stagiaire = `${p.personFirstName} ${p.personLastName.toUpperCase()}`.trim();
     const morceaux = [

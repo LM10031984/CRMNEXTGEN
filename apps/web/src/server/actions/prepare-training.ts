@@ -26,7 +26,7 @@ import { generateConvocationForParticipant } from './convocation-generator';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { enqueueClosureJob } from '@/lib/closure/queue-postgres';
 import { countAgeficeReady } from '@/lib/sessions/count-agefice-ready';
-import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
+import { OU_AGEFICE, AGEFICE_PARTICIPANT_SELECT, filterAgeficeCandidates } from '@/lib/agefice/eligibilite';
 
 /**
  * Règle payeur des conventions : le routeur vit désormais dans
@@ -88,6 +88,7 @@ export async function prepareTrainingForSession(
     select: {
       id: true,
       productId: true,
+      regime: true, priceTotalHT: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
       participants: { select: PREPARE_PARTICIPANT_SELECT },
@@ -110,7 +111,7 @@ export async function prepareTrainingForSession(
   // programme/convention sinon NON CONFORME audit). Cf feedback Laurent
   // 2026-05-25 — "ça ne doit jamais arriver".
   const productPriceHT = Number(session.product?.priceHT ?? 0);
-  const sessionPrice = Number(session.pricePerLearner ?? 0);
+  const sessionPrice = Number((session.regime === 'ENTREPRISE' ? session.priceTotalHT : session.pricePerLearner) ?? 0);
   if (productPriceHT === 0 && sessionPrice === 0) {
     return {
       ok: false,
@@ -127,7 +128,7 @@ export async function prepareTrainingForSession(
   // On propage session.pricePerLearner → product.priceHT pour que le générateur
   // de programme l'utilise (le programme lit product.priceHT). Évite à Laurent
   // d'avoir à resaisir sur la fiche produit.
-  if (productPriceHT === 0 && sessionPrice > 0) {
+  if (!session.regime && productPriceHT === 0 && sessionPrice > 0) {
     await prisma.trainingProduct.update({
       where: { id: session.productId },
       data: { priceHT: sessionPrice },
@@ -306,6 +307,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     select: {
       id: true,
       productId: true,
+      regime: true, priceTotalHT: true,
       pricePerLearner: true,
       product: { select: { id: true, title: true, priceHT: true } },
       participants: { select: PREPARE_PARTICIPANT_SELECT },
@@ -317,7 +319,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
 
   // Garde-fou tarif (conformité Qualiopi) — identique à prepareTrainingForSession.
   const productPriceHT = Number(session.product?.priceHT ?? 0);
-  const sessionPrice = Number(session.pricePerLearner ?? 0);
+  const sessionPrice = Number((session.regime === 'ENTREPRISE' ? session.priceTotalHT : session.pricePerLearner) ?? 0);
   if (productPriceHT === 0 && sessionPrice === 0) {
     return {
       ...empty,
@@ -325,7 +327,7 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
     };
   }
   // Propage tarif session → produit (cas import SmartOF).
-  if (productPriceHT === 0 && sessionPrice > 0) {
+  if (!session.regime && productPriceHT === 0 && sessionPrice > 0) {
     await prisma.trainingProduct.update({
       where: { id: session.productId },
       data: { priceHT: sessionPrice },
@@ -424,19 +426,16 @@ export async function prepareSession(sessionId: string): Promise<PrepareSessionR
   //         - OU legalLink EI_SELF/AGENT_COMMERCIAL avec AgeficeProfile
   let ageficeGenerated = 0;
   let ageficeEligible = 0;
-  const ageficeEligibleParticipants =
+  const ageficeEligibleParticipants = filterAgeficeCandidates(
     participantIds.length > 0
       ? await prisma.sessionParticipant.findMany({
           where: {
             sessionId,
             OR: OU_AGEFICE,
           },
-          select: {
-            id: true,
-            person: { select: { firstName: true, lastName: true } },
-          },
+          select: AGEFICE_PARTICIPANT_SELECT,
         })
-      : [];
+      : []);
   ageficeEligible = ageficeEligibleParticipants.length;
   await Promise.all(
     ageficeEligibleParticipants.map(async (p) => {
@@ -789,12 +788,12 @@ export async function getSessionPreparationStatus(
             sessionId: session.id,
             OR: OU_AGEFICE,
           },
-          select: { id: true },
+          select: AGEFICE_PARTICIPANT_SELECT,
         })
-      : Promise.resolve([] as Array<{ id: string }>),
+      : Promise.resolve([]),
   ]);
 
-  const eligibleAgeficeIds = ageficeEligibleParticipants.map((p) => p.id);
+  const eligibleAgeficeIds = filterAgeficeCandidates(ageficeEligibleParticipants).map((p) => p.id);
   const ageficeEligibleCount = eligibleAgeficeIds.length;
 
   const programme = docs.some((d) => d.type === 'PROGRAMME');

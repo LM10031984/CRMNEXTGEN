@@ -25,6 +25,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { resolveSponsorOrg, cleanSiret } from '@/lib/enrollment/sponsor-org';
+import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 import { convertPreEnrollment } from './preinscription-convert';
 import { prepareTrainingForSession } from './prepare-training';
@@ -153,6 +154,7 @@ export async function enrollFromRequest(input: {
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId: user.tenantId },
     select: {
+      regime: true,
       pricePerLearner: true,
       product: { select: { priceHT: true, groupFlatPrice: true } },
     },
@@ -166,7 +168,8 @@ export async function enrollFromRequest(input: {
     console.warn(`[inscription ${pe.id}] tarif à arbitrer : ${defaultPrice.reason}`);
   }
 
-  const participant = await prisma.sessionParticipant.create({
+  let participant;
+  try { participant = session?.regime ? await createDeclaredParticipant(user, { sessionId, personId, sponsorOrgId, participantType: pe.professionalStatus ?? null }) : await prisma.sessionParticipant.create({
     data: {
       sessionId,
       personId,
@@ -176,6 +179,8 @@ export async function enrollFromRequest(input: {
       participantType: pe.professionalStatus ?? null,
     },
   });
+
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   // 4. Documents du nouvel inscrit. Idempotent (find-or-create) : rejouer ne
   //    duplique rien, et la règle « payeur personne morale ⇒ convention de

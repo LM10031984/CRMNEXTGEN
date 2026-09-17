@@ -68,6 +68,7 @@ async function loadSessionGraph(tenantId: string, sessionId: string) {
         startDate: true,
         endDate: true,
         modality: true,
+        regime: true, priceTotalHT: true,
         pricePerLearner: true,
         productId: true,
         product: { select: PRODUCT_SELECT },
@@ -162,6 +163,7 @@ function contextFromGraph(
       startDate: session.startDate,
       endDate: session.endDate,
       modality: session.modality,
+      ...(session.regime ? { regime: session.regime, priceTotalHT: session.priceTotalHT } : {}),
       pricePerLearner: session.pricePerLearner,
     },
     slots: session.slots.map((s) => ({

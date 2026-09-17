@@ -22,7 +22,7 @@ import {
 } from '@/lib/closure/route-conventions';
 import { generateAgeficeForParticipant } from './agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from './agefice-attendance-generator';
-import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
+import { OU_AGEFICE, AGEFICE_PARTICIPANT_SELECT, filterAgeficeCandidates } from '@/lib/agefice/eligibilite';
 import { checkDocumentReplacement } from '@/lib/docs/replacement-guard';
 
 /**
@@ -202,11 +202,11 @@ export async function generateClosurePack(
       id: { in: sessionParticipantList.map((p) => p.id) },
       OR: OU_AGEFICE,
     },
-    select: { id: true },
+    select: AGEFICE_PARTICIPANT_SELECT,
   });
 
   await Promise.allSettled(
-    ageficeEligibles.flatMap(({ id }) => [
+    filterAgeficeCandidates(ageficeEligibles).flatMap(({ id }) => [
       generateAgeficeForParticipant(id).catch((e) => {
         console.warn(`[closure-pack] AGEFICE non généré pour ${id} :`, e?.message ?? e);
       }),

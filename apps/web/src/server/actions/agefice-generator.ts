@@ -1,4 +1,5 @@
 'use server';
+import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
 import { activeLegalLinksAtSession } from '@/lib/persons/legal-link-period';
 
 import { createHash } from 'node:crypto';
@@ -92,13 +93,7 @@ export async function generateAgeficeForParticipant(
   // Laurent 2026-06-04 : "je ne peux pas régénérer un doc". Le paramètre
   // `force` reste accepté dans la signature pour compat appelants mais ne
   // conditionne plus la suppression.
-  await prisma.document.deleteMany({
-    where: {
-      tenantId: user.tenantId,
-      type: 'AGEFICE',
-      participantId,
-    },
-  });
+
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -107,7 +102,7 @@ export async function generateAgeficeForParticipant(
         include: {
           sensitiveData: true,
           legalLinks: {
-            where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] } },
+
             include: {
               organization: {
                 include: {
@@ -134,16 +129,24 @@ export async function generateAgeficeForParticipant(
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+  if (participant.session.regime && !estEligibleAgefice(participant)) return { ok: false, error: `${participant.person.firstName} ${participant.person.lastName} : aucun financement AGEFICE actif chez le commanditaire aux dates de la session. Corrigez les périodes dans la fiche apprenant ou le commanditaire dans la fiche inscription.` };
+  await prisma.document.deleteMany({
+    where: {
+      tenantId: user.tenantId,
+      type: 'AGEFICE',
+      participantId,
+    },
+  });
 
   const warnings: string[] = [];
 
   // ── Détermine l'organisation EI à utiliser ───────────────────
-  let eiOrg = participant.sponsorOrg.opcoCode === 'AGEFICE' ? participant.sponsorOrg : null;
+  let eiOrg = (participant.session.regime || participant.sponsorOrg.opcoCode === 'AGEFICE') ? participant.sponsorOrg : null;
   let agefice = eiOrg?.ageficeProfile ?? null;
   if (!eiOrg) {
     const eiLink =
-      activeLegalLinksAtSession(participant.person.legalLinks, participant.session).find((l) => l.role === 'EI_SELF') ??
-      activeLegalLinksAtSession(participant.person.legalLinks, participant.session)[0];
+      activeLegalLinksAtSession(participant.person.legalLinks.filter((l) => ['EI_SELF', 'AGENT_COMMERCIAL'].includes(l.role)), participant.session).find((l) => l.role === 'EI_SELF') ??
+      activeLegalLinksAtSession(participant.person.legalLinks.filter((l) => ['EI_SELF', 'AGENT_COMMERCIAL'].includes(l.role)), participant.session)[0];
     if (eiLink?.organization) {
       eiOrg = eiLink.organization;
       agefice = eiLink.organization.ageficeProfile;

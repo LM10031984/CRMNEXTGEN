@@ -1,4 +1,5 @@
 'use server';
+import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
 import { activeLegalLinksAtSession } from '@/lib/persons/legal-link-period';
 
 /**
@@ -69,9 +70,7 @@ export async function generateAgeficeAttendanceForParticipant(
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
   // même type avant de recréer (anti-doublons). Le paramètre `force` reste
   // accepté dans la signature pour compat appelants mais ne conditionne plus rien.
-  await prisma.document.deleteMany({
-    where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
-  });
+
 
   const participant = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
@@ -81,12 +80,12 @@ export async function generateAgeficeAttendanceForParticipant(
           legalLinks: {
             // Tous les LegalLinks pertinents : EI (autoentrepreneur) ou
             // employeur (salarié immobilier sous enseigne).
-            where: { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL', 'SALARIE'] } },
+
             include: { organization: true },
           },
         },
       },
-      sponsorOrg: true,
+      sponsorOrg: { include: { ageficeProfile: true } },
       session: {
         include: {
           product: { select: { title: true, durationHours: true, priceHT: true } },
@@ -102,6 +101,10 @@ export async function generateAgeficeAttendanceForParticipant(
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+  if (participant.session.regime && !estEligibleAgefice(participant)) return { ok: false, error: `${participant.person.firstName} ${participant.person.lastName} : aucun financement AGEFICE actif chez le commanditaire aux dates de la session. Corrigez les périodes dans la fiche apprenant ou le commanditaire dans la fiche inscription.` };
+  await prisma.document.deleteMany({
+    where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
+  });
   if (!participant.session.product) return { ok: false, error: 'Produit manquant' };
 
   const warnings: string[] = [];
@@ -114,7 +117,7 @@ export async function generateAgeficeAttendanceForParticipant(
   //   4. SALARIE (structure employeur)
   //   5. sponsorOrg fallback
   let eiOrgName: string | null = null;
-  if (participant.sponsorOrg?.opcoCode === 'AGEFICE') {
+  if (participant.session.regime || participant.sponsorOrg?.opcoCode === 'AGEFICE') {
     eiOrgName = participant.sponsorOrg.legalName;
   } else {
     const orderedRoles = ['EI_SELF', 'AGENT_COMMERCIAL', 'SALARIE'] as const;

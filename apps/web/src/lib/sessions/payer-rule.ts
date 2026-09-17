@@ -90,6 +90,8 @@ export function releveDeLaConvention(input: {
 
 /** Inscrit vu sous l'angle « qui paye ? ». */
 export interface PayerParticipant {
+  /** Régime déclaré ; NULL conserve le routage historique. */
+  regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null;
   id: string;
   sponsorOrgId: string;
   sponsorLegalForm: string | null | undefined;
@@ -155,7 +157,7 @@ export function partitionByPayerRule(
   const individuels: string[] = [];
 
   for (const p of participants) {
-    if (!releveDeLaConvention({ sponsorLegalForm: p.sponsorLegalForm, roleChezSponsor: p.roleChezSponsor })) {
+    if (!(p.regime ? p.regime === 'ENTREPRISE' : releveDeLaConvention({ sponsorLegalForm: p.sponsorLegalForm, roleChezSponsor: p.roleChezSponsor }))) {
       individuels.push(p.id);
       continue;
     }

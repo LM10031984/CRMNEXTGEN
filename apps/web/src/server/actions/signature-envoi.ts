@@ -194,7 +194,7 @@ async function chargerContexte(
     where: { id: sessionId, tenantId },
     select: {
       id: true,
-      code: true, startDate: true, endDate: true,
+      code: true, startDate: true, endDate: true, regime: true,
       // Lot C.2c : l'email nomme la formation, pour qu'un responsable qui
       // reçoit trois demandes le même jour sache laquelle il ouvre.
       product: { select: { title: true } },
@@ -202,7 +202,7 @@ async function chargerContexte(
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         select: {
           id: true,
-          sponsorOrgId: true,
+          sponsorOrgId: true, financingMode: true,
           person: {
             select: {
               id: true,
@@ -225,7 +225,7 @@ async function chargerContexte(
               brandName: true,
               legalForm: true,
               representative: true,
-              opcoCode: true,
+              opcoCode: true, ageficeProfile: { select: { id: true } },
               // Ordre EXIGÉ par le contrat de `representant.ts` : le contact
               // principal d'abord, le plus ancien ensuite. La cascade ne
               // rejoue pas ce tri, elle s'y fie.
@@ -252,7 +252,7 @@ async function chargerContexte(
     sponsorOrgId: p.sponsorOrgId ?? null,
     sponsorOrgLabel: p.sponsorOrg?.brandName ?? p.sponsorOrg?.legalName ?? null,
     sponsorOpcoCode: p.sponsorOrg?.opcoCode ?? null,
-    liens: p.person.legalLinks,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile,
   }));
   const reglesParCode = await chargerReglesSignature(codesFinanceursDe(lus));
 

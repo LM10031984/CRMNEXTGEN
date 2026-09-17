@@ -1,3 +1,4 @@
+import { sessionTotalHT } from '@/lib/sessions/session-regime';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération de convention de formation.
@@ -149,11 +150,11 @@ export async function generateConventionCore(
   // pendant que le routeur produisait la convention de groupe — les deux
   // documents contradictoires que la règle du 12/08 sert justement à éviter.
   if (
-    releveDeLaConvention({
+    (participant.session.regime ? participant.session.regime === 'ENTREPRISE' : releveDeLaConvention({
       sponsorLegalForm: participant.sponsorOrg?.legalForm,
       roleChezSponsor:
         legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,
-    })
+    }))
   ) {
     return {
       ok: true,
@@ -417,7 +418,8 @@ export async function generateConventionEntrepriseCore(
   // un prix manquant ici ferait dire à la convention un montant SUPÉRIEUR à
   // celui facturé — deux documents contractuels qui se contredisent. On refuse
   // plutôt, en nommant les personnes à compléter.
-  const sansPrix = participants.filter((p) => Number(p.priceHT) <= 0);
+  if (session.regime === 'INDIVIDUEL') return { ok: false, error: 'Cette session est INDIVIDUELLE. Générez les contrats depuis la fiche session.' };
+  const sansPrix = session.regime === 'ENTREPRISE' ? [] : participants.filter((p) => Number(p.priceHT) <= 0);
   if (sansPrix.length > 0) {
     const noms = sansPrix
       .map((p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`)
@@ -428,7 +430,7 @@ export async function generateConventionEntrepriseCore(
     };
   }
   const productPrice = Number(session.product.priceHT);
-  const prixGlobalHT = participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
+  const prixGlobalHT = sessionTotalHT(session, participants);
 
   // Représentant légal — quick 260821-md8. Cascade : champ explicite de la
   // fiche entreprise, puis contact principal. À défaut, on REFUSE.

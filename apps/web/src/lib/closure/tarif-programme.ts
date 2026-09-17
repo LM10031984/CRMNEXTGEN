@@ -1,4 +1,10 @@
+import { sessionTotalHT, type SessionRegime } from '@/lib/sessions/session-regime';
+
 /**
+ * Correction du 17/09/2026 de « le mode du PRODUIT, LE POINT DE DÉPART » :
+ * une session déclarée impose désormais son régime et son montant ; NULL conserve
+ * les règles historiques ci-dessous. Aucun prix catalogue n’est modifié.
+ *
  * Quel tarif le programme annonce — module NEUTRE et PUR.
  *
  * Constat du 02/09 sur SES-0109 : le programme annonçait « 2 500 € HT par
@@ -106,11 +112,15 @@ export function resoudrePrixProgramme(input: {
    * indiscernables tant qu'on ne regardait pas qui s'était inscrit, et le
    * catalogue ne pouvait rien annoncer de juste.
    */
+  regimeSession?: SessionRegime | null;
+  prixTotalSession?: unknown;
   modeProduit: ModeProduit;
   inscrits: ReadonlyArray<InscritPourPrix>;
   tarifSession: unknown;
   prixProduit: unknown;
 }): PrixProgramme {
+  if (input.regimeSession === 'ENTREPRISE') return { mode: 'TOTAL_ENTREPRISE', montantHT: sessionTotalHT({ regime: input.regimeSession, priceTotalHT: input.prixTotalSession }, []) };
+  if (input.regimeSession === 'INDIVIDUEL') return { mode: 'PAR_STAGIAIRE', montantHT: resoudreTarifProgramme(input.tarifSession, input.prixProduit) };
   const tarifCatalogue = resoudreTarifProgramme(input.tarifSession, input.prixProduit);
 
   // Vendu à la place : rien dans la composition de la salle ne peut en faire un
@@ -155,9 +165,18 @@ export function resoudrePrixProgramme(input: {
  * il faut le dire à qui peut le corriger.
  */
 export function refusForfaitNonConfirme(input: {
+  regimeSession?: SessionRegime | null;
+  prixTotalSession?: unknown;
   modeProduit: ModeProduit;
   inscrits: ReadonlyArray<InscritPourPrix>;
 }): string | null {
+  if (input.regimeSession === 'INDIVIDUEL') return null;
+  if (input.regimeSession === 'ENTREPRISE') {
+    try { sessionTotalHT({ regime: input.regimeSession, priceTotalHT: input.prixTotalSession }, []); } catch (e) { return (e as Error).message; }
+    if (new Set(input.inscrits.map((i) => i.sponsorOrgId)).size > 1) return 'La session entreprise doit porter un seul commanditaire. Scindez la session par entreprise.';
+    if (input.inscrits.some((i) => !i.couvertParConvention)) return 'Un payeur ne correspond pas au régime ENTREPRISE. Corrigez le commanditaire dans la fiche inscription.';
+    return null;
+  }
   if (input.modeProduit !== 'FORFAIT_ENTREPRISE') return null;
 
   const { inscrits } = input;
@@ -214,11 +233,14 @@ export function refusForfaitNonConfirme(input: {
  * (contenu FIGÉ au produit).
  */
 export function programmeDoitEtrePropreALaSession(input: {
+  regimeSession?: SessionRegime | null;
+  prixTotalSession?: unknown;
   modeProduit: ModeProduit;
   inscrits: ReadonlyArray<InscritPourPrix>;
   tarifSession: unknown;
   prixProduit: unknown;
 }): boolean {
+  if (input.regimeSession) return true;
   const tarifSession = Number(input.tarifSession ?? 0);
   if (Number.isFinite(tarifSession) && tarifSession > 0) return true;
 

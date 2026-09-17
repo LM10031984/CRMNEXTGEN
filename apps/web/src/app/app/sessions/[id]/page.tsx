@@ -52,6 +52,8 @@ import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
 import { SessionTitleInline } from '@/components/sessions/session-title-inline';
+import { SessionRegimeEditor } from '@/components/sessions/session-regime-editor';
+import { sessionTotalHT } from '@/lib/sessions/session-regime';
 import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
@@ -193,7 +195,7 @@ export default async function SessionDetailPage({
               // de faire disparaître un dossier de l'écran.
               legalLinks: {
                 select: {
-                  role: true,
+                  role: true, startDate: true, endDate: true,
                   // Ajouté le 02/09 : sans l'id de l'organisation, impossible
                   // de savoir QUELLE casquette relie l'apprenant à son
                   // commanditaire — et donc si celui-ci est son employeur.
@@ -209,7 +211,7 @@ export default async function SessionDetailPage({
               legalName: true,
               brandName: true,
               legalForm: true,
-              opcoCode: true,
+              opcoCode: true, ageficeProfile: { select: { id: true } },
               // Garde-fous AVANT génération des documents d'entreprise (28/08) :
               // le représentant signe la convention et porte le recueil du
               // besoin ; à défaut, le contact principal en tient lieu.
@@ -526,7 +528,7 @@ export default async function SessionDetailPage({
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
     sponsorOpcoCode: p.sponsorOrg.opcoCode,
-    liens: p.person.legalLinks,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
   }));
   const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
   const regimeParParticipant = new Map(
@@ -1010,7 +1012,7 @@ export default async function SessionDetailPage({
     : null;
   const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
   const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
-  const caTotalHT = (pricePerLearnerNum ?? 0) * session.participants.length;
+  const caTotalHT = session.regime ? sessionTotalHT(session, session.participants) : (pricePerLearnerNum ?? 0) * session.participants.length;
 
   // ── Inscriptions publiques par session (spec 2026-08-28) ──────────────
   // Demandes reçues via le lien public et pas encore traitées : elles
@@ -1464,8 +1466,8 @@ export default async function SessionDetailPage({
         pricePerLearner={pricePerLearnerNum}
         priceSlot={
           canEdit ? (
-            <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />
-          ) : undefined
+            <div className="space-y-1">{!session.regime && <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />}<SessionRegimeEditor sessionId={session.id} regime={session.regime} price={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum} /></div>
+          ) : session.regime === 'ENTREPRISE' ? <span>{Number(session.priceTotalHT).toLocaleString('fr-FR')} € HT au total</span> : undefined
         }
         locationLabel={locationLabel}
         participantsCount={session.participants.length}
@@ -1860,6 +1862,7 @@ export default async function SessionDetailPage({
                   était hors écran. Frustration Laurent 15/06. */}
               <div className="mt-3">
                 <SessionParticipantsList
+                  companyPrice={session.regime === 'ENTREPRISE'}
                   canManage={canWrite}
                   participants={matrixParticipants.map((p) => {
                     const raw = session.participants.find((sp) => sp.id === p.id);

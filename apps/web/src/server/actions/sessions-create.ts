@@ -6,6 +6,8 @@ import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { prepareSession } from './prepare-training';
+import { synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
+import { sessionTotalHT, type SessionRegime } from '@/lib/sessions/session-regime';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 export interface CreateSessionInput {
@@ -21,6 +23,8 @@ export interface CreateSessionInput {
   trainerPersonIds: string[]; // au moins 1
   capacityMax?: number;
   pricePerLearner?: number | null;
+  regime?: SessionRegime | null;
+  priceTotalHT?: number | null;
   internalNotes?: string | null;
   participants: Array<{
     personId: string;
@@ -125,6 +129,10 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     throw e;
   }
 
+  if (input.regime && !['ENTREPRISE', 'INDIVIDUEL'].includes(input.regime)) return { ok: false, error: 'Régime invalide.' };
+  if (input.regime === 'ENTREPRISE') {
+    try { sessionTotalHT(input, []); } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
   // Validations
   if (!input.productId) return { ok: false, error: 'Produit obligatoire' };
   if (!input.startDate || !input.endDate) return { ok: false, error: 'Dates obligatoires' };
@@ -184,7 +192,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   // le produit n'en porte pas — `Number(null)` valait 0, soit un tarif nul posé
   // en silence sur toute la session (E-2).
   const pricePerLearner =
-    input.pricePerLearner ?? (product.priceHT === null ? null : Number(product.priceHT));
+    input.regime === 'ENTREPRISE' ? null : input.pricePerLearner ?? (product.priceHT === null ? null : Number(product.priceHT));
 
   // Le prix de chaque inscrit passe par la source unique : le sponsor diffère
   // d'un participant à l'autre (session mixte agence + EI), donc le prix aussi.
@@ -208,6 +216,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
         modality: input.modality,
         locationId,
         capacityMax: input.capacityMax ?? product.capacityMax,
+        regime: input.regime ?? null,
+        priceTotalHT: input.regime === 'ENTREPRISE' ? input.priceTotalHT : null,
         pricePerLearner: pricePerLearner === null ? null : new Prisma.Decimal(pricePerLearner),
         internalNotes: input.internalNotes ?? null,
       },
@@ -231,7 +241,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     const createdParticipantIds: string[] = [];
     for (const p of input.participants) {
       const prix = resolveDefaultParticipantPrice(
-        { pricePerLearner },
+        { pricePerLearner, regime: input.regime },
         product,
         { legalForm: legalFormParOrg.get(p.sponsorOrgId) ?? null },
       );
@@ -251,6 +261,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
       createdParticipantIds.push(part.id);
     }
 
+    await synchronizeCompanyPriceTx(tx, created, user.id);
     return { created, createdParticipantIds };
   });
 

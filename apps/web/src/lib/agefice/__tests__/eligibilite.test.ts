@@ -64,11 +64,23 @@ describe('estEligibleAgefice', () => {
     expect(estEligibleAgefice({ sponsorOrg: null, person: { legalLinks: null } })).toBe(false);
   });
 
-  it('expose les deux mêmes voies au filtre Prisma', () => {
+  it('charge les périodes déclarées puis les deux voies historiques', () => {
     // Le filtre et le prédicat doivent décrire la même population : si l'un
     // gagne une voie, l'autre doit suivre.
-    expect(OU_AGEFICE).toHaveLength(2);
-    expect(OU_AGEFICE[0]).toEqual({ sponsorOrg: { opcoCode: 'AGEFICE' } });
-    expect(JSON.stringify(OU_AGEFICE[1])).toContain('ageficeProfile');
+    expect(OU_AGEFICE).toHaveLength(3);
+    expect(OU_AGEFICE[0]).toEqual({ session: { regime: { not: null } } });
+    expect(OU_AGEFICE[1]).toEqual({ sponsorOrg: { opcoCode: 'AGEFICE' } });
+    expect(JSON.stringify(OU_AGEFICE[2])).toContain('ageficeProfile');
   });
+});
+
+it('session déclarée : une EI annexe ne rend pas le salarié éligible chez son payeur', () => {
+  const p = { sponsorOrgId: 'sas', sponsorOrg: { opcoCode: 'OPCO_EP' }, session: { regime: 'ENTREPRISE' as const, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') }, person: { legalLinks: [{ organizationId: 'sas', role: 'SALARIE', startDate: new Date('2026-02-01') }, { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } }] } };
+  expect(estEligibleAgefice(p)).toBe(false);
+});
+it('le même payeur peut porter le dossier TNS en janvier puis un salarié sans AGEFICE', () => {
+  const p = { sponsorOrgId: 'org', sponsorOrg: { opcoCode: 'OPCO_EP', ageficeProfile: {} }, session: { regime: 'ENTREPRISE' as const, startDate: new Date('2026-01-20'), endDate: new Date('2026-01-20') }, person: { legalLinks: [{ organizationId: 'org', role: 'DIRIGEANT', endDate: new Date('2026-01-31') }, { organizationId: 'org', role: 'SALARIE', startDate: new Date('2026-02-01') }] } };
+  expect(estEligibleAgefice(p)).toBe(true);
+  expect(estEligibleAgefice({ ...p, session: { ...p.session, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') } })).toBe(false);
+  expect(estEligibleAgefice({ ...p, financingMode: 'AUTOFINANCEMENT' })).toBe(false);
 });
