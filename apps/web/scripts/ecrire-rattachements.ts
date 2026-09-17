@@ -28,7 +28,14 @@
  * poser : la douleur paraîtrait couverte, et c'est un module sans rapport qui
  * partirait dans une proposition client.
  */
-import { prisma } from '@qualiof/db';
+// `@prisma/client` n'est pas une dépendance directe d'apps/web ; `@qualiof/db`
+// le ré-exporte (`export * from '@prisma/client'`).
+import { createPrismaClientForUrl, type Prisma } from '@qualiof/db';
+import {
+  CibleInattendueError,
+  transactionGardee,
+  type MarqueursCible,
+} from '@qualiof/db/garde-cible';
 
 import {
   RATTACHEMENTS_IMPOSSIBLES,
@@ -51,14 +58,67 @@ const CHAPITRE = new Map(
 
 const APPLY = process.argv.includes('--apply');
 
+/**
+ * La connexion DIRECTE (`:5432`), jamais la poolée (`:6543`) — une seule voie
+ * d'écriture dans le dépôt, la même que `import-drive-catalog.ts`.
+ *
+ * pgbouncer en mode transaction ne garantit pas qu'une transaction interactive
+ * reste sur la même connexion. Le lot est plus petit ici que pour l'import, mais
+ * c'est la même classe de risque, et deux voies d'écriture, c'est deux
+ * hypothèses à tenir d'accord.
+ */
+const CIBLE_URL = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+if (!CIBLE_URL)
+  throw new Error('Ni DIRECT_URL ni DATABASE_URL — cible inconnue, on ne devine pas.');
+const prisma = createPrismaClientForUrl(CIBLE_URL);
+
+/** L'hôte de la cible, pour que le run dise sur quoi il a tourné (§4 terdecies). */
+const HOTE = (() => {
+  try {
+    return new URL(CIBLE_URL).hostname;
+  } catch {
+    return '(illisible)';
+  }
+})();
+
 const tenant = await prisma.tenant.findFirst({ select: { id: true, name: true } });
 if (!tenant) throw new Error('Aucun tenant');
+
+/**
+ * Les marqueurs de CONTENU relevés en tête de run — ce que la garde de cible
+ * exigera de la connexion qui écrit. Une base s'identifie par son contenu,
+ * jamais par son nom (§4 sexies).
+ */
+const ATTENDU: MarqueursCible = {
+  tenantId: tenant.id,
+  tenantNom: tenant.name,
+  produits: await prisma.trainingProduct.count({ where: { tenantId: tenant.id } }),
+  modules: await prisma.trainingModule.count({ where: { product: { tenantId: tenant.id } } }),
+};
+
+/** Les mêmes compteurs, relus DANS la transaction — mêmes définitions, au mot près. */
+async function relireMarqueurs(tx: Prisma.TransactionClient): Promise<MarqueursCible | null> {
+  const t = await tx.tenant.findUnique({
+    where: { id: ATTENDU.tenantId },
+    select: { id: true, name: true },
+  });
+  if (!t) return null;
+  return {
+    tenantId: t.id,
+    tenantNom: t.name,
+    produits: await tx.trainingProduct.count({ where: { tenantId: t.id } }),
+    modules: await tx.trainingModule.count({ where: { product: { tenantId: t.id } } }),
+  };
+}
 
 console.log(
   `\n=== Rattachements douleur → module · tenant « ${tenant.name} » · ${
     APPLY ? 'ÉCRITURE (--apply)' : 'SIMULATION'
   } ===\n`,
 );
+console.log(`🎯 Cible : ${HOTE}`);
+console.log(`   tenant : ${tenant.id} « ${tenant.name} »`);
+console.log(`   avant  : ${ATTENDU.produits} produits · ${ATTENDU.modules} modules\n`);
 
 interface Resultat {
   douleur: string;
@@ -184,7 +244,11 @@ if (APPLY && aEcrire.length > 0) {
   // L'AuditLog est écrit DANS la même transaction que la donnée — un journal
   // qui survit à un échec d'écriture raconterait une écriture qui n'a pas eu
   // lieu.
-  await prisma.$transaction(async (tx) => {
+  // La garde de cible est le PREMIER ordre de la transaction — `transactionGardee`
+  // ne nous appelle pas autrement. Même enveloppe que l'import, pas une copie :
+  // deux exemplaires d'une garde finissent par diverger, et c'est le jour où
+  // l'un des deux a déjà cessé de garder qu'on s'en aperçoit.
+  await transactionGardee(prisma, ATTENDU, relireMarqueurs, async (tx) => {
     for (const e of aEcrire) {
       await tx.trainingModule.update({
         where: { id: e.moduleId },
@@ -208,7 +272,26 @@ if (APPLY && aEcrire.length > 0) {
         },
       });
     }
+  }).catch((e: unknown) => {
+    if (e instanceof CibleInattendueError) {
+      console.error("\n⛔ ÉCHEC — la base d'écriture n'est PAS celle du relevé.\n");
+      for (const ecart of e.ecarts) console.error(`   ${ecart}`);
+      console.error(
+        `\n   Connexion d'écriture : ${HOTE}.\n` +
+          '   Un signal posé sur le mauvais module ferait paraître une douleur\n' +
+          '   couverte, et un module sans rapport partirait dans une proposition\n' +
+          '   client. Le poser dans la mauvaise BASE est la même faute en plus large.\n\n' +
+          "   ROLLBACK. Rien n'a été écrit.\n",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    throw e;
   });
+  if (process.exitCode === 1) {
+    await prisma.$disconnect();
+    process.exit(1);
+  }
 }
 
 function ligne(r: RattachementValide, c: CibleRattachement) {
@@ -272,7 +355,8 @@ console.log(
 );
 if (rates.length > 0) {
   console.log('\n  ❌ Lignes en échec — RIEN n’a été écrit pour elles :');
-  for (const r of rates) console.log(`     ${r.programme} « ${r.module.slice(0, 50)} » — ${r.detail}`);
+  for (const r of rates)
+    console.log(`     ${r.programme} « ${r.module.slice(0, 50)} » — ${r.detail}`);
 }
 if (!APPLY) console.log('\n  Simulation : aucune écriture. Relancer avec `-- --apply`.');
 console.log('');
