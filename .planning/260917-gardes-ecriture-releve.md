@@ -210,17 +210,36 @@ n'est lancé** au 17/09._
 `prisma migrate deploy` contre la prod Supabase (`DATABASE_URL` + `DIRECT_URL`
 en secrets). **La migration part donc à la fusion, sans que personne la lance.**
 
-C'est la première migration de toute la chaîne : `20260917120000_module_empreinte_import`,
-et elle est seule — vérifié, le diff de PR A ne contient aucun autre fichier sous
-`prisma/migrations/`.
+Elle est seule dans le diff de PR A — vérifié après rebase : aucun autre fichier
+sous `prisma/migrations/`. Elle n'est plus « la première de toute la chaîne »
+comme ce relevé le disait ce matin : `#92` a déployé
+`20260917080000_product_pricing_mode` dans la journée et lui a pris ce titre.
+Notre migration reste néanmoins la première que CETTE chaîne de travail produit.
 
-**Attendu : 31 → 32 migrations.**
+**Attendu : 32 → 33 migrations.**
+
+> #### Corrigé le 17/09/2026 (après-midi) — ce paragraphe annonçait « 31 → 32 »
+>
+> C'était exact le matin, quand la branche a été écrite : la production portait
+> alors 31 migrations. Ça ne l'est plus. Laurent a fusionné `#92` dans la
+> journée, qui a déployé `20260917080000_product_pricing_mode` — la production
+> en porte **32**. Notre migration est donc la **33ᵉ**.
+>
+> Vérifié après rebase : `20260917120000` trie bien **après** `20260917080000`,
+> donc `migrate deploy` l'applique dans le bon ordre et ne rejoue pas la leur.
+>
+> **Pourquoi la phrase d'origine est citée et non effacée** : un relevé qui
+> réécrit ses chiffres en silence devient un document juste aujourd'hui et faux
+> sur son propre passé (§4 sexdecies). Celui qui relira cette séquence doit
+> pouvoir savoir ce que son auteur avait sous les yeux — et que le compte a
+> bougé parce qu'une autre PR est passée entre-temps, ce qui est précisément le
+> genre de chose qu'on veut voir.
 
 ## ① Vérifier le déploiement — avant de toucher à quoi que ce soit
 
 | # | Contrôle | Attendu |
 |---|---|---|
-| a | migrations appliquées | **32**, dont `20260917120000_module_empreinte_import` |
+| a | migrations appliquées | **33**, dont `20260917120000_module_empreinte_import` |
 | b | la colonne existe | `TrainingModule.contentMdFingerprint`, nullable, **486 NULL** |
 | c | **le témoin** | `/catalogue` → **39 codes**, `diff` vide |
 | d | les routes | `/catalogue` et `/diagnostic` → 200 **avec leur contenu** : titre, `<h1>`, 39 cartes pour l'un ; 1ʳᵉ question et ses 4 options pour l'autre |
