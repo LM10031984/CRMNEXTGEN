@@ -3,7 +3,7 @@
   Base      : LOCALE — qualiof_dev @ localhost
   Dossier   : DIAG-R001 — 454b58e6-7f88-4d95-adf6-5fc6c16ab838
   Agence    : Agence A (COPIE PSEUDONYMISÉE — ne pas remettre)
-  Généré le : 2026-09-16T05:12:15.348Z
+  Généré le : 2026-09-16T05:32:59.513Z
 -->
 
 > ⚠ **Sortie de sonde**, base **LOCALE — qualiof_dev @ localhost**, dossier `DIAG-R001` (`454b58e6-7f88-4d95-adf6-5fc6c16ab838`), agence « Agence A (COPIE PSEUDONYMISÉE — ne pas remettre) ».
@@ -12,7 +12,7 @@
 
 Parcours composé à partir du diagnostic **DIAG-R001**.
 
-**6 journées — 48 heures.**
+**5 journées — 40 heures.**
 
 ## Objectifs pédagogiques
 
@@ -25,11 +25,6 @@ Parcours composé à partir du diagnostic **DIAG-R001**.
 - Mener une découverte du projet acheteur-vendeur en situation
 - Préparer un dossier de suivi vendeur complet
 - Convaincre le vendeur avec des arguments solides
-
-_Objectifs restant à rédiger — critère : le titre doit commencer par un verbe d’action reconnu._
-
-- « Appliquer des techniques de feedback constructif pour guider l'équipe vers l'amélioration continue. » (mot lu : « appliquer »)
-- « Élaborer des activités interactives pour encourager la participation de l'équipe et favoriser la cohésion. » (mot lu : « elaborer »)
 
 ## Déroulé
 
@@ -94,17 +89,6 @@ _Répond au besoin : Transformer visites et offres en actes._
 
 _Source : Négociation et compromis (BIB-D034)._
 
-#### Appliquer des techniques de feedback constructif pour guider l'équipe vers l'amélioration continue.
-
-_Répond au besoin : Piloter par les chiffres et animer l’équipe._
-
-- Après-midi :
-- Animer des réunions commerciales percutantes pour motiver et engager l'équipe
-
-_Source : Boostez, animez et fidélisez les performances de votre équipe (BIB-D014)._
-
-### Journée 5 — 8 h
-
 #### Mener une découverte du projet acheteur-vendeur en situation
 
 _Répond au besoin : Formaliser la découverte et l’estimation vendeur._
@@ -116,6 +100,8 @@ _Répond au besoin : Formaliser la découverte et l’estimation vendeur._
 
 _Source : Face à face acheteurs (BIB-D008)._
 
+### Journée 5 — 8 h
+
 #### Préparer un dossier de suivi vendeur complet
 
 _Répond au besoin : Piloter le stock et le suivi vendeur._
@@ -126,8 +112,6 @@ _Répond au besoin : Piloter le stock et le suivi vendeur._
 
 _Source : Transformez vos Mandats et Décrochez des Rendez-vous de Suivi avec Succès (BIB-D037)._
 
-### Journée 6 — 8 h
-
 #### Convaincre le vendeur avec des arguments solides
 
 _Répond au besoin : Transformer visites et offres en actes._
@@ -137,14 +121,6 @@ _Répond au besoin : Transformer visites et offres en actes._
 - Répondre : Techniques pour gérer les objections et rassurer le vendeur
 
 _Source : Découverte vendeur et estimation percutante (BIB-D017)._
-
-#### Élaborer des activités interactives pour encourager la participation de l'équipe et favoriser la cohésion.
-
-_Répond au besoin : Piloter par les chiffres et animer l’équipe._
-
-- Prendre la parole devant son équipe avec assurance et gagner en influence
-
-_Source : Boostez, animez et fidélisez les performances de votre équipe (BIB-D014)._
 
 ## Public visé
 

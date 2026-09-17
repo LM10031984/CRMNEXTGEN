@@ -657,6 +657,55 @@ rattachements, le lexical sert encore — c'est-à-dire si des recommandations
 continuent de sortir en `source: 'lexique'` sur des dossiers réels. Si elles
 sortent toutes en `source: 'signaux'`, le sujet est clos pour de bon.
 
+---
+
+#### ✅ D-27 — **FERMÉE le 16/09/2026, appliquée au moteur en variante CIBLÉE**
+
+Le critère de réouverture ci-dessus était écrit ; il a été **atteint, et
+largement** : sur un dossier réel, **245 rapprochements sur 276 sortaient en
+`source: 'lexique'`**. Le « filet de sécurité » n'était pas un filet, c'était le
+chemin principal. Et **87 % de tous les rapprochements possibles ne tenaient que
+par UN seul mot** (relevé `probe-homonymes.ts`).
+
+**La mesure faite AVANT d'appliquer** (`probe-d27.ts`, simulation pure) :
+
+| Variante | Rapprochements survivants | Parcours DIAG-R001 | Besoins non couverts |
+|---|---:|---:|---:|
+| actuel | 276 | 6 journées | 0 |
+| **A** — stricte, signaux compris | 35 (12,7 %) | 4 journées | 2 |
+| **B** — ciblée, le signal survit | **51 (18,5 %)** | **5 journées** | **1** |
+
+**Variante B retenue.** Motif de Laurent : *la règle vise les rapprochements
+DEVINÉS, pas les étiquettes posées à la main. Un signal de catalogue est une
+décision humaine ; la punir parce qu'elle tient sur peu de mots reviendrait à
+sanctionner le seul endroit du système où quelqu'un a pris la peine d'être
+explicite.* Même raison pour les **arbitrages CONFIRMÉS**, qui traversent aussi
+la règle.
+
+**Coût accepté** : une journée de moins, une douleur qui se déclare non
+couverte, **+1 008 €** de droits non consommés. C'est le prix de la vérité, et
+il est bas — une proposition fausse ne couvrait rien, elle le **cachait**.
+
+##### Ce qui vaut mieux que la règle : deux méthodes, une conclusion
+
+La variante B retrouve **seule** « Piloter par les chiffres et animer l'équipe »
+comme non couvert — exactement ce que Laurent avait trouvé **en relisant**
+`BIB-D014`, dont les deux modules sont des résidus de découpage.
+
+> **Quand une mesure retrouve ce qu'un humain avait vu, c'est la mesure qui est
+> validée, pas l'humain.**
+
+Et l'inverse est écrit aussi, parce qu'il compte autant : **elle ne rattrape pas
+le compromis**. `drive:034#2` portait deux mots pleins et serait passé. §5 ter
+tient — la règle attrape ce qu'on a su formuler, la relecture attrape le reste.
+**Elles ne se remplacent jamais.**
+
+##### Si on la rouvre un jour
+
+Ce qui avait été pesé est ci-dessus : les deux variantes, leurs chiffres, et le
+dossier sur lequel ils ont été mesurés. Rouvrir suppose de refaire la mesure —
+`pnpm --filter @qualiof/web probe:d27:local` — pas de refaire le raisonnement.
+
 ##### D-28 — toutes les douleurs ne sont pas des besoins de **formation** (relecture du 11/09/2026)
 
 Quatre règles du barème sur trente-quatre notent un fait de **contexte** ou de

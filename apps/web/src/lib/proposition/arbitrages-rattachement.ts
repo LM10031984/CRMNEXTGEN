@@ -22,13 +22,28 @@
  *
  * ## Ce que ce fichier n'est PAS
  *
- * Une liste noire de modules. Un refus porte sur un **couple** (besoin, module)
- * : « Rédiger des compromis » reste un module parfaitement valable, et il peut
- * répondre à un autre besoin. C'est le rapprochement qui est faux, pas le
- * contenu.
+ * Une liste noire de modules. Un arbitrage porte sur un **couple** (besoin,
+ * module) : « Rédiger des compromis » reste un module parfaitement valable, et
+ * il peut répondre à un autre besoin. C'est le rapprochement qui est faux, pas
+ * le contenu.
+ *
+ * ## Le registre porte les DEUX sens (16/09/2026)
+ *
+ * Un rapprochement **CONFIRMÉ** n'est pas un « non-refusé » : c'est un
+ * rapprochement **jugé**. La différence est opérationnelle — un confirmé ne se
+ * re-soumet plus à la relecture métier (§5 ter), et il **survit aux règles
+ * automatiques**, D-27 comprise.
+ *
+ * Le motif est le même que celui qui a fait choisir la variante B de D-27 :
+ * punir un rapprochement parce qu'il tient sur peu de mots reviendrait à
+ * sanctionner l'endroit où quelqu'un a pris la peine d'être explicite. Un
+ * signal de catalogue est une décision humaine ; un arbitrage confirmé l'est
+ * encore plus.
  */
 
 export interface ArbitrageRattachement {
+  /** REFUSE : le moteur ne le propose plus. CONFIRME : il est jugé, et il reste. */
+  sens: 'REFUSE' | 'CONFIRME';
   /** Le code du besoin (`ProgrammeNeed.code`). */
   needCode: string;
   /** L'identité stable du module dans sa source — `drive:NNN#i`. */
@@ -55,6 +70,7 @@ export interface ArbitrageRattachement {
  */
 export const ARBITRAGES_RATTACHEMENT: readonly ArbitrageRattachement[] = [
   {
+    sens: 'REFUSE',
     needCode: 'transformation',
     moduleSourceRef: 'drive:034#2',
     moduleTitle: 'Rédiger des compromis de vente efficaces',
@@ -75,14 +91,34 @@ export const ARBITRAGES_RATTACHEMENT: readonly ArbitrageRattachement[] = [
       'DOCUMENT À RÉDIGER. Même mot, deux rôles.',
     date: '2026-09-16',
   },
+  {
+    sens: 'CONFIRME',
+    needCode: 'transformation',
+    moduleSourceRef: 'drive:034#3',
+    moduleTitle: 'Gérer les objections et trouver des solutions de compromis',
+    motif:
+      'Gérer les objections pour faire aboutir une offre fait partie de ' +
+      '« transformer visites et offres en actes ». Le rattachement est juste.',
+    constatTechnique:
+      'Rapproché par SIGNAUX, confiance forte, sur trois mots — « vente », ' +
+      '« negociation », « offre ». Il aurait survécu à D-27 dans les deux ' +
+      'variantes ; le confirmer ne le sauve de rien, ça le retire de la file ' +
+      'de relecture.',
+    date: '2026-09-16',
+  },
 ];
 
-/** Index (needCode → sourceRefs refusés), construit une fois. */
+/** Index (needCode → sourceRef → arbitrage), construit une fois. */
 const PAR_BESOIN = new Map<string, Map<string, ArbitrageRattachement>>();
 for (const a of ARBITRAGES_RATTACHEMENT) {
   const pour = PAR_BESOIN.get(a.needCode) ?? new Map();
   pour.set(a.moduleSourceRef, a);
   PAR_BESOIN.set(a.needCode, pour);
+}
+
+function arbitrageDe(needCode: string, moduleSourceRef: string | null): ArbitrageRattachement | null {
+  if (!moduleSourceRef) return null;
+  return PAR_BESOIN.get(needCode)?.get(moduleSourceRef) ?? null;
 }
 
 /**
@@ -93,6 +129,20 @@ export function arbitrageRefusant(
   needCode: string,
   moduleSourceRef: string | null,
 ): ArbitrageRattachement | null {
-  if (!moduleSourceRef) return null;
-  return PAR_BESOIN.get(needCode)?.get(moduleSourceRef) ?? null;
+  const a = arbitrageDe(needCode, moduleSourceRef);
+  return a?.sens === 'REFUSE' ? a : null;
+}
+
+/**
+ * Ce couple a-t-il été CONFIRMÉ par un humain ?
+ *
+ * Un confirmé traverse les règles automatiques : il a déjà été jugé sur le
+ * fond, et une règle de forme n'a pas à revenir dessus.
+ */
+export function arbitrageConfirmant(
+  needCode: string,
+  moduleSourceRef: string | null,
+): ArbitrageRattachement | null {
+  const a = arbitrageDe(needCode, moduleSourceRef);
+  return a?.sens === 'CONFIRME' ? a : null;
 }
