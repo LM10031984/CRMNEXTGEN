@@ -31,6 +31,53 @@ ouverte qui ne se fusionne pas** — elle EST la décision, visible :
 L'exclusion **contourne** le défaut de modalité ; elle ne le répare pas. La
 barrière se lève quand ① et ② tombent, pas en retirant un fichier.
 
+## ⛔ CETTE PR EST ROUGE, ET ELLE RESTE OUVERTE
+
+**Elle ne se fusionne pas.** Elle porte les trois assertions qui tiennent
+l'arbitrage de Laurent du 16/09 — *aucun contenu Faros n'est importé au
+catalogue* — et elle reviendra dans `main` verte, le jour où le travail qu'elle
+décrit sera fait.
+
+La fusionner rendrait la CI rouge en permanence, ce qui revient à débrancher la
+gate pour tout le dépôt. La supprimer effacerait un arbitrage. Une PR ouverte
+est la seule forme qui tienne les deux.
+
+> **Ce qu'elle ne porte PAS** : la garde elle-même. L'exclusion est sur le
+> chemin réel dans `main` depuis le 17/09 (`sortDuRayon`, vérifiée en vert par
+> `barriere-faros-chemin-reel.test.ts`). Aucun contenu Faros ne peut entrer au
+> catalogue pendant que cette PR attend.
+
+## ⛔ `pnpm test` est ROUGE, et c'est une décision, pas une régression
+
+`apps/web/src/lib/proposition/__tests__/faros-non-importable.test.ts` — **3 tests
+en échec, délibérément.** Tout le reste est vert : 362 fichiers, 3 867 tests.
+
+```
+Test Files  1 failed | 363 passed (364)
+     Tests  3 failed | 3879 passed | 2 skipped (3884)
+```
+
+_Compte actualisé le 16/09 au soir, après la correction de la modalité AGEFICE
+(12 tests ajoutés, tous verts). Les trois rouges sont les mêmes, et ce sont les
+seuls._
+
+**Pourquoi.** Laurent a arbitré le 16/09 : *aucun contenu Faros n'est importé au
+catalogue*. Le test tient cette décision. Il ne se supprime pas ; il se lève en
+faisant le travail qu'il décrit.
+
+**Les trois conditions, dans l'ordre où elles doivent tomber :**
+
+| # | Ce que le test exige | État au 16/09 |
+|---|---|---|
+| ① | `TrainingModule` porte une modalité explicite | le champ n'existe pas (`TrainingProduct` et `TrainingSession` l'ont, pas le module) |
+| ② | l'import ne stampe pas `Modality.PRESENTIEL` sur un produit `faros:` | `import-drive-catalog.ts:375` le fait pour TOUS les produits |
+| ③ | une unité `faros:` est refusée par `isAnimable` | les deux modules `faros:` sont animables (55 434 et 6 887 car.) |
+
+**Ce que je n'ai PAS fait, et qui n'est pas un oubli** : aucun champ, aucune
+migration, aucun import, aucune écriture en base. Le test est la barrière ; le
+champ est une décision de Laurent.
+
+
 ## ⚠️ Les deux bases DIVERGENT volontairement — ne pas « réparer » par un import
 
 **Posé le 17/09/2026, en portant la barrière dans l'importeur.**
