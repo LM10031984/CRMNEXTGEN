@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./product-code": "./scripts/lib/product-code.ts",
     "./barriere-faros": "./scripts/lib/barriere-faros.ts",
-    "./garde-cible": "./scripts/lib/garde-cible.ts"
+    "./garde-cible": "./scripts/lib/garde-cible.ts",
+    "./empreinte-import": "./scripts/lib/empreinte-import.ts"
   },
   "scripts": {
     "postinstall": "prisma generate",

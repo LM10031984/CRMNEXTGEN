@@ -569,6 +569,24 @@ model TrainingModule {
   /// son titre a été retouché depuis. Un identifiant technique (`id`) ne le
   /// permet pas — il change à chaque recréation.
   sourceRef                 String?
+  /// L'empreinte du `contentMd` que l'IMPORT a écrit — SHA-256, jamais le texte.
+  ///
+  /// Elle répond à une seule question, au ré-import : « ce qu'il y a en base,
+  /// est-ce encore CE QUE J'AI ÉCRIT ? » Si oui, l'import peut reprendre la
+  /// main. Sinon, un humain est passé après lui, et il ne réécrit pas.
+  ///
+  /// Pourquoi elle existe (17/09/2026). L'import réécrit `contentMd` à chaque
+  /// passage, et sa seule garde — `doitProtegerLeContenu` — ne protège que du
+  /// VIDE : un déroulé réécrit à la main était remplacé dès que le Drive
+  /// portait son propre texte, et le rapport annonçait « 72 mis à jour », ce
+  /// qui a l'air d'une bonne nouvelle. La règle passe de « l'import ne vide
+  /// jamais un contenu écrit » à « l'import ne réécrit que ce qu'il a
+  /// lui-même écrit » — la seconde contient la première.
+  ///
+  /// NULL = l'import n'a jamais écrit ce module, ou l'a écrit avant cette
+  /// colonne. Dans les deux cas il n'a rien à protéger, et il stampe au
+  /// prochain passage. Même famille que `Document.sourceFingerprint`.
+  contentMdFingerprint      String?
 
   @@index([productId, order])
   @@index([family])

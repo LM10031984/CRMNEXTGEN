@@ -1,0 +1,11 @@
+-- Empreinte du `contentMd` écrit par l'IMPORT (lot I-1, garde d'écrasement).
+--
+-- ADDITIVE et NULLABLE : aucune donnée existante n'est lue, écrite ni
+-- déplacée. Les 486 modules de production passent à NULL, ce qui est
+-- exactement le bon état de départ — NULL veut dire « l'import n'a rien à
+-- protéger ici », et il stampe au prochain passage.
+--
+-- Aucun index : cette colonne ne sert jamais de critère de recherche. Elle est
+-- lue module par module, après que le module a été retrouvé par son
+-- `sourceRef` — qui est indexé, lui.
+ALTER TABLE "TrainingModule" ADD COLUMN "contentMdFingerprint" TEXT;

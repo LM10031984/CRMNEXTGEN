@@ -54,6 +54,7 @@ import { fileURLToPath } from 'node:url';
 import type { Prisma } from '@prisma/client';
 import { doitProtegerLeContenu } from './lib/mentions-organisme.js';
 import { sortDuRayon, MOTIF_FAROS } from './lib/barriere-faros.js';
+import { empreinte, sortDuContenu } from './lib/empreinte-import.js';
 import { CibleInattendueError, transactionGardee, type MarqueursCible } from './lib/garde-cible.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -415,6 +416,14 @@ const collisions: string[] = [];
 const guarded: string[] = [];
 /** Les rayons refusés par la barrière Faros — nommés, jamais silencieux. */
 const farosEcartes: string[] = [];
+/**
+ * Les modules qu'un HUMAIN a réécrits après l'import — non réécrits.
+ *
+ * Comptés à part et rendus en tête de rapport, pas en note au milieu du détail :
+ * une perte évitée qui se lit à la ligne 700 d'un fichier de 959 n'est pas
+ * rendue, elle est rangée.
+ */
+const contenusHumains: string[] = [];
 
 /**
  * Un lien `supersededBy` VOULU — déclaré en phase 1, résolu en phase 2.
@@ -657,7 +666,7 @@ for (const p of snapshot.programmes) {
     for (const m of modulesData) {
       const current = await tx.trainingModule.findFirst({
         where: { productId: product.id, sourceRef: m.sourceRef },
-        select: { id: true, contentMd: true },
+        select: { id: true, contentMd: true, contentMdFingerprint: true },
       });
       if (current) {
         // ── Un import ne VIDE jamais un contenu écrit ────────────────────
@@ -693,8 +702,34 @@ for (const p of snapshot.programmes) {
         // filtre : s'il n'en reste rien, il n'y a rien à protéger et
         // l'écriture passe. L'import ne normalise rien en base et ne réécrit
         // rien à la main — il DÉCIDE si la garde s'applique, c'est tout.
-        const proteger = doitProtegerLeContenu(current.contentMd, m.contentMd);
-        if (proteger) {
+        //
+        // ── La garde d'ÉCRASEMENT (17/09/2026) ──────────────────────────
+        //
+        // La garde ci-dessus ne protège que du VIDE. Celle-ci ferme l'autre
+        // moitié : si l'empreinte mémorisée ne décrit plus ce qu'il y a en
+        // base, un HUMAIN a écrit après l'import — et l'import ne reprend pas
+        // la main sur un texte qu'il n'a pas écrit.
+        //
+        // Il n'arbitre jamais : une vraie correction du Drive sur un module
+        // retouché à la main est un conflit que seul un humain peut trancher,
+        // exactement comme un rayon contre un rayon (D-19 bis). Le script le
+        // NOMME et passe au suivant.
+        const sortContenu = sortDuContenu({
+          enBase: current.contentMd,
+          entrant: m.contentMd,
+          empreinteConnue: current.contentMdFingerprint,
+          protegeParLeVide: doitProtegerLeContenu(current.contentMd, m.contentMd),
+        });
+        if (sortContenu.action === 'refuser') {
+          // Tout le reste du module est mis à jour ; seul le déroulé reste
+          // intact. Et l'empreinte n'est PAS rafraîchie : sinon le passage
+          // suivant croirait la base redevenue la sienne, et écraserait.
+          const { contentMd: _humain, ...sansContenu } = m;
+          await tx.trainingModule.update({ where: { id: current.id }, data: sansContenu });
+          contenusHumains.push(
+            `\`${m.sourceRef}\` « ${m.title.slice(0, 50)} » — le déroulé en base **n'est plus celui que l'import a écrit** (${(current.contentMd ?? '').trim().length} car. en base, ${(m.contentMd ?? '').trim().length} au Drive). **Non réécrit.** Laquelle des deux versions fait foi n'est pas une question d'import.`,
+          );
+        } else if (sortContenu.action === 'protéger') {
           const { contentMd: _ignore, ...sansContenu } = m;
           await tx.trainingModule.update({ where: { id: current.id }, data: sansContenu });
           contenusProteges.push(
@@ -712,10 +747,15 @@ for (const p of snapshot.programmes) {
               `\`${m.sourceRef}\` « ${m.title.slice(0, 50)} » — la base ne portait QUE des mentions d'organisme du gabarit : **déroulé vidé**, rien de pédagogique n'a été perdu.`,
             );
           }
-          await tx.trainingModule.update({ where: { id: current.id }, data: m });
+          await tx.trainingModule.update({
+            where: { id: current.id },
+            data: { ...m, contentMdFingerprint: empreinte(m.contentMd) },
+          });
         }
       } else {
-        await tx.trainingModule.create({ data: { ...m, productId: product.id } });
+        await tx.trainingModule.create({
+          data: { ...m, productId: product.id, contentMdFingerprint: empreinte(m.contentMd) },
+        });
       }
     }
   });
@@ -931,6 +971,11 @@ const lines: string[] = [
   `- **aucun rayon activé** — corollaire D-19 du 10/09/2026 : ce qui devient vendable est le programme COMPOSÉ (lot I-2), jamais le conteneur importé`,
   `- **aucun produit existant modifié** — les doublons écartent le RAYON, jamais le produit vendu (D-19 bis)`,
   `- **${report.filter((l) => l.notes.some((n) => n.includes('D-19 bis'))).length}** rayon(s) écarté(s) de la reco pour doublon d'un produit vendu (D-19 bis)`,
+  ...(contenusHumains.length > 0
+    ? [
+        `- ⛔ **${contenusHumains.length} module(s) modifiés par un humain — NON RÉÉCRITS.** L'import ne reprend pas la main sur un déroulé qu'il n'a pas écrit.`,
+      ]
+    : []),
   ...(jumeauxDeRayon.length > 0
     ? [
         `- ⚠️ **${jumeauxDeRayon.length}** programme(s) importé(s) DEUX FOIS depuis deux dossiers source — signalés plus bas, **rien n'a été écarté** : entre deux rayons, c'est une décision de catalogue`,
@@ -951,6 +996,21 @@ if (farosEcartes.length > 0) {
     '',
   );
   for (const f of farosEcartes) lines.push(`- ${f}`);
+  lines.push('');
+}
+
+if (contenusHumains.length > 0) {
+  lines.push(
+    `## ⛔ ${contenusHumains.length} module(s) modifiés par un humain — non réécrits`,
+    '',
+    "Le déroulé en base ne correspond plus à l'empreinte que l'import y avait laissée : **quelqu'un a écrit après lui.** L'import a mis à jour tout le reste du module (titre, ordre, durée) et **n'a pas touché au déroulé**.",
+    '',
+    "**Ce n'est pas au script de trancher.** Si le document Drive a été corrigé depuis, les deux versions sont légitimes et aucune règle ne peut les départager — c'est le même arbitrage qu'entre deux rayons (D-19 bis). La paire est nommée ci-dessous ; la décision est humaine.",
+    '',
+    "Une réexécution refusera de nouveau : l'empreinte n'est pas rafraîchie tant que l'import n'a pas repris la main, et rien dans ce fichier ne le fera changer d'avis tout seul.",
+    '',
+  );
+  for (const c of contenusHumains) lines.push(`- ${c}`);
   lines.push('');
 }
 
@@ -1071,6 +1131,12 @@ if (farosEcartes.length > 0) {
   console.log(
     `   ⛔ ${farosEcartes.length} rayon(s) Faros écarté(s) — barrière du 16/09 (modalité)`,
   );
+}
+if (contenusHumains.length > 0) {
+  console.log(`   ⛔ ${contenusHumains.length} module(s) modifiés par un humain — NON RÉÉCRITS`);
+  for (const c of contenusHumains) {
+    console.log(`      ${c.replace(/\*\*/g, '').replace(/`/g, '').slice(0, 116)}`);
+  }
 }
 for (const l of liensResolus.filter((x) => x.enPhase2)) {
   console.log(
