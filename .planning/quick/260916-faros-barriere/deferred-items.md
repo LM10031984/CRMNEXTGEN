@@ -30,6 +30,44 @@ faisant le travail qu'il décrit.
 migration, aucun import, aucune écriture en base. Le test est la barrière ; le
 champ est une décision de Laurent.
 
+## ⚠️ Les deux bases DIVERGENT volontairement — ne pas « réparer » par un import
+
+**Posé le 17/09/2026, en portant la barrière dans l'importeur.**
+
+| Base | Entrées `faros:` |
+|---|---|
+| LOCALE `qualiof_dev` | **2 produits, 2 modules** — importés le 11/09, avant l'arbitrage |
+| PRODUCTION | **aucune**, et c'est voulu |
+
+`import-drive-catalog.ts` refuse désormais tout rayon dont l'origine est
+`faros`, avant toute écriture, avec ce motif imprimé dans le dry-run **et** dans
+le rapport :
+
+> Écarté — contenu asynchrone, et l'import ne sait poser que PRESENTIEL.
+> Le champ de modalité n'existe pas encore (barrière Faros, condition ①).
+
+**La raison n'est pas que le contenu est mauvais.** `SA-ACQ-M003` et
+`SA-ADM-M001` déclarent « G3 prêt à produire » en v1.0 — ce sont les deux seuls
+du corpus dans ce cas, et c'est précisément pourquoi l'extraction ne voyait
+qu'eux (cause A, fermée le 16/09). La raison est qu'on écrirait une **fausse
+modalité sur une pièce Qualiopi, en production** : ces deux unités sont des
+capsules asynchrones, et l'import ne sait poser que `PRESENTIEL`, en dur.
+
+> **Quelqu'un qui compare les deux bases verra 2 produits en local et 0 en prod.
+> C'est l'état voulu. Ce n'est pas un import raté, et ça ne se rattrape pas en
+> relançant l'import** — il refusera de nouveau, et il aura raison.
+
+L'écart se referme le jour où les conditions ① et ② du test tombent : un champ
+de modalité sur `TrainingModule`, et un import qui cesse de déclarer
+`PRESENTIEL` par défaut. Pas avant.
+
+**Où la garde vit, depuis le 17/09** : `packages/db/scripts/lib/barriere-faros.ts`,
+une fonction pure appelée par l'importeur **et** par le test. Auparavant la
+barrière était une lecture du texte source de l'importeur — elle le décrivait
+sans jamais l'empêcher de rien (§4 ter). Le test `④` du fichier
+`faros-non-importable.test.ts` est vert : c'est le seul du fichier, et il
+vérifie un travail fait, pas une décision en attente.
+
 ## Conséquence pour la gate de livraison
 
 Tant que cette barrière est en place, la règle « aucun commit de fin sans les
