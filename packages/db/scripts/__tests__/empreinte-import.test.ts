@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { empreinte, sortDuContenu } from '../lib/empreinte-import.js';
+import { ciblesSansEmpreinte, empreinte, sortDuContenu } from '../lib/empreinte-import.js';
 
 const DRIVE = 'Le déroulé tel que le Drive le porte.';
 const HUMAIN = 'Le déroulé réécrit à la main par Laurent, plus précis, 1500 car.';
@@ -98,5 +98,54 @@ describe('sortDuContenu — trois issues, jamais une devinette', () => {
     const e = empreinte(HUMAIN);
     expect(e).toMatch(/^[0-9a-f]{64}$/);
     expect(e).not.toContain('Laurent');
+  });
+});
+
+describe("ciblesSansEmpreinte — l'ordre du versement, tenu par une garde", () => {
+  it('refuse une cible gérée par l’import qui ne porte AUCUNE empreinte', () => {
+    // Le piège : `NULL` veut dire « rien à protéger ici ». Poser du contenu
+    // humain maintenant le rendrait écrasable au premier import, qui
+    // l'annoncerait en « mis à jour ».
+    const refusees = ciblesSansEmpreinte([
+      { sourceRef: 'drive:047#20', titre: 'Répondre aux avis clients', empreinte: null },
+    ]);
+    expect(refusees).toHaveLength(1);
+    expect(refusees[0]!.sourceRef).toBe('drive:047#20');
+  });
+
+  it('laisse passer une cible que l’import a déjà stampée', () => {
+    expect(
+      ciblesSansEmpreinte([
+        {
+          sourceRef: 'drive:047#20',
+          titre: 'Répondre aux avis clients',
+          empreinte: empreinte('x'),
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('ne vise PAS un module né hors import — il n’a pas de sourceRef', () => {
+    // Les modules que le versement CRÉE sont dans ce cas. L'import ne les
+    // connaît pas, ne les écrira jamais, et n'a rien à écraser. Les refuser
+    // ferait échouer un versement légitime — et une garde qui refuse le cas
+    // normal finit débranchée.
+    expect(
+      ciblesSansEmpreinte([
+        { sourceRef: null, titre: 'Installer un rythme de suivi vendeur', empreinte: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('rend TOUTES les cibles fautives, pas seulement la première', () => {
+    // Un refus qui n'en nomme qu'une ferait relancer autant de fois qu'il y a
+    // de cibles, en découvrant la suivante à chaque fois.
+    expect(
+      ciblesSansEmpreinte([
+        { sourceRef: 'drive:001#1', titre: 'A', empreinte: null },
+        { sourceRef: 'drive:002#1', titre: 'B', empreinte: empreinte('vu') },
+        { sourceRef: 'drive:003#1', titre: 'C', empreinte: undefined },
+      ]).map((c) => c.sourceRef),
+    ).toEqual(['drive:001#1', 'drive:003#1']);
   });
 });

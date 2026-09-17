@@ -94,3 +94,59 @@ export function sortDuContenu(etat: EtatDuContenu): SortDuContenu {
   if (empreinte(etat.enBase) !== etat.empreinteConnue) return { action: 'refuser' };
   return { action: 'écrire' };
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LE PIÈGE D'ORDRE — une garde n'a pas d'effet rétroactif
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `contentMdFingerprint = NULL` veut dire « **l'import n'a rien à protéger
+ * ici** », pas « protégé ». C'est le bon défaut — sans lui, la colonne aurait
+ * gelé tout le catalogue le jour de sa naissance. Mais il a une conséquence que
+ * personne ne voit venir :
+ *
+ *   **Verser du contenu humain AVANT que l'import ait stampé le rend écrasable
+ *   par le premier import qui passe — et celui-ci l'annoncera en « mis à
+ *   jour ».**
+ *
+ * L'ordre n'est donc pas une préférence, c'est une condition :
+ *
+ *   ① import complet   → chaque module porte l'empreinte de ce que l'import a écrit
+ *   ② SEULEMENT ENSUITE → versement du contenu humain
+ *   ③ import suivant   → empreinte ≠ contenu, il refuse et il nomme
+ *
+ * Inversé, l'ordre ne casse rien bruyamment : il perd le travail en silence, au
+ * prochain import, avec un rapport qui a l'air d'une bonne nouvelle.
+ *
+ * Une consigne se perd — d'où cette garde. Un script de versement l'appelle
+ * AVANT d'écrire, et refuse si une seule de ses cibles n'a pas d'empreinte.
+ */
+
+/** Le motif rendu à l'écran quand le versement est lancé trop tôt. */
+export const MOTIF_ORDRE_INVERSE =
+  "Ce module est géré par l'import et ne porte AUCUNE empreinte : " +
+  "l'import n'y a jamais écrit depuis que la garde existe. Y poser du contenu " +
+  "maintenant le rendrait écrasable au premier import, qui l'annoncerait en " +
+  "« mis à jour ». Lancer l'import COMPLET d'abord, ce versement ensuite.";
+
+/** Une cible de versement, telle que la garde a besoin de la voir. */
+export interface CibleVersement {
+  /** L'identité du module dans sa source. NULL = module né hors import, rien à craindre. */
+  sourceRef: string | null;
+  /** Pour que le refus se lise. */
+  titre: string;
+  /** L'empreinte que le module porte aujourd'hui. */
+  empreinte: string | null | undefined;
+}
+
+/**
+ * Les cibles qu'on ne peut PAS encore servir, et rien d'autre.
+ *
+ * Un module sans `sourceRef` n'est pas concerné : l'import ne le connaît pas,
+ * ne l'écrira jamais, et n'a donc rien à écraser. Le confondre avec une cible à
+ * risque ferait refuser un versement légitime — et une garde qui refuse le cas
+ * normal finit débranchée (§4 quaterdecies).
+ */
+export function ciblesSansEmpreinte(cibles: readonly CibleVersement[]): CibleVersement[] {
+  return cibles.filter((c) => c.sourceRef !== null && c.empreinte == null);
+}
