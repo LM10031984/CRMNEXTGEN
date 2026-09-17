@@ -236,6 +236,8 @@ export default async function OrgDetailPage({
           <ContactsOrganisation
             organizationId={org.id}
             representative={org.representative}
+            organisationEmail={org.email}
+            organisationPhone={org.phone}
             contacts={org.contacts.map((c) => ({
               id: c.id,
               firstName: c.firstName,
