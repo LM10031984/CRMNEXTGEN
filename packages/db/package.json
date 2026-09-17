@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./product-code": "./scripts/lib/product-code.ts",
-    "./barriere-faros": "./scripts/lib/barriere-faros.ts"
+    "./barriere-faros": "./scripts/lib/barriere-faros.ts",
+    "./garde-cible": "./scripts/lib/garde-cible.ts"
   },
   "scripts": {
     "postinstall": "prisma generate",
