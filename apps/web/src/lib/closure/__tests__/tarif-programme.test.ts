@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   resoudreTarifProgramme,
   resoudrePrixProgramme,
+  refusForfaitNonConfirme,
   programmeDoitEtrePropreALaSession,
+  prixModeDuProduit,
 } from '../tarif-programme';
 import { Prisma } from '@qualiof/db';
 
@@ -42,17 +44,25 @@ describe('resoudreTarifProgramme', () => {
 });
 
 /**
- * Correction du 02/09 (Laurent) : « c'est un contrat avec une entreprise donc
- * le montant est pas par stagiaire, il devrait afficher 2 200 € et pas 1 100 €
- * par stagiaire. La règle il prend le montant total point. »
+ * LE MODE DU PRODUIT DÉCIDE, LA SESSION CONFIRME (17/09/2026).
  *
- * Cas réel SES-0109 : deux salariées de l'AGENCE DE L'OLIVIER à 1 100 € chacune.
- * La convention engage l'entreprise sur 2 200 € — le programme doit dire 2 200 €.
+ * Ce qui change par rapport au 02/09. Le mode se DÉDUISAIT de la composition de
+ * la session : tous sous convention, un seul commanditaire, tous avec un prix
+ * ⇒ total. Un produit vendu au forfait et un produit vendu à la place étaient
+ * donc indiscernables tant qu'on ne regardait pas qui s'était inscrit — et le
+ * catalogue, qui n'a pas d'inscrits, ne pouvait rien annoncer de juste.
  *
- * Test de puissance : remplacer la somme par `tarif × effectif` passe encore
- * ici, mais casse « additionne les prix RÉELS » (des salariés à prix différents).
+ * `TrainingProduct.pricingMode` porte désormais la décision. Les conditions
+ * n'ont pas changé, leur RÔLE si : elles confirment, et quand elles ne
+ * confirment pas, ce n'est plus « alors c'est un prix par tête » mais un REFUS
+ * NOMMÉ — annoncer un prix de place sur un produit vendu au forfait serait faux
+ * dans l'enveloppe du financeur.
+ *
+ * Test de puissance : rendre au mode produit un rôle consultatif — décider
+ * encore par la composition — fait virer ROUGE « un produit vendu à la place
+ * reste par stagiaire, même sur une salle de salariés ».
  */
-describe('resoudrePrixProgramme — total entreprise vs prix par stagiaire', () => {
+describe('resoudrePrixProgramme — le mode du produit décide', () => {
   const salarie = (priceHT: number, sponsorOrgId = 'org-olivier') => ({
     priceHT,
     sponsorOrgId,
@@ -63,10 +73,13 @@ describe('resoudrePrixProgramme — total entreprise vs prix par stagiaire', () 
     sponsorOrgId,
     couvertParConvention: false,
   });
+  const FORFAIT = 'FORFAIT_ENTREPRISE' as const;
+  const PLACE = 'PAR_STAGIAIRE' as const;
 
-  it('SES-0109 : deux salariées à 1 100 € → 2 200 € au TOTAL', () => {
+  it('SES-0109 : deux salariées à 1 100 € sur un produit au forfait → 2 200 € au TOTAL', () => {
     expect(
       resoudrePrixProgramme({
+        modeProduit: FORFAIT,
         inscrits: [salarie(1100), salarie(1100)],
         tarifSession: 1100,
         prixProduit: 2500,
@@ -77,6 +90,7 @@ describe('resoudrePrixProgramme — total entreprise vs prix par stagiaire', () 
   it('additionne les prix RÉELS, pas tarif × effectif', () => {
     expect(
       resoudrePrixProgramme({
+        modeProduit: FORFAIT,
         inscrits: [salarie(1500), salarie(700)],
         tarifSession: 1100,
         prixProduit: 2500,
@@ -85,58 +99,139 @@ describe('resoudrePrixProgramme — total entreprise vs prix par stagiaire', () 
   });
 
   it('une salariée seule : le total vaut son prix, mais reste un total', () => {
-    const r = resoudrePrixProgramme({
-      inscrits: [salarie(2500)],
-      tarifSession: 2500,
-      prixProduit: 2500,
-    });
-    expect(r).toEqual({ mode: 'TOTAL_ENTREPRISE', montantHT: 2500 });
-  });
-
-  it('session inter d’auto-payeurs : prix PAR STAGIAIRE, jamais un total absurde', () => {
     expect(
       resoudrePrixProgramme({
-        inscrits: [autoPayeur(2500, 'ei-1'), autoPayeur(2500, 'ei-2'), autoPayeur(2500, 'ei-3')],
+        modeProduit: FORFAIT,
+        inscrits: [salarie(2500)],
+        tarifSession: 2500,
+        prixProduit: 2500,
+      }),
+    ).toEqual({ mode: 'TOTAL_ENTREPRISE', montantHT: 2500 });
+  });
+
+  it('un produit vendu à la place reste PAR STAGIAIRE, même sur une salle de salariés', () => {
+    // LE test de la bascule : cette salle cochait les trois conditions et
+    // donnait un total avant le 17/09. Le produit dit « à la place », donc
+    // c'est par stagiaire, et la salle n'a plus voix au chapitre.
+    expect(
+      resoudrePrixProgramme({
+        modeProduit: PLACE,
+        inscrits: [salarie(1100), salarie(1100)],
+        tarifSession: 1100,
+        prixProduit: 2500,
+      }),
+    ).toEqual({ mode: 'PAR_STAGIAIRE', montantHT: 1100 });
+  });
+
+  it('session inter d’auto-payeurs : prix PAR STAGIAIRE', () => {
+    expect(
+      resoudrePrixProgramme({
+        modeProduit: PLACE,
+        inscrits: [autoPayeur(2500, 'ei-1'), autoPayeur(2500, 'ei-2')],
         tarifSession: 2500,
         prixProduit: 2500,
       }),
     ).toEqual({ mode: 'PAR_STAGIAIRE', montantHT: 2500 });
   });
 
-  it('session MIXTE (salariés + agent commercial) : on reste par stagiaire', () => {
+  it('produit au forfait SANS inscrit : le montant est celui du catalogue', () => {
+    // Le cas du programme produit, et d'une session pas encore remplie.
     expect(
       resoudrePrixProgramme({
-        inscrits: [salarie(1100), autoPayeur(1100, 'ei-agent')],
-        tarifSession: 1100,
+        modeProduit: FORFAIT,
+        inscrits: [],
+        tarifSession: null,
         prixProduit: 2500,
-      }).mode,
-    ).toBe('PAR_STAGIAIRE');
+      }),
+    ).toEqual({ mode: 'TOTAL_ENTREPRISE', montantHT: 2500 });
   });
 
-  it('deux entreprises sur la même session : pas de total, il ne concernerait qu’une partie', () => {
+  it('produit à la place sans inscrit : catalogue par stagiaire', () => {
     expect(
       resoudrePrixProgramme({
-        inscrits: [salarie(1100, 'org-a'), salarie(1100, 'org-b')],
-        tarifSession: 1100,
+        modeProduit: PLACE,
+        inscrits: [],
+        tarifSession: null,
         prixProduit: 2500,
-      }).mode,
-    ).toBe('PAR_STAGIAIRE');
-  });
-
-  it('un prix manquant ⇒ pas de total (il sous-estimerait l’engagement)', () => {
-    expect(
-      resoudrePrixProgramme({
-        inscrits: [salarie(1100), salarie(0)],
-        tarifSession: 1100,
-        prixProduit: 2500,
-      }).mode,
-    ).toBe('PAR_STAGIAIRE');
-  });
-
-  it('session sans inscrit ⇒ prix catalogue par stagiaire', () => {
-    expect(
-      resoudrePrixProgramme({ inscrits: [], tarifSession: null, prixProduit: 2500 }),
+      }),
     ).toEqual({ mode: 'PAR_STAGIAIRE', montantHT: 2500 });
+  });
+});
+
+/**
+ * Le REFUS NOMMÉ — ce qui remplace le repli silencieux sur le prix par tête.
+ *
+ * Avant, une session qui ne confirmait pas retombait sur « par stagiaire » sans
+ * rien dire. Sur un produit vendu au forfait, c'est annoncer un prix de place
+ * dans une enveloppe OPCO. On refuse, et on nomme ce qui cloche à qui peut le
+ * corriger.
+ */
+describe('refusForfaitNonConfirme', () => {
+  const salarie = (priceHT: number, sponsorOrgId = 'org-a') => ({
+    priceHT,
+    sponsorOrgId,
+    couvertParConvention: true,
+  });
+  const autoPayeur = (priceHT: number, sponsorOrgId = 'org-ei') => ({
+    priceHT,
+    sponsorOrgId,
+    couvertParConvention: false,
+  });
+  const FORFAIT = 'FORFAIT_ENTREPRISE' as const;
+
+  it('se tait pour un produit vendu à la place, quelle que soit la salle', () => {
+    expect(
+      refusForfaitNonConfirme({
+        modeProduit: 'PAR_STAGIAIRE',
+        inscrits: [salarie(1100, 'org-a'), salarie(1100, 'org-b')],
+      }),
+    ).toBeNull();
+  });
+
+  it('se tait quand tout confirme', () => {
+    expect(
+      refusForfaitNonConfirme({ modeProduit: FORFAIT, inscrits: [salarie(1100), salarie(1100)] }),
+    ).toBeNull();
+  });
+
+  it('se tait sans inscrit — il n’y a rien à totaliser, pas une anomalie', () => {
+    expect(refusForfaitNonConfirme({ modeProduit: FORFAIT, inscrits: [] })).toBeNull();
+  });
+
+  it('deux commanditaires : nomme le nombre et dit de scinder', () => {
+    const r = refusForfaitNonConfirme({
+      modeProduit: FORFAIT,
+      inscrits: [salarie(1100, 'org-a'), salarie(1100, 'org-b')],
+    });
+    expect(r).toContain('2 commanditaires');
+    expect(r).toContain('Scindez');
+  });
+
+  it('salle mixte : compte les inscrits hors convention et dit quoi faire', () => {
+    const r = refusForfaitNonConfirme({
+      modeProduit: FORFAIT,
+      // MÊME agence : un salarié et un agent commercial d'org-a. Sinon c'est le
+      // refus « deux commanditaires » qui répond, et on ne teste plus rien.
+      inscrits: [salarie(1100), autoPayeur(1100, 'org-a')],
+    });
+    expect(r).toContain('1 inscrit ne relève pas');
+    expect(r).toContain('vendu à la place');
+  });
+
+  it('prix manquant : le dit plutôt que de sous-estimer l’engagement', () => {
+    const r = refusForfaitNonConfirme({
+      modeProduit: FORFAIT,
+      inscrits: [salarie(1100), salarie(0)],
+    });
+    expect(r).toContain("1 inscrit n'a pas de prix");
+  });
+
+  it('le commanditaire multiple prime sur le reste — le motif le plus structurel d’abord', () => {
+    const r = refusForfaitNonConfirme({
+      modeProduit: FORFAIT,
+      inscrits: [salarie(1100, 'org-a'), autoPayeur(0, 'org-b')],
+    });
+    expect(r).toContain('commanditaires');
   });
 });
 
@@ -158,9 +253,10 @@ describe('programmeDoitEtrePropreALaSession', () => {
     couvertParConvention: false,
   });
 
-  it('SES-0107 : forfait d’entreprise SANS tarif de session ⇒ programme de la session', () => {
+  it('SES-0107 : produit au forfait, huit salariés, sans tarif de session ⇒ programme de la session', () => {
     expect(
       programmeDoitEtrePropreALaSession({
+        modeProduit: 'FORFAIT_ENTREPRISE',
         inscrits: Array.from({ length: 8 }, () => salarie(312.5)),
         tarifSession: null,
         prixProduit: 2500,
@@ -168,9 +264,10 @@ describe('programmeDoitEtrePropreALaSession', () => {
     ).toBe(true);
   });
 
-  it('tarif négocié pour la session ⇒ programme de la session, même hors convention d’entreprise', () => {
+  it('tarif négocié pour la session ⇒ programme de la session, quel que soit le mode', () => {
     expect(
       programmeDoitEtrePropreALaSession({
+        modeProduit: 'PAR_STAGIAIRE',
         inscrits: [autoPayeur(1800), autoPayeur(1800, 'org-ei-2')],
         tarifSession: 1800,
         prixProduit: 2500,
@@ -178,9 +275,10 @@ describe('programmeDoitEtrePropreALaSession', () => {
     ).toBe(true);
   });
 
-  it('session inter d’auto-payeurs au prix catalogue ⇒ le programme de catalogue suffit', () => {
+  it('session inter au prix catalogue ⇒ le programme de catalogue suffit', () => {
     expect(
       programmeDoitEtrePropreALaSession({
+        modeProduit: 'PAR_STAGIAIRE',
         inscrits: [autoPayeur(2500), autoPayeur(2500, 'org-ei-2')],
         tarifSession: null,
         prixProduit: 2500,
@@ -188,19 +286,30 @@ describe('programmeDoitEtrePropreALaSession', () => {
     ).toBe(false);
   });
 
-  it('session sans inscrit ⇒ catalogue (rien à totaliser)', () => {
-    expect(
-      programmeDoitEtrePropreALaSession({ inscrits: [], tarifSession: 0, prixProduit: 2500 }),
-    ).toBe(false);
-  });
-
-  it('salle mixte salariés + agent commercial ⇒ catalogue (un total ne vaudrait que pour une partie)', () => {
+  it('produit au forfait SANS inscrit ⇒ catalogue : il sait désormais annoncer le forfait', () => {
+    // Depuis le 17/09, le programme produit porte le mode. Fabriquer un PDF de
+    // session identique au PDF produit serait un doublon à maintenir.
     expect(
       programmeDoitEtrePropreALaSession({
-        inscrits: [salarie(312.5), autoPayeur(312.5)],
-        tarifSession: null,
+        modeProduit: 'FORFAIT_ENTREPRISE',
+        inscrits: [],
+        tarifSession: 0,
         prixProduit: 2500,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Deux vocabulaires, et c'est voulu : le produit dit comment il se VEND, le
+ * document dit ce qu'il AFFICHE.
+ */
+describe('prixModeDuProduit', () => {
+  it('traduit le forfait en total affiché', () => {
+    expect(prixModeDuProduit('FORFAIT_ENTREPRISE')).toBe('TOTAL_ENTREPRISE');
+  });
+
+  it('traduit la place en prix par stagiaire', () => {
+    expect(prixModeDuProduit('PAR_STAGIAIRE')).toBe('PAR_STAGIAIRE');
   });
 });
