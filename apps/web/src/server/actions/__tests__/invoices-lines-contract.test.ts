@@ -1,3 +1,4 @@
+import { assertTestTarget, assertTestDatabaseContent } from '../../../../../packages/db/scripts/assert-test-target';
 /**
  * Contrat de montants — `Invoice.amountHT === Σ InvoiceLine.totalHT`.
  *
@@ -22,12 +23,13 @@
  * Ce qui est prouvé ici et maintenant, c'est le DÉTECTEUR — sur une facture
  * cohérente et sur une facture délibérément fausse, en transaction annulée.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { createPrismaClientForUrl, Prisma } from '@qualiof/db';
 
 // Même garde d'environnement que `scripts/__tests__/dedupe.merge.test.ts` :
 // base DÉDIÉE `*_test`, jamais la prod-locale.
 const TEST_URL = process.env.TEST_DATABASE_URL;
+assertTestTarget({ databaseUrl: TEST_URL });
 function dbName(u: string): string {
   return new URL(u).pathname.replace(/^\//, '');
 }
@@ -38,6 +40,8 @@ if (!TEST_URL || !/_test$/.test(dbName(TEST_URL))) {
 }
 
 const db = createPrismaClientForUrl(TEST_URL);
+
+beforeAll(async () => { await assertTestDatabaseContent(db, TEST_URL); });
 
 afterAll(async () => {
   await db.$disconnect();

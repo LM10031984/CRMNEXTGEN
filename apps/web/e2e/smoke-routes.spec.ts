@@ -1,3 +1,4 @@
+import { assertTestDatabaseContent } from '../../../packages/db/scripts/assert-test-target';
 import { test, expect } from '@playwright/test';
 import { prisma } from '@qualiof/db';
 
@@ -34,6 +35,7 @@ const BOGUS_TOKEN = 'token-bidon-xyz';
 let firstSessionId: string;
 
 test.beforeAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   // 1ʳᵉ session réelle pour la route dynamique /app/sessions/[id] — jamais d'id en dur.
   const session = await prisma.trainingSession.findFirst({ select: { id: true } });
   if (!session) throw new Error('Aucune TrainingSession en base — smoke /app/sessions/[id] impossible.');
@@ -54,6 +56,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   await prisma.preEnrollment.deleteMany({ where: { token: E2E_TOKEN } });
   await prisma.$disconnect();
 });

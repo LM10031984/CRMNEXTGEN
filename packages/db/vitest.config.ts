@@ -6,6 +6,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    setupFiles: ['../../scripts/unit-test-env.ts'],
     include: ['scripts/**/__tests__/**/*.{test,spec}.ts', 'src/**/__tests__/**/*.{test,spec}.ts'],
   },
 });

@@ -1,3 +1,4 @@
+import { assertTestDatabaseContent, assertTestTarget } from '../../../packages/db/scripts/assert-test-target';
 /**
  * Teardown E2E — purge EXCLUSIVE des données de test préfixées `E2E-` / `e2e-`
  * (Phase 21, plan 21-06 — TEST-01, convention D-11 : données jetables identifiables).
@@ -79,6 +80,8 @@ async function removeStorageObjects(bucket: string, keys: string[]): Promise<num
 }
 
 export async function teardownE2EData(): Promise<Record<string, number>> {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
+  if (process.env.SUPABASE_URL) assertTestTarget({ databaseUrl: process.env.DATABASE_URL, baseUrl: process.env.SUPABASE_URL });
   const counts: Record<string, number> = {};
 
   // ── 0. Résolution des ids E2E (aucune PII loggée) ────────────────
