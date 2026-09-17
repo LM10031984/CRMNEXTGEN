@@ -44,6 +44,7 @@ import {
   type RattachementValide,
 } from '../src/lib/proposition/rattachements-valides';
 import { normalize } from '../src/lib/proposition/programme-matcher';
+import { accumulerSignaux } from '../src/lib/proposition/accumulation-signaux';
 import { DIAGNOSTIC_CHAPTERS } from '@qualiof/shared/diagnostic';
 import { listDiagnosticPainPoints } from '../src/lib/diagnostic-r1/scoring';
 
@@ -133,13 +134,32 @@ interface Resultat {
   detail?: string;
 }
 
-/** Une écriture retenue, appliquée plus tard dans UNE transaction. */
+/**
+ * Une écriture retenue, appliquée plus tard dans UNE transaction.
+ *
+ * ## Ce qui a changé le 17/09/2026, et pourquoi
+ *
+ * Ce type portait `signalsAvant: string[]` — l'état du module lu PENDANT la
+ * phase de décision, donc AVANT la transaction. L'écriture valait alors
+ * `[...signalsAvant, signal]`.
+ *
+ * Trois modules sont visés par DEUX douleurs différentes (`drive:008#1`,
+ * `drive:034#2`, `drive:034#3`). Leurs deux écritures partaient du même
+ * `signalsAvant` et la seconde écrasait la première : un **lost update**. Un
+ * passage ne posait que 9 signaux sur 12 ; il en fallait un second.
+ *
+ * C'est le bug `drive:020` sous un autre nom — une lecture prise hors de la
+ * transaction, utilisée pour décider dedans. Il est resté invisible tant qu'un
+ * run ne posait qu'un signal ; c'est le versement complet qui l'a allumé.
+ *
+ * `signalsAvant` a donc disparu : l'état est relu DANS la transaction, et les
+ * signaux s'accumulent par MODULE.
+ */
 interface AEcrire {
   moduleId: string;
   sourceRef: string;
   titreActuel: string;
   douleur: string;
-  signalsAvant: string[];
   signal: string;
 }
 
@@ -227,7 +247,6 @@ for (const r of RATTACHEMENTS_VALIDES) {
       sourceRef: cible.sourceRef,
       titreActuel: module.title,
       douleur: r.douleur,
-      signalsAvant: actuels,
       signal: r.signal,
     });
     resultats.push({
@@ -239,6 +258,17 @@ for (const r of RATTACHEMENTS_VALIDES) {
   }
 }
 
+/**
+ * Ce que l'écriture a RÉELLEMENT fait — mesuré dans la transaction, pas déduit
+ * de la phase de lecture.
+ *
+ * Les deux peuvent diverger, et c'est voulu : la phase de lecture dit ce qu'on
+ * VEUT poser, la transaction dit ce qui a été posé. Faire annoncer la première
+ * à la place de la seconde, c'est exactement ce qui a caché le lost update — le
+ * script disait « 12 posés » quand il en avait posé 9.
+ */
+let bilan: { posesReels: number; dejaAuMomentDEcrire: number } | null = null;
+
 if (APPLY && aEcrire.length > 0) {
   // UNE transaction : les 8 rattachements entrent ensemble ou pas du tout.
   // L'AuditLog est écrit DANS la même transaction que la donnée — un journal
@@ -248,30 +278,78 @@ if (APPLY && aEcrire.length > 0) {
   // ne nous appelle pas autrement. Même enveloppe que l'import, pas une copie :
   // deux exemplaires d'une garde finissent par diverger, et c'est le jour où
   // l'un des deux a déjà cessé de garder qu'on s'en aperçoit.
-  await transactionGardee(prisma, ATTENDU, relireMarqueurs, async (tx) => {
-    for (const e of aEcrire) {
-      await tx.trainingModule.update({
-        where: { id: e.moduleId },
-        data: { diagnosticSignals: [...e.signalsAvant, e.signal] },
+  // Regroupé par MODULE, et c'est tout l'objet de la correction : l'unité
+  // d'écriture n'est plus la décision. Trois modules portent deux douleurs ;
+  // les traiter séparément faisait écraser la première écriture par la seconde.
+  const parModule = new Map<string, { sourceRef: string; titre: string; entrees: AEcrire[] }>();
+  for (const e of aEcrire) {
+    const v = parModule.get(e.moduleId) ?? {
+      sourceRef: e.sourceRef,
+      titre: e.titreActuel,
+      entrees: [],
+    };
+    v.entrees.push(e);
+    parModule.set(e.moduleId, v);
+  }
+
+  bilan = await transactionGardee(prisma, ATTENDU, relireMarqueurs, async (tx) => {
+    let posesReels = 0;
+    let dejaAuMomentDEcrire = 0;
+
+    for (const [moduleId, v] of parModule) {
+      // L'état est relu DANS la transaction. C'est la correction : décider
+      // d'une écriture à partir d'une lecture prise avant elle, c'est écraser
+      // ce qu'un autre ordre a écrit entre-temps — ici, notre propre ordre
+      // précédent.
+      const frais = await tx.trainingModule.findUnique({
+        where: { id: moduleId },
+        select: { diagnosticSignals: true },
       });
+      if (!frais) {
+        throw new Error(
+          `Le module \`${v.sourceRef}\` a disparu entre la lecture et l'écriture. Rien n'est écrit.`,
+        );
+      }
+      const actuels = Array.isArray(frais.diagnosticSignals)
+        ? (frais.diagnosticSignals as unknown[]).map(String)
+        : [];
+
+      const { aAjouter, dejaPresents } = accumulerSignaux(
+        actuels,
+        v.entrees.map((e) => e.signal),
+        (x) => normalize(x).trim(),
+      );
+      dejaAuMomentDEcrire += dejaPresents;
+      if (aAjouter.length === 0) continue;
+
+      const apres = [...actuels, ...aAjouter];
+      await tx.trainingModule.update({
+        where: { id: moduleId },
+        data: { diagnosticSignals: apres },
+      });
+      // Une entrée par MODULE, avec toutes les douleurs qu'elle sert : un
+      // journal par décision raconterait deux écritures là où il n'y en a
+      // qu'une, et c'est la fiction qu'on vient de retirer du code.
       await tx.auditLog.create({
         data: {
           tenantId: tenant.id,
           userId: null,
           entity: 'TrainingModule',
-          entityId: e.moduleId,
+          entityId: moduleId,
           action: 'diagnostic.rattachement.pose',
           diff: {
-            sourceRef: e.sourceRef,
-            titre: e.titreActuel,
-            douleur: e.douleur,
-            before: { diagnosticSignals: e.signalsAvant },
-            after: { diagnosticSignals: [...e.signalsAvant, e.signal] },
+            sourceRef: v.sourceRef,
+            titre: v.titre,
+            douleurs: v.entrees.map((e) => e.douleur),
+            before: { diagnosticSignals: actuels },
+            after: { diagnosticSignals: apres },
             source: 'scripts/ecrire-rattachements.ts',
           },
         },
       });
+      posesReels += aAjouter.length;
     }
+    return { posesReels, dejaAuMomentDEcrire };
   }).catch((e: unknown) => {
     if (e instanceof CibleInattendueError) {
       console.error("\n⛔ ÉCHEC — la base d'écriture n'est PAS celle du relevé.\n");
@@ -284,7 +362,7 @@ if (APPLY && aEcrire.length > 0) {
           "   ROLLBACK. Rien n'a été écrit.\n",
       );
       process.exitCode = 1;
-      return;
+      return null;
     }
     throw e;
   });
@@ -344,7 +422,10 @@ const rates = resultats.filter((r) => r.verdict === 'introuvable' || r.verdict =
 
 console.log('═══════════════════════════════════════════════════════');
 console.log(
-  `  ${poses} signal(aux) ${APPLY ? 'posé(s)' : 'à poser'} · ${dejaPoses} déjà en place · ${rates.length} en échec`,
+  APPLY && bilan
+    ? `  ${bilan.posesReels} signal(aux) posé(s) · ${dejaPoses + bilan.dejaAuMomentDEcrire} déjà en place · ${rates.length} en échec` +
+        `\n  (compté DANS la transaction, pas déduit de la lecture)`
+    : `  ${poses} signal(aux) à poser · ${dejaPoses} déjà en place · ${rates.length} en échec`,
 );
 console.log(
   `  ${RATTACHEMENTS_VALIDES.length} douleurs écrivables · ${resultats.length} cible(s) de module`,
