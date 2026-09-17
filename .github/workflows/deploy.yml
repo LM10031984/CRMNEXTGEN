@@ -1,12 +1,58 @@
+# Migrations de production, PUIS déploiement de l'app — dans cet ordre.
+#
+# ── Ce que ce fichier répare (16/09/2026) ─────────────────────────────────
+#
+# Il se déclenchait sur `push: branches: [main]`, exactement comme l'intégration
+# Git de Vercel. Les deux réagissaient donc au MÊME événement, en parallèle et
+# sans se connaître : rien ne garantissait que la migration soit appliquée avant
+# que la nouvelle version de l'app ne serve du trafic.
+#
+# Ce n'est pas théorique. Prisma Client SELECTionne explicitement les colonnes
+# qu'il connaît : si Vercel gagnait la course, une migration additive donnait des
+# `column "..." does not exist` jusqu'à la fin du job, et une migration
+# destructive cassait l'ANCIENNE version encore servie. Et `deploy.yml` faisant
+# checkout + install + migrate là où Vercel repart d'un cache de build, Vercel
+# gagnait souvent.
+#
+# Deux verrous désormais :
+#
+#  1. `workflow_run` — on ne part plus du push, mais de la FIN de la CI, et
+#     seulement si elle est verte. Une suite de tests rouge n'envoie plus de
+#     migration en production.
+#  2. Le Deploy Hook Vercel est appelé PAR CE JOB, après le `migrate deploy`.
+#     L'ordre est garanti par la séquence des étapes, plus par la chance.
+#
+# ⚠ Le déploiement automatique de `main` doit être DÉSACTIVÉ côté Vercel, sans
+# quoi le push continue de déclencher un build en parallèle et le verrou n°2 ne
+# sert à rien.
 name: Deploy migrations
+
 on:
-  push:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: [main]
+
+# Deux merges rapprochés appliqueraient leurs migrations en parallèle sur la
+# même base. On sérialise, sans annuler : une migration commencée doit finir.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
 jobs:
   migrate:
+    # LE GARDE. `workflow_run` se déclenche aussi quand la CI échoue — sans ce
+    # test, le changement de déclencheur aurait élargi le trou au lieu de le
+    # fermer.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Sur un événement `workflow_run`, `checkout` prend la branche par
+          # défaut, PAS le commit testé. Sans ce `ref`, on migrerait depuis un
+          # autre commit que celui que la CI vient de valider.
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -19,3 +65,23 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      # Après la migration, jamais avant. Si l'étape précédente échoue, le job
+      # s'arrête et RIEN n'est déployé : la base et l'app restent d'accord.
+      - name: Déclencher le déploiement Vercel
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOOK:-}" ]; then
+            # Tolérant à l'absence du secret, pour que ce workflow puisse être
+            # fusionné AVANT que le hook n'existe sans rendre la CI rouge.
+            echo "::warning::VERCEL_DEPLOY_HOOK_URL absent — aucun déploiement déclenché depuis ce workflow."
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$HOOK")
+          echo "Deploy Hook Vercel → HTTP $code"
+          case "$code" in
+            2*) echo "Déploiement demandé." ;;
+            *)  echo "::error::Le Deploy Hook a répondu $code — l'app n'a PAS été déployée alors que la migration est appliquée."; exit 1 ;;
+          esac
