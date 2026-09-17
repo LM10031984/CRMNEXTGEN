@@ -1,4 +1,5 @@
 'use server';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * Moteur d'envoi en signature électronique — lot C.2a-2.
@@ -193,7 +194,7 @@ async function chargerContexte(
     where: { id: sessionId, tenantId },
     select: {
       id: true,
-      code: true,
+      code: true, startDate: true, endDate: true,
       // Lot C.2c : l'email nomme la formation, pour qu'un responsable qui
       // reçoit trois demandes le même jour sache laquelle il ouvre.
       product: { select: { title: true } },
@@ -210,7 +211,7 @@ async function chargerContexte(
               email: true,
               legalLinks: {
                 select: {
-                  role: true,
+                  role: true, startDate: true, endDate: true,
                   organizationId: true,
                   organization: { select: { id: true, opcoCode: true } },
                 },
@@ -257,7 +258,7 @@ async function chargerContexte(
 
   const participants: ParticipantCharge[] = session.participants.map((p, index) => {
     const nom = nomAffiche(p.person);
-    const lienSponsor = p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId);
+    const lienSponsor = legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session);
     const lu = lus[index]!;
 
     return {

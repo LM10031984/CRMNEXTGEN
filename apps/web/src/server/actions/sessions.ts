@@ -161,6 +161,7 @@ export async function addParticipant(input: {
         routeConventionsByPayerRule(user.tenantId, input.sessionId, [
           {
             id: part.id,
+            session: { startDate: session.startDate, endDate: session.endDate },
             sponsorOrgId: input.sponsorOrgId,
             sponsorOrg: {
               id: sponsor.id,

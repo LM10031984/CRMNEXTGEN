@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération de convention de formation.
  *
@@ -151,9 +152,7 @@ export async function generateConventionCore(
     releveDeLaConvention({
       sponsorLegalForm: participant.sponsorOrg?.legalForm,
       roleChezSponsor:
-        participant.person?.legalLinks?.find(
-          (l) => l.organizationId === participant.sponsorOrgId,
-        )?.role ?? null,
+        legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,
     })
   ) {
     return {
@@ -177,9 +176,7 @@ export async function generateConventionCore(
 
   // Détermine si l'apprenant est rattaché à son sponsorOrg via EI_SELF
   // (= auto-entreprise perso) ou via SALARIE/DIRIGEANT (= structure employeur).
-  const linkToSponsor = participant.person.legalLinks.find(
-    (l) => l.organizationId === participant.sponsorOrgId,
-  );
+  const linkToSponsor = legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session);
   const isSelfEmployed = linkToSponsor?.role === 'EI_SELF';
 
   // Représentant qui signe la convention — cascade PARTAGÉE avec le moteur
@@ -374,7 +371,7 @@ export async function generateConventionEntrepriseCore(
   const participants = await prisma.sessionParticipant.findMany({
     where: { sessionId, sponsorOrgId, session: { tenantId } },
     include: {
-      person: { include: { legalLinks: { select: { organizationId: true, role: true } } } },
+      person: { include: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
       session: { include: { product: true, location: true } },
     },
     orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
@@ -395,7 +392,7 @@ export async function generateConventionEntrepriseCore(
   // c'est-à-dire le vrai cas de l'auto-entrepreneur qui se forme lui-même.
   const salaries = participants.filter((p) =>
     estEmployeurDeLApprenant(
-      p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.role ?? null,
+      legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.role ?? null,
     ),
   );
   if (requiresContratIndividuel(org.legalForm) && salaries.length === 0) {
@@ -552,14 +549,14 @@ export async function generateConventionEntrepriseCore(
     select: {
       sponsorOrgId: true,
       sponsorOrg: { select: { legalForm: true } },
-      person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+      person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
     },
   });
   const monoCommanditaire = !autresInscrits.some((p) =>
     releveDeLaConvention({
       sponsorLegalForm: p.sponsorOrg?.legalForm,
       roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
     }),
   );
   if (!monoCommanditaire) {

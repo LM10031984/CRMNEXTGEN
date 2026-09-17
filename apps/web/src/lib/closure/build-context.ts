@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Helper partagé pour construire un ClosureContext à partir d'un participantId.
  * Utilisé par le worker BullMQ ET par les server actions de régénération
@@ -59,7 +60,7 @@ export async function buildClosureContextForParticipant(
   const sessionLocation = formatLieuFormation(session.location, fallbackLieu);
   const sessionLocationCity = villeLieuFormation(session.location, of.addressVille);
 
-  const primaryLink = participant.person.legalLinks[0] ?? null;
+  const primaryLink = legalLinkAtSession(participant.person.legalLinks, participant.sponsorOrgId, session) ?? participant.person.legalLinks.find((l) => l.isPrimary && legalLinkAtSession([l], l.organizationId, session)) ?? null;
   const entreprise = primaryLink
     ? primaryLink.organization.brandName ?? primaryLink.organization.legalName
     : null;

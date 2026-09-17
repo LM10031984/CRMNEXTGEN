@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération du programme PRODUIT.
  *
@@ -215,7 +216,7 @@ export async function generateProgrammeForSessionCore(
           priceHT: true,
           sponsorOrgId: true,
           sponsorOrg: { select: { legalForm: true } },
-          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
         },
       },
     },
@@ -234,7 +235,7 @@ export async function generateProgrammeForSessionCore(
     couvertParConvention: releveDeLaConvention({
       sponsorLegalForm: p.sponsorOrg?.legalForm,
       roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
     }),
   }));
 
@@ -395,6 +396,7 @@ export async function generateProgrammeForSessionOrProductCore(
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId },
     select: {
+      startDate: true, endDate: true,
       productId: true,
       pricePerLearner: true,
       product: { select: { priceHT: true, pricingMode: true } },
@@ -403,7 +405,7 @@ export async function generateProgrammeForSessionOrProductCore(
           priceHT: true,
           sponsorOrgId: true,
           sponsorOrg: { select: { legalForm: true } },
-          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
         },
       },
     },
@@ -419,7 +421,7 @@ export async function generateProgrammeForSessionOrProductCore(
       couvertParConvention: releveDeLaConvention({
         sponsorLegalForm: p.sponsorOrg?.legalForm,
         roleChezSponsor:
-          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+          legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
       }),
     })),
     tarifSession: session.pricePerLearner,

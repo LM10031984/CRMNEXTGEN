@@ -1,4 +1,5 @@
 'use server';
+import { activeLegalLinksAtSession } from '@/lib/persons/legal-link-period';
 
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
@@ -141,8 +142,8 @@ export async function generateAgeficeForParticipant(
   let agefice = eiOrg?.ageficeProfile ?? null;
   if (!eiOrg) {
     const eiLink =
-      participant.person.legalLinks.find((l) => l.role === 'EI_SELF') ??
-      participant.person.legalLinks[0];
+      activeLegalLinksAtSession(participant.person.legalLinks, participant.session).find((l) => l.role === 'EI_SELF') ??
+      activeLegalLinksAtSession(participant.person.legalLinks, participant.session)[0];
     if (eiLink?.organization) {
       eiOrg = eiLink.organization;
       agefice = eiLink.organization.ageficeProfile;

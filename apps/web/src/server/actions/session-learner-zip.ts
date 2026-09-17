@@ -1,4 +1,5 @@
 'use server';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * ZIP « les documents de CET apprenant, pour CETTE session, sur CETTE phase »
@@ -68,10 +69,10 @@ export async function buildSessionLearnerZip(
         select: {
           firstName: true,
           lastName: true,
-          legalLinks: { select: { role: true, organizationId: true } },
+          legalLinks: { select: { role: true, organizationId: true, startDate: true, endDate: true } },
         },
       },
-      session: { select: { id: true, code: true, productId: true } },
+      session: { select: { id: true, code: true, productId: true, startDate: true, endDate: true } },
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
@@ -174,7 +175,7 @@ export async function buildSessionLearnerZip(
   const releveConvention = releveDeLaConvention({
     sponsorLegalForm: participant.sponsorOrg.legalForm,
     roleChezSponsor:
-      participant.person.legalLinks.find((l) => l.organizationId === participant.sponsorOrgId)
+      legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)
         ?.role ?? null,
   });
   const assetMap = new Map<string, { id: string }>();

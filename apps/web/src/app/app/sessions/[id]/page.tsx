@@ -1,3 +1,4 @@
+import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
@@ -141,12 +142,12 @@ const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 function releveDeLaConventionPour(p: {
   sponsorOrgId: string;
   sponsorOrg: { legalForm: string };
-  person: { legalLinks: { role: string; organizationId: string }[] };
-}): boolean {
+  person: { legalLinks: PeriodLink[] };
+}, session: SessionPeriod): boolean {
   return releveDeLaConvention({
     sponsorLegalForm: p.sponsorOrg.legalForm,
     roleChezSponsor:
-      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+      legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role ?? null,
   });
 }
 
@@ -397,7 +398,7 @@ export default async function SessionDetailPage({
     sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
   if (analyseEntrepriseAssetId) {
     for (const p of session.participants) {
-      if (!releveDeLaConventionPour(p)) continue;
+      if (!releveDeLaConventionPour(p, session)) continue;
       const m = assetsByParticipant.get(p.id) ?? new Map();
       // Ne jamais écraser une analyse nominative déjà rendue.
       if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
@@ -711,8 +712,8 @@ export default async function SessionDetailPage({
       })),
     },
     estEiSelfChezSponsor:
-      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role === 'EI_SELF',
-    relevantDeLaConvention: releveDeLaConventionPour(p),
+      legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role === 'EI_SELF',
+    relevantDeLaConvention: releveDeLaConventionPour(p, session),
   }));
   const participantPourSignataireParId = new Map(
     participantsPourSignataire.map((p) => [p.id, p] as const),
@@ -1169,7 +1170,7 @@ export default async function SessionDetailPage({
       analyseEntrepriseAssetId &&
       !pedagogicalAssets.has('ANALYSE_BESOIN') &&
       raw &&
-      releveDeLaConventionPour(raw)
+      releveDeLaConventionPour(raw, session)
     ) {
       pedagogicalAssets.set('ANALYSE_BESOIN', { id: analyseEntrepriseAssetId });
     }
@@ -1310,7 +1311,7 @@ export default async function SessionDetailPage({
       }
     >();
     for (const p of session.participants) {
-      if (!releveDeLaConventionPour(p)) continue;
+      if (!releveDeLaConventionPour(p, session)) continue;
       const g =
         map.get(p.sponsorOrgId) ??
         {

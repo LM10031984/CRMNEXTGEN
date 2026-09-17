@@ -1,4 +1,5 @@
 'use server';
+import { activeLegalLinksAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * BUG-12 — Génère l'Attestation d'assiduité AGEFICE pour un participant.
@@ -118,7 +119,7 @@ export async function generateAgeficeAttendanceForParticipant(
   } else {
     const orderedRoles = ['EI_SELF', 'AGENT_COMMERCIAL', 'SALARIE'] as const;
     const link = orderedRoles
-      .map((role) => participant.person.legalLinks.find((l) => l.role === role))
+      .map((role) => activeLegalLinksAtSession(participant.person.legalLinks, participant.session).find((l) => l.role === role))
       .find((l) => l != null);
     eiOrgName = link?.organization?.legalName ?? participant.sponsorOrg?.legalName ?? null;
   }

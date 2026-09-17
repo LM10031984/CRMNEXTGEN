@@ -1,4 +1,5 @@
 'use server';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * Server action unifiée pour générer N'IMPORTE QUEL document Qualiopi
@@ -128,17 +129,16 @@ export async function dispatchGenerateDoc(
           select: {
             id: true,
             sponsorOrgId: true,
+            session: { select: { startDate: true, endDate: true } },
             sponsorOrg: { select: { legalName: true, legalForm: true } },
-            person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+            person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
           },
         });
         if (!participant) return { ok: false, error: 'Inscription introuvable' };
         const relèveEntreprise = releveDeLaConvention({
           sponsorLegalForm: participant.sponsorOrg?.legalForm,
           roleChezSponsor:
-            participant.person?.legalLinks?.find(
-              (l) => l.organizationId === participant.sponsorOrgId,
-            )?.role ?? null,
+            legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,
         });
         if (relèveEntreprise) {
           const nom = participant.sponsorOrg?.legalName ?? "l'entreprise commanditaire";
