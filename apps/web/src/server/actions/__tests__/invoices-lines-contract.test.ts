@@ -1,4 +1,4 @@
-import { assertTestTarget, assertTestDatabaseContent } from '../../../../../packages/db/scripts/assert-test-target';
+import { assertTestTarget, assertTestDatabaseContent } from '../../../../../../packages/db/scripts/assert-test-target';
 /**
  * Contrat de montants — `Invoice.amountHT === Σ InvoiceLine.totalHT`.
  *
