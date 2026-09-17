@@ -196,3 +196,82 @@ personne ne l'édite aujourd'hui. Le jour où ça change, cette garde est la for
   transaction ni journal. À traiter avant le troisième chantier.
 - Le document de lecture des modules rédigés : il vient après la garde. Verser
   avant de protéger, c'est perdre le travail au prochain import.
+
+---
+
+# 5 · Après la fusion de PR A — la séquence, écrite d'avance
+
+_Pour que la session suivante n'ait pas à la reconstruire. **Rien de tout ceci
+n'est lancé** au 17/09._
+
+## Ce que la fusion déclenche toute seule
+
+`.github/workflows/deploy.yml` : tout push sur `main` lance
+`prisma migrate deploy` contre la prod Supabase (`DATABASE_URL` + `DIRECT_URL`
+en secrets). **La migration part donc à la fusion, sans que personne la lance.**
+
+C'est la première migration de toute la chaîne : `20260917120000_module_empreinte_import`,
+et elle est seule — vérifié, le diff de PR A ne contient aucun autre fichier sous
+`prisma/migrations/`.
+
+**Attendu : 31 → 32 migrations.**
+
+## ① Vérifier le déploiement — avant de toucher à quoi que ce soit
+
+| # | Contrôle | Attendu |
+|---|---|---|
+| a | migrations appliquées | **32**, dont `20260917120000_module_empreinte_import` |
+| b | la colonne existe | `TrainingModule.contentMdFingerprint`, nullable, **486 NULL** |
+| c | **le témoin** | `/catalogue` → **39 codes**, `diff` vide |
+| d | les routes | `/catalogue` et `/diagnostic` → 200 **avec leur contenu** : titre, `<h1>`, 39 cartes pour l'un ; 1ʳᵉ question et ses 4 options pour l'autre |
+
+```bash
+pnpm --filter @qualiof/db run db:query:prod <fichier.sql>   # a et b
+curl -s https://qualiof.vercel.app/catalogue \
+  | grep -oE '<span class="shrink-0 text-xs font-mono[^"]*">[^<]+</span>' \
+  | sed -E 's/.*">([^<]+)<.*/\1/' | sort -u | wc -l          # c → 39
+```
+
+Un 200 ne suffit pas : chercher dans le HTML l'absence de « Application error »,
+« Internal Server Error » et de frontière d'erreur FR. ⚠️ Un grep sur « 500 » ou
+« digest » rend des faux positifs (`text-slate-500`, `fontWeight: 500`) — c'est
+arrivé le 17/09.
+
+**Un écart, même de 1, sur le témoin : on s'arrête et on écrit à Laurent.**
+
+## ② L'import complet — pour stamper les 486 modules
+
+C'est l'étape ① du piège d'ordre (§4 sexies bis). Tant qu'elle n'a pas tourné,
+les empreintes sont `NULL` et le versement des modules rédigés **sera refusé** —
+par la garde, pas par une consigne.
+
+Protocole complet, sans raccourci :
+
+1. **dry-run** — `pnpm --filter @qualiof/db import:drive-catalog`
+   Attendu : `0 créés · 72 mis à jour · 4 écartés · 400 modules`, cible PRODUCTION
+   imprimée avec ses marqueurs. **0 module « modifié par un humain »** : personne
+   n'a encore rien écrit.
+2. ⛔ **STOP** — montrer le dry-run à Laurent. Rien ne s'écrit avant son go.
+3. **apply** — `-- --apply`. La garde de cible relit les marqueurs en premier
+   ordre ; une transaction, les deux phases dedans.
+4. **idempotence** — rejouer : `0 créés · 72 mis à jour · 0 en échec`, et
+   **aucun lien re-posé**.
+5. **témoin** — `/catalogue` toujours à **39**.
+6. **la preuve qui compte** : `contentMdFingerprint` non nul sur les **400**
+   modules de rayon. C'est ce qui rend le versement suivant possible.
+
+## ③ Seulement ensuite — les modules rédigés
+
+Après lecture et arbitrage de Laurent sur
+`.planning/260917-modules-rediges-a-relire.md`, et pas avant.
+
+`ecrire:modules -- --apply` refusera de tourner tant que ② n'a pas tourné, en
+nommant les cibles sans empreinte et en rappelant l'ordre. **C'est voulu.**
+
+## Ce qui reste ouvert après tout ça
+
+- **PR B ne se fusionne pas.** Elle porte les trois conditions de levée de la
+  barrière Faros. Elle reviendra verte le jour où ce travail sera fait.
+- `invoices.ts` et `preinscription-reminders.ts` décident d'envoyer une relance
+  sur une lecture prise hors transaction — nommé, non corrigé (§2 de ce relevé).
+- 27 des 40 fichiers portant une transaction n'ont pas été lus un par un.
