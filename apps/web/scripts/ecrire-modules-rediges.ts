@@ -64,6 +64,7 @@ import {
   type MarqueursCible,
 } from '@qualiof/db/garde-cible';
 import { ciblesSansEmpreinte, MOTIF_ORDRE_INVERSE } from '@qualiof/db/empreinte-import';
+import { MOTIF_REGLE_MANQUANTE, sortDuGesteIA } from '@qualiof/db/regle-ia-metier';
 
 import { accumulerSignaux } from '../src/lib/proposition/accumulation-signaux';
 import { normalize } from '../src/lib/proposition/programme-matcher';
@@ -423,6 +424,35 @@ await viserParSourceRef({
 
 // ── 3 · déplacer le signal depuis le module de rayon vide ────────────────────
 await viserRetraitDeSignal('Catalogue diagnostic — Vendeur', 'Suivi', SIGNAL_SUIVI);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA GARDE « L'IA DANS LE MÉTIER » — avant toute écriture, et elle refuse
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Doctrine du 17/09/2026 : aucun module d'IA n'est écrit, l'IA entre dans le
+// geste métier. Le module « garde-fous » disparaît donc — et ce qui le remplace
+// est le bloc « Règle qui traverse le module », porté par CHAQUE module qui met
+// un outil dans les mains d'un stagiaire.
+//
+// Sans cette garde, « dissous » voudrait dire « disparu » : on aurait retiré le
+// module qui portait les précautions et gagné des modules qui envoient un
+// conseiller coller des données de vendeur dans un outil en ligne.
+const sansRegle = intentions
+  .filter((it) => it.genre === 'contenu')
+  .map((it) => ({ it, sort: sortDuGesteIA((it as { contenu: string }).contenu) }))
+  .filter((x) => !x.sort.conforme);
+
+if (sansRegle.length > 0) {
+  console.error('\n⛔ REFUS — un geste IA sans sa règle.\n');
+  for (const { it } of sansRegle) console.error(`   ${it.libelle}`);
+  console.error(`\n   ${MOTIF_REGLE_MANQUANTE}\n`);
+  console.error('   Le bloc attendu, mot pour mot :');
+  console.error("     **Règle qui traverse le module.** L'IA prépare, le conseiller décide.");
+  console.error('     Rien ne part au client sans relecture. Aucune donnée confidentielle');
+  console.error('     dans un outil.\n');
+  await prisma.$disconnect();
+  process.exit(1);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LA GARDE D'ORDRE — avant toute écriture, et elle refuse
