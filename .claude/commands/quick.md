@@ -491,6 +491,51 @@ pas à `A1` — et il n'existe aucune capsule `A5`.
 toujours faux** : deux numérotations distinctes qui partagent un alphabet ne se
 rapprochent pas, elles collisionnent. Rien ne protesterait.
 
+## 4 quater ter. Un rapport compte ce qu'il a FAIT, pas ce qu'il voulait faire
+
+**Vécu le 17/09/2026**, pendant le versement du catalogue en production.
+
+`ecrire-rattachements.ts` a annoncé « **12 signaux posés** ». Il en avait posé
+**9**. Le compte venait des DÉCISIONS en entrée — une ligne par cible retenue —
+et non des ÉCRITURES en sortie.
+
+Le décalage n'était pas cosmétique : il masquait un *lost update*. Trois modules
+étaient visés par deux douleurs chacun ; leurs deux écritures partaient du même
+état lu avant la transaction, et la seconde écrasait la première. Le rapport,
+lui, comptait sereinement ses douze intentions.
+
+Le défaut a traversé **tout un versement en production** sans se voir. Il n'est
+apparu qu'au rejeu — « 3 posés » là où on attendait « 0 » — c'est-à-dire par
+accident, parce que quelqu'un a relancé le script pour une autre raison.
+
+> **La règle : un rapport compte ses EFFETS, jamais ses intentions. Et le compte
+> se prend DANS la transaction, là où les écritures ont lieu.**
+
+Le corollaire est ce qui rend la règle applicable : si le compte vit hors de la
+transaction, il ne PEUT pas dire ce qui s'est écrit — il ne connaît que ce qu'on
+espérait écrire. Faire remonter le chiffre depuis le corps de la transaction
+n'est pas un raffinement de présentation, c'est la seule façon d'avoir un
+chiffre vrai.
+
+La forme, en pratique :
+
+```ts
+const bilan = await prisma.$transaction(async (tx) => {
+  let poses = 0;
+  // …écritures… poses += 1;
+  return { poses };                     // le compte remonte d'ici
+});
+console.log(`${bilan.poses} posé(s) — compté DANS la transaction`);
+```
+
+Et la phrase « compté DANS la transaction, pas déduit de la lecture » s'imprime
+avec le chiffre : un lecteur doit pouvoir savoir d'où vient un nombre sans lire
+le code qui l'a produit.
+
+**Le rapprochement à garder en tête** : c'est la même famille que §4 quinquies —
+une absence rendue par une affirmation positive. Ici, l'affirmation positive est
+un compte juste en apparence, et c'est précisément ce qui le rend indétectable.
+
 ## 4 quinquies. Une valeur ABSENTE ne s'imprime jamais comme une valeur POSITIVE
 
 **Troisième occurrence du même défaut en une semaine, relevée le 14/09/2026.**
@@ -639,6 +684,56 @@ déconseille** — et il tient les jours de fatigue, qui sont ceux qui comptent.
 Le corollaire, en lisant : une sonde dit sur quelle base elle a tourné (§4
 terdecies), et le lanceur l'imprime pour elle. Un inventaire sans sa cible en
 tête n'est pas un inventaire, c'est un nombre.
+
+## 4 sexies bis. Une ABSENCE d'empreinte n'est pas une protection
+
+**Vécu le 17/09/2026**, en posant la garde d'écrasement de l'import.
+
+`TrainingModule.contentMdFingerprint` porte l'empreinte de ce que l'IMPORT a
+écrit. Au passage suivant il compare : si la base ne correspond plus, un humain
+est passé après lui et il ne réécrit pas.
+
+`NULL` veut dire « **l'import n'a rien à protéger ici** ». C'est le bon défaut,
+et il n'y en a pas d'autre : traiter `NULL` comme « protégé » aurait gelé les
+486 modules du catalogue le jour de la naissance de la colonne, et une garde qui
+refuse le cas normal finit débranchée (§4 quaterdecies).
+
+Mais ce défaut a une conséquence que personne ne voit venir :
+
+> **Une garde a une DATE DE NAISSANCE. Avant elle, elle ne garde rien — et le
+> travail posé avant elle n'est pas protégé, il est seulement en attente d'être
+> écrasé.**
+
+Poser un contenu humain sur un module dont l'empreinte est encore `NULL` le rend
+écrasable par le premier import qui passe. Et celui-ci l'annoncera en « mis à
+jour », ce qui a l'air d'une bonne nouvelle.
+
+L'ordre n'est donc pas une préférence, c'est une condition :
+
+| | |
+|---|---|
+| ① | l'import tourne en entier → chaque module porte son empreinte |
+| ② | **seulement ensuite** : le versement du contenu humain |
+| ③ | l'import suivant compare, ne reconnaît plus son texte, et refuse |
+
+Inversé, l'ordre ne casse rien bruyamment : **il perd le travail en silence.**
+
+### Le corollaire, et il est plus important que la règle
+
+**Une consigne d'ordre se perd ; une garde non.** Un commentaire en tête de
+script, un paragraphe dans un relevé, une ligne dans un `deferred-items.md` :
+tout cela vit tant que quelqu'un le lit. Le jour où le versement est relancé par
+quelqu'un d'autre, sur une base fraîche, à six mois de distance, il ne reste que
+le code.
+
+Le script de versement REFUSE donc de tourner si une seule de ses cibles gérées
+par l'import n'a pas d'empreinte — avec le motif en clair et l'ordre à suivre
+(`ciblesSansEmpreinte`, `MOTIF_ORDRE_INVERSE`). Et cette garde-là se fait rougir
+une fois avant d'être crue, comme les autres (§4 ter).
+
+**Ce que la garde ne couvre PAS, et c'est dit exprès** : un module sans
+`sourceRef` n'est pas concerné — l'import ne le connaît pas, ne l'écrira jamais,
+et n'a rien à écraser. Confondre les deux ferait refuser un versement légitime.
 
 ## 4 septies. Un document client ne se note jamais lui-même
 
