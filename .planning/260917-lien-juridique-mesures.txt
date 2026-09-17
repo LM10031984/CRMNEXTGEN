@@ -1,0 +1,270 @@
+Sortie brute de 260917-lien-juridique-mesures.sql — base de production, BEGIN READ ONLY … ROLLBACK, TZ=UTC, jouée le 17/09/2026 16:30 UTC.
+Personnes : prénom + initiale du nom.
+
+### -- Mesures du relevé 260917-lien-juridique-releve.md — 100 % LECTURE, rejouable.
+┌─────────┐
+│ (index) │
+├─────────┤
+└─────────┘
+### -- ⚠ Client `pg` Node : lancer avec TZ=UTC. Prisma écrit l'UTC dans des colonnes
+┌─────────┬───────┬───────────┬────────────┬──────────┬────────────┐
+│ (index) │ liens │ personnes │ avec_debut │ avec_fin │ principaux │
+├─────────┼───────┼───────────┼────────────┼──────────┼────────────┤
+│ 0       │ '578' │ '373'     │ '4'        │ '0'      │ '327'      │
+└─────────┴───────┴───────────┴────────────┴──────────┴────────────┘
+### SELECT role, count(*) AS liens, count(*) FILTER (WHERE "isPrimary") AS principaux
+┌─────────┬────────────────────┬───────┬────────────┐
+│ (index) │ role               │ liens │ principaux │
+├─────────┼────────────────────┼───────┼────────────┤
+│ 0       │ 'AGENT_COMMERCIAL' │ '274' │ '75'       │
+│ 1       │ 'EI_SELF'          │ '246' │ '232'      │
+│ 2       │ 'SALARIE'          │ '54'  │ '16'       │
+│ 3       │ 'CONTACT'          │ '2'   │ '2'        │
+│ 4       │ 'FORMATEUR'        │ '1'   │ '1'        │
+│ 5       │ 'DIRIGEANT'        │ '1'   │ '1'        │
+└─────────┴────────────────────┴───────┴────────────┘
+### -- ── (a) Liens AGENT_COMMERCIAL vers une organisation NON solo ──────────────
+┌─────────┬─────────────────────┬───────┬───────────┬───────────────┐
+│ (index) │ legalForm           │ liens │ personnes │ organisations │
+├─────────┼─────────────────────┼───────┼───────────┼───────────────┤
+│ 0       │ 'AUTRE'             │ '178' │ '174'     │ '29'          │
+│ 1       │ 'SARL'              │ '60'  │ '60'      │ '11'          │
+│ 2       │ 'SAS'               │ '13'  │ '13'      │ '3'           │
+│ 3       │ 'EI'                │ '11'  │ '11'      │ '11'          │
+│ 4       │ 'SASU'              │ '6'   │ '6'       │ '1'           │
+│ 5       │ 'EIRL'              │ '3'   │ '3'       │ '2'           │
+│ 6       │ 'AUTO_ENTREPRENEUR' │ '3'   │ '3'       │ '3'           │
+└─────────┴─────────────────────┴───────┴───────────┴───────────────┘
+### WITH ac AS (
+┌─────────┬───────┬───────────┬───────────────┬──────────────┬──────────────┬─────────────────────┐
+│ (index) │ liens │ personnes │ organisations │ avec_lien_ei │ ac_principal │ payes_par_cette_org │
+├─────────┼───────┼───────────┼───────────────┼──────────────┼──────────────┼─────────────────────┤
+│ 0       │ '257' │ '234'     │ '44'          │ '151'        │ '74'         │ '36'                │
+└─────────┴───────┴───────────┴───────────────┴──────────────┴──────────────┴─────────────────────┘
+### -- par organisation
+┌─────────┬───────────────────────────────────────┬───────────┬───────────┬────────┬───────────────────────┐
+│ (index) │ legalName                             │ legalForm │ opcoCode  │ agents │ agents_payes_par_elle │
+├─────────┼───────────────────────────────────────┼───────────┼───────────┼────────┼───────────────────────┤
+│ 0       │ 'Imagimmo'                            │ 'AUTRE'   │ 'OPCO_EP' │ '35'   │ '0'                   │
+│ 1       │ 'Neyrat immo'                         │ 'AUTRE'   │ 'OPCO_EP' │ '30'   │ '4'                   │
+│ 2       │ 'Ambition'                            │ 'AUTRE'   │ 'OPCO_EP' │ '17'   │ '0'                   │
+│ 3       │ "GCS Century 21 Immo d'azur"          │ 'SARL'    │ 'OPCO_EP' │ '16'   │ '1'                   │
+│ 4       │ 'Meilleur taux'                       │ 'AUTRE'   │ null      │ '15'   │ '0'                   │
+│ 5       │ 'Sigma'                               │ 'AUTRE'   │ 'OPCO_EP' │ '13'   │ '1'                   │
+│ 6       │ 'ASHLEY PARKER'                       │ 'SARL'    │ null      │ '11'   │ '0'                   │
+│ 7       │ 'CONCEPT PATRIMOINE'                  │ 'SARL'    │ 'AGEFICE' │ '10'   │ '1'                   │
+│ 8       │ 'RIVIERA ESTATES'                     │ 'SAS'     │ 'OPCO_EP' │ '10'   │ '10'                  │
+│ 9       │ 'BIANCO INVEST ASSURANCES'            │ 'SARL'    │ null      │ '8'    │ '8'                   │
+│ 10      │ 'Bianco Invest'                       │ 'AUTRE'   │ 'ATLAS'   │ '7'    │ '0'                   │
+│ 11      │ 'KW HLC'                              │ 'AUTRE'   │ 'OPCO_EP' │ '7'    │ '0'                   │
+│ 12      │ 'LAdresse'                            │ 'AUTRE'   │ 'OPCO_EP' │ '6'    │ '0'                   │
+│ 13      │ 'Nestenn France'                      │ 'AUTRE'   │ 'OPCO_EP' │ '6'    │ '1'                   │
+│ 14      │ 'Riviera Keys'                        │ 'SASU'    │ 'OPCO_EP' │ '6'    │ '1'                   │
+│ 15      │ 'Habitat Concept Immo'                │ 'SARL'    │ 'OPCO_EP' │ '5'    │ '0'                   │
+│ 16      │ 'OPTIMMO SARL'                        │ 'SARL'    │ 'OPCO_EP' │ '5'    │ '0'                   │
+│ 17      │ 'Solo'                                │ 'AUTRE'   │ null      │ '5'    │ '0'                   │
+│ 18      │ 'Laforet'                             │ 'AUTRE'   │ 'OPCO_EP' │ '4'    │ '0'                   │
+│ 19      │ 'Le Castel Real Estate'               │ 'AUTRE'   │ 'OPCO_EP' │ '4'    │ '0'                   │
+│ 20      │ 'Octantimmo'                          │ 'AUTRE'   │ 'OPCO_EP' │ '4'    │ '0'                   │
+│ 21      │ 'Syndup'                              │ 'AUTRE'   │ null      │ '4'    │ '0'                   │
+│ 22      │ 'Solution Immobilier'                 │ 'AUTRE'   │ null      │ '3'    │ '2'                   │
+│ 23      │ 'CENTURY 21 MANDELIEU'                │ 'AUTRE'   │ null      │ '2'    │ '0'                   │
+│ 24      │ 'Laforet Caen'                        │ 'AUTRE'   │ 'OPCO_EP' │ '2'    │ '0'                   │
+│ 25      │ 'Magrey and son'                      │ 'AUTRE'   │ 'OPCO_EP' │ '2'    │ '0'                   │
+│ 26      │ 'Nestenn Fréjus'                      │ 'AUTRE'   │ 'OPCO_EP' │ '2'    │ '0'                   │
+│ 27      │ 'NEYRAT Immobilier Chalon sur Saone'  │ 'SAS'     │ 'OPCO_EP' │ '2'    │ '2'                   │
+│ 28      │ 'A.BC FINANCE'                        │ 'SARL'    │ null      │ '1'    │ '1'                   │
+│ 29      │ 'AGEFICE 06'                          │ 'AUTRE'   │ null      │ '1'    │ '0'                   │
+│ 30      │ 'Albert 1er agence SARL'              │ 'SARL'    │ 'OPCO_EP' │ '1'    │ '1'                   │
+│ 31      │ 'Ashley&Parker'                       │ 'AUTRE'   │ null      │ '1'    │ '0'                   │
+│ 32      │ 'Azur Loc Invest'                     │ 'AUTRE'   │ null      │ '1'    │ '0'                   │
+│ 33      │ 'BSK Immo'                            │ 'AUTRE'   │ 'OPCO_EP' │ '1'    │ '0'                   │
+│ 34      │ 'Concept patrimoine'                  │ 'AUTRE'   │ null      │ '1'    │ '0'                   │
+│ 35      │ 'CRYSTAL Piscine (DARCEL)'            │ 'SARL'    │ null      │ '1'    │ '1'                   │
+│ 36      │ 'HOLDING ERIC PECOUL'                 │ 'SARL'    │ null      │ '1'    │ '1'                   │
+│ 37      │ 'IAD'                                 │ 'AUTRE'   │ 'OPCO_EP' │ '1'    │ '0'                   │
+│ 38      │ 'Infinity Groupe'                     │ 'AUTRE'   │ 'OPCO_EP' │ '1'    │ '0'                   │
+│ 39      │ 'Locashop'                            │ 'AUTRE'   │ null      │ '1'    │ '0'                   │
+│ 40      │ 'MCH IMMOBILIER'                      │ 'SARL'    │ 'OPCO_EP' │ '1'    │ '0'                   │
+│ 41      │ 'Nestenn Vitrolles'                   │ 'AUTRE'   │ 'OPCO_EP' │ '1'    │ '0'                   │
+│ 42      │ 'SAS NS ANTIBES IMMOBILIER'           │ 'SAS'     │ 'OPCO_EP' │ '1'    │ '1'                   │
+│ 43      │ 'TEAM PRIMOS (Le Castel Real estate)' │ 'AUTRE'   │ 'OPCO_EP' │ '1'    │ '0'                   │
+└─────────┴───────────────────────────────────────┴───────────┴───────────┴────────┴───────────────────────┘
+### -- le motif Katia exact : l'organisation du lien AGENT_COMMERCIAL est le PAYEUR
+┌─────────┬─────────────────┬──────────────────────────────────────┬───────────┬───────────┬──────────────────────┬─────────────────────────────────────────┐
+│ (index) │ personne        │ organisation                         │ legalForm │ opcoCode  │ statut_libre         │ sessions                                │
+├─────────┼─────────────────┼──────────────────────────────────────┼───────────┼───────────┼──────────────────────┼─────────────────────────────────────────┤
+│ 0       │ 'Charlotte P.'  │ 'A.BC FINANCE'                       │ 'SARL'    │ null      │ 'assistante'         │ 'SES-0018 07/09/25'                     │
+│ 1       │ 'Charles B.'    │ 'Albert 1er agence SARL'             │ 'SARL'    │ 'OPCO_EP' │ 'manager immobilier' │ 'SES-0030 12/10/25'                     │
+│ 2       │ 'Alizéa A.'     │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Commerciale'        │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 3       │ 'Anthony B.'    │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Gérant'             │ 'SES-0090 15/04/26'                     │
+│ 4       │ 'Christelle P.' │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Commerciale'        │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 5       │ 'Clara M.'      │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Commerciale'        │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 6       │ 'Giulia G.'     │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Commerciale'        │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 7       │ 'Isabelle P.'   │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ null                 │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 8       │ 'Jessica B.'    │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Commerciale'        │ 'SES-0055 21/12/25 ; SES-0056 29/12/25' │
+│ 9       │ 'Pascal B.'     │ 'BIANCO INVEST ASSURANCES'           │ 'SARL'    │ null      │ 'Gérant'             │ 'SES-0090 15/04/26'                     │
+│ 10      │ 'Sébastien R.'  │ 'CONCEPT PATRIMOINE'                 │ 'SARL'    │ 'AGEFICE' │ 'Agent immobilier'   │ 'SES-0002 20/10/24'                     │
+│ 11      │ 'Florian D.'    │ 'CRYSTAL Piscine (DARCEL)'           │ 'SARL'    │ null      │ 'gérant'             │ 'SES-0042 07/12/25'                     │
+│ 12      │ 'Katia T.'      │ "GCS Century 21 Immo d'azur"         │ 'SARL'    │ 'OPCO_EP' │ 'Salarié'            │ 'SES-0116 20/11/26'                     │
+│ 13      │ 'Thomas P.'     │ 'HOLDING ERIC PECOUL'                │ 'SARL'    │ null      │ 'cadre'              │ 'SES-0049 15/12/25'                     │
+│ 14      │ 'Audrey C.'     │ 'Nestenn France'                     │ 'AUTRE'   │ 'OPCO_EP' │ 'Agent co'           │ 'SES-0009 29/05/25'                     │
+│ 15      │ 'Antonin L.'    │ 'Neyrat immo'                        │ 'AUTRE'   │ 'OPCO_EP' │ 'salarié'            │ 'SES-0050 26/01/26'                     │
+│ 16      │ 'Bruno D.'      │ 'Neyrat immo'                        │ 'AUTRE'   │ 'OPCO_EP' │ 'salarié'            │ 'SES-0050 26/01/26'                     │
+│ 17      │ 'Léo M.'        │ 'Neyrat immo'                        │ 'AUTRE'   │ 'OPCO_EP' │ 'salarié'            │ 'SES-0050 26/01/26'                     │
+│ 18      │ 'Noémie D.'     │ 'Neyrat immo'                        │ 'AUTRE'   │ 'OPCO_EP' │ 'salarié'            │ 'SES-0050 26/01/26'                     │
+│ 19      │ 'Bastien N.'    │ 'NEYRAT Immobilier Chalon sur Saone' │ 'SAS'     │ 'OPCO_EP' │ 'gérant'             │ 'SES-0050 26/01/26'                     │
+│ 20      │ 'John G.'       │ 'NEYRAT Immobilier Chalon sur Saone' │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0050 26/01/26'                     │
+│ 21      │ 'Anne Marie O.' │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 22      │ 'Aurélie L.'    │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 23      │ 'Domino S.'     │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 24      │ 'Julia P.'      │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 25      │ 'Kati M.'       │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 26      │ 'Katia K.'      │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 27      │ 'Laetitia M.'   │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 28      │ 'Laurence L.'   │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 29      │ 'Pauline G.'    │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 30      │ 'Sara L.'       │ 'RIVIERA ESTATES'                    │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0086 15/04/26'                     │
+│ 31      │ 'Lise C.'       │ 'Riviera Keys'                       │ 'SASU'    │ 'OPCO_EP' │ null                 │ 'SES-0015 17/06/25 ; SES-0020 07/10/25' │
+│ 32      │ 'Jilbert N.'    │ 'SAS NS ANTIBES IMMOBILIER'          │ 'SAS'     │ 'OPCO_EP' │ null                 │ 'SES-0115 09/11/26'                     │
+│ 33      │ 'Clothilde M.'  │ 'Sigma'                              │ 'AUTRE'   │ 'OPCO_EP' │ 'Agent immobilier'   │ 'SES-0002 20/10/24'                     │
+│ 34      │ 'Jami K.'       │ 'Solution Immobilier'                │ 'AUTRE'   │ null      │ null                 │ 'SES-0091 21/05/26 ; SES-0092 24/05/26' │
+│ 35      │ 'Johanna F.'    │ 'Solution Immobilier'                │ 'AUTRE'   │ null      │ null                 │ 'SES-0091 21/05/26 ; SES-0092 24/05/26' │
+└─────────┴─────────────────┴──────────────────────────────────────┴───────────┴───────────┴──────────────────────┴─────────────────────────────────────────┘
+### -- ── (b) Multi-casquettes, et sessions où le financeur dépend du lien retenu ─
+┌─────────┬─────────────────────────────┬──────────────────┬───────────────────────┬────────────────────┬─────────────────┬──────────────┬──────────┬────────────────────────┐
+│ (index) │ personnes_avec_lien_porteur │ multi_casquettes │ financeurs_differents │ regimes_differents │ l_un_ou_l_autre │ inscriptions │ sessions │ sessions_non_terminees │
+├─────────┼─────────────────────────────┼──────────────────┼───────────────────────┼────────────────────┼─────────────────┼──────────────┼──────────┼────────────────────────┤
+│ 0       │ '371'                       │ '174'            │ '153'                 │ '148'              │ '159'           │ '193'        │ '55'     │ '5'                    │
+└─────────┴─────────────────────────────┴──────────────────┴───────────────────────┴────────────────────┴─────────────────┴──────────────┴──────────┴────────────────────────┘
+### -- ── (c) Personnes inscrites chez des financeurs différents ─────────────────
+┌─────────┬────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ (index) │ personne   │ parcours                                                                                                                │
+├─────────┼────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 0       │ 'Katia T.' │ "04/01/26 SES-0043 → Katia Tchakmakjian [EI, AGEFICE] | 20/11/26 SES-0116 → GCS Century 21 Immo d'azur [SARL, OPCO_EP]" │
+└─────────┴────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+### SELECT count(*) AS personnes_plusieurs_payeurs
+┌─────────┬─────────────────────────────┐
+│ (index) │ personnes_plusieurs_payeurs │
+├─────────┼─────────────────────────────┤
+│ 0       │ '7'                         │
+└─────────┴─────────────────────────────┘
+### -- ── (d) professionalStatus : valeurs distinctes ────────────────────────────
+┌─────────┬───────────────────────────────┬──────┐
+│ (index) │ valeur                        │ n    │
+├─────────┼───────────────────────────────┼──────┤
+│ 0       │ '∅ (NULL)'                    │ '99' │
+│ 1       │ 'Agent immobilier'            │ '45' │
+│ 2       │ 'conseiller commercial'       │ '29' │
+│ 3       │ 'Agent commercial'            │ '27' │
+│ 4       │ 'agent immobilier'            │ '22' │
+│ 5       │ 'salarié'                     │ '22' │
+│ 6       │ 'Salarié'                     │ '21' │
+│ 7       │ 'conseiller immobilier'       │ '18' │
+│ 8       │ 'agent commercial'            │ '15' │
+│ 9       │ 'AGENT COMMERCIAL'            │ '11' │
+│ 10      │ 'gérant'                      │ '9'  │
+│ 11      │ 'courtier'                    │ '7'  │
+│ 12      │ 'Formateur'                   │ '6'  │
+│ 13      │ 'Commerciale'                 │ '5'  │
+│ 14      │ 'dirigeant'                   │ '4'  │
+│ 15      │ 'Gérant'                      │ '4'  │
+│ 16      │ 'Agent Immobilier'            │ '3'  │
+│ 17      │ 'Courtier'                    │ '3'  │
+│ 18      │ 'Dirigeant'                   │ '3'  │
+│ 19      │ 'gérante'                     │ '3'  │
+│ 20      │ 'Agent co'                    │ '2'  │
+│ 21      │ 'cadre'                       │ '2'  │
+│ 22      │ 'salarié immobilier'          │ '2'  │
+│ 23      │ 'Agent commercial immobilier' │ '1'  │
+│ 24      │ 'Artisan'                     │ '1'  │
+│ 25      │ 'assistante'                  │ '1'  │
+│ 26      │ "Chef d'entreprise"           │ '1'  │
+│ 27      │ 'Coach'                       │ '1'  │
+│ 28      │ 'conjoint collaborateur'      │ '1'  │
+│ 29      │ 'conseil entreprise'          │ '1'  │
+│ 30      │ 'conseiller comemercial'      │ '1'  │
+│ 31      │ 'conseiller commerial'        │ '1'  │
+│ 32      │ 'Conseiller Immobilier'       │ '1'  │
+│ 33      │ 'directeur'                   │ '1'  │
+│ 34      │ 'dirigeant agence'            │ '1'  │
+│ 35      │ 'dirigeant courtier'          │ '1'  │
+│ 36      │ 'Dirigeant immobilier'        │ '1'  │
+│ 37      │ 'Dirirgeant'                  │ '1'  │
+│ 38      │ 'employé immobilier'          │ '1'  │
+│ 39      │ 'gérant immobilier'           │ '1'  │
+│ 40      │ 'immobilier'                  │ '1'  │
+│ 41      │ 'manager immobilier'          │ '1'  │
+│ 42      │ 'salariée immobilier'         │ '1'  │
+│ 43      │ 'secretaire comptable'        │ '1'  │
+│ 44      │ 'vidéaste'                    │ '1'  │
+└─────────┴───────────────────────────────┴──────┘
+### -- ── (e) Statut libre qui contredit le rattachement principal ───────────────
+┌─────────┬────────────────────┬───────────┬────────────────┬──────────────────────┬───────────┐
+│ (index) │ famille            │ personnes │ sans_principal │ plusieurs_principaux │ contredit │
+├─────────┼────────────────────┼───────────┼────────────────┼──────────────────────┼───────────┤
+│ 0       │ 'AGENT_COMMERCIAL' │ '56'      │ '4'            │ '6'                  │ '0'       │
+│ 1       │ 'DIRIGEANT'        │ '29'      │ '3'            │ '3'                  │ '1'       │
+│ 2       │ 'SALARIE'          │ '47'      │ '30'           │ '0'                  │ '6'       │
+└─────────┴────────────────────┴───────────┴────────────────┴──────────────────────┴───────────┘
+### -- ── (f) Pièces déjà générées touchées par professionalStatus ────────────────
+┌─────────┬──────────────────┬──────────┬─────────────────────────────┬────────────────────────────┐
+│ (index) │ piece            │ generees │ statut_non_vide_aujourd_hui │ texte_ia_reprend_le_statut │
+├─────────┼──────────────────┼──────────┼─────────────────────────────┼────────────────────────────┤
+│ 0       │ 'ANALYSE_BESOIN' │ '125'    │ '119'                       │ '83'                       │
+│ 1       │ 'GRILLE_OBS'     │ '104'    │ '99'                        │ '10'                       │
+│ 2       │ 'POSITIONNEMENT' │ '76'     │ '72'                        │ '7'                        │
+└─────────┴──────────────────┴──────────┴─────────────────────────────┴────────────────────────────┘
+### SELECT count(*) AS grilles_session_generees, count(DISTINCT d."sessionId") AS sessions, co
+┌─────────┬──────────────────────────┬──────────┬─────────────────────────────────────┐
+│ (index) │ grilles_session_generees │ sessions │ avec_au_moins_un_statut_aujourd_hui │
+├─────────┼──────────────────────────┼──────────┼─────────────────────────────────────┤
+│ 0       │ '1'                      │ '1'      │ '1'                                 │
+└─────────┴──────────────────────────┴──────────┴─────────────────────────────────────┘
+### SELECT p."professionalStatus" AS statut, count(*) AS n FROM "PedagogicalAsset" pa JOIN "Se
+┌─────────┬─────────────────────────┬──────┐
+│ (index) │ statut                  │ n    │
+├─────────┼─────────────────────────┼──────┤
+│ 0       │ 'Agent immobilier'      │ '11' │
+│ 1       │ 'Agent commercial'      │ '11' │
+│ 2       │ 'conseiller immobilier' │ '10' │
+│ 3       │ 'AGENT COMMERCIAL'      │ '9'  │
+│ 4       │ 'agent immobilier'      │ '9'  │
+│ 5       │ 'agent commercial'      │ '7'  │
+│ 6       │ 'gérant'                │ '6'  │
+│ 7       │ 'cadre'                 │ '4'  │
+│ 8       │ 'salarié'               │ '3'  │
+│ 9       │ 'conseiller commercial' │ '3'  │
+│ 10      │ 'dirigeant'             │ '3'  │
+│ 11      │ 'Agent Immobilier'      │ '2'  │
+└─────────┴─────────────────────────┴──────┘
+### -- ── Population inscriptions et éligibilité AGEFICE par lien ─────────────────
+┌─────────┬──────────────┬─────────────────────┬───────────────────────┬──────────┐
+│ (index) │ inscriptions │ avec_financing_mode │ avec_participant_type │ sessions │
+├─────────┼──────────────┼─────────────────────┼───────────────────────┼──────────┤
+│ 0       │ '376'        │ '44'                │ '33'                  │ '87'     │
+└─────────┴──────────────┴─────────────────────┴───────────────────────┴──────────┘
+### SELECT count(*) AS organisations, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "AgeficePro
+┌─────────┬───────────────┬─────────────────────┐
+│ (index) │ organisations │ avec_profil_agefice │
+├─────────┼───────────────┼─────────────────────┤
+│ 0       │ '315'         │ '187'               │
+└─────────┴───────────────┴─────────────────────┘
+### SELECT (SELECT count(*) FROM "Person" p WHERE EXISTS (SELECT 1 FROM "LegalLink" l WHERE l.
+┌─────────┬──────────────────────────────────────┬────────────────────────────────────────────────────────────┬─────────────────────┬────────────────────────────────────────────────────────────────┐
+│ (index) │ personnes_eligibles_agefice_par_lien │ inscriptions_payees_par_societe_non_agefice_mais_eligibles │ sessions_concernees │ demandes_agefice_sur_inscription_payee_par_societe_non_agefice │
+├─────────┼──────────────────────────────────────┼────────────────────────────────────────────────────────────┼─────────────────────┼────────────────────────────────────────────────────────────────┤
+│ 0       │ '190'                                │ '15'                                                       │ '9'                 │ '6'                                                            │
+└─────────┴──────────────────────────────────────┴────────────────────────────────────────────────────────────┴─────────────────────┴────────────────────────────────────────────────────────────────┘
+### -- ── (e) détail nommé des contradictions ─────────────────────────────────────
+┌─────────┬─────────────┬───────────────────────┬───────────────┬────────────────────┬───────────────────────────┐
+│ (index) │ statut_dit  │ saisi                 │ personne      │ role_principal     │ org_principale            │
+├─────────┼─────────────┼───────────────────────┼───────────────┼────────────────────┼───────────────────────────┤
+│ 0       │ 'DIRIGEANT' │ 'gérant'              │ 'Bastien N.'  │ 'AGENT_COMMERCIAL' │ 'Neyrat immo [AUTRE]'     │
+│ 1       │ 'SALARIE'   │ 'salarié'             │ 'Antonin L.'  │ 'AGENT_COMMERCIAL' │ 'Neyrat immo [AUTRE]'     │
+│ 2       │ 'SALARIE'   │ 'salarié'             │ 'Bruno D.'    │ 'AGENT_COMMERCIAL' │ 'Neyrat immo [AUTRE]'     │
+│ 3       │ 'SALARIE'   │ 'Salarié'             │ 'Katia T.'    │ 'EI_SELF'          │ 'Katia Tchakmakjian [EI]' │
+│ 4       │ 'SALARIE'   │ 'salarié'             │ 'Léo M.'      │ 'AGENT_COMMERCIAL' │ 'Neyrat immo [AUTRE]'     │
+│ 5       │ 'SALARIE'   │ 'salariée immobilier' │ 'Mathilde S.' │ 'EI_SELF'          │ 'Eric PECOUL [EI]'        │
+│ 6       │ 'SALARIE'   │ 'salarié'             │ 'Noémie D.'   │ 'AGENT_COMMERCIAL' │ 'Neyrat immo [AUTRE]'     │
+└─────────┴─────────────┴───────────────────────┴───────────────┴────────────────────┴───────────────────────────┘
