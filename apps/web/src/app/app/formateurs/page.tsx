@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Mail, Phone, MapPin, Briefcase } from 'lucide-react';
-import { prisma } from '@qualiof/db';
+import { listTrainers } from '@/lib/planning/list-trainers';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -10,56 +10,24 @@ export default async function FormateursPage() {
   const { user } = await validateRequest();
   if (!user) return null;
 
-  // Formateurs = Persons qui ont une ExternalIdentity entityType=Person.Trainer (depuis l'import)
-  // OU au moins un LegalLink role=FORMATEUR.
-  const trainers = await prisma.person.findMany({
-    where: {
-      tenantId: user.tenantId,
-      archived: false,
-      OR: [
-        { legalLinks: { some: { role: 'FORMATEUR' } } },
-        // ExternalIdentity Person.Trainer (créé par l'import des formateurs SmartOF)
-        // On les recoupe via une requête séparée ci-dessous si besoin
-      ],
-    },
-    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    include: {
-      legalLinks: {
-        where: { role: 'FORMATEUR' },
-        include: { organization: { select: { id: true, legalName: true, siret: true } } },
-      },
-    },
-  });
-
-  // Complète avec ceux marqués Person.Trainer dans ExternalIdentity (formateurs sans SIRET)
-  const externalTrainers = await prisma.externalIdentity.findMany({
-    where: { tenantId: user.tenantId, entityType: 'Person.Trainer' },
-    select: { entityId: true },
-  });
-  const externalIds = new Set(externalTrainers.map((e) => e.entityId));
-  const additionalIds = [...externalIds].filter((id) => !trainers.find((t) => t.id === id));
-
-  const additional = additionalIds.length
-    ? await prisma.person.findMany({
-        where: { id: { in: additionalIds }, tenantId: user.tenantId, archived: false },
-        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-        include: {
-          legalLinks: {
-            where: { role: 'FORMATEUR' },
-            include: { organization: { select: { id: true, legalName: true, siret: true } } },
-          },
-        },
-      })
-    : [];
-
-  const allTrainers = [...trainers, ...additional];
+  const allTrainers = await listTrainers(user.tenantId);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Formateurs"
         subtitle={`${allTrainers.length} formateur${allTrainers.length > 1 ? 's' : ''} (interne ou sous-traitant)`}
-        actions={<CreateTrainerButton variant="primary" />}
+        actions={
+          <div className="flex items-center gap-3">
+            <Link
+              href="/app/planning"
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-primary hover:bg-muted"
+            >
+              Voir le planning
+            </Link>
+            <CreateTrainerButton variant="primary" />
+          </div>
+        }
       />
 
       {allTrainers.length === 0 ? (
