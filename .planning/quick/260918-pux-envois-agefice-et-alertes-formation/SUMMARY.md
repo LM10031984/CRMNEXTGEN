@@ -12,7 +12,8 @@
 
 ## Vérifications
 
-- Suite monorepo : 4 101 tests web + 208 shared + 231 db réussis, deux tests web ignorés.
+- Suite monorepo : 4 107 tests web + 208 shared + 231 db réussis, deux tests web ignorés.
+- Intégration PostgreSQL réelle : 30 tests réussis, dont concurrence composition/envoi et simulation SMTP sans faux statut envoyé.
 - TypeScript application + scripts et lint monorepo vérifiés. Un avertissement alt préexistant dans Paramètres.
 - Migration rejouée dans qualiof_agefice_drift_test (locale jetable), contrôle de dérive nul.
 - Revue indépendante : course statut/envoi, doublons historiques et rôle commercial/facture corrigés.
