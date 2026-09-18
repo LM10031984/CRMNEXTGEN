@@ -52,6 +52,7 @@ vi.mock('@/lib/of-config', () => ({
   loadOfConfig: vi.fn().mockResolvedValue({
     name: 'Start Academy',
     addressFull: '12 avenue des Camélias, 06800 Cagnes-sur-Mer',
+    addressStreet: '12 avenue des Camélias',
     addressCp: '06800',
     addressVille: 'Cagnes-sur-Mer',
   }),
@@ -138,7 +139,7 @@ describe('demande AGEFICE — lieu de formation', () => {
 
     // La mention que l'AGEFICE réclame — absente avant le 11/09/2026.
     expect(lieuEcrit()).toContain('Start Academy');
-    expect(lieuEcrit()).toBe('Start Academy, 12 avenue des Camélias, 06800 Cagnes-sur-Mer');
+    expect(lieuEcrit()).toBe('Start Academy, 12 avenue des Camélias');
   });
 
   it("sans lieu rattaché, le repli est SIGNALÉ et non appliqué en silence", async () => {
@@ -153,7 +154,7 @@ describe('demande AGEFICE — lieu de formation', () => {
     expect(r.warnings?.some((w) => w.includes('Start Academy'))).toBe(true);
   });
 
-  it('avec un lieu, raison sociale, nom, rue et ville sont composés sans répétition', async () => {
+  it('sépare la raison sociale, le nom et la rue des cases code postal et ville', async () => {
     findFirstParticipant.mockResolvedValue(
       participantAvecLieu({
         legalName: "SARL L'Agence Signature",
@@ -164,7 +165,8 @@ describe('demande AGEFICE — lieu de formation', () => {
 
     await generateAgeficeForParticipant('part-1');
 
-    expect(lieuEcrit()).toBe("SARL L'Agence Signature — Agence Nice Centre, 12 rue Masséna, 06000 Nice");
+    expect(lieuEcrit()).toBe("SARL L'Agence Signature — Agence Nice Centre, 12 rue Masséna");
+    expect(fillAgeficePdf.mock.calls.at(-1)?.[0].formation).toMatchObject({lieuPostalCode: '06000', lieuVille: 'Nice'});
   });
 
   it("ne répète pas la rue déjà contenue dans le nom d'usage du lieu", async () => {
@@ -178,7 +180,7 @@ describe('demande AGEFICE — lieu de formation', () => {
 
     await generateAgeficeForParticipant('part-1');
 
-    expect(lieuEcrit()).toBe('AKORIMMO — 63 bd de Cessole, 06100 Nice');
+    expect(lieuEcrit()).toBe('AKORIMMO — 63 bd de Cessole');
   });
 
   it("n'avertit pas quand la session a bien un lieu", async () => {
@@ -193,5 +195,50 @@ describe('demande AGEFICE — lieu de formation', () => {
     const r = await generateAgeficeForParticipant('part-1');
 
     expect(r.warnings?.some((w) => /Aucun lieu/.test(w))).toBe(false);
+  });
+});
+
+
+describe('demande AGEFICE — adresse entreprise et lieu réel', () => {
+  it.each([true, false])('adresse de rue sans raison sociale (adresse entreprise disponible : %s)', async (withOrgAddress) => {
+    const participant = participantAvecLieu(null);
+    if (withOrgAddress) participant.sponsorOrg.address = { street: '16 rue de la Démonstration', postalCode: '06200', city: 'Nice' } as any;
+    findFirstParticipant.mockResolvedValue(participant);
+    expect((await generateAgeficeForParticipant('part-1')).ok).toBe(true);
+    expect(fillAgeficePdf.mock.calls.at(-1)?.[0].entreprise).toMatchObject({
+      raisonSociale: 'Nicolas JILBERT',
+      address: withOrgAddress ? '16 rue de la Démonstration' : '28 route de la badine',
+      postalCode: withOrgAddress ? '06200' : '06600',
+      city: withOrgAddress ? 'Nice' : 'Antibes',
+    });
+  });
+
+  it.each(['PRESENTIEL', 'MIXTE'])('coche entreprise pour un lieu client (%s), même si le produit dit non', async (modality) => {
+    const participant = participantAvecLieu({legalName: 'SAS', name: 'Agence de démonstration', address: {street: '3 avenue des Fleurs', postalCode: '06000', city: 'Nice'}});
+    participant.session.modality = modality;
+    Object.assign(participant.session.product, {ageficeEnEntreprise: false});
+    findFirstParticipant.mockResolvedValue(participant);
+    await generateAgeficeForParticipant('part-1');
+    expect(fillAgeficePdf.mock.calls.at(-1)?.[0].formation.enEntreprise).toBe(true);
+  });
+
+  it.each([
+    {legalName: 'SAS START ACADEMY', name: 'Salle 1', address: {street: '12 avenue des Camélias', postalCode: '06800', city: 'Cagnes-sur-Mer'}},
+    {legalName: null, name: 'Salle principale', address: {street: '12 avenue des Camélias', postalCode: '06800', city: 'Cagnes-sur-Mer'}},
+  ])('ne coche pas entreprise pour les locaux de l’OF (%j)', async (location) => {
+    const participant = participantAvecLieu(location);
+    Object.assign(participant.session.product, {ageficeEnEntreprise: true});
+    findFirstParticipant.mockResolvedValue(participant);
+    await generateAgeficeForParticipant('part-1');
+    expect(fillAgeficePdf.mock.calls.at(-1)?.[0].formation.enEntreprise).toBe(false);
+  });
+
+  it('ne coche pas entreprise en distanciel malgré un lieu conservé sur la session', async () => {
+    const participant = participantAvecLieu({legalName: 'Agence cliente', name: 'Salle de réunion', address: {street: '3 avenue des Fleurs', postalCode: '06000', city: 'Nice'}});
+    participant.session.modality = 'DISTANCIEL';
+    Object.assign(participant.session.product, {ageficeEnEntreprise: true});
+    findFirstParticipant.mockResolvedValue(participant);
+    await generateAgeficeForParticipant('part-1');
+    expect(fillAgeficePdf.mock.calls.at(-1)?.[0].formation.enEntreprise).toBe(false);
   });
 });

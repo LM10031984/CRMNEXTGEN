@@ -182,3 +182,27 @@ describe('dossier AGEFICE — ancre de signature du demandeur', () => {
     );
   }, 30_000);
 });
+
+
+describe('dossier AGEFICE — options exactes du formulaire officiel', () => {
+  it('sélectionne auto-entreprise pour AUTO_ENTREPRENEUR, jamais AUTRE', async () => {
+    const payload = data();
+    payload.entreprise.formeJuridique = 'AUTO_ENTREPRENEUR';
+    const pdf = await PDFDocument.load(await fillAgeficePdf(payload));
+    expect(pdf.getForm().getDropdown('Forme juridique (Entreprise)').getSelected()).toEqual(['MICRO-ENTREPRISE / AUTO-ENTREPRISE']);
+  });
+
+  it('remplit séparément les adresses, CP, villes et cases entreprise', async () => {
+    const payload = data();
+    payload.formation.enEntreprise = true;
+    payload.formation.lieuAdresseComplete = 'Agence de démonstration, 3 avenue des Fleurs';
+    const pdf = await PDFDocument.load(await fillAgeficePdf(payload));
+    const form = pdf.getForm();
+    expect(form.getTextField('Adresse Entreprise').getText()).toBe("5 place de l'Ile de Beauté");
+    expect(form.getTextField('Nom et Adresse exacte du lieu de formation').getText()).toBe(payload.formation.lieuAdresseComplete);
+    expect(form.getTextField('Code Postal (Lieu de Formation)').getText()).toBe(payload.formation.lieuPostalCode);
+    expect(form.getTextField('Ville (Lieu de Formation)').getText()).toBe(payload.formation.lieuVille);
+    expect(form.getCheckBox('Form en Entreprise (Oui)').isChecked()).toBe(true);
+    expect(form.getCheckBox('Form en Entreprise (Non)').isChecked()).toBe(false);
+  });
+});
