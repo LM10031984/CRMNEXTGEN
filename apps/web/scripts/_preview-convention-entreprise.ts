@@ -59,6 +59,7 @@ const data: ConventionData = {
   beneficiaireRcsVille: orgAddr?.city ?? null,
   beneficiaireRepresentantNom: org.representative?.trim() || '',
   stagiaires,
+  conventionType: 'ENTREPRISE',
   sessionParticipantCount: session._count.participants,
   sessionStartDate: session.startDate,
   sessionEndDate: session.endDate,

@@ -31,6 +31,8 @@ export interface ConventionStagiaire {
 }
 
 export interface ConventionData {
+  // Le type contractuel ne se déduit pas du nombre de personnes couvertes.
+  conventionType: 'INDIVIDUEL' | 'ENTREPRISE';
   // Bénéficiaire (entreprise qui signe & paye)
   beneficiaireRaisonSociale: string;
   beneficiaireSiret: string | null;
@@ -345,8 +347,8 @@ ${renderOfPagedFooter(of)}
   <h2 class="article">Article 4 — Organisation de l'action de formation</h2>
   <p>L'action de formation aura lieu du <strong>${fmtDate(data.sessionStartDate)} à 9h</strong> au <strong>${fmtDate(data.sessionEndDate)} à 18h</strong>, au ${escapeHtml(data.sessionLieu)}.</p>
   <p>Elle est organisée pour un effectif de <strong>${data.sessionParticipantCount} stagiaire${data.sessionParticipantCount > 1 ? 's' : ''}</strong>.</p>
-  <p>La présente convention concerne ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
-  <p style="padding-left: 14px;">${stagiaireListe}</p>
+  ${data.conventionType === 'ENTREPRISE' ? `<p>La présente convention concerne ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
+  <p style="padding-left: 14px;">${stagiaireListe}</p>` : ''}
   ${data.produitTrainerProfile ? `<p>Profil du formateur : ${escapeHtml(data.produitTrainerProfile)}</p>` : ''}
 </section>
 

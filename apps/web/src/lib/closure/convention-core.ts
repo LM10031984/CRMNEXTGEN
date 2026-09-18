@@ -1,4 +1,4 @@
-import { sessionTotalHT } from '@/lib/sessions/session-regime';
+import { sessionTotalHT, sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération de convention de formation.
@@ -94,6 +94,18 @@ export async function generateConventionCore(
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.product) return { ok: false, error: 'Produit lié à la session manquant' };
 
+  const usesCompanyAgreement = sessionUsesCompanyAgreement(participant.session, {
+    sponsorLegalForm: participant.sponsorOrg?.legalForm,
+    roleChezSponsor: legalLinkAtSession(
+      participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session,
+    )?.role ?? null,
+  });
+  // Certains dossiers EI historiques ont un PDF stocké au format groupe.
+  // Ce stockage ne doit pas imposer un contrat entreprise au dossier actuel.
+  // Sans régime ni forme juridique, on conserve la couverture existante.
+  const knownIndividual = !usesCompanyAgreement &&
+    !!(participant.session.regime || participant.sponsorOrg?.legalForm);
+
   // Garde anti-doublon (revue Codex PR #13). Si une convention GROUPE couvre
   // déjà ce participant, ne pas en émettre une individuelle : la session
   // porterait les DEUX, ce qui viole la règle « jamais une convention par
@@ -114,9 +126,13 @@ export async function generateConventionCore(
   const groupConvention = await prisma.document.findFirst({
     where: groupConventionAnyShapeWhere(tenantId, participant.session.id, participant.sponsorOrgId),
     orderBy: { createdAt: 'desc' },
-    select: { id: true },
+    select: { id: true, status: true, signedPdfUrl: true },
   });
-  if (groupConvention) {
+  if (groupConvention && knownIndividual &&
+      (groupConvention.signedPdfUrl || ['signed', 'sent_for_signature'].includes(groupConvention.status))) {
+    return { ok: false, error: 'Cette ancienne convention est signée ou en cours de signature. Traitez cette signature avant de générer une nouvelle convention individuelle.' };
+  }
+  if (groupConvention && !knownIndividual) {
     return {
       ok: true,
       documentId: groupConvention.id,
@@ -150,13 +166,7 @@ export async function generateConventionCore(
   // le cœur individuel fabriquait un contrat nominatif au salarié d'une EI
   // pendant que le routeur produisait la convention de groupe — les deux
   // documents contradictoires que la règle du 12/08 sert justement à éviter.
-  if (
-    (participant.session.regime ? participant.session.regime === 'ENTREPRISE' : releveDeLaConvention({
-      sponsorLegalForm: participant.sponsorOrg?.legalForm,
-      roleChezSponsor:
-        legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,
-    }))
-  ) {
+  if (usesCompanyAgreement) {
     return {
       ok: true,
       skipped: true,
@@ -247,6 +257,7 @@ export async function generateConventionCore(
   );
 
   const data: ConventionData = {
+    conventionType: 'INDIVIDUEL',
     beneficiaireRaisonSociale: participant.sponsorOrg.legalName,
     beneficiaireSiret: participant.sponsorOrg.siret,
     // Ligne RCS = SIREN (9 chiffres), pas le SIRET. La cascade de représentant
@@ -484,6 +495,7 @@ export async function generateConventionEntrepriseCore(
   const conventionDate = resolveConventionDate(session.startDate, new Date(), dateSignature);
 
   const data: ConventionData = {
+    conventionType: 'ENTREPRISE',
     beneficiaireRaisonSociale: org.legalName,
     beneficiaireSiret: org.siret,
     // Ligne RCS = SIREN (9 chiffres) ; le SIRET a désormais sa propre ligne.

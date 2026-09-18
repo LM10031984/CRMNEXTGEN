@@ -37,6 +37,7 @@ function baseData(overrides: Partial<ConventionData> = {}): ConventionData {
     beneficiaireSiret: '98765432109876',
     beneficiaireRcsVille: 'Aix-en-Provence',
     beneficiaireRepresentantNom: 'Jean DUPONT',
+    conventionType: 'INDIVIDUEL',
     stagiaires: [{ prenom: 'Marie', nom: 'Martin', email: 'marie@example.com' }],
     sessionParticipantCount: 1,
     sessionStartDate: new Date('2026-05-11T00:00:00Z'),
@@ -93,8 +94,10 @@ describe('article 4 — effectif total, noms et tarif du seul dossier', () => {
     const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
     const article7 = html.split('Article 7 —')[1]!.split('Article 8 —')[0]!;
     expect(article4).toContain(`effectif de <strong>${count} stagiaire${count > 1 ? 's' : ''}</strong>`);
-    expect(article4).toContain('Marie MARTIN');
-    expect(article4).toContain('la personne suivante');
+    expect(article4).not.toContain('Marie');
+    expect(article4).not.toContain('MARTIN');
+    expect(article4).not.toContain('marie@example.com');
+    expect(article4).not.toContain('personne suivante');
     expect(article4).not.toContain('peut évoluer');
     expect(article4).not.toContain('Effectif couvert');
     expect(article7).toMatch(/3[\s\u202f]024,00\s*€ HT/);
@@ -103,6 +106,7 @@ describe('article 4 — effectif total, noms et tarif du seul dossier', () => {
 
   it('conserve le forfait et les seuls noms du dossier entreprise dans une session plus grande', () => {
     const html = renderConventionHtml(baseData({
+      conventionType: 'ENTREPRISE',
       sessionParticipantCount: 5,
       stagiaires: [
         { prenom: 'Marie', nom: 'Martin', email: null },
@@ -118,4 +122,11 @@ describe('article 4 — effectif total, noms et tarif du seul dossier', () => {
     expect(article7).toMatch(/240,00\s*€ HT/);
     expect(article7).not.toContain('×');
   });
+});
+
+it('liste aussi le salarié unique d’une convention entreprise', () => {
+  const html = renderConventionHtml(baseData({ conventionType: 'ENTREPRISE', sessionParticipantCount: 2, prixGlobalHT: 240 }), of);
+  const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
+  expect(article4).toContain('<strong>2 stagiaires</strong>');
+  expect(article4).toContain('Marie MARTIN');
 });

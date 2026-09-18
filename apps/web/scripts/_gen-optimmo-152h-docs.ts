@@ -218,6 +218,7 @@ async function main() {
     beneficiaireRcsVille: orgAddr?.city ? orgAddr.city.charAt(0) + orgAddr.city.slice(1).toLowerCase() : null,
     beneficiaireRepresentantNom: sponsor.representative ?? 'Gilles Blanchon',
     stagiaires,
+    conventionType: 'ENTREPRISE',
     sessionParticipantCount: session.participants.filter((p) => p.enrollmentStatus !== 'CANCELLED').length,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
