@@ -200,7 +200,7 @@ describe('composeProgramme — §8.2 : le surplus d’enveloppe s’affiche, il 
 
     expect(out.totalHalfDays).toBe(1);
     expect(out.spareHalfDays).toBe(8);
-    expect(out.notices.some((n) => n.includes('ne sont PAS ajoutées d’office'))).toBe(true);
+    expect(out.notices.some((n) => n.toLowerCase().includes('ne sont pas ajoutées d’office'))).toBe(true);
   });
 
   it('ne dépasse jamais l’enveloppe, et dit quelles douleurs restent sans module', () => {

@@ -7,6 +7,7 @@ import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { getProposalWorkspace } from '@/server/actions/propositions';
+import { ProposalPathOptions } from '@/components/proposition/proposal-path-options';
 import { ProposalActions } from '@/components/proposition/proposal-actions';
 import { ProposalContentForm } from '@/components/proposition/proposal-content-form';
 import { ProposalPricingForm } from '@/components/proposition/proposal-pricing-form';
@@ -124,8 +125,8 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
         />
         <Stat
           label="Heures conventionnées"
-          value={`${ws.data.funding.conventionedHoursPerParticipant} h`}
-          hint={`${ws.data.funding.halfDays} demi-journées, par participant`}
+          value={`${ws.synthesis.conventionedHoursMax} h`}
+          hint={`${ws.synthesis.halfDaysMax} demi-journées, par participant`}
         />
       </div>
 
@@ -203,6 +204,12 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
           (remise, arrondi offert), l'éditeur se remonte sur les valeurs
           fraîches au lieu de garder son état local — sinon l'écran affiche
           encore l'ancien reste à charge à côté du nouveau. */}
+      <ProposalPathOptions
+        diagnosticId={ws.proposal.diagnosticId}
+        options={ws.pathOptions}
+        canCreate={['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role)}
+      />
+
       <ProposalPricingForm
         key={`pricing-${ws.proposal.updatedAt.toISOString()}`}
         proposalId={id}
@@ -224,7 +231,8 @@ export default async function PropositionPage({ params }: { params: Promise<{ id
       />
 
       <p className="text-xs text-muted-foreground">
-        Rédaction : {ws.proposal.generationSource === 'heuristique'
+        Rédaction :{' '}
+        {ws.proposal.generationSource === 'heuristique'
           ? 'heuristique (aucun modèle de langage n’a écrit ce document)'
           : ws.proposal.generationSource}
         .

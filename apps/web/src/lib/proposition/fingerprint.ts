@@ -33,15 +33,16 @@
  */
 
 import { createHash } from 'node:crypto';
+import { PATH_SELECTION_VERSION, COMPLEMENT_CONTEXTS } from './path-recommendations';
 import { DIAGNOSTIC_SELECTION_VERSION, COMPETENCY_LINKS } from './competency-links';
 
-import {
-  computeSourceFingerprint,
-  type FingerprintInput,
-} from '@/lib/diagnostic-r1/fingerprint';
+import { computeSourceFingerprint, type FingerprintInput } from '@/lib/diagnostic-r1/fingerprint';
 import type { ProposalContent, ProposalPricing } from '@qualiof/shared';
 
-export { compareSourceFingerprint, type FingerprintComparison } from '@/lib/diagnostic-r1/fingerprint';
+export {
+  compareSourceFingerprint,
+  type FingerprintComparison,
+} from '@/lib/diagnostic-r1/fingerprint';
 
 /** La matière vivante d'un module, telle que l'écran la relit au catalogue. */
 export interface ModuleMaterial {
@@ -148,6 +149,9 @@ export function computeProposalFingerprint(input: ProposalFingerprintInput): str
     .sort();
 
   const payload = [
+    ...(input.content.pathMode === 'COMPLET_IA'
+      ? [`parcours:${PATH_SELECTION_VERSION}:${JSON.stringify(COMPLEMENT_CONTEXTS)}`]
+      : []),
     `selection:${DIAGNOSTIC_SELECTION_VERSION}:${JSON.stringify(COMPETENCY_LINKS)}`,
     `justifications:${JSON.stringify(input.content.axes.map((a) => a.modules.map((m) => ({ selection: m.selection, additionalSelections: m.additionalSelections, quotes: m.quotes, need: m.needLabel }))))}`,
     `diagnostic:${diagnosticPart}`,

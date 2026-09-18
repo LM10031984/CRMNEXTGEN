@@ -65,7 +65,11 @@ function optimo(): ProposalPricing {
 describe('Σ devis = Σ proposition, au centime', () => {
   const pricing = optimo();
   const s = computePricing({ pricing, rules: RULES });
-  const drafts = buildQuoteDrafts({ synthesis: s, proposalReference: 'PROP-0001', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
+  const drafts = buildQuoteDrafts({
+    synthesis: s,
+    proposalReference: 'PROP-0001',
+    onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS,
+  });
 
   it('reproduit exactement le coût pédagogique de la proposition', () => {
     expect(s.totalHt).toBe(4 * 9 * 336 + 3 * 6 * 336);
@@ -87,7 +91,11 @@ describe('Σ devis = Σ proposition, au centime', () => {
       })),
     };
     const sc = computePricing({ pricing: centimes, rules: RULES });
-    const dc = buildQuoteDrafts({ synthesis: sc, proposalReference: 'PROP-0002', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
+    const dc = buildQuoteDrafts({
+      synthesis: sc,
+      proposalReference: 'PROP-0002',
+      onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS,
+    });
     expect(quotesMatchProposal(dc, sc)).toBe(true);
   });
 
@@ -134,7 +142,11 @@ describe('Ce que le devis dit — et ce qu’il ne retranche pas', () => {
       discount: { amount: 500, reason: 'Offre de lancement', kind: 'COMMERCIALE' },
     };
     const s = computePricing({ pricing: remise, rules: RULES });
-    const drafts = buildQuoteDrafts({ synthesis: s, proposalReference: 'PROP-0003', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
+    const drafts = buildQuoteDrafts({
+      synthesis: s,
+      proposalReference: 'PROP-0003',
+      onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS,
+    });
 
     // Aucune ligne négative : le coût déclaré est l'assiette des droits.
     for (const d of drafts) {
@@ -142,12 +154,16 @@ describe('Ce que le devis dit — et ce qu’il ne retranche pas', () => {
     }
     expect(drafts.reduce((sum, d) => sum + d.amountHt, 0)).toBe(s.totalHt);
     expect(drafts[0]!.notes).toContain('Offre de lancement');
-    expect(drafts[0]!.notes).toContain('ne modifie ni le coût pédagogique');
+    expect(drafts[0]!.notes).toContain('Les lignes du devis restent au coût pédagogique intégral');
   });
 
   it('porte l’exonération de TVA et la réserve d’acceptation des financeurs', () => {
     const s = computePricing({ pricing, rules: RULES });
-    const drafts = buildQuoteDrafts({ synthesis: s, proposalReference: 'PROP-0004', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
+    const drafts = buildQuoteDrafts({
+      synthesis: s,
+      proposalReference: 'PROP-0004',
+      onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS,
+    });
     expect(drafts[0]!.notes).toContain(MENTION_EXONERATION_TVA);
     expect(drafts[0]!.notes).toContain('Aucune facturation avant accord de prise en charge');
     for (const d of drafts) for (const l of d.lines) expect(l.vatRate).toBe(0);
@@ -159,7 +175,11 @@ describe('Ce que le devis dit — et ce qu’il ne retranche pas', () => {
       discount: { amount: 999999, reason: 'Partenariat', kind: 'COMMERCIALE' },
     };
     const s = computePricing({ pricing: offert, rules: RULES });
-    const drafts = buildQuoteDrafts({ synthesis: s, proposalReference: 'PROP-0005', onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS });
+    const drafts = buildQuoteDrafts({
+      synthesis: s,
+      proposalReference: 'PROP-0005',
+      onsiteHoursPerHalfDay: RULES.HALF_DAY_ONSITE_HOURS,
+    });
     expect(s.coverageState).toBe('offered_via_discount');
     expect(drafts[0]!.notes).toContain('Reste à charge offert');
     expect(drafts[0]!.notes).not.toContain('Intégralement pris en charge');

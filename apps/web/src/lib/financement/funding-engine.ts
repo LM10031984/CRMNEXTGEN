@@ -183,11 +183,12 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
   let opcoRemaining = opcoCovered;
   let opcoOverflow = false;
 
+  const opcoPrice = euros(conventionedHours * opcoRate);
   const opcoResults: FundingParticipantResult[] = opcoRows.map((r) => {
     const uncapped = euros(conventionedHours * r.hourlyRate);
-    const grant = euros(Math.min(uncapped, opcoRemaining, pricePerParticipant));
+    const grant = euros(Math.min(uncapped, opcoRemaining, opcoPrice));
     opcoRemaining = euros(opcoRemaining - grant);
-    if (grant < Math.min(uncapped, pricePerParticipant)) opcoOverflow = true;
+    if (grant < Math.min(uncapped, opcoPrice)) opcoOverflow = true;
     return {
       id: r.p.id,
       regime: r.regime,
@@ -196,8 +197,8 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
       hourlyRate: r.hourlyRate,
       coverageUncapped: uncapped,
       coverage: grant,
-      price: pricePerParticipant,
-      remainder: euros(pricePerParticipant - grant),
+      price: opcoPrice,
+      remainder: euros(opcoPrice - grant),
     };
   });
 
@@ -211,8 +212,8 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
       hourlyRate: 0,
       coverageUncapped: 0,
       coverage: 0,
-      price: pricePerParticipant,
-      remainder: pricePerParticipant,
+      price: r.p.statut === 'SALARIE' ? opcoPrice : pricePerParticipant,
+      remainder: r.p.statut === 'SALARIE' ? opcoPrice : pricePerParticipant,
     }));
 
   // On restitue les participants dans l'ordre d'entrée : la grille équipe à
@@ -335,6 +336,8 @@ export function computeFunding(input: FundingComputeInput): FundingSynthesis {
   }
 
   return {
+    modality,
+    fundingType,
     halfDays,
     onsiteHours,
     conventionedHours,

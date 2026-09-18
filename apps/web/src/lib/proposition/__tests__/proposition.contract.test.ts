@@ -228,7 +228,8 @@ describe('« OFFERT » n’est pas « pris en charge »', () => {
       ),
     );
     expect(offert).toContain('OFFERT');
-    expect(offert).toContain('ne modifie ni le coût pédagogique déclaré ni vos droits');
+    expect(offert).toContain('avoir distinct rattaché à la facture de chaque payeur');
+    expect(offert).toContain('facture et avoir justifient le coût net auprès du financeur');
     expect(offert).toContain('Il ne s’agit pas d’une prise en charge supplémentaire');
     expect(offert).toContain('Arrondi de parcours');
     expect(offert).not.toContain('Intégralement pris en charge');

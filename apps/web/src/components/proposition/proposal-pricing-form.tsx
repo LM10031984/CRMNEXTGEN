@@ -6,13 +6,14 @@ import { toast } from 'sonner';
 import { Gift, Loader2, Save, Undo2 } from 'lucide-react';
 import type { ProposalPricing } from '@qualiof/shared';
 
+import { commercialCreditPlan } from '@/lib/proposition/commercial-credit';
 import type { FundingRuleValues } from '@/lib/financement/types';
+import { computePricing, isRoundingGap, ROUNDING_DISCOUNT_REASON } from '@/lib/proposition/pricing';
 import {
-  computePricing,
-  isRoundingGap,
-  ROUNDING_DISCOUNT_REASON,
-} from '@/lib/proposition/pricing';
-import { offerRoundingGap, setProposalDiscount, updateProposalPricing } from '@/server/actions/propositions';
+  offerRoundingGap,
+  setProposalDiscount,
+  updateProposalPricing,
+} from '@/server/actions/propositions';
 
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 
@@ -66,9 +67,10 @@ export function ProposalPricingForm({
     start(async () => {
       const r = await setProposalDiscount({
         proposalId,
-        discount: Number.isFinite(amount) && amount > 0
-          ? { amount, reason: discountReason, kind: 'COMMERCIALE' }
-          : null,
+        discount:
+          Number.isFinite(amount) && amount > 0
+            ? { amount, reason: discountReason, kind: 'COMMERCIALE' }
+            : null,
       });
       if (r.ok) {
         toast.success(amount > 0 ? 'Remise enregistrée' : 'Remise retirée');
@@ -129,7 +131,9 @@ export function ProposalPricingForm({
                   value={p.payer.participantCount}
                   disabled={readOnly}
                   onChange={(e) =>
-                    updatePayer(payerIndex, { participantCount: Math.max(1, Number(e.target.value)) })
+                    updatePayer(payerIndex, {
+                      participantCount: Math.max(1, Number(e.target.value)),
+                    })
                   }
                 />
               </label>
@@ -141,7 +145,9 @@ export function ProposalPricingForm({
                   className={`${INPUT} min-w-0 flex-1`}
                   value={line.description}
                   disabled={readOnly}
-                  onChange={(e) => updateLine(payerIndex, lineIndex, { description: e.target.value })}
+                  onChange={(e) =>
+                    updateLine(payerIndex, lineIndex, { description: e.target.value })
+                  }
                 />
                 <label className="flex items-center gap-1.5 text-xs">
                   <span className="text-muted-foreground">Demi-j.</span>
@@ -208,6 +214,31 @@ export function ProposalPricingForm({
         </p>
       </div>
 
+      {synthesis.discount && (
+        <div className="rounded-md border border-amber-200 bg-amber-50/40 p-3 text-sm">
+          <h3 className="font-semibold">Avoirs commerciaux à émettre sur les factures</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Répartition au prorata des restes à charge. Après émission de la facture, utilisez «
+            Créer un avoir » sur la facture du payeur concerné avec le montant et le motif
+            ci-dessous. Aucun avoir n’est encore créé.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {commercialCreditPlan(synthesis)
+              .filter((p) => p.amountHt > 0)
+              .map((p) => (
+                <li key={p.payerId}>
+                  {p.name} : <strong>{eur.format(p.amountHt)} HT</strong>
+                </li>
+              ))}
+          </ul>
+          <p className="mt-2 text-xs">Motif : {synthesis.discount.reason}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            La facture conserve le coût pédagogique intégral. L’avoir est une pièce distincte et
+            permet de justifier le coût net auprès du financeur.
+          </p>
+        </div>
+      )}
+
       {synthesis.alerts.length > 0 && (
         <ul className="space-y-1 text-xs">
           {synthesis.alerts.map((a) => (
@@ -231,11 +262,28 @@ export function ProposalPricingForm({
             Geste commercial
           </h3>
           <p className="text-[11px] text-muted-foreground">
-            Une remise porte uniquement sur le reste à charge : elle ne réduit jamais le coût
-            pédagogique, qui est l’assiette des droits. Au-delà de{' '}
+            Le geste porte sur le reste à charge et sera matérialisé par un avoir sur la facture.
+            Les lignes de vente conservent le coût pédagogique intégral. Au-delà de{' '}
             {rules.DISCOUNT_WARNING_PERCENT} % du reste à charge, la validation d’un responsable
             devient obligatoire avant l’envoi.
           </p>
+
+          {synthesis.remainderBeforeDiscount > 0 && !pricing.discount && (
+            <button
+              type="button"
+              disabled={pending}
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 disabled:opacity-50"
+              onClick={() => {
+                setDiscountAmount(String(synthesis.remainderBeforeDiscount));
+                setDiscountReason(
+                  'Complément du parcours métier avec IA offert par avoir sur facture',
+                );
+              }}
+            >
+              Préparer le complément offert par avoir (
+              {eur.format(synthesis.remainderBeforeDiscount)})
+            </button>
+          )}
 
           {roundingGap !== null && (
             <button
@@ -286,7 +334,11 @@ export function ProposalPricingForm({
               disabled={pending}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
             >
-              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              {pending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
               Appliquer
             </button>
             {pricing.discount && (

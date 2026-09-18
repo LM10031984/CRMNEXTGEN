@@ -42,6 +42,8 @@ import { z } from 'zod';
  * de 8 h conventionnées (D-20).
  */
 export const ProposalModuleSelectionSchema = z.object({
+  kind: z.enum(['socle', 'developpement']).optional(),
+  rationale: z.string().min(1).max(600).optional(),
   version: z.string().min(1).max(80),
   ruleId: z.string().min(1).max(80),
   moduleSourceRef: z.string().min(1).max(120),
@@ -111,6 +113,7 @@ export const ProposalStepSchema = z.object({
 export type ProposalStep = z.infer<typeof ProposalStepSchema>;
 
 export const ProposalContentSchema = z.object({
+  pathMode: z.enum(['PRIORITAIRE', 'COMPLET_IA']).optional(),
   uncoveredNeeds: z.array(z.string().max(200)).max(60).optional(),
   /** Sous-titre de couverture — l'activité et la ville, pas un slogan. */
   subtitle: z.string().max(300).default(''),
@@ -252,6 +255,7 @@ export type ProposalFunding = z.infer<typeof ProposalFundingSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const CreateProposalSchema = z.object({
+  pathMode: z.enum(['PRIORITAIRE', 'COMPLET_IA']).default('PRIORITAIRE'),
   diagnosticId: z.string().uuid(),
   title: z.string().min(1).max(300).optional(),
 });

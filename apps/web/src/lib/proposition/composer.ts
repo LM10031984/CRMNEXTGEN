@@ -252,12 +252,23 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
   for (const { candidate, rec } of orderCandidates(servable, maxPerNeed)) {
     const titleKey = normalizeTitle(candidate.title);
     // Un seul atelier peut servir plusieurs compétences explicitement validées.
-    const existingBlock = blocks.find((b) => b.modules.some((m) => m.moduleId === candidate.moduleId));
+    const existingBlock = blocks.find((b) =>
+      b.modules.some((m) => m.moduleId === candidate.moduleId),
+    );
     const existing = existingBlock?.modules.find((m) => m.moduleId === candidate.moduleId);
-    if (existing && candidate.selection && existing.selection && rec.need.code !== existing.need.code) {
-      existing.additionalSelections = [...(existing.additionalSelections ?? []), candidate.selection];
+    if (
+      existing &&
+      candidate.selection &&
+      existing.selection &&
+      rec.need.code !== existing.need.code
+    ) {
+      existing.additionalSelections = [
+        ...(existing.additionalSelections ?? []),
+        candidate.selection,
+      ];
       existing.evidence = [...existing.evidence, ...rec.evidence];
-      if (!existingBlock!.needCodes.includes(rec.need.code)) existingBlock!.needCodes.push(rec.need.code);
+      if (!existingBlock!.needCodes.includes(rec.need.code))
+        existingBlock!.needCodes.push(rec.need.code);
       placedNeeds.add(rec.need.code);
       continue;
     }
@@ -325,12 +336,14 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
   if (spareHalfDays > 0 && totalHalfDays > 0 && uncovered.length === 0) {
     // §8.2 — l'arbitrage humain s'AFFICHE, il ne se décide pas tout seul.
     notices.push(
-      `Toutes les douleurs tracées sont couvertes en ${totalHalfDays} demi-journée(s), et vos droits en financeraient ${envelope}. Les ${spareHalfDays} demi-journée(s) restantes ne sont PAS ajoutées d’office : ajouter un module sans point de douleur derrière ne passerait pas un contrôle OPCO. À arbitrer avec le dirigeant — sachant que des droits non consommés au 31 décembre sont perdus.`,
+      `Les ateliers retenus représentent ${totalHalfDays} demi-journée(s), pour un objectif de composition de ${envelope}. Les ${spareHalfDays} demi-journée(s) restantes ne sont pas ajoutées d’office : chaque atelier doit répondre à une douleur documentée ou à un objectif de développement métier validé avec le dirigeant. Le financement réel dépend des plafonds de chaque payeur.`,
     );
   }
 
   if (spareHalfDays > 0 && uncovered.length > 0) {
-    notices.push(`Des besoins restent sans atelier adapté. Les ${spareHalfDays} demi-journée(s) restantes ne sont PAS ajoutées d’office : un module doit répondre à un besoin documenté.`);
+    notices.push(
+      `Des besoins restent sans atelier adapté. Les ${spareHalfDays} demi-journée(s) restantes ne sont PAS ajoutées d’office : un module doit répondre à un besoin documenté.`,
+    );
   }
 
   const enveloppePleine = uncovered.filter((u) => u.reason === 'enveloppe-pleine');
@@ -338,7 +351,9 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
     notices.push(
       `L’enveloppe de ${envelope} demi-journée(s) ne couvre pas tout : ${enveloppePleine
         .map((u) => `« ${u.label} »`)
-        .join(', ')} reste(nt) sans module. Le parcours suit les priorités du diagnostic ; les autres besoins restent à traiter.`,
+        .join(
+          ', ',
+        )} reste(nt) sans module. Le parcours suit les priorités du diagnostic ; les autres besoins restent à traiter.`,
     );
   }
 
@@ -357,7 +372,9 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
         ...new Set(doublons),
       ]
         .slice(0, 3)
-        .join(', ')}). Un module transverse remonte sur plusieurs besoins — il n'est programmé qu'une fois, et la place revient au candidat suivant.`,
+        .join(
+          ', ',
+        )}). Un module transverse remonte sur plusieurs besoins — il n'est programmé qu'une fois, et la place revient au candidat suivant.`,
     );
   }
 
@@ -385,7 +402,7 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
   return {
     blocks,
     totalHalfDays,
-    totalOnSiteHours: Math.round((totalHalfDays * rules.HALF_DAY_ONSITE_HOURS * 100)) / 100,
+    totalOnSiteHours: Math.round(totalHalfDays * rules.HALF_DAY_ONSITE_HOURS * 100) / 100,
     totalConventionedHours: totalHalfDays * conventionedPerBlock,
     sourceProgrammes: [...sources.entries()].map(([code, title]) => ({ code, title })),
     spareHalfDays,
@@ -465,7 +482,7 @@ export function compositionFromAxes(
       matchedSignals: m.signal ? [m.signal] : [],
       confidence: m.confidence,
       isFoundation: false,
-      targetProfile: m.selection?.audience === 'tous' ? null : m.selection?.audience ?? null,
+      targetProfile: m.selection?.audience === 'tous' ? null : (m.selection?.audience ?? null),
     }));
 
     return {
