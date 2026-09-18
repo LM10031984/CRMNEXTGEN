@@ -69,10 +69,13 @@ function normalize(raw: string): string {
  *
  * @param fallback libellé de repli (l'adresse du siège de l'OF) quand aucun
  *   segment exploitable n'est disponible.
+ * @param options separatePostalFields réserve les CP/ville structurés aux
+ *   cases dédiées du Cerfa AGEFICE, sans changer les autres documents.
  */
 export function formatLieuFormation(
   loc: LieuInput | null | undefined,
   fallback: string,
+  options?: { separatePostalFields?: boolean },
 ): string {
   if (!loc) return fallback;
 
@@ -109,7 +112,9 @@ export function formatLieuFormation(
     const street = clean(a.street);
     if (street) adresse.push(street);
     const cpVille = [clean(a.postalCode), clean(a.city)].filter(Boolean).join(' ');
-    if (cpVille) adresse.push(cpVille);
+    // Cerfa : CP et ville ont leurs propres cases. Les autres documents
+    // conservent le libellé postal complet par défaut.
+    if (cpVille && !options?.separatePostalFields) adresse.push(cpVille);
   }
 
   // ── Égalité stricte, tous segments confondus ─────────────────────────────

@@ -22,6 +22,7 @@ import {
 } from '@/lib/agefice-form-fill';
 import { isCanonicalExperience } from '@/lib/agefice-options';
 import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
+import { ageficeFormationEnEntreprise } from '@/lib/locations/agefice-context';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
@@ -259,7 +260,12 @@ export async function generateAgeficeForParticipant(
   // désormais la raison sociale de l'OF — « Start Academy, 12 avenue des
   // Camélias… » — et non l'adresse nue, qui exposait au même motif de refus
   // (Laurent 11/09).
-  const lieuAdresseComplete = formatLieuFormation(session.location, fallbackLieuOf(of));
+  // Le Cerfa a des cases CP/ville séparées : ici, identité du lieu + rue.
+  const lieuAdresseComplete = formatLieuFormation(
+    session.location ?? { legalName: of.name, address: { street: of.addressStreet } },
+    of.name,
+    { separatePostalFields: true },
+  );
   if (!session.location) {
     // Le repli sur le siège est LÉGITIME quand la formation s'y tient, et FAUX
     // sinon — rien ne les distingue ici. La convocation, elle, affiche « à
@@ -289,7 +295,10 @@ export async function generateAgeficeForParticipant(
       : (['QUIZ', 'FEUILLES_PRESENCE'] satisfies EvaluationType[]);
   const ageficeObligatoire = (pAny.ageficeObligatoire as boolean | null | undefined) ?? false;
   const ageficeReconversion = (pAny.ageficeReconversion as boolean | null | undefined) ?? false;
-  const ageficeEnEntreprise = (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? false;
+  const ageficeEnEntreprise = ageficeFormationEnEntreprise(
+    session.location, of, session.modality,
+    (pAny.ageficeEnEntreprise as boolean | null | undefined) ?? false,
+  );
   const ageficeMandat = (pAny.ageficeMandat as boolean | null | undefined) ?? true;
 
   const data: AgeficeFormData = {
@@ -314,14 +323,9 @@ export async function generateAgeficeForParticipant(
       // Activité principale exercée : TOUJOURS « Immobilier » (Laurent 2026-06-16).
       activite: 'Immobilier',
       formeJuridique: eiOrg.legalForm,
-      // AGEFICE refuse les dossiers si la raison sociale n'apparaît pas dans
-      // le champ "Adresse Entreprise" du Cerfa (Laurent 2026-06-04). On force le
-      // format "Raison Sociale — Rue", la rue venant du DOMICILE de l'apprenant
-      // si l'EI n'a pas d'adresse propre (auto-entrepreneur : adresse entreprise
-      // = domicile ; Laurent 2026-06-16).
-      address:
-        [eiOrg.legalName, orgAddress?.street ?? personalAddress?.street].filter(Boolean).join(' — ') ||
-        null,
+      // La raison sociale possède sa propre case ; l'adresse contient la rue
+      // seule, avec repli sur le domicile si l'EI n'a pas d'adresse renseignée.
+      address: orgAddress?.street?.trim() || personalAddress?.street?.trim() || null,
       postalCode: orgAddress?.postalCode ?? personalAddress?.postalCode ?? null,
       city: orgAddress?.city ?? personalAddress?.city ?? null,
     },

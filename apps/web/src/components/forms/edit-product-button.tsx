@@ -157,7 +157,7 @@ export function EditProductButton({
         },
         {
           name: 'ageficeEnEntreprise',
-          label: 'AGEFICE · Formation en entreprise ?',
+          label: 'AGEFICE · En entreprise par défaut (lieu non renseigné) ?',
           type: 'select',
           defaultValue: boolToTri(current.ageficeEnEntreprise),
           options: triOpts,

@@ -121,10 +121,10 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
     display: flex;
     align-items: center;
     gap: 8mm;
-    margin-bottom: 3mm;
+    margin-bottom: 2mm;
   }
   .header img.logo {
-    height: 15mm;
+    height: 13mm;
     width: auto;
   }
   .header h1 {
@@ -138,8 +138,8 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
   }
 
   .intro {
-    margin: 2mm 0 3mm 0;
-    line-height: 1.4;
+    margin: 1.5mm 0 2mm 0;
+    line-height: 1.25;
   }
   .intro .val { font-weight: 700; }
   .intro ul {
@@ -153,17 +153,17 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
     color: ${BRAND_DARK};
     font-size: 10.5pt;
     font-weight: 700;
-    margin: 2.5mm 0 1.5mm 0;
+    margin: 2mm 0 1mm 0;
   }
 
   table.info, table.heures {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 2.5mm;
+    margin-bottom: 2mm;
   }
   table.info td, table.heures td, table.heures th {
     border: 0.4pt solid #94a3b8;
-    padding: 1.2mm 2.2mm;
+    padding: 1mm 2.2mm;
     vertical-align: middle;
   }
   table.info td.label {
@@ -185,8 +185,8 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
 
   .clause {
     text-align: justify;
-    margin: 2mm 0;
-    line-height: 1.35;
+    margin: 1.5mm 0;
+    line-height: 1.25;
   }
 
   .reglement {
@@ -207,9 +207,10 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
   }
 
   .signature {
-    margin-top: 3mm;
+    margin-top: 2mm;
+    break-inside: avoid;
   }
-  .signature .fait-le { margin-bottom: 2mm; line-height: 1.55; }
+  .signature .fait-le { margin-bottom: 2mm; line-height: 1.25; }
   .signature .fait-le .val {
     font-weight: 700;
     border-bottom: 0.3pt dotted #64748b;
@@ -261,7 +262,8 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
   }
 
   .footnotes {
-    margin-top: 3mm;
+    margin-top: 2mm;
+    break-inside: avoid;
     font-size: 7pt;
     color: ${MUTED};
     line-height: 1.25;
@@ -369,8 +371,8 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
 
   <div class="signature">
     <div class="fait-le">
-      Fait à : <span class="val">${escapeHtml(d.ofLieuDelivrance)}</span><br/>
-      Le : <span class="val">${fmtDateFr(d.dateDelivrance)}</span>
+      Fait à : <span class="val">${escapeHtml(d.ofLieuDelivrance)}</span>,
+      le <span class="val">${fmtDateFr(d.dateDelivrance)}</span>
     </div>
     <div class="blocks">
       <div class="col">
