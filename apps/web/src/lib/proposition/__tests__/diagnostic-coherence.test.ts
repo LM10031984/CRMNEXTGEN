@@ -7,6 +7,8 @@ import type { FundingRuleValues } from '@/lib/financement/types';
 import { recommendModules, type LibraryModule } from '../module-matcher';
 import { composeProgramme } from '../composer';
 import { seedContent } from '../builder';
+import { FAROS_WORKSHOPS, farosContent } from '../faros-workshops';
+import { validateProposalSelection } from '../selection-validation';
 
 const rules = Object.fromEntries(FUNDING_RULE_SEEDS.map((s) => [s.key, s.valueNumeric])) as FundingRuleValues;
 const catalogue = JSON.parse(readFileSync('../../packages/db/scripts/data/drive-programmes-catalog.json', 'utf8')) as {
@@ -46,7 +48,7 @@ function match(values: Record<string, unknown>, library: LibraryModule[]) {
 function propose(values: Record<string, unknown>, library: LibraryModule[]) {
   const a = audit(values);
   return { audit: a, ...seedContent({ audit: a, rules, library, agencyName: 'Agence témoin', diagnosticReference: 'DIAG-TEST',
-    ofName: 'OF', participantCount: 1 }) };
+    ofName: 'OF', participantCount: 1, meetingAt: null }) };
 }
 
 describe('diagnostic → proposition : la compétence doit traiter la douleur précise', () => {
@@ -154,5 +156,84 @@ describe('diagnostic → proposition : la compétence doit traiter la douleur pr
     expect(out.audit.priorities[0]!.title).toBe('Découverte vendeur formalisée');
     expect(out.content.axes[0]!.modules[0]!.needLabel).toBe('Découverte vendeur formalisée');
     expect(out.content.heard.join(' ')).toContain('Découverte');
+  });
+});
+
+function farosLibrary(): LibraryModule[] {
+  return FAROS_WORKSHOPS.map((w) => ({
+    ...module('drive:017#1'), moduleId: w.sourceRef, sourceRef: w.sourceRef,
+    title: w.title, durationMin: w.durationMin, contentMd: farosContent(w),
+    source: { ...module('drive:017#1').source, productId: 'faros', code: 'FAROS', title: 'Ateliers Faros — IA appliquée à l’immobilier' },
+  }));
+}
+
+describe('Faros dans le parcours réellement proposé', () => {
+  it.each([
+    ['seller-discovery-formalized', 'no', 'faros-applique:v1:decouverte-vendeur'],
+    ['commercial-followup-frequency', 'jamais', 'faros-applique:v1:suivi-vendeur'],
+    ['db-crm-uptodate', 'non', 'faros-applique:v1:base-fiable'],
+    ['db-exploitation', ['aucune'], 'faros-applique:v1:base-dormante'],
+    ['reviews-collection-process', 'no', 'faros-applique:v1:collecte-avis'],
+    ['buyers-discovery-formalized', 'no', 'faros-applique:v1:decouverte-acheteur'],
+  ])('%s sélectionne le cas d’usage Faros correspondant', (question, value, ref) => {
+    const out = propose({ [question]: value }, [...farosLibrary(), module('drive:017#1')]);
+    const modules = out.content.axes.flatMap((a) => a.modules);
+    expect(modules).toHaveLength(1);
+    expect(modules[0]!.selection).toMatchObject({ moduleSourceRef: ref, aiUsage: true });
+    expect(modules[0]!.quotes.join(' ')).not.toBe('');
+    expect(ProposalContentSchema.safeParse(out.content).success).toBe(true);
+  });
+
+  it('les ateliers possèdent une source précise, un déroulé minuté, un exercice et une évaluation', () => {
+    for (const w of FAROS_WORKSHOPS) {
+      expect(w.sourceCapsules.length).toBeGreaterThan(0);
+      expect(w.steps.reduce((n, s) => n + s.minutes, 0)).toBe(w.durationMin);
+      expect(w.exercise.length).toBeGreaterThan(60);
+      expect(w.evaluation.length).toBeGreaterThan(60);
+      expect(farosContent(w)).toContain('Règle qui traverse le module');
+      expect(farosContent(w)).not.toMatch(/\bpige/i);
+    }
+  });
+
+  it('un même atelier couvre deux besoins validés sans être facturé deux fois', () => {
+    const out = propose({ 'skill-price-defense': 'no', 'mandates-price-above-market': 'toujours' }, farosLibrary());
+    expect(out.content.axes.flatMap((a) => a.modules)).toHaveLength(1);
+    expect(out.composition.uncovered).toEqual([]);
+    expect(out.content.axes[0]!.modules[0]!.additionalSelections).toHaveLength(1);
+    expect(validateProposalSelection(out.content, match({ 'skill-price-defense': 'no', 'mandates-price-above-market': 'toujours' }, farosLibrary()).recommendations)).toEqual([]);
+  });
+
+  it('refuse une sélection historique non justifiée et une preuve devenue fausse', () => {
+    const values = { 'seller-discovery-formalized': 'no' };
+    const out = propose(values, farosLibrary());
+    const recs = match(values, farosLibrary()).recommendations;
+    expect(validateProposalSelection(out.content, recs)).toEqual([]);
+    const altered = structuredClone(out.content);
+    altered.axes[0]!.modules[0]!.selection = undefined;
+    expect(validateProposalSelection(altered, recs).length).toBeGreaterThan(0);
+    expect(validateProposalSelection(out.content, match({ 'seller-discovery-formalized': 'yes' }, farosLibrary()).recommendations).length).toBeGreaterThan(0);
+  });
+});
+
+describe('contrôle du parcours enregistré avant remise', () => {
+  it.each(['quotes', 'duration', 'source', 'rule', 'outcome', 'duplicate'])(
+    'refuse une modification incohérente : %s', (change) => {
+      const values = { 'seller-discovery-formalized': 'no' };
+      const out = propose(values, farosLibrary());
+      const m = out.content.axes[0]!.modules[0]!;
+      if (change === 'quotes') m.quotes = ['Une réponse inventée'];
+      if (change === 'duration') m.durationMin = 5;
+      if (change === 'source') m.sourceCode = 'UN-AUTRE-PROGRAMME';
+      if (change === 'rule') m.selection!.ruleId = 'crm-a-jour';
+      if (change === 'outcome') m.selection!.outcome = 'Promesse sans rapport avec le module';
+      if (change === 'duplicate') out.content.axes[0]!.modules.push(structuredClone(m));
+      expect(validateProposalSelection(out.content, match(values, farosLibrary()).recommendations).length).toBeGreaterThan(0);
+    },
+  );
+  it('refuse un atelier devenu exclu du catalogue', () => {
+    const values = { 'seller-discovery-formalized': 'no' };
+    const out = propose(values, farosLibrary());
+    const excluded = farosLibrary().map((m) => ({ ...m, excludedFromClientOutputs: true }));
+    expect(validateProposalSelection(out.content, match(values, excluded).recommendations).length).toBeGreaterThan(0);
   });
 });

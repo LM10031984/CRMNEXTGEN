@@ -305,3 +305,21 @@ describe('Fontes — ce que le conteneur de rendu sait réellement dessiner', ()
     expect(interdits, `caractères hors fonte : ${interdits.join(' ')}`).toEqual([]);
   });
 });
+
+it('le document relie la douleur à la pratique IA et nomme les besoins non couverts', () => {
+  const data = build();
+  data.content.axes[0]!.modules = [{
+    moduleId: 'faros-suivi', title: 'Ritualiser le suivi vendeur avec un journal et l’IA',
+    sourceCode: 'FAROS', sourceTitle: 'Ateliers Faros', needLabel: 'Rythme de suivi vendeur',
+    durationMin: 120, quotes: ['Fréquence de suivi : jamais'], signal: null, confidence: 'forte',
+    selection: { version: 'v1', ruleId: 'suivi-vendeur', moduleSourceRef: 'faros:suivi',
+      outcome: 'Produire un compte rendu hebdomadaire vérifié.', aiUsage: true, audience: 'conseiller' },
+  }];
+  data.content.uncoveredNeeds = ['Financement acquéreur vérifié <script>'];
+  const result = renderPropositionHtml(data);
+  expect(result).toContain('Fréquence de suivi : jamais');
+  expect(result).toContain('Mise en pratique avec l’IA');
+  expect(result).toContain('Produire un compte rendu hebdomadaire vérifié.');
+  expect(result).toContain('Besoins restant à traiter');
+  expect(result).toContain('Financement acquéreur vérifié &lt;script&gt;');
+});

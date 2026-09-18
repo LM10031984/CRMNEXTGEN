@@ -139,6 +139,8 @@ function renderModules(axe: PropositionData['content']['axes'][number]): string 
         <b>${esc(m.title)}</b>
         ${m.sourceTitle ? `<span class="src">issu de ${esc(m.sourceTitle)}</span>` : ''}
         ${m.needLabel ? `<span class="need">${esc(m.needLabel)}</span>` : ''}
+        ${m.quotes.length ? `<span class="need">Constat du diagnostic : ${m.quotes.map(esc).join(' · ')}</span>` : ''}
+        ${m.selection ? `<span class="need">${m.selection.aiUsage ? 'Mise en pratique avec l’IA — ' : 'Résultat attendu — '}${esc(m.selection.outcome)}</span>` : ''}
       </li>`,
     )
     .join('');
@@ -146,10 +148,12 @@ function renderModules(axe: PropositionData['content']['axes'][number]): string 
 }
 
 function renderAxes(data: PropositionData): string {
+  const gaps = data.content.uncoveredNeeds?.length
+    ? `<p class="notice"><b>Besoins restant à traiter :</b> ${data.content.uncoveredNeeds.map(esc).join(' · ')}. Ces points ne sont pas couverts par les ateliers de cette proposition.</p>` : '';
   if (data.content.axes.length === 0) {
-    return `<p class="notice">Aucun axe n’est encore composé. Le parcours s’assemble depuis la bibliothèque de modules : chaque module répond à un point de douleur relevé au diagnostic, et un point de douleur métier reçoit un module métier.</p>`;
+    return gaps + `<p class="notice">Aucun axe n’est encore composé. Le parcours s’assemble depuis la bibliothèque de modules : chaque module répond à un point de douleur relevé au diagnostic, et un point de douleur métier reçoit un module métier.</p>`;
   }
-  return data.content.axes
+  return gaps + data.content.axes
     .map(
       (axe) => `<div class="phase">
       <div class="tag">${esc(axe.label)}<small>${plural(axe.halfDays, 'demi-journée')}${axe.periodLabel ? ` · ${esc(axe.periodLabel)}` : ''}</small></div>

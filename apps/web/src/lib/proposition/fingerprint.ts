@@ -33,6 +33,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { DIAGNOSTIC_SELECTION_VERSION, COMPETENCY_LINKS } from './competency-links';
 
 import {
   computeSourceFingerprint,
@@ -147,6 +148,8 @@ export function computeProposalFingerprint(input: ProposalFingerprintInput): str
     .sort();
 
   const payload = [
+    `selection:${DIAGNOSTIC_SELECTION_VERSION}:${JSON.stringify(COMPETENCY_LINKS)}`,
+    `justifications:${JSON.stringify(input.content.axes.map((a) => a.modules.map((m) => ({ selection: m.selection, additionalSelections: m.additionalSelections, quotes: m.quotes, need: m.needLabel }))))}`,
     `diagnostic:${diagnosticPart}`,
     `modalite:${input.pricing.modality}|${input.pricing.fundingType}`,
     `validite:${input.validUntil ? input.validUntil.toISOString().slice(0, 10) : 'aucune'}`,

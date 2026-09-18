@@ -112,7 +112,7 @@ function mod(
 ): LibraryModule {
   return {
     moduleId,
-    sourceRef: null,
+    sourceRef: ({ 'm-excl': 'drive:058#6', 'm-suivi': 'drive:058#5', 'm-decouverte': 'drive:017#1' } as Record<string, string>)[moduleId] ?? null,
     title,
     family: null,
     targetProfile: null,

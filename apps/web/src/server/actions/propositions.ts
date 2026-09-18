@@ -1,5 +1,7 @@
 'use server';
 
+import { validateProposalSelection, uncoveredProposalNeeds } from '@/lib/proposition/selection-validation';
+
 /**
  * Server actions de la proposition commerciale (lot E de la chaîne diagnostic).
  *
@@ -442,6 +444,7 @@ export interface ProposalWorkspace {
   freshness: FingerprintComparison;
   /** Ce qui bloque l'envoi, en clair. Vide = on peut envoyer. */
   blockers: string[];
+  selectionBlockers: string[];
   /**
    * Ce qui n'empêche pas d'envoyer mais qui se voit dans le document — une
    * incohérence entre ce qu'on vend et ce qu'on détaille, typiquement.
@@ -479,7 +482,19 @@ async function buildWorkspace(
   if (!assembled) return null;
   const { bundle, rules, of, audit, library } = assembled;
 
+  const { notices: recoNotices, recommendations } = recommendModules({
+    chapterScores: audit.chapterScores.map((c) => ({
+      chapter: c.chapter,
+      score: c.score,
+      breakdown: c.breakdown,
+    })),
+    alerts: audit.chapters.flatMap((c) => c.alerts),
+    answers: audit.chapters.flatMap((c) => c.answers),
+    library,
+  });
   const content = ProposalContentSchema.parse(proposal.contentJson);
+  content.uncoveredNeeds = uncoveredProposalNeeds(content, recommendations);
+  const selectionBlockers = validateProposalSelection(content, recommendations);
   const pricing = ProposalPricingSchema.parse(proposal.pricingJson);
   const synthesis = computePricing({ pricing, rules });
 
@@ -591,7 +606,7 @@ async function buildWorkspace(
     generationSource: proposal.generationSource,
   };
 
-  const blockers: string[] = [];
+  const blockers: string[] = [...selectionBlockers];
   if (!proposal.reviewedAt) {
     blockers.push(
       'La proposition n’a pas été relue. Un document rédigé par heuristique ou par IA ne part jamais sans relecture humaine.',
@@ -653,19 +668,10 @@ async function buildWorkspace(
   // recommandation ET la composition : les deux ont des choses à dire au
   // commercial (un besoin sans module, une enveloppe qui déborde, un surplus à
   // arbitrer), et il n'y a aucune raison de n'en montrer qu'une moitié.
-  const { notices: recoNotices, recommendations } = recommendModules({
-    chapterScores: audit.chapterScores.map((c) => ({
-      chapter: c.chapter,
-      score: c.score,
-      breakdown: c.breakdown,
-    })),
-    alerts: audit.chapters.flatMap((c) => c.alerts),
-    answers: audit.chapters.flatMap((c) => c.answers),
-    library,
-  });
+
   const notices = [
     ...recoNotices,
-    ...composeProgramme({ recommendations, rules, envelopeHalfDays: audit.funding.halfDays })
+    ...composeProgramme({ recommendations, rules, envelopeHalfDays: audit.funding.halfDays, maxPerNeed: 1 })
       .notices,
   ];
 
@@ -677,6 +683,7 @@ async function buildWorkspace(
     data,
     freshness: compareSourceFingerprint(proposal.sourceFingerprint, currentFingerprint),
     blockers,
+    selectionBlockers,
     warnings,
     roundingOffer,
     rules,
@@ -1017,6 +1024,7 @@ export async function generateProposalPdf(
 
   const ws = await buildWorkspace(proposalId, g.user.tenantId);
   if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.selectionBlockers.length) return { ok: false, error: ws.selectionBlockers[0]! };
 
   const html = renderPropositionHtml(ws.data);
 
@@ -1107,6 +1115,10 @@ export async function issueProposalPublicLink(
     };
   }
 
+  const ws = await buildWorkspace(proposalId, g.user.tenantId);
+  if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.selectionBlockers.length) return { ok: false, error: ws.selectionBlockers[0]! };
+
   const token = randomBytes(PUBLIC_TOKEN_BYTES).toString('hex');
   const expiresAt = proposal.validUntil ?? new Date(Date.now() + 30 * 24 * 3600 * 1000);
 
@@ -1175,6 +1187,7 @@ export async function generateProposalQuotes(
 
   const ws = await buildWorkspace(proposalId, g.user.tenantId);
   if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.selectionBlockers.length) return { ok: false, error: ws.selectionBlockers[0]! };
 
   if (ws.proposal.quotes.length > 0) {
     return {
@@ -1326,6 +1339,7 @@ export async function generateComposedProduct(proposalId: string): Promise<Actio
 
   const ws = await buildWorkspace(proposalId, g.user.tenantId);
   if (!ws) return { ok: false, error: 'Proposition introuvable' };
+  if (ws.selectionBlockers.length) return { ok: false, error: ws.selectionBlockers[0]! };
 
   const axes = ws.content.axes;
   const modules = axes.flatMap((a) => a.modules);

@@ -66,6 +66,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
+      - name: Installer les ateliers Faros liés au diagnostic
+        run: pnpm --filter @qualiof/web exec tsx scripts/installer-ateliers-faros.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          WRITE: '1'
+
       # Après la migration, jamais avant. Si l'étape précédente échoue, le job
       # s'arrête et RIEN n'est déployé : la base et l'app restent d'accord.
       - name: Déclencher le déploiement Vercel
