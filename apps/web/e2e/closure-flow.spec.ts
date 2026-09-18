@@ -1,3 +1,4 @@
+import { assertTestDatabaseContent } from '../../../packages/db/scripts/assert-test-target';
 import { test, expect, type Page, type Download } from '@playwright/test';
 import { prisma } from '@qualiof/db';
 import { teardownE2EData } from './teardown-e2e-data';
@@ -91,6 +92,7 @@ async function clickAndCaptureDownload(
 }
 
 test.beforeAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   // Tenant du user e2e (ADMIN) — les fixtures doivent être visibles par lui.
   const e2eUser = await prisma.user.findFirstOrThrow({
     where: { email: process.env.E2E_LOGIN_EMAIL ?? 'e2e@start-academy.fr' },
@@ -142,6 +144,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   // Purge EXCLUSIVE des données E2E- (base + storage) — idempotent, réutilisé
   // tel quel en standalone (e2e/teardown-e2e-data.ts) après un crash.
   await teardownE2EData();

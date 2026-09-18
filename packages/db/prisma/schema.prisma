@@ -589,6 +589,11 @@ enum SessionStatus {
   CANCELLED
 }
 
+enum SessionRegime {
+  ENTREPRISE
+  INDIVIDUEL
+}
+
 model TrainingSession {
   id                    String                @id @default(uuid())
   tenantId              String
@@ -606,6 +611,9 @@ model TrainingSession {
   capacityMax           Int                   @default(12)
   language              String                @default("fr")
   internalNotes         String?
+  // Décision explicite. NULL préserve toutes les sessions historiques.
+  regime                SessionRegime?
+  priceTotalHT          Decimal?              @db.Decimal(10, 2)
   // Tarification spécifique session (sinon hérite produit)
   pricePerLearner       Decimal?              @db.Decimal(10, 2)
   // Hébergement formateur (utilisé dans la check-list C4.i17 Qualiopi).

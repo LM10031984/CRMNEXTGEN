@@ -3,10 +3,7 @@
 /**
  * Bouton primaire "Marquer terminée" pour les sessions IN_PROGRESS.
  *
- * Bascule le statut → COMPLETED. Côté serveur, `updateSessionStatus` détecte
- * la transition et déclenche automatiquement la génération du pack fin de
- * formation en arrière-plan (cf sessions.ts). L'utilisateur recevra un email
- * quand le pack sera prêt — pas besoin de rester sur la page.
+ * Bascule le statut → COMPLETED. Le pack reste généré à la demande.
  */
 
 import { useTransition } from 'react';
@@ -31,14 +28,7 @@ export function MarkCompletedButton({ sessionId, participantCount }: Props) {
         toast.error(r.error ?? 'Échec de la clôture');
         return;
       }
-      if (r.autoPackTriggered) {
-        toast.success('Session terminée — pack fin de formation lancé', {
-          description: 'Tu recevras un email quand les documents seront prêts.',
-          duration: 7000,
-        });
-      } else {
-        toast.success('Session terminée');
-      }
+      toast.success('Session terminée');
       router.refresh();
     });
   }
@@ -51,7 +41,7 @@ export function MarkCompletedButton({ sessionId, participantCount }: Props) {
       title={
         participantCount === 0
           ? 'Aucun apprenant inscrit'
-          : 'Clôture la session et lance la génération du pack fin de formation'
+          : 'Marque la session comme terminée'
       }
       className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >

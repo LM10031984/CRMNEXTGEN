@@ -1,6 +1,7 @@
 'use server';
 
 import { createHash } from 'node:crypto';
+import { sessionTotalHT } from '@/lib/sessions/session-regime';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
@@ -195,6 +196,7 @@ export async function createInvoiceFromParticipant(
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+  if (participant.session.regime === 'ENTREPRISE') return { ok: false, error: 'Cette session porte un forfait entreprise. Créez la facture groupée depuis la fiche session.' };
 
   // Phase 7 — pre-resolve OF config (BDD fallback ENV via D-01 hybrid)
   const of = await loadOfConfig(user.tenantId);
@@ -485,7 +487,7 @@ export async function createInvoiceForSponsorGroup(input: {
 
   const vatRate = input.vatRate ?? 0;
   const dueDays = input.dueDateDays ?? 30;
-  const totalHT = session.participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
+  const totalHT = sessionTotalHT(session, session.participants);
   const totalTTC = Math.round(totalHT * (1 + vatRate / 100) * 100) / 100;
 
   const participantIds = session.participants.map((p) => p.id);
@@ -508,6 +510,7 @@ export async function createInvoiceForSponsorGroup(input: {
   }
   const delivery = buildDeliveryParty(session.location);
   const invoiceLines = buildTrainingLines({
+    companyTotalHT: session.regime === 'ENTREPRISE' ? totalHT : undefined,
     formationTitre: session.product.title,
     sessionCode: session.code,
     startDate: session.startDate,
@@ -551,7 +554,14 @@ export async function createInvoiceForSponsorGroup(input: {
   // Idem facture individuelle : les deux dates partent du même instant.
   const emission = resolveInvoiceIssueDate();
 
-  const invoice = await prisma.$transaction(async (tx) => {
+  let invoice;
+  try { invoice = await prisma.$transaction(async (tx) => {
+    if (session.regime === 'ENTREPRISE') {
+      const current = await tx.trainingSession.findFirst({ where: { id: session.id, tenantId: user.tenantId }, include: { participants: { select: { id: true, sponsorOrgId: true, invoiceSent: true } } } });
+      const existing = await tx.invoice.findFirst({ where: { tenantId: user.tenantId, sessionId: session.id, status: { not: 'CANCELLED' } }, select: { number: true } });
+      if (existing) throw new Error(`Le forfait a déjà été facturé (${existing.number}). Consultez cette facture dans la fiche session.`);
+      if (!current || current.regime !== 'ENTREPRISE' || Number(current.priceTotalHT) !== totalHT || current.participants.length !== participantIds.length || current.participants.some((p) => p.sponsorOrgId !== sponsor.id || p.invoiceSent || !participantIds.includes(p.id))) throw new Error('Le forfait ou les inscriptions ont changé. Rechargez la fiche session avant de facturer.');
+    }
     const number = await getNextInvoiceNumber(user.tenantId, tx);
 
     const created = await tx.invoice.create({
@@ -582,11 +592,12 @@ export async function createInvoiceForSponsorGroup(input: {
     });
 
     return created;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   // Génération PDF multi-lignes
   const sponsorAddr = (sponsor.address ?? null) as null | { street?: string; postalCode?: string; city?: string };
-  const lines = session.participants.map((p) => ({
+  const lines = session.regime === 'ENTREPRISE' ? [{ label: 'Forfait entreprise — prix total de la session', amountHT: totalHT }] : session.participants.map((p) => ({
     label: `${p.person.firstName} ${p.person.lastName.toUpperCase()}`,
     amountHT: Number(p.priceHT),
   }));
@@ -621,7 +632,7 @@ export async function createInvoiceForSponsorGroup(input: {
     formateurNom: composeFormateur(session.trainers),
     formationModalite: MODALITE_LABEL[session.modality] ?? null,
     tenantId: user.tenantId,
-    stagiaires: lines.map((l) => l.label),
+    stagiaires: session.participants.map((p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`),
     amountHT: totalHT,
     vatRate,
     amountTTC: totalTTC,

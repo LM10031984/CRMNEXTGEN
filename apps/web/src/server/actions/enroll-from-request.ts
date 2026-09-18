@@ -14,9 +14,8 @@
  * conversion refuse de se rejouer, et rien d'autre ne créait le participant.
  *
  * Le formulaire public ne touche JAMAIS au prix. En revanche l'inscrit hérite
- * du tarif de la session : poser 0 en dur fabriquait une convention à zéro
- * euro dès la validation, puisque `prepareTrainingForSession` génère les
- * pièces dans la foulée. Le tarif reste modifiable ensuite depuis la fiche
+ * du tarif de la session pour les documents générés ensuite à la demande.
+ * Le tarif reste modifiable depuis la fiche
  * participant, et `applyPriceCascade` le repropage si la session change de
  * tarif (cf. lib/pricing/, audit 2026-08-28 écart E-2).
  */
@@ -25,9 +24,12 @@ import { revalidatePath } from 'next/cache';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { resolveSponsorOrg, cleanSiret } from '@/lib/enrollment/sponsor-org';
+import { refusalForSessionPayer } from '@/lib/sessions/session-regime';
+import { assertCompanyPriceEditable } from '@/lib/pricing/company-session-price';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
+import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 import { convertPreEnrollment } from './preinscription-convert';
-import { prepareTrainingForSession } from './prepare-training';
 
 export async function enrollFromRequest(input: {
   preEnrollmentId: string;
@@ -46,6 +48,15 @@ export async function enrollFromRequest(input: {
     return { ok: false, error: "Cette demande n'est rattachée à aucune session" };
   }
   const sessionId = pe.intendedSessionId;
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, tenantId: user.tenantId },
+    select: {
+      id: true, tenantId: true, startDate: true, endDate: true, priceTotalHT: true, regime: true,
+      pricePerLearner: true,
+      product: { select: { priceHT: true, groupFlatPrice: true } },
+    },
+  });
+  if (!session) return { ok: false, error: 'Session introuvable.' };
 
   // 1. Qui paye ? — la recherche par SIRET est faite ici, la décision est
   //    déléguée au module pur (testable sans base).
@@ -78,6 +89,20 @@ export async function enrollFromRequest(input: {
   //    pouvait les rapprocher (constaté sur SES-0114, 3 demandes « Inscrite »
   //    pour 0 inscrit). On repart donc de ce que la conversion a laissé.
   const dejaConvertie = pe.status === 'CONVERTED' && Boolean(pe.convertedToPersonId);
+
+  // Refus du PAYEUR avant conversion de la demande. Le contrôle complet est
+  // rejoué dans la transaction d'inscription avec les rattachements réels.
+  if (session.regime) {
+    const targetId = input.overrideSponsorOrgId ?? pe.convertedToOrgId ?? (decision.kind === 'org-existante' ? decision.organizationId : null);
+    const target = targetId ? await prisma.organization.findFirst({ where: { id: targetId, tenantId: user.tenantId, archived: false }, select: { legalForm: true, legalName: true } }) : null;
+    const person = pe.convertedToPersonId ? await prisma.person.findFirst({ where: { id: pe.convertedToPersonId, tenantId: user.tenantId }, include: { legalLinks: true } }) : null;
+    try {
+      const role = targetId && person ? legalLinkAtSession(person.legalLinks, targetId, session)?.role : decision.kind === 'creer-ei' ? 'EI_SELF' : null;
+      const refusal = refusalForSessionPayer(session.regime, { name: `${pe.firstName ?? ''} ${pe.lastName ?? ''}`, sponsorLegalForm: target?.legalForm ?? (decision.kind === 'creer-ei' ? 'EI' : null), roleChezSponsor: role });
+      if (refusal) return { ok: false, error: refusal, needsSponsor: true };
+      await assertCompanyPriceEditable(prisma, session);
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
 
   let personId: string;
   let sponsorOrgId: string | null;
@@ -150,13 +175,7 @@ export async function enrollFromRequest(input: {
 
   // Tarif hérité de la session (jamais du formulaire public), via la source
   // unique de la règle. Scopé tenant comme toute lecture de ce module.
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, tenantId: user.tenantId },
-    select: {
-      pricePerLearner: true,
-      product: { select: { priceHT: true, groupFlatPrice: true } },
-    },
-  });
+
   const sponsorOrg = await prisma.organization.findFirst({
     where: { id: sponsorOrgId, tenantId: user.tenantId },
     select: { legalForm: true },
@@ -166,7 +185,8 @@ export async function enrollFromRequest(input: {
     console.warn(`[inscription ${pe.id}] tarif à arbitrer : ${defaultPrice.reason}`);
   }
 
-  const participant = await prisma.sessionParticipant.create({
+  let participant;
+  try { participant = session?.regime ? await createDeclaredParticipant(user, { sessionId, personId, sponsorOrgId, participantType: pe.professionalStatus ?? null }) : await prisma.sessionParticipant.create({
     data: {
       sessionId,
       personId,
@@ -177,12 +197,7 @@ export async function enrollFromRequest(input: {
     },
   });
 
-  // 4. Documents du nouvel inscrit. Idempotent (find-or-create) : rejouer ne
-  //    duplique rien, et la règle « payeur personne morale ⇒ convention de
-  //    groupe » est appliquée par l'orchestrateur, pas ici.
-  await Promise.resolve(prepareTrainingForSession(sessionId)).catch((e: any) =>
-    console.warn('[inscription] préparation documentaire échouée', e?.message ?? e),
-  );
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath(`/app/sessions/${sessionId}`);
   revalidatePath('/app/inscriptions');

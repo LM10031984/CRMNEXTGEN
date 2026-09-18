@@ -307,3 +307,14 @@ describe('verdict', () => {
     expect(compareSourceFingerprint('abc', 'def')).toBe('stale');
   });
 });
+
+
+describe('effectif total de la session', () => {
+  it('signale une convention à actualiser après une inscription sans changer les autres documents', () => {
+    const before = ctx();
+    before.session = { ...before.session!, participantCount: 2 };
+    const after = { ...before, session: { ...before.session!, participantCount: 3 } };
+    expect(fingerprintDocumentSource('CONVENTION', before)).not.toBe(fingerprintDocumentSource('CONVENTION', after));
+    expect(fingerprintDocumentSource('CONVOCATION', before)).toBe(fingerprintDocumentSource('CONVOCATION', after));
+  });
+});

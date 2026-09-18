@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur métier "closure-generation" — logique d'un job de génération de doc.
  *
@@ -116,7 +117,7 @@ export async function processClosureJobPayload(
     const product = session.product;
 
     // Profil pro du stagiaire à partir du LegalLink primaire (si dispo)
-    const primaryLink = participant.person.legalLinks[0] ?? null;
+    const primaryLink = legalLinkAtSession(participant.person.legalLinks, participant.sponsorOrgId, session) ?? participant.person.legalLinks.find((l) => l.isPrimary && legalLinkAtSession([l], l.organizationId, session)) ?? null;
     // Précédence : legalName (NOT NULL côté schema, c'est le nom légal Qualiopi).
     // brandName n'est PAS utilisé : il a été pollué historiquement par des codes
     // internes ENT-XXXX issus d'imports SmartOF (bug 2026-05-21 Fabrice/AKORIMMO).

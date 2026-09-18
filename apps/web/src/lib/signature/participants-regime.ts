@@ -1,3 +1,5 @@
+import { sessionFunding, type SessionRegime } from '@/lib/sessions/session-regime';
+import type { SessionPeriod } from '@/lib/persons/legal-link-period';
 /**
  * Le régime d'un participant, lu depuis la donnée — module PUR, DEUX APPELANTS.
  * Spec signature 2026-09-04 §3 bis (D-10), lot C.2b-1.
@@ -36,6 +38,8 @@ import type { ParticipantPourEnvoi } from './plan-envoi';
 /** Un `LegalLink` réduit à ce que le régime en lit. */
 export interface LienJuridiqueLu {
   role: string;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
   organizationId: string;
   organization: { opcoCode: string | null } | null;
 }
@@ -48,6 +52,9 @@ export interface LienJuridiqueLu {
  * recomposer ici en ferait une troisième source.
  */
 export interface ParticipantLu {
+  session?: SessionPeriod & { regime?: SessionRegime | null };
+  financingMode?: string | null;
+  sponsorAgeficeProfile?: unknown;
   participantId: string;
   nomAffiche: string;
   sponsorOrgId: string | null;
@@ -55,6 +62,12 @@ export interface ParticipantLu {
   sponsorOrgLabel: string | null;
   sponsorOpcoCode: string | null;
   liens: readonly LienJuridiqueLu[];
+}
+
+/** Correction du 17/09 de « celui du commanditaire » : le fonds dépend
+ * aussi de la période active chez ce commanditaire. Sessions NULL inchangées. */
+export function financeurDeParticipant(p: ParticipantLu): string | null {
+  return p.session?.regime && p.sponsorOrgId ? sessionFunding({ sponsorOrgId: p.sponsorOrgId, sponsorOpcoCode: p.sponsorOpcoCode, sponsorAgeficeProfile: p.sponsorAgeficeProfile, links: p.liens, session: p.session, financingMode: p.financingMode }) : p.sponsorOpcoCode;
 }
 
 /** Une chaîne utile, ou `null`. Un champ rempli d'espaces est un champ vide. */
@@ -74,9 +87,9 @@ function codeUtile(valeur: string | null | undefined): string | null {
 export function codesFinanceursDe(participants: readonly ParticipantLu[]): string[] {
   const codes = new Set<string>();
   for (const participant of participants) {
-    const duSponsor = codeUtile(participant.sponsorOpcoCode);
+    const duSponsor = codeUtile(financeurDeParticipant(participant));
     if (duSponsor !== null) codes.add(duSponsor);
-    for (const lien of participant.liens) {
+    for (const lien of participant.session?.regime ? [] : participant.liens) {
       const duLien = codeUtile(lien.organization?.opcoCode);
       if (duLien !== null) codes.add(duLien);
     }
@@ -110,7 +123,7 @@ export function participantPourEnvoi(
   participant: ParticipantLu,
   regles: ReadonlyMap<string, RegleSignatureFinanceur>,
 ): ParticipantPourEnvoi {
-  const autresLiens = participant.liens.filter(
+  const autresLiens = (participant.session?.regime ? [] : participant.liens).filter(
     (lien) => lien.organizationId !== participant.sponsorOrgId,
   );
 
@@ -119,7 +132,7 @@ export function participantPourEnvoi(
     nomAffiche: participant.nomAffiche,
     sponsorOrgId: participant.sponsorOrgId,
     sponsorOrgLabel: participant.sponsorOrgLabel,
-    regle: regleDuFinanceur(participant.sponsorOpcoCode, regles),
+    regle: regleDuFinanceur(financeurDeParticipant(participant), regles),
     signauxDossierPropre: {
       aLienEiSelfHorsSponsor: autresLiens.some((lien) => lien.role === 'EI_SELF'),
       reglesAutresOrgs: autresLiens

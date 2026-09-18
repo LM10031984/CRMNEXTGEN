@@ -13,6 +13,12 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
+    setupFiles: ['../../scripts/unit-test-env.ts'],
+    exclude: [
+      'scripts/__tests__/dedupe.merge.test.ts',
+      'src/server/actions/__tests__/invoices-lines-contract.test.ts',
+      'src/**/*.integration.test.ts',
+    ],
     // scripts/** : tests d'intégration BDD réelle des scripts de réconciliation
     // (Phase 09.2 — dedupe.merge, match-treso-scoring). Inclus dans la suite.
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.{test,spec}.{ts,tsx}'],

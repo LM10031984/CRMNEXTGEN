@@ -1,0 +1,52 @@
+
+ RUN  v2.1.9 /Users/laurentmarx/Documents/CRM Next gen/prix-statuts/apps/web
+
+ ❯ src/lib/sessions/__tests__/enrollment-regime-guard.test.ts (6 tests | 2 failed) 5ms
+   × refuse le payeur EI en entreprise en nommant la personne et la fiche à corriger 2ms
+     → promise resolved "undefined" instead of rejecting
+   × le rôle de salarié dans une EI est lu aux dates de la session 0ms
+     → promise resolved "undefined" instead of rejecting
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/sessions/__tests__/enrollment-regime-guard.test.ts > refuse le payeur EI en entreprise en nommant la personne et la fiche à corriger
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected: 
+[Error: rejected promise]
+
++ Received: 
+undefined
+
+ ❯ src/lib/sessions/__tests__/enrollment-regime-guard.test.ts:12:21
+     10| it('refuse le payeur EI en entreprise en nommant la personne et la fic…
+     11|   tx.organization.findMany.mockResolvedValue([{ id: 'sas', legalForm: …
+     12|   await expect(run()).rejects.toThrow(/Conseiller Test.*fiche/);
+       |                     ^
+     13| });
+     14| it('ne consulte ni ne refuse une session historique NULL', async () =>…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/lib/sessions/__tests__/enrollment-regime-guard.test.ts > le rôle de salarié dans une EI est lu aux dates de la session
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected: 
+[Error: rejected promise]
+
++ Received: 
+undefined
+
+ ❯ src/lib/sessions/__tests__/enrollment-regime-guard.test.ts:20:103
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  20:00:56
+   Duration  286ms (transform 24ms, setup 5ms, collect 20ms, tests 5ms, environment 0ms, prepare 26ms)
+
+undefined
+/Users/laurentmarx/Documents/CRM Next gen/prix-statuts/apps/web:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/lib/sessions/__tests__/enrollment-regime-guard.test.ts

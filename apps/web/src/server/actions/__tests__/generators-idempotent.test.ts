@@ -91,6 +91,7 @@ const TENANT_ID = 'tnt-1';
 
 beforeEach(() => {
   documentDeleteMany.mockClear();
+  vi.mocked(prisma.sessionParticipant.findFirst).mockResolvedValue(null);
 });
 
 describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
@@ -113,6 +114,7 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
   });
 
   it("Test 3 — generateAgeficeForParticipant SANS options → deleteMany AGEFICE", async () => {
+    vi.mocked(prisma.sessionParticipant.findFirst).mockResolvedValue({ session: { regime: null }, person: { legalLinks: [] }, sponsorOrg: { opcoCode: null } } as any);
     await generateAgeficeForParticipant(PARTICIPANT_ID);
 
     expect(documentDeleteMany).toHaveBeenCalledTimes(1);
@@ -122,6 +124,7 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
   });
 
   it("Test 4 — generateAgeficeAttendanceForParticipant SANS options → deleteMany ASSIDUITE", async () => {
+    vi.mocked(prisma.sessionParticipant.findFirst).mockResolvedValue({ session: { regime: null, product: null }, person: { legalLinks: [] }, sponsorOrg: { opcoCode: null } } as any);
     await generateAgeficeAttendanceForParticipant(PARTICIPANT_ID);
 
     expect(documentDeleteMany).toHaveBeenCalledTimes(1);
@@ -129,4 +132,12 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
       where: { tenantId: TENANT_ID, type: 'ASSIDUITE', participantId: PARTICIPANT_ID },
     });
   });
+});
+
+// Correction 17/09/2026 de « le generator supprime puis retourne introuvable » :
+// la validation d'éligibilité précède toute suppression d'un dossier existant.
+it.each([generateAgeficeForParticipant, generateAgeficeAttendanceForParticipant])('refus AGEFICE avant toute écriture sur une session déclarée incompatible', async (generate) => {
+  vi.mocked(prisma.sessionParticipant.findFirst).mockResolvedValue({ sponsorOrgId: 'sas', financingMode: 'OPCO', session: { regime: 'ENTREPRISE', startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') }, person: { firstName: 'Conseiller', lastName: 'Test', legalLinks: [{ organizationId: 'sas', role: 'SALARIE' }, { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } }] }, sponsorOrg: { opcoCode: 'OPCO_EP' } } as any);
+  expect(await generate(PARTICIPANT_ID)).toMatchObject({ ok: false, error: expect.stringContaining('Conseiller Test') });
+  expect(documentDeleteMany).not.toHaveBeenCalled();
 });

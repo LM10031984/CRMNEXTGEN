@@ -1,11 +1,13 @@
 'use server';
+import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
-import { prepareSession } from './prepare-training';
+import { synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
+import { validateDeclaredSessionPrice, type SessionRegime } from '@/lib/sessions/session-regime';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 export interface CreateSessionInput {
@@ -21,6 +23,8 @@ export interface CreateSessionInput {
   trainerPersonIds: string[]; // au moins 1
   capacityMax?: number;
   pricePerLearner?: number | null;
+  regime?: SessionRegime | null;
+  priceTotalHT?: number | null;
   internalNotes?: string | null;
   participants: Array<{
     personId: string;
@@ -125,6 +129,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     throw e;
   }
 
+  const priceError = validateDeclaredSessionPrice(input);
+  if (priceError) return { ok: false, error: priceError };
   // Validations
   if (!input.productId) return { ok: false, error: 'Produit obligatoire' };
   if (!input.startDate || !input.endDate) return { ok: false, error: 'Dates obligatoires' };
@@ -139,6 +145,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     select: { id: true, title: true, priceHT: true, groupFlatPrice: true, capacityMax: true },
   });
   if (!product) return { ok: false, error: 'Produit introuvable' };
+
+  try { await assertSessionPayersTx(prisma, { tenantId: user.tenantId, regime: input.regime, startDate: start, endDate: end }, input.participants); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   // Location optionnelle
   let locationId: string | null = null;
@@ -184,7 +192,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   // le produit n'en porte pas — `Number(null)` valait 0, soit un tarif nul posé
   // en silence sur toute la session (E-2).
   const pricePerLearner =
-    input.pricePerLearner ?? (product.priceHT === null ? null : Number(product.priceHT));
+    input.regime === 'ENTREPRISE' ? null : input.pricePerLearner ?? (product.priceHT === null ? null : Number(product.priceHT));
 
   // Le prix de chaque inscrit passe par la source unique : le sponsor diffère
   // d'un participant à l'autre (session mixte agence + EI), donc le prix aussi.
@@ -195,7 +203,9 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
   const legalFormParOrg = new Map(sponsorOrgs.map((o) => [o.id, o.legalForm]));
 
   // Création atomique
-  const session = await prisma.$transaction(async (tx) => {
+  let session;
+  try { session = await prisma.$transaction(async (tx) => {
+    await assertSessionPayersTx(tx, { tenantId: user.tenantId, regime: input.regime, startDate: start, endDate: end }, input.participants);
     const created = await tx.trainingSession.create({
       data: {
         tenantId: user.tenantId,
@@ -208,6 +218,8 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
         modality: input.modality,
         locationId,
         capacityMax: input.capacityMax ?? product.capacityMax,
+        regime: input.regime ?? null,
+        priceTotalHT: input.regime === 'ENTREPRISE' ? input.priceTotalHT : null,
         pricePerLearner: pricePerLearner === null ? null : new Prisma.Decimal(pricePerLearner),
         internalNotes: input.internalNotes ?? null,
       },
@@ -231,7 +243,7 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     const createdParticipantIds: string[] = [];
     for (const p of input.participants) {
       const prix = resolveDefaultParticipantPrice(
-        { pricePerLearner },
+        { pricePerLearner, regime: input.regime },
         product,
         { legalForm: legalFormParOrg.get(p.sponsorOrgId) ?? null },
       );
@@ -251,17 +263,11 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
       createdParticipantIds.push(part.id);
     }
 
+    await synchronizeCompanyPriceTx(tx, created, user.id);
+    await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.create', diff: { regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, participantsCreated: createdParticipantIds.length, population: createdParticipantIds } } });
     return { created, createdParticipantIds };
-  });
-
-  // Auto-trigger préparation pédagogique complète (programme + déroulé +
-  // checklist + convention/convocation/analyse besoin par participant).
-  // Fire-and-forget : la création de session reste rapide côté UX, la
-  // préparation tourne en arrière-plan (analyse besoin = jobs BullMQ).
-  // Idempotente : les generators sont find-or-create.
-  void prepareSession(session.created.id).catch((e) =>
-    console.warn(`[createSessionFull] prepareSession failed for ${session.created.id}:`, e?.message ?? e),
-  );
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');

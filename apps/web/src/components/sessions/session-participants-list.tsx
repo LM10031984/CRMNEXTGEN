@@ -37,9 +37,11 @@ export interface SessionParticipantRow {
 export function SessionParticipantsList({
   participants,
   canManage,
+  companyPrice = false,
 }: {
   participants: SessionParticipantRow[];
   canManage: boolean;
+  companyPrice?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -113,6 +115,7 @@ export function SessionParticipantsList({
                   <EditParticipantButton
                     participantId={p.id}
                     currentPriceHT={p.priceHT}
+                    companyPrice={companyPrice}
                     currentStatus={p.enrollmentStatus}
                     currentFinancingRequestDate={p.financingRequestDate ?? null}
                     currentFinancingMode={p.financingMode ?? null}

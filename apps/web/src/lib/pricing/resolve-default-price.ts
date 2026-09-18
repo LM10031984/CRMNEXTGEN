@@ -30,6 +30,7 @@ type MontantBrut = number | string | { toString(): string } | null | undefined;
 
 export interface SessionPriceContext {
   pricePerLearner: MontantBrut;
+  regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null;
 }
 export interface ProductPriceContext {
   priceHT: MontantBrut;
@@ -60,6 +61,7 @@ export function resolveDefaultParticipantPrice(
   product: ProductPriceContext | null,
   sponsorOrg: SponsorPriceContext | null,
 ): DefaultPriceResult {
+  if (session?.regime === 'ENTREPRISE') return { priceHT: 0, source: 'session', needsReview: false };
   // 1. Le prix négocié de la session fait foi — y compris 0, qui est alors un
   //    choix explicite de celui qui l'a saisi.
   const tarifSession = toNumber(session?.pricePerLearner);

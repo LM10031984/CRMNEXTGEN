@@ -1,4 +1,5 @@
 'use server';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * Moteur d'envoi en signature électronique — lot C.2a-2.
@@ -56,7 +57,7 @@ import {
   groupConventionAnyShapeWhere,
   GROUP_CONVENTION_ENTITY_TYPE,
 } from '@/lib/docs/convention-coverage';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import {
   generateConventionCore,
   generateConventionEntrepriseCore,
@@ -193,7 +194,7 @@ async function chargerContexte(
     where: { id: sessionId, tenantId },
     select: {
       id: true,
-      code: true,
+      code: true, startDate: true, endDate: true, regime: true,
       // Lot C.2c : l'email nomme la formation, pour qu'un responsable qui
       // reçoit trois demandes le même jour sache laquelle il ouvre.
       product: { select: { title: true } },
@@ -201,7 +202,7 @@ async function chargerContexte(
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         select: {
           id: true,
-          sponsorOrgId: true,
+          sponsorOrgId: true, financingMode: true,
           person: {
             select: {
               id: true,
@@ -210,7 +211,7 @@ async function chargerContexte(
               email: true,
               legalLinks: {
                 select: {
-                  role: true,
+                  role: true, startDate: true, endDate: true,
                   organizationId: true,
                   organization: { select: { id: true, opcoCode: true } },
                 },
@@ -224,7 +225,7 @@ async function chargerContexte(
               brandName: true,
               legalForm: true,
               representative: true,
-              opcoCode: true,
+              opcoCode: true, ageficeProfile: { select: { id: true } },
               // Ordre EXIGÉ par le contrat de `representant.ts` : le contact
               // principal d'abord, le plus ancien ensuite. La cascade ne
               // rejoue pas ce tri, elle s'y fie.
@@ -251,13 +252,13 @@ async function chargerContexte(
     sponsorOrgId: p.sponsorOrgId ?? null,
     sponsorOrgLabel: p.sponsorOrg?.brandName ?? p.sponsorOrg?.legalName ?? null,
     sponsorOpcoCode: p.sponsorOrg?.opcoCode ?? null,
-    liens: p.person.legalLinks,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile,
   }));
   const reglesParCode = await chargerReglesSignature(codesFinanceursDe(lus));
 
   const participants: ParticipantCharge[] = session.participants.map((p, index) => {
     const nom = nomAffiche(p.person);
-    const lienSponsor = p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId);
+    const lienSponsor = legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session);
     const lu = lus[index]!;
 
     return {
@@ -284,7 +285,7 @@ async function chargerContexte(
           }
         : null,
       estEiSelfChezSponsor: lienSponsor?.role === 'EI_SELF',
-      relevantDeLaConvention: releveDeLaConvention({
+      relevantDeLaConvention: sessionUsesCompanyAgreement(session, {
         sponsorLegalForm: p.sponsorOrg?.legalForm,
         roleChezSponsor: lienSponsor?.role ?? null,
       }),

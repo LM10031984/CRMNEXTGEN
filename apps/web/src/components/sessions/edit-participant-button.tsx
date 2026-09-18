@@ -27,6 +27,7 @@ import {
 interface EditParticipantButtonProps {
   participantId: string;
   currentPriceHT: number;
+  companyPrice?: boolean;
   currentStatus: string;
   currentFinancingRequestDate?: Date | string | null;
   currentFinancingMode?: string | null;
@@ -76,6 +77,7 @@ function toIsoDate(d: Date | string | null | undefined): string {
 export function EditParticipantButton({
   participantId,
   currentPriceHT,
+  companyPrice = false,
   currentStatus,
   currentFinancingRequestDate,
   currentFinancingMode,
@@ -204,7 +206,7 @@ export function EditParticipantButton({
 
       const r = await updateParticipant({
         participantId,
-        priceHT: parsedPrice,
+        ...(companyPrice ? {} : { priceHT: parsedPrice }),
         enrollmentStatus: status as any,
         financingRequestDate: financingRequestDate || null,
         financingMode: (financingMode || null) as any,
@@ -251,12 +253,13 @@ export function EditParticipantButton({
             <form onSubmit={onSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  Prix HT (€)
+                  {companyPrice ? 'Part du forfait (€) — modifier le total sur la session' : 'Prix HT (€)'}
                 </label>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={priceHT}
+                  disabled={companyPrice}
                   onChange={(e) => setPriceHT(e.target.value)}
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm"
                   placeholder="ex: 2000"

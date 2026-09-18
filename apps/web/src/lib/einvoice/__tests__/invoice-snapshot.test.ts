@@ -452,3 +452,11 @@ describe('empreinte des données rendues', () => {
     );
   });
 });
+
+it('facture entreprise : une ligne au prix total de session, indépendante de trois parts', () => {
+  const lines = buildTrainingLines({ formationTitre: 'Formation test', sessionCode: 'SES-TEST', startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20'), dureeHeures: 8, vatRate: 0, vatExemptionText: 'Exonération', companyTotalHT: 240,
+    participants: ['a','b','c'].map((id) => ({ participantId: id, personFirstName: id, personLastName: 'Test', priceHT: 120 })) });
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toMatchObject({ unitPriceHT: 240, totalHT: 240, quantity: 1, participantId: null });
+  expect(lines[0]!.label).toContain('Forfait entreprise');
+});

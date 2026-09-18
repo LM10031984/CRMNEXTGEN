@@ -1,3 +1,4 @@
+import { assertTestDatabaseContent } from '../../../packages/db/scripts/assert-test-target';
 /**
  * Test E2E Day 5 — flux complet sur SES-0010 (Caroline VESCOVI, AGEFICE).
  *
@@ -24,6 +25,7 @@ const RESUME_BATCH_ID = process.env.RESUME_BATCH_ID ?? null;
 const TIMEOUT_MS = 15 * 60_000;
 
 async function main() {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   console.log(`\n🚀 E2E test Day 5 sur ${SESSION_CODE}${RESUME_BATCH_ID ? ` (resume ${RESUME_BATCH_ID.slice(0, 8)}…)` : ''}\n`);
 
   // 1. Charge la session

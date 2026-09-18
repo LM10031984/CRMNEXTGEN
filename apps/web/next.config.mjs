@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 // dotenv ne réécrit pas une variable déjà set par .env — d'où l'AI_PROVIDER
 // qui restait "ollama" même si .env.local disait "openrouter".
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-loadEnv({ path: path.resolve(__dirname, '../../.env') });
-loadEnv({ path: path.resolve(__dirname, '../../.env.local'), override: true });
+if (process.env.QUALIOF_E2E !== '1') {
+  loadEnv({ path: path.resolve(__dirname, '../../.env') });
+  loadEnv({ path: path.resolve(__dirname, '../../.env.local'), override: true });
+}
 
 // Chokepoint fail-loud (Phase 17) : force createEnv() de @qualiof/shared/env à
 // s'exécuter au boot. Sans cet import, sharedEnv n'était chargé nulle part et la

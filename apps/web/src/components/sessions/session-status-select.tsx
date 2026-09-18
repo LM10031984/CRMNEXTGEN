@@ -49,16 +49,7 @@ export function SessionStatusSelect({ sessionId, currentStatus }: Props) {
     startTransition(async () => {
       const r = await updateSessionStatus({ sessionId, newStatus: next });
       if (r.ok) {
-        if (r.autoPackTriggered) {
-          // Cas: COMPLETED déclenche la génération du pack fin de formation.
-          // L'utilisateur recevra un email quand le pack sera prêt (5-10 min).
-          toast.success('Session terminée — pack fin de formation lancé', {
-            description: 'Tu recevras un email quand les documents seront prêts.',
-            duration: 7000,
-          });
-        } else {
-          toast.success(`Statut mis à jour : ${STATUSES.find((s) => s.value === next)?.label ?? next}`);
-        }
+        toast.success(`Statut mis à jour : ${STATUSES.find((s) => s.value === next)?.label ?? next}`);
         setOpen(false);
         router.refresh();
       } else {

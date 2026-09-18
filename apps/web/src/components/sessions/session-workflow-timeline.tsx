@@ -325,7 +325,7 @@ function detectNextStep(input: {
       stepNumber: 2,
       title: empty ? 'Lance la préparation pédagogique' : 'Complète la préparation pédagogique',
       reason: empty
-        ? 'Programme, déroulé, conventions, convocations, analyse besoin et AGEFICE sont générés automatiquement (~30s).'
+        ? 'Lancez la préparation à votre demande : programme, déroulé, conventions, convocations, analyse besoin et AGEFICE.'
         : `${countMissingPrep(prep)} document(s) restant(s) à générer pour clôturer la préparation.`,
       cta: { label: empty ? 'Lancer la préparation' : 'Compléter', href: '#step-2', primary: true },
       variant: 'action',

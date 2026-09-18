@@ -95,9 +95,10 @@ describe('enrollFromRequest', () => {
     });
   });
 
-  it('régénère les documents pour ce participant', async () => {
+  it('inscrit sans lancer de préparation documentaire', async () => {
     await enrollFromRequest({ preEnrollmentId: 'pe-1' });
-    expect(m.prepareTrainingForSession).toHaveBeenCalledWith('ses-1');
+    expect(m.participantCreate).toHaveBeenCalledTimes(1);
+    expect(m.prepareTrainingForSession).not.toHaveBeenCalled();
   });
 
   it('refuse une demande sans session cible', async () => {
@@ -236,4 +237,12 @@ describe('enrollFromRequest — dossier déjà converti', () => {
     await enrollFromRequest({ preEnrollmentId: 'pe-1', overrideSponsorOrgId: 'org-corrigee' });
     expect(m.participantCreate.mock.calls[0]![0].data.sponsorOrgId).toBe('org-corrigee');
   });
+});
+
+it('refuse une demande indépendante avant conversion lorsque la session est ENTREPRISE', async () => {
+  m.sessionFindFirst.mockResolvedValue({ id: 'ses-1', tenantId: 'tenant-1', regime: 'ENTREPRISE', priceTotalHT: 240, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') });
+  const result = await enrollFromRequest({ preEnrollmentId: 'pe-1' });
+  expect(result).toMatchObject({ ok: false, error: expect.stringContaining('Jean Martin') });
+  expect(m.convertPreEnrollment).not.toHaveBeenCalled();
+  expect(m.participantCreate).not.toHaveBeenCalled();
 });

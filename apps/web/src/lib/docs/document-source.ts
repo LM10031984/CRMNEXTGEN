@@ -68,6 +68,7 @@ async function loadSessionGraph(tenantId: string, sessionId: string) {
         startDate: true,
         endDate: true,
         modality: true,
+        regime: true, priceTotalHT: true,
         pricePerLearner: true,
         productId: true,
         product: { select: PRODUCT_SELECT },
@@ -85,6 +86,7 @@ async function loadSessionGraph(tenantId: string, sessionId: string) {
           select: {
             id: true,
             priceHT: true,
+            enrollmentStatus: true,
             financingMode: true,
             financingRequestDate: true,
             sponsorOrgId: true,
@@ -144,7 +146,7 @@ function contextFromGraph(
 
   const groupMembers = opts.organizationId
     ? session.participants
-        .filter((p) => p.sponsorOrgId === opts.organizationId)
+        .filter((p) => p.sponsorOrgId === opts.organizationId && p.enrollmentStatus !== 'CANCELLED')
         .map((p) => personSource(p.person))
         .filter((p): p is SourcePerson => p !== null)
     : null;
@@ -157,11 +159,13 @@ function contextFromGraph(
   return {
     tenant: tenantSource(tenant),
     session: {
+      participantCount: session.participants.filter((p) => p.enrollmentStatus !== 'CANCELLED').length,
       code: session.code,
       name: session.name,
       startDate: session.startDate,
       endDate: session.endDate,
       modality: session.modality,
+      ...(session.regime ? { regime: session.regime, priceTotalHT: session.priceTotalHT } : {}),
       pricePerLearner: session.pricePerLearner,
     },
     slots: session.slots.map((s) => ({

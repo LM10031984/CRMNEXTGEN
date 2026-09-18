@@ -17,10 +17,11 @@ interface Props {
   /** Tarif de la session, `null` si elle n'en porte pas : le champ reste alors
    *  vide et la cascade tarifaire décide (jamais un 0 pré-rempli). */
   defaultPrice: number | null;
+  regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null;
   excludePersonIds: string[];
 }
 
-export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds }: Props) {
+export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds, regime }: Props) {
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState<PickerSelection | null>(null);
   // Nom pré-rempli dans le picker après création express d'un apprenant, pour
@@ -42,7 +43,7 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
         // Champ vide ⇒ `undefined` : la cascade tarifaire décide. Envoyer 0
         // ici la court-circuiterait (`input.priceHT ?? défaut`) et créerait un
         // inscrit à 0 € — E-2 rouvert par l'interface.
-        priceHT: parsePriceInput(price),
+        priceHT: regime ? undefined : parsePriceInput(price),
         // Le picker sait désormais rattacher une entreprise à un apprenant qui
         // n'en avait aucune : on transmet le rôle retenu, pour que l'action
         // crée le LegalLink manquant plutôt que de refuser l'inscription.
@@ -125,7 +126,8 @@ export function AddParticipantDialog({ sessionId, defaultPrice, excludePersonIds
               )}
             </div>
 
-            {selection && (
+            {selection && regime && <p className="text-xs text-muted-foreground">{regime === 'ENTREPRISE' ? 'Le forfait total de la session reste inchangé lors de cet ajout.' : `Le tarif par stagiaire de la session s’applique : ${defaultPrice} € HT.`}</p>}
+            {selection && !regime && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">
                   Tarif HT (€)

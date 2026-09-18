@@ -1,3 +1,4 @@
+import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
 /**
  * Applique la règle payeur du 12/08 aux conventions d'une session — SOURCE UNIQUE.
  *
@@ -33,6 +34,7 @@ import { partitionByPayerRule } from '@/lib/sessions/payer-rule';
  */
 export interface RoutableParticipant {
   id: string;
+  session?: SessionPeriod & { regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null };
   sponsorOrgId: string;
   sponsorOrg: { id: string; legalName: string; legalForm: string } | null;
   person: {
@@ -44,7 +46,7 @@ export interface RoutableParticipant {
      * convention — ou s'il se forme à ses frais — donc contrat individuel.
      * Indispensable depuis le 02/09 pour les EI employeuses.
      */
-    legalLinks: { organizationId: string; role: string }[];
+    legalLinks: PeriodLink[];
   };
 }
 
@@ -52,12 +54,13 @@ export interface RoutableParticipant {
 export const ROUTABLE_PARTICIPANT_SELECT = {
   id: true,
   sponsorOrgId: true,
+  session: { select: { startDate: true, endDate: true, regime: true } },
   sponsorOrg: { select: { id: true, legalName: true, legalForm: true } },
   person: {
     select: {
       firstName: true,
       lastName: true,
-      legalLinks: { select: { organizationId: true, role: true } },
+      legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } },
     },
   },
 } as const;
@@ -66,6 +69,7 @@ export const ROUTABLE_PARTICIPANT_SELECT = {
 export function toPayerParticipants(participants: ReadonlyArray<RoutableParticipant>) {
   return participants.map((p) => ({
     id: p.id,
+    regime: p.session?.regime,
     sponsorOrgId: p.sponsorOrgId,
     sponsorLegalForm: p.sponsorOrg?.legalForm,
     sponsorName: p.sponsorOrg?.legalName,
@@ -81,7 +85,7 @@ export function toPayerParticipants(participants: ReadonlyArray<RoutableParticip
  * on ne retient que le lien vers l'organisation qui paye.
  */
 export function roleChezSponsor(p: RoutableParticipant): string | null {
-  return p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null;
+  return legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, p.session)?.role ?? null;
 }
 
 export interface ConventionRouting {

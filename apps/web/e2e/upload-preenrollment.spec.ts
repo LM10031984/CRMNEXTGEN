@@ -1,3 +1,4 @@
+import { assertTestDatabaseContent } from '../../../packages/db/scripts/assert-test-target';
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '@qualiof/db';
@@ -42,6 +43,7 @@ function makeFakeJpeg10Mb(): Buffer {
 }
 
 test.beforeAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   const tenant = await prisma.tenant.findFirstOrThrow({ select: { id: true } });
   await prisma.preEnrollment.create({
     data: {
@@ -55,6 +57,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.DATABASE_URL);
   // Nettoyage storage : les objets uploadés vivent sous `{token}/…` dans le
   // bucket preinscriptions (cf. createPreEnrollmentUploadUrl). Service role
   // depuis l'env locale — jamais exposé au client.

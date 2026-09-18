@@ -29,8 +29,11 @@ import {
   suiviDuProduit,
 } from '@/lib/sessions/changement-produit';
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
-import { generateClosurePack } from './closure-pack';
 import { applyPriceCascade } from '@/lib/pricing/cascade';
+import { validateDeclaredSessionPrice, type SessionRegime } from '@/lib/sessions/session-regime';
+import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
+import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
+import { assertCompanyPriceEditable, synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 
 // Zod schema pour unenrollParticipant — UUID strict pour participantId
@@ -77,12 +80,14 @@ export async function addParticipant(input: {
     return { ok: false, error: 'Session, apprenant ou organisation introuvable.' };
   }
 
+  try { await assertSessionPayersTx(prisma, session, [input]); } catch (e) { return { ok: false, error: (e as Error).message }; }
+
   // Le LegalLink Person→Org doit exister avant l'inscription. Sinon refus
   // explicite (au lieu d'un SALARIE par défaut qui était faux dans 95% des cas immo).
   const link = await prisma.legalLink.findFirst({
     where: { personId: input.personId, organizationId: input.sponsorOrgId },
   });
-  if (!link) {
+  if (!link && !session.regime) {
     if (!input.legalLinkRole) {
       return {
         ok: false,
@@ -102,7 +107,7 @@ export async function addParticipant(input: {
   const defaultPrice = resolveDefaultParticipantPrice(session, session.product, sponsor);
 
   try {
-    const part = await prisma.sessionParticipant.upsert({
+    const part = session.regime ? await createDeclaredParticipant(user, { sessionId: input.sessionId, personId: input.personId, sponsorOrgId: input.sponsorOrgId, legalLinkRole: input.legalLinkRole }) : await prisma.sessionParticipant.upsert({
       where: { sessionId_personId: { sessionId: input.sessionId, personId: input.personId } },
       create: {
         sessionId: input.sessionId,
@@ -119,100 +124,6 @@ export async function addParticipant(input: {
         sponsorOrgId: input.sponsorOrgId,
       },
     });
-
-    // Auto-génération en parallèle des docs pré-formation pour CE participant.
-    // Tous fire-and-forget pour ne pas bloquer l'inscription si une génération
-    // échoue. Idempotent : skip si déjà existant.
-    // 1) Convention (Code du Travail L6353-1) — template pur ~1s
-    // 2) Convocation
-    // 3) Demande AGEFICE — uniquement si TNS éligible (sponsor AGEFICE OU
-    //    LegalLink EI_SELF/AGENT_COMMERCIAL sur une org rattachée AGEFICE).
-    //    Bug remonté Laurent 2026-06-04 : "AGEFICE doit se créer automatiquement
-    //    sans que je clique sur un bouton".
-    const [existingConvention, existingConvocation, existingAgefice] = await Promise.all([
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'CONVENTION', participantId: part.id },
-        select: { id: true },
-      }),
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId: part.id },
-        select: { id: true },
-      }),
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'AGEFICE', participantId: part.id },
-        select: { id: true },
-      }),
-    ]);
-
-    if (!existingConvention) {
-      // Règle payeur (28/08) : plus d'appel direct au cœur individuel. Sur le
-      // 1er salarié inscrit chez une entreprise, aucune convention de groupe
-      // n'existe encore, et c'est une NOMINATIVE qui était fabriquée — l'inverse
-      // de la règle du 12/08. Le routeur émet la convention d'entreprise.
-      //
-      // Effet recherché à chaque nouvelle inscription du groupe : la convention
-      // d'entreprise est REGÉNÉRÉE pour inclure le nouvel arrivant (elle liste
-      // nominativement les stagiaires couverts et somme leurs prix).
-      // Import DYNAMIQUE, comme la convocation juste en dessous : le routeur
-      // tire `@/lib/storage` (donc `sharedEnv`, fail-loud) — le charger au
-      // sommet du module ferait exploser toute page important `sessions.ts`
-      // hors runtime applicatif.
-      void import('@/lib/closure/route-conventions').then(({ routeConventionsByPayerRule }) =>
-        routeConventionsByPayerRule(user.tenantId, input.sessionId, [
-          {
-            id: part.id,
-            sponsorOrgId: input.sponsorOrgId,
-            sponsorOrg: {
-              id: sponsor.id,
-              legalName: sponsor.legalName,
-              legalForm: sponsor.legalForm,
-            },
-            person: {
-              firstName: person.firstName,
-              lastName: person.lastName,
-              // Le rôle vient d'être résolu juste au-dessus (lien existant, ou
-              // créé à l'instant avec `input.legalLinkRole`). C'est lui qui
-              // décide convention vs contrat individuel quand le commanditaire
-              // est une entreprise individuelle employeuse.
-              legalLinks: [
-                {
-                  organizationId: input.sponsorOrgId,
-                  role: link?.role ?? input.legalLinkRole ?? '',
-                },
-              ],
-            },
-          },
-        ]),
-      ).catch((e) => {
-        console.warn(`[addParticipant] auto-gen convention failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
-    if (!existingConvocation) {
-      const { generateConvocationForParticipant } = await import('./convocation-generator');
-      generateConvocationForParticipant(part.id).catch((e) => {
-        console.warn(`[addParticipant] auto-gen convocation failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
-    // Eligibilité AGEFICE : sponsor AGEFICE OU EI/AGENT_COMMERCIAL sur org AGEFICE
-    const isAgeficeEligible =
-      sponsor.opcoCode === 'AGEFICE' ||
-      (await prisma.legalLink.findFirst({
-        where: {
-          personId: input.personId,
-          OR: [
-            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { opcoCode: 'AGEFICE' } },
-            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { ageficeProfile: { isNot: null } } },
-          ],
-        },
-        select: { id: true },
-      })) !== null;
-
-    if (isAgeficeEligible && !existingAgefice) {
-      const { generateAgeficeForParticipant } = await import('./agefice-generator');
-      generateAgeficeForParticipant(part.id).catch((e) => {
-        console.warn(`[addParticipant] auto-gen AGEFICE failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
 
     revalidatePath(`/app/sessions/${input.sessionId}`);
     return { ok: true, id: part.id };
@@ -259,7 +170,7 @@ export async function unenrollParticipant(
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: validatedId },
     include: {
-      session: { select: { tenantId: true, id: true } },
+      session: { select: { tenantId: true, id: true, regime: true, priceTotalHT: true } },
       person: { select: { firstName: true, lastName: true } },
     },
   });
@@ -267,6 +178,20 @@ export async function unenrollParticipant(
     return { ok: false, error: 'Inscription introuvable.' };
   }
 
+  // Forfait : suppression et repartage atomiques, interdits si déjà engagé.
+  if (part.session.regime === 'ENTREPRISE') {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const current = await tx.trainingSession.findFirst({ where: { id: part.session.id, tenantId: user.tenantId } });
+        if (!current) throw new Error('Session introuvable.');
+        await assertCompanyPriceEditable(tx, current);
+        const deleted = await tx.sessionParticipant.deleteMany({ where: { id: validatedId, sessionId: current.id } });
+        if (deleted.count) await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'SessionParticipant', entityId: validatedId,
+          action: 'sessionParticipants.delete', diff: { sessionId: current.id, personId: part.personId, deleted: deleted.count } } });
+        await synchronizeCompanyPriceTx(tx, current, user.id);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
+  } else {
   // 4) Transaction atomique : delete + auditLog
   await prisma.$transaction([
     prisma.sessionParticipant.delete({ where: { id: validatedId } }),
@@ -288,6 +213,8 @@ export async function unenrollParticipant(
       },
     }),
   ]);
+
+  }
 
   revalidatePath(`/app/sessions/${part.session.id}`);
   return { ok: true };
@@ -334,12 +261,13 @@ export async function updateParticipant(input: {
 
   const part = await prisma.sessionParticipant.findUnique({
     where: { id: input.participantId },
-    include: { session: { select: { tenantId: true, id: true } } },
+    include: { session: { select: { tenantId: true, id: true, regime: true, priceTotalHT: true } } },
   });
   if (!part || part.session.tenantId !== user.tenantId) {
     return { ok: false, error: 'Inscription introuvable.' };
   }
 
+  if (part.session.regime === 'ENTREPRISE' && input.priceHT !== undefined) return { ok: false, error: 'Le prix est un forfait total. Modifiez-le dans le régime de la fiche session.' };
   const data: Prisma.SessionParticipantUpdateInput = {};
   // E-4 (audit 2026-08-28) — cette action ecrivait sans laisser de trace, alors
   // qu'elle touche precisement les champs contestables en audit ou par un
@@ -502,6 +430,8 @@ export async function createSession(input: {
   capacityMin?: number;
   capacityMax?: number;
   pricePerLearner?: number;
+  regime?: SessionRegime;
+  priceTotalHT?: number;
   internalNotes?: string;
 }): Promise<{ ok: true; id: string; code: string } | { ok: false; error: string }> {
   let user;
@@ -513,6 +443,9 @@ export async function createSession(input: {
     }
     throw e;
   }
+
+  const priceError = validateDeclaredSessionPrice(input);
+  if (priceError) return { ok: false, error: priceError };
 
   const product = await prisma.trainingProduct.findFirst({
     where: { id: input.productId, tenantId: user.tenantId },
@@ -529,7 +462,9 @@ export async function createSession(input: {
   const nextSeq = lastSeq ? parseInt(lastSeq, 10) + 1 : 1;
   const code = sessionCode(year, nextSeq);
 
-  const session = await prisma.trainingSession.create({
+  let session;
+  try { session = await prisma.$transaction(async (tx) => {
+    const created = await tx.trainingSession.create({
     data: {
       tenantId: user.tenantId,
       productId: input.productId,
@@ -541,12 +476,15 @@ export async function createSession(input: {
       modality: input.modality as Modality,
       capacityMin: input.capacityMin ?? product.capacityMin,
       capacityMax: input.capacityMax ?? product.capacityMax,
-      pricePerLearner: input.pricePerLearner
-        ? new Prisma.Decimal(input.pricePerLearner)
-        : product.priceHT,
+      regime: input.regime, priceTotalHT: input.regime === 'ENTREPRISE' ? input.priceTotalHT : null,
+      pricePerLearner: input.regime === 'INDIVIDUEL' ? new Prisma.Decimal(input.pricePerLearner!) : null,
       internalNotes: input.internalNotes,
     },
   });
+
+    await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.create', diff: { regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, pricePerLearner: created.pricePerLearner?.toString() ?? null, created: 1 } } });
+    return created;
+  }); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
   return { ok: true, id: session.id, code };
@@ -562,6 +500,8 @@ export async function createSession(input: {
 export async function duplicateSession(input: {
   sessionId: string;
   newStartDate: string;
+  regime?: SessionRegime;
+  priceHT?: number;
   recurrence?: { count: number; intervalMonths: number };
 }): Promise<{ ok: true; createdIds: string[]; firstCode: string } | { ok: false; error: string }> {
   let user;
@@ -579,6 +519,11 @@ export async function duplicateSession(input: {
     include: { trainers: { select: { personId: true, role: true } } },
   });
   if (!source) return { ok: false, error: 'Session source introuvable.' };
+
+  const chosenRegime = input.regime ?? source.regime;
+  const price = input.priceHT ?? (chosenRegime === 'ENTREPRISE' ? Number(source.priceTotalHT) : Number(source.pricePerLearner));
+  const priceError = validateDeclaredSessionPrice({ regime: chosenRegime, priceTotalHT: price, pricePerLearner: price });
+  if (priceError) return { ok: false, error: priceError };
 
   const startBase = new Date(input.newStartDate);
   if (Number.isNaN(startBase.getTime())) return { ok: false, error: 'Date de debut invalide.' };
@@ -598,6 +543,7 @@ export async function duplicateSession(input: {
   const createdIds: string[] = [];
   let firstCode = '';
 
+  try { await prisma.$transaction(async (tx) => {
   for (let i = 0; i < occurrences; i++) {
     const start = new Date(startBase);
     start.setMonth(start.getMonth() + i * intervalMonths);
@@ -606,7 +552,7 @@ export async function duplicateSession(input: {
     nextSeq += 1;
     if (i === 0) firstCode = code;
 
-    const created = await prisma.trainingSession.create({
+    const created = await tx.trainingSession.create({
       data: {
         tenantId: user.tenantId,
         productId: source.productId,
@@ -618,7 +564,8 @@ export async function duplicateSession(input: {
         modality: source.modality,
         capacityMin: source.capacityMin,
         capacityMax: source.capacityMax,
-        pricePerLearner: source.pricePerLearner,
+        regime: chosenRegime, priceTotalHT: chosenRegime === 'ENTREPRISE' ? price : null,
+        pricePerLearner: chosenRegime === 'INDIVIDUEL' ? price : null,
         locationId: source.locationId,
         internalNotes: source.internalNotes,
         trainers: {
@@ -626,8 +573,11 @@ export async function duplicateSession(input: {
         },
       },
     });
+    await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.duplicate', diff: { sourceSessionId: source.id, regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, created: 1 } } });
     createdIds.push(created.id);
   }
+
+  }); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
   return { ok: true, createdIds, firstCode };
@@ -683,6 +633,22 @@ export async function updateSessionDates(input: {
   if (end < start) {
     return { ok: false, error: 'La date de fin ne peut pas être antérieure à la date de début' };
   }
+  const current = await prisma.trainingSession.findFirst({ where: { id: input.sessionId, tenantId: user.tenantId } });
+  if (current?.regime) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const fresh = await tx.trainingSession.findFirst({ where: { id: current.id, tenantId: user.tenantId } });
+        if (!fresh) throw new Error('Session introuvable.');
+        await assertCompanyPriceEditable(tx, { ...fresh, regime: 'ENTREPRISE' });
+        const participants = await tx.sessionParticipant.findMany({ where: { sessionId: fresh.id, session: { tenantId: user.tenantId } }, select: { personId: true, sponsorOrgId: true } });
+        await assertSessionPayersTx(tx, { ...fresh, startDate: start, endDate: end }, participants);
+        const updated = await tx.trainingSession.updateMany({ where: { id: fresh.id, tenantId: user.tenantId }, data: { startDate: start, endDate: end } });
+        if (updated.count) await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: fresh.id, action: 'sessions.dates', diff: { before: [fresh.startDate.toISOString(), fresh.endDate.toISOString()], after: [start.toISOString(), end.toISOString()], updated: updated.count } } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      revalidatePath(`/app/sessions/${current.id}`);
+      return { ok: true };
+    } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
   const result = await prisma.trainingSession.updateMany({
     where: { id: input.sessionId, tenantId: user.tenantId },
     data: { startDate: start, endDate: end },
@@ -697,7 +663,7 @@ export async function updateSessionDates(input: {
 export async function updateSessionStatus(input: {
   sessionId: string;
   newStatus: SessionStatus;
-}): Promise<{ ok: boolean; error?: string; autoPackTriggered?: boolean }> {
+}): Promise<{ ok: boolean; error?: string }> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
@@ -719,7 +685,7 @@ export async function updateSessionStatus(input: {
 
   // Verrou : une fois COMPLETED, on n'autorise que IN_PROGRESS (rectification)
   // ou CANCELLED → COMPLETED reste interdit pour préserver l'historique propre
-  // (le pack closure a déjà été généré).
+  // (des documents de clôture peuvent déjà avoir été générés).
   if (session.status === 'COMPLETED' && input.newStatus !== 'IN_PROGRESS') {
     return {
       ok: false,
@@ -734,34 +700,7 @@ export async function updateSessionStatus(input: {
   revalidatePath(`/app/sessions/${input.sessionId}`);
   revalidatePath('/app/sessions');
 
-  // Auto-déclenchement du pack fin de formation lors d'une transition vers
-  // COMPLETED — élimine le clic manuel "Générer le pack". Garde-fous :
-  //   - Skip si un batch RUNNING/PENDING existe déjà (évite les doublons en cas
-  //     de toggle rapide IN_PROGRESS ↔ COMPLETED par l'utilisateur).
-  //   - Fire-and-forget (`void`) : la pré-génération du déroulé/grille obs
-  //     session peut prendre 5-10 min via Ollama. Ne pas bloquer la réponse
-  //     du toggle de statut.
-  //   - Erreurs swallowed : un échec d'enqueue ne doit pas casser le change
-  //     de statut. L'utilisateur pourra retrigger manuellement depuis la
-  //     fiche session.
-  let autoPackTriggered = false;
-  if (input.newStatus === 'COMPLETED' && session.status !== 'COMPLETED') {
-    const inFlight = await prisma.closureBatch.count({
-      where: {
-        tenantId: user.tenantId,
-        sessionId: input.sessionId,
-        status: { in: ['PENDING', 'RUNNING'] },
-      },
-    });
-    if (inFlight === 0) {
-      autoPackTriggered = true;
-      void generateClosurePack(input.sessionId).catch((e) => {
-        console.error('[auto-pack] échec déclenchement pour', input.sessionId, ':', (e as Error).message);
-      });
-    }
-  }
-
-  return { ok: true, autoPackTriggered };
+  return { ok: true };
 }
 
 // ---------- Mise à jour des paramètres logistique session (C4.i17) ----------
@@ -831,6 +770,8 @@ export async function createSessionAndRedirect(formData: FormData): Promise<void
     endDate,
     modality,
     pricePerLearner,
+    regime: String(formData.get('regime') ?? '') as SessionRegime,
+    priceTotalHT: Number(formData.get('priceTotalHT')),
     internalNotes,
   });
   if (!res.ok) throw new Error(res.error);
@@ -1353,7 +1294,7 @@ export async function updateSessionDetails(
       before.name = session.name;
       after.name = suivi.nouveauNom;
     }
-    if (suivi.nouveauPrix !== null) {
+    if (!session.regime && suivi.nouveauPrix !== null) {
       updateData.pricePerLearner = new Prisma.Decimal(suivi.nouveauPrix);
       before.pricePerLearner =
         session.pricePerLearner === null ? null : Number(session.pricePerLearner);
@@ -1425,7 +1366,8 @@ export async function updateSessionDetails(
 
   // pricePerLearner (nullable Decimal). Comparaison via Number() pour éviter
   // les égalités Decimal vs number qui sont toujours différentes.
-  if (data.pricePerLearner !== undefined) {
+  if (data.pricePerLearner !== undefined && session.regime && data.pricePerLearner !== (session.pricePerLearner == null ? null : Number(session.pricePerLearner))) return { ok: false, error: 'Modifiez le prix dans le régime de la fiche session pour prévisualiser la modification.' };
+  if (data.pricePerLearner !== undefined && !session.regime) {
     const newPrice =
       data.pricePerLearner === null ? null : new Prisma.Decimal(data.pricePerLearner);
     const oldNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
@@ -1457,6 +1399,20 @@ export async function updateSessionDetails(
   // No-op si rien n'a changé (évite AuditLog vide + write inutile)
   if (Object.keys(updateData).length === 0) return { ok: true };
 
+  if (session.regime) {
+    try { await prisma.$transaction(async (tx) => {
+      const fresh = await tx.trainingSession.findFirst({ where: { id: session.id, tenantId: user.tenantId } });
+      if (!fresh) throw new Error('Session introuvable.');
+      if (updateData.startDate || updateData.endDate) {
+        await assertCompanyPriceEditable(tx, { ...fresh, regime: 'ENTREPRISE' });
+        const participants = await tx.sessionParticipant.findMany({ where: { sessionId: fresh.id }, select: { personId: true, sponsorOrgId: true } });
+        await assertSessionPayersTx(tx, { ...fresh, startDate: finalStart, endDate: finalEnd }, participants);
+      }
+      await tx.trainingSession.update({ where: { id: fresh.id }, data: updateData });
+      await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: fresh.id, action: 'sessions.update', diff: { before, after } as Prisma.InputJsonValue } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }); }
+    catch (e) { return { ok: false, error: (e as Error).message }; }
+  } else {
   // 5) Transaction atomique : update + AuditLog
   await prisma.$transaction([
     prisma.trainingSession.update({
@@ -1474,6 +1430,8 @@ export async function updateSessionDetails(
       },
     }),
   ]);
+
+  }
 
   // E-2 — un tarif de session qui ne descend pas jusqu'aux inscrits ne sert a
   // rien : ce sont `SessionParticipant.priceHT` que lisent la convention, la

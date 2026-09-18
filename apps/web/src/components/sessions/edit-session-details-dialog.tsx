@@ -68,6 +68,7 @@ interface Props {
    * cacher un champ n'a jamais protégé une donnée.
    */
   produits?: ProgrammeOption[];
+  declaredRegime?: boolean;
   initial: {
     productId: string | null;
     name: string | null;
@@ -92,7 +93,7 @@ function toDateInput(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function EditSessionDetailsDialog({ sessionId, produits = [], initial }: Props) {
+export function EditSessionDetailsDialog({ sessionId, produits = [], initial, declaredRegime = false }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -332,7 +333,7 @@ export function EditSessionDetailsDialog({ sessionId, produits = [], initial }: 
 
             {/* 5. Prix + Langue (grid 2 cols) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              {declaredRegime ? <p className="text-sm text-muted-foreground">Le prix se modifie depuis « Régime de la session » dans l’en-tête.</p> : <div>
                 <label htmlFor="pricePerLearner" className="block text-sm font-medium mb-1">
                   Prix HT / apprenant (€)
                 </label>
@@ -360,7 +361,7 @@ export function EditSessionDetailsDialog({ sessionId, produits = [], initial }: 
                     {errors.pricePerLearner.message}
                   </p>
                 )}
-              </div>
+              </div>}
               <div>
                 <label htmlFor="language" className="block text-sm font-medium mb-1">
                   Langue

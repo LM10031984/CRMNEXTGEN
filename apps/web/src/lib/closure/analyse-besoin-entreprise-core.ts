@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Analyse des besoins au nom de l'ENTREPRISE — cœur SANS auth.
  *
@@ -120,7 +121,7 @@ export async function generateAnalyseBesoinEntrepriseCore(
   // commanditaire n'y est salarié, c'est-à-dire le vrai auto-payeur.
   const aUnSalarie = participants.some((p) =>
     estEmployeurDeLApprenant(
-      p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.role ?? null,
+      legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.role ?? null,
     ),
   );
   if (requiresContratIndividuel(org.legalForm) && !aUnSalarie) {
@@ -160,7 +161,7 @@ export async function generateAnalyseBesoinEntrepriseCore(
   const fonctions = participants
     .map(
       (p) =>
-        p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.function ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.function ?? null,
     )
     .filter((f): f is string => !!f && f.trim().length > 0);
 
@@ -293,14 +294,14 @@ ${renderBrandHeader(undefined, tenantId)}
     select: {
       sponsorOrgId: true,
       sponsorOrg: { select: { legalForm: true } },
-      person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+      person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
     },
   });
   const multi = autresInscrits.some((p) =>
     releveDeLaConvention({
       sponsorLegalForm: p.sponsorOrg?.legalForm,
       roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
     }),
   );
   if (multi) {

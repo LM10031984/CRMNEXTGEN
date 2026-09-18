@@ -54,6 +54,7 @@ const sanitize = (s: string) => s.replace(/[\/\\:*?"<>|]/g, '-').replace(/\s+/g,
 const session = await prisma.trainingSession.findFirstOrThrow({
   where: { code: SES },
   include: {
+    _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } },
     location: true,
     product: true,
     trainers: { include: { person: true } },
@@ -196,6 +197,7 @@ for (const part of parts) {
       beneficiaireRcsVille: orgAddr?.city ?? null,
       beneficiaireRepresentantNom: repr,
       stagiaires: [{ prenom: part.person.firstName, nom: part.person.lastName, email: part.person.email }],
+      sessionParticipantCount: session._count.participants,
       sessionStartDate: session.startDate, sessionEndDate: session.endDate, conventionDate, sessionLieu: lieu ?? of.addressFull,
       produitTitre: session.name ?? p.title, produitDureeHeures: p.durationHours,
       produitObjectifs: Array.isArray(p.objectives) ? (p.objectives as string[]) : [],

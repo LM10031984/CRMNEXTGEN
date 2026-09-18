@@ -1,3 +1,4 @@
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération du programme PRODUIT.
  *
@@ -215,7 +216,7 @@ export async function generateProgrammeForSessionCore(
           priceHT: true,
           sponsorOrgId: true,
           sponsorOrg: { select: { legalForm: true } },
-          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
         },
       },
     },
@@ -234,17 +235,18 @@ export async function generateProgrammeForSessionCore(
     couvertParConvention: releveDeLaConvention({
       sponsorLegalForm: p.sponsorOrg?.legalForm,
       roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
     }),
   }));
 
   // ⚠ AVANT de résoudre le montant. Un produit vendu au forfait sur une session
   // qui ne le confirme pas ne retombe PAS sur un prix par tête : on refuse, et
   // on dit à qui peut corriger quoi corriger.
-  const refus = refusForfaitNonConfirme({ modeProduit: product.pricingMode, inscrits });
+  const refus = refusForfaitNonConfirme({ modeProduit: product.pricingMode, regimeSession: session.regime, prixTotalSession: session.priceTotalHT, inscrits });
   if (refus !== null) return { ok: false, error: refus };
 
   const prix = resoudrePrixProgramme({
+    regimeSession: session.regime, prixTotalSession: session.priceTotalHT,
     modeProduit: product.pricingMode,
     inscrits,
     tarifSession: session.pricePerLearner,
@@ -395,7 +397,9 @@ export async function generateProgrammeForSessionOrProductCore(
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId },
     select: {
+      startDate: true, endDate: true,
       productId: true,
+      regime: true, priceTotalHT: true,
       pricePerLearner: true,
       product: { select: { priceHT: true, pricingMode: true } },
       participants: {
@@ -403,7 +407,7 @@ export async function generateProgrammeForSessionOrProductCore(
           priceHT: true,
           sponsorOrgId: true,
           sponsorOrg: { select: { legalForm: true } },
-          person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+          person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
         },
       },
     },
@@ -412,6 +416,7 @@ export async function generateProgrammeForSessionOrProductCore(
   if (!session.productId) return { ok: false, error: 'Produit lié à la session manquant' };
 
   const propreALaSession = programmeDoitEtrePropreALaSession({
+    regimeSession: session.regime, prixTotalSession: session.priceTotalHT,
     modeProduit: session.product?.pricingMode ?? 'PAR_STAGIAIRE',
     inscrits: session.participants.map((p) => ({
       priceHT: Number(p.priceHT),
@@ -419,7 +424,7 @@ export async function generateProgrammeForSessionOrProductCore(
       couvertParConvention: releveDeLaConvention({
         sponsorLegalForm: p.sponsorOrg?.legalForm,
         roleChezSponsor:
-          p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+          legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
       }),
     })),
     tarifSession: session.pricePerLearner,

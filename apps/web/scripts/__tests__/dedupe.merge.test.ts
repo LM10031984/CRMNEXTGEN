@@ -1,3 +1,4 @@
+import { assertTestTarget, assertTestDatabaseContent } from '../../../../packages/db/scripts/assert-test-target';
 /**
  * PRÉREQUIS DUR (RECONCILE-RULES §3.2) — Phase 09.2.
  *
@@ -16,7 +17,7 @@
  * Test C : garde-fou anti-fusion email-seul (cas Nestenn) — données committées
  *          sur qualiof_test puis nettoyées en afterAll.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 // Factory re-exportée par @qualiof/db (apps/web ne dépend pas directement de
 // @prisma/client). On instancie NOTRE PROPRE client (pas le singleton) → qualiof_test.
 // createPrismaClientForUrl respecte PRISMA_USE_PG_ADAPTER (sandbox d'audit).
@@ -25,6 +26,7 @@ import { mergeOrgsTx, mergePersonsTx, detectPersonsByName } from '../dedupe';
 
 // ── Garde d'environnement (première ligne de défense) ──────────────
 const TEST_URL = process.env.TEST_DATABASE_URL;
+assertTestTarget({ databaseUrl: TEST_URL });
 function dbName(u: string): string {
   return new URL(u).pathname.replace(/^\//, '');
 }
@@ -36,7 +38,14 @@ if (!TEST_URL || !/_test$/.test(dbName(TEST_URL))) {
 
 const db = createPrismaClientForUrl(TEST_URL);
 
+let targetVerified = false;
+beforeAll(async () => {
+  await assertTestDatabaseContent(db, TEST_URL);
+  targetVerified = true;
+});
+
 afterAll(async () => {
+  if (!targetVerified) { await db.$disconnect(); return; }
   // Filet : purge tout résidu de test sur qualiof_test (jamais qualiof).
   await db.externalIdentity.deleteMany({ where: { source: 'test-09.2' } });
   await db.person.deleteMany({ where: { lastName: 'TESTA' } });

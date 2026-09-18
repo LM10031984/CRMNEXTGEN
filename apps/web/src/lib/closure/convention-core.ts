@@ -1,3 +1,5 @@
+import { sessionTotalHT } from '@/lib/sessions/session-regime';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Cœur SANS auth de la génération de convention de formation.
  *
@@ -81,6 +83,7 @@ export async function generateConventionCore(
       sponsorOrg: true,
       session: {
         include: {
+          _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } },
           product: true,
           location: true,
           trainers: { include: { person: true } },
@@ -148,13 +151,11 @@ export async function generateConventionCore(
   // pendant que le routeur produisait la convention de groupe — les deux
   // documents contradictoires que la règle du 12/08 sert justement à éviter.
   if (
-    releveDeLaConvention({
+    (participant.session.regime ? participant.session.regime === 'ENTREPRISE' : releveDeLaConvention({
       sponsorLegalForm: participant.sponsorOrg?.legalForm,
       roleChezSponsor:
-        participant.person?.legalLinks?.find(
-          (l) => l.organizationId === participant.sponsorOrgId,
-        )?.role ?? null,
-    })
+        legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)?.role ?? null,
+    }))
   ) {
     return {
       ok: true,
@@ -177,9 +178,7 @@ export async function generateConventionCore(
 
   // Détermine si l'apprenant est rattaché à son sponsorOrg via EI_SELF
   // (= auto-entreprise perso) ou via SALARIE/DIRIGEANT (= structure employeur).
-  const linkToSponsor = participant.person.legalLinks.find(
-    (l) => l.organizationId === participant.sponsorOrgId,
-  );
+  const linkToSponsor = legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session);
   const isSelfEmployed = linkToSponsor?.role === 'EI_SELF';
 
   // Représentant qui signe la convention — cascade PARTAGÉE avec le moteur
@@ -256,6 +255,7 @@ export async function generateConventionCore(
     beneficiaireRcsVille: rcsVille,
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
+    sessionParticipantCount: participant.session._count.participants,
     sessionStartDate: participant.session.startDate,
     sessionEndDate: participant.session.endDate,
     conventionDate,
@@ -372,10 +372,10 @@ export async function generateConventionEntrepriseCore(
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
   const participants = await prisma.sessionParticipant.findMany({
-    where: { sessionId, sponsorOrgId, session: { tenantId } },
+    where: { sessionId, sponsorOrgId, session: { tenantId }, enrollmentStatus: { not: 'CANCELLED' } },
     include: {
-      person: { include: { legalLinks: { select: { organizationId: true, role: true } } } },
-      session: { include: { product: true, location: true } },
+      person: { include: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
+      session: { include: { product: true, location: true, _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } } } },
     },
     orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
   });
@@ -395,7 +395,7 @@ export async function generateConventionEntrepriseCore(
   // c'est-à-dire le vrai cas de l'auto-entrepreneur qui se forme lui-même.
   const salaries = participants.filter((p) =>
     estEmployeurDeLApprenant(
-      p.person?.legalLinks?.find((l) => l.organizationId === sponsorOrgId)?.role ?? null,
+      legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.role ?? null,
     ),
   );
   if (requiresContratIndividuel(org.legalForm) && salaries.length === 0) {
@@ -420,7 +420,8 @@ export async function generateConventionEntrepriseCore(
   // un prix manquant ici ferait dire à la convention un montant SUPÉRIEUR à
   // celui facturé — deux documents contractuels qui se contredisent. On refuse
   // plutôt, en nommant les personnes à compléter.
-  const sansPrix = participants.filter((p) => Number(p.priceHT) <= 0);
+  if (session.regime === 'INDIVIDUEL') return { ok: false, error: 'Cette session est INDIVIDUELLE. Générez les contrats depuis la fiche session.' };
+  const sansPrix = session.regime === 'ENTREPRISE' ? [] : participants.filter((p) => Number(p.priceHT) <= 0);
   if (sansPrix.length > 0) {
     const noms = sansPrix
       .map((p) => `${p.person.firstName} ${p.person.lastName.toUpperCase()}`)
@@ -431,7 +432,7 @@ export async function generateConventionEntrepriseCore(
     };
   }
   const productPrice = Number(session.product.priceHT);
-  const prixGlobalHT = participants.reduce((sum, p) => sum + Number(p.priceHT), 0);
+  const prixGlobalHT = sessionTotalHT(session, participants);
 
   // Représentant légal — quick 260821-md8. Cascade : champ explicite de la
   // fiche entreprise, puis contact principal. À défaut, on REFUSE.
@@ -492,6 +493,7 @@ export async function generateConventionEntrepriseCore(
     // par la garde ci-dessus.
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
+    sessionParticipantCount: session._count.participants,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
     conventionDate,
@@ -552,14 +554,14 @@ export async function generateConventionEntrepriseCore(
     select: {
       sponsorOrgId: true,
       sponsorOrg: { select: { legalForm: true } },
-      person: { select: { legalLinks: { select: { organizationId: true, role: true } } } },
+      person: { select: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
     },
   });
   const monoCommanditaire = !autresInscrits.some((p) =>
     releveDeLaConvention({
       sponsorLegalForm: p.sponsorOrg?.legalForm,
       roleChezSponsor:
-        p.person?.legalLinks?.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+        legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, session)?.role ?? null,
     }),
   );
   if (!monoCommanditaire) {

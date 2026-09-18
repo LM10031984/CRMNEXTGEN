@@ -1,27 +1,30 @@
+import { assertTestTarget } from '../../packages/db/scripts/assert-test-target';
+assertTestTarget({ databaseUrl: process.env.DATABASE_URL, baseUrl: process.env.STAGING_BASE_URL ?? 'http://127.0.0.1:3011' });
 import { defineConfig } from '@playwright/test';
 
 /**
- * Config Playwright — filet minimal contre le staging déployé (Phase 21, D-10).
- *
- * - Cible DISTANTE : baseURL = STAGING_BASE_URL (défaut localhost:3010, l'instance
- *   dev perso). Exécution À LA DEMANDE, PAS dans le gate PR :
- *   `STAGING_BASE_URL=https://qualiof.vercel.app pnpm --filter @qualiof/web exec \
- *      dotenv -e ../../.env -- playwright test`
- * - PAS de webServer : la cible est un déploiement distant (D-10).
- * - testDir `e2e/` est HORS du glob vitest (`src/**`, `scripts/**`) → aucune
- *   collision de runners.
- * - Auth par storageState : le projet `setup` fait un VRAI login UI (preuve
- *   APP-02 cookie session) et persiste `e2e/.auth/user.json` (gitignoré).
- * - Le projet `logout` n'a PAS de storageState : il fait un login FRAIS dans le
- *   spec — `logoutAction` n'invalide que SA session Lucia, donc il ne casse pas
- *   la session partagée du projet `authenticated`.
- * - Si Vercel Deployment Protection est active : poser
- *   VERCEL_AUTOMATION_BYPASS_SECRET (header x-vercel-protection-bypass).
+ * Correction du 17/09/2026 : l'ancienne instruction « Cible DISTANTE » visait
+ * un staging devenu production. Serveur local dédié désormais, sans réutiliser
+ * une instance en cours et sans charger les fichiers .env de déploiement.
+ * La cible ET sa population sont validées avant les fixtures et l'authentification.
  */
-const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const baseURL = process.env.STAGING_BASE_URL ?? 'http://127.0.0.1:3011';
+if (baseURL !== 'http://127.0.0.1:3011') throw new Error('REFUS E2E : utiliser le serveur dédié http://127.0.0.1:3011.');
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
+  webServer: {
+    command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3011',
+    url: baseURL,
+    reuseExistingServer: false,
+    env: {
+      QUALIOF_E2E: '1', DATABASE_URL: process.env.DATABASE_URL!, DIRECT_URL: process.env.DATABASE_URL!,
+      STORAGE_PROVIDER: 'minio', S3_ENDPOINT: 'http://127.0.0.1:9000',
+      S3_ACCESS_KEY: 'qualiof', S3_SECRET_KEY: 'qualiof_dev_minio',
+      SMTP_HOST: '', GOOGLE_OAUTH_REFRESH_TOKEN: '',
+    },
+  },
   timeout: 60_000,
   retries: 1,
   // `open: 'never'` : le serveur HTML auto-servi sur échec BLOQUE les runs
@@ -31,15 +34,13 @@ export default defineConfig({
   // D-13) : on sérialise pour rester déterministe sous la fenêtre.
   workers: 1,
   use: {
-    baseURL: process.env.STAGING_BASE_URL ?? 'http://localhost:3010',
+    baseURL,
     trace: 'retain-on-failure',
     // Sandbox d'audit : Chromium préinstallé hors du cache Playwright standard.
     ...(process.env.PW_EXECUTABLE_PATH
       ? { launchOptions: { executablePath: process.env.PW_EXECUTABLE_PATH } }
       : {}),
-    ...(bypassSecret
-      ? { extraHTTPHeaders: { 'x-vercel-protection-bypass': bypassSecret } }
-      : {}),
+
   },
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/ },

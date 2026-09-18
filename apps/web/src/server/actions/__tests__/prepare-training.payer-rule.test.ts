@@ -10,9 +10,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * ou SES-0108 (EXPERTA, 1 salariée) produisait encore des conventions
  * nominatives, en doublon de la convention d'entreprise correcte.
  *
- * Les DEUX orchestrateurs sont couverts : `prepareSession` (création de
- * session, fire-and-forget) et `prepareTrainingForSession` (bouton
- * « Préparer »). Ils sont appelés depuis des chemins différents — corriger un
+ * Les DEUX orchestrateurs manuels sont couverts : `prepareSession` (bouton
+ * « Compléter ») et `prepareTrainingForSession` (bouton « Préparer »).
+ * Ils sont appelés depuis des chemins différents — corriger un
  * seul laisserait l'autre produire le mauvais document.
  *
  * Test de puissance : retirer le `!` de `isPersonneMoralePayeur` fait rougir

@@ -5,6 +5,8 @@
  * Utilisé sur la fiche apprenant pour ajouter/retirer/marquer principal.
  */
 
+import { LegalLinkPeriodEditor } from './legal-link-period-editor';
+import { calendarDay } from '@/lib/persons/legal-link-period';
 import { useState, useTransition } from 'react';
 import { Plus, X, Star, StarOff, Briefcase, Search, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +31,9 @@ interface LegalLink {
   id: string;
   role: string;
   isPrimary: boolean;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  function?: string | null;
   organization: {
     id: string;
     legalName: string;
@@ -93,20 +98,26 @@ export function LegalLinkEditor({ personId, links, personName }: Props) {
   }
 
   function handleDelete(linkId: string) {
-    if (!confirm('Retirer ce lien juridique ?')) return;
+    setError(null);
     startTransition(async () => {
-      await deleteLegalLink(linkId);
+      const preview = await deleteLegalLink(linkId);
+      if (!preview.ok) { setError(preview.error); return; }
+      if (!preview.confirmationKey || !confirm('Ce lien ne porte aucune inscription. Confirmer sa suppression ?')) return;
+      const result = await deleteLegalLink(linkId, true, preview.confirmationKey);
+      if (!result.ok) setError(result.error);
     });
   }
 
   function handleSetPrimary(linkId: string) {
     startTransition(async () => {
-      await setPrimaryLegalLink(linkId);
+      const result = await setPrimaryLegalLink(linkId);
+      if (!result.ok) setError(result.error ?? "Modification impossible.");
     });
   }
 
   return (
     <div className="space-y-3">
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {links.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">
           Aucune organisation rattachée à cet apprenant.
@@ -114,6 +125,7 @@ export function LegalLinkEditor({ personId, links, personName }: Props) {
       ) : (
         <ul className="space-y-2">
           {links.map((link) => {
+            const ended = !!link.endDate && calendarDay(link.endDate) < calendarDay(new Date());
             const isEi = SOLO_FORMS.includes(link.organization.legalForm);
             // Auto-entreprise dont la raison sociale contient le nom de famille
             // sans lui être égale : soit un ancien nom resté en place, soit un
@@ -130,7 +142,7 @@ export function LegalLinkEditor({ personId, links, personName }: Props) {
             return (
               <li
                 key={link.id}
-                className="flex items-start gap-3 p-3 rounded-lg border border-border bg-white hover:bg-muted/30 transition-colors"
+                className={`flex items-start gap-3 p-3 rounded-lg border border-border transition-colors ${ended ? "bg-muted/30 opacity-70" : "bg-white hover:bg-muted/30"}`}
               >
                 <Briefcase className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -145,10 +157,16 @@ export function LegalLinkEditor({ personId, links, personName }: Props) {
                       {ROLE_LABELS[link.role] ?? link.role}
                     </Badge>
                     {link.isPrimary && <Badge variant="info">Principal</Badge>}
+                    {ended && <Badge variant="muted">Terminé</Badge>}
                     {link.organization.opcoCode && (
                       <Badge variant="default">{formatFunderCode(link.organization.opcoCode)}</Badge>
                     )}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {link.startDate ? `Depuis le ${calendarDay(link.startDate)}` : 'Début non renseigné'}
+                    {link.endDate ? ` · Jusqu’au ${calendarDay(link.endDate)} inclus` : ' · Sans fin'}
+                  </p>
+                  <LegalLinkPeriodEditor link={{ ...link, startDate: link.startDate ?? null, endDate: link.endDate ?? null, function: link.function ?? null }} />
                   {nameMismatch && (
                     <div className="text-xs text-amber-700 mt-1 inline-flex items-start gap-1">
                       <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" aria-hidden="true" />
@@ -168,7 +186,7 @@ export function LegalLinkEditor({ personId, links, personName }: Props) {
                   <button
                     type="button"
                     onClick={() => handleSetPrimary(link.id)}
-                    disabled={pending || link.isPrimary}
+                    disabled={pending || link.isPrimary || ended}
                     className="h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:text-amber-600 hover:bg-amber-50 disabled:opacity-30"
                     title={link.isPrimary ? 'Déjà principal' : 'Marquer principal'}
                   >

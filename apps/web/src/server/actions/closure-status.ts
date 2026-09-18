@@ -17,7 +17,7 @@
 
 import { prisma, type DocType, type PedagogicalKind } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
-import { OU_AGEFICE } from '@/lib/agefice/eligibilite';
+import { OU_AGEFICE, AGEFICE_PARTICIPANT_SELECT, filterAgeficeCandidates } from '@/lib/agefice/eligibilite';
 
 export interface SessionClosureStatus {
   ok: boolean;
@@ -65,7 +65,7 @@ export async function getSessionClosureStatus(
 
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, tenantId: user.tenantId },
-    select: { id: true, participants: { select: { id: true } } },
+    select: { id: true, regime: true, participants: { select: { id: true } } },
   });
   if (!session) return { ...empty, error: 'Session introuvable' };
 
@@ -136,7 +136,7 @@ export async function getSessionClosureStatus(
       }),
       // Éligibles AGEFICE — même requête que prepare-training.
       participantIds.length > 0
-        ? prisma.sessionParticipant.count({
+        ? session.regime ? prisma.sessionParticipant.findMany({ where: { sessionId: session.id, session: { tenantId: user.tenantId }, OR: OU_AGEFICE }, select: AGEFICE_PARTICIPANT_SELECT }).then((rows) => filterAgeficeCandidates(rows).length) : prisma.sessionParticipant.count({
             where: {
               sessionId: session.id,
               OR: OU_AGEFICE,

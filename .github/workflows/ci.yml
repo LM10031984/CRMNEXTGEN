@@ -64,6 +64,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm --filter @qualiof/web exec tsc --noEmit
       - run: pnpm test
+      - name: Intégration sur la base jetable de CI
+        run: pnpm --filter @qualiof/web exec dotenv -e ../../.env -- pnpm test:integration
   worker-image:
     # CI-01 « build Docker worker » — preuve que l'image compile, PAS de push.
     # Sur push main uniquement : garde le gate PR rapide (D-10, Open Q2 RESEARCH).

@@ -1,3 +1,4 @@
+import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
@@ -51,6 +52,8 @@ import { TresoStatusBlock } from '@/components/sessions/treso-status-block';
 import { SessionTasksPanel } from '@/components/sessions/session-tasks-panel';
 import { SessionDatesEditor } from '@/components/sessions/session-dates-editor';
 import { SessionTitleInline } from '@/components/sessions/session-title-inline';
+import { SessionRegimeEditor } from '@/components/sessions/session-regime-editor';
+import { sessionTotalHT } from '@/lib/sessions/session-regime';
 import { SessionPriceInline } from '@/components/sessions/session-price-inline';
 import { SessionNotesInline } from '@/components/sessions/session-notes-inline';
 import { SettingsButton } from '@/components/sessions/settings-button';
@@ -108,7 +111,7 @@ import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
 import { TabAvant } from '@/components/sessions/tabs/tab-avant';
 import { ConventionEntreprisePanel } from '@/components/sessions/convention-entreprise-panel';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import {
   blocagesDocsEntreprise,
   type BlocageDocEntreprise,
@@ -141,12 +144,12 @@ const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
 function releveDeLaConventionPour(p: {
   sponsorOrgId: string;
   sponsorOrg: { legalForm: string };
-  person: { legalLinks: { role: string; organizationId: string }[] };
-}): boolean {
-  return releveDeLaConvention({
+  person: { legalLinks: PeriodLink[] };
+}, session: SessionPeriod & { regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null }): boolean {
+  return sessionUsesCompanyAgreement(session, {
     sponsorLegalForm: p.sponsorOrg.legalForm,
     roleChezSponsor:
-      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role ?? null,
+      legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role ?? null,
   });
 }
 
@@ -192,7 +195,7 @@ export default async function SessionDetailPage({
               // de faire disparaître un dossier de l'écran.
               legalLinks: {
                 select: {
-                  role: true,
+                  role: true, startDate: true, endDate: true,
                   // Ajouté le 02/09 : sans l'id de l'organisation, impossible
                   // de savoir QUELLE casquette relie l'apprenant à son
                   // commanditaire — et donc si celui-ci est son employeur.
@@ -208,7 +211,7 @@ export default async function SessionDetailPage({
               legalName: true,
               brandName: true,
               legalForm: true,
-              opcoCode: true,
+              opcoCode: true, ageficeProfile: { select: { id: true } },
               // Garde-fous AVANT génération des documents d'entreprise (28/08) :
               // le représentant signe la convention et porte le recueil du
               // besoin ; à défaut, le contact principal en tient lieu.
@@ -397,7 +400,7 @@ export default async function SessionDetailPage({
     sessionAssets.find((a) => !a.participantId && a.kind === 'ANALYSE_BESOIN')?.id ?? null;
   if (analyseEntrepriseAssetId) {
     for (const p of session.participants) {
-      if (!releveDeLaConventionPour(p)) continue;
+      if (!releveDeLaConventionPour(p, session)) continue;
       const m = assetsByParticipant.get(p.id) ?? new Map();
       // Ne jamais écraser une analyse nominative déjà rendue.
       if (!m.has('ANALYSE_BESOIN')) m.set('ANALYSE_BESOIN', analyseEntrepriseAssetId);
@@ -525,7 +528,7 @@ export default async function SessionDetailPage({
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
     sponsorOpcoCode: p.sponsorOrg.opcoCode,
-    liens: p.person.legalLinks,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
   }));
   const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
   const regimeParParticipant = new Map(
@@ -711,8 +714,8 @@ export default async function SessionDetailPage({
       })),
     },
     estEiSelfChezSponsor:
-      p.person.legalLinks.find((l) => l.organizationId === p.sponsorOrgId)?.role === 'EI_SELF',
-    relevantDeLaConvention: releveDeLaConventionPour(p),
+      legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role === 'EI_SELF',
+    relevantDeLaConvention: releveDeLaConventionPour(p, session),
   }));
   const participantPourSignataireParId = new Map(
     participantsPourSignataire.map((p) => [p.id, p] as const),
@@ -1009,7 +1012,7 @@ export default async function SessionDetailPage({
     : null;
   const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
   const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
-  const caTotalHT = (pricePerLearnerNum ?? 0) * session.participants.length;
+  const caTotalHT = session.regime ? sessionTotalHT(session, session.participants) : (pricePerLearnerNum ?? 0) * session.participants.length;
 
   // ── Inscriptions publiques par session (spec 2026-08-28) ──────────────
   // Demandes reçues via le lien public et pas encore traitées : elles
@@ -1169,7 +1172,7 @@ export default async function SessionDetailPage({
       analyseEntrepriseAssetId &&
       !pedagogicalAssets.has('ANALYSE_BESOIN') &&
       raw &&
-      releveDeLaConventionPour(raw)
+      releveDeLaConventionPour(raw, session)
     ) {
       pedagogicalAssets.set('ANALYSE_BESOIN', { id: analyseEntrepriseAssetId });
     }
@@ -1310,7 +1313,7 @@ export default async function SessionDetailPage({
       }
     >();
     for (const p of session.participants) {
-      if (!releveDeLaConventionPour(p)) continue;
+      if (!releveDeLaConventionPour(p, session)) continue;
       const g =
         map.get(p.sponsorOrgId) ??
         {
@@ -1463,8 +1466,8 @@ export default async function SessionDetailPage({
         pricePerLearner={pricePerLearnerNum}
         priceSlot={
           canEdit ? (
-            <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />
-          ) : undefined
+            <div className="space-y-1">{!session.regime && <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />}<SessionRegimeEditor sessionId={session.id} regime={session.regime} price={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum} /></div>
+          ) : session.regime === 'ENTREPRISE' ? <span>{Number(session.priceTotalHT).toLocaleString('fr-FR')} € HT au total</span> : undefined
         }
         locationLabel={locationLabel}
         participantsCount={session.participants.length}
@@ -1478,6 +1481,7 @@ export default async function SessionDetailPage({
           <>
             {canEdit && (
               <EditSessionDetailsDialog
+                declaredRegime={!!session.regime}
                 sessionId={session.id}
                 produits={programmesSelectionnables}
                 initial={{
@@ -1717,6 +1721,8 @@ export default async function SessionDetailPage({
               sessionId={session.id}
               sessionCode={session.code}
               sourceStartDate={session.startDate}
+              sourceRegime={session.regime}
+              sourcePrice={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum}
             />
             <DeleteSessionButton
               sessionId={session.id}
@@ -1826,6 +1832,7 @@ export default async function SessionDetailPage({
                   <>
                     {canEdit && (
                       <EditSessionDetailsDialog
+                declaredRegime={!!session.regime}
                         sessionId={session.id}
                         produits={programmesSelectionnables}
                         initial={{
@@ -1845,6 +1852,7 @@ export default async function SessionDetailPage({
                     )}
                     {canWrite && (
                       <AddParticipantDialog
+                        regime={session.regime}
                         sessionId={session.id}
                         defaultPrice={session.pricePerLearner === null ? null : Number(session.pricePerLearner)}
                         excludePersonIds={session.participants.map((p) => p.personId)}
@@ -1859,6 +1867,7 @@ export default async function SessionDetailPage({
                   était hors écran. Frustration Laurent 15/06. */}
               <div className="mt-3">
                 <SessionParticipantsList
+                  companyPrice={session.regime === 'ENTREPRISE'}
                   canManage={canWrite}
                   participants={matrixParticipants.map((p) => {
                     const raw = session.participants.find((sp) => sp.id === p.id);

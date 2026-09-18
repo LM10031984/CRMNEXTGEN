@@ -1,4 +1,5 @@
 'use server';
+import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 
 /**
  * ZIP « les documents de CET apprenant, pour CETTE session, sur CETTE phase »
@@ -27,7 +28,7 @@ import { validateRequest } from '@/lib/auth';
 import { downloadFile, DOCS_BUCKET } from '@/lib/storage';
 import { PED_KIND_TO_DOC_TYPE } from '@/lib/doc-scope';
 import { expandGroupConventions } from '@/lib/docs/convention-coverage';
-import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
+import { sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import { DOC_PHASES, type DocPhase } from '@/lib/docs/doc-phase';
 import { resolveParticipantPhaseDocs } from '@/lib/sessions/participant-phase-items';
 import {
@@ -68,10 +69,10 @@ export async function buildSessionLearnerZip(
         select: {
           firstName: true,
           lastName: true,
-          legalLinks: { select: { role: true, organizationId: true } },
+          legalLinks: { select: { role: true, organizationId: true, startDate: true, endDate: true } },
         },
       },
-      session: { select: { id: true, code: true, productId: true } },
+      session: { select: { id: true, code: true, productId: true, startDate: true, endDate: true, regime: true } },
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
@@ -171,10 +172,10 @@ export async function buildSessionLearnerZip(
 
   // Assets : indexés par le DocType de COLONNE (le QCM a kind='QCM' mais sa
   // colonne est 'EVALUATION_ACQUIS' — sans ce mapping, la pièce est invisible).
-  const releveConvention = releveDeLaConvention({
+  const releveConvention = sessionUsesCompanyAgreement(participant.session, {
     sponsorLegalForm: participant.sponsorOrg.legalForm,
     roleChezSponsor:
-      participant.person.legalLinks.find((l) => l.organizationId === participant.sponsorOrgId)
+      legalLinkAtSession(participant.person?.legalLinks ?? [], participant.sponsorOrgId, participant.session)
         ?.role ?? null,
   });
   const assetMap = new Map<string, { id: string }>();

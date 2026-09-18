@@ -30,6 +30,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
   mockEnv,
+  databaseRead,
   cronCtor,
   processVeilleJob,
   processReminderJob,
@@ -37,6 +38,7 @@ const {
   purgeTranscripts,
 } = vi.hoisted(
   () => ({
+    databaseRead: vi.fn().mockResolvedValue([]),
     mockEnv: {
       DATABASE_URL: 'postgres://test',
       DIRECT_URL: 'postgres://test',
@@ -57,6 +59,10 @@ vi.mock('@qualiof/shared/env', () => ({
     return mockEnv;
   },
 }));
+
+vi.mock('@qualiof/db', () => ({ prisma: { tenant: { findMany: databaseRead } } }));
+
+vi.mock('../audit-invoice-chronology', () => ({ scanChronologyBreaks: vi.fn().mockResolvedValue([]) }));
 
 vi.mock('croner', () => {
   class Cron {
@@ -90,6 +96,7 @@ vi.mock('../../src/lib/rgpd/purge-transcripts', () => ({
 }));
 
 beforeEach(() => {
+  databaseRead.mockClear();
   cronCtor.mockClear();
   processVeilleJob.mockClear();
   processReminderJob.mockClear();
@@ -183,4 +190,10 @@ describe('invoice-reminder-worker — enregistrement croner', () => {
     expect(processReminderJob).toHaveBeenCalledTimes(1);
     expect(processReminderJob).toHaveBeenCalledWith({ triggered_by: 'cron' });
   });
+});
+
+ it('le callback du cron ne consulte aucune vraie table dans un test unitaire', async () => {
+  await import('../invoice-reminder-worker');
+  await cronCtor.mock.calls[0]![2]();
+  expect(databaseRead).not.toHaveBeenCalled();
 });
