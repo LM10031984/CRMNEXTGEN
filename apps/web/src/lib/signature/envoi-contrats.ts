@@ -161,6 +161,7 @@ export type RaisonRefus =
   | 'DEJA_SIGNE'
   | 'ENVOI_EN_COURS'
   | 'SIGNATAIRE_SANS_EMAIL'
+  | 'SIGNATAIRE_SANS_MOBILE'
   | 'SIGNATAIRE_OF_INCOMPLET'
   | 'REGENERATION_IMPOSSIBLE'
   | 'AUCUN_CHAMP_DE_SIGNATURE'
@@ -195,6 +196,8 @@ export interface SignataireResolu {
   email: string;
   sourceNom: SourceRepresentant;
   sourceEmail: SourceEmailRepresentant;
+  verification?: 'email' | 'sms';
+  phone?: string;
 }
 
 /**

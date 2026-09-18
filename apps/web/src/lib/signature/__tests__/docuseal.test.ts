@@ -149,12 +149,29 @@ describe('DocuSeal — createRequest', () => {
     expect(init.headers['Content-Type']).toBe('application/json');
   });
 
-  it('coupe l’envoi d’emails côté DocuSeal (D-9 — QualiOF envoie via son mailer)', async () => {
+  it('coupe les invitations côté DocuSeal (D-9 — QualiOF envoie via son mailer)', async () => {
     await provider().createRequest(CREATE_INPUT);
     const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
 
     expect(body.send_email).toBe(false);
     expect(body.submitters.every((s: { send_email: boolean }) => s.send_email === false)).toBe(true);
+  });
+
+  it('exige un code email pour chaque signataire sans invitation doublonnée ni SMS', async () => {
+    await provider().createRequest(CREATE_INPUT);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+
+    expect(body.send_email).toBe(false);
+    expect(body.submitters).toHaveLength(2);
+    for (const [index, signer] of body.submitters.entries()) {
+      expect(signer).toMatchObject({
+        email: CREATE_INPUT.signers[index]!.email,
+        require_email_2fa: true,
+        send_email: false,
+        send_sms: false,
+        metadata: { lang: 'fr-FR' },
+      });
+    }
   });
 
   it('demande le certificat de signature en français, sur CHAQUE signataire', async () => {
@@ -168,6 +185,30 @@ describe('DocuSeal — createRequest', () => {
     expect(
       body.submitters.every((s: { metadata?: { lang?: string } }) => s.metadata?.lang === 'fr-FR'),
     ).toBe(true);
+  });
+
+  it('active le code SMS uniquement pour le signataire explicitement sélectionné', async () => {
+    await provider().createRequest({
+      ...CREATE_INPUT,
+      signers: CREATE_INPUT.signers.map((s, i) => i === 0
+        ? { ...s, verification: 'sms' as const, phone: '06 00 00 00 00' }
+        : s),
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(body.submitters[0]).toMatchObject({
+      phone: '+33600000000', require_phone_2fa: true, require_email_2fa: false,
+      send_email: false, send_sms: false, metadata: { lang: 'fr-FR' },
+    });
+    expect(body.submitters[1].require_email_2fa).toBe(true);
+    expect(body.submitters[1].phone).toBeUndefined();
+  });
+
+  it.each([undefined, '', '063100000', '+33invalid'])('refuse le SMS sans mobile valide (%s), avant tout appel', async (phone) => {
+    await expect(provider().createRequest({
+      ...CREATE_INPUT,
+      signers: [{ ...CREATE_INPUT.signers[0]!, verification: 'sms', ...(phone === undefined ? {} : { phone }) }],
+    })).rejects.toThrow('numéro mobile valide obligatoire');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('préserve l’ordre de signature client → OF (D-3)', async () => {

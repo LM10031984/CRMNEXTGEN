@@ -29,10 +29,22 @@ toucher au métier.
 
 ## Mesures techniques côté QualiOF
 
-- **Aucun email envoyé par DocuSeal** (`send_email: false` sur l'envoi et sur
+- **Invitations envoyées par QualiOF** (`send_email: false` sur l'envoi et sur
   chaque signataire) : les liens de signature partent du mailer QualiOF (SMTP Google Workspace
-  depuis le 2026-09-02, voir [google.md](google.md)), qui est fail-closed et dispose d'une catégorie décochable par tenant. Le prestataire ne
-  constitue donc pas de liste de diffusion à partir de nos signataires.
+  depuis le 2026-09-02, voir [google.md](google.md)), qui est fail-closed et dispose d'une catégorie décochable par tenant. Le prestataire
+  envoie séparément les **codes de vérification par email** : les nouveaux
+  envois exigent par défaut `require_email_2fa: true` pour chaque signataire avant l'accès
+  aux documents. L'adaptateur permet aussi un choix explicite SMS avec un mobile
+  fourni par l'appelant (`require_phone_2fa: true`, à la place du code email).
+  Le CRM exige le SMS quand le signataire résolu est l'apprenant (stagiaire,
+  indépendant signant pour lui-même ou repli sur l'apprenant). Le mobile vient
+  de sa fiche et apparaît au récapitulatif. Un mobile absent ou invalide bloque
+  l'envoi ; aucun repli automatique sur le code email. L'organisme et un
+  représentant d'entreprise distinct conservent le code email.
+  Les mobiles français saisis en 06/07 sont convertis en +336/+337 à l'envoi,
+  sans réécriture des coordonnées enregistrées. Les autres pays nécessitent
+  un indicatif international explicite. Les codes sont gérés par DocuSeal, sans stockage dans QualiOF.
+  Cette modification ne s'applique pas rétroactivement aux demandes existantes.
 - **Webhooks authentifiés** : HMAC-SHA256 sur `timestamp.corps`, fenêtre de rejeu
   de 5 minutes, comparaison à temps constant. **Sans secret configuré, tout
   webhook est rejeté** — jamais de « accepté par défaut ».
