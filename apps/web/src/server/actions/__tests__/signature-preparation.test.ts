@@ -143,6 +143,7 @@ function tnsViaSonEi(over: Record<string, unknown> = {}) {
       firstName: 'Florent',
       lastName: 'Hausswirth',
       email: 'florent@ei.fr',
+      phone: '0631056390',
       legalLinks: [
         {
           role: 'EI_SELF',
@@ -331,6 +332,8 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
       email: 'florent@ei.fr',
       sourceNom: 'APPRENANT_EI_SELF',
       sourceEmail: 'PERSON',
+      verification: 'sms',
+      phone: '+33631056390',
     });
     expect(convention.empechements).toEqual([]);
   });
@@ -359,6 +362,16 @@ describe('preparerEnvoiSignature — l’aperçu du PDF qui partira', () => {
       P_TNS,
       expect.objectContaining({ signatureTags: true }),
     );
+  });
+
+  it('annonce le mobile manquant dès le récapitulatif', async () => {
+    sessionAvec([tnsViaSonEi({ person: { phone: null } })]);
+    docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
+    const r = await preparerEnvoiSignature({ sessionId: SESSION_ID, scope: 'BEFORE' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.envois.find((e) => e.docType === 'AGEFICE')?.empechements)
+      .toContainEqual({ raison: 'SIGNATAIRE_SANS_MOBILE', message: expect.stringContaining('fiche apprenant') });
   });
 
   it('journalise `document.regenerated_for_signature` avec l’ancien et le nouveau hash', async () => {

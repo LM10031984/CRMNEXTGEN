@@ -253,6 +253,8 @@ describe('Le couple qui signera — quel NOM, quelle ADRESSE, et d’où viennen
             email: 'jean@dupont.fr',
             sourceNom: 'APPRENANT_STAGIAIRE',
             sourceEmail: 'PERSON',
+            verification: 'sms',
+            phone: '+33631056390',
           },
         },
       ]),
@@ -260,6 +262,7 @@ describe('Le couple qui signera — quel NOM, quelle ADRESSE, et d’où viennen
     ouvrir();
     await waitFor(() => expect(screen.getByTitle(/aperçu/i)).toBeTruthy());
     expect(document.body.textContent).toContain('l’apprenant lui-même');
+    expect(document.body.textContent).toContain('Vérification par SMS : +33631056390');
   });
 });
 

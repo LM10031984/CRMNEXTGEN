@@ -107,6 +107,7 @@ function tnsViaSonEi() {
       firstName: 'Florent',
       lastName: 'Hausswirth',
       email: EMAIL_TNS,
+      phone: '0631056390',
       legalLinks: [
         {
           role: 'EI_SELF',

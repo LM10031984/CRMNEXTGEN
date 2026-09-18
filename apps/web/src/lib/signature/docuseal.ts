@@ -14,14 +14,17 @@
  * partir du PDF déjà rendu par WeasyPrint, sans passer par un Template DocuSeal
  * à maintenir en double. Les champs sont posés par les ancres `{{…}}` (D-7).
  *
- * Emails : `send_email: false` partout (D-9). C'est QualiOF qui écrit aux
- * signataires, via son mailer fail-closed et sa catégorie décochable.
+ * Invitations : `send_email: false` partout (D-9). QualiOF envoie les liens
+ * via son mailer. DocuSeal envoie séparément les codes de vérification email
+ * exigés par défaut avant l'accès aux documents (`require_email_2fa: true`).
+ * Un signataire peut explicitement utiliser un code SMS à la place.
  *
  * Documentation : https://www.docuseal.com/docs/api — spécification OpenAPI
  * https://console.docuseal.com/openapi.yml (vérifiée le 04/09/2026).
  */
 
 import crypto from 'node:crypto';
+import { signaturePhone } from './phone';
 import type {
   CreateSignatureRequestInput,
   CreateSignatureRequestResult,
@@ -165,6 +168,9 @@ export function createDocusealProvider(config: DocusealConfig): SignatureProvide
     name: 'docuseal',
 
     async createRequest(input: CreateSignatureRequestInput): Promise<CreateSignatureRequestResult> {
+      for (const signer of input.signers) {
+        if (signer.verification === 'sms') signaturePhone(signer.phone);
+      }
       const submitters = [...input.signers]
         .sort((a, b) => a.order - b.order)
         .map((s) => ({
@@ -173,9 +179,16 @@ export function createDocusealProvider(config: DocusealConfig): SignatureProvide
           email: s.email,
           order: s.order,
           external_id: `${input.externalId}:${s.role}`,
-          // D-9 — QualiOF envoie les emails, pas DocuSeal.
+          // D-9 — QualiOF envoie les invitations ; DocuSeal gère le code.
           send_email: false,
           send_sms: false,
+          // Le lien seul ne suffit plus : code email par défaut, ou code SMS
+          // explicitement demandé pour le mobile fourni par l'appelant.
+          // send_email ne désactive que l'invitation, pas ce code d'accès.
+          require_email_2fa: s.verification !== 'sms',
+          ...(s.verification === 'sms'
+            ? { phone: signaturePhone(s.phone), require_phone_2fa: true }
+            : {}),
           // Le certificat de signature part au dossier AGEFICE : un financeur
           // français doit pouvoir le lire. DocuSeal le compose dans la langue
           // du **dernier signataire ayant complété** — d'où la pose sur chaque

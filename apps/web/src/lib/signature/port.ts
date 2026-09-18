@@ -38,6 +38,10 @@ export interface SignatureSignerInput {
   role: string;
   name: string;
   email: string;
+  /** Code email par défaut ; SMS uniquement sur demande explicite. */
+  verification?: 'email' | 'sms';
+  /** Mobile français (06/07) ou international, obligatoire pour le SMS. */
+  phone?: string;
   /** 0 signe en premier. D-3 : client (0) puis OF (1). */
   order: number;
 }

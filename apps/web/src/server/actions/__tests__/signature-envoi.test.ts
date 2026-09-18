@@ -148,6 +148,7 @@ function tnsViaSonEi() {
       firstName: 'Florent',
       lastName: 'Hausswirth',
       email: 'florent@ei.fr',
+      phone: '0631056390',
       legalLinks: [
         {
           role: 'EI_SELF',
@@ -319,6 +320,19 @@ beforeEach(() => {
 });
 
 describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
+  it.each(['', '0131056390', '0631'])('refuse un apprenant sans mobile valide (%s) avant l’appel prestataire', async (phone) => {
+    const participant = tnsViaSonEi();
+    participant.person.phone = phone;
+    sessionAvec([participant]);
+    docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
+    const r = await sendForSignature({ sessionId: SESSION_ID, scope: 'BEFORE',
+      cibles: [{ cle: `AGEFICE:${P_TNS}`, hashConfirme: 'hash-doc-age' }] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.refus.map((x) => x.raison)).toEqual(['SIGNATAIRE_SANS_MOBILE']);
+    expect(createRequestMock).not.toHaveBeenCalled();
+    expect(downloadFileMock).not.toHaveBeenCalled();
+  });
   it('(a) PUISSANCE — hash divergent : refus, aucun appel prestataire, aucune écriture', async () => {
     sessionAvec([tnsViaSonEi()]);
     docs = [doc({ id: 'doc-age', type: 'AGEFICE', participantId: P_TNS, entityId: P_TNS })];
@@ -438,6 +452,8 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
         name: 'Florent HAUSSWIRTH',
         email: 'florent@ei.fr',
         order: 0,
+        verification: 'sms',
+        phone: '+33631056390',
       },
     ]);
     // L'OF ne figure NULLE PART : son exemplaire porte déjà l'image de sa
@@ -510,7 +526,7 @@ describe('sendForSignature — n’envoie que ce qui a été confirmé', () => {
     const appel = createRequestMock.mock.calls[0]![0] as { signers: unknown[] };
     expect(appel.signers).toHaveLength(2);
     expect(appel.signers).toEqual([
-      { role: 'Stagiaire', name: 'Florent HAUSSWIRTH', email: 'florent@ei.fr', order: 0 },
+      { role: 'Stagiaire', name: 'Florent HAUSSWIRTH', email: 'florent@ei.fr', order: 0, verification: 'sms', phone: '+33631056390' },
       {
         role: 'Organisme de formation',
         name: 'Laurent MARX',

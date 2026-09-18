@@ -620,6 +620,12 @@ function PieceARelire({
             {envoi.signataire.nom} — nom : {LIBELLE_SOURCE_NOM[envoi.signataire.sourceNom]} ·
             adresse : {LIBELLE_SOURCE_EMAIL[envoi.signataire.sourceEmail]}
           </p>
+          {envoi.signataire.verification === 'sms' && (
+            <p className="mt-1 text-xs">
+              Vérification par SMS : {envoi.signataire.phone} (mobile de la fiche apprenant).
+              {envoi.signataireOf !== null && ' Organisme : vérification par e-mail.'}
+            </p>
+          )}
         </div>
       )}
 

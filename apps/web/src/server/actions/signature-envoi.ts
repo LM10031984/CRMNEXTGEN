@@ -134,6 +134,7 @@ import {
   type ResultatNotification,
 } from '@/lib/signature/envoi-contrats';
 import { notifierSignataire } from '@/lib/signature/notifier';
+import { verificationApprenant } from '@/lib/signature/verification-apprenant';
 import { loadOfConfig } from '@/lib/of-config';
 
 /**
@@ -167,7 +168,7 @@ interface ParticipantCharge {
   personId: string;
   sponsorOrgId: string | null;
   nom: string;
-  apprenant: { firstName: string; lastName: string; email: string | null };
+  apprenant: { firstName: string; lastName: string; email: string | null; phone: string | null };
   /** L'organisation bénéficiaire, dans la forme attendue par la cascade. */
   org: OrganisationRepresentee | null;
   estEiSelfChezSponsor: boolean;
@@ -209,6 +210,7 @@ async function chargerContexte(
               firstName: true,
               lastName: true,
               email: true,
+              phone: true,
               legalLinks: {
                 select: {
                   role: true, startDate: true, endDate: true,
@@ -270,6 +272,7 @@ async function chargerContexte(
         firstName: p.person.firstName,
         lastName: p.person.lastName,
         email: p.person.email,
+        phone: p.person.phone,
       },
       org: p.sponsorOrg
         ? {
@@ -553,6 +556,12 @@ export async function preparerEnvoiSignature(
     if (!client.ok) {
       empechements.push({ raison: 'SIGNATAIRE_SANS_EMAIL', message: client.error });
     }
+    const verification = client.ok
+      ? verificationApprenant(client.signataire, couverts[0]?.apprenant.phone)
+      : null;
+    if (verification && !verification.ok) {
+      empechements.push({ raison: 'SIGNATAIRE_SANS_MOBILE', message: verification.error });
+    }
 
     // Le signataire de l'organisme est vérifié DÈS L'APERÇU : découvrir au clic
     // que Paramètres organisme est incomplet obligerait à annuler une demande
@@ -568,7 +577,9 @@ export async function preparerEnvoiSignature(
       role: envoi.role,
       participantIds: envoi.participantIds,
       document,
-      signataire: client.ok ? client.signataire : null,
+      signataire: client.ok
+        ? { ...client.signataire, ...(verification?.ok ? verification.configuration : {}) }
+        : null,
       signataireOf: ofDeLaPiece(envoi.docType),
       empechements,
     });
@@ -712,6 +723,11 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       refuser('SIGNATAIRE_SANS_EMAIL', client.error);
       continue;
     }
+    const verification = verificationApprenant(client.signataire, couverts[0]?.apprenant.phone);
+    if (!verification.ok) {
+      refuser('SIGNATAIRE_SANS_MOBILE', verification.error);
+      continue;
+    }
 
     const signers: SignatureSignerInput[] = [];
     const roleClient = roleAncreClient(envoi.docType);
@@ -728,6 +744,7 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
       name: client.signataire.nom,
       email: client.signataire.email,
       order: rangClient,
+      ...verification.configuration,
     });
     if (roleOf !== null && signataireOf.ok) {
       signers.push({
@@ -840,6 +857,7 @@ export async function sendForSignature(input: unknown): Promise<SendForSignature
                 email: client.signataire.email,
                 sourceNom: client.signataire.sourceNom,
                 sourceEmail: client.signataire.sourceEmail,
+                ...verification.configuration,
               },
               status: { before: doc.status, after: STATUT_ENVOYE },
             },
