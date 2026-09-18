@@ -197,6 +197,7 @@ for (const part of parts) {
       beneficiaireRcsVille: orgAddr?.city ?? null,
       beneficiaireRepresentantNom: repr,
       stagiaires: [{ prenom: part.person.firstName, nom: part.person.lastName, email: part.person.email }],
+      conventionType: 'INDIVIDUEL',
       sessionParticipantCount: session._count.participants,
       sessionStartDate: session.startDate, sessionEndDate: session.endDate, conventionDate, sessionLieu: lieu ?? of.addressFull,
       produitTitre: session.name ?? p.title, produitDureeHeures: p.durationHours,

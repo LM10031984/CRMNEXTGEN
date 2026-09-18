@@ -62,6 +62,7 @@ function conventionData(overrides: Partial<ConventionData> = {}): ConventionData
     beneficiaireRcsVille: 'Nice',
     beneficiaireRepresentantNom: 'Gilles BLANCHON',
     stagiaires: [{ prenom: 'Sophie', nom: 'Augustin', email: null }],
+    conventionType: 'INDIVIDUEL',
     sessionParticipantCount: 1,
     sessionStartDate: new Date('2026-10-07T00:00:00Z'),
     sessionEndDate: new Date('2026-12-16T00:00:00Z'),

@@ -137,6 +137,7 @@ describe('generateConventionEntrepriseCore — groupe par commanditaire', () => 
     const data = renderMock.mock.calls[0]![0] as { stagiaires: unknown[]; beneficiaireRaisonSociale: string };
     expect(data.stagiaires).toHaveLength(2);
     expect(renderMock.mock.calls[0]![0].sessionParticipantCount).toBe(5);
+    expect(renderMock.mock.calls[0]![0].conventionType).toBe('ENTREPRISE');
     expect(findManyMock.mock.calls[0]![0].where.enrollmentStatus).toEqual({ not: 'CANCELLED' });
     expect(findManyMock.mock.calls[0]![0].include.session.include._count).toEqual({
       select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } },
@@ -325,6 +326,65 @@ describe('generateConventionCore — garde anti-doublon', () => {
     expect(res.documentId).toBe('doc-groupe');
     // Aucun nouveau document individuel.
     expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { regime: null, options: { force: true } },
+    { regime: 'INDIVIDUEL', options: { force: true } },
+    { regime: null, options: undefined },
+    { regime: null, options: { signatureTags: true } },
+  ])('régénère un dossier individuel malgré une ancienne convention au format entreprise (%j)', async ({ regime, options }) => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      ...PARTICIPANT,
+      sponsorOrg: { ...PARTICIPANT.sponsorOrg, legalForm: 'EI' },
+      person: { ...PARTICIPANT.person, legalLinks: [{ organizationId: PARTICIPANT.sponsorOrgId, role: 'EI_SELF' }] },
+      session: { ...PARTICIPANT.session, regime, _count: { participants: 2 } },
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue({ id: 'ancienne-convention-entreprise', status: 'generated', signedPdfUrl: null });
+    prisma.document.create = createMock;
+    const { generateConventionCore } = await importCore();
+    const result = await generateConventionCore('tnt-1', 'sp-1', options);
+    expect(result.ok).toBe(true);
+    expect(result.skipped).not.toBe(true);
+    expect(result.documentId).not.toBe('ancienne-convention-entreprise');
+    expect(renderMock.mock.calls[0]![0]).toMatchObject({ conventionType: 'INDIVIDUEL', sessionParticipantCount: 2, produitPriceHTPerStagiaire: 700 });
+    expect(createMock.mock.calls[0]![0].data).toMatchObject({ entityType: 'participant', participantId: 'sp-1' });
+  });
+
+  it.each([
+    { status: 'signed', signedPdfUrl: null },
+    { status: 'sent_for_signature', signedPdfUrl: null },
+    { status: 'generated', signedPdfUrl: 'signed.pdf' },
+  ])('conserve une ancienne convention engagée au lieu de créer un document concurrent (%j)', async (signature) => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      ...PARTICIPANT, sponsorOrg: { ...PARTICIPANT.sponsorOrg, legalForm: 'EI' },
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue({ id: 'ancienne-convention-signee', ...signature });
+    const { generateConventionCore } = await importCore();
+    const result = await generateConventionCore('tnt-1', 'sp-1', { force: true });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/signée|signature/);
+    expect(renderMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { legalForm: 'SARL', role: 'SALARIE' },
+    { legalForm: 'EI', role: 'SALARIE' },
+  ])('garde la convention commune pour un employeur même avec force (%j)', async ({ legalForm, role }) => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn().mockResolvedValue({
+      ...PARTICIPANT,
+      sponsorOrg: { ...PARTICIPANT.sponsorOrg, legalForm },
+      person: { ...PARTICIPANT.person, legalLinks: [{ organizationId: PARTICIPANT.sponsorOrgId, role }] },
+    });
+    prisma.document.findFirst = vi.fn().mockResolvedValue({ id: 'convention-employeur', status: 'generated' });
+    const { generateConventionCore } = await importCore();
+    expect(await generateConventionCore('tnt-1', 'sp-1', { force: true })).toMatchObject({
+      ok: true, skipped: true, documentId: 'convention-employeur',
+    });
+    expect(renderMock).not.toHaveBeenCalled();
   });
 
   it('génère normalement quand aucune convention groupe ne couvre le participant', async () => {
