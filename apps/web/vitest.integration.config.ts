@@ -11,6 +11,7 @@ export default defineConfig({
     include: [
       'scripts/__tests__/dedupe.merge.test.ts',
       'src/server/actions/__tests__/invoices-lines-contract.test.ts',
+      'src/**/*.integration.test.ts',
     ],
   },
 });

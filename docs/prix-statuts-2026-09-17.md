@@ -6,7 +6,7 @@ Décisions source : contexte QualiOF fourni par Laurent le 17/09/2026. Base de c
 
 Lecture du code des tests, rattachements, sessions, inscriptions, programmes, conventions, factures, éligibilité AGEFICE et signatures. Les quatre chemins d'inscription trouvés dans l'application sont : `addParticipant`, `createSessionFull`, `enrollFromRequest` et le nouvel écrivain transactionnel partagé. Le changement de commanditaire et les changements de dates ont aussi été contrôlés.
 
-Aucune lecture ni écriture de la base réelle n'a été effectuée pour ce chantier. Les chiffres 87 sessions, 376 inscriptions, 123 produits et 486 modules proviennent du contexte utilisateur ; ce ne sont pas un nouveau relevé. Aucune intervention sur SES-0115, SES-0116, les six dossiers AGEFICE, la session de janvier de Katia ou PROD-0062. Aucun document réel généré, aucun push, aucun merge.
+Aucune lecture ni écriture de la base réelle n'a été effectuée pour ce chantier. Les chiffres 87 sessions, 376 inscriptions, 123 produits et 486 modules proviennent du contexte utilisateur ; ce ne sont pas un nouveau relevé. Aucune intervention sur SES-0115, SES-0116, les six dossiers AGEFICE, la session de janvier de Katia ou PROD-0062. Aucun document réel généré, aucun merge ni déploiement.
 
 ## Comportement réalisé
 
@@ -30,9 +30,20 @@ Sur données factices et doubles de base uniquement :
 - Sonde de puissance : désactivation temporaire du refus de payeur → deux tests échouent ; restauration → six tests du garde réussissent. La sonde n'est pas conservée dans le code.
 - Prévisualisation sans écriture, clé périmée, transaction auditée, comptage des mises à jour effectives et rejeu sans second journal sont couverts par tests unitaires.
 
-Les tests d'intégration PostgreSQL, le garde de dérive sur une base réinitialisée et les parcours navigateur complets n'ont pas été exécutés. Ils écrivent en base et nécessitent la validation humaine imposée par le contexte. Les unités ne prouvent donc pas encore les propriétés transactionnelles sous concurrence sur PostgreSQL réel.
+### Complément du 18 septembre — autorisation de tester et pousser
 
-## Migration proposée — non appliquée
+Après la demande explicite « ok fais les tests et pousse le code », les contrôles suivants ont été exécutés sur PostgreSQL 16.13 dans un nouveau conteneur jetable `qualiof-regime-tests-20260918`, exposé uniquement sur `127.0.0.1:55439`, sans volume existant ni environnement de production. Son contenu a été vérifié : aucune table métier au départ, puis zéro tenant, produit et module après migration.
+
+- `check:schema` sur `qualiof_regime_drift` : aucune dérive après rejeu complet des migrations.
+- `prisma migrate deploy` sur `qualiof_regime_test` : 33 migrations appliquées ; second passage sans migration en attente.
+- Tests d'intégration : **13 réussis**, deux passages, dont **7 nouveaux tests** de régime et de rattachement sur une vraie base. Ils vérifient le forfait stable après ajout du troisième agent commercial payé par une SAS ; la répartition exacte des centimes ; la prévisualisation sans écriture ; le refus d'une confirmation périmée ; le rollback de l'inscription et des parts si l'audit échoue sur une contrainte FK ; les refus de payeur incompatible et de forfait engagé ; les inscriptions concurrentes avec rejeu d'un éventuel conflit sérialisable ; le changement de rôle avec conservation de l'ancienne période et rejeu sans duplication.
+- `pnpm test --force` : **4 367 tests unitaires réussis**, 2 ignorés, aucun résultat repris du cache.
+- `pnpm lint --force` et TypeScript application : codes de sortie 0. Seul avertissement : attribut alt préexistant dans `parametres/page.tsx:228`.
+- Après les tests : zéro tenant, utilisateur, produit, module, session, inscription et journal d'audit. Les fixtures ont été nettoyées.
+
+Les parcours navigateur complets n'ont pas été exécutés. Les tests de concurrence vérifient le résultat et la possibilité de rejouer un conflit ; ils ne constituent pas un test de charge. Les résultats détaillés des gates sont consignés dans `verification/prix-statuts-2026-09-18.md`.
+
+## Migration additive — appliquée uniquement aux bases jetables
 
 Fichier : `packages/db/prisma/migrations/20260917180000_session_regime/migration.sql`.
 
@@ -45,7 +56,7 @@ ALTER TABLE "TrainingSession"
 
 Aucun UPDATE, aucune valeur par défaut, aucun remplissage rétroactif. Le diff généré hors base confirme ces seuls objets. Un déploiement de l'application nécessite cette migration avant le nouveau code.
 
-Avant toute écriture : identifier la cible par son contenu, produire son dry-run, arrêter pour validation humaine, puis appliquer de façon auditée et vérifier le rejeu. Aucun accord pour une migration ou une correction de données réelles n'est déduit de la demande de modification du code. Les gates base et intégration doivent passer avant tout push.
+Avant toute écriture réelle : identifier la cible par son contenu, produire son dry-run, arrêter pour validation humaine, puis appliquer de façon auditée et vérifier le rejeu. Aucun accord pour une migration ou une correction de données réelles n'est déduit de l'autorisation de tester et pousser. Les gates base et intégration ont passé avant publication de la branche.
 
 ## Points restant à décider avec les données réelles
 
