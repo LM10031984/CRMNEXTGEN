@@ -6,19 +6,17 @@
  * se monte par personne. Le bandeau « Agents commerciaux indépendants » de la
  * maquette regroupe quatre payeurs, donc quatre devis.
  *
- * **Ce que le devis porte, et ce qu'il ne porte pas** (décision D-15, à
- * confirmer par Laurent) : le devis reproduit le **coût pédagogique**, celui
- * qui sert d'assiette aux droits — pas le reste à charge après geste
- * commercial. Une remise portée en ligne négative sur le devis diminuerait le
- * coût déclaré, donc la prise en charge : le client paierait lui-même le
- * cadeau qu'on prétend lui faire. La prise en charge attendue et le geste
- * commercial sont donc écrits en clair dans les notes du devis, pas retranchés
- * de ses lignes.
+ * Décision Laurent du 18/09/2026 : le devis et la facture portent le coût
+ * pédagogique intégral. Le geste commercial est préparé par payeur dans les
+ * notes, puis matérialisé par un avoir distinct sur sa facture. Le coût net
+ * reste justifiable auprès du financeur avec ces deux pièces ; la préparation
+ * commerciale ne vaut ni émission de l’avoir, ni accord du financeur.
  *
  * C'est ce qui rend le test de contrat exact : **Σ lignes de devis = coût
  * pédagogique de la proposition, au centime**.
  */
 
+import { commercialCreditPlan } from './commercial-credit';
 import { MENTION_EXONERATION_TVA } from '../tva-exoneration';
 import { plural } from './plural';
 import type { PricingSynthesis } from './pricing';
@@ -104,7 +102,11 @@ export function buildQuoteDrafts(args: {
       recipientEmail: p.payer.email,
       recipientSiret: p.payer.siret,
       title: `Formation — ${args.proposalReference}`,
-      notes: buildQuoteNotes({ synthesis, payerId: p.payer.id, proposalReference: args.proposalReference }),
+      notes: buildQuoteNotes({
+        synthesis,
+        payerId: p.payer.id,
+        proposalReference: args.proposalReference,
+      }),
       lines,
       amountHt,
     };
@@ -130,7 +132,9 @@ export function buildQuoteNotes(args: {
   const parts: string[] = [MENTION_PONCTUEE];
 
   for (const c of payer.coverages) {
-    parts.push(`Prise en charge estimée ${c.funder === 'OPCO_EP' ? 'OPCO EP' : 'AGEFICE'} : ${eur.format(c.amount)} — ${c.label}.`);
+    parts.push(
+      `Prise en charge estimée ${c.funder === 'OPCO_EP' ? 'OPCO EP' : 'AGEFICE'} : ${eur.format(c.amount)} — ${c.label}.`,
+    );
   }
 
   if (payer.coverage > 0) {
@@ -139,11 +143,14 @@ export function buildQuoteNotes(args: {
     );
   }
 
-  if (synthesis.discount) {
+  const credit = commercialCreditPlan(synthesis).find((p) => p.payerId === args.payerId);
+  if (synthesis.discount && credit && credit.amountHt > 0) {
     parts.push(
-      `Geste commercial consenti sur le reste à charge de la proposition ${args.proposalReference} : ` +
-        `${eur.format(synthesis.discount.amount)} — motif « ${synthesis.discount.reason} ». ` +
-        `Il ne modifie ni le coût pédagogique ci-dessus ni les droits mobilisés.`,
+      `Avoir commercial à émettre sur la facture de ce payeur : ${eur.format(credit.amountHt)} HT — ` +
+        `proposition ${args.proposalReference}, motif « ${synthesis.discount.reason} ». ` +
+        'Ce montant est la part du geste commercial attribuée à ce payeur au prorata des restes à charge. ' +
+        'Les lignes du devis restent au coût pédagogique intégral. L’avoir sera une pièce distincte rattachée à la facture ; il n’est pas encore émis. ' +
+        'La facture et l’avoir permettent de justifier le coût net auprès du financeur.',
     );
   }
 

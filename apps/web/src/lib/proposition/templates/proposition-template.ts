@@ -64,8 +64,6 @@ function esc(value: unknown): string {
 
 const nn = (n: number) => String(n).padStart(2, '0');
 
-
-
 function sectionTitle(no: number, title: string): string {
   return `<h2><span class="no">${nn(no)}</span>${esc(title)}</h2>`;
 }
@@ -139,7 +137,8 @@ function renderModules(axe: PropositionData['content']['axes'][number]): string 
         <b>${esc(m.title)}</b>
         ${m.sourceTitle ? `<span class="src">issu de ${esc(m.sourceTitle)}</span>` : ''}
         ${m.needLabel ? `<span class="need">${esc(m.needLabel)}</span>` : ''}
-        ${m.quotes.length ? `<span class="need">Constat du diagnostic : ${m.quotes.map(esc).join(' · ')}</span>` : ''}
+        ${m.quotes.length ? `<span class="need">${m.selection?.kind ? 'Contexte métier du complément' : 'Constat du diagnostic'} : ${m.quotes.map(esc).join(' · ')}</span>` : ''}
+        ${m.selection?.rationale ? `<span class="need">${esc(m.selection.rationale)}</span>` : ''}
         ${m.selection ? `<span class="need">${m.selection.aiUsage ? 'Mise en pratique avec l’IA — ' : 'Résultat attendu — '}${esc(m.selection.outcome)}</span>` : ''}
       </li>`,
     )
@@ -149,13 +148,19 @@ function renderModules(axe: PropositionData['content']['axes'][number]): string 
 
 function renderAxes(data: PropositionData): string {
   const gaps = data.content.uncoveredNeeds?.length
-    ? `<p class="notice"><b>Besoins restant à traiter :</b> ${data.content.uncoveredNeeds.map(esc).join(' · ')}. Ces points ne sont pas couverts par les ateliers de cette proposition.</p>` : '';
+    ? `<p class="notice"><b>Besoins restant à traiter :</b> ${data.content.uncoveredNeeds.map(esc).join(' · ')}. Ces points ne sont pas couverts par les ateliers de cette proposition.</p>`
+    : '';
   if (data.content.axes.length === 0) {
-    return gaps + `<p class="notice">Aucun axe n’est encore composé. Le parcours s’assemble depuis la bibliothèque de modules : chaque module répond à un point de douleur relevé au diagnostic, et un point de douleur métier reçoit un module métier.</p>`;
+    return (
+      gaps +
+      `<p class="notice">Aucun axe n’est encore composé. Le parcours s’assemble depuis la bibliothèque de modules : chaque module répond à un point de douleur relevé au diagnostic, et un point de douleur métier reçoit un module métier.</p>`
+    );
   }
-  return gaps + data.content.axes
-    .map(
-      (axe) => `<div class="phase">
+  return (
+    gaps +
+    data.content.axes
+      .map(
+        (axe) => `<div class="phase">
       <div class="tag">${esc(axe.label)}<small>${plural(axe.halfDays, 'demi-journée')}${axe.periodLabel ? ` · ${esc(axe.periodLabel)}` : ''}</small></div>
       <div class="body">
         <h3>${esc(axe.title)}</h3>
@@ -164,8 +169,9 @@ function renderAxes(data: PropositionData): string {
         <div class="why">Pourquoi : ${esc(axe.why)}</div>
       </div>
     </div>`,
-    )
-    .join('');
+      )
+      .join('')
+  );
 }
 
 // ── Page 2 — planning et budget mobilisable ─────────────────────────────────
@@ -336,10 +342,7 @@ function renderPricingTable(data: PropositionData): string {
         .map(
           (l) =>
             `<tr><td>${esc(l.description)}</td><td class="num">${participants}</td><td class="num">${l.halfDays}</td><td class="num">${l.conventionedHours} h</td><td class="num">${money(l.unitPriceHt)}</td><td class="num">${money(
-              payers.reduce(
-                (s, p) => s + (p.lines.find((x) => x.id === l.id)?.totalHt ?? 0),
-                0,
-              ),
+              payers.reduce((s, p) => s + (p.lines.find((x) => x.id === l.id)?.totalHt ?? 0), 0),
             )}</td></tr>`,
         )
         .join('');
@@ -369,7 +372,7 @@ function renderPricingTable(data: PropositionData): string {
   if (pricing.discount) {
     rows.push(
       `<tr><td colspan="5">Reste à charge avant geste commercial</td><td class="num">${money(pricing.remainderBeforeDiscount)}</td></tr>`,
-      `<tr><td colspan="5">Remise commerciale <span class="muted">(motif : ${esc(pricing.discount.reason)})</span></td><td class="num">&#8722; ${money(pricing.discount.amount)}</td></tr>`,
+      `<tr><td colspan="5">Geste commercial par avoir à émettre <span class="muted">(motif : ${esc(pricing.discount.reason)})</span></td><td class="num">&#8722; ${money(pricing.discount.amount)}</td></tr>`,
     );
   }
   rows.push(
@@ -399,7 +402,7 @@ function renderOffert(data: PropositionData): string {
   }
   return `<div class="offert">
       <div class="stampcell"><span class="stamp">OFFERT</span></div>
-      <p><b>Le reste à charge vous est offert.</b> Précision importante : ce geste commercial ne modifie ni le coût pédagogique déclaré ni vos droits — les prises en charge sont calculées sur le coût réel. Il ne s’agit pas d’une prise en charge supplémentaire par un financeur.</p>
+      <p><b>Le reste à charge vous est offert.</b> Ce geste commercial sera matérialisé par un avoir distinct rattaché à la facture de chaque payeur concerné. La facture conserve le coût pédagogique intégral ; facture et avoir justifient le coût net auprès du financeur. Il ne s’agit pas d’une prise en charge supplémentaire par un financeur.</p>
     </div>`;
 }
 

@@ -1,6 +1,15 @@
 'use server';
 
-import { validateProposalSelection, uncoveredProposalNeeds } from '@/lib/proposition/selection-validation';
+import { buildPathOptions, type PathPreview } from '@/lib/proposition/path-options';
+import {
+  recommendPathModules,
+  pathHalfDayLimit,
+  type PathMode,
+} from '@/lib/proposition/path-recommendations';
+import {
+  validateProposalSelection,
+  uncoveredProposalNeeds,
+} from '@/lib/proposition/selection-validation';
 
 /**
  * Server actions de la proposition commerciale (lot E de la chaîne diagnostic).
@@ -22,6 +31,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma, Modality } from '@qualiof/db';
 import {
+  CreateProposalSchema,
   ProposalContentSchema,
   ProposalPricingSchema,
   PricingDiscountSchema,
@@ -54,10 +64,7 @@ import {
   seedContent,
   seedPricing,
 } from '@/lib/proposition/builder';
-import {
-  recommendModules,
-  type LibraryModule,
-} from '@/lib/proposition/module-matcher';
+import { type LibraryModule } from '@/lib/proposition/module-matcher';
 import { composeProgramme, compositionFromAxes } from '@/lib/proposition/composer';
 import {
   buildComposedProgramme,
@@ -186,8 +193,6 @@ async function loadDiagnosticBundle(diagnosticId: string, tenantId: string) {
 
 type DiagnosticBundle = NonNullable<Awaited<ReturnType<typeof loadDiagnosticBundle>>>;
 
-
-
 function fingerprintInputOf(
   bundle: DiagnosticBundle,
   rules: Awaited<ReturnType<typeof loadFundingRules>>['values'],
@@ -269,7 +274,10 @@ async function assembleFromDiagnostic(diagnosticId: string, tenantId: string) {
 
 export async function createProposalFromDiagnostic(
   diagnosticId: string,
+  pathMode: PathMode = 'PRIORITAIRE',
 ): Promise<ActionResult<{ proposalId: string; reference: string; notices: string[] }>> {
+  const parsed = CreateProposalSchema.safeParse({ diagnosticId, pathMode });
+  if (!parsed.success) return { ok: false, error: 'Diagnostic ou choix de parcours invalide.' };
   const g = await guard();
   if (!g.ok) return { ok: false, error: g.error };
   const { user } = g;
@@ -281,19 +289,21 @@ export async function createProposalFromDiagnostic(
   if (bundle.answers.length === 0) {
     return {
       ok: false,
-      error: "Ce diagnostic ne porte aucune réponse : il n'y a rien sur quoi appuyer une proposition.",
+      error:
+        "Ce diagnostic ne porte aucune réponse : il n'y a rien sur quoi appuyer une proposition.",
     };
   }
   if (participants.filter((p) => p.includedInProposal).length === 0) {
     return {
       ok: false,
       error:
-        "Aucune fiche équipe retenue : sans participant, ni le volume ni le financement ne peuvent être dimensionnés.",
+        'Aucune fiche équipe retenue : sans participant, ni le volume ni le financement ne peuvent être dimensionnés.',
     };
   }
 
   const agencyName = nomAgence(bundle);
   const { content, match, composition } = seedContent({
+    pathMode: parsed.data.pathMode,
     audit,
     rules,
     library,
@@ -373,8 +383,9 @@ export async function createProposalFromDiagnostic(
           reference: created.reference,
           axes: content.axes.length,
           payers: pricing.payers.length,
-          halfDays: audit.funding.halfDays,
-          conventionedHours: audit.funding.conventionedHours,
+          pathMode: parsed.data.pathMode,
+          halfDays: composition.totalHalfDays,
+          conventionedHours: composition.totalConventionedHours,
           notices: match.notices,
         } as Prisma.InputJsonValue,
       },
@@ -436,6 +447,7 @@ export type LoadedProposal = NonNullable<Awaited<ReturnType<typeof loadProposal>
  * lignes ; ici il n'existe pas.
  */
 export interface ProposalWorkspace {
+  pathOptions: PathPreview[];
   proposal: LoadedProposal;
   content: ProposalContent;
   pricing: ProposalPricing;
@@ -482,18 +494,24 @@ async function buildWorkspace(
   if (!assembled) return null;
   const { bundle, rules, of, audit, library } = assembled;
 
-  const { notices: recoNotices, recommendations } = recommendModules({
-    chapterScores: audit.chapterScores.map((c) => ({
-      chapter: c.chapter,
-      score: c.score,
-      breakdown: c.breakdown,
-    })),
-    alerts: audit.chapters.flatMap((c) => c.alerts),
-    answers: audit.chapters.flatMap((c) => c.answers),
-    library,
-  });
   const content = ProposalContentSchema.parse(proposal.contentJson);
-  content.uncoveredNeeds = uncoveredProposalNeeds(content, recommendations);
+  const { notices: recoNotices, recommendations } = recommendPathModules(
+    {
+      chapterScores: audit.chapterScores.map((c) => ({
+        chapter: c.chapter,
+        score: c.score,
+        breakdown: c.breakdown,
+      })),
+      alerts: audit.chapters.flatMap((c) => c.alerts),
+      answers: audit.chapters.flatMap((c) => c.answers),
+      library,
+    },
+    content.pathMode ?? 'PRIORITAIRE',
+  );
+  content.uncoveredNeeds = uncoveredProposalNeeds(
+    content,
+    recommendations.filter((r) => !r.need.code.startsWith('complement:')),
+  );
   const selectionBlockers = validateProposalSelection(content, recommendations);
   const pricing = ProposalPricingSchema.parse(proposal.pricingJson);
   const synthesis = computePricing({ pricing, rules });
@@ -516,9 +534,7 @@ async function buildWorkspace(
     moduleMaterial: moduleMaterialOf(library),
   });
 
-  const ownerLabel = [proposal.owner.firstName, proposal.owner.lastName]
-    .filter(Boolean)
-    .join(' ');
+  const ownerLabel = [proposal.owner.firstName, proposal.owner.lastName].filter(Boolean).join(' ');
 
   // Le produit composé déjà généré, s'il existe — pour que le bouton dise
   // « régénérer » plutôt que « générer », et nomme ce qu'il va toucher.
@@ -554,9 +570,16 @@ async function buildWorkspace(
     const shelves = await prisma.trainingProduct.findMany({
       where: { tenantId, code: { in: codes } },
       select: {
-        code: true, title: true, prerequisites: true, targetAudience: true,
-        pedagogicalMethods: true, evaluationMethods: true, accessibility: true,
-        trainerProfile: true, pedagogicalSupport: true, accessConditions: true,
+        code: true,
+        title: true,
+        prerequisites: true,
+        targetAudience: true,
+        pedagogicalMethods: true,
+        evaluationMethods: true,
+        accessibility: true,
+        trainerProfile: true,
+        pedagogicalSupport: true,
+        accessConditions: true,
         modules: { select: { id: true, contentMd: true, needIdentification: true } },
       },
     });
@@ -573,7 +596,9 @@ async function buildWorkspace(
         accessConditions: null,
       },
       mentions: qualiopiMentions,
-      moduleContent: new Map(shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.contentMd] as const))),
+      moduleContent: new Map(
+        shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.contentMd] as const)),
+      ),
       moduleNeedIdentification: new Map(
         shelves.flatMap((sh) => sh.modules.map((m) => [m.id, m.needIdentification ?? ''] as const)),
       ),
@@ -624,9 +649,7 @@ async function buildWorkspace(
     compareSourceFingerprint(proposal.sourceFingerprint, currentFingerprint) === 'stale' &&
     proposal.pdfKey
   ) {
-    blockers.push(
-      'Le PDF ne correspond plus aux données : régénérez-le avant de l’envoyer.',
-    );
+    blockers.push('Le PDF ne correspond plus aux données : régénérez-le avant de l’envoyer.');
   }
   for (const a of synthesis.alerts.filter((x) => x.severity === 'blocking')) {
     if (a.code !== 'remise_validation_requise') blockers.push(a.label);
@@ -671,11 +694,26 @@ async function buildWorkspace(
 
   const notices = [
     ...recoNotices,
-    ...composeProgramme({ recommendations, rules, envelopeHalfDays: audit.funding.halfDays, maxPerNeed: 1 })
-      .notices,
+    ...composeProgramme({
+      recommendations,
+      rules,
+      envelopeHalfDays: pathHalfDayLimit(audit.funding, rules, content.pathMode ?? 'PRIORITAIRE'),
+      maxPerNeed: 1,
+    }).notices,
   ];
 
   return {
+    pathOptions: buildPathOptions({
+      audit,
+      rules,
+      library,
+      agencyName: nomAgence(bundle),
+      diagnosticReference: bundle.reference,
+      meetingAt: bundle.meetingAt,
+      ofName: of.name,
+      participantCount: assembled.participants.filter((p) => p.includedInProposal).length,
+      participants: assembled.participants.filter((p) => p.includedInProposal),
+    }),
     proposal,
     content,
     pricing,

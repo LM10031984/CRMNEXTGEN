@@ -86,6 +86,8 @@ export interface FundingParticipantResult {
 }
 
 export interface FundingSynthesis {
+  modality?: FundingComputeInput['modality'];
+  fundingType?: FundingComputeInput['fundingType'];
   /** Demi-journées de groupe proposées (le groupe avance ensemble). */
   halfDays: number;
   /** Heures sur site — l'assiette du PRIX. */

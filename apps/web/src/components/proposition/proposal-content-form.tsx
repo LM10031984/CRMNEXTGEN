@@ -84,7 +84,9 @@ export function ProposalContentForm({
 
       {catalogueNotices.length > 0 && (
         <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs leading-relaxed dark:border-sky-800 dark:bg-sky-950/40">
-          <p className="mb-1 font-semibold">Ce que le catalogue permet — et ce qu’il ne permet pas</p>
+          <p className="mb-1 font-semibold">
+            Ce que le catalogue permet — et ce qu’il ne permet pas
+          </p>
           <ul className="list-disc space-y-1 pl-4">
             {catalogueNotices.map((n) => (
               <li key={n}>{n}</li>
@@ -187,7 +189,8 @@ export function ProposalContentForm({
                       why: '',
                       halfDays: 0,
                       periodLabel: '',
-                      matchSource: 'manuel', modules: [],
+                      matchSource: 'manuel',
+                      modules: [],
                     },
                   ],
                 })
@@ -271,7 +274,13 @@ export function ProposalContentForm({
                       {m.confidence === 'faible' ? ' · rapprochement à vérifier' : ''}
                     </p>
                     {m.needLabel && <p className="text-muted-foreground">Besoin : {m.needLabel}</p>}
-                    {m.selection && <p>{m.selection.aiUsage ? 'Pratique avec l’IA : ' : 'Résultat attendu : '}{m.selection.outcome}</p>}
+                    {m.selection?.rationale && <p>{m.selection.rationale}</p>}
+                    {m.selection && (
+                      <p>
+                        {m.selection.aiUsage ? 'Pratique avec l’IA : ' : 'Résultat attendu : '}
+                        {m.selection.outcome}
+                      </p>
+                    )}
                     {m.quotes.length > 0 && (
                       <p className="italic text-muted-foreground">« {m.quotes[0]} »</p>
                     )}
@@ -285,7 +294,12 @@ export function ProposalContentForm({
                 : axe.productCode
                   ? `Programme ${axe.productCode} · `
                   : ''}
-              rapprochement {axe.matchSource === 'signaux' ? 'par signaux du catalogue' : axe.matchSource === 'lexique' ? 'par lexique (heuristique)' : 'saisi à la main'}
+              rapprochement{' '}
+              {axe.matchSource === 'signaux'
+                ? 'par signaux du catalogue'
+                : axe.matchSource === 'lexique'
+                  ? 'par lexique (heuristique)'
+                  : 'saisi à la main'}
             </p>
           </div>
         ))}
@@ -357,10 +371,7 @@ export function ProposalContentForm({
         />
       </Field>
 
-      <Field
-        label="Prochaines étapes"
-        hint="Une ligne par étape : action | qui | échéance."
-      >
+      <Field label="Prochaines étapes" hint="Une ligne par étape : action | qui | échéance.">
         <textarea
           className={`${INPUT} min-h-[90px]`}
           value={content.nextSteps.map((s) => [s.action, s.who, s.when].join(' | ')).join('\n')}
@@ -376,8 +387,15 @@ export function ProposalContentForm({
         />
       </Field>
 
-      <Field label="Mention légale" hint="Jamais retirable — elle protège l’organisme et le client.">
-        <textarea className={`${INPUT} min-h-[70px] bg-muted/50`} value={content.legalMention} readOnly />
+      <Field
+        label="Mention légale"
+        hint="Jamais retirable — elle protège l’organisme et le client."
+      >
+        <textarea
+          className={`${INPUT} min-h-[70px] bg-muted/50`}
+          value={content.legalMention}
+          readOnly
+        />
       </Field>
     </section>
   );

@@ -25,13 +25,10 @@ import type { AuditData } from '@/lib/diagnostic-r1/templates/audit-data';
 import type { FundingParticipantResult, FundingSynthesis } from '@/lib/financement/types';
 import type { FundingRuleValues } from '@/lib/financement/types';
 
+import { recommendPathModules, pathHalfDayLimit, type PathMode } from './path-recommendations';
 import { accord, plural } from './plural';
 import { composeProgramme, type ComposeOutput, type ComposedBlock } from './composer';
-import {
-  recommendModules,
-  type LibraryModule,
-  type ModuleMatchOutput,
-} from './module-matcher';
+import { type LibraryModule, type ModuleMatchOutput } from './module-matcher';
 import { conventionedHoursPerHalfDay } from './pricing';
 import {
   recommendProgrammes,
@@ -110,7 +107,7 @@ export function buildFundingSection(input: FundingBuildInput): ProposalFunding {
       rows.push({
         funder: 'OPCO EP',
         beneficiaries: `${input.agencyName} — ${plural(funding.opcoEp.participantCount, 'salarié')}`,
-        basis: "Plus de 50 salariés : enveloppe à valider avec l’opérateur",
+        basis: 'Plus de 50 salariés : enveloppe à valider avec l’opérateur',
         amount: 0,
         isDeduction: false,
       });
@@ -220,13 +217,16 @@ export interface PayerSeedInput {
 export function seedPayers(input: PayerSeedInput): PricingPayer[] {
   const { funding, rules } = input;
   const unitPriceHt = euros(rules.HALF_DAY_ONSITE_HOURS * rules.PRICE_PER_HOUR_PER_PARTICIPANT);
-  // Le volume composé quand il existe, l'enveloppe sinon — un parcours qui n'a
-  // rien pu composer doit rester chiffrable à la main plutôt que de sortir à 0.
-  const halfDays =
-    input.halfDaysSold !== undefined && input.halfDaysSold > 0
-      ? input.halfDaysSold
-      : funding.halfDays;
-  const byId = new Map<string, FundingParticipantResult>(funding.participants.map((p) => [p.id, p]));
+  const halfDays = input.halfDaysSold ?? funding.halfDays;
+  const hours = halfDays * conventionedHoursPerHalfDay(rules);
+  const opcoRate =
+    funding.fundingType === 'REGLEMENTAIRE'
+      ? rules.OPCO_EP_RATE_REGLEMENTAIRE
+      : rules.OPCO_EP_RATE_COEUR_METIER;
+  const opcoUnitPrice = euros(conventionedHoursPerHalfDay(rules) * opcoRate);
+  const byId = new Map<string, FundingParticipantResult>(
+    funding.participants.map((p) => [p.id, p]),
+  );
 
   const payers: PricingPayer[] = [];
 
@@ -239,26 +239,29 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
     return r && (r.regime === 'OPCO_EP' || p.statut === 'SALARIE');
   });
 
-  const lineFor = (label: string) => [
+  const lineFor = (label: string, price = unitPriceHt) => [
     {
       id: 'ligne-1',
       description: label,
       halfDays,
-      unitPriceHt,
+      unitPriceHt: price,
     },
   ];
 
   for (const [index, p] of independants.entries()) {
     const result = byId.get(p.id);
     const coverages: PricingCoverage[] = [];
-    if (result && result.coverage > 0) {
+    const coverage = result
+      ? euros(Math.min(result.budget, hours * result.hourlyRate, halfDays * unitPriceHt))
+      : 0;
+    if (result?.regime === 'AGEFICE' && coverage > 0) {
       coverages.push({
         funder: 'AGEFICE',
         label:
           result.budgetSource === 'cfp_verifiee'
             ? 'Droits vérifiés au dossier — dossier individuel'
             : `Plafond annuel ${eur.format(rules.AGEFICE_ANNUAL_CAP)} — dossier individuel, sous réserve de l’attestation CFP`,
-        amount: result.coverage,
+        amount: coverage,
       });
     }
     payers.push({
@@ -269,8 +272,7 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
       email: null,
       address: null,
       groupLabel: 'Indépendants — dossiers individuels AGEFICE (subrogation, zéro avance)',
-      groupNote:
-        'Chaque dossier est monté et déposé par nos soins. Aucune avance de trésorerie.',
+      groupNote: 'Chaque dossier est monté et déposé par nos soins. Aucune avance de trésorerie.',
       participantIds: [p.id],
       participantCount: 1,
       lines: lineFor(libelleVolumeClient(halfDays)),
@@ -279,9 +281,23 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
   }
 
   if (salaries.length > 0) {
-    const coverage = euros(
-      salaries.reduce((s, p) => s + (byId.get(p.id)?.coverage ?? 0), 0),
-    );
+    const coverage =
+      funding.modality === 'DISTANCIEL' || funding.opcoEp.manualValidationRequired
+        ? 0
+        : euros(
+            Math.min(
+              funding.opcoEp.budget,
+              salaries.reduce((sum, p) => {
+                const result = byId.get(p.id);
+                return (
+                  sum +
+                  (result?.regime === 'OPCO_EP'
+                    ? Math.min(hours * result.hourlyRate, halfDays * opcoUnitPrice)
+                    : 0)
+                );
+              }, 0),
+            ),
+          );
     const coverages: PricingCoverage[] = [];
     if (coverage > 0) {
       coverages.push({
@@ -301,7 +317,7 @@ export function seedPayers(input: PayerSeedInput): PricingPayer[] {
       groupNote: 'Un dossier unique pour l’entreprise, monté et déposé par nos soins.',
       participantIds: salaries.map((p) => p.id),
       participantCount: salaries.length,
-      lines: lineFor(libelleVolumeClient(halfDays)),
+      lines: lineFor(libelleVolumeClient(halfDays), opcoUnitPrice),
       coverages,
     });
   }
@@ -313,8 +329,8 @@ export function seedPricing(input: PayerSeedInput): ProposalPricing {
   return {
     payers: seedPayers(input),
     discount: null,
-    modality: 'PRESENTIEL',
-    fundingType: 'COEUR_METIER',
+    modality: input.funding.modality ?? 'PRESENTIEL',
+    fundingType: input.funding.fundingType ?? 'COEUR_METIER',
   };
 }
 
@@ -323,6 +339,7 @@ export function seedPricing(input: PayerSeedInput): ProposalPricing {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ContentSeedInput {
+  pathMode?: PathMode;
   audit: AuditData;
   rules: FundingRuleValues;
   /** La bibliothèque de modules (lot I-2) — l'unité composable, cf. D-19. */
@@ -497,11 +514,17 @@ export function axisFromBlock(
     sourceTitle: m.source.title,
     needLabel: m.need.label,
     durationMin: m.durationMin,
-    quotes: [...new Set(m.evidence.flatMap((e) =>
-      e.kind === 'alerte'
-        ? e.answers.map((a) => `${a.label} : ${a.value}`)
-        : [`${e.label} : ${e.value}`],
-    ))].slice(0, 6).map((q) => q.slice(0, 300)),
+    quotes: [
+      ...new Set(
+        m.evidence.flatMap((e) =>
+          e.kind === 'alerte'
+            ? e.answers.map((a) => `${a.label} : ${a.value}`)
+            : [`${e.label} : ${e.value}`],
+        ),
+      ),
+    ]
+      .slice(0, 6)
+      .map((q) => q.slice(0, 300)),
     signal: m.matchedSignals[0] ?? null,
     confidence: m.confidence,
   }));
@@ -527,7 +550,11 @@ export function axisFromBlock(
     productId: null,
     productCode: null,
     description: '',
-    why: constats.map(termine).join(' ').slice(0, 600) || 'À justifier avant envoi.',
+    why:
+      [...new Set(block.modules.map((m) => m.selection?.rationale).filter(Boolean)), ...constats]
+        .map((s) => termine(s!))
+        .join(' ')
+        .slice(0, 600) || 'À justifier avant envoi.',
     halfDays: 1,
     periodLabel,
     matchSource: block.modules.every((m) => m.confidence === 'forte') ? 'signaux' : 'lexique',
@@ -563,16 +590,20 @@ const PIECE_JOINTE = 'rapport de diagnostic joint';
 export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const { audit, rules } = input;
 
-  const match = recommendModules({
-    chapterScores: audit.chapterScores.map((c) => ({
-      chapter: c.chapter,
-      score: c.score,
-      breakdown: c.breakdown,
-    })),
-    alerts: audit.chapters.flatMap((c) => c.alerts),
-    answers: audit.chapters.flatMap((c) => c.answers),
-    library: input.library,
-  });
+  const mode = input.pathMode ?? 'PRIORITAIRE';
+  const match = recommendPathModules(
+    {
+      chapterScores: audit.chapterScores.map((c) => ({
+        chapter: c.chapter,
+        score: c.score,
+        breakdown: c.breakdown,
+      })),
+      alerts: audit.chapters.flatMap((c) => c.alerts),
+      answers: audit.chapters.flatMap((c) => c.answers),
+      library: input.library,
+    },
+    mode,
+  );
 
   // La composition : des blocs de 8 h conventionnées, chaque module justifié
   // par une réponse du diagnostic (D-19, D-20). Le volume ne se déduit plus
@@ -580,14 +611,17 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const composition = composeProgramme({
     recommendations: match.recommendations,
     rules,
-    envelopeHalfDays: audit.funding.halfDays,
+    envelopeHalfDays: pathHalfDayLimit(audit.funding, rules, mode),
     maxPerNeed: 1,
   });
 
   // « Ce que nous avons entendu » : les constats du diagnostic, jamais du
   // générique. Chaque puce provient d'une alerte de ratio (donc d'une réponse
   // et d'un repère) ou d'un levier de financement.
-  const heard = match.recommendations.map((r) => r.trigger).slice(0, 6);
+  const heard = match.recommendations
+    .filter((r) => !r.need.code.startsWith('complement:'))
+    .map((r) => r.trigger)
+    .slice(0, 6);
 
   const fundingLever = audit.funding.alerts.find((a) => a.code === 'droits_sous_utilises');
   if (fundingLever) heard.push(fundingLever.label);
@@ -603,7 +637,10 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const indemnity = `de l’ordre de ${eur.format(rules.AGEFICE_INDEMNITY_MIN)} à ${eur.format(rules.AGEFICE_INDEMNITY_MAX)}`;
 
   const content: ProposalContent = {
-    uncoveredNeeds: composition.uncovered.map((u) => u.label),
+    pathMode: mode,
+    uncoveredNeeds: composition.uncovered
+      .filter((u) => !u.code.startsWith('complement:'))
+      .map((u) => u.label),
     subtitle: buildCoverHeadline(audit.priorities.map((p) => p.title)),
     recipientLabel: '',
     contactLabel: '',
@@ -612,7 +649,9 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
       : `À la suite de notre diagnostic (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
     heard,
     axesIntro:
-      'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Chaque module travaille une compétence liée à vos réponses. L’IA intervient dans les gestes métier lorsque le contenu le prévoit.',
+      mode === 'COMPLET_IA'
+        ? 'Le parcours conserve les priorités du diagnostic et les prolonge par un socle IA et des compétences métier complémentaires. Les compléments sont des objectifs de développement proposés, à valider au positionnement ; ils ne constituent pas des difficultés déclarées supplémentaires. Chaque atelier produit un livrable immobilier vérifié par le conseiller.'
+        : 'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Chaque module travaille une compétence liée à vos réponses. L’IA intervient dans les gestes métier lorsque le contenu le prévoit.',
     axes,
     planning,
     piecesDeadlineNote: `Pour sécuriser la première date, l’ensemble des pièces administratives doit être réuni au plus tard ${rules.AGEFICE_LEAD_DAYS_MIN} jours avant la première session. Le lien de pré-inscription transmis à votre équipe permet à chacun de déposer ses pièces en quelques minutes — nous relançons nous-mêmes les retardataires.`,
@@ -625,19 +664,22 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     nextSteps: [
       {
         id: 'etape-1',
-        action: 'Valider la proposition (signature du devis entreprise + accord de principe des indépendants)',
+        action:
+          'Valider la proposition (signature du devis entreprise + accord de principe des indépendants)',
         who: input.agencyName,
         when: 'À définir',
       },
       {
         id: 'etape-2',
-        action: 'Transmettre le lien de pré-inscription à l’équipe (pièces : CNI, RIB, attestation CFP)',
+        action:
+          'Transmettre le lien de pré-inscription à l’équipe (pièces : CNI, RIB, attestation CFP)',
         who: 'Ensemble',
         when: 'Cette semaine',
       },
       {
         id: 'etape-3',
-        action: 'Vérifier chaque dossier, relancer, monter et déposer les dossiers AGEFICE / OPCO EP',
+        action:
+          'Vérifier chaque dossier, relancer, monter et déposer les dossiers AGEFICE / OPCO EP',
         who: input.ofName,
         when: `Au plus tard ${rules.AGEFICE_LEAD_DAYS_MIN} jours avant la première session`,
       },

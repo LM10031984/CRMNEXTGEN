@@ -137,7 +137,7 @@ describe('diagnostic → proposition : la compétence doit traiter la douleur pr
     const out = match({ 'seller-discovery-formalized': 'no', 'reviews-collection-process': 'no' }, [module('drive:017#1')]);
     const plan = composeProgramme({ recommendations: out.recommendations, rules, envelopeHalfDays: 9 });
     expect(plan.uncovered).toEqual([expect.objectContaining({ code: 'collecte-avis' })]);
-    expect(plan.notices.join(' ')).not.toContain('Toutes les douleurs tracées sont couvertes');
+    expect(plan.notices.join(' ')).not.toContain('Les ateliers retenus représentent');
   });
 
   it('la proposition conserve le besoin précis, son résultat et la version de sélection', () => {
