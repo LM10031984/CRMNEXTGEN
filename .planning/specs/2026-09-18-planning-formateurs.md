@@ -58,6 +58,9 @@ sur `TrainerAvailability`.
   (même table, même fonction `checkTrainerAvailability`) — zéro logique dupliquée.
 - **D-7 — Un formateur (rôle `FORMATEUR`) voit tout le planning mais ne déclare que ses propres
   indisponibilités.** ADMIN / MANAGER déclarent pour tous. LECTEUR : lecture.
+  Précision validée par Laurent le 18/09/2026 : faute de lien User → Person dans le schéma,
+  l’identité est résolue par email (sans distinction de casse), uniquement si une seule
+  Person active du même tenant correspond et est reconnue comme formateur. Sinon lecture seule.
 - **D-8 — Pas de bibliothèque de calendrier.** Grille CSS (`grid-template-columns`), en-tête
   de colonnes et première colonne collants (sticky) — attention au chantier `fix/260917-matrice-
   sticky-zindex` en cours sur un problème de z-index sticky ailleurs : réutiliser sa solution

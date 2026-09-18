@@ -1,10 +1,13 @@
-import { prisma } from '@qualiof/db';
+import { prisma, type Prisma } from '@qualiof/db';
 
 /** Critère partagé avec Formateurs (spec planning §1). Ordre existant conservé. */
-export async function listTrainers(tenantId: string) {
+export async function listTrainers(
+  tenantId: string,
+  db: Pick<Prisma.TransactionClient, 'person' | 'externalIdentity'> = prisma,
+) {
   // Formateurs = Persons qui ont une ExternalIdentity entityType=Person.Trainer (depuis l'import)
   // OU au moins un LegalLink role=FORMATEUR.
-  const trainers = await prisma.person.findMany({
+  const trainers = await db.person.findMany({
     where: {
       tenantId,
       archived: false,
@@ -24,7 +27,7 @@ export async function listTrainers(tenantId: string) {
   });
 
   // Complète avec ceux marqués Person.Trainer dans ExternalIdentity (formateurs sans SIRET)
-  const externalTrainers = await prisma.externalIdentity.findMany({
+  const externalTrainers = await db.externalIdentity.findMany({
     where: { tenantId, entityType: 'Person.Trainer' },
     select: { entityId: true },
   });
@@ -32,7 +35,7 @@ export async function listTrainers(tenantId: string) {
   const additionalIds = [...externalIds].filter((id) => !trainers.find((t) => t.id === id));
 
   const additional = additionalIds.length
-    ? await prisma.person.findMany({
+    ? await db.person.findMany({
         where: { id: { in: additionalIds }, tenantId, archived: false },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         include: {
