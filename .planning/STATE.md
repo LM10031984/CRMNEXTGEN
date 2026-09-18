@@ -664,6 +664,8 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ### Quick Tasks Completed
 
+18/09/2026 — Envois AGEFICE initial/final et alertes formation implémentés, déploiement applicatif en attente. [Résumé et activation](quick/260918-pux-envois-agefice-et-alertes-formation/SUMMARY.md). Référentiel officiel audité ; seule couverture PTA83 corrigée en production.
+
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260523-eyi | Bouton Désinscrire participant fiche session (RBAC ADMIN+MANAGER, AuditLog `sessionParticipants.delete`, AlertDialog Radix) | 2026-05-23 | 666a949 | [260523-eyi-ajouter-un-bouton-d-sinscrire-dans-le-me](./quick/260523-eyi-ajouter-un-bouton-d-sinscrire-dans-le-me/) |

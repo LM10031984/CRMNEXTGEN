@@ -13,6 +13,7 @@ import {
   LinkRole,
   FinancingMode,
 } from '@qualiof/db';
+import { queueSessionCreatedAlert, flushFormationEventAlerts } from '@/lib/alertes/formation-notifier';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -483,10 +484,12 @@ export async function createSession(input: {
   });
 
     await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.create', diff: { regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, pricePerLearner: created.pricePerLearner?.toString() ?? null, created: 1 } } });
+    await queueSessionCreatedAlert(tx, created);
     return created;
   }); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
+  await flushFormationEventAlerts().catch(() => console.error('[formation-alert] livraison différée au cron'));
   return { ok: true, id: session.id, code };
 }
 
@@ -574,12 +577,14 @@ export async function duplicateSession(input: {
       },
     });
     await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.duplicate', diff: { sourceSessionId: source.id, regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, created: 1 } } });
+    await queueSessionCreatedAlert(tx, created);
     createdIds.push(created.id);
   }
 
   }); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
+  await flushFormationEventAlerts().catch(() => console.error('[formation-alert] livraison différée au cron'));
   return { ok: true, createdIds, firstCode };
 }
 

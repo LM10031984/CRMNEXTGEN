@@ -465,8 +465,10 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
             )}
             <ComposeOpcoButton
               participantId={r.id}
-              disabled={!r.invoiceSent || isComplete}
             />
+            {r.sponsorOrg?.opcoCode === 'AGEFICE' && (
+              <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />
+            )}
             <DossierReminderButton
               participantId={r.id}
               disabled={!r.invoiceSent || isComplete}

@@ -23,6 +23,9 @@ const m = vi.hoisted(() => ({
 
 vi.mock('@qualiof/db', () => ({
   prisma: {
+    $transaction: vi.fn(async (fn) =>
+      fn({ preEnrollment: { create: m.preEnrollmentCreate, update: m.preEnrollmentUpdate } }),
+    ),
     trainingSession: { findUnique: m.sessionFindUnique },
     sessionParticipant: { count: m.participantCount },
     preEnrollment: {
@@ -32,6 +35,14 @@ vi.mock('@qualiof/db', () => ({
       update: m.preEnrollmentUpdate,
     },
   },
+}));
+
+vi.mock('@/lib/alertes/formation-notifier', () => ({
+  queueEnrollmentSubmittedAlert: vi.fn(),
+  flushFormationEventAlerts: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/alertes/formation-check', () => ({
+  checkFormationDocuments: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('@/lib/storage', () => ({
@@ -124,7 +135,12 @@ describe('createSessionEnrollmentUploadUrl', () => {
 
 describe('submitSessionEnrollmentRequest', () => {
   it('crée la demande en SUBMITTED, rattachée à la session', async () => {
-    const r = await submitSessionEnrollmentRequest('tok', 'draft-0001', { CNI: 'k1' }, CHAMPS_VALIDES);
+    const r = await submitSessionEnrollmentRequest(
+      'tok',
+      'draft-0001',
+      { CNI: 'k1' },
+      CHAMPS_VALIDES,
+    );
     expect(r.ok).toBe(true);
     const data = m.preEnrollmentCreate.mock.calls[0]![0].data;
     expect(data.status).toBe('SUBMITTED');
@@ -149,7 +165,12 @@ describe('submitSessionEnrollmentRequest', () => {
 
   it('rejoue le même draftId sans créer de doublon', async () => {
     m.preEnrollmentFindFirst.mockResolvedValue({ id: 'pe-existante' });
-    const r = await submitSessionEnrollmentRequest('tok', 'draft-0001', { CNI: 'k1' }, CHAMPS_VALIDES);
+    const r = await submitSessionEnrollmentRequest(
+      'tok',
+      'draft-0001',
+      { CNI: 'k1' },
+      CHAMPS_VALIDES,
+    );
     expect(r.ok).toBe(true);
     expect(m.preEnrollmentCreate).not.toHaveBeenCalled();
     expect(m.preEnrollmentUpdate).toHaveBeenCalled();
@@ -174,7 +195,12 @@ describe('submitSessionEnrollmentRequest', () => {
   it('refuse quand la session est complète', async () => {
     m.participantCount.mockResolvedValue(11);
     m.preEnrollmentCount.mockResolvedValue(1);
-    const r = await submitSessionEnrollmentRequest('tok', 'draft-0001', { CNI: 'k1' }, CHAMPS_VALIDES);
+    const r = await submitSessionEnrollmentRequest(
+      'tok',
+      'draft-0001',
+      { CNI: 'k1' },
+      CHAMPS_VALIDES,
+    );
     expect(r.ok).toBe(false);
     expect(m.preEnrollmentCreate).not.toHaveBeenCalled();
   });
@@ -191,7 +217,12 @@ describe('limitation anti-spam', () => {
       );
       expect(ok.ok).toBe(true);
     }
-    const r = await submitSessionEnrollmentRequest('tok', 'draft-9999', { CNI: 'k1' }, CHAMPS_VALIDES);
+    const r = await submitSessionEnrollmentRequest(
+      'tok',
+      'draft-9999',
+      { CNI: 'k1' },
+      CHAMPS_VALIDES,
+    );
     expect(r).toEqual({ ok: false, error: 'Trop de demandes envoyées. Réessaie dans une heure.' });
   });
 });

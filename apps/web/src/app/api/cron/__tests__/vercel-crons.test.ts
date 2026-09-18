@@ -41,7 +41,7 @@ const routes = readdirSync(CRONS_DIR, { withFileTypes: true })
   .sort();
 
 describe('vercel.json — toute route cron est planifiée, et réciproquement', () => {
-  it('les SEPT routes existantes sont déclarées', () => {
+  it('les HUIT routes existantes sont déclarées', () => {
     // ⚠ Fusion du 12/09/2026 : `/api/cron/alerts` arrive de `main` (veille
     // quotidienne de chronologie des factures + alertes leads/pré-inscriptions).
     // Ce test a fait exactement son office — il a rougi à la fusion en nommant
@@ -50,6 +50,7 @@ describe('vercel.json — toute route cron est planifiée, et réciproquement', 
       '/api/cron/alerts',
       '/api/cron/closure-worker',
       '/api/cron/diagnostic-worker',
+      '/api/cron/formation-alerts',
       '/api/cron/opco-submission-reminders',
       '/api/cron/preinscription-reminders',
       '/api/cron/signature-reminders',
@@ -96,9 +97,7 @@ describe('vercel.json — toute route cron est planifiée, et réciproquement', 
     // `main`, `signature-sync` de la branche signature). Le test des quotidiens
     // ne les regardait pas — deux `0 * * * *` se seraient croisés 24 fois par
     // jour sans que rien ne rougisse.
-    const horaires = config.crons
-      .map((c) => c.schedule)
-      .filter((s) => /^\d+ \* \* \* \*$/.test(s));
+    const horaires = config.crons.map((c) => c.schedule).filter((s) => /^\d+ \* \* \* \*$/.test(s));
     expect(new Set(horaires).size).toBe(horaires.length);
     expect(horaires.length).toBeGreaterThanOrEqual(2);
   });

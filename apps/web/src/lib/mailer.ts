@@ -63,6 +63,8 @@ export interface SendMailContext {
 }
 
 export interface SendMailInput {
+  /** Expéditeur imposé par un circuit métier côté serveur. */
+  from?: string;
   to: string;
   /**
    * Copie visible. Sert à mettre l'EXPÉDITEUR en copie d'un envoi partant au
@@ -162,7 +164,7 @@ function getTransporter(): Transporter {
 }
 
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
-  const from = getFromAddress();
+  const from = input.from ?? getFromAddress();
 
   // ① Couche env (plomberie) — prioritaire, AUCUNE lecture BDD.
   if (isDryRun()) {
@@ -204,6 +206,17 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       replyTo: process.env.MAIL_REPLY_TO,
       attachments: input.attachments,
     });
+    // Une copie acceptée ne prouve pas que le destinataire principal l'a été.
+    if (
+      Array.isArray(info.accepted) &&
+      !info.accepted.some(
+        (address: string | { address: string }) =>
+          (typeof address === 'string' ? address : address.address).toLowerCase() ===
+          input.to.toLowerCase(),
+      )
+    ) {
+      return { ok: false, error: 'Le serveur mail n’a pas accepté le destinataire principal.' };
+    }
     // Lot 0 · 0.2 — le document a quitté la maison : on l'écrit, sinon on ne
     // pourra plus jamais le savoir.
     await tracerDocumentsEnvoyes(input, from);

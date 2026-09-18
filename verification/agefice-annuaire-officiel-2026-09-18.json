@@ -1,0 +1,1829 @@
+{
+  "fetchedAt": "2026-09-18T16:44:14.673Z",
+  "endpoint": "https://communication-agefice.fr/ajax/json.php",
+  "successes": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "2A",
+    "2B",
+    "30",
+    "31",
+    "32",
+    "33",
+    "34",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59",
+    "60",
+    "61",
+    "62",
+    "63",
+    "64",
+    "65",
+    "66",
+    "67",
+    "68",
+    "69",
+    "70",
+    "71",
+    "72",
+    "73",
+    "74",
+    "75",
+    "76",
+    "77",
+    "78",
+    "79",
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "89",
+    "90",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95",
+    "971",
+    "972",
+    "973",
+    "974",
+    "976"
+  ],
+  "failures": [],
+  "centres": [
+    {
+      "numberPta": "1",
+      "name": "CPME 13",
+      "email": "agefice@cpme13.fr",
+      "postalCode": "13015",
+      "city": "MARSEILLE",
+      "departmentsServed": [
+        "04",
+        "05",
+        "06",
+        "13",
+        "2A",
+        "2B",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "3",
+      "name": "CPME HAUTE VIENNE",
+      "email": "agefice@cpme87.fr",
+      "postalCode": "87100",
+      "city": "LIMOGES",
+      "departmentsServed": [
+        "87"
+      ]
+    },
+    {
+      "numberPta": "6",
+      "name": "CPME DE TOULOUSE",
+      "email": "accueil@cpme31.fr",
+      "postalCode": "31400",
+      "city": "TOULOUSE",
+      "departmentsServed": [
+        "31"
+      ]
+    },
+    {
+      "numberPta": "10",
+      "name": "CPME DORDOGNE",
+      "email": "agefice24@cpme24.org",
+      "postalCode": "24100",
+      "city": "BERGERAC",
+      "departmentsServed": [
+        "24"
+      ]
+    },
+    {
+      "numberPta": "11",
+      "name": "CPME DE LA MOSELLE",
+      "email": "agefice@cpme57.fr",
+      "postalCode": "57045",
+      "city": "METZ",
+      "departmentsServed": [
+        "57",
+        "67"
+      ]
+    },
+    {
+      "numberPta": "24",
+      "name": "LES ENTREPRENEURS Marne",
+      "email": "contact@cpme51.fr",
+      "postalCode": "51100",
+      "city": "REIMS",
+      "departmentsServed": [
+        "08",
+        "10",
+        "51",
+        "52"
+      ]
+    },
+    {
+      "numberPta": "25",
+      "name": "CPME OISE",
+      "email": "accueil@cpme-oise.fr",
+      "postalCode": "60000",
+      "city": "BEAUVAIS",
+      "departmentsServed": [
+        "60"
+      ]
+    },
+    {
+      "numberPta": "26",
+      "name": "CPME DE LA SOMME",
+      "email": "accueil@cpme-somme.fr",
+      "postalCode": "80000",
+      "city": "AMIENS",
+      "departmentsServed": [
+        "80"
+      ]
+    },
+    {
+      "numberPta": "27",
+      "name": "LES ENTREPRENEURS Loire-Atlantique (antenne 44)",
+      "email": "agefice@cpme-pdl.fr",
+      "postalCode": "44800",
+      "city": "SAINT HERBLAIN",
+      "departmentsServed": [
+        "44"
+      ]
+    },
+    {
+      "numberPta": "40",
+      "name": "CCI DES LANDES",
+      "email": "agefice@landes.cci.fr",
+      "postalCode": "40003",
+      "city": "MONT DE MARSAN CEDEX",
+      "departmentsServed": [
+        "40"
+      ]
+    },
+    {
+      "numberPta": "44",
+      "name": "CCI ALLIER DELEGATION DE VICHY",
+      "email": "ml.collin@allier.cci.fr",
+      "postalCode": "03200",
+      "city": "VICHY",
+      "departmentsServed": [
+        "03",
+        "63"
+      ]
+    },
+    {
+      "numberPta": "46",
+      "name": "CCI DU CANTAL",
+      "email": "nprat@cantal.cci.fr",
+      "postalCode": "15000",
+      "city": "AURILLAC",
+      "departmentsServed": [
+        "15"
+      ]
+    },
+    {
+      "numberPta": "60",
+      "name": "CCI DE L'YONNE",
+      "email": "ma.fintoni@yonne.cci.fr",
+      "postalCode": "89005",
+      "city": "AUXERRE CEDEX",
+      "departmentsServed": [
+        "58",
+        "89"
+      ]
+    },
+    {
+      "numberPta": "62",
+      "name": "CCI FINISTERE",
+      "email": "agefice.brest@finistere.cci.fr",
+      "postalCode": "29238",
+      "city": "BREST CEDEX 2",
+      "departmentsServed": [
+        "29"
+      ]
+    },
+    {
+      "numberPta": "63",
+      "name": "CCIMBO MORLAIX",
+      "email": "agefice.morlaix@bretagne-ouest.cci.bzh",
+      "postalCode": "29679",
+      "city": "MORLAIX CEDEX",
+      "departmentsServed": [
+        "29"
+      ]
+    },
+    {
+      "numberPta": "64",
+      "name": "CCI DE QUIMPER",
+      "email": "agefice.quimper@bretagne-ouest.cci.bzh",
+      "postalCode": "29330",
+      "city": "QUIMPER CEDEX",
+      "departmentsServed": [
+        "29"
+      ]
+    },
+    {
+      "numberPta": "70",
+      "name": "CCI DU MORBIHAN",
+      "email": "agefice@morbihan.cci.fr",
+      "postalCode": "56009",
+      "city": "VANNES CEDEX",
+      "departmentsServed": [
+        "56"
+      ]
+    },
+    {
+      "numberPta": "78",
+      "name": "CCI DE L'INDRE",
+      "email": "accueil@indre.cci.fr",
+      "postalCode": "36028",
+      "city": "CHATEAUROUX",
+      "departmentsServed": [
+        "18",
+        "28",
+        "36",
+        "37",
+        "41"
+      ]
+    },
+    {
+      "numberPta": "83",
+      "name": "CCI MARNE ARDENNES",
+      "email": "f.lamotte@marneardennes.cci.fr",
+      "postalCode": "08004",
+      "city": "CHARLEVILLE-MEZIERES CEDEX",
+      "departmentsServed": [
+        "08",
+        "51"
+      ]
+    },
+    {
+      "numberPta": "85",
+      "name": "CCI DE TROYES ET DE L'AUBE",
+      "email": "agefice@troyes.cci.fr",
+      "postalCode": "10001",
+      "city": "TROYES CEDEX",
+      "departmentsServed": [
+        "10"
+      ]
+    },
+    {
+      "numberPta": "94",
+      "name": "CCI Territoriale Saône-Doubs",
+      "email": "m.nief@saone-doubs.cci.fr",
+      "postalCode": "70000",
+      "city": "VESOUL",
+      "departmentsServed": [
+        "25",
+        "70"
+      ]
+    },
+    {
+      "numberPta": "107",
+      "name": "CCI DU GARD DELEGATION BAGNOLS SUR CEZE",
+      "email": "agefice@gard.cci.fr",
+      "postalCode": "30200",
+      "city": "BAGNOLS SUR CEZE",
+      "departmentsServed": [
+        "30"
+      ]
+    },
+    {
+      "numberPta": "110",
+      "name": "CCI HERAULT",
+      "email": "agefice@herault.cci.fr",
+      "postalCode": "34137",
+      "city": "MAUGUIO CEDEX",
+      "departmentsServed": [
+        "34"
+      ]
+    },
+    {
+      "numberPta": "111",
+      "name": "CCI DE LA LOZERE",
+      "email": "agefice@lozere.cci.fr",
+      "postalCode": "48000",
+      "city": "MENDE",
+      "departmentsServed": [
+        "48"
+      ]
+    },
+    {
+      "numberPta": "112",
+      "name": "CCI DE PERPIGNAN ET DES P.0",
+      "email": "agefice@pyrenees-orientales.cci.fr",
+      "postalCode": "66020",
+      "city": "PERPIGNAN CEDEX",
+      "departmentsServed": [
+        "66"
+      ]
+    },
+    {
+      "numberPta": "117",
+      "name": "CCI CHARENTE-MARITIME",
+      "email": "agefice@charente-maritime.cci.fr",
+      "postalCode": "17306",
+      "city": "ROCHEFORT CEDEX",
+      "departmentsServed": [
+        "16",
+        "17",
+        "33",
+        "79",
+        "85",
+        "86"
+      ]
+    },
+    {
+      "numberPta": "118",
+      "name": "CCI DE LA CORREZE",
+      "email": "adv@correze.cci.fr",
+      "postalCode": "19109",
+      "city": "BRIVE CEDEX 1",
+      "departmentsServed": [
+        "19"
+      ]
+    },
+    {
+      "numberPta": "120",
+      "name": "CCI DE GUERET ET DE LA CREUSE",
+      "email": "souvrard@creuse.cci.fr",
+      "postalCode": "23000",
+      "city": "GUERET",
+      "departmentsServed": [
+        "23"
+      ]
+    },
+    {
+      "numberPta": "126",
+      "name": "CCI MEUSE HAUTE MARNE",
+      "email": "agefice@meusehautemarne.cci.fr",
+      "postalCode": "55000",
+      "city": "SAVONNIERES DEVANT BAR",
+      "departmentsServed": [
+        "52",
+        "55"
+      ]
+    },
+    {
+      "numberPta": "127",
+      "name": "CCI DES VOSGES",
+      "email": "s.lame-salvador@vosges.cci.fr",
+      "postalCode": "88051",
+      "city": "EPINAL CEDEX",
+      "departmentsServed": [
+        "88"
+      ]
+    },
+    {
+      "numberPta": "131",
+      "name": "CCI DE L'AVEYRON - SITE DE MILLAU",
+      "email": "millauagefice@aveyron.cci.fr",
+      "postalCode": "12100",
+      "city": "MILLAU",
+      "departmentsServed": [
+        "12"
+      ]
+    },
+    {
+      "numberPta": "132",
+      "name": "CCI DE L'AVEYRON - SITE DE RODEZ",
+      "email": "rodezagefice@aveyron.cci.fr",
+      "postalCode": "12033",
+      "city": "RODEZ CEDEX 09",
+      "departmentsServed": [
+        "12"
+      ]
+    },
+    {
+      "numberPta": "133",
+      "name": "CCI TOULOUSE HAUTE GARONNE",
+      "email": "agefice@toulouse.cci.fr",
+      "postalCode": "31002",
+      "city": "TOULOUSE CEDEX 6",
+      "departmentsServed": [
+        "31"
+      ]
+    },
+    {
+      "numberPta": "135",
+      "name": "CCI DU LOT",
+      "email": "agefice@lot.cci.fr",
+      "postalCode": "46002",
+      "city": "CAHORS CEDEX 9",
+      "departmentsServed": [
+        "46"
+      ]
+    },
+    {
+      "numberPta": "136",
+      "name": "CCI TARBES/HAUTES PYRENEES",
+      "email": "karine.boyer@tarbes.cci.fr",
+      "postalCode": "65003",
+      "city": "TARBES CEDEX",
+      "departmentsServed": [
+        "65"
+      ]
+    },
+    {
+      "numberPta": "137",
+      "name": "CCI DU TARN",
+      "email": "agefice@tarn.cci.fr",
+      "postalCode": "81012",
+      "city": "ALBI CEDEX 9",
+      "departmentsServed": [
+        "81"
+      ]
+    },
+    {
+      "numberPta": "140",
+      "name": "CCI TARN ET GARONNE",
+      "email": "entreprendre@tarn-et-garonne.cci.fr",
+      "postalCode": "82065",
+      "city": "MONTAUBAN CEDEX",
+      "departmentsServed": [
+        "82"
+      ]
+    },
+    {
+      "numberPta": "141",
+      "name": "UNION PATRONALE DU VAR",
+      "email": "agefice83@upv.org",
+      "postalCode": "83055",
+      "city": "TOULON CEDEX",
+      "departmentsServed": [
+        "04",
+        "05",
+        "06",
+        "13",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "148",
+      "name": "CCI LITTORAL HAUTS DE FRANCE",
+      "email": "agefice@littoralhautsdefrance.cci.fr",
+      "postalCode": "62104",
+      "city": "CALAIS CEDEX",
+      "departmentsServed": [
+        "59",
+        "62",
+        "76",
+        "80"
+      ]
+    },
+    {
+      "numberPta": "149",
+      "name": "CCI GRAND LILLE",
+      "email": "agefice@grand-lille.cci.fr",
+      "postalCode": "59020",
+      "city": "LILLE CEDEX",
+      "departmentsServed": [
+        "59",
+        "62"
+      ]
+    },
+    {
+      "numberPta": "150",
+      "name": "CCI GRAND HAINAUT",
+      "email": "agefice@grandhainaut.cci.fr",
+      "postalCode": "59308",
+      "city": "VALENCIENNES CEDEX",
+      "departmentsServed": [
+        "59",
+        "62"
+      ]
+    },
+    {
+      "numberPta": "151",
+      "name": "CCI DE L'ARTOIS",
+      "email": "agefice@artois.cci.fr",
+      "postalCode": "62008",
+      "city": "ARRAS",
+      "departmentsServed": [
+        "59",
+        "62"
+      ]
+    },
+    {
+      "numberPta": "161",
+      "name": "CCI DE CAEN",
+      "email": "agefice@caen.cci.fr",
+      "postalCode": "14911",
+      "city": "CAEN CEDEX 9",
+      "departmentsServed": [
+        "14"
+      ]
+    },
+    {
+      "numberPta": "163",
+      "name": "CCI Ouest Normandie Cherbourg Cotentin",
+      "email": "agefice.cherbourg@normandie.cci.fr",
+      "postalCode": "50108",
+      "city": "CHERBOURG CEDEX",
+      "departmentsServed": [
+        "50"
+      ]
+    },
+    {
+      "numberPta": "164",
+      "name": "CCI OUEST NORMANDIE CENTRE SUD MANCHE",
+      "email": "sandrine.patrigeon@normandie.cci.fr",
+      "postalCode": "50402",
+      "city": "GRANVILLE CEDEX",
+      "departmentsServed": [
+        "50"
+      ]
+    },
+    {
+      "numberPta": "165",
+      "name": "CCI PORTES DE NORMANDIE - Sites : EURE et ORNE",
+      "email": "agefice-ccipn@normandie.cci.fr",
+      "postalCode": "61002",
+      "city": "ALENCON CEDEX",
+      "departmentsServed": [
+        "27",
+        "61",
+        "72",
+        "78"
+      ]
+    },
+    {
+      "numberPta": "166",
+      "name": "CCI OUEST NORMANDIE DELEGATION ORNE",
+      "email": "agefice.flers@normandie.cci.fr",
+      "postalCode": "61103",
+      "city": "FLERS CEDEX",
+      "departmentsServed": [
+        "61"
+      ]
+    },
+    {
+      "numberPta": "173",
+      "name": "CCI SEINE ESTUAIRE",
+      "email": "agefice@seine-estuaire.cci.fr",
+      "postalCode": "76067",
+      "city": "LE HAVRE CEDEX",
+      "departmentsServed": [
+        "14",
+        "76"
+      ]
+    },
+    {
+      "numberPta": "182",
+      "name": "CCI NANTES ST NAZAIRE",
+      "email": "agefice@44.cci.fr",
+      "postalCode": "44800",
+      "city": "ST HERBLAIN",
+      "departmentsServed": [
+        "44"
+      ]
+    },
+    {
+      "numberPta": "183",
+      "name": "CCI Maine et Loire",
+      "email": "point.agefice@maineetloire.cci.fr",
+      "postalCode": "49003",
+      "city": "ANGERS CEDEX 01",
+      "departmentsServed": [
+        "49"
+      ]
+    },
+    {
+      "numberPta": "186",
+      "name": "CCI DE MAYENNE",
+      "email": "cci53-agefice@mayenne.cci.fr",
+      "postalCode": "53002",
+      "city": "LAVAL CEDEX",
+      "departmentsServed": [
+        "53"
+      ]
+    },
+    {
+      "numberPta": "190",
+      "name": "CCI DE L'AISNE",
+      "email": "agefice@aisne.cci.fr",
+      "postalCode": "02200",
+      "city": "SOISSONS",
+      "departmentsServed": [
+        "02"
+      ]
+    },
+    {
+      "numberPta": "191",
+      "name": "CCI DE L'OISE",
+      "email": "sandie.coste@cci-oise.fr",
+      "postalCode": "60000",
+      "city": "BEAUVAIS",
+      "departmentsServed": [
+        "60"
+      ]
+    },
+    {
+      "numberPta": "193",
+      "name": "CCI AMIENS PICARDIE",
+      "email": "agefice@amiens-picardie.cci.fr",
+      "postalCode": "80039",
+      "city": "AMIENS CEDEX 1",
+      "departmentsServed": [
+        "80"
+      ]
+    },
+    {
+      "numberPta": "196",
+      "name": "CCI DE DIGNE LES BAINS",
+      "email": "agefice@digne.cci.fr",
+      "postalCode": "04000",
+      "city": "DIGNE LES BAINS",
+      "departmentsServed": [
+        "04",
+        "11",
+        "18",
+        "22",
+        "35",
+        "37",
+        "45",
+        "51",
+        "67",
+        "79",
+        "85",
+        "86",
+        "87",
+        "95"
+      ]
+    },
+    {
+      "numberPta": "197",
+      "name": "CCI GAP",
+      "email": "agefice@hautes-alpes.cci.fr",
+      "postalCode": "05001",
+      "city": "GAP CEDEX",
+      "departmentsServed": [
+        "01",
+        "05",
+        "06",
+        "07",
+        "09",
+        "21",
+        "24",
+        "25",
+        "26",
+        "32",
+        "33",
+        "38",
+        "41",
+        "42",
+        "43",
+        "47",
+        "54",
+        "57",
+        "68",
+        "69",
+        "73",
+        "74",
+        "77",
+        "83",
+        "85",
+        "86",
+        "91"
+      ]
+    },
+    {
+      "numberPta": "199",
+      "name": "CCI PAYS D ARLES",
+      "email": "agefice@arles.cci.fr",
+      "postalCode": "13633",
+      "city": "ARLES CEDEX",
+      "departmentsServed": [
+        "13"
+      ]
+    },
+    {
+      "numberPta": "202",
+      "name": "CCI DE CORSE",
+      "email": "pointaccueilagefice@cci.corsica",
+      "postalCode": "20293",
+      "city": "BASTIA CEDEX",
+      "departmentsServed": [
+        "2A",
+        "2B"
+      ]
+    },
+    {
+      "numberPta": "229",
+      "name": "CPME MEURTHE ET MOSELLE",
+      "email": "agefice@cpme54.fr",
+      "postalCode": "54320",
+      "city": "MAXEVILLE",
+      "departmentsServed": [
+        "54",
+        "67",
+        "68"
+      ]
+    },
+    {
+      "numberPta": "235",
+      "name": "CPME DE L'AISNE",
+      "email": "accueil@cpme-aisne.fr",
+      "postalCode": "02200",
+      "city": "SOISSONS",
+      "departmentsServed": [
+        "02",
+        "62"
+      ]
+    },
+    {
+      "numberPta": "237",
+      "name": "UDPME PUY DE DOME CPME63",
+      "email": "info@cpmepuydedome.fr",
+      "postalCode": "63100",
+      "city": "CLERMONT FERRAND",
+      "departmentsServed": [
+        "63"
+      ]
+    },
+    {
+      "numberPta": "246",
+      "name": "UNION DES ENTREPRISES",
+      "email": "contact@ude04.com",
+      "postalCode": "04200",
+      "city": "SISTERON",
+      "departmentsServed": [
+        "04"
+      ]
+    },
+    {
+      "numberPta": "250",
+      "name": "MEDEF AUDE",
+      "email": "agefice@medef11.com",
+      "postalCode": "11200",
+      "city": "LEZIGNAN CORBIERES",
+      "departmentsServed": [
+        "11"
+      ]
+    },
+    {
+      "numberPta": "255",
+      "name": "UPE 16",
+      "email": "agefice@upmedef.fr",
+      "postalCode": "16021",
+      "city": "ANGOULEME CEDEX",
+      "departmentsServed": [
+        "16"
+      ]
+    },
+    {
+      "numberPta": "257",
+      "name": "MEDEF DU CHER",
+      "email": "contact@medef-cher.fr",
+      "postalCode": "18000",
+      "city": "BOURGES",
+      "departmentsServed": [
+        "18"
+      ]
+    },
+    {
+      "numberPta": "264",
+      "name": "MEDEF PERIGORD",
+      "email": "contact@medef-perigord.fr",
+      "postalCode": "24660",
+      "city": "COULOUNIEIX-CHAMIERS",
+      "departmentsServed": [
+        "19",
+        "23",
+        "24",
+        "33",
+        "64",
+        "86",
+        "87"
+      ]
+    },
+    {
+      "numberPta": "268",
+      "name": "MEDEF EURE ET LOIR",
+      "email": "christelle.maubert@entreprises28.org",
+      "postalCode": "28008",
+      "city": "CHARTRES CEDEX",
+      "departmentsServed": [
+        "28"
+      ]
+    },
+    {
+      "numberPta": "271",
+      "name": "UP GERS",
+      "email": "ageficegers@gers32.org",
+      "postalCode": "32000",
+      "city": "AUCH",
+      "departmentsServed": [
+        "32"
+      ]
+    },
+    {
+      "numberPta": "273",
+      "name": "MEDEF HERAULT MONTPELLIER",
+      "email": "agefice@medef-montpellier.com",
+      "postalCode": "34395",
+      "city": "MONTPELLIER CEDEX 5",
+      "departmentsServed": [
+        "30",
+        "34"
+      ]
+    },
+    {
+      "numberPta": "286",
+      "name": "GPI DU LOT ET GARONNE  (UP)",
+      "email": "catherine.boidin@gpi-medef47.fr",
+      "postalCode": "47031",
+      "city": "AGEN Cedex",
+      "departmentsServed": [
+        "47"
+      ]
+    },
+    {
+      "numberPta": "287",
+      "name": "UPIL 48 MEDEF LOZERE",
+      "email": "vbros@medef-lozere.fr",
+      "postalCode": "48000",
+      "city": "MENDE",
+      "departmentsServed": [
+        "48"
+      ]
+    },
+    {
+      "numberPta": "304",
+      "name": "MEDEF SAMBRE AVESNOIS",
+      "email": "lamaisondesentreprises@medef-sa.fr",
+      "postalCode": "59600",
+      "city": "MAUBEUGE",
+      "departmentsServed": [
+        "59"
+      ]
+    },
+    {
+      "numberPta": "312",
+      "name": "MEDEF PAYS BASQUE",
+      "email": "serviceformations@medefpb.fr",
+      "postalCode": "64100",
+      "city": "BAYONNE",
+      "departmentsServed": [
+        "64"
+      ]
+    },
+    {
+      "numberPta": "314",
+      "name": "UPE 66",
+      "email": "corinne.saubesty@medef66.com",
+      "postalCode": "66000",
+      "city": "PERPIGNAN",
+      "departmentsServed": [
+        "66"
+      ]
+    },
+    {
+      "numberPta": "358",
+      "name": "MEDEF GUADELOUPE",
+      "email": "agefice@ude-medef.com",
+      "postalCode": "97122",
+      "city": "BAIE MAHAULT CEDEX",
+      "departmentsServed": [
+        "971"
+      ]
+    },
+    {
+      "numberPta": "368",
+      "name": "UMIH 05",
+      "email": "agefice@umih05.com",
+      "postalCode": "05000",
+      "city": "GAP",
+      "departmentsServed": [
+        "01",
+        "04",
+        "05",
+        "06",
+        "13",
+        "26",
+        "38",
+        "69",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "370",
+      "name": "UMIH Nice Azur et Alpes",
+      "email": "info.agefice@orange.fr",
+      "postalCode": "06000",
+      "city": "NICE",
+      "departmentsServed": [
+        "04",
+        "05",
+        "06",
+        "13",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "372",
+      "name": "UMIH 07",
+      "email": "umih07@free.fr",
+      "postalCode": "07000",
+      "city": "PRIVAS",
+      "departmentsServed": [
+        "07"
+      ]
+    },
+    {
+      "numberPta": "381",
+      "name": "UMIH DU CANTAL",
+      "email": "cantal.hotels@orange.fr",
+      "postalCode": "15000",
+      "city": "AURILLAC",
+      "departmentsServed": [
+        "15"
+      ]
+    },
+    {
+      "numberPta": "386",
+      "name": "UMIH COTE D OR",
+      "email": "contact@umih21.fr",
+      "postalCode": "21000",
+      "city": "DIJON",
+      "departmentsServed": [
+        "21"
+      ]
+    },
+    {
+      "numberPta": "387",
+      "name": "UMIH (22)",
+      "email": "contact@agefice22.fr",
+      "postalCode": "22190",
+      "city": "PLERIN",
+      "departmentsServed": [
+        "22"
+      ]
+    },
+    {
+      "numberPta": "389",
+      "name": "UMIH DROME",
+      "email": "contact@umih26.fr",
+      "postalCode": "26000",
+      "city": "VALENCE",
+      "departmentsServed": [
+        "26"
+      ]
+    },
+    {
+      "numberPta": "392",
+      "name": "UMIH DU GARD",
+      "email": "contact@umih30.fr",
+      "postalCode": "30000",
+      "city": "NIMES",
+      "departmentsServed": [
+        "30"
+      ]
+    },
+    {
+      "numberPta": "397",
+      "name": "UMIH 34",
+      "email": "contact@umih34.com",
+      "postalCode": "34130",
+      "city": "MAUGUIO",
+      "departmentsServed": [
+        "34"
+      ]
+    },
+    {
+      "numberPta": "399",
+      "name": "UMIH (35)",
+      "email": "agefice@umih35.com",
+      "postalCode": "35577",
+      "city": "CESSON SEVIGNE",
+      "departmentsServed": [
+        "35"
+      ]
+    },
+    {
+      "numberPta": "404",
+      "name": "UMIH DES LANDES",
+      "email": "umih-40@umih-40.fr",
+      "postalCode": "40106",
+      "city": "DAX CEDEX",
+      "departmentsServed": [
+        "40"
+      ]
+    },
+    {
+      "numberPta": "406",
+      "name": "UMIH 42",
+      "email": "umih42@orange.fr",
+      "postalCode": "42100",
+      "city": "SAINT ETIENNE",
+      "departmentsServed": [
+        "38",
+        "42",
+        "69"
+      ]
+    },
+    {
+      "numberPta": "412",
+      "name": "UMIH 51",
+      "email": "umih51@outlook.com",
+      "postalCode": "51100",
+      "city": "REIMS",
+      "departmentsServed": [
+        "51"
+      ]
+    },
+    {
+      "numberPta": "415",
+      "name": "UMIH 56",
+      "email": "contactvannes@umih56.com",
+      "postalCode": "56038",
+      "city": "VANNES CEDEX",
+      "departmentsServed": [
+        "56"
+      ]
+    },
+    {
+      "numberPta": "416",
+      "name": "UMIH MOSELLE",
+      "email": "secretariat@umih-moselle.fr",
+      "postalCode": "57050",
+      "city": "METZ",
+      "departmentsServed": [
+        "57"
+      ]
+    },
+    {
+      "numberPta": "417",
+      "name": "UMIH 58 NIEVRE (CHRD)",
+      "email": "umihnievre@sfr.fr",
+      "postalCode": "58000",
+      "city": "NEVERS",
+      "departmentsServed": [
+        "58",
+        "89"
+      ]
+    },
+    {
+      "numberPta": "430",
+      "name": "UMIH DU PUY DE DOME (63)",
+      "email": "umih.63@orange.fr",
+      "postalCode": "63100",
+      "city": "CLERMONT FERRAND",
+      "departmentsServed": [
+        "43",
+        "63"
+      ]
+    },
+    {
+      "numberPta": "432",
+      "name": "UMIH PAYS BASQUE",
+      "email": "contact@umih-pays-basque.org",
+      "postalCode": "64200",
+      "city": "BIARRITZ",
+      "departmentsServed": [
+        "40",
+        "64",
+        "65"
+      ]
+    },
+    {
+      "numberPta": "435",
+      "name": "UMIH 67 - GHRD DU BAS RHIN",
+      "email": "info@umih67.fr",
+      "postalCode": "67080",
+      "city": "STRASBOURG CEDEX",
+      "departmentsServed": [
+        "67"
+      ]
+    },
+    {
+      "numberPta": "447",
+      "name": "UMIH ILE DE FRANCE",
+      "email": "administratif@umih-idf.fr",
+      "postalCode": "77300",
+      "city": "FONTAINEBLEAU",
+      "departmentsServed": [
+        "75",
+        "77",
+        "78",
+        "91",
+        "92",
+        "93",
+        "94",
+        "95"
+      ]
+    },
+    {
+      "numberPta": "449",
+      "name": "UMIH 80",
+      "email": "info@umih80.com",
+      "postalCode": "80000",
+      "city": "AMIENS",
+      "departmentsServed": [
+        "80"
+      ]
+    },
+    {
+      "numberPta": "455",
+      "name": "U M I H DE LA HTE VIENNE",
+      "email": "contact@umih87.fr",
+      "postalCode": "87000",
+      "city": "LIMOGES",
+      "departmentsServed": [
+        "87"
+      ]
+    },
+    {
+      "numberPta": "456",
+      "name": "UMIH DES VOSGES",
+      "email": "umihvosges@gmail.com",
+      "postalCode": "88000",
+      "city": "EPINAL",
+      "departmentsServed": [
+        "88"
+      ]
+    },
+    {
+      "numberPta": "492",
+      "name": "CPME BAYONNE-PAYS BASQUE-BEARN",
+      "email": "contact@cpme64.org",
+      "postalCode": "64100",
+      "city": "BAYONNE",
+      "departmentsServed": [
+        "64"
+      ]
+    },
+    {
+      "numberPta": "493",
+      "name": "CPME DE LA MARTINIQUE",
+      "email": "mfmv@cpmemartinique.com",
+      "postalCode": "97200",
+      "city": "FORT DE FRANCE",
+      "departmentsServed": [
+        "972"
+      ]
+    },
+    {
+      "numberPta": "494",
+      "name": "CPME REUNION",
+      "email": "agefice@cpmereunion.re",
+      "postalCode": "97460",
+      "city": "SAINT PAUL",
+      "departmentsServed": [
+        "974"
+      ]
+    },
+    {
+      "numberPta": "500",
+      "name": "CPME BOURGOGNE FRANCHE-COMTE",
+      "email": "agefice@cpme-bfc.fr",
+      "postalCode": "21000",
+      "city": "DIJON",
+      "departmentsServed": [
+        "21",
+        "25",
+        "39",
+        "58",
+        "70",
+        "71",
+        "89",
+        "90"
+      ]
+    },
+    {
+      "numberPta": "501",
+      "name": "LES ENTREPRENEURS Loire-Atlantique (antenne 49)",
+      "email": "agefice@cpme-pdl.fr",
+      "postalCode": "44800",
+      "city": "SAINT HERBLAIN",
+      "departmentsServed": [
+        "49"
+      ]
+    },
+    {
+      "numberPta": "502",
+      "name": "MEDEF HERAULT BEZIERS",
+      "email": "agefice.medefbeziers@gmail.com",
+      "postalCode": "34516",
+      "city": "BEZIERS CEDEX",
+      "departmentsServed": [
+        "34"
+      ]
+    },
+    {
+      "numberPta": "508",
+      "name": "CPME DE LA SARTHE",
+      "email": "agefice@cpme72.fr",
+      "postalCode": "72000",
+      "city": "LE MANS",
+      "departmentsServed": [
+        "72"
+      ]
+    },
+    {
+      "numberPta": "512",
+      "name": "CPME VENDEE",
+      "email": "agefice@cpme85.fr",
+      "postalCode": "85000",
+      "city": "LA ROCHE SUR YON",
+      "departmentsServed": [
+        "17",
+        "79",
+        "85"
+      ]
+    },
+    {
+      "numberPta": "516",
+      "name": "CPME DE LA VIENNE",
+      "email": "agefice@cpme86.fr",
+      "postalCode": "86000",
+      "city": "POITIERS",
+      "departmentsServed": [
+        "16",
+        "17",
+        "86"
+      ]
+    },
+    {
+      "numberPta": "519",
+      "name": "CPME DES YVELINES",
+      "email": "agefice.cpme78@orange.fr",
+      "postalCode": "78000",
+      "city": "VERSAILLES",
+      "departmentsServed": [
+        "22",
+        "27",
+        "35",
+        "50",
+        "59",
+        "75",
+        "76",
+        "77",
+        "78",
+        "91",
+        "92",
+        "93",
+        "94"
+      ]
+    },
+    {
+      "numberPta": "523",
+      "name": "UMIH 11",
+      "email": "aude.umih@gmail.com",
+      "postalCode": "11200",
+      "city": "LEZIGNAN CORBIERES",
+      "departmentsServed": [
+        "11"
+      ]
+    },
+    {
+      "numberPta": "533",
+      "name": "CPME DE L'HERAULT",
+      "email": "cpme34agefice@gmail.com",
+      "postalCode": "34970",
+      "city": "LATTES",
+      "departmentsServed": [
+        "34"
+      ]
+    },
+    {
+      "numberPta": "534",
+      "name": "UMIH 04",
+      "email": "direction@umih04.fr",
+      "postalCode": "04000",
+      "city": "DIGNE LES BAINS",
+      "departmentsServed": [
+        "04",
+        "05",
+        "06",
+        "13",
+        "26",
+        "38",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "556",
+      "name": "UMIH/GPIH BEZIERS",
+      "email": "gpihumih@yahoo.fr",
+      "postalCode": "34500",
+      "city": "BEZIERS",
+      "departmentsServed": [
+        "34"
+      ]
+    },
+    {
+      "numberPta": "558",
+      "name": "CPME GIRONDE",
+      "email": "agefice33@cpmegironde.fr",
+      "postalCode": "33000",
+      "city": "BORDEAUX",
+      "departmentsServed": [
+        "33"
+      ]
+    },
+    {
+      "numberPta": "559",
+      "name": "CPME LANDES",
+      "email": "agefice@cpme40.fr",
+      "postalCode": "40100",
+      "city": "DAX",
+      "departmentsServed": [
+        "40"
+      ]
+    },
+    {
+      "numberPta": "560",
+      "name": "CPME DU LOT ET GARONNE",
+      "email": "agefice47@gmail.com",
+      "postalCode": "47901",
+      "city": "AGEN CEDEX 9",
+      "departmentsServed": [
+        "47"
+      ]
+    },
+    {
+      "numberPta": "562",
+      "name": "UMIH PYRENEES ATLANTIQUES",
+      "email": "agefice@umihbearnsoule.fr",
+      "postalCode": "64000",
+      "city": "PAU",
+      "departmentsServed": [
+        "64"
+      ]
+    },
+    {
+      "numberPta": "563",
+      "name": "MEDEF FLANDRE AUDOMAROIS",
+      "email": "adutilly@medef-flandre-audomarois.fr",
+      "postalCode": "62575",
+      "city": "BLENDECQUES",
+      "departmentsServed": [
+        "62"
+      ]
+    },
+    {
+      "numberPta": "565",
+      "name": "CPME GARD",
+      "email": "cpme30agefice@gmail.com",
+      "postalCode": "30900",
+      "city": "NIMES",
+      "departmentsServed": [
+        "30"
+      ]
+    },
+    {
+      "numberPta": "568",
+      "name": "CPME  DU LOIRET",
+      "email": "agefice@cpmeloiret.fr",
+      "postalCode": "45100",
+      "city": "ORLEANS",
+      "departmentsServed": [
+        "18",
+        "28",
+        "36",
+        "37",
+        "41",
+        "45"
+      ]
+    },
+    {
+      "numberPta": "570",
+      "name": "LES ENTREPRENEURS Loire-Atlantique (antenne 53)",
+      "email": "agefice@cpme-pdl.fr",
+      "postalCode": "44800",
+      "city": "SAINT HERBLAIN",
+      "departmentsServed": [
+        "53"
+      ]
+    },
+    {
+      "numberPta": "571",
+      "name": "UPE 05",
+      "email": "agefice@upe05.com",
+      "postalCode": "05000",
+      "city": "GAP     Privilégier l'envoi par mail à l'envoi postal",
+      "departmentsServed": [
+        "01",
+        "05",
+        "06",
+        "07",
+        "09",
+        "24",
+        "26",
+        "32",
+        "38",
+        "42",
+        "43",
+        "47",
+        "69",
+        "73",
+        "74",
+        "83"
+      ]
+    },
+    {
+      "numberPta": "572",
+      "name": "CPME  AUDE",
+      "email": "cpmeaude@gmail.com",
+      "postalCode": "11000",
+      "city": "CARCASSONNE",
+      "departmentsServed": [
+        "11"
+      ]
+    },
+    {
+      "numberPta": "577",
+      "name": "CPME 66",
+      "email": "agefice@cpme66.fr",
+      "postalCode": "66000",
+      "city": "PERPIGNAN",
+      "departmentsServed": [
+        "66"
+      ]
+    },
+    {
+      "numberPta": "578",
+      "name": "CPME DES HAUTES PYRENEES",
+      "email": "agefice@cpme65.fr",
+      "postalCode": "65003",
+      "city": "TARBES",
+      "departmentsServed": [
+        "65"
+      ]
+    },
+    {
+      "numberPta": "580",
+      "name": "CPME GUADELOUPE",
+      "email": "agefice@cpme-guadeloupe.fr",
+      "postalCode": "97122",
+      "city": "BAIE-MAHAULT",
+      "departmentsServed": [
+        "971"
+      ]
+    },
+    {
+      "numberPta": "584",
+      "name": "CPME MEUSE",
+      "email": "contact@cpme55.fr",
+      "postalCode": "55100",
+      "city": "VERDUN",
+      "departmentsServed": [
+        "55"
+      ]
+    },
+    {
+      "numberPta": "585",
+      "name": "CPME CHARENTE MARITIME / DEUX SEVRES",
+      "email": "agefice1779@cpme85.fr",
+      "postalCode": "85000",
+      "city": "LA ROCHE SUR YON",
+      "departmentsServed": [
+        "17",
+        "79"
+      ]
+    },
+    {
+      "numberPta": "586",
+      "name": "CPME TARN ET GARONNE",
+      "email": "contact@cpme82.fr",
+      "postalCode": "82000",
+      "city": "MONTAUBAN",
+      "departmentsServed": [
+        "82"
+      ]
+    },
+    {
+      "numberPta": "591",
+      "name": "UMIH 61",
+      "email": "info@umih61.com",
+      "postalCode": "61140",
+      "city": "BAGNOLES DE L'ORNE NORMANDIE",
+      "departmentsServed": [
+        "61"
+      ]
+    },
+    {
+      "numberPta": "592",
+      "name": "CPME DU VAUCLUSE",
+      "email": "agefice@cpme84.org",
+      "postalCode": "84090",
+      "city": "AVIGNON CEDEX 9",
+      "departmentsServed": [
+        "04",
+        "05",
+        "06",
+        "07",
+        "09",
+        "11",
+        "13",
+        "26",
+        "30",
+        "31",
+        "34",
+        "64",
+        "66",
+        "83",
+        "84"
+      ]
+    },
+    {
+      "numberPta": "598",
+      "name": "UMIH 14",
+      "email": "contact@umih14.org",
+      "postalCode": "14130",
+      "city": "PONT L'EVEQUE",
+      "departmentsServed": [
+        "14"
+      ]
+    },
+    {
+      "numberPta": "600",
+      "name": "MEDEF MARNE ET CHAMPAGNE-ARDENNE",
+      "email": "corinne.daheron@medef-marne.fr",
+      "postalCode": "51058",
+      "city": "Reims Cedex",
+      "departmentsServed": [
+        "51"
+      ]
+    },
+    {
+      "numberPta": "601",
+      "name": "CCI VAUCLUSE",
+      "email": "agefice@vaucluse.cci.fr",
+      "postalCode": "84008",
+      "city": "AVIGNON CEDEX 1",
+      "departmentsServed": [
+        "84"
+      ]
+    },
+    {
+      "numberPta": "602",
+      "name": "MEDEF GUYANE",
+      "email": "formation@medefguyane.fr",
+      "postalCode": "97338",
+      "city": "CAYENNE CEDEX",
+      "departmentsServed": [
+        "973"
+      ]
+    },
+    {
+      "numberPta": "604",
+      "name": "MEDEF Reunion",
+      "email": "agefice@medef-reunion.com",
+      "postalCode": "97400",
+      "city": "SAINT DENIS DE LA REUNION",
+      "departmentsServed": [
+        "974"
+      ]
+    },
+    {
+      "numberPta": "605",
+      "name": "CPME GUYANE",
+      "email": "contact@cpmeguyane.com",
+      "postalCode": "97300",
+      "city": "CAYENNE",
+      "departmentsServed": [
+        "973"
+      ]
+    },
+    {
+      "numberPta": "606",
+      "name": "UMIH 53",
+      "email": "agefice@umih53.org",
+      "postalCode": "53003",
+      "city": "LAVAL CEDEX",
+      "departmentsServed": [
+        "53"
+      ]
+    },
+    {
+      "numberPta": "607",
+      "name": "PTA 607 - PLATEFORME NATIONALE DÉMATÉRIALISÉE",
+      "email": "agefice@communication-agefice.fr",
+      "postalCode": "75000",
+      "city": "PARIS",
+      "departmentsServed": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "2A",
+        "2B",
+        "30",
+        "31",
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+        "47",
+        "48",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "54",
+        "55",
+        "56",
+        "57",
+        "58",
+        "59",
+        "60",
+        "61",
+        "62",
+        "63",
+        "64",
+        "65",
+        "66",
+        "67",
+        "68",
+        "69",
+        "70",
+        "71",
+        "72",
+        "73",
+        "74",
+        "75",
+        "76",
+        "77",
+        "78",
+        "79",
+        "80",
+        "81",
+        "82",
+        "83",
+        "84",
+        "85",
+        "86",
+        "87",
+        "88",
+        "89",
+        "90",
+        "91",
+        "92",
+        "93",
+        "94",
+        "95",
+        "971",
+        "972",
+        "973",
+        "974",
+        "976"
+      ]
+    },
+    {
+      "numberPta": "608",
+      "name": "UMIH 35 Cote d'Emeraude",
+      "email": "agefice@umih35emeraude.fr",
+      "postalCode": "35400",
+      "city": "ST MALO",
+      "departmentsServed": [
+        "35"
+      ]
+    },
+    {
+      "numberPta": "1000",
+      "name": "UNION PATRONALE ARIÈGE-PYRÉNÉES",
+      "email": "accueil@upap09.fr",
+      "postalCode": "09000",
+      "city": "SAINT PAUL DE JARRAT",
+      "departmentsServed": [
+        "09"
+      ]
+    },
+    {
+      "numberPta": "1002",
+      "name": "LES ENTREPRENEURS Hautes Alpes",
+      "email": "ageficelesentrepreneursha@gmail.com",
+      "postalCode": "05000",
+      "city": "GAP",
+      "departmentsServed": [
+        "01",
+        "05",
+        "32",
+        "38",
+        "42",
+        "43",
+        "69",
+        "73"
+      ]
+    },
+    {
+      "numberPta": "1005",
+      "name": "CPME CREUSE (23)",
+      "email": "m.morand@cpme23.fr",
+      "postalCode": "23000",
+      "city": "GUERET",
+      "departmentsServed": [
+        "23"
+      ]
+    },
+    {
+      "numberPta": "1006",
+      "name": "UNION DES ENTREPRISES HAUTES PYRENEES (MEDEF 65)",
+      "email": "gsarrazin@medef65.com",
+      "postalCode": "65000",
+      "city": "TARBES",
+      "departmentsServed": [
+        "65"
+      ]
+    }
+  ]
+}

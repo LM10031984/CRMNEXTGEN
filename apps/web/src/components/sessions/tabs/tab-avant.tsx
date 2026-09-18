@@ -36,6 +36,7 @@ import {
 } from '@/server/actions/dispatch-generate-doc';
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { LearnerPhaseActions } from '../learner-phase-actions';
+import { ComposeOpcoButton } from '@/components/dossiers-opco/compose-opco-button';
 import type { DocDockItem } from '@/lib/sessions/dispatch-doc-types';
 import type { DropZoneParticipant } from '../qualiopi-matrix/signed-doc-drop-zone';
 import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
@@ -122,7 +123,10 @@ export function TabAvant({
     name: string;
     items: DocDockItem[];
   }> = (() => {
-    const byParticipant = new Map<string, { participantId?: string; name: string; items: DocDockItem[] }>();
+    const byParticipant = new Map<
+      string,
+      { participantId?: string; name: string; items: DocDockItem[] }
+    >();
     for (const it of items) {
       if (it.section === 'shared') continue;
       const key = it.participantId ?? it.participantName ?? '—';
@@ -196,9 +200,7 @@ export function TabAvant({
             `${r.success} document${r.success > 1 ? 's' : ''} généré${r.success > 1 ? 's' : ''}`,
           );
         } else {
-          toast.warning(
-            `${r.success}/${r.total} OK · ${r.failed} échec${r.failed > 1 ? 's' : ''}`,
-          );
+          toast.warning(`${r.success}/${r.total} OK · ${r.failed} échec${r.failed > 1 ? 's' : ''}`);
         }
         router.refresh();
       } finally {
@@ -284,7 +286,11 @@ export function TabAvant({
                 disabled={pending}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-60 disabled:cursor-wait transition-colors shadow-sm"
               >
-                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4" />
+                )}
                 Tout générer ({completion.missing})
               </button>
             )}
@@ -316,25 +322,30 @@ export function TabAvant({
           title={group.name}
           actions={
             group.participantId ? (
-              <LearnerPhaseActions
-                sessionId={sessionId}
-                participantId={group.participantId}
-                participantName={group.name}
-                phase="avant"
-                readyCount={
-                  archiveDeLaPhase.get(group.participantId)?.readyCount ??
-                  group.items.filter((it) => it.state === 'generated').length
-                }
-                readyLabels={archiveDeLaPhase
-                  .get(group.participantId)
-                  ?.items.filter((it) => it.state === 'generated')
-                  .map((it) => it.label)}
-                missingCount={group.items.filter((it) => it.state === 'missing').length}
-                canGenerate={canGenerate}
-                onGenerateAll={() => handleGenerateAll(group.items)}
-                onRegenerateAll={() => handleRegenerateAll(group.items)}
-                busy={group.items.some((it) => busyKeys.has(it.key))}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {canGenerate && group.items.some((item) => item.docType === 'AGEFICE') && (
+                  <ComposeOpcoButton participantId={group.participantId} />
+                )}
+                <LearnerPhaseActions
+                  sessionId={sessionId}
+                  participantId={group.participantId}
+                  participantName={group.name}
+                  phase="avant"
+                  readyCount={
+                    archiveDeLaPhase.get(group.participantId)?.readyCount ??
+                    group.items.filter((it) => it.state === 'generated').length
+                  }
+                  readyLabels={archiveDeLaPhase
+                    .get(group.participantId)
+                    ?.items.filter((it) => it.state === 'generated')
+                    .map((it) => it.label)}
+                  missingCount={group.items.filter((it) => it.state === 'missing').length}
+                  canGenerate={canGenerate}
+                  onGenerateAll={() => handleGenerateAll(group.items)}
+                  onRegenerateAll={() => handleRegenerateAll(group.items)}
+                  busy={group.items.some((it) => busyKeys.has(it.key))}
+                />
+              </div>
             ) : null
           }
         >
@@ -470,7 +481,11 @@ function DocLine({
               // un document après une correction de tarif ou de fiche.
               className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 transition-colors"
             >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
               Régénérer
             </button>
           )}
@@ -490,7 +505,11 @@ function DocLine({
             'bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 disabled:cursor-wait',
           )}
         >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
           Générer
         </button>
       ) : (

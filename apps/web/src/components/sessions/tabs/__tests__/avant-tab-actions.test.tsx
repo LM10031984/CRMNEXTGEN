@@ -22,9 +22,13 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
  */
 
 // --- mocks ------------------------------------------------------------------
-const dispatchGenerateMissing = vi.fn(
-  async (..._args: unknown[]) => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] }),
-);
+const dispatchGenerateMissing = vi.fn(async (..._args: unknown[]) => ({
+  ok: true,
+  total: 0,
+  success: 0,
+  failed: 0,
+  errors: [],
+}));
 const dispatchGenerateDoc = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
 vi.mock('@/server/actions/qualiopi-matrix', () => ({
   // Lot A signature — l'onglet embarque `<SignedDocDropZone>`, qui importe la
@@ -168,7 +172,6 @@ describe('TabAvant — une ligne par doc/stagiaire (dispatchGenerateDoc)', () =>
   }
 });
 
-
 /**
  * Retour Laurent du 02/09 : « j'ai pas de bouton pour regénérer le programme ».
  *
@@ -224,3 +227,4 @@ describe('TabAvant — régénérer un document déjà produit', () => {
     expect(screen.queryByText(/^Régénérer$/)).toBeNull();
   });
 });
+vi.mock('@/server/actions/opco-submission', () => ({ composeOpcoSubmission: vi.fn() }));

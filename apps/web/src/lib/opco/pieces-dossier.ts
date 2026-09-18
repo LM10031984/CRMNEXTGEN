@@ -23,6 +23,9 @@ export type KindPieceDossier =
   | 'CONVENTION'
   | 'PROGRAMME'
   | 'AUDIT_TRAIL'
+  | 'EMARGEMENT'
+  | 'ASSIDUITE'
+  | 'FACTURE_ACQUITTEE'
   | 'OTHER';
 
 /**
@@ -38,6 +41,9 @@ export const LIBELLES_PIECE_DOSSIER: Record<KindPieceDossier, string> = {
   CONVENTION: 'Convention de formation',
   PROGRAMME: 'Programme pédagogique',
   AUDIT_TRAIL: 'Certificat de signature',
+  EMARGEMENT: 'Émargement signé',
+  ASSIDUITE: 'Assiduité signée',
+  FACTURE_ACQUITTEE: 'Facture acquittée',
   OTHER: 'Autre',
 };
 
@@ -70,10 +76,10 @@ function rempli(valeur: string | null | undefined): boolean {
  * Le `signe` remonté n'est pas un confort d'affichage : c'est lui que
  * `sendOpcoSubmission` relit pour refuser un dossier incomplet.
  */
-export function versionAJoindre(doc: {
-  pdfUrl: string;
-  signedPdfUrl: string | null;
-}): { key: string; signe: boolean } {
+export function versionAJoindre(doc: { pdfUrl: string; signedPdfUrl: string | null }): {
+  key: string;
+  signe: boolean;
+} {
   if (rempli(doc.signedPdfUrl)) return { key: doc.signedPdfUrl!.trim(), signe: true };
   return { key: doc.pdfUrl, signe: false };
 }

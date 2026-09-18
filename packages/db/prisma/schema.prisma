@@ -1498,6 +1498,11 @@ model OpcoSubmission {
   sponsorOrgId       String
   sponsorOrg         Organization         @relation(fields: [sponsorOrgId], references: [id])
   status             OpcoSubmissionStatus @default(DRAFT)
+  // Deux envois indépendants par inscription, avec verrou de remise SMTP.
+  stage              String               @default("PRISE_EN_CHARGE")
+  deliveryState      String               @default("READY")
+  sendingStartedAt   DateTime?
+  lastError          String?
   // Email destinataire (resolu au moment de l'envoi : sponsor.emailBilling || sponsor.email)
   recipientEmail     String?
   // Composition mail

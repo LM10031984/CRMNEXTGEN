@@ -20,11 +20,7 @@ const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 });
 
-export default async function ComposeOpcoPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ComposeOpcoPage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = await validateRequest();
   if (!user) return null;
 
@@ -94,6 +90,13 @@ export default async function ComposeOpcoPage({
           // le renseigner.
           sponsorOpcoCode: sub.sponsorOrg.opcoCode,
           sponsorOrgId: sub.sponsorOrg.id,
+          agefice: sub.agefice,
+          stage: sub.stage,
+          deliveryState: sub.deliveryState,
+          lastError: sub.lastError,
+          pointAccueilOptions: sub.pointAccueilOptions,
+          pointAccueilId: sub.pointAccueilId,
+          department: sub.department,
         }}
       />
     </div>
