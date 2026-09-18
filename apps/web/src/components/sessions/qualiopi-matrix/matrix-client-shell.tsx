@@ -135,7 +135,12 @@ export function MatrixClientShell({
         onChange={setFilters}
       />
 
-      <div className="overflow-x-auto -mx-5 sm:mx-0">
+      {/* `isolate` : les cellules sticky-left (z-10) restent confinées dans
+          leur propre contexte d'empilement. Sans ça, elles passaient PAR-DESSUS
+          le header session sticky (z-[9]) et la TopBar (z-10) dès que la table
+          remontait sous eux au scroll — « APPRENANT » + case à cocher affichés
+          sur la ligne de date, bandeau blanc sur les boutons (Laurent 2026-09-17). */}
+      <div className="overflow-x-auto -mx-5 sm:mx-0 isolate">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-muted/30">
             <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
