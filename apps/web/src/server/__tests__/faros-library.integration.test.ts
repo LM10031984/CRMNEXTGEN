@@ -12,7 +12,7 @@ const db = new PrismaClient({ datasources: { db: { url } } });
 const tenantId = randomUUID();
 const otherId = randomUUID();
 beforeAll(async () => {
-  await db.tenant.createMany({ data: [{ id: tenantId, name: 'Faros test' }, { id: otherId, name: 'Autre organisme test' }] });
+  await db.tenant.createMany({ data: [{ id: tenantId, name: 'TEST-Faros' }, { id: otherId, name: 'TEST-Autre-organisme' }] });
 });
 afterAll(async () => {
   await db.trainingProduct.deleteMany({ where: { tenantId: { in: [tenantId, otherId] } } });
