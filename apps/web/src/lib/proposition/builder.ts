@@ -490,16 +490,18 @@ export function axisFromBlock(
 
   const modules: ProposalModule[] = block.modules.map((m) => ({
     moduleId: m.moduleId,
+    selection: m.selection,
+    additionalSelections: m.additionalSelections,
     title: m.title,
     sourceCode: m.source.code,
     sourceTitle: m.source.title,
     needLabel: m.need.label,
     durationMin: m.durationMin,
-    quotes: m.evidence.flatMap((e) =>
+    quotes: [...new Set(m.evidence.flatMap((e) =>
       e.kind === 'alerte'
         ? e.answers.map((a) => `${a.label} : ${a.value}`)
         : [`${e.label} : ${e.value}`],
-    ),
+    ))].slice(0, 6).map((q) => q.slice(0, 300)),
     signal: m.matchedSignals[0] ?? null,
     confidence: m.confidence,
   }));
@@ -518,14 +520,14 @@ export function axisFromBlock(
   return {
     id: slugId('axe', index),
     label: `Demi-journée ${block.index}`,
-    title: besoins.join(' · ') || 'À composer',
+    title: besoins.join(' · ').slice(0, 300) || 'À composer',
     // Un bloc réunit des modules de plusieurs programmes : aucun produit unique
     // ne le représente. La traçabilité vit dans `modules`, pas dans un id qui
     // désignerait arbitrairement l'un des rayons.
     productId: null,
     productCode: null,
     description: '',
-    why: constats.map(termine).join(' ') || 'À justifier avant envoi.',
+    why: constats.map(termine).join(' ').slice(0, 600) || 'À justifier avant envoi.',
     halfDays: 1,
     periodLabel,
     matchSource: block.modules.every((m) => m.confidence === 'forte') ? 'signaux' : 'lexique',
@@ -579,16 +581,13 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
     recommendations: match.recommendations,
     rules,
     envelopeHalfDays: audit.funding.halfDays,
+    maxPerNeed: 1,
   });
 
   // « Ce que nous avons entendu » : les constats du diagnostic, jamais du
   // générique. Chaque puce provient d'une alerte de ratio (donc d'une réponse
   // et d'un repère) ou d'un levier de financement.
-  const heard = audit.chapters
-    .flatMap((c) => c.alerts)
-    .filter((a) => a.audience === 'client')
-    .map((a) => a.label)
-    .slice(0, 6);
+  const heard = match.recommendations.map((r) => r.trigger).slice(0, 6);
 
   const fundingLever = audit.funding.alerts.find((a) => a.code === 'droits_sous_utilises');
   if (fundingLever) heard.push(fundingLever.label);
@@ -604,6 +603,7 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
   const indemnity = `de l’ordre de ${eur.format(rules.AGEFICE_INDEMNITY_MIN)} à ${eur.format(rules.AGEFICE_INDEMNITY_MAX)}`;
 
   const content: ProposalContent = {
+    uncoveredNeeds: composition.uncovered.map((u) => u.label),
     subtitle: buildCoverHeadline(audit.priorities.map((p) => p.title)),
     recipientLabel: '',
     contactLabel: '',
@@ -612,7 +612,7 @@ export function seedContent(input: ContentSeedInput): ContentSeedOutput {
       : `À la suite de notre diagnostic (${PIECE_JOINTE} — ${input.diagnosticReference}), voici les enjeux identifiés :`,
     heard,
     axesIntro:
-      'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Un point de douleur métier reçoit un programme métier : l’IA n’est jamais la réponse par défaut.',
+      'Un parcours sur mesure, dans vos locaux, co-animé par deux formateurs spécialisés immobilier, composé depuis notre catalogue de programmes métier et IA — chaque axe répond à une priorité de votre audit. Chaque module travaille une compétence liée à vos réponses. L’IA intervient dans les gestes métier lorsque le contenu le prévoit.',
     axes,
     planning,
     piecesDeadlineNote: `Pour sécuriser la première date, l’ensemble des pièces administratives doit être réuni au plus tard ${rules.AGEFICE_LEAD_DAYS_MIN} jours avant la première session. Le lien de pré-inscription transmis à votre équipe permet à chacun de déposer ses pièces en quelques minutes — nous relançons nous-mêmes les retardataires.`,

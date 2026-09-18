@@ -271,6 +271,7 @@ export function ProposalContentForm({
                       {m.confidence === 'faible' ? ' · rapprochement à vérifier' : ''}
                     </p>
                     {m.needLabel && <p className="text-muted-foreground">Besoin : {m.needLabel}</p>}
+                    {m.selection && <p>{m.selection.aiUsage ? 'Pratique avec l’IA : ' : 'Résultat attendu : '}{m.selection.outcome}</p>}
                     {m.quotes.length > 0 && (
                       <p className="italic text-muted-foreground">« {m.quotes[0]} »</p>
                     )}

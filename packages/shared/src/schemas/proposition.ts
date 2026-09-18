@@ -41,7 +41,19 @@ import { z } from 'zod';
  * demi-journée, **jamais à chiffrer** : le volume vendu est un multiple du bloc
  * de 8 h conventionnées (D-20).
  */
+export const ProposalModuleSelectionSchema = z.object({
+  version: z.string().min(1).max(80),
+  ruleId: z.string().min(1).max(80),
+  moduleSourceRef: z.string().min(1).max(120),
+  outcome: z.string().min(1).max(300),
+  aiUsage: z.boolean(),
+  audience: z.enum(['conseiller', 'manager', 'tous']),
+});
+
 export const ProposalModuleSchema = z.object({
+  // Optionnel pour relire les propositions historiques sans les réécrire.
+  selection: ProposalModuleSelectionSchema.optional(),
+  additionalSelections: z.array(ProposalModuleSelectionSchema).max(8).optional(),
   moduleId: z.string().min(1),
   title: z.string().min(1).max(300),
   /** Le programme d'origine — « composé depuis plusieurs programmes » se prouve ici. */
@@ -99,6 +111,7 @@ export const ProposalStepSchema = z.object({
 export type ProposalStep = z.infer<typeof ProposalStepSchema>;
 
 export const ProposalContentSchema = z.object({
+  uncoveredNeeds: z.array(z.string().max(200)).max(60).optional(),
   /** Sous-titre de couverture — l'activité et la ville, pas un slogan. */
   subtitle: z.string().max(300).default(''),
   /** À l'attention de — le dirigeant nommé, jamais « Madame, Monsieur ». */

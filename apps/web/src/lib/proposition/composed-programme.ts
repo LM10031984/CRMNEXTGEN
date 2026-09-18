@@ -408,7 +408,9 @@ export function buildComposedProgramme(input: ComposedProgrammeInput): ComposedP
   const refus: RefusObjectif[] = [];
   const seenObjective = new Set<string>();
   for (const m of modules) {
-    const r = toObjective(m.title);
+    const r = m.selection
+      ? { ok: true as const, objective: m.selection.outcome }
+      : toObjective(m.title);
     if (!r.ok) {
       if (!objectivesToWrite.includes(m.title)) {
         objectivesToWrite.push(m.title);

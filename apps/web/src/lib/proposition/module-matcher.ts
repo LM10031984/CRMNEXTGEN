@@ -1,3 +1,5 @@
+/** La sélection client est exportée depuis validated-module-matcher.
+ * Le moteur lexical ci-dessous reste un outil de suggestion éditoriale uniquement. */
 /**
  * Recommandation au niveau MODULE (lot I-1, décision D-19) — fonction pure.
  *
@@ -44,6 +46,8 @@
  * (`source.excludedFromClientOutputs`, D-19 ter du 11/09/2026) — ni inventer un
  * module. La bibliothèque est la seule source.
  */
+
+import type { ProposalModule } from '@qualiof/shared';
 
 import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
 
@@ -199,6 +203,7 @@ export type DiagnosticEvidence =
     };
 
 export interface ModuleCandidate {
+  selection?: ProposalModule['selection'];
   moduleId: string;
   title: string;
   family: ProgrammeFamily;
@@ -524,7 +529,8 @@ function toucheLeVocabulaireDuBesoin(c: ModuleCandidate, labelNormalise: string)
   return c.matchedTerms.some((terme) => labelNormalise.includes(normalize(terme)));
 }
 
-export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
+/** Suggestions lexicales pour les sondes de catalogue uniquement. */
+export function suggestModules(input: ModuleMatchInput): ModuleMatchOutput {
   const maxCandidates = input.maxCandidates ?? 5;
   const notices: string[] = [];
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a]));
@@ -782,3 +788,6 @@ export function recommendModules(input: ModuleMatchInput): ModuleMatchOutput {
     libraryModuleCount: library.length,
   };
 }
+
+// Le chemin client utilise les compétences validées, jamais les suggestions lexicales.
+export { recommendModules } from './validated-module-matcher';

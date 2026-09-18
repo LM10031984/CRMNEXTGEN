@@ -59,6 +59,8 @@ export function onSiteMinutesPerBlock(rules: FundingRuleValues): number {
 
 /** Un module retenu, avec ce qui l'a fait entrer. */
 export interface ComposedModule {
+  selection?: ModuleCandidate['selection'];
+  additionalSelections?: NonNullable<ModuleCandidate['selection']>[];
   moduleId: string;
   title: string;
   /** Durée SUR SITE. Sert à remplir un bloc, jamais à chiffrer (D-20). */
@@ -249,6 +251,16 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
 
   for (const { candidate, rec } of orderCandidates(servable, maxPerNeed)) {
     const titleKey = normalizeTitle(candidate.title);
+    // Un seul atelier peut servir plusieurs compétences explicitement validées.
+    const existingBlock = blocks.find((b) => b.modules.some((m) => m.moduleId === candidate.moduleId));
+    const existing = existingBlock?.modules.find((m) => m.moduleId === candidate.moduleId);
+    if (existing && candidate.selection && existing.selection && rec.need.code !== existing.need.code) {
+      existing.additionalSelections = [...(existing.additionalSelections ?? []), candidate.selection];
+      existing.evidence = [...existing.evidence, ...rec.evidence];
+      if (!existingBlock!.needCodes.includes(rec.need.code)) existingBlock!.needCodes.push(rec.need.code);
+      placedNeeds.add(rec.need.code);
+      continue;
+    }
     if (placedModules.has(candidate.moduleId) || placedTitles.has(titleKey)) {
       doublons.push(candidate.title);
       continue;
@@ -279,6 +291,7 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
 
     block.modules.push({
       moduleId: candidate.moduleId,
+      selection: candidate.selection,
       title: candidate.title,
       durationMin: candidate.durationMin,
       source: candidate.source,
@@ -296,6 +309,12 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
     placedTitles.add(titleKey);
   }
 
+  for (const rec of servable) {
+    if (!placedNeeds.has(rec.need.code) && !uncovered.some((u) => u.code === rec.need.code)) {
+      uncovered.push({ code: rec.need.code, label: rec.need.label, reason: 'aucun-module' });
+    }
+  }
+
   // ── Ce que le parcours dit de lui-même ─────────────────────────────────────
   const sources = new Map<string, string>();
   for (const b of blocks) for (const m of b.modules) sources.set(m.source.code, m.source.title);
@@ -303,11 +322,15 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
   const totalHalfDays = blocks.length;
   const spareHalfDays = Math.max(0, envelope - totalHalfDays);
 
-  if (spareHalfDays > 0 && totalHalfDays > 0) {
+  if (spareHalfDays > 0 && totalHalfDays > 0 && uncovered.length === 0) {
     // §8.2 — l'arbitrage humain s'AFFICHE, il ne se décide pas tout seul.
     notices.push(
       `Toutes les douleurs tracées sont couvertes en ${totalHalfDays} demi-journée(s), et vos droits en financeraient ${envelope}. Les ${spareHalfDays} demi-journée(s) restantes ne sont PAS ajoutées d’office : ajouter un module sans point de douleur derrière ne passerait pas un contrôle OPCO. À arbitrer avec le dirigeant — sachant que des droits non consommés au 31 décembre sont perdus.`,
     );
+  }
+
+  if (spareHalfDays > 0 && uncovered.length > 0) {
+    notices.push(`Des besoins restent sans atelier adapté. Les ${spareHalfDays} demi-journée(s) restantes ne sont PAS ajoutées d’office : un module doit répondre à un besoin documenté.`);
   }
 
   const enveloppePleine = uncovered.filter((u) => u.reason === 'enveloppe-pleine');
@@ -315,7 +338,7 @@ export function composeProgramme(input: ComposeInput): ComposeOutput {
     notices.push(
       `L’enveloppe de ${envelope} demi-journée(s) ne couvre pas tout : ${enveloppePleine
         .map((u) => `« ${u.label} »`)
-        .join(', ')} reste(nt) sans module. Le parcours traite les douleurs dans l’ordre de la chaîne commerciale — c’est la profondeur qui a été coupée, pas la largeur.`,
+        .join(', ')} reste(nt) sans module. Le parcours suit les priorités du diagnostic ; les autres besoins restent à traiter.`,
     );
   }
 
@@ -390,6 +413,8 @@ export function compositionFromAxes(
     halfDays: number;
     modules: readonly {
       moduleId: string;
+      selection?: ModuleCandidate['selection'];
+      additionalSelections?: NonNullable<ModuleCandidate['selection']>[];
       title: string;
       sourceCode: string;
       sourceTitle: string;
@@ -408,6 +433,8 @@ export function compositionFromAxes(
   const blocks: ComposedBlock[] = axes.map((axe, i) => {
     const modules: ComposedModule[] = axe.modules.map((m) => ({
       moduleId: m.moduleId,
+      selection: m.selection,
+      additionalSelections: m.additionalSelections,
       title: m.title,
       durationMin: m.durationMin,
       source: {
@@ -422,7 +449,7 @@ export function compositionFromAxes(
         // passé les filtres de sortie client au moment de la composition.
         excludedFromClientOutputs: false,
       },
-      need: { code: m.needLabel, label: m.needLabel },
+      need: { code: m.selection?.ruleId ?? m.needLabel, label: m.needLabel },
       // Les citations enregistrées, relues comme des preuves de réponse : le
       // détail de l'alerte d'origine n'a pas à être retraversé, c'est le TEXTE
       // qui a été montré au dirigeant qui fait foi.
@@ -438,7 +465,7 @@ export function compositionFromAxes(
       matchedSignals: m.signal ? [m.signal] : [],
       confidence: m.confidence,
       isFoundation: false,
-      targetProfile: null,
+      targetProfile: m.selection?.audience === 'tous' ? null : m.selection?.audience ?? null,
     }));
 
     return {

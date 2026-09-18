@@ -4,7 +4,7 @@ import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
 
 import {
   moduleFamilyOf,
-  recommendModules,
+  suggestModules,
   type ChapterScoreLike,
   type EvidenceAnswer,
   type LibraryModule,
@@ -140,14 +140,14 @@ function chapitre(chapter: number, score: number | null, questionId?: string): C
   };
 }
 
-describe('recommendModules — corollaire D-19 : la bibliothèque se lit conteneurs inactifs', () => {
+describe('suggestModules — corollaire D-19 : la bibliothèque se lit conteneurs inactifs', () => {
   it('propose des modules alors que TOUS les conteneurs sont inactifs', () => {
     // Le test qui tient la règle (spec §5.3). Une liste vide signifierait qu'un
     // filtre `isActive` s'est glissé dans le chemin de composition — et que les
     // 86 modules importés sont redevenus invisibles.
     expect(BIBLIOTHEQUE.every((m) => !m.source.isActive)).toBe(true);
 
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
       answers: REPONSES,
@@ -171,8 +171,8 @@ describe('recommendModules — corollaire D-19 : la bibliothèque se lit contene
       answers: REPONSES,
     };
 
-    const inactifs = recommendModules({ ...args, library: BIBLIOTHEQUE });
-    const actives = recommendModules({ ...args, library: actifs });
+    const inactifs = suggestModules({ ...args, library: BIBLIOTHEQUE });
+    const actives = suggestModules({ ...args, library: actifs });
 
     expect(actives.recommendations.map((r) => r.candidates.map((c) => c.moduleId))).toEqual(
       inactifs.recommendations.map((r) => r.candidates.map((c) => c.moduleId)),
@@ -180,9 +180,9 @@ describe('recommendModules — corollaire D-19 : la bibliothèque se lit contene
   });
 });
 
-describe('recommendModules — traçabilité module ↔ signal ↔ réponse', () => {
+describe('suggestModules — traçabilité module ↔ signal ↔ réponse', () => {
   it('rattache chaque axe servi à une réponse du diagnostic', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30), chapitre(4, 20, 'seller-discovery-formalized')],
       alerts: [
         alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent']),
@@ -205,7 +205,7 @@ describe('recommendModules — traçabilité module ↔ signal ↔ réponse', ()
   });
 
   it('nomme le signal du catalogue qui a fait entrer le module', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
       answers: REPONSES,
@@ -220,7 +220,7 @@ describe('recommendModules — traçabilité module ↔ signal ↔ réponse', ()
   });
 
   it('remonte la réponse mal notée quand c’est le barème qui déclenche, sans alerte', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(4, 20, 'seller-discovery-formalized')],
       alerts: [],
       answers: REPONSES,
@@ -238,9 +238,9 @@ describe('recommendModules — traçabilité module ↔ signal ↔ réponse', ()
   });
 });
 
-describe('recommendModules — règles de catalogue gravées', () => {
+describe('suggestModules — règles de catalogue gravées', () => {
   it('ne propose JAMAIS un module interdit en sortie client (pige)', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
       answers: REPONSES,
@@ -256,7 +256,7 @@ describe('recommendModules — règles de catalogue gravées', () => {
   it('sert une douleur métier avec un module métier, jamais avec de l’IA seule', () => {
     // Le besoin `mandat_exclusivite` n'accepte que METIER. Même si un module IA
     // matchait, il ne serait pas servi.
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
       answers: REPONSES,
@@ -269,7 +269,7 @@ describe('recommendModules — règles de catalogue gravées', () => {
   });
 
   it('propose des modules venus de plusieurs programmes sources', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(3, 25), chapitre(5, 30)],
       alerts: [
         alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent']),
@@ -304,9 +304,9 @@ describe('moduleFamilyOf — le module parle pour lui-même, son rayon parle à 
   });
 });
 
-describe('recommendModules — ce qui ne se comble pas se dit', () => {
+describe('suggestModules — ce qui ne se comble pas se dit', () => {
   it('signale une bibliothèque vide au lieu de rendre un résultat muet', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, [])],
       answers: REPONSES,
@@ -317,7 +317,7 @@ describe('recommendModules — ce qui ne se comble pas se dit', () => {
   });
 
   it('badge « faible » un rapprochement qui ne tient qu’à l’intitulé', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(3, 25)],
       alerts: [alerte('no_one_prospects', 3, [])],
       answers: REPONSES,
@@ -335,7 +335,7 @@ describe('recommendModules — ce qui ne se comble pas se dit', () => {
   });
 });
 
-describe('recommendModules — un mot qui matche tout ne qualifie rien (D-18 au niveau module)', () => {
+describe('suggestModules — un mot qui matche tout ne qualifie rien (D-18 au niveau module)', () => {
   /**
    * Une bibliothèque réaliste : « vendeur » y est partout (comme dans le vrai
    * catalogue, où il touche un module sur cinq), « exclusivite » y est rare.
@@ -360,7 +360,7 @@ describe('recommendModules — un mot qui matche tout ne qualifie rien (D-18 au 
   };
 
   it('ne badge pas « forte » un signal accroché par le seul mot « vendeur »', () => {
-    const out = recommendModules({ ...args, library: grandeBibliotheque() });
+    const out = suggestModules({ ...args, library: grandeBibliotheque() });
     const axe = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite')!;
 
     const generaliste = axe.candidates.find((c) => c.moduleId === 'generaliste');
@@ -369,7 +369,7 @@ describe('recommendModules — un mot qui matche tout ne qualifie rien (D-18 au 
   });
 
   it('classe devant le module accroché par un mot réellement discriminant', () => {
-    const out = recommendModules({ ...args, library: grandeBibliotheque() });
+    const out = suggestModules({ ...args, library: grandeBibliotheque() });
     const axe = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite')!;
 
     expect(axe.candidates[0]!.moduleId).toBe('precis');
@@ -379,13 +379,13 @@ describe('recommendModules — un mot qui matche tout ne qualifie rien (D-18 au 
   it('ne pondère pas une bibliothèque trop petite pour être mesurée', () => {
     // Sur huit modules, « exclusivite » présent deux fois pèse 25 % : la
     // statistique dirait « passe-partout » là où il n'y a qu'un échantillon.
-    const out = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    const out = suggestModules({ ...args, library: BIBLIOTHEQUE });
     const axe = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite')!;
     expect(axe.candidates.some((c) => c.confidence === 'forte')).toBe(true);
   });
 });
 
-describe('recommendModules — composer depuis plusieurs programmes, pas revendre un rayon', () => {
+describe('suggestModules — composer depuis plusieurs programmes, pas revendre un rayon', () => {
   it('plafonne à deux modules par programme source dans un même axe', () => {
     const monoculture: LibraryModule[] = [
       ...Array.from({ length: 6 }, (_, i) =>
@@ -396,7 +396,7 @@ describe('recommendModules — composer depuis plusieurs programmes, pas revendr
       mod('ailleurs', 'Vente de mandats exclusifs', BOOSTER),
     ];
 
-    const out = recommendModules({
+    const out = suggestModules({
       chapterScores: [chapitre(5, 30)],
       alerts: [alerte('exclusivity_below_benchmark', 5, ['mandates-exclusivity-percent'])],
       answers: REPONSES,
@@ -415,7 +415,7 @@ describe('recommendModules — composer depuis plusieurs programmes, pas revendr
   });
 });
 
-describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
+describe('suggestModules — D-19 bis : la version VENDUE fait foi', () => {
   /**
    * Le cas réel : le Drive porte « 055 Maîtrise des techniques de vente » et
    * QualiOF vend `PROD-055` sous le même nom. Le produit vendu ne bouge pas —
@@ -433,7 +433,7 @@ describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
   };
 
   it('ne propose jamais un module dont le rayon fait doublon avec un produit vendu', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -452,12 +452,12 @@ describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
     // La confusion serait fatale : TOUS les rayons sont inactifs (c'est la
     // norme depuis D-19), alors qu'un seul sur vingt fait doublon.
     expect(BIBLIOTHEQUE.every((m) => !m.source.isActive)).toBe(true);
-    const out = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    const out = suggestModules({ ...args, library: BIBLIOTHEQUE });
     expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
   });
 
   it('compte le doublon à part de la pige', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [...BIBLIOTHEQUE, mod('m-doublon', 'Signer en exclusivité', RAYON_DOUBLON)],
     });
@@ -469,7 +469,7 @@ describe('recommendModules — D-19 bis : la version VENDUE fait foi', () => {
 });
 
 
-describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort jamais', () => {
+describe('suggestModules — D-19 ter : un programme NON DIFFUSABLE ne sort jamais', () => {
   /**
    * Le cas réel, relevé le 11/09/2026 sur la liste de rattachement : « L'Agent
    * Incomparable » (PROD-0681) était proposé en TÊTE de deux douleurs — suivi
@@ -492,7 +492,7 @@ describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort ja
   };
 
   it('ne propose jamais un module venu d’un programme non diffusable, même le mieux placé', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -518,12 +518,12 @@ describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort ja
     // (corollaire D-19), un seul programme est non diffusable.
     expect(BIBLIOTHEQUE.every((m) => !m.source.isActive)).toBe(true);
     expect(BIBLIOTHEQUE.every((m) => !m.source.excludedFromClientOutputs)).toBe(true);
-    const out = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    const out = suggestModules({ ...args, library: BIBLIOTHEQUE });
     expect(out.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
   });
 
   it('vaut pour TOUT ce que le programme contient, y compris un module ajouté demain', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -544,7 +544,7 @@ describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort ja
   });
 
   it('compte l’indiffusable à part de la pige et du doublon', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -559,7 +559,7 @@ describe('recommendModules — D-19 ter : un programme NON DIFFUSABLE ne sort ja
 });
 
 
-describe('recommendModules — règle 4 : une étiquette n’est pas un contenu', () => {
+describe('suggestModules — règle 4 : une étiquette n’est pas un contenu', () => {
   /**
    * Le cas réel du 11/09/2026 : « Suivi » (PROD-0680), module du catalogue
    * diagnostic SANS déroulé, gagnait sa place sur « Piloter le stock et le
@@ -580,7 +580,7 @@ describe('recommendModules — règle 4 : une étiquette n’est pas un contenu'
   const SIGNAL = 'Mandat — Trop de mandats simples, exclusivité difficile à obtenir';
 
   it('n’entre jamais dans une recommandation, même porteur du signal exact', () => {
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -597,7 +597,7 @@ describe('recommendModules — règle 4 : une étiquette n’est pas un contenu'
     // `needIdentification` faute de contenu. Ce n'est pas un déroulé, c'est la
     // trame d'un rendez-vous commercial.
     const questions = 'À quelle fréquence suivez-vous vos vendeurs ?';
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [
         ...BIBLIOTHEQUE,
@@ -615,7 +615,7 @@ describe('recommendModules — règle 4 : une étiquette n’est pas un contenu'
   it('la douleur qui ne trouve plus rien le DIT, au lieu d’être servie par une étiquette', () => {
     // Une bibliothèque où le SEUL candidat du besoin est vide : le besoin doit
     // ressortir non comblé, pas rempli d'une coquille.
-    const out = recommendModules({
+    const out = suggestModules({
       ...args,
       library: [mod('m-vide', 'Exclusivité', VENDEUR, { signals: [SIGNAL], contentMd: '' })],
     });
@@ -625,7 +625,7 @@ describe('recommendModules — règle 4 : une étiquette n’est pas un contenu'
   });
 
   it('ne touche pas aux modules qui ont un vrai déroulé', () => {
-    const avant = recommendModules({ ...args, library: BIBLIOTHEQUE });
+    const avant = suggestModules({ ...args, library: BIBLIOTHEQUE });
     expect(avant.libraryModuleCount).toBe(BIBLIOTHEQUE.length - 1); // -1 = la pige
     expect(avant.recommendations.some((r) => r.candidates.length > 0)).toBe(true);
   });
@@ -666,13 +666,13 @@ const SIGNAL_TRANSFORMATION =
   'Transformation — trop d’offres ne deviennent pas des compromis, la négociation cale';
 
 function axeMandat(library: LibraryModule[]) {
-  const out = recommendModules({ ...ARGS_MANDAT, library });
+  const out = suggestModules({ ...ARGS_MANDAT, library });
   const axe = out.recommendations.find((r) => r.need.code === 'mandat_exclusivite');
   expect(axe, 'le besoin mandat_exclusivite doit être déclenché').toBeDefined();
   return axe!;
 }
 
-describe('recommendModules — départage d’une égalité de score (arbitrage du 11/09)', () => {
+describe('suggestModules — départage d’une égalité de score (arbitrage du 11/09)', () => {
   it('le cas réel D017#3 / D034#3 : le candidat accroché par un mot du LABEL sort premier', () => {
     const axe = axeMandat([
       mod('m-d017', 'Convaincre le vendeur avec des arguments solides', VENDEUR, {
@@ -831,7 +831,7 @@ describe('arbitrages de rattachement — un refus métier survit au catalogue', 
   });
 
   function reco(library: LibraryModule[]) {
-    return recommendModules(entree(library)).recommendations.find((r) => r.need.code === BESOIN);
+    return suggestModules(entree(library)).recommendations.find((r) => r.need.code === BESOIN);
   }
 
   it('ne propose plus le module refusé sur CE besoin', () => {
@@ -840,7 +840,7 @@ describe('arbitrages de rattachement — un refus métier survit au catalogue', 
   });
 
   it('le DIT au commercial — un module écarté en silence est un module qu’on rajoute', () => {
-    const out = recommendModules(entree(bibliotheque(REFUSE)));
+    const out = suggestModules(entree(bibliotheque(REFUSE)));
     expect(out.notices.join(' ')).toMatch(/arbitrage|refus/i);
     expect(out.notices.join(' ')).toContain('Rédiger des compromis de vente efficaces');
   });
@@ -872,7 +872,7 @@ describe('notice de rapprochement lexical — elle nomme ses mots', () => {
   const BESOIN = 'transformation';
 
   function noticesPour(titre: string): string {
-    return recommendModules({
+    return suggestModules({
       answers: REPONSES,
       alerts: [],
       chapterScores: [chapitre(8, 30)],

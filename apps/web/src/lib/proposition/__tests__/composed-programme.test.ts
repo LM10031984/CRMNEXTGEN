@@ -508,7 +508,7 @@ describe('CONTRAT — un programme composé ne contient JAMAIS un module sans d�
       // Le module réel, moins bien doté en signaux.
       {
         ...base,
-        sourceRef: null,
+        sourceRef: 'drive:058#6',
         moduleId: 'm-reel',
         title: 'Signer plus de mandats exclusifs',
         signals: [SIGNAL],

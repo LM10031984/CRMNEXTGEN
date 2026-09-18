@@ -20,13 +20,14 @@ import { computeFunding } from '@/lib/financement/funding-engine';
 import type { FundingRuleValues } from '@/lib/financement/types';
 
 import { buildChapterLecture, buildChapterLever } from './lecture';
+import { identifyTrainingNeeds } from './training-needs';
 import { computePipeline } from './pipeline';
 import { getVisibleChapterQuestions, hasValue, type AnswerLike } from './progress';
 import { computeRatios, type DiagnosticAlert } from './ratios';
 import { computeScoring } from './scoring';
 import { resolveEmployeeCount } from './snapshot';
 import { buildTeamObjectives } from './team-objectives';
-import type { AuditData, AuditPriority } from './templates/audit-data';
+import type { AuditData } from './templates/audit-data';
 
 const QUESTIONS_BY_ID = new Map(DIAGNOSTIC_QUESTIONS.map((q) => [q.id, q]));
 
@@ -108,35 +109,6 @@ export function renderAnswerValue(question: DiagnosticQuestion, answer: AnswerLi
   }
 }
 
-/**
- * Les trois priorités du plan 90 jours.
- *
- * Dérivées des chapitres les plus faibles, dans l'ordre de la chaîne de
- * production : on corrige en amont d'abord. Réparer la transformation quand
- * l'entrée de chaîne est tarie ne sert à rien.
- */
-function buildPriorities(
-  chapterScores: { chapter: number; title: string; score: number | null }[],
-  alertsByChapter: Map<number, DiagnosticAlert[]>,
-): AuditPriority[] {
-  const horizons = ['Jours 1 à 30', 'Jours 31 à 60', 'Jours 61 à 90'];
-  return chapterScores
-    .filter((c) => c.score !== null && c.chapter >= 3)
-    .sort((a, b) => a.score! - b.score!)
-    .slice(0, 3)
-    .sort((a, b) => a.chapter - b.chapter)
-    .map((c, i) => {
-      const alerts = (alertsByChapter.get(c.chapter) ?? []).filter((a) => a.audience === 'client');
-      const lever = buildChapterLever(c.chapter as never, alerts);
-      return {
-        title: lever.title,
-        why:
-          alerts[0]?.label ??
-          `${c.title} est noté ${c.score} / 100 : c'est le chapitre où l'effort rapporte le plus vite.`,
-        horizon: horizons[i] ?? 'Au-delà de 90 jours',
-      };
-    });
-}
 
 export function buildAuditData(input: AuditBuildInput): AuditData {
   const answerMap = Object.fromEntries(
@@ -291,7 +263,11 @@ export function buildAuditData(input: AuditBuildInput): AuditData {
     directorQuotes,
     revenueGoal,
     revenueN1,
-    priorities: buildPriorities(scoring.chapters, alertsByChapter),
+    priorities: identifyTrainingNeeds({ chapterScores: scoring.chapters, alerts,
+      answers: chapters.flatMap((c) => c.answers) }).slice(0, 3).map((p, i) => ({
+        title: p.need.label, why: p.trigger,
+        horizon: ['Jours 1 à 30', 'Jours 31 à 60', 'Jours 61 à 90'][i]!,
+      })),
     // E-3 : la source de rédaction est toujours dite, jamais devinée.
     generationSource: 'heuristique',
   };
