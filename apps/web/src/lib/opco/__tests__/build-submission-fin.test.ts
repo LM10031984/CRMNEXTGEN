@@ -235,6 +235,35 @@ describe('dossier de fin de formation — sources réelles', () => {
     expect(m.mail).not.toHaveBeenCalled();
   });
 
+  it('reprend aussi convention et prise en charge manuelles sans génération préalable', async () => {
+    m.documents.mockResolvedValue([]);
+    m.participant.mockResolvedValue({
+      ...participant(),
+      docStatus: Object.fromEntries(
+        ['CONVENTION', 'AGEFICE'].map((type) => [
+          type,
+          {
+            state: 'MANUAL_OK',
+            uploadedSignedPdfKey: `manual/${type}.pdf`,
+            uploadedSignedAt: '2020-01-03T00:00:00Z',
+          },
+        ]),
+      ),
+    });
+    const built = await buildOpcoSubmission('participant', user, 'PRISE_EN_CHARGE');
+    if (!built.ok) throw Error(built.error);
+    expect(built.attachments.find((a) => a.kind === 'CONVENTION')).toMatchObject({
+      key: 'manual/CONVENTION.pdf',
+      signe: true,
+    });
+    expect(built.attachments.find((a) => a.kind === 'AGEFICE_PA_FORM')).toMatchObject({
+      key: 'manual/AGEFICE.pdf',
+      signe: true,
+    });
+    expect(built.missing).not.toContain('CONVENTION');
+    expect(built.missing).not.toContain('AGEFICE_PA_FORM');
+  });
+
   it('refuse une session dont la fin est encore future', async () => {
     const p = participant();
     p.session.endDate = new Date('2999-01-01');

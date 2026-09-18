@@ -112,8 +112,8 @@ describe('zone de dépôt — choix du type de document', () => {
     const bloc = apresSrc.slice(apresSrc.indexOf('<BlocSignature'));
     expect(bloc).toMatch(/depotParticipants=\{dropZoneParticipants\}/);
     // …et c'est bien le bloc qui les passe à la zone.
-    const zone = blocSrc.slice(blocSrc.indexOf('<SignedDocDropZone'));
-    expect(zone).toMatch(/participants=\{depotParticipants\}/);
+    const zone = readFileSync(path.join(__dirname, '..', 'depot-pieces-signees.tsx'), 'utf-8');
+    expect(zone).toContain('participants={participants}');
   });
 
   it('les deux types proposés sont réellement acceptés côté serveur', async () => {
@@ -196,7 +196,7 @@ describe('une seule zone de dépôt dans tout l’écran session', () => {
       return src.includes('<SignedDocDropZone');
     });
     expect(monteurs.map((f) => path.relative(racineSessions, f))).toEqual([
-      path.join('signature', 'bloc-signature.tsx'),
+      path.join('qualiopi-matrix', 'depot-pieces-signees.tsx'),
     ]);
   });
 
@@ -208,15 +208,9 @@ describe('une seule zone de dépôt dans tout l’écran session', () => {
     }
   });
 
-  it('le bloc rend la section repliée, avec les trois chaînes partagées', () => {
-    const blocSrc = readFileSync(
-      path.join(racineSessions, 'signature', 'bloc-signature.tsx'),
-      'utf-8',
-    );
-    expect(blocSrc).toMatch(/TITRE_DEPOT_MANUEL/);
-    expect(blocSrc).toMatch(/AIDE_DEPOT_MANUEL/);
-    expect(blocSrc).toMatch(/MENTION_RETOUR_AUTOMATIQUE/);
-    // Repliée : le cas courant du bloc reste l'envoi en signature.
-    expect(blocSrc).toMatch(/defaultOpen=\{false\}/);
+  it('les anciens blocs renvoient au dépôt unique', () => {
+    const bloc = readFileSync(path.join(racineSessions, 'signature', 'bloc-signature.tsx'), 'utf-8');
+    expect(bloc).toContain('href="#depot-pieces-signees"');
+    expect(bloc).not.toContain('<SignedDocDropZone');
   });
 });

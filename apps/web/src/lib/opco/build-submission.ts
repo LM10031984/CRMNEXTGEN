@@ -1,3 +1,4 @@
+import { manualSignedKey } from './manual-signed-key';
 import { prisma } from '@qualiof/db';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import {
@@ -179,8 +180,17 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
     docs.find((d) => d.type === 'PROGRAMME' && d.participantId === participant.id) ??
     docs.find((d) => d.type === 'PROGRAMME');
 
-  if (conventionDoc) {
-    const version = versionAJoindre(conventionDoc);
+  const conventionScan = manualSignedKey(
+    participant.docStatus,
+    'CONVENTION',
+    conventionDoc?.createdAt,
+  );
+  if (conventionDoc || conventionScan) {
+    const version = conventionDoc?.signedPdfUrl?.trim()
+      ? versionAJoindre(conventionDoc)
+      : conventionScan
+        ? { key: conventionScan, signe: true }
+        : versionAJoindre(conventionDoc!);
     attachments.push({
       key: version.key,
       filename: `Convention_${participant.session.code ?? 'session'}.pdf`,
@@ -205,8 +215,13 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
     missing.push('PROGRAMME');
   }
 
-  if (ageficeDoc) {
-    const version = versionAJoindre(ageficeDoc);
+  const ageficeScan = manualSignedKey(participant.docStatus, 'AGEFICE', ageficeDoc?.createdAt);
+  if (ageficeDoc || ageficeScan) {
+    const version = ageficeDoc?.signedPdfUrl?.trim()
+      ? versionAJoindre(ageficeDoc)
+      : ageficeScan
+        ? { key: ageficeScan, signe: true }
+        : versionAJoindre(ageficeDoc!);
     attachments.push({
       key: version.key,
       filename: `AGEFICE_PA_${participant.person.lastName}.pdf`,
@@ -228,6 +243,7 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
   // l'ordre dans lequel un instructeur les dépile.
   const certificatsVus = new Set<string>();
   for (const source of [conventionDoc, ageficeDoc]) {
+    if (!source?.signedPdfUrl?.trim()) continue;
     const demande = source?.signatureRequest ?? null;
     const cle = (demande?.auditTrailUrl ?? '').trim();
     if (demande === null || cle.length === 0) continue;
@@ -329,25 +345,7 @@ ${
     for (const type of ['EMARGEMENT', 'ASSIDUITE'] as const) {
       const doc = docs.find((d) => d.type === type && d.participantId === participant.id);
       // Le dépôt individuel enregistre aussi sa preuve sans Document généré.
-      const statuses = participant.docStatus as Record<string, unknown> | null;
-      const entry = statuses?.[type];
-      const scan =
-        entry && typeof entry === 'object' && !Array.isArray(entry)
-          ? (entry as Record<string, unknown>)
-          : null;
-      const scanKey =
-        typeof scan?.uploadedSignedPdfKey === 'string' ? scan.uploadedSignedPdfKey.trim() : '';
-      const scanDate =
-        typeof scan?.uploadedSignedAt === 'string'
-          ? new Date(scan.uploadedSignedAt).getTime()
-          : NaN;
-      const manualKey =
-        scan?.state === 'MANUAL_OK' &&
-        scanKey &&
-        Number.isFinite(scanDate) &&
-        (!doc || scanDate >= doc.createdAt.getTime())
-          ? scanKey
-          : null;
+      const manualKey = manualSignedKey(participant.docStatus, type, doc?.createdAt);
       const signedDocument = Boolean(doc?.signedPdfUrl?.trim());
       if (!doc && !manualKey) {
         missing.push(type);
