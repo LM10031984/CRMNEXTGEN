@@ -6,13 +6,14 @@ export async function listTrainers(
   db: Pick<Prisma.TransactionClient, 'person' | 'externalIdentity'> = prisma,
 ) {
   // Formateurs = Persons qui ont une ExternalIdentity entityType=Person.Trainer (depuis l'import)
-  // OU au moins un LegalLink role=FORMATEUR.
+  // OU un LegalLink role=FORMATEUR OU une affectation SessionTrainer (comme le wizard).
   const trainers = await db.person.findMany({
     where: {
       tenantId,
       archived: false,
       OR: [
         { legalLinks: { some: { role: 'FORMATEUR' } } },
+        { trainerSessions: { some: { session: { tenantId } } } },
         // ExternalIdentity Person.Trainer (créé par l'import des formateurs SmartOF)
         // On les recoupe via une requête séparée ci-dessous si besoin
       ],
