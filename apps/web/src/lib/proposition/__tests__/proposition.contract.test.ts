@@ -323,3 +323,11 @@ it('le document relie la douleur à la pratique IA et nomme les besoins non couv
   expect(result).toContain('Besoins restant à traiter');
   expect(result).toContain('Financement acquéreur vérifié &lt;script&gt;');
 });
+
+it('le titre du parcours annonce le volume proposé et non toute l’enveloppe disponible', () => {
+  const data = build();
+  data.pricing.halfDaysMax = 1;
+  data.content.axes[0]!.halfDays = 1;
+  const result = renderPropositionHtml(data);
+  expect(result).toContain('Notre proposition — 1 demi-journée chez vous');
+});

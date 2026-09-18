@@ -113,7 +113,7 @@ function pageCover(data: PropositionData): string {
   </div>
 
   <div class="sec">
-    ${sectionTitle(2, `Notre proposition — ${plural(data.funding.halfDays, 'demi-journée')} chez vous`)}
+    ${sectionTitle(2, `Notre proposition — ${plural(data.pricing.halfDaysMax, 'demi-journée')} chez vous`)}
     ${data.content.axesIntro ? `<p class="lead">${esc(data.content.axesIntro)}</p>` : ''}
     ${renderAxes(data)}
   </div>
