@@ -74,6 +74,7 @@ function participant() {
 function documents() {
   return ['EMARGEMENT', 'ASSIDUITE'].map((type) => ({
     id: type,
+    createdAt: new Date('2020-01-01'),
     type,
     participantId: 'participant',
     entityType: 'participant',
@@ -144,6 +145,94 @@ describe('dossier de fin de formation — sources réelles', () => {
     expect(built.subject).toBe('FIN DE FORMATION pour Jean MARTIN');
     expect((await sendOpcoSubmission('submission')).ok).toBe(true);
     expect(m.mail.mock.calls[0]![0].attachments).toHaveLength(4);
+  });
+
+  it('joint les deux scans individuels sans génération préalable et les transmet au mailer', async () => {
+    m.documents.mockResolvedValue([]);
+    m.participant.mockResolvedValue({
+      ...participant(),
+      docStatus: Object.fromEntries(
+        ['EMARGEMENT', 'ASSIDUITE'].map((type) => [
+          type,
+          {
+            state: 'MANUAL_OK',
+            uploadedSignedPdfKey: `manual/${type}.pdf`,
+            uploadedSignedAt: '2020-01-03T00:00:00Z',
+          },
+        ]),
+      ),
+    });
+    const built = await prepare();
+    expect(built.missing).toEqual([]);
+    expect(built.attachments.filter((a) => a.signe).map((a) => a.key)).toEqual([
+      'manual/EMARGEMENT.pdf',
+      'manual/ASSIDUITE.pdf',
+    ]);
+    expect((await sendOpcoSubmission('submission')).ok).toBe(true);
+    expect(m.download).toHaveBeenCalledWith('documents', 'manual/EMARGEMENT.pdf');
+    expect(m.download).toHaveBeenCalledWith('documents', 'manual/ASSIDUITE.pdf');
+  });
+
+  it('préfère le PDF signé du document au scan historique du suivi', async () => {
+    m.participant.mockResolvedValue({
+      ...participant(),
+      docStatus: {
+        EMARGEMENT: {
+          state: 'MANUAL_OK',
+          uploadedSignedPdfKey: 'historic.pdf',
+          uploadedSignedAt: '2020-01-03T00:00:00Z',
+        },
+      },
+    });
+    const built = await prepare();
+    expect(built.attachments.find((a) => a.kind === 'EMARGEMENT')?.key).toBe(
+      'signed/EMARGEMENT.pdf',
+    );
+  });
+
+  it('reprend le scan récent sans joindre le certificat de l’ancienne demande électronique', async () => {
+    m.documents.mockResolvedValue(
+      documents().map((d) => ({
+        ...d,
+        signedPdfUrl: null,
+        signatureRequest: { auditTrailUrl: 'old-certificate.pdf' },
+      })),
+    );
+    m.participant.mockResolvedValue({
+      ...participant(),
+      docStatus: Object.fromEntries(
+        ['EMARGEMENT', 'ASSIDUITE'].map((type) => [
+          type,
+          {
+            state: 'MANUAL_OK',
+            uploadedSignedPdfKey: `manual/${type}.pdf`,
+            uploadedSignedAt: '2020-01-03T00:00:00Z',
+          },
+        ]),
+      ),
+    });
+    const built = await prepare();
+    expect(built.attachments.filter((a) => a.signe)).toHaveLength(2);
+    expect(built.attachments.some((a) => a.kind === 'AUDIT_TRAIL')).toBe(false);
+  });
+
+  it('refuse une validation manuelle sans fichier et un scan ancien après régénération', async () => {
+    m.documents.mockResolvedValue(documents().map((d) => ({ ...d, signedPdfUrl: null })));
+    m.participant.mockResolvedValue({
+      ...participant(),
+      docStatus: {
+        EMARGEMENT: { state: 'MANUAL_OK' },
+        ASSIDUITE: {
+          state: 'MANUAL_OK',
+          uploadedSignedPdfKey: 'old.pdf',
+          uploadedSignedAt: '2019-01-01T00:00:00Z',
+        },
+      },
+    });
+    const built = await prepare();
+    expect(built.attachments.some((a) => a.key === 'old.pdf')).toBe(false);
+    expect((await sendOpcoSubmission('submission', { force: true })).ok).toBe(false);
+    expect(m.mail).not.toHaveBeenCalled();
   });
 
   it('refuse une session dont la fin est encore future', async () => {

@@ -139,6 +139,7 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
     },
     select: {
       type: true,
+      createdAt: true,
       pdfUrl: true,
       participantId: true,
       // La FORME DE STOCKAGE — elle dit qui la pièce couvre, donc qui nommer
@@ -327,11 +328,36 @@ ${
     missing.splice(0, missing.length, ...(rib ? [] : ['RIB' as const]));
     for (const type of ['EMARGEMENT', 'ASSIDUITE'] as const) {
       const doc = docs.find((d) => d.type === type && d.participantId === participant.id);
-      if (!doc) {
+      // Le dépôt individuel enregistre aussi sa preuve sans Document généré.
+      const statuses = participant.docStatus as Record<string, unknown> | null;
+      const entry = statuses?.[type];
+      const scan =
+        entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? (entry as Record<string, unknown>)
+          : null;
+      const scanKey =
+        typeof scan?.uploadedSignedPdfKey === 'string' ? scan.uploadedSignedPdfKey.trim() : '';
+      const scanDate =
+        typeof scan?.uploadedSignedAt === 'string'
+          ? new Date(scan.uploadedSignedAt).getTime()
+          : NaN;
+      const manualKey =
+        scan?.state === 'MANUAL_OK' &&
+        scanKey &&
+        Number.isFinite(scanDate) &&
+        (!doc || scanDate >= doc.createdAt.getTime())
+          ? scanKey
+          : null;
+      const signedDocument = Boolean(doc?.signedPdfUrl?.trim());
+      if (!doc && !manualKey) {
         missing.push(type);
         continue;
       }
-      const version = versionAJoindre(doc);
+      const version = signedDocument
+        ? versionAJoindre(doc!)
+        : manualKey
+          ? { key: manualKey, signe: true }
+          : versionAJoindre(doc!);
       attachments.push({
         key: version.key,
         filename: `${type}_${participant.person.lastName}.pdf`,
@@ -340,7 +366,8 @@ ${
         signe: version.signe,
       });
       if (
-        doc.signatureRequest?.auditTrailUrl &&
+        signedDocument &&
+        doc?.signatureRequest?.auditTrailUrl &&
         !attachments.some((a) => a.key === doc.signatureRequest!.auditTrailUrl)
       ) {
         attachments.push({
