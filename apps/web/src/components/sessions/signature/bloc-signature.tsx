@@ -107,15 +107,7 @@ import {
   mentionSignatureFaite,
 } from '@/lib/sessions/ordre-signataires';
 import type { ScopeEnvoi } from '@/lib/signature/plan-envoi';
-import {
-  AIDE_DEPOT_MANUEL,
-  MENTION_RETOUR_AUTOMATIQUE,
-  TITRE_DEPOT_MANUEL,
-} from '@/lib/sessions/titre-depot-signe';
-import {
-  SignedDocDropZone,
-  type DropZoneParticipant,
-} from '../qualiopi-matrix/signed-doc-drop-zone';
+import type { DropZoneParticipant } from '../qualiopi-matrix/signed-doc-drop-zone';
 import { RecapitulatifEnvoi } from './recapitulatif-envoi';
 
 export interface BlocSignatureProps {
@@ -155,7 +147,6 @@ export function BlocSignature({
   depotAutorise = false,
   depotParticipants,
   depotDocType,
-  depotDocTypeOptions,
 }: BlocSignatureProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -579,23 +570,9 @@ export function BlocSignature({
           signées à la main, pas ce composant. */}
       {depotDisponible && depotDocType !== undefined && depotParticipants !== undefined && (
         <div className="mt-4">
-          <SignedDocDropZone
-            sessionId={sessionId}
-            docType={depotDocType}
-            participants={depotParticipants}
-            defaultOpen={false}
-            titre={TITRE_DEPOT_MANUEL}
-            aide={
-              <div className="space-y-1.5 text-xs text-muted-foreground">
-                <p>{AIDE_DEPOT_MANUEL}</p>
-                {/* ⚠ CE QUI ÉVITE LE GESTE QUI DÉFAIT LE PRÉCÉDENT. Sans cette
-                    phrase, l'admin qui vient d'envoyer une convention dépose
-                    aussi son scan ici — et annule son propre envoi. */}
-                <p>{MENTION_RETOUR_AUTOMATIQUE}</p>
-              </div>
-            }
-            {...(depotDocTypeOptions === undefined ? {} : { docTypeOptions: depotDocTypeOptions })}
-          />
+          <a href="#depot-pieces-signees" className="text-sm font-medium text-primary underline">
+            Déposer des pièces signées — espace commun en haut de la fiche
+          </a>
         </div>
       )}
 

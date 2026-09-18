@@ -108,11 +108,7 @@ import {
 // `lib/sessions/__tests__/titre-depot-signe.test.ts`, donc l'assertion ici
 // garde « c'est bien ce texte-là qui s'affiche », pas « deux constantes sont
 // égales à elles-mêmes ».
-import {
-  AIDE_DEPOT_MANUEL,
-  MENTION_RETOUR_AUTOMATIQUE,
-  TITRE_DEPOT_MANUEL,
-} from '@/lib/sessions/titre-depot-signe';
+
 
 const SESSION_ID = 'sess-1';
 
@@ -878,131 +874,14 @@ describe('PUISSANCE (g) — qui signe, et à quelle adresse, sur la LIGNE', () =
  *      un admin déposerait ici un scan de la pièce qu'il vient d'envoyer, et
  *      annulerait son propre envoi.
  */
-describe('Zone de dépôt — fusionnée dans le bloc Signature (demande n°4)', () => {
-  const PARTICIPANTS = [
-    { id: 'part-1', fullName: 'Jean DUPONT' },
-    { id: 'part-2', fullName: 'Marie MARTIN' },
-  ];
-
-  function avecDepot(over: Partial<VueSignature> = {}) {
-    return render(
-      <BlocSignature
-        sessionId={SESSION_ID}
-        scope="AFTER"
-        vue={vue({ lignes: [ligne()], ...over })}
-        depotAutorise
-        depotParticipants={PARTICIPANTS}
-        depotDocType="EMARGEMENT"
-        depotDocTypeOptions={[
-          { value: 'EMARGEMENT', label: 'Émargements' },
-          { value: 'ASSIDUITE', label: "Attestations d'assiduité" },
-        ]}
-      />,
-    );
-  }
-
-  it('(a) la section est là, dans le bloc, et REPLIÉE par défaut', () => {
-    avecDepot();
-    const bouton = screen.getByRole('button', { name: /exemplaire signé à la main/i });
-    expect(bouton.getAttribute('aria-expanded')).toBe('false');
-    // Repliée ⇒ la zone de glisser-déposer n'est pas encore dans le DOM.
-    expect(screen.queryAllByLabelText(/type de document/i)).toHaveLength(0);
-  });
-
-  it('(b) dépliée, elle porte le titre, l’aide et la mention — au mot près', () => {
-    avecDepot();
-    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
-
-    const texte = document.body.textContent ?? '';
-    expect(texte).toContain(TITRE_DEPOT_MANUEL);
-    expect(texte).toContain(AIDE_DEPOT_MANUEL);
-    expect(texte).toContain(MENTION_RETOUR_AUTOMATIQUE);
-    // Le choix du type reste offert : l'onglet Après dépose émargements ET
-    // attestations d'assiduité (complément lot B).
-    expect(screen.getByLabelText(/type de document/i)).toBeTruthy();
-  });
-
-  it('(c) le bloc n’est plus MUET quand il n’a que la zone de dépôt à offrir', () => {
-    // Une session sans pièce e-signable garde la feuille d'émargement à
-    // rentrer. Renvoyer `null` ferait disparaître le seul endroit où la
-    // déposer — c'est-à-dire la régression que la fusion introduirait.
-    const { container } = render(
-      <BlocSignature
-        sessionId={SESSION_ID}
-        scope="AFTER"
-        vue={vue({ lignes: [] })}
-        depotAutorise
-        depotParticipants={PARTICIPANTS}
-        depotDocType="EMARGEMENT"
-      />,
-    );
-    expect(container.textContent).toContain(TITRE_DEPOT_MANUEL);
-  });
-
-  it('(d) sans droit d’écriture, aucune zone — un dépôt refusé ne doit pas être proposé', () => {
-    render(
-      <BlocSignature
-        sessionId={SESSION_ID}
-        scope="AFTER"
-        vue={vue({ lignes: [ligne()] })}
-        depotAutorise={false}
-        depotParticipants={PARTICIPANTS}
-        depotDocType="EMARGEMENT"
-      />,
-    );
-    expect(screen.queryAllByRole('button', { name: /exemplaire signé à la main/i })).toHaveLength(
-      0,
-    );
-  });
-
-  it('(e) aucun participant : rien à rattacher, donc rien à proposer', () => {
-    render(
-      <BlocSignature
-        sessionId={SESSION_ID}
-        scope="AFTER"
-        vue={vue({ lignes: [ligne()] })}
-        depotAutorise
-        depotParticipants={[]}
-        depotDocType="EMARGEMENT"
-      />,
-    );
-    expect(screen.queryAllByRole('button', { name: /exemplaire signé à la main/i })).toHaveLength(
-      0,
-    );
-  });
-
-  it('(f) le dépôt reste NOMINATIF : un fichier, un stagiaire — jamais la session d’un coup', () => {
-    const { container } = avecDepot();
-    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
-
-    // Règle métier n°1 du lot A : la fiche est individuelle. Un PDF déposé
-    // ouvre UNE affectation, et les deux inscrits y sont proposés.
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const pdf = new File(['%PDF'], 'dupont-emargement.pdf', { type: 'application/pdf' });
-    fireEvent.change(input, { target: { files: [pdf] } });
-
-    const affectation = screen.getByLabelText(/stagiaire pour dupont-emargement\.pdf/i);
-    expect(affectation.tagName).toBe('SELECT');
-    const options = Array.from((affectation as HTMLSelectElement).options).map((o) => o.text);
-    expect(options.join(' · ')).toContain('Jean DUPONT');
-    expect(options.join(' · ')).toContain('Marie MARTIN');
-    // …et la pré-affectation par nom de fichier a fait son travail.
-    expect((affectation as HTMLSelectElement).value).toBe('part-1');
-  });
-
-  it('(g) la zone nomme la pièce attendue, et ce titre SUIT le type choisi', () => {
-    // Le titre par type (correction n°5, C.2b-6) n'est PAS défait par la
-    // question de l'en-tête : il descend là où les fichiers atterrissent.
-    // « Déposer les convention signés » ne doit pas revenir par cette porte.
-    avecDepot();
-    fireEvent.click(screen.getByRole('button', { name: /exemplaire signé à la main/i }));
-    expect(document.body.textContent).toContain('Déposer les feuilles d’émargement signées');
-
-    fireEvent.change(screen.getByLabelText(/type de document/i), {
-      target: { value: 'ASSIDUITE' },
-    });
-    expect(document.body.textContent).toContain('Déposer les attestations d’assiduité signées');
-    expect(document.body.textContent).not.toContain('Déposer les feuilles d’émargement signées');
+describe('Accès au dépôt unique', () => {
+  it.each([true, false])('respecte le droit de dépôt : %s', (autorise) => {
+    render(<BlocSignature sessionId={SESSION_ID} scope="AFTER" vue={vue({lignes:[ligne()]})}
+      depotAutorise={autorise} depotParticipants={[{id:'part-1',fullName:'Jean DUPONT'}]} depotDocType="EMARGEMENT" />);
+    const lien = screen.queryByRole('link', {name:/déposer des pièces signées/i});
+    if (autorise) expect(lien?.getAttribute('href')).toBe('#depot-pieces-signees');
+    else expect(lien).toBeNull();
+    expect(screen.queryByLabelText(/type de document/i)).toBeNull();
   });
 });
 

@@ -1,3 +1,5 @@
+import { manualSignedKey } from '@/lib/opco/manual-signed-key';
+import { DepotPiecesSignees } from '@/components/sessions/qualiopi-matrix/depot-pieces-signees';
 import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -275,6 +277,8 @@ export default async function SessionDetailPage({
             // les conventions de groupe, toutes formes de stockage confondues.
             status: true,
             signedPdfUrl: true,
+            createdAt: true,
+            signatureKind: true,
             signatureRequestId: true,
             // Lot C.3 (D-C3-1) — les SIGNATAIRES de la demande en cours. Sans
             // eux, une pièce partie affiche « En attente de signature » même
@@ -1763,6 +1767,28 @@ export default async function SessionDetailPage({
           SessionEvaluationBlock + StepFacturation restent HORS onglets
           (déféré, cf. 15-CONTEXT §deferred) — conservés en bas de page.
           ════════════════════════════════════════════════════════════════ */}
+      {canWrite && (
+        <DepotPiecesSignees
+          sessionId={session.id}
+          pieces={session.participants.flatMap((p) =>
+            (['CONVENTION', 'AGEFICE', 'EMARGEMENT', 'ASSIDUITE'] as const).flatMap((type) => {
+              const doc = sessionDocs.filter(d => d.participantId === p.id && d.type === type)
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+              if (!doc?.signedPdfUrl?.trim() && !manualSignedKey(p.docStatus, type, doc?.createdAt)) return [];
+              return [{
+                label: { CONVENTION: 'Convention', AGEFICE: 'Prise en charge AGEFICE', EMARGEMENT: 'Émargement', ASSIDUITE: 'Assiduité' }[type],
+                apprenant: `${p.person.firstName} ${p.person.lastName}`,
+                source: doc?.signedPdfUrl && doc.signatureKind === 'E_SIGNATURE' ? 'DocuSeal' : 'Dépôt manuel',
+                href: `/api/sessions/${session.id}/apprenants/${p.id}/pieces-signees/${type}`,
+              }];
+            })
+          )}
+          participants={session.participants.map((p) => ({
+            id: p.id,
+            fullName: `${p.person.firstName} ${p.person.lastName}`,
+          }))}
+        />
+      )}
       <SessionTabs
         defaultTab={coerceTab(sp.tab)}
         session={
