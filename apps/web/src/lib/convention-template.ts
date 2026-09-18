@@ -51,6 +51,9 @@ export interface ConventionData {
   // Personnes couvertes par CE document, pas tous les inscrits à la session.
   stagiaires: ConventionStagiaire[];
 
+  // Effectif total non annulé au moment de la génération, indépendant du prix.
+  sessionParticipantCount: number;
+
   // Session
   sessionStartDate: Date;
   sessionEndDate: Date;
@@ -341,8 +344,8 @@ ${renderOfPagedFooter(of)}
 <section>
   <h2 class="article">Article 4 — Organisation de l'action de formation</h2>
   <p>L'action de formation aura lieu du <strong>${fmtDate(data.sessionStartDate)} à 9h</strong> au <strong>${fmtDate(data.sessionEndDate)} à 18h</strong>, au ${escapeHtml(data.sessionLieu)}.</p>
-  <p>Effectif couvert par la présente convention : <strong>${nbStagiaires} stagiaire${nbStagiaires > 1 ? 's' : ''}</strong>.</p>
-  <p>L’effectif total de la session peut évoluer au fil des inscriptions. La présente convention concerne ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
+  <p>Elle est organisée pour un effectif de <strong>${data.sessionParticipantCount} stagiaire${data.sessionParticipantCount > 1 ? 's' : ''}</strong>.</p>
+  <p>La présente convention concerne ${nbStagiaires > 1 ? 'les personnes suivantes' : 'la personne suivante'} :</p>
   <p style="padding-left: 14px;">${stagiaireListe}</p>
   ${data.produitTrainerProfile ? `<p>Profil du formateur : ${escapeHtml(data.produitTrainerProfile)}</p>` : ''}
 </section>

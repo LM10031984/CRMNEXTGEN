@@ -83,6 +83,7 @@ export async function generateConventionCore(
       sponsorOrg: true,
       session: {
         include: {
+          _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } },
           product: true,
           location: true,
           trainers: { include: { person: true } },
@@ -254,6 +255,7 @@ export async function generateConventionCore(
     beneficiaireRcsVille: rcsVille,
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
+    sessionParticipantCount: participant.session._count.participants,
     sessionStartDate: participant.session.startDate,
     sessionEndDate: participant.session.endDate,
     conventionDate,
@@ -370,10 +372,10 @@ export async function generateConventionEntrepriseCore(
   if (!org) return { ok: false, error: 'Organisation commanditaire introuvable' };
 
   const participants = await prisma.sessionParticipant.findMany({
-    where: { sessionId, sponsorOrgId, session: { tenantId } },
+    where: { sessionId, sponsorOrgId, session: { tenantId }, enrollmentStatus: { not: 'CANCELLED' } },
     include: {
       person: { include: { legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
-      session: { include: { product: true, location: true } },
+      session: { include: { product: true, location: true, _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } } } },
     },
     orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
   });
@@ -491,6 +493,7 @@ export async function generateConventionEntrepriseCore(
     // par la garde ci-dessus.
     beneficiaireRepresentantNom: representantNom,
     stagiaires,
+    sessionParticipantCount: session._count.participants,
     sessionStartDate: session.startDate,
     sessionEndDate: session.endDate,
     conventionDate,

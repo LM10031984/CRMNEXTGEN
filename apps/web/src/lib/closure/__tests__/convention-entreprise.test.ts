@@ -67,6 +67,7 @@ const SESSION = {
   name: null,
   startDate: new Date('2026-09-14T08:30:00Z'),
   endDate: new Date('2026-09-18T17:30:00Z'),
+  _count: { participants: 5 },
   location: null,
   product: {
     title: 'IA pour conseillers immobiliers',
@@ -135,6 +136,11 @@ describe('generateConventionEntrepriseCore — groupe par commanditaire', () => 
 
     const data = renderMock.mock.calls[0]![0] as { stagiaires: unknown[]; beneficiaireRaisonSociale: string };
     expect(data.stagiaires).toHaveLength(2);
+    expect(renderMock.mock.calls[0]![0].sessionParticipantCount).toBe(5);
+    expect(findManyMock.mock.calls[0]![0].where.enrollmentStatus).toEqual({ not: 'CANCELLED' });
+    expect(findManyMock.mock.calls[0]![0].include.session.include._count).toEqual({
+      select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } },
+    });
     expect(data.beneficiaireRaisonSociale).toBe('OPTIMMO');
     // Consigne Laurent : aucune CSP / poste occupé sur les documents.
     for (const s of data.stagiaires as Record<string, unknown>[]) {
@@ -332,6 +338,14 @@ describe('generateConventionCore — garde anti-doublon', () => {
 
     expect(res.skipped).toBeUndefined();
     expect(createMock).toHaveBeenCalled(); // comportement historique préservé
+    expect(renderMock.mock.calls[0]![0]).toMatchObject({
+      sessionParticipantCount: 5,
+      stagiaires: [{ prenom: 'Alice', nom: 'Martin', email: null }],
+      produitPriceHTPerStagiaire: 700,
+    });
+    expect(prisma.sessionParticipant.findFirst.mock.calls[0][0].include.session.include._count).toEqual({
+      select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } },
+    });
   });
 
   /**
@@ -366,6 +380,23 @@ describe('generateConventionCore — garde anti-doublon', () => {
     expect(res.skipped).toBe(true);
     expect(res.documentId).toBeUndefined();
     expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it('relit l’effectif à chaque génération explicite sans ajouter les autres noms ni changer le tarif', async () => {
+    const { prisma } = (await import('@qualiof/db')) as any;
+    prisma.sessionParticipant.findFirst = vi.fn()
+      .mockResolvedValueOnce({ ...PARTICIPANT, session: { ...PARTICIPANT.session, _count: { participants: 2 } } })
+      .mockResolvedValueOnce({ ...PARTICIPANT, session: { ...PARTICIPANT.session, _count: { participants: 3 } } });
+    prisma.document.findFirst = vi.fn().mockResolvedValue(null);
+    prisma.document.create = createMock;
+    const { generateConventionCore } = await importCore();
+    expect((await generateConventionCore('tnt-1', 'sp-1')).ok).toBe(true);
+    expect((await generateConventionCore('tnt-1', 'sp-1')).ok).toBe(true);
+    expect(renderMock.mock.calls.map(([data]) => data.sessionParticipantCount)).toEqual([2, 3]);
+    for (const [data] of renderMock.mock.calls) {
+      expect(data.stagiaires).toEqual([{ prenom: 'Alice', nom: 'Martin', email: null }]);
+      expect(data.produitPriceHTPerStagiaire).toBe(700);
+    }
   });
 
   it('laisse passer le chemin individuel pour un auto-payeur (EI)', async () => {

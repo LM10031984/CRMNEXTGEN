@@ -38,6 +38,7 @@ function baseData(overrides: Partial<ConventionData> = {}): ConventionData {
     beneficiaireRcsVille: 'Aix-en-Provence',
     beneficiaireRepresentantNom: 'Jean DUPONT',
     stagiaires: [{ prenom: 'Marie', nom: 'Martin', email: 'marie@example.com' }],
+    sessionParticipantCount: 1,
     sessionStartDate: new Date('2026-05-11T00:00:00Z'),
     sessionEndDate: new Date('2026-05-11T00:00:00Z'),
     sessionLieu: 'Nestenn, place de provence, 13127 Vitrolles',
@@ -86,19 +87,23 @@ describe('conventionDate (COR-1) + nettoyage puces (COR-4)', () => {
   });
 });
 
-describe('article 4 — effectif couvert par la convention', () => {
-  it('ne présente pas une inscription individuelle comme l’effectif total de la formation', () => {
-    const html = renderConventionHtml(baseData(), of);
+describe('article 4 — effectif total, noms et tarif du seul dossier', () => {
+  it.each([1, 2, 3])('affiche %i inscrits sans multiplier le prix individuel', (count) => {
+    const html = renderConventionHtml(baseData({ sessionParticipantCount: count }), of);
     const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
-    expect(article4).toContain('Effectif couvert par la présente convention');
-    expect(article4).toContain('<strong>1 stagiaire</strong>');
+    const article7 = html.split('Article 7 —')[1]!.split('Article 8 —')[0]!;
+    expect(article4).toContain(`effectif de <strong>${count} stagiaire${count > 1 ? 's' : ''}</strong>`);
     expect(article4).toContain('Marie MARTIN');
-    expect(article4).not.toContain('Elle est organisée pour un effectif de');
-    expect(article4).toContain('L’effectif total de la session peut évoluer au fil des inscriptions.');
+    expect(article4).toContain('la personne suivante');
+    expect(article4).not.toContain('peut évoluer');
+    expect(article4).not.toContain('Effectif couvert');
+    expect(article7).toMatch(/3[\s\u202f]024,00\s*€ HT/);
+    expect(article7).not.toContain('×');
   });
 
-  it('conserve les deux personnes et le forfait de leur convention commune', () => {
+  it('conserve le forfait et les seuls noms du dossier entreprise dans une session plus grande', () => {
     const html = renderConventionHtml(baseData({
+      sessionParticipantCount: 5,
       stagiaires: [
         { prenom: 'Marie', nom: 'Martin', email: null },
         { prenom: 'Louis', nom: 'Test', email: null },
@@ -107,8 +112,7 @@ describe('article 4 — effectif couvert par la convention', () => {
     }), of);
     const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
     const article7 = html.split('Article 7 —')[1]!.split('Article 8 —')[0]!;
-    expect(article4).toContain('Effectif couvert par la présente convention');
-    expect(article4).toContain('<strong>2 stagiaires</strong>');
+    expect(article4).toContain('<strong>5 stagiaires</strong>');
     expect(article4).toContain('Marie MARTIN');
     expect(article4).toContain('Louis TEST');
     expect(article7).toMatch(/240,00\s*€ HT/);

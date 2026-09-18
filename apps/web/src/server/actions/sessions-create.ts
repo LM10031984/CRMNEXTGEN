@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
-import { prepareSession } from './prepare-training';
 import { synchronizeCompanyPriceTx } from '@/lib/pricing/company-session-price';
 import { validateDeclaredSessionPrice, type SessionRegime } from '@/lib/sessions/session-regime';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
@@ -269,15 +268,6 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
     return { created, createdParticipantIds };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (e) { return { ok: false, error: (e as Error).message }; }
-
-  // Auto-trigger préparation pédagogique complète (programme + déroulé +
-  // checklist + convention/convocation/analyse besoin par participant).
-  // Fire-and-forget : la création de session reste rapide côté UX, la
-  // préparation tourne en arrière-plan (analyse besoin = jobs BullMQ).
-  // Idempotente : les generators sont find-or-create.
-  void prepareSession(session.created.id).catch((e) =>
-    console.warn(`[createSessionFull] prepareSession failed for ${session.created.id}:`, e?.message ?? e),
-  );
 
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');

@@ -1,19 +1,35 @@
-# Convention : effectif du document et effectif de la session
+# Convention : effectif total et génération à la demande
 
-Correction du 18/09/2026 de la phrase de l'article 4 : « Elle est organisée pour un effectif de 1 stagiaire. »
+Décision de Laurent du 18/09/2026 dans cette conversation : « la convention est liée au nombre de participants donc on la génère quand on en a besoin pas de manière auto pour pas faire péter les crédits IA », puis « Mais on nomme pas les autres que l'effectif total ».
 
-Le modèle comptait les personnes couvertes par la convention (`stagiaires.length`) tout en présentant ce nombre comme l'effectif de l'action de formation. Sur un dossier individuel, il affichait donc 1, même si d'autres personnes étaient inscrites à la même session avec leur propre convention.
+Cette décision remplace la première correction du même jour (« Effectif couvert par la présente convention » et « L’effectif total de la session peut évoluer »), rejetée par Laurent.
 
-Le modèle affiche désormais :
+## Comportement
 
-> Effectif couvert par la présente convention : **1 stagiaire**.
+L'article 4 affiche le nombre total d'inscriptions non annulées de la session, tous commanditaires confondus, lu au moment de chaque génération demandée. Une convention individuelle conserve uniquement le nom de son titulaire et son tarif. Les autres inscrits contribuent au compteur, sans être nommés sur ce document. La convention commune d'une entreprise conserve les noms de son propre groupe et son forfait.
+
+Exemple : la session compte deux inscrits. La convention individuelle indique :
+
+> Elle est organisée pour un effectif de **2 stagiaires**.
 >
-> L’effectif total de la session peut évoluer au fil des inscriptions. La présente convention concerne la personne suivante :
+> La présente convention concerne la personne suivante :
+>
+> Gavina FORLANI
 
-La liste reste limitée aux personnes couvertes par ce document. Une convention commune à deux inscrits affiche **2 stagiaires** et leurs deux noms. Aucun effectif total provisoire n'est figé dans les conventions individuelles ; les inscriptions ultérieures à d'autres dossiers ne modifient ni leur bénéficiaire ni leur prix.
+Une nouvelle inscription ne modifie pas le PDF existant et ne lance aucune génération. Le contrôle de fraîcheur existant tient compte du nombre d'inscrits et peut signaler le document à actualiser. La prochaine génération explicitement demandée lit le nouveau total. Le prix individuel reste indépendant de cet effectif.
 
-La correction concerne uniquement la rédaction du modèle. Elle ne change pas le routage des conventions, les prix, les statuts, la base de données ou les PDF déjà stockés. Les brouillons existants doivent être régénérés après déploiement pour afficher le nouveau texte. Aucune régénération de document réel n'a été lancée.
+Hypothèse de comptage : toute inscription autre que `CANCELLED` compte dans l'effectif. Il ne s'agit ni de la capacité maximale ni d'un nombre de présences constatées.
 
-Validation : deux nouveaux tests initialement rouges reproduisent l'ambiguïté. Après correction, 54 tests ciblés de conventions et ancres de signature passent. Suite complète sans cache : **4 369 tests unitaires réussis, 2 ignorés**. Lint et TypeScript passent ; l'avertissement alt d'image préexistant reste présent.
+## Déclenchement et coût
 
-Pour une convention censée couvrir toute une agence mais ne listant qu'un seul inscrit, il reste à vérifier le commanditaire des inscriptions et la date de génération du document. Cette situation est distincte d'une convention individuelle dans une session collective ; aucune hypothèse sur les données réelles n'a été appliquée.
+La création d'une session, l'ajout d'un participant, la validation d'une inscription publique et le passage au statut « Terminée » enregistrent désormais les données sans lancer de préparation documentaire ou de pack. Cela retire aussi les générations de convocations et de pièces AGEFICE à l'ajout d'un inscrit. Les boutons explicites de génération, de préparation et de pack restent disponibles.
+
+Le rendu d'une convention est un modèle HTML/PDF sans appel IA. Les préparations globales, elles, peuvent lancer des travaux IA : elles ne partent plus automatiquement avec ces modifications de session. Les travaux déjà demandés ne sont pas annulés par ce correctif.
+
+## Validation et périmètre
+
+Les tests couvrent les compteurs 1, 2, 3 et 5, une génération à 2 puis à 3 inscrits, les noms limités au dossier, le tarif individuel et le forfait entreprise, l'exclusion des annulations, l'alerte de fraîcheur et l'absence de déclenchement automatique sur les quatre actions ci-dessus. Les tests de régression ont été observés rouges avant correction puis verts.
+
+Aucune modification de schéma dans ce complément. Aucun document réel régénéré et aucune donnée de production consultée ou modifiée. Les PDF existants devront être régénérés à la demande après déploiement pour afficher le nouveau total.
+
+Résultat final : **4 380 tests unitaires réussis, 2 ignorés**, TypeScript et lint validés (avertissement alt préexistant). Preuves détaillées dans `verification/prix-statuts-2026-09-18.md`.

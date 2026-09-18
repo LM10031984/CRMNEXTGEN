@@ -47,3 +47,15 @@ Après les deux passages, une lecture SQL confirme **0 tenant, utilisateur, prod
 ## Limites
 
 Pas de parcours navigateur complet, de test de charge, de merge ni de déploiement. Les migrations et les fixtures ont été appliquées uniquement aux bases jetables décrites ci-dessus. La production n'a pas été consultée ni modifiée.
+
+
+## Complément : effectif et génération manuelle
+
+Décision source et comportement détaillés : `docs/convention-effectif-2026-09-18.md`.
+
+Les tests de régression ont d'abord reproduit 13 échecs : effectif limité aux noms du dossier, préparation automatique, absence du total dans la détection de fraîcheur. Après correction, les 86 tests ciblés passent ; 3 tests complémentaires vérifient ensuite la relecture du total et le chargement des inscriptions non annulées sans exposition des autres noms.
+
+Les vérifications de ce complément sont locales : Prisma, PDF et stockage sont remplacés par des doublures dans les tests unitaires. Aucune génération IA ni connexion à une base réelle. Les migrations et les tests PostgreSQL ci-dessus concernent le lot prix/statuts précédent ; ils n'ont pas été rejoués pour ce complément sans migration.
+
+
+Validation finale du complément : `pnpm test --force` passe sans cache (**4 380 réussis, 2 ignorés** : web 3 941, db 231, shared 208). `pnpm lint --force`, `pnpm --filter @qualiof/web exec tsc --noEmit` et `git diff --check` passent. Seul l'avertissement alt préexistant de `parametres/page.tsx:228` demeure. Aucun E2E navigateur ni déploiement effectué.

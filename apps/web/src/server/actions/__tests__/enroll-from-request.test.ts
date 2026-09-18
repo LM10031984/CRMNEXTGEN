@@ -95,9 +95,10 @@ describe('enrollFromRequest', () => {
     });
   });
 
-  it('régénère les documents pour ce participant', async () => {
+  it('inscrit sans lancer de préparation documentaire', async () => {
     await enrollFromRequest({ preEnrollmentId: 'pe-1' });
-    expect(m.prepareTrainingForSession).toHaveBeenCalledWith('ses-1');
+    expect(m.participantCreate).toHaveBeenCalledTimes(1);
+    expect(m.prepareTrainingForSession).not.toHaveBeenCalled();
   });
 
   it('refuse une demande sans session cible', async () => {

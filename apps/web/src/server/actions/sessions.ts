@@ -29,9 +29,7 @@ import {
   suiviDuProduit,
 } from '@/lib/sessions/changement-produit';
 import { mentionsLieuManquantes } from '@/lib/locations/format-lieu';
-import { generateClosurePack } from './closure-pack';
 import { applyPriceCascade } from '@/lib/pricing/cascade';
-import { estEligibleAgefice, AGEFICE_PARTICIPANT_SELECT } from '@/lib/agefice/eligibilite';
 import { validateDeclaredSessionPrice, type SessionRegime } from '@/lib/sessions/session-regime';
 import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
 import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
@@ -126,102 +124,6 @@ export async function addParticipant(input: {
         sponsorOrgId: input.sponsorOrgId,
       },
     });
-
-    // Auto-génération en parallèle des docs pré-formation pour CE participant.
-    // Tous fire-and-forget pour ne pas bloquer l'inscription si une génération
-    // échoue. Idempotent : skip si déjà existant.
-    // 1) Convention (Code du Travail L6353-1) — template pur ~1s
-    // 2) Convocation
-    // 3) Demande AGEFICE — uniquement si TNS éligible (sponsor AGEFICE OU
-    //    LegalLink EI_SELF/AGENT_COMMERCIAL sur une org rattachée AGEFICE).
-    //    Bug remonté Laurent 2026-06-04 : "AGEFICE doit se créer automatiquement
-    //    sans que je clique sur un bouton".
-    const [existingConvention, existingConvocation, existingAgefice] = await Promise.all([
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'CONVENTION', participantId: part.id },
-        select: { id: true },
-      }),
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId: part.id },
-        select: { id: true },
-      }),
-      prisma.document.findFirst({
-        where: { tenantId: user.tenantId, type: 'AGEFICE', participantId: part.id },
-        select: { id: true },
-      }),
-    ]);
-
-    if (!existingConvention) {
-      // Règle payeur (28/08) : plus d'appel direct au cœur individuel. Sur le
-      // 1er salarié inscrit chez une entreprise, aucune convention de groupe
-      // n'existe encore, et c'est une NOMINATIVE qui était fabriquée — l'inverse
-      // de la règle du 12/08. Le routeur émet la convention d'entreprise.
-      //
-      // Effet recherché à chaque nouvelle inscription du groupe : la convention
-      // d'entreprise est REGÉNÉRÉE pour inclure le nouvel arrivant (elle liste
-      // nominativement les stagiaires couverts et somme leurs prix).
-      // Import DYNAMIQUE, comme la convocation juste en dessous : le routeur
-      // tire `@/lib/storage` (donc `sharedEnv`, fail-loud) — le charger au
-      // sommet du module ferait exploser toute page important `sessions.ts`
-      // hors runtime applicatif.
-      void import('@/lib/closure/route-conventions').then(({ routeConventionsByPayerRule }) =>
-        routeConventionsByPayerRule(user.tenantId, input.sessionId, [
-          {
-            id: part.id,
-            session: { startDate: session.startDate, endDate: session.endDate, regime: session.regime },
-            sponsorOrgId: input.sponsorOrgId,
-            sponsorOrg: {
-              id: sponsor.id,
-              legalName: sponsor.legalName,
-              legalForm: sponsor.legalForm,
-            },
-            person: {
-              firstName: person.firstName,
-              lastName: person.lastName,
-              // Le rôle vient d'être résolu juste au-dessus (lien existant, ou
-              // créé à l'instant avec `input.legalLinkRole`). C'est lui qui
-              // décide convention vs contrat individuel quand le commanditaire
-              // est une entreprise individuelle employeuse.
-              legalLinks: [
-                {
-                  organizationId: input.sponsorOrgId,
-                  role: link?.role ?? input.legalLinkRole ?? '',
-                },
-              ],
-            },
-          },
-        ]),
-      ).catch((e) => {
-        console.warn(`[addParticipant] auto-gen convention failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
-    if (!existingConvocation) {
-      const { generateConvocationForParticipant } = await import('./convocation-generator');
-      generateConvocationForParticipant(part.id).catch((e) => {
-        console.warn(`[addParticipant] auto-gen convocation failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
-    // Eligibilité AGEFICE : sponsor AGEFICE OU EI/AGENT_COMMERCIAL sur org AGEFICE
-    const currentForFunding = session.regime ? await prisma.sessionParticipant.findFirst({ where: { id: part.id, session: { tenantId: user.tenantId } }, select: AGEFICE_PARTICIPANT_SELECT }) : null;
-    const isAgeficeEligible = session.regime ? !!currentForFunding && estEligibleAgefice(currentForFunding) :
-      sponsor.opcoCode === 'AGEFICE' ||
-      (await prisma.legalLink.findFirst({
-        where: {
-          personId: input.personId,
-          OR: [
-            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { opcoCode: 'AGEFICE' } },
-            { role: { in: ['EI_SELF', 'AGENT_COMMERCIAL'] }, organization: { ageficeProfile: { isNot: null } } },
-          ],
-        },
-        select: { id: true },
-      })) !== null;
-
-    if (isAgeficeEligible && !existingAgefice) {
-      const { generateAgeficeForParticipant } = await import('./agefice-generator');
-      generateAgeficeForParticipant(part.id).catch((e) => {
-        console.warn(`[addParticipant] auto-gen AGEFICE failed for ${part.id}:`, e?.message ?? e);
-      });
-    }
 
     revalidatePath(`/app/sessions/${input.sessionId}`);
     return { ok: true, id: part.id };
@@ -761,7 +663,7 @@ export async function updateSessionDates(input: {
 export async function updateSessionStatus(input: {
   sessionId: string;
   newStatus: SessionStatus;
-}): Promise<{ ok: boolean; error?: string; autoPackTriggered?: boolean }> {
+}): Promise<{ ok: boolean; error?: string }> {
   let user;
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL']);
@@ -783,7 +685,7 @@ export async function updateSessionStatus(input: {
 
   // Verrou : une fois COMPLETED, on n'autorise que IN_PROGRESS (rectification)
   // ou CANCELLED → COMPLETED reste interdit pour préserver l'historique propre
-  // (le pack closure a déjà été généré).
+  // (des documents de clôture peuvent déjà avoir été générés).
   if (session.status === 'COMPLETED' && input.newStatus !== 'IN_PROGRESS') {
     return {
       ok: false,
@@ -798,34 +700,7 @@ export async function updateSessionStatus(input: {
   revalidatePath(`/app/sessions/${input.sessionId}`);
   revalidatePath('/app/sessions');
 
-  // Auto-déclenchement du pack fin de formation lors d'une transition vers
-  // COMPLETED — élimine le clic manuel "Générer le pack". Garde-fous :
-  //   - Skip si un batch RUNNING/PENDING existe déjà (évite les doublons en cas
-  //     de toggle rapide IN_PROGRESS ↔ COMPLETED par l'utilisateur).
-  //   - Fire-and-forget (`void`) : la pré-génération du déroulé/grille obs
-  //     session peut prendre 5-10 min via Ollama. Ne pas bloquer la réponse
-  //     du toggle de statut.
-  //   - Erreurs swallowed : un échec d'enqueue ne doit pas casser le change
-  //     de statut. L'utilisateur pourra retrigger manuellement depuis la
-  //     fiche session.
-  let autoPackTriggered = false;
-  if (input.newStatus === 'COMPLETED' && session.status !== 'COMPLETED') {
-    const inFlight = await prisma.closureBatch.count({
-      where: {
-        tenantId: user.tenantId,
-        sessionId: input.sessionId,
-        status: { in: ['PENDING', 'RUNNING'] },
-      },
-    });
-    if (inFlight === 0) {
-      autoPackTriggered = true;
-      void generateClosurePack(input.sessionId).catch((e) => {
-        console.error('[auto-pack] échec déclenchement pour', input.sessionId, ':', (e as Error).message);
-      });
-    }
-  }
-
-  return { ok: true, autoPackTriggered };
+  return { ok: true };
 }
 
 // ---------- Mise à jour des paramètres logistique session (C4.i17) ----------

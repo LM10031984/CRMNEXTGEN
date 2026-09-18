@@ -66,6 +66,7 @@ export interface SourceParticipant {
 }
 
 export interface SourceSession {
+  participantCount?: number;
   code: string | null;
   name: string | null;
   startDate: unknown;
@@ -249,6 +250,7 @@ export function buildDocumentSource(
         // Convention groupe : la composition du groupe fait partie du contrat.
         groupStagiaires: stagiairesTries(ctx.groupStagiaires),
         prixHT: ctx.participant?.priceHT ?? ctx.session?.pricePerLearner ?? ctx.product?.priceHT ?? null,
+        effectifSession: ctx.session?.participantCount ?? null,
         sessionDates: { debut: ctx.session?.startDate, fin: ctx.session?.endDate },
         sessionTitre: ctx.session?.name ?? ctx.product?.title ?? null,
         modalite: ctx.session?.modality ?? null,

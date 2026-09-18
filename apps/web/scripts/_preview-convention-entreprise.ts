@@ -29,7 +29,7 @@ const participants = await prisma.sessionParticipant.findMany({
   where: { sponsorOrgId: ORG_ID },
   include: {
     person: true,
-    session: { include: { product: true, location: true } },
+    session: { include: { product: true, location: true, _count: { select: { participants: { where: { enrollmentStatus: { not: 'CANCELLED' } } } } } } },
   },
   orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
 });
@@ -59,6 +59,7 @@ const data: ConventionData = {
   beneficiaireRcsVille: orgAddr?.city ?? null,
   beneficiaireRepresentantNom: org.representative?.trim() || '',
   stagiaires,
+  sessionParticipantCount: session._count.participants,
   sessionStartDate: session.startDate,
   sessionEndDate: session.endDate,
   conventionDate,

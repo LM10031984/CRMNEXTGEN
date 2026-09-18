@@ -207,7 +207,7 @@ export async function prepareTrainingForSession(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Quick task 260525-kl5 — auto-trigger préparation pédagogique complète
+// Préparation pédagogique complète à la demande
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface PrepareSessionResult {
@@ -272,12 +272,9 @@ export interface SessionPreparationStatus {
  *  - Convention + Convocation par participant (find-or-create sha256)
  *  - Analyse besoin par participant via batch BullMQ (kind=ANALYSE_BESOIN)
  *
- * Appelée en fire-and-forget depuis createSessionFull (post-transaction)
- * OU à la demande depuis le bloc UI "Compléter (X manquants)".
- *
- * Pas de `requireRole` ici : le contexte d'auth peut être perdu en
- * fire-and-forget post-transaction. Bail out silencieux si pas d'user. Côté
- * UI, `canWrite` filtre déjà l'accès au bouton.
+ * Appelée à la demande depuis le bloc UI « Compléter (X manquants) ».
+ * La création de session et les inscriptions ne lancent aucune préparation.
+ * Le contexte utilisateur est vérifié avant de lancer la génération.
  */
 export async function prepareSession(sessionId: string): Promise<PrepareSessionResult> {
   const empty: PrepareSessionResult = {

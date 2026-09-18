@@ -14,9 +14,8 @@
  * conversion refuse de se rejouer, et rien d'autre ne créait le participant.
  *
  * Le formulaire public ne touche JAMAIS au prix. En revanche l'inscrit hérite
- * du tarif de la session : poser 0 en dur fabriquait une convention à zéro
- * euro dès la validation, puisque `prepareTrainingForSession` génère les
- * pièces dans la foulée. Le tarif reste modifiable ensuite depuis la fiche
+ * du tarif de la session pour les documents générés ensuite à la demande.
+ * Le tarif reste modifiable depuis la fiche
  * participant, et `applyPriceCascade` le repropage si la session change de
  * tarif (cf. lib/pricing/, audit 2026-08-28 écart E-2).
  */
@@ -31,7 +30,6 @@ import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 import { createDeclaredParticipant } from '@/lib/pricing/declared-session-enrollment';
 import { resolveDefaultParticipantPrice } from '@/lib/pricing/resolve-default-price';
 import { convertPreEnrollment } from './preinscription-convert';
-import { prepareTrainingForSession } from './prepare-training';
 
 export async function enrollFromRequest(input: {
   preEnrollmentId: string;
@@ -200,13 +198,6 @@ export async function enrollFromRequest(input: {
   });
 
   } catch (e) { return { ok: false, error: (e as Error).message }; }
-
-  // 4. Documents du nouvel inscrit. Idempotent (find-or-create) : rejouer ne
-  //    duplique rien, et la règle « payeur personne morale ⇒ convention de
-  //    groupe » est appliquée par l'orchestrateur, pas ici.
-  await Promise.resolve(prepareTrainingForSession(sessionId)).catch((e: any) =>
-    console.warn('[inscription] préparation documentaire échouée', e?.message ?? e),
-  );
 
   revalidatePath(`/app/sessions/${sessionId}`);
   revalidatePath('/app/inscriptions');
