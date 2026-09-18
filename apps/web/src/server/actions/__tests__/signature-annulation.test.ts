@@ -163,6 +163,7 @@ function tnsViaSonEi() {
       firstName: 'Florent',
       lastName: 'Hausswirth',
       email: 'florent@ei.fr',
+      phone: '0631056390',
       legalLinks: [
         {
           role: 'EI_SELF',
