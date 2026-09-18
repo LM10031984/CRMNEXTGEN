@@ -85,3 +85,33 @@ describe('conventionDate (COR-1) + nettoyage puces (COR-4)', () => {
     expect(html).toContain('Contenu réel');
   });
 });
+
+describe('article 4 — effectif couvert par la convention', () => {
+  it('ne présente pas une inscription individuelle comme l’effectif total de la formation', () => {
+    const html = renderConventionHtml(baseData(), of);
+    const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
+    expect(article4).toContain('Effectif couvert par la présente convention');
+    expect(article4).toContain('<strong>1 stagiaire</strong>');
+    expect(article4).toContain('Marie MARTIN');
+    expect(article4).not.toContain('Elle est organisée pour un effectif de');
+    expect(article4).toContain('L’effectif total de la session peut évoluer au fil des inscriptions.');
+  });
+
+  it('conserve les deux personnes et le forfait de leur convention commune', () => {
+    const html = renderConventionHtml(baseData({
+      stagiaires: [
+        { prenom: 'Marie', nom: 'Martin', email: null },
+        { prenom: 'Louis', nom: 'Test', email: null },
+      ],
+      prixGlobalHT: 240,
+    }), of);
+    const article4 = html.split('Article 4 —')[1]!.split('Article 5 —')[0]!;
+    const article7 = html.split('Article 7 —')[1]!.split('Article 8 —')[0]!;
+    expect(article4).toContain('Effectif couvert par la présente convention');
+    expect(article4).toContain('<strong>2 stagiaires</strong>');
+    expect(article4).toContain('Marie MARTIN');
+    expect(article4).toContain('Louis TEST');
+    expect(article7).toMatch(/240,00\s*€ HT/);
+    expect(article7).not.toContain('×');
+  });
+});
