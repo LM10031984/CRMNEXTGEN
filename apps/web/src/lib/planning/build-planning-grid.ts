@@ -1,3 +1,4 @@
+import { availabilityDayBounds } from './availability-time';
 /** Planning en lecture, décisions D-1 à D-5 de la spec du 18/09/2026. */
 export type PlanningTrainer = { id: string; firstName: string; lastName: string };
 export type PlanningRegime = 'INDIVIDUEL' | 'ENTREPRISE' | 'undeclared';
@@ -81,6 +82,7 @@ export function buildPlanningGrid(
   filters: PlanningFilters = {},
 ) {
   const days = daysInRange(range);
+  const bounds = new Map(days.map((day) => [day, availabilityDayBounds(day)]));
   const statuses = planningStatuses(filters);
   const visibleSessions = sessions.filter(
     (s) =>
@@ -128,8 +130,7 @@ export function buildPlanningGrid(
             conflicts: [],
           });
         }
-        const dayStart = new Date(`${date}T00:00:00Z`).getTime();
-        const dayEnd = new Date(`${shiftDay(date, 1)}T00:00:00Z`).getTime();
+        const { start: dayStart, end: dayEnd } = bounds.get(date)!;
         const cellAbsences = absences.filter(
           (a) => Date.parse(a.startsAt) < dayEnd && Date.parse(a.endsAt) > dayStart,
         );

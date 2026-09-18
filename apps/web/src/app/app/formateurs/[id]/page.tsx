@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { formatAddress } from '@qualiof/shared';
+import { availabilityAccess } from '@/lib/planning/availability-access';
+import { TrainerAvailabilities } from '@/components/planning/trainer-availabilities';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -48,7 +50,7 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
         },
       },
       trainerAvailabilities: {
-        where: { startsAt: { gt: new Date() } },
+        where: { tenantId: user.tenantId, endsAt: { gt: new Date() } },
         orderBy: { startsAt: 'asc' },
         take: 5,
       },
@@ -57,6 +59,8 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
 
   if (!trainer) notFound();
 
+  const access = await availabilityAccess(user);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const now = new Date();
   const subOrg = trainer.legalLinks[0]?.organization;
   const address = (trainer.personalAddress ?? null) as null | { street?: string; postalCode?: string; city?: string };
@@ -266,21 +270,13 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
           </section>
 
           {/* Disponibilités */}
-          {trainer.trainerAvailabilities.length > 0 && (
-            <section className="rounded-2xl border border-border bg-white p-6">
-              <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-muted-foreground">
-                Prochaines disponibilités
-              </h2>
-              <ul className="space-y-2 text-sm">
-                {trainer.trainerAvailabilities.map((a) => (
-                  <li key={a.id} className="text-xs">
-                    <span className="font-medium">{new Date(a.startsAt).toLocaleDateString('fr-FR')}</span>
-                    <span className="text-muted-foreground"> · {a.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <TrainerAvailabilities
+            trainer={{ id: trainer.id, firstName: trainer.firstName, lastName: trainer.lastName }}
+            availabilities={trainer.trainerAvailabilities.map((a) => ({ id: a.id, trainerId: a.trainerId, startsAt: a.startsAt.toISOString(), endsAt: a.endsAt.toISOString(), status: a.status, note: a.note }))}
+            canEdit={access.trainerIds.includes(trainer.id)}
+            today={today}
+            reason={access.reason}
+          />
 
           <section className="rounded-2xl border border-border bg-background p-5 text-sm">
             <h2 className="mb-2 font-semibold">Planning du formateur</h2>

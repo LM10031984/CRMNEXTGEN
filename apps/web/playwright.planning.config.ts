@@ -24,5 +24,5 @@ export default defineConfig({
       GOOGLE_OAUTH_REFRESH_TOKEN: '',
     },
   },
-  use: { baseURL, viewport: { width: 1720, height: 1080 }, trace: 'retain-on-failure' },
+  use: { baseURL, locale: 'fr-FR', timezoneId: 'Europe/Paris', viewport: { width: 1720, height: 1080 }, trace: 'retain-on-failure' },
 });

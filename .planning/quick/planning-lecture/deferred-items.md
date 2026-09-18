@@ -1,6 +1,6 @@
 # Différé — planning lot 1
 
-- Lot 2 : déclarer, modifier et supprimer des indisponibilités (RBAC FORMATEUR propriétaire / ADMIN / MANAGER), dialog et validation. Aucun début d'implémentation dans ce lot.
+- Lot 2 livré après validation du lot 1 : voir ../planning-indisponibilites/VALIDATION.md.
 - Export ICS / synchronisation Google Calendar des indisponibilités.
 - Filtre « mes sessions » propre au rôle FORMATEUR.
 - Réaffectation par glisser-déposer.

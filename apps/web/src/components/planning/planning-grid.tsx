@@ -1,5 +1,8 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
+import { AvailabilityDialog, type AvailabilitySelection } from './availability-dialog';
+import { availabilityDayBounds } from '@/lib/planning/availability-time';
 import { AlertTriangle, CalendarRange } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -50,8 +53,7 @@ function rowSegments(row: PlanningGridData['rows'][number], week: boolean) {
       .filter((s) => !half || s.halfDays.includes(half))
       .forEach((s) => add(`session-${s.id}`, s));
     cell.availabilities.forEach((a) => {
-      const start = Date.parse(`${cell.date}T${half === 'afternoon' ? '12' : '00'}:00:00Z`);
-      const end = start + (half ? 12 : 24) * 60 * 60 * 1000;
+      const { start, end } = availabilityDayBounds(cell.date, half);
       if (Date.parse(a.startsAt) < end && Date.parse(a.endsAt) > start)
         add(`absence-${a.id}`, undefined, a);
     });
@@ -81,11 +83,14 @@ export function PlanningGrid({
   grid,
   view,
   today,
+  editableTrainerIds = [],
 }: {
   grid: PlanningGridData;
   view: 'month' | 'week';
   today: string;
+  editableTrainerIds?: string[];
 }) {
+  const [selection, setSelection] = useState<AvailabilitySelection | null>(null);
   const week = view === 'week';
   const count = grid.days.length * (week ? 2 : 1);
   const outerColumns = `210px repeat(${count}, minmax(${week ? 66 : 40}px, 1fr))`;
@@ -168,6 +173,7 @@ export function PlanningGrid({
           </div>
           {grid.rows.map((row) => {
             const { segments, laneCount, columns } = rowSegments(row, week);
+            const canEdit = editableTrainerIds.includes(row.trainer.id);
             return (
               <div
                 key={row.trainer.id}
@@ -186,6 +192,15 @@ export function PlanningGrid({
                     Principal sur {row.primarySessionCount} session
                     {row.primarySessionCount > 1 ? 's' : ''} {week ? 'cette semaine' : 'ce mois'}
                   </span>
+                  {canEdit && (
+                    <button
+                      className="w-fit text-left text-xs font-medium text-primary hover:underline"
+                      aria-label={`Déclarer une indisponibilité pour ${row.trainer.firstName} ${row.trainer.lastName}`}
+                      onClick={() => setSelection({ trainer: row.trainer, day: today })}
+                    >
+                      + Indisponibilité
+                    </button>
+                  )}
                 </div>
                 <div
                   className="grid py-2"
@@ -195,18 +210,32 @@ export function PlanningGrid({
                     gridTemplateRows: `repeat(${laneCount}, 30px)`,
                   }}
                 >
-                  {columns.map(({ cell, half }, i) => (
-                    <div
-                      key={`${cell.date}-${half}`}
-                      className={cn(
-                        'border-r border-border',
-                        [0, 6].includes(new Date(`${cell.date}T00:00:00Z`).getUTCDay()) &&
-                          'bg-muted',
-                        cell.date === today && 'bg-primary-50',
-                      )}
-                      style={{ gridColumn: i + 1, gridRow: `1 / span ${laneCount}` }}
-                    />
-                  ))}
+                  {columns.map(({ cell, half }, i) => {
+                    const empty =
+                      !cell.sessions.some((entry) => !half || entry.halfDays.includes(half)) &&
+                      cell.availabilities.length === 0;
+                    const className = cn(
+                      'border-r border-border',
+                      [0, 6].includes(new Date(`${cell.date}T00:00:00Z`).getUTCDay()) && 'bg-muted',
+                      cell.date === today && 'bg-primary-50',
+                    );
+                    const style = { gridColumn: i + 1, gridRow: `1 / span ${laneCount}` };
+                    return canEdit && empty ? (
+                      <button
+                        key={`${cell.date}-${half}`}
+                        type="button"
+                        style={style}
+                        className={cn(
+                          className,
+                          'hover:bg-primary-100 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+                        )}
+                        aria-label={`Déclarer une indisponibilité pour ${row.trainer.firstName} ${row.trainer.lastName} le ${formatPlanningDate(cell.date, { dateStyle: 'long' })}${half === 'morning' ? ' matin' : half === 'afternoon' ? ' après-midi' : ''}`}
+                        onClick={() => setSelection({ trainer: row.trainer, day: cell.date, half })}
+                      />
+                    ) : (
+                      <div key={`${cell.date}-${half}`} className={className} style={style} />
+                    );
+                  })}
                   {segments.map((segment) => {
                     const { entry, absence } = segment;
                     const style = {
@@ -240,7 +269,13 @@ export function PlanningGrid({
                         </Link>
                       );
                     return (
-                      <div
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        aria-label={`Modifier l’indisponibilité de ${row.trainer.firstName} ${row.trainer.lastName}`}
+                        onClick={() =>
+                          setSelection({ trainer: row.trainer, day: today, availability: absence })
+                        }
                         key={`${absence!.id}-${segment.start}`}
                         title={`${absence!.status === 'busy' ? 'Indisponible' : 'À confirmer'}${absence!.note ? ` · ${absence!.note}` : ''}`}
                         className={cn(
@@ -258,7 +293,7 @@ export function PlanningGrid({
                         <span className="rounded bg-background px-1">
                           {absence!.status === 'busy' ? 'Indisponible' : 'À confirmer'}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -303,6 +338,7 @@ export function PlanningGrid({
           </ul>
         )}
       </section>
+      {selection && <AvailabilityDialog selection={selection} onClose={() => setSelection(null)} />}
     </>
   );
 }

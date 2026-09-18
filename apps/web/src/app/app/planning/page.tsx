@@ -1,4 +1,5 @@
 import { prisma, type SessionStatus } from '@qualiof/db';
+import { availabilityAccess } from '@/lib/planning/availability-access';
 import { requireRole } from '@/lib/rbac';
 import { listTrainers } from '@/lib/planning/list-trainers';
 import { buildPlanningGrid, planningStatuses, shiftDay } from '@/lib/planning/build-planning-grid';
@@ -22,7 +23,7 @@ export default async function PlanningPage({
   const query = parsePlanningQuery(searchParams, today);
   const start = new Date(`${shiftDay(query.range.start, -7)}T00:00:00Z`);
   const end = new Date(`${shiftDay(query.range.end, 8)}T00:00:00Z`);
-  const [allTrainers, sessions, availabilities] = await Promise.all([
+  const [allTrainers, sessions, availabilities, access] = await Promise.all([
     listTrainers(user.tenantId),
     prisma.trainingSession.findMany({
       where: {
@@ -44,6 +45,7 @@ export default async function PlanningPage({
       where: { tenantId: user.tenantId, startsAt: { lt: end }, endsAt: { gt: start } },
       orderBy: { startsAt: 'asc' },
     }),
+    availabilityAccess(user),
   ]);
   const trainers = allTrainers.map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
   const grid = buildPlanningGrid(
@@ -86,12 +88,22 @@ export default async function PlanningPage({
         subtitle="Disponibilités, sessions et régimes de financement"
       />
       <PlanningToolbar trainers={trainers} today={today} conflictCount={grid.conflicts.length} />
+      {access.reason && (
+        <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
+          {access.reason}
+        </p>
+      )}
       {trainers.length > 0 && grid.rows.length === 0 ? (
         <p className="rounded-xl border border-border p-8 text-center text-muted-foreground">
           Aucun formateur ne correspond aux filtres sélectionnés.
         </p>
       ) : (
-        <PlanningGrid grid={grid} view={query.view} today={today} />
+        <PlanningGrid
+          grid={grid}
+          view={query.view}
+          today={today}
+          editableTrainerIds={access.trainerIds}
+        />
       )}
     </div>
   );
