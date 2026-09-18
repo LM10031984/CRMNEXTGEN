@@ -18,6 +18,8 @@ import {
   updateTrainerAvailability,
   deleteTrainerAvailability,
 } from '../trainer-availability';
+import { listTrainers } from '@/lib/planning/list-trainers';
+import { availabilityAccess } from '@/lib/planning/availability-access';
 import { checkTrainerAvailability } from '@/lib/schedule/trainer-availability';
 
 let tenantId: string;
@@ -92,6 +94,8 @@ afterEach(async () => {
   for (const id of [tenantId, otherTenantId].filter(Boolean)) {
     await db.trainerAvailability.deleteMany({ where: { tenantId: id } });
     await db.externalIdentity.deleteMany({ where: { tenantId: id } });
+    await db.trainingSession.deleteMany({ where: { tenantId: id } });
+    await db.trainingProduct.deleteMany({ where: { tenantId: id } });
     await db.person.deleteMany({ where: { tenantId: id } });
     await db.auditLog.deleteMany({ where: { tenantId: id } });
     await db.tenant.delete({ where: { id } });
@@ -102,6 +106,26 @@ afterAll(async () => {
 });
 
 describe('indisponibilités — PostgreSQL réel', () => {
+  it('reconnaît les formateurs de sessions sans marquage import ni lien organisation, même hors période', async () => {
+    await db.externalIdentity.deleteMany({ where: { tenantId, entityId: trainerId } });
+    const product = await db.trainingProduct.create({
+      data: { tenantId, code: 'TEST-HISTORY', title: 'Historique', durationHours: 7,
+        modality: 'PRESENTIEL', objectives: [], programMd: 'Test' },
+    });
+    const archived = await db.person.create({
+      data: { tenantId, firstName: 'Archive', lastName: 'Test', archived: true },
+    });
+    await db.person.create({ data: { tenantId, firstName: 'Non formateur', lastName: 'Test' } });
+    await db.trainingSession.create({
+      data: { tenantId, productId: product.id, code: 'TEST-HISTORY', status: 'COMPLETED',
+        startDate: new Date('2020-01-01'), endDate: new Date('2020-01-02'), modality: 'PRESENTIEL',
+        trainers: { create: [trainerId, archived.id].map(personId => ({ personId, role: 'FORMATEUR' })) } },
+    });
+    expect((await listTrainers(tenantId)).map(t => t.id)).toEqual([trainerId]);
+    expect((await availabilityAccess({ ...user, role: 'FORMATEUR' })).trainerIds).toEqual([trainerId]);
+    expect(await createTrainerAvailability({ trainerId, ...dates })).toMatchObject({ ok: true });
+  });
+
   it('crée, modifie puis supprime avec audit before/after et revalidation', async () => {
     const result = await createTrainerAvailability({ trainerId, ...dates });
     expect(result).toMatchObject({ ok: true, changed: true });
