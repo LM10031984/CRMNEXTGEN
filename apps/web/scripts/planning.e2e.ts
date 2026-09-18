@@ -35,6 +35,7 @@ test('planning : vrai login, régime sur la bonne ligne, semaine et URL partagea
       .getByTestId('trainer-row-planning-claire')
       .locator('[data-session-id="planning-conflit"].ring-danger'),
   ).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Planning', exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/planning-mois.png', fullPage: true });
   await page.getByRole('button', { name: 'Semaine', exact: true }).click();
   await expect(page).toHaveURL(/view=week/);
@@ -49,5 +50,12 @@ test('planning : vrai login, régime sur la bonne ligne, semaine et URL partagea
   await page.goBack();
   await expect(page).not.toHaveURL(/regime=/);
   await expect(alice.locator('[data-regime="INDIVIDUEL"]')).toHaveCount(3);
+  await page.goto('/app/formateurs');
+  await page.getByRole('link', { name: 'Voir le planning', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/planning$/);
+  await page.goto('/app/formateurs/planning-alice');
+  await page.getByRole('link', { name: 'Voir le planning', exact: true }).click();
+  await expect(page).toHaveURL(/trainer=planning-alice/);
+  await expect(page.getByTestId('trainer-row-planning-benoit')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

@@ -17,7 +17,17 @@ export default async function FormateursPage() {
       <PageHeader
         title="Formateurs"
         subtitle={`${allTrainers.length} formateur${allTrainers.length > 1 ? 's' : ''} (interne ou sous-traitant)`}
-        actions={<CreateTrainerButton variant="primary" />}
+        actions={
+          <div className="flex items-center gap-3">
+            <Link
+              href="/app/planning"
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-primary hover:bg-muted"
+            >
+              Voir le planning
+            </Link>
+            <CreateTrainerButton variant="primary" />
+          </div>
+        }
       />
 
       {allTrainers.length === 0 ? (

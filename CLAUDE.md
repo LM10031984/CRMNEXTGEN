@@ -29,6 +29,7 @@ Si l'un de ces quatre piliers casse, le reste de l'outil perd sa valeur.
 
 ### Routes (convention naming)
 
+- `/app/planning` : planning partagé des formateurs en lecture (lot 1, spec 18/09/2026).
 - French routes, kebab-case where multi-word : `/app/dossiers-opco`, `/app/budget-agefice`.
 - Exceptions historiques préservées :
   - `/app/preinscriptions` (no hyphen — depuis palier 4)

@@ -282,13 +282,17 @@ export default async function FormateurDetailPage({ params }: { params: Promise<
             </section>
           )}
 
-          <section className="rounded-2xl border border-dashed border-border bg-muted/30 p-5 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1.5">Bientôt disponible :</p>
-            <ul className="space-y-0.5 list-disc pl-4">
-              <li>Édition des coordonnées et tarif (palier 2.2)</li>
-              <li>Calendrier de disponibilités cliquable (palier 3)</li>
-              <li>Récap CA généré et factures sous-traitant (lot 2)</li>
-            </ul>
+          <section className="rounded-2xl border border-border bg-background p-5 text-sm">
+            <h2 className="mb-2 font-semibold">Planning du formateur</h2>
+            <p className="mb-3 text-muted-foreground">
+              Retrouvez ses sessions et ses indisponibilités dans le planning partagé.
+            </p>
+            <Link
+              href={`/app/planning?trainer=${trainer.id}`}
+              className="font-medium text-primary hover:underline"
+            >
+              Voir le planning
+            </Link>
           </section>
         </div>
       </div>

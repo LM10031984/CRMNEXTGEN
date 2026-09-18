@@ -5,6 +5,7 @@ import {
   BookOpen,
   FileText,
   Calendar,
+  CalendarRange,
   Receipt,
   Megaphone,
   Settings,
@@ -206,6 +207,12 @@ export const NAV: NavSection[] = [
         label: 'Formateurs',
         href: '/app/formateurs',
         icon: GraduationCap,
+        allowedRoles: ['ADMIN', 'MANAGER', 'FORMATEUR', 'LECTEUR'],
+      },
+      {
+        label: 'Planning',
+        href: '/app/planning',
+        icon: CalendarRange,
         allowedRoles: ['ADMIN', 'MANAGER', 'FORMATEUR', 'LECTEUR'],
       },
       // Produits : 6 rôles — pas de filtre
