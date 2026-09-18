@@ -99,8 +99,8 @@ export function PlanningGrid({
       <div className="rounded-2xl border border-border bg-background p-12 text-center text-muted-foreground">
         <CalendarRange className="mx-auto mb-3 h-8 w-8" />
         <p>
-          Aucun formateur. Un formateur est une personne rattachée à une organisation avec le rôle
-          Formateur.
+          Aucun formateur. Les personnes affectées à une session, importées comme formateurs ou
+          rattachées à une organisation avec le rôle Formateur apparaissent ici.
         </p>
       </div>
     );

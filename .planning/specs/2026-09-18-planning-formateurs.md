@@ -28,7 +28,7 @@ calendrier d'événements. Ce que Laurent cherche en un coup d'œil : les trous 
 | Indisponibilités déclarées | ⚠ modèle présent, **aucune écriture dans l'app** (données importées d'Airtable uniquement) | `TrainerAvailability` (status `available` / `busy` / `tentative`) |
 | Détection de conflit formateur | ✅ en prod, affichée dans le wizard étape 2 comme avertissement (PR #85) | `lib/schedule/trainer-availability.ts` → `checkTrainerAvailability` |
 | Régime de la session | ✅ en prod depuis PR #96, `null` sur l'historique (pas de rétro-remplissage, voulu) | `TrainingSession.regime` : `ENTREPRISE` \| `INDIVIDUEL` |
-| Liste des formateurs | ✅ mais **inline dans la page** | `app/app/formateurs/page.tsx` : Person avec un `LegalLink role=FORMATEUR` OU une `ExternalIdentity entityType=Person.Trainer` |
+| Liste des formateurs | ✅ mais **inline dans la page** | `app/app/formateurs/page.tsx` : Person avec un `LegalLink role=FORMATEUR` OU une `ExternalIdentity entityType=Person.Trainer` OU une affectation `SessionTrainer` dans le tenant (alignement wizard, correctif du 18/09) |
 | Promesse non tenue | « Bientôt disponible : calendrier de disponibilités cliquable (palier 3) » | `app/app/formateurs/[id]/page.tsx` |
 
 Conclusion : **pas de migration**. Tout le chantier est de la lecture + un premier chemin d'écriture
