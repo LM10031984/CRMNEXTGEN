@@ -28,13 +28,22 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 
 const generateClosurePack = vi.fn(async (..._a: unknown[]) => ({ ok: true, total: 6 }));
 const dispatchGenerateDoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
+vi.mock('@/components/dossiers-opco/compose-opco-button', () => ({
+  ComposeOpcoButton: () => null,
+}));
 
 vi.mock('@/server/actions/closure-pack', () => ({
   generateClosurePack: (...a: unknown[]) => generateClosurePack(...a),
 }));
 vi.mock('@/server/actions/dispatch-generate-doc', () => ({
   dispatchGenerateDoc: (...a: unknown[]) => dispatchGenerateDoc(...a),
-  dispatchGenerateMissing: vi.fn(async () => ({ ok: true, total: 0, success: 0, failed: 0, errors: [] })),
+  dispatchGenerateMissing: vi.fn(async () => ({
+    ok: true,
+    total: 0,
+    success: 0,
+    failed: 0,
+    errors: [],
+  })),
 }));
 vi.mock('@/server/actions/deroule-product-generator', () => ({
   generateDerouleForProduct: vi.fn(async () => ({ ok: true })),

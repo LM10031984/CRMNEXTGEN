@@ -52,7 +52,8 @@ vi.mock('@/server/actions/generate-checklist-formation', () => ({
   generateChecklistForSession: (...a: unknown[]) => generateChecklistForSession(...a),
 }));
 vi.mock('@/server/actions/generate-satisfaction-session', () => ({
-  generateSatisfactionSessionForSession: (...a: unknown[]) => generateSatisfactionSessionForSession(...a),
+  generateSatisfactionSessionForSession: (...a: unknown[]) =>
+    generateSatisfactionSessionForSession(...a),
 }));
 
 // Blocs par apprenant (Laurent 2026-09-10) : deux moteurs de plus. Sans ces
@@ -349,3 +350,4 @@ describe('TabApres — actions par apprenant sur la ligne du nom', () => {
     expect(screen.queryByText(/par apprenant/i)).toBeNull();
   });
 });
+vi.mock('@/server/actions/opco-submission', () => ({ composeOpcoSubmission: vi.fn() }));

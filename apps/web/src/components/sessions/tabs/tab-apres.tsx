@@ -20,10 +20,19 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Download, ExternalLink, FileText, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import {
+  Check,
+  Download,
+  ExternalLink,
+  FileText,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { BatchProgressAutoRefresh } from '../batch-progress-auto-refresh';
 import { LearnerPhaseActions } from '../learner-phase-actions';
+import { ComposeOpcoButton } from '@/components/dossiers-opco/compose-opco-button';
 import { docCompletion, type CompletionItem, type DocState } from '@/lib/sessions/doc-completion';
 import { apresMissingCount } from './tab-apres-helpers';
 import { closureKindsForPhase, phaseLabel, type DocPhase } from '@/lib/docs/doc-phase';
@@ -103,7 +112,11 @@ const SESSION_CARDS: Array<{
   { key: 'deroule', title: 'Déroulé pédagogique', shortLabel: 'Déroulé' },
   { key: 'grilleObs', title: "Grille d'observation session", shortLabel: 'Grille observation' },
   { key: 'checklist', title: 'Checklist formation', shortLabel: 'Checklist' },
-  { key: 'satisfactionSession', title: 'Bilan satisfaction session', shortLabel: 'Bilan satisfaction' },
+  {
+    key: 'satisfactionSession',
+    title: 'Bilan satisfaction session',
+    shortLabel: 'Bilan satisfaction',
+  },
 ];
 
 export function TabApres({
@@ -300,9 +313,7 @@ export function TabApres({
           force,
         });
         if (r.ok) {
-          toast.success(
-            `${fullName} — attestation d'assiduité ${force ? 'régénérée' : 'générée'}`,
-          );
+          toast.success(`${fullName} — attestation d'assiduité ${force ? 'régénérée' : 'générée'}`);
           router.refresh();
         } else {
           toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
@@ -350,7 +361,12 @@ export function TabApres({
             <h2 className="font-semibold text-base">Pack fin de formation</h2>
             <p className="text-sm text-muted-foreground">
               {completion.ready}/{completion.total} prêts
-              {missing > 0 && <> · {missing} manquant{missing > 1 ? 's' : ''}</>}
+              {missing > 0 && (
+                <>
+                  {' '}
+                  · {missing} manquant{missing > 1 ? 's' : ''}
+                </>
+              )}
             </p>
           </div>
           {packCta}
@@ -524,21 +540,28 @@ function PhaseLearnerBlocks({
                 <span className="normal-case font-normal"> ({group.sponsorOrgLabel})</span>
               )}
             </h4>
-            <LearnerPhaseActions
-              sessionId={sessionId}
-              participantId={group.participantId}
-              participantName={group.fullName}
-              phase={phase}
-              readyCount={group.readyCount}
-              readyLabels={group.items
-                .filter((it) => it.state === 'generated')
-                .map((it) => it.label)}
-              missingCount={group.missingCount}
-              canGenerate={canWrite}
-              onGenerateAll={() => onGenerateAll(group, phase)}
-              onRegenerateAll={() => onRegenerateAll(group, phase)}
-              busy={busyParticipant === group.participantId}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              {canWrite &&
+                phase === 'apres' &&
+                group.items.some((item) => item.docType === 'ASSIDUITE') && (
+                  <ComposeOpcoButton participantId={group.participantId} stage="FIN_FORMATION" />
+                )}
+              <LearnerPhaseActions
+                sessionId={sessionId}
+                participantId={group.participantId}
+                participantName={group.fullName}
+                phase={phase}
+                readyCount={group.readyCount}
+                readyLabels={group.items
+                  .filter((it) => it.state === 'generated')
+                  .map((it) => it.label)}
+                missingCount={group.missingCount}
+                canGenerate={canWrite}
+                onGenerateAll={() => onGenerateAll(group, phase)}
+                onRegenerateAll={() => onRegenerateAll(group, phase)}
+                busy={busyParticipant === group.participantId}
+              />
+            </div>
           </div>
           <ul className="divide-y divide-border">
             {group.items.map((item) => (
@@ -575,9 +598,10 @@ function PhaseLearnerBlocks({
                     </a>
                   </div>
                 )}
-                {!item.pdfUrl && !(item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite) && (
-                  <span className="text-xs text-muted-foreground shrink-0">À générer</span>
-                )}
+                {!item.pdfUrl &&
+                  !(item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite) && (
+                    <span className="text-xs text-muted-foreground shrink-0">À générer</span>
+                  )}
                 {item.docType === 'ASSIDUITE' && canWrite && onGenerateAssiduite && (
                   <button
                     type="button"

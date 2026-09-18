@@ -79,7 +79,10 @@ function isNationalFallback(pa: PointAccueilCandidate): boolean {
 }
 
 /** Vrai si ce point d'accueil peut prendre en charge ce département. */
-export function servesDepartment(pa: PointAccueilCandidate, department: string): boolean {
+export function servesDepartment(
+  pa: Pick<PointAccueilCandidate, 'department' | 'departmentsServed'>,
+  department: string,
+): boolean {
   const served = pa.departmentsServed ?? [];
   // Repli sur le référentiel ancien (couverture non renseignée) : on retombe
   // sur l'implantation, l'ancien comportement, plutôt que d'écarter le point.

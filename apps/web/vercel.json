@@ -9,6 +9,7 @@
     { "path": "/api/cron/signature-sync", "schedule": "17 * * * *" },
     { "path": "/api/cron/signature-reminders", "schedule": "35 7 * * *" },
     { "path": "/api/cron/preinscription-reminders", "schedule": "45 7 * * *" },
-    { "path": "/api/cron/opco-submission-reminders", "schedule": "55 7 * * *" }
+    { "path": "/api/cron/opco-submission-reminders", "schedule": "55 7 * * *" },
+    { "path": "/api/cron/formation-alerts", "schedule": "5 8 * * *" }
   ]
 }

@@ -12,6 +12,11 @@
  * /preinscription, qui crée une ligne à chaque visite).
  */
 
+import {
+  queueEnrollmentSubmittedAlert,
+  flushFormationEventAlerts,
+} from '@/lib/alertes/formation-notifier';
+import { checkFormationDocuments } from '@/lib/alertes/formation-check';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { prisma } from '@qualiof/db';
@@ -203,23 +208,33 @@ export async function submitSessionEnrollmentRequest(
     select: { id: true },
   });
 
-  if (existante) {
-    await prisma.preEnrollment.update({ where: { id: existante.id }, data: donnees });
-  } else {
-    const expiresAt = new Date(session.endDate);
-    expiresAt.setDate(expiresAt.getDate() + 30);
-    await prisma.preEnrollment.create({
-      data: {
-        ...donnees,
-        tenantId: session.tenantId,
-        token: generatePublicToken(),
-        expiresAt,
-        intendedSessionId: session.id,
-        extractedData: { draftId },
-      },
-    });
-  }
+  await prisma.$transaction(async (tx) => {
+    let submitted;
+    if (existante) {
+      submitted = await tx.preEnrollment.update({ where: { id: existante.id }, data: donnees });
+    } else {
+      const expiresAt = new Date(session.endDate);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      submitted = await tx.preEnrollment.create({
+        data: {
+          ...donnees,
+          tenantId: session.tenantId,
+          token: generatePublicToken(),
+          expiresAt,
+          intendedSessionId: session.id,
+          extractedData: { draftId },
+        },
+      });
+    }
 
+    await queueEnrollmentSubmittedAlert(tx, submitted);
+  });
+  await flushFormationEventAlerts().catch(() =>
+    console.error('[formation-alert] livraison différée au cron'),
+  );
+  await checkFormationDocuments(new Date(), session.id).catch(() =>
+    console.error('[formation-alert] contrôle différé au cron'),
+  );
   revalidatePath('/app/inscriptions');
   revalidatePath(`/app/sessions/${session.id}`);
   return { ok: true };

@@ -14,3 +14,5 @@ export * from './diagnostic';
 export * from './proposition';
 export * from './participant-sponsor';
 export * from './trainer-availability';
+
+export * from './opco-envoi';

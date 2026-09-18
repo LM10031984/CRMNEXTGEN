@@ -37,6 +37,8 @@ export async function GET(req: Request) {
   const candidates = await prisma.opcoSubmission.findMany({
     where: {
       status: 'SENT',
+      stage: 'PRISE_EN_CHARGE', // Le dossier final ne déclenche pas une relance de prise en charge.
+      deliveryState: 'READY',
       sentAt: { not: null },
       reminderCount: { lt: MAX_REMINDERS },
     },

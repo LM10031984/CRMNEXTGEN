@@ -26,14 +26,16 @@ const findManyParticipants = vi.fn();
 const findManyDocuments = vi.fn();
 const createSubmission = vi.fn();
 const findFirstSubmission = vi.fn();
+const findOtherSubmission = vi.fn();
 const updateSubmission = vi.fn();
+const updateManySubmission = vi.fn();
+const auditCreate = vi.fn();
 const sendMailMock = vi.fn();
 const downloadFileMock = vi.fn();
 const validateRequestMock = vi.fn();
 
-vi.mock('@qualiof/db', () => ({
-  Prisma: {},
-  prisma: {
+vi.mock('@qualiof/db', () => {
+  const db = {
     sessionParticipant: {
       findFirst: (...a: unknown[]) => findFirstParticipant(...a),
       findMany: (...a: unknown[]) => findManyParticipants(...a),
@@ -41,11 +43,18 @@ vi.mock('@qualiof/db', () => ({
     document: { findMany: (...a: unknown[]) => findManyDocuments(...a) },
     opcoSubmission: {
       create: (...a: unknown[]) => createSubmission(...a),
-      findFirst: (...a: unknown[]) => findFirstSubmission(...a),
+      findFirst: (a: any) => (a.where?.id?.not ? findOtherSubmission(a) : findFirstSubmission(a)),
       update: (...a: unknown[]) => updateSubmission(...a),
+      updateMany: (...a: unknown[]) => updateManySubmission(...a),
     },
-  },
-}));
+    $executeRaw: vi.fn(),
+    auditLog: { create: (...a: unknown[]) => auditCreate(...a) },
+  };
+  return {
+    Prisma: {},
+    prisma: { ...db, $transaction: async (fn: (tx: typeof db) => unknown) => fn(db) },
+  };
+});
 vi.mock('@/lib/auth', () => ({ validateRequest: (...a: unknown[]) => validateRequestMock(...a) }));
 vi.mock('@/lib/mailer', () => ({ sendMail: (...a: unknown[]) => sendMailMock(...a) }));
 vi.mock('@/lib/storage', () => ({
@@ -54,7 +63,12 @@ vi.mock('@/lib/storage', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-import { composeOpcoSubmission, sendOpcoSubmission } from '../opco-submission';
+import {
+  composeOpcoSubmission,
+  sendOpcoSubmission,
+  resolveOpcoDelivery,
+  updateOpcoSubmissionDraft,
+} from '../opco-submission';
 import type { SubmissionAttachment } from '../opco-submission';
 
 const PA_NICE = { id: 'pa-1', name: 'CCI Nice Côte d’Azur', email: 'formation@cci-nice.fr' };
@@ -63,12 +77,14 @@ function participant(over: Record<string, unknown> = {}) {
   return {
     id: 'part-1',
     priceHT: 3000,
+    sessionId: 'sess-1',
     sponsorOrgId: 'org-1',
     person: {
       firstName: 'Jean',
       lastName: 'Dupont',
       ribKey: 'docs/rib.pdf',
-      sensitiveData: { idDocumentUrl: 'docs/cni.pdf' },
+      legalLinks: [],
+      sensitiveData: { idDocumentUrl: 'docs/cni.pdf', socialSecurityNb: '1870277243087' },
     },
     sponsorOrg: {
       id: 'org-1',
@@ -100,9 +116,10 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
       entityId: null,
       pdfUrl: 'docs/convention.pdf',
       signedPdfUrl: over.conventionSignee === false ? null : 'signed/convention.pdf',
-      signatureRequest: over.conventionSignee === false
-        ? null
-        : { id: 'req-1', auditTrailUrl: 'signed/convention.audit-trail.pdf' },
+      signatureRequest:
+        over.conventionSignee === false
+          ? null
+          : { id: 'req-1', auditTrailUrl: 'signed/convention.audit-trail.pdf' },
     },
     {
       id: 'doc-agefice',
@@ -112,9 +129,10 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
       entityId: null,
       pdfUrl: 'docs/agefice.pdf',
       signedPdfUrl: over.ageficeSignee === false ? null : 'signed/agefice.pdf',
-      signatureRequest: over.ageficeSignee === false
-        ? null
-        : { id: 'req-2', auditTrailUrl: 'signed/agefice.audit-trail.pdf' },
+      signatureRequest:
+        over.ageficeSignee === false
+          ? null
+          : { id: 'req-2', auditTrailUrl: 'signed/agefice.audit-trail.pdf' },
     },
     {
       id: 'doc-prog',
@@ -135,8 +153,18 @@ function piecesCreees(): SubmissionAttachment[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findOtherSubmission.mockReset().mockResolvedValue(null);
+  findFirstSubmission.mockReset().mockResolvedValue(null);
+  updateManySubmission.mockReset().mockResolvedValue({ count: 1 });
   validateRequestMock.mockResolvedValue({
-    user: { id: 'u-1', tenantId: 't-1', role: 'ADMIN', firstName: 'Laurent', lastName: 'Marx', email: 'laurent@start-academy.fr' },
+    user: {
+      id: 'u-1',
+      tenantId: 't-1',
+      role: 'ADMIN',
+      firstName: 'Laurent',
+      lastName: 'Marx',
+      email: 'laurent@start-academy.fr',
+    },
   });
   findFirstParticipant.mockResolvedValue(participant());
   // Les inscrits de la session — ils ne servent qu'à la PORTÉE d'une convention
@@ -200,7 +228,11 @@ describe('composeOpcoSubmission — le certificat, la pièce que les AGEFICE ré
     // certificats : sous le même nom, le financeur ne peut plus dire lequel
     // couvre la convention.
     await composeOpcoSubmission('part-1');
-    expect(piecesCreees().filter((p) => p.kind === 'AUDIT_TRAIL').map((p) => p.filename)).toEqual([
+    expect(
+      piecesCreees()
+        .filter((p) => p.kind === 'AUDIT_TRAIL')
+        .map((p) => p.filename),
+    ).toEqual([
       'Certificat-de-signature-Convention-Jean-DUPONT-SES-0112.pdf',
       'Certificat-de-signature-Dossier-AGEFICE-Jean-DUPONT-SES-0112.pdf',
     ]);
@@ -211,7 +243,9 @@ describe('composeOpcoSubmission — le certificat, la pièce que les AGEFICE ré
     // ferait deux pièces jointes identiques dans le mail du financeur.
     findManyDocuments.mockResolvedValue(
       documents().map((d) =>
-        d.signatureRequest ? { ...d, signatureRequest: { id: 'req-1', auditTrailUrl: 'signed/x.audit-trail.pdf' } } : d,
+        d.signatureRequest
+          ? { ...d, signatureRequest: { id: 'req-1', auditTrailUrl: 'signed/x.audit-trail.pdf' } }
+          : d,
       ),
     );
     await composeOpcoSubmission('part-1');
@@ -266,43 +300,168 @@ function submission(attachments: SubmissionAttachment[], over: Record<string, un
   return {
     id: 'sub-1',
     status: 'DRAFT',
+    deliveryState: 'READY',
+    participantId: 'part-1',
+    stage: 'PRISE_EN_CHARGE',
     recipientEmail: 'formation@cci-nice.fr',
     subject: 'Dossier AGEFICE',
-    bodyHtml: '<p>x</p>',
+    bodyHtml: '<p>1870277243087</p>',
     attachments,
     participant: { sessionId: 'sess-1' },
     ...over,
   };
 }
 
+const PJ_BASE: SubmissionAttachment[] = [
+  { key: 'docs/cni.pdf', filename: 'cni.pdf', kind: 'CNI', included: true, signe: false },
+  { key: 'docs/rib.pdf', filename: 'rib.pdf', kind: 'RIB', included: true, signe: false },
+  {
+    key: 'docs/cfp.pdf',
+    filename: 'cfp.pdf',
+    kind: 'CFP_ATTESTATION',
+    included: true,
+    signe: false,
+  },
+  {
+    key: 'docs/programme.pdf',
+    filename: 'programme.pdf',
+    kind: 'PROGRAMME',
+    included: true,
+    signe: false,
+  },
+];
 const PJ_SIGNEES: SubmissionAttachment[] = [
-  { key: 'signed/convention.pdf', filename: 'c.pdf', kind: 'CONVENTION', included: true, signe: true },
-  { key: 'signed/agefice.pdf', filename: 'a.pdf', kind: 'AGEFICE_PA_FORM', included: true, signe: true },
+  ...PJ_BASE,
+  {
+    key: 'signed/convention.pdf',
+    filename: 'c.pdf',
+    kind: 'CONVENTION',
+    included: true,
+    signe: true,
+  },
+  {
+    key: 'signed/agefice.pdf',
+    filename: 'a.pdf',
+    kind: 'AGEFICE_PA_FORM',
+    included: true,
+    signe: true,
+  },
 ];
 const PJ_NON_SIGNEES: SubmissionAttachment[] = [
-  { key: 'docs/convention.pdf', filename: 'c.pdf', kind: 'CONVENTION', included: true, signe: false },
-  { key: 'signed/agefice.pdf', filename: 'a.pdf', kind: 'AGEFICE_PA_FORM', included: true, signe: true },
+  ...PJ_BASE,
+  {
+    key: 'docs/convention.pdf',
+    filename: 'c.pdf',
+    kind: 'CONVENTION',
+    included: true,
+    signe: false,
+  },
+  {
+    key: 'signed/agefice.pdf',
+    filename: 'a.pdf',
+    kind: 'AGEFICE_PA_FORM',
+    included: true,
+    signe: true,
+  },
 ];
 
 describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
+  it('exige chacune des six pièces même pour ADMIN avec force', async () => {
+    for (const piece of PJ_SIGNEES) {
+      findFirstSubmission.mockResolvedValue(
+        submission(PJ_SIGNEES.filter((p) => p.kind !== piece.kind)),
+      );
+      const result = await sendOpcoSubmission('sub-1', { force: true });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Pièces manquantes');
+    }
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('le mode simulation conserve le brouillon et libère le verrou', async () => {
+    findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+    sendMailMock.mockResolvedValue({ ok: true, dryRun: true });
+    expect(await sendOpcoSubmission('sub-1')).toEqual({ ok: true, dryRun: true });
+    expect(updateManySubmission.mock.calls.some((call) => call[0].data.status === 'SENT')).toBe(
+      false,
+    );
+    expect(updateManySubmission.mock.calls.at(-1)![0].data.deliveryState).toBe('READY');
+  });
+
+  it('une deuxième tentative concurrente ne déclenche pas SMTP', async () => {
+    findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+    updateManySubmission.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const results = await Promise.all([sendOpcoSubmission('sub-1'), sendOpcoSubmission('sub-1')]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('un compte lecture seule est refusé avant le claim', async () => {
+    validateRequestMock.mockResolvedValue({ user: { id: 'u', tenantId: 't-1', role: 'READONLY' } });
+    expect((await sendOpcoSubmission('sub-1')).ok).toBe(false);
+    expect(updateManySubmission).not.toHaveBeenCalled();
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('une clé de stockage forgée ne peut jamais être téléchargée ni envoyée', async () => {
+    findFirstSubmission.mockResolvedValue(
+      submission(
+        PJ_SIGNEES.map((p) => (p.kind === 'RIB' ? { ...p, key: 'other-tenant/secret.pdf' } : p)),
+      ),
+    );
+    const result = await sendOpcoSubmission('sub-1');
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('pièces ont changé');
+    expect(downloadFileMock).not.toHaveBeenCalled();
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('refuse une ancienne version quand la convention a été remplacée', async () => {
+    findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+    findManyDocuments.mockResolvedValue(
+      documents().map((d) =>
+        d.type === 'CONVENTION' ? { ...d, signedPdfUrl: 'signed/new.pdf' } : d,
+      ),
+    );
+    expect((await sendOpcoSubmission('sub-1')).ok).toBe(false);
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('un résultat SMTP ambigu bloque la reprise automatique', async () => {
+    findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+    sendMailMock.mockResolvedValue({ ok: false, error: 'timeout' });
+    expect((await sendOpcoSubmission('sub-1')).ok).toBe(false);
+    expect(updateManySubmission.mock.calls.at(-1)![0].data.deliveryState).toBe('UNCERTAIN');
+    expect(updateManySubmission.mock.calls.some((call) => call[0].data.status === 'SENT')).toBe(
+      false,
+    );
+  });
   it('refuse d’envoyer un dossier dont une pièce exigée n’est pas signée, en la NOMMANT', async () => {
     findFirstSubmission.mockResolvedValue(submission(PJ_NON_SIGNEES));
     const r = await sendOpcoSubmission('sub-1');
     expect(r.ok).toBe(false);
-    expect(r.error).toContain('Convention de formation non signée');
+    expect(r.error).toContain('Signature manquante');
+    expect(r.error).toContain('Convention');
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it('un ADMIN peut FORCER — c’est une décision, pas un contournement', async () => {
+  it('un ADMIN ne peut pas forcer un dossier AGEFICE incomplet', async () => {
     findFirstSubmission.mockResolvedValue(submission(PJ_NON_SIGNEES));
     const r = await sendOpcoSubmission('sub-1', { force: true });
-    expect(r.ok).toBe(true);
-    expect(sendMailMock).toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+    expect(sendMailMock).not.toHaveBeenCalled();
   });
 
   it('un COMMERCIAL ne peut pas forcer', async () => {
     validateRequestMock.mockResolvedValue({
-      user: { id: 'u-2', tenantId: 't-1', role: 'COMMERCIAL', firstName: 'C', lastName: 'C', email: 'c@x.fr' },
+      user: {
+        id: 'u-2',
+        tenantId: 't-1',
+        role: 'COMMERCIAL',
+        firstName: 'C',
+        lastName: 'C',
+        email: 'c@x.fr',
+      },
     });
     findFirstSubmission.mockResolvedValue(submission(PJ_NON_SIGNEES));
     const r = await sendOpcoSubmission('sub-1', { force: true });
@@ -312,7 +471,9 @@ describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
 
   it('un dossier entièrement signé part sans rien demander', async () => {
     findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
-    findManyDocuments.mockResolvedValue([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
+    findManyDocuments
+      .mockResolvedValueOnce(documents())
+      .mockResolvedValueOnce([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
     const r = await sendOpcoSubmission('sub-1');
     expect(r.ok).toBe(true);
   });
@@ -323,7 +484,9 @@ describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
 describe('sendOpcoSubmission — ce que l’envoi laisse derrière lui', () => {
   beforeEach(() => {
     findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
-    findManyDocuments.mockResolvedValue([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
+    findManyDocuments
+      .mockResolvedValueOnce(documents())
+      .mockResolvedValueOnce([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
   });
 
   it('la trace « ce document est parti » retrouve les documents par leur clé SIGNÉE', async () => {
@@ -334,8 +497,8 @@ describe('sendOpcoSubmission — ce que l’envoi laisse derrière lui', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           OR: [
-            { pdfUrl: { in: ['signed/convention.pdf', 'signed/agefice.pdf'] } },
-            { signedPdfUrl: { in: ['signed/convention.pdf', 'signed/agefice.pdf'] } },
+            { pdfUrl: { in: PJ_SIGNEES.map((a) => a.key) } },
+            { signedPdfUrl: { in: PJ_SIGNEES.map((a) => a.key) } },
           ],
         }),
       }),
@@ -352,15 +515,22 @@ describe('sendOpcoSubmission — ce que l’envoi laisse derrière lui', () => {
     // les pièces ». Pas un `mailto:` — il ne joint pas de fichiers de façon
     // fiable — et pas un second envoi, qui doublerait la trace.
     await sendOpcoSubmission('sub-1');
-    expect(sendMailMock.mock.calls[0]![0].cc).toBe('laurent@start-academy.fr');
+    expect(sendMailMock.mock.calls[0]![0].cc).toBe('formation@start-academy.fr');
   });
 
-  it('un expéditeur sans adresse n’ajoute aucune copie', async () => {
+  it('la copie AGEFICE va toujours à formation même sans email utilisateur', async () => {
     validateRequestMock.mockResolvedValue({
-      user: { id: 'u-1', tenantId: 't-1', role: 'ADMIN', firstName: 'L', lastName: 'M', email: null },
+      user: {
+        id: 'u-1',
+        tenantId: 't-1',
+        role: 'ADMIN',
+        firstName: 'L',
+        lastName: 'M',
+        email: null,
+      },
     });
     await sendOpcoSubmission('sub-1');
-    expect(sendMailMock.mock.calls[0]![0].cc).toBeUndefined();
+    expect(sendMailMock.mock.calls[0]![0].cc).toBe('formation@start-academy.fr');
   });
 });
 
@@ -414,4 +584,50 @@ describe('le certificat porte le nom de la PORTÉE de sa pièce, pas du dossier 
       'Certificat-de-signature-Convention-Jean-DUPONT-SES-0112.pdf',
     );
   });
+});
+
+describe('reprise vérifiée et édition sûre', () => {
+  it('ne réarme pas un envoi encore récent', async () => {
+    findFirstSubmission.mockResolvedValue(
+      submission(PJ_SIGNEES, { deliveryState: 'SENDING', sendingStartedAt: new Date() }),
+    );
+    expect((await resolveOpcoDelivery('sub-1', 'RETRY')).ok).toBe(false);
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+  it('un administrateur peut réarmer après contrôle un envoi incertain ancien', async () => {
+    findFirstSubmission.mockResolvedValue(
+      submission(PJ_SIGNEES, {
+        deliveryState: 'UNCERTAIN',
+        sendingStartedAt: new Date(Date.now() - 11 * 60_000),
+      }),
+    );
+    expect((await resolveOpcoDelivery('sub-1', 'RETRY')).ok).toBe(true);
+    expect(updateManySubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deliveryState: 'READY', sendingStartedAt: null }),
+      }),
+    );
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'opco.delivery_reconciled' }),
+      }),
+    );
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+  it('refuse de falsifier une signature ou une clé via édition du brouillon', async () => {
+    findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+    const result = await updateOpcoSubmissionDraft('sub-1', {
+      attachments: PJ_SIGNEES.map((a) => ({ ...a, key: 'autre-tenant.pdf' })),
+    });
+    expect(result.ok).toBe(false);
+    expect(updateManySubmission).not.toHaveBeenCalled();
+  });
+});
+
+it('un autre ancien brouillon déjà expédié bloque le même participant et la même étape', async () => {
+  findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+  findOtherSubmission.mockResolvedValue({ id: 'ancien-dossier', status: 'SENT' });
+  expect((await sendOpcoSubmission('sub-1')).ok).toBe(false);
+  expect(updateManySubmission).not.toHaveBeenCalled();
+  expect(sendMailMock).not.toHaveBeenCalled();
 });

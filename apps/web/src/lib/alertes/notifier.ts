@@ -263,9 +263,7 @@ export async function alerterLeadsDormants(args: {
           value: `${l.hoursIdle} h${l.source ? ` · ${l.source}` : ''}`,
         })),
         ctaLabel: pluriel ? 'Voir les leads' : 'Traiter le lead',
-        ctaUrl: pluriel
-          ? `${appUrl()}/app/leads`
-          : `${appUrl()}/app/leads/${groupe.leads[0]!.id}`,
+        ctaUrl: pluriel ? `${appUrl()}/app/leads` : `${appUrl()}/app/leads/${groupe.leads[0]!.id}`,
         urgent: true,
       });
 
@@ -304,10 +302,7 @@ export async function alerterPreinscriptionsDeposees(args: {
     if (admins.length === 0) return;
 
     const a = args.alerte;
-    const vedette =
-      a.kind === 'digest'
-        ? `${a.preEnrollmentIds.length} dossiers déposés`
-        : a.nom;
+    const vedette = a.kind === 'digest' ? `${a.preEnrollmentIds.length} dossiers déposés` : a.nom;
     const details =
       a.kind === 'digest'
         ? [
@@ -327,7 +322,11 @@ export async function alerterPreinscriptionsDeposees(args: {
         batchId: a.batchId,
         count: a.preEnrollmentIds.length,
       },
-      destinataires: users,
+      // The transactional formation queue already announces each submission
+      // to this mailbox; retain the bell notification and other team emails.
+      destinataires: users.filter(
+        (u) => u.email?.trim().toLowerCase() !== 'formation@start-academy.fr',
+      ),
       category: 'preenrollment_submitted',
       subject: sujetAlerteSubmission(a),
       titre: 'Dossier de pré-inscription à vérifier',

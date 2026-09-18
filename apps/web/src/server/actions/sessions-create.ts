@@ -1,6 +1,7 @@
 'use server';
 import { assertSessionPayersTx } from '@/lib/sessions/enrollment-regime-guard';
 
+import { queueSessionCreatedAlert, flushFormationEventAlerts } from '@/lib/alertes/formation-notifier';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma, Prisma } from '@qualiof/db';
@@ -265,12 +266,14 @@ export async function createSessionFull(input: CreateSessionInput): Promise<{
 
     await synchronizeCompanyPriceTx(tx, created, user.id);
     await tx.auditLog.create({ data: { tenantId: user.tenantId, userId: user.id, entity: 'TrainingSession', entityId: created.id, action: 'sessions.create', diff: { regime: created.regime, priceTotalHT: created.priceTotalHT?.toString() ?? null, participantsCreated: createdParticipantIds.length, population: createdParticipantIds } } });
+    await queueSessionCreatedAlert(tx, created);
     return { created, createdParticipantIds };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   revalidatePath('/app/sessions');
   revalidatePath('/app/dossiers-opco');
+  await flushFormationEventAlerts().catch(() => console.error('[formation-alert] livraison différée au cron'));
   return { ok: true, sessionId: session.created.id };
 }
 

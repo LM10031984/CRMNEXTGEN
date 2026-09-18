@@ -1,5 +1,10 @@
 'use server';
 
+import {
+  queueEnrollmentSubmittedAlert,
+  flushFormationEventAlerts,
+} from '@/lib/alertes/formation-notifier';
+import { checkFormationDocuments } from '@/lib/alertes/formation-check';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -81,28 +86,38 @@ export async function submitPreEnrollmentForm(
   }
 
   // 4) Mise à jour de la pré-inscription
-  await prisma.preEnrollment.update({
-    where: { id: pe.id },
-    data: {
-      firstName: input.firstName.trim(),
-      lastName: input.lastName.trim(),
-      email: input.email.trim().toLowerCase(),
-      phone: input.phone?.trim() || null,
-      birthDate: input.birthDate ? new Date(input.birthDate) : null,
-      birthPlace: input.birthPlace?.trim() || null,
-      professionalStatus: input.professionalStatus?.trim() || null,
-      diploma: input.diploma?.trim() || null,
-      educationLevel: input.educationLevel?.trim() || null,
-      professionalExperience: input.professionalExperience?.trim() || null,
-      cniKey: uploadedKeys.CNI,
-      ribKey: uploadedKeys.RIB,
-      cfpKey: uploadedKeys.CFP,
-      rgpdAcceptedAt: new Date(),
-      submittedAt: new Date(),
-      status: 'SUBMITTED',
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    const submitted = await tx.preEnrollment.update({
+      where: { id: pe.id },
+      data: {
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
+        email: input.email.trim().toLowerCase(),
+        phone: input.phone?.trim() || null,
+        birthDate: input.birthDate ? new Date(input.birthDate) : null,
+        birthPlace: input.birthPlace?.trim() || null,
+        professionalStatus: input.professionalStatus?.trim() || null,
+        diploma: input.diploma?.trim() || null,
+        educationLevel: input.educationLevel?.trim() || null,
+        professionalExperience: input.professionalExperience?.trim() || null,
+        cniKey: uploadedKeys.CNI,
+        ribKey: uploadedKeys.RIB,
+        cfpKey: uploadedKeys.CFP,
+        rgpdAcceptedAt: new Date(),
+        submittedAt: new Date(),
+        status: 'SUBMITTED',
+      },
+    });
 
+    await queueEnrollmentSubmittedAlert(tx, submitted);
+  });
+  await flushFormationEventAlerts().catch(() =>
+    console.error('[formation-alert] livraison différée au cron'),
+  );
+  if (pe.intendedSessionId)
+    await checkFormationDocuments(new Date(), pe.intendedSessionId).catch(() =>
+      console.error('[formation-alert] contrôle différé au cron'),
+    );
   revalidatePath('/app/inscriptions');
 
   // Déclenche l'extraction IA en background (fire-and-forget)
@@ -120,7 +135,9 @@ export async function submitPreEnrollmentForm(
  * Server action manuelle : relancer l'extraction IA pour une pré-inscription.
  * Utile depuis la page admin si la 1ère extraction a échoué ou pour reprocesser.
  */
-export async function retriggerExtraction(preEnrollmentId: string): Promise<{ ok: boolean; error?: string }> {
+export async function retriggerExtraction(
+  preEnrollmentId: string,
+): Promise<{ ok: boolean; error?: string }> {
   const { user } = await validateRequest();
   if (!user) return { ok: false, error: 'Non authentifié' };
   const pe = await prisma.preEnrollment.findFirst({
