@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
+import colors from 'tailwindcss/colors';
 
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
@@ -12,6 +13,8 @@ const config: Config = {
     },
     extend: {
       colors: {
+        info: { DEFAULT: colors.blue[600], foreground: colors.blue[800] },
+        danger: colors.red[700],
         // Charte Start Academy (issue de Qualiopi Gen)
         primary: {
           DEFAULT: '#00527A',
