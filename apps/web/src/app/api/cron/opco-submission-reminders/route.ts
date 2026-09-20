@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { sendMail } from '@/lib/mailer';
 
 export const dynamic = 'force-dynamic';
@@ -45,8 +46,8 @@ export async function GET(req: Request) {
     include: {
       participant: {
         include: {
-          person: { select: { firstName: true, lastName: true } },
-          session: { select: { code: true, product: { select: { title: true } } } },
+          person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
+          session: { select: { regime: true, startDate: true, endDate: true, code: true, product: { select: { title: true } } } },
         },
       },
       sponsorOrg: { select: { legalName: true, opcoCode: true } },
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
   let dryRunCount = 0;
 
   for (const sub of candidates) {
-    if (!sub.sentAt || !sub.recipientEmail) {
+    if (isCompanyDossier(sub.participant) || !sub.sentAt || !sub.recipientEmail) {
       skipped++;
       continue;
     }

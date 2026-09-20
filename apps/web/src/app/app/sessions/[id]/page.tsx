@@ -130,6 +130,7 @@ import { AfterTrainingDelivery } from '@/components/sessions/after-training-deli
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 import { analyzeSessionDocuments } from '@/lib/docs/session-document-analysis';
+import { loadCompanyPortalGroups } from '@/lib/opco/company-portal-documents';
 import { SessionFundingSummary } from '@/components/sessions/session-funding-summary';
 import {
   aggregateFundingTone,
@@ -1270,6 +1271,7 @@ export default async function SessionDetailPage({
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
   const canManageFunding = ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user.role);
+  const companyPortalGroups = await loadCompanyPortalGroups(session.id, user);
 
   const activeParticipants = session.participants.filter((p) => p.enrollmentStatus !== 'CANCELLED');
   const companyFundingRows = (() => {
@@ -1281,6 +1283,7 @@ export default async function SessionDetailPage({
       groups.set(participant.sponsorOrgId, members);
     }
     return [...groups.entries()].map(([sponsorOrgId, members]) => {
+      const portal = companyPortalGroups.get(sponsorOrgId);
       const tone = companyDepositState(members);
       const deposited = members.filter((member) => member.opcoDepositedAt !== null);
       const declarations = new Set(deposited.map((member) =>
@@ -1302,6 +1305,9 @@ export default async function SessionDetailPage({
         })),
         depositedAt: tone === 'success' ? members[0]!.opcoDepositedAt?.toISOString() ?? null : null,
         depositedBy: tone === 'success' ? members[0]!.opcoDepositedByEmail : null,
+        pieces: portal?.pieces.map(({ participantId, kind, label }) => ({ participantId, kind, label })) ?? [],
+        missingLearners: portal?.missingLearners ?? members.map((member) => `${member.person.firstName} ${member.person.lastName.toUpperCase()}`),
+        programmeMissing: portal?.programmeMissing ?? true,
       };
     });
   })();
@@ -2061,6 +2067,9 @@ export default async function SessionDetailPage({
               dropZoneParticipants={dropZoneParticipants}
               avantGroups={avantGroups}
               vueSignature={vueSignatureAvant}
+              companyParticipantIds={activeParticipants
+                .filter((participant) => isCompanyDossier({ ...participant, session }))
+                .map((participant) => participant.id)}
             />
           </div>
         }

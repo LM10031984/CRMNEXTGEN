@@ -1,5 +1,6 @@
-import { DepositTracker } from '@/components/dossiers-opco/deposit-tracker';
 import { isCompanyDossier } from '@/lib/opco/company-dossier';
+import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
+import { companyDepositState, isSuccessfulInitialSubmission } from '@/lib/opco/session-funding-status';
 import Link from 'next/link';
 import { ClipboardCheck, FileCheck, Wallet, AlertCircle, TrendingUp, Briefcase, Download } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
@@ -149,12 +150,18 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         financingMode: true,
         financingRequestDate: true,
         dossierType: true,
-        person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
+        person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true, organization: { select: { ageficeProfile: { select: { id: true } } } } } } } },
         sponsorOrg: {
-          select: { id: true, legalName: true, opcoCode: true, network: true },
+          select: { id: true, legalName: true, opcoCode: true, network: true, ageficeProfile: { select: { id: true } } },
         },
         session: {
           select: { id: true, code: true, name: true, startDate: true, endDate: true, regime: true },
+        },
+        opcoSubmissions: {
+          where: { stage: 'PRISE_EN_CHARGE' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 10,
+          select: { id: true, stage: true, status: true, deliveryState: true, sentAt: true },
         },
       },
     }),
@@ -191,6 +198,53 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
       dossierType: 'PREINSCRIPTION_BUDGET',
     },
   });
+
+  const companyRefs = Array.from(
+    new Map(
+      rows
+        .filter((row) => isCompanyDossier(row))
+        .map((row) => [`${row.session.id}:${row.sponsorOrgId}`, { sessionId: row.session.id, sponsorOrgId: row.sponsorOrgId }]),
+    ).values(),
+  );
+  const companyDepositMembers = companyRefs.length > 0
+    ? await prisma.sessionParticipant.findMany({
+        where: {
+          session: { tenantId: user.tenantId },
+          enrollmentStatus: { not: 'CANCELLED' },
+          OR: companyRefs,
+        },
+        select: {
+          sessionId: true, sponsorOrgId: true, participantType: true,
+          opcoDepositedAt: true, opcoDepositedByEmail: true,
+          session: { select: { startDate: true, endDate: true, regime: true } },
+          person: { select: { legalLinks: { select: { role: true, organizationId: true, startDate: true, endDate: true } } } },
+        },
+      })
+    : [];
+  const companyDepositByGroup = new Map<string, {
+    tone: 'neutral' | 'warning' | 'success';
+    deposited: number;
+    total: number;
+    at: Date | null;
+    by: string | null;
+  }>();
+  for (const ref of companyRefs) {
+    const members = companyDepositMembers.filter(
+      (member) =>
+        member.sessionId === ref.sessionId &&
+        member.sponsorOrgId === ref.sponsorOrgId &&
+        isCompanyDossier(member),
+    );
+    const tone = companyDepositState(members);
+    const deposited = members.filter((member) => member.opcoDepositedAt !== null);
+    companyDepositByGroup.set(`${ref.sessionId}:${ref.sponsorOrgId}`, {
+      tone,
+      deposited: deposited.length,
+      total: members.length,
+      at: tone === 'success' ? members[0]?.opcoDepositedAt ?? null : null,
+      by: tone === 'success' ? members[0]?.opcoDepositedByEmail ?? null : null,
+    });
+  }
 
   // Aggrégations sur le résultat filtré pour la barre de stats
   const totalShown = rows.length;
@@ -319,7 +373,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
     return `/api/dossiers-opco/export${params.toString() ? `?${params.toString()}` : ''}`;
   })();
 
-  const allRowIds = rows.map((r) => r.id);
+  const allRowIds = rows.filter((r) => !isCompanyDossier(r)).map((r) => r.id);
   const groupedView = sp.group === '1';
 
   // US-006 : regroupement par (sessionId + sponsorOrgId). On groupe à
@@ -368,6 +422,12 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   // Helper de rendu d'une row "détail" — utilisé en mode plat ET en
   // mode groupé (pour les rows enfants d'un groupe).
   function renderRow(r: RowItem, idx: number) {
+    const company = isCompanyDossier(r);
+    const companyDeposit = companyDepositByGroup.get(`${r.session.id}:${r.sponsorOrgId}`);
+    const agefice = !company && estEligibleAgefice(r);
+    const successfulAgefice = agefice
+      ? r.opcoSubmissions.find(isSuccessfulInitialSubmission)
+      : null;
     const isComplete =
       r.invoiceSent && r.opcoApproved && r.opcoReimbursed && r.paymentReceived;
     let daysWaiting = 0;
@@ -398,7 +458,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         key={r.id}
         className={`border-b border-border last:border-0 transition-colors ${rowBg}`}
       >
-        <td className="px-3 py-2"><DossierRowCheckbox id={r.id} /></td>
+        <td className="px-3 py-2">{company ? null : <DossierRowCheckbox id={r.id} />}</td>
         <td className="px-3 py-2 whitespace-nowrap text-xs">
           <Link href={`/app/sessions/${r.session.id}`} className="text-foreground hover:text-primary">
             {fmtDate.format(r.session.startDate)}
@@ -469,18 +529,37 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                 amountHT={Number(r.priceHT)}
               />
             )}
-            <ComposeOpcoButton
-              participantId={r.id}
-            />
-            {r.sponsorOrg?.opcoCode === 'AGEFICE' && (
-              <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />
+            {company ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info">Portail OPCO</Badge>
+                <Badge variant={companyDeposit?.tone === 'success' ? 'success' : 'warning'}>
+                  {companyDeposit?.tone === 'success'
+                    ? 'Dépôt déclaré'
+                    : companyDeposit?.tone === 'warning'
+                      ? `Dépôt partiel ${companyDeposit.deposited}/${companyDeposit.total}`
+                      : 'Dépôt à déclarer'}
+                </Badge>
+                <Link
+                  href={`/app/sessions/${r.session.id}#depot-${r.sponsorOrgId}`}
+                  className="text-xs font-medium text-primary underline underline-offset-2"
+                >
+                  Pièces et dépôt du groupe
+                </Link>
+              </div>
+            ) : (
+              <>
+                <ComposeOpcoButton participantId={r.id} />
+                {agefice && <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />}
+                <DossierReminderButton participantId={r.id} disabled={!r.invoiceSent || isComplete} />
+                {successfulAgefice && <Badge variant="success">Conforme et déposé</Badge>}
+              </>
             )}
-            <DossierReminderButton
-              participantId={r.id}
-              disabled={!r.invoiceSent || isComplete}
-            />
           </div>
-          {isCompanyDossier(r) && <DepositTracker participantId={r.id} depositedAt={r.opcoDepositedAt?.toISOString() ?? null} depositedBy={r.opcoDepositedByEmail} userEmail={user!.email} canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user!.role)}/>}
+          {company && companyDeposit?.at && (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              {fmtDate.format(companyDeposit.at)} · {companyDeposit.by ?? 'auteur non renseigné'}
+            </p>
+          )}
         </td>
       </tr>
     );

@@ -635,17 +635,21 @@ it('un autre ancien brouillon déjà expédié bloque le même participant et la
   expect(sendMailMock).not.toHaveBeenCalled();
 });
 
-it('dossier entreprise : ne joint ni CNI, ni RIB, ni CFP ni formulaire AGEFICE', async () => {
+it('dossier entreprise : redirige vers le portail session sans créer de mail', async () => {
   const p = participant();
   findFirstParticipant.mockResolvedValue({ ...p, session: { ...p.session, regime: 'ENTREPRISE' } });
-  await composeOpcoSubmission('part-1');
-  const kinds = piecesCreees().map((p) => p.kind);
-  expect(kinds).toContain('CONVENTION');
-  expect(kinds).toContain('PROGRAMME');
-  expect(kinds).not.toContain('CNI');
-  expect(kinds).not.toContain('RIB');
-  expect(kinds).not.toContain('CFP_ATTESTATION');
-  expect(kinds).not.toContain('AGEFICE_PA_FORM');
+  expect(await composeOpcoSubmission('part-1')).toEqual({ ok: true, redirectTo: '/app/sessions/sess-1?tab=avant#depot-org-1' });
+  expect(createSubmission).not.toHaveBeenCalled();
+  expect(sendMailMock).not.toHaveBeenCalled();
+});
+it('un ancien brouillon salarié ne peut plus être envoyé même avec force admin', async () => {
+  const p = participant();
+  findFirstParticipant.mockResolvedValue({ ...p, session: { ...p.session, regime: 'ENTREPRISE' } });
+  findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
+  const result = await sendOpcoSubmission('sub-1', { force: true });
+  expect(result.ok).toBe(false);
+  expect(result.error).toContain('portail OPCO');
+  expect(sendMailMock).not.toHaveBeenCalled();
 });
 it('ne renomme pas un justificatif image en PDF', async () => {
   const p = participant();
