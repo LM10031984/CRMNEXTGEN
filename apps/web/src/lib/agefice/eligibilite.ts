@@ -1,5 +1,6 @@
 import { sessionFunding, type SessionRegime } from '@/lib/sessions/session-regime';
-import type { PeriodLink, SessionPeriod } from '@/lib/persons/legal-link-period';
+import { legalLinkAtSession, type PeriodLink, type SessionPeriod } from '@/lib/persons/legal-link-period';
+import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 /**
  * Qui relève de l'AGEFICE ? — SOURCE UNIQUE.
  *
@@ -71,6 +72,12 @@ export function estEligibleAgefice(p: ParticipantAgeficeLike): boolean {
     if (!p.sponsorOrgId) return false;
     return sessionFunding({ sponsorOrgId: p.sponsorOrgId, sponsorOpcoCode: p.sponsorOrg?.opcoCode, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile, links: (p.person?.legalLinks ?? []).filter((l): l is PeriodLink => !!l.organizationId), session: p.session, financingMode: p.financingMode }) === 'AGEFICE';
   }
+  // Une activité indépendante annexe ne finance pas l'inscription salariée.
+  if (p.session && p.sponsorOrgId) {
+    const links = (p.person?.legalLinks ?? []).filter((l): l is PeriodLink => !!l.organizationId);
+    const role = legalLinkAtSession(links, p.sponsorOrgId, p.session)?.role;
+    if (role && estEmployeurDeLApprenant(role)) return false;
+  }
   if (p.sponsorOrg?.opcoCode === 'AGEFICE') return true;
   return (p.person?.legalLinks ?? []).some(
     (l) =>
@@ -89,7 +96,7 @@ export const AGEFICE_PARTICIPANT_SELECT = {
     organization: { select: { ageficeProfile: { select: { id: true } } } },
   } } } },
 } as const;
-/** Les candidats SQL sans contexte sont les anciens résultats legacy. */
+/** Le SQL sélectionne des candidats ; le rôle à la date de session décide. */
 export function filterAgeficeCandidates<T extends ParticipantAgeficeLike>(candidates: T[]): T[] {
-  return candidates.filter((p) => !p.session?.regime || estEligibleAgefice(p));
+  return candidates.filter((p) => !p.session || estEligibleAgefice(p));
 }

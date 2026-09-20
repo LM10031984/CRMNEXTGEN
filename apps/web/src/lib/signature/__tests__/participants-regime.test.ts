@@ -293,3 +293,12 @@ describe('colonneAgeficeVisible — aucun dossier ne disparaît de l’écran', 
     ).toBe(true);
   });
 });
+
+it('ne signale pas une EI annexe comme incohérence pour une inscription salariée datée', () => {
+  const p = { ...florent(), session: { regime: null, startDate: '2026-11-20', endDate: '2026-11-20' } };
+  const result = participantPourEnvoi(p, REGLES);
+  expect(result.regle).toEqual(REGLE_OPCO);
+  expect(result.signauxDossierPropre).toEqual({ aLienEiSelfHorsSponsor: false, reglesAutresOrgs: [] });
+  const agent = { ...p, liens: p.liens.map(l => l.organizationId === p.sponsorOrgId ? { ...l, role: 'AGENT_COMMERCIAL' } : l) };
+  expect(participantPourEnvoi(agent, REGLES).signauxDossierPropre?.aLienEiSelfHorsSponsor).toBe(true);
+});

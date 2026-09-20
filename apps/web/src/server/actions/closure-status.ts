@@ -136,12 +136,10 @@ export async function getSessionClosureStatus(
       }),
       // Éligibles AGEFICE — même requête que prepare-training.
       participantIds.length > 0
-        ? session.regime ? prisma.sessionParticipant.findMany({ where: { sessionId: session.id, session: { tenantId: user.tenantId }, OR: OU_AGEFICE }, select: AGEFICE_PARTICIPANT_SELECT }).then((rows) => filterAgeficeCandidates(rows).length) : prisma.sessionParticipant.count({
-            where: {
-              sessionId: session.id,
-              OR: OU_AGEFICE,
-            },
-          })
+        ? prisma.sessionParticipant.findMany({
+            where: { sessionId: session.id, session: { tenantId: user.tenantId }, OR: OU_AGEFICE },
+            select: AGEFICE_PARTICIPANT_SELECT,
+          }).then((rows) => filterAgeficeCandidates(rows).length)
         : Promise.resolve(0),
     ]);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estEligibleAgefice, OU_AGEFICE } from '../eligibilite';
+import { estEligibleAgefice, filterAgeficeCandidates, OU_AGEFICE } from '../eligibilite';
 
 /**
  * La règle « qui relève de l'AGEFICE » vivait en trois exemplaires, dont un
@@ -83,4 +83,20 @@ it('le même payeur peut porter le dossier TNS en janvier puis un salarié sans 
   expect(estEligibleAgefice(p)).toBe(true);
   expect(estEligibleAgefice({ ...p, session: { ...p.session, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') } })).toBe(false);
   expect(estEligibleAgefice({ ...p, financingMode: 'AUTOFINANCEMENT' })).toBe(false);
+});
+
+it('session historique : le rôle chez le payeur prime sur une EI annexe, selon la date', () => {
+  const p = {
+    sponsorOrgId: 'agence', sponsorOrg: { opcoCode: 'OPCO_EP' },
+    session: { regime: null, startDate: '2026-11-20', endDate: '2026-11-20' },
+    person: { legalLinks: [
+      { organizationId: 'agence', role: 'AGENT_COMMERCIAL', endDate: '2026-04-30' },
+      { organizationId: 'agence', role: 'SALARIE', startDate: '2026-05-01' },
+      { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } },
+    ] },
+  };
+  expect(estEligibleAgefice(p)).toBe(false);
+  expect(filterAgeficeCandidates([p])).toEqual([]);
+  expect(estEligibleAgefice({ ...p, session: { ...p.session, startDate: '2026-01-20', endDate: '2026-01-20' } })).toBe(true);
+  expect(estEligibleAgefice({ ...p, sponsorOrgId: 'ei', sponsorOrg: { opcoCode: 'AGEFICE' } })).toBe(true);
 });

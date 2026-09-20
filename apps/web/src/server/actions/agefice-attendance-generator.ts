@@ -1,5 +1,6 @@
 'use server';
 import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { activeLegalLinksAtSession } from '@/lib/persons/legal-link-period';
 
 /**
@@ -101,6 +102,7 @@ export async function generateAgeficeAttendanceForParticipant(
     },
   });
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
+  if (!participant.session.regime && isCompanyDossier(participant)) return { ok: false, error: 'Cette inscription est salariée : aucun dossier AGEFICE à générer.' };
   if (participant.session.regime && !estEligibleAgefice(participant)) return { ok: false, error: `${participant.person.firstName} ${participant.person.lastName} : aucun financement AGEFICE actif chez le commanditaire aux dates de la session. Corrigez les périodes dans la fiche apprenant ou le commanditaire dans la fiche inscription.` };
   await prisma.document.deleteMany({
     where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
