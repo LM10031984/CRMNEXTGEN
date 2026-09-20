@@ -1,5 +1,6 @@
 import { sessionFunding, type SessionRegime } from '@/lib/sessions/session-regime';
-import type { SessionPeriod } from '@/lib/persons/legal-link-period';
+import { legalLinkAtSession, type SessionPeriod } from '@/lib/persons/legal-link-period';
+import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 /**
  * Le régime d'un participant, lu depuis la donnée — module PUR, DEUX APPELANTS.
  * Spec signature 2026-09-04 §3 bis (D-10), lot C.2b-1.
@@ -123,7 +124,11 @@ export function participantPourEnvoi(
   participant: ParticipantLu,
   regles: ReadonlyMap<string, RegleSignatureFinanceur>,
 ): ParticipantPourEnvoi {
-  const autresLiens = (participant.session?.regime ? [] : participant.liens).filter(
+  const roleSponsor = participant.session && participant.sponsorOrgId
+    ? legalLinkAtSession(participant.liens, participant.sponsorOrgId, participant.session)?.role
+    : null;
+  const salarieChezSponsor = !!roleSponsor && estEmployeurDeLApprenant(roleSponsor);
+  const autresLiens = (participant.session?.regime || salarieChezSponsor ? [] : participant.liens).filter(
     (lien) => lien.organizationId !== participant.sponsorOrgId,
   );
 
