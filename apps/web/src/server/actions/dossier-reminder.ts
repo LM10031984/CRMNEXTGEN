@@ -11,6 +11,7 @@
  * Destinataire : sponsor.emailBilling || sponsor.email. Si null → erreur.
  */
 
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { sendMail } from '@/lib/mailer';
@@ -53,12 +54,13 @@ export async function sendDossierReminderEmail(
   const p = await prisma.sessionParticipant.findFirst({
     where: { id: participantId, session: { tenantId: user.tenantId } },
     include: {
-      person: { select: { firstName: true, lastName: true } },
+      person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
       sponsorOrg: { select: { legalName: true, opcoCode: true, email: true, emailBilling: true } },
       session: {
         select: {
           id: true,
           code: true,
+          regime: true,
           startDate: true,
           endDate: true,
           product: { select: { title: true } },
@@ -67,6 +69,8 @@ export async function sendDossierReminderEmail(
     },
   });
   if (!p) return { ok: false, error: 'Inscription introuvable' };
+
+  if (isCompanyDossier(p)) return { ok: false, error: 'Le suivi du dossier salarié se fait sur le portail OPCO, sans relance email depuis ce dossier.' };
 
   // Détermine le type de relance attendu
   if (!p.invoiceSent) {

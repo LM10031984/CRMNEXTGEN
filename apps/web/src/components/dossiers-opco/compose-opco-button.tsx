@@ -27,6 +27,10 @@ export function ComposeOpcoButton({
   function onClick() {
     startTransition(async () => {
       const r = await composeOpcoSubmission(participantId, stage);
+      if (r.ok && r.redirectTo) {
+        router.push(r.redirectTo as never);
+        return;
+      }
       if (!r.ok || !r.submissionId) {
         toast.error(r.error ?? 'Erreur composition dossier');
         return;

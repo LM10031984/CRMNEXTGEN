@@ -31,6 +31,14 @@ export default async function ComposeOpcoPage({ params }: { params: Promise<{ id
     redirect('/app/dossiers-opco' as never);
   }
 
+  // Les anciens brouillons entreprise ne sont plus éditables : le dépôt se fait
+  // sur le portail externe avec les pièces du groupe visibles dans la session.
+  if (sub.company) {
+    redirect(
+      `/app/sessions/${sub.participant.sessionId}#depot-${sub.participant.sponsorOrgId}` as never,
+    );
+  }
+
   // Si déjà envoyé, on affiche un récap simple sans éditeur
   if (sub.status !== 'DRAFT') {
     return (

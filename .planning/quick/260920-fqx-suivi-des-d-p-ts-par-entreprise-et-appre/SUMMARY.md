@@ -16,7 +16,7 @@
 - Accès navigateur automatisé indisponible (erreur fournisseur request-header policy), vérification métier directe en lecture seule et tests composants réalisés.
 
 ## Livraison
-PR109. Aucune migration. Attendre CI puis déploiement Vercel confirmé avant d’annoncer production.
+PR109 fusionnée : f2d95dbb6e21bb03988ea9c8e659175fa8ad6192. CI principale 35503214846 réussie, workflow déploiement 35503312610 réussi, production Vercel Azr3i9ei9N3TryCPDDz5BzSZNXpu confirmée. Aucune migration. Validation finale : 4 251 tests web réussis, 2 ignorés.
 
 ## Suite imposée par utilisateur
 Après cette livraison seulement : retirer le parcours email des salariés dans Dossiers OPCO, proposer convention signée+programme à télécharger puis déclaration dépôt portail, garder AGEFICE mail et badge conforme/déposé. Ce point a été explicitement différé par l’utilisateur jusqu’à la livraison du présent lot.

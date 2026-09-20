@@ -27,6 +27,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Check, Download, ExternalLink, Loader2, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,8 @@ interface Props {
    * : l'onglet ne décide RIEN, il met en page.
    */
   vueSignature?: VueSignature;
+  /** Inscriptions salariées : leur dossier se dépose sur le portail externe, jamais par email. */
+  companyParticipantIds?: string[];
 }
 
 /** Docs pré-formation qui peuvent revenir signés à la main. */
@@ -96,12 +99,14 @@ export function TabAvant({
   dropZoneParticipants,
   avantGroups = [],
   vueSignature,
+  companyParticipantIds = [],
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
 
   const completion = docCompletion(items);
+  const companyParticipants = new Set(companyParticipantIds);
 
   // Ce que le bouton « Télécharger » livrera, apprenant par apprenant. Indexé
   // ici plutôt que recompté : la table des phases est l'autorité, l'onglet ne
@@ -323,7 +328,14 @@ export function TabAvant({
           actions={
             group.participantId ? (
               <div className="flex flex-wrap items-center gap-2">
-                {canGenerate && (
+                {companyParticipants.has(group.participantId) ? (
+                  <Link
+                    href="#depots-financement"
+                    className="inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-medium text-primary hover:bg-muted/40"
+                  >
+                    Pièces et dépôt portail OPCO
+                  </Link>
+                ) : canGenerate && (
                   <ComposeOpcoButton participantId={group.participantId} />
                 )}
                 <LearnerPhaseActions

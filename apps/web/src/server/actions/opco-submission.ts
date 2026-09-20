@@ -1,6 +1,6 @@
 'use server';
 
-import { isCompanyDossier, controlCompanyPieces } from '@/lib/opco/company-dossier';
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma, type OpcoSubmissionStatus } from '@qualiof/db';
@@ -60,6 +60,7 @@ export interface SubmissionAttachment {
 export interface ComposeResult {
   ok: boolean;
   submissionId?: string;
+  redirectTo?: string;
   /** Pièces présentes (attachments[].included === true par défaut) */
   attachments?: SubmissionAttachment[];
   /** Pièces manquantes (à ajouter manuellement avant envoi) */
@@ -88,6 +89,10 @@ export async function composeOpcoSubmission(
     return { ok: false, error: 'Dossier invalide' };
   const built = await buildOpcoSubmission(participantId, user, stage);
   if (!built.ok) return built;
+  if (built.company) return {
+    ok: true,
+    redirectTo: `/app/sessions/${built.participant.sessionId}?tab=avant#depot-${built.participant.sponsorOrgId}`,
+  };
   if (built.invoiceId && ['ADMIN', 'MANAGER', 'COMPTABLE'].includes(user.role)) {
     const { generateAcquittedInvoicePdf } = await import('./invoices');
     const result = await generateAcquittedInvoicePdf({ invoiceId: built.invoiceId });
@@ -271,6 +276,9 @@ export async function sendOpcoSubmission(
       return await release('Vérifiez le destinataire, l’objet et le message.');
     const built = await buildOpcoSubmission(sub.participantId, user, stage.data);
     if (!built.ok) return await release(built.error);
+    if (built.company) return await release(
+      'Les dossiers salariés se déposent sur le portail OPCO. Téléchargez les pièces et déclarez le dépôt depuis la session.',
+    );
     const attachments = (sub.attachments as unknown as SubmissionAttachment[]).filter(
       (a) => a.included,
     );
@@ -299,9 +307,6 @@ export async function sendOpcoSubmission(
             ? 'Le remboursement doit être adressé au destinataire confirmé de l’envoi initial. Actualisez les pièces.'
             : 'Le destinataire diffère du point d’accueil actuel. Corrigez le point d’accueil ou le destinataire.',
         );
-    } else if (built.company) {
-      const blocked = controlCompanyPieces(attachments);
-      if (blocked) return await release(blocked);
     } else {
       const unsigned = piecesNonSignees(
         attachments.map((a) => ({ kind: a.kind, signe: a.signe === true })),
@@ -441,6 +446,7 @@ export async function markOpcoSubmissionStatus(
     return { ok: false, error: 'Le dossier doit être envoyé avant de suivre son instruction.' };
   if (next === 'SENT') {
     const details = await getOpcoSubmission(sub.id);
+    if (details?.company) return { ok: false, error: 'Déclarez le dépôt sur le portail OPCO depuis la session.' };
     if (details?.agefice) return { ok: false, error: 'Utilisez le bouton d’envoi AGEFICE.' };
   }
   const now = new Date();

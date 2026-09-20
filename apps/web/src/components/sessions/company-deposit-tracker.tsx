@@ -21,6 +21,7 @@ export function CompanyDepositTracker({
   depositedBy,
   userEmail,
   canWrite,
+  readyToDeposit = true,
 }: {
   sessionId: string;
   sponsorOrgId: string;
@@ -29,6 +30,7 @@ export function CompanyDepositTracker({
   depositedBy: string | null;
   userEmail: string;
   canWrite: boolean;
+  readyToDeposit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState(
@@ -75,7 +77,7 @@ export function CompanyDepositTracker({
           {depositor ? ` par ${depositor}` : ''}
         </p>
       )}
-      {canWrite && !editing && (
+      {canWrite && !editing && (depositedAt || readyToDeposit) && (
         <button
           type="button"
           className="underline underline-offset-2"
@@ -118,7 +120,7 @@ export function CompanyDepositTracker({
           <button
             type="button"
             className="rounded bg-primary px-2 py-1 text-primary-foreground"
-            disabled={pending || !email || !date}
+            disabled={pending || !email || !date || !readyToDeposit}
             onClick={() => save()}
           >
             Confirmer pour {members.length} salarié{members.length > 1 ? 's' : ''}
@@ -140,6 +142,12 @@ export function CompanyDepositTracker({
             À utiliser après le dépôt sur le portail OPCO. Cette déclaration ne vaut pas accord de
             financement.
           </p>
+          {!readyToDeposit && (
+            <p className="w-full text-amber-800">
+              Le dépôt ne peut pas être confirmé tant que les pièces obligatoires manquent. Une
+              déclaration existante peut toujours être corrigée ou annulée.
+            </p>
+          )}
         </div>
       )}
     </div>
