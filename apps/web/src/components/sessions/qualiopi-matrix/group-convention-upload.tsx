@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { uploadGroupConvention } from '@/server/actions/upload-group-convention';
@@ -16,6 +16,7 @@ export function GroupConventionUpload({
   const [file, setFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const company = companies.find((c) => c.id === companyId);
   return (
     <div className="rounded-md border p-4 space-y-3">
@@ -51,6 +52,7 @@ export function GroupConventionUpload({
       <label className="block text-sm">
         Convention entreprise signée (PDF, 3 Mo maximum)
         <input
+          ref={inputRef}
           type="file"
           accept="application/pdf"
           disabled={pending}
@@ -81,6 +83,7 @@ export function GroupConventionUpload({
             }
             toast.success(`Convention commune enregistrée pour ${result.covered} salarié(s)`);
             setFile(null);
+            if (inputRef.current) inputRef.current.value = '';
             router.refresh();
           } catch {
             toast.error('Dépôt interrompu. Rechargez la session pour vérifier les pièces.');

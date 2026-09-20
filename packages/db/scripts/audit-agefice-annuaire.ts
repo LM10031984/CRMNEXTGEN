@@ -222,7 +222,7 @@ async function readDatabase() {
 }
 
 async function main() {
-  const outDir = resolve(ROOT, 'verification');
+  const outDir = resolve(arg('--out') ?? resolve(ROOT, 'verification'));
   await mkdir(outDir, { recursive: true });
   const snapshotPath = arg('--snapshot');
   const official: Official = snapshotPath

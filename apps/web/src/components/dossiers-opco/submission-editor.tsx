@@ -128,6 +128,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
   const [attachments, setAttachments] = useState<SubmissionAttachment[]>(initial.attachments);
   const [pointAccueilId, setPointAccueilId] = useState(initial.pointAccueilId ?? '');
   const [cfpPostalCode, setCfpPostalCode] = useState('');
+  const [editingPostalCode, setEditingPostalCode] = useState(false);
   useEffect(() => setAttachments(initial.attachments), [initial.attachments]);
   // Only a changed server value replaces local edits, never an unrelated refresh.
   useEffect(() => setRecipient(initial.recipientEmail ?? ''), [initial.recipientEmail]);
@@ -155,6 +156,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         return;
       }
       toast.success('Code postal vérifié sur l’attestation CFP enregistré');
+      setEditingPostalCode(false);
       router.refresh();
     });
   }
@@ -328,7 +330,9 @@ export function SubmissionEditor({ id, role, initial }: Props) {
               ? `Département de l’entreprise vérifié sur la CFP : ${initial.department}. Choisissez le point d’accueil qui traite ce dossier.`
               : 'Renseignez ici le code postal de l’entreprise vérifié sur l’attestation CFP pour retrouver les points d’accueil.'}
           </p>
-          {!initial.department && (
+          {initial.department && <p className="text-xs text-muted-foreground">{initial.pointAccueilOptions?.length ?? 0} points proposés pour le département {initial.department}. Cette liste est filtrée ; elle ne représente pas tout l’annuaire national.</p>}
+          {initial.department && !editingPostalCode && <button type="button" onClick={() => setEditingPostalCode(true)} disabled={pending || locked} className="text-xs underline">Modifier le code postal CFP</button>}
+          {(!initial.department || editingPostalCode) && (
             <div className="space-y-2">
               <label htmlFor="agefice-cfp-postal-code" className="block text-xs font-medium">
                 Code postal de l’entreprise sur l’attestation CFP
