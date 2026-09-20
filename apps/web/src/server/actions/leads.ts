@@ -35,6 +35,7 @@ import { autoAssignLead } from './auto-assign-leads';
 import { notifyLeadAssigned } from '@/lib/lead-notifications';
 import { alerterNouveauLead } from '@/lib/alertes/notifier';
 import { logLeadEvent } from '@/lib/audit-log';
+import { STATUTS } from '@/lib/leads/suivi';
 
 export type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -189,25 +190,38 @@ export async function updateLeadStatus(
     throw e;
   }
 
+  if (!Object.prototype.hasOwnProperty.call(STATUTS, newStatus))
+    return { ok: false, error: 'Statut invalide' };
   const existing = await prisma.lead.findFirst({
     where: { id: leadId, tenantId: user.tenantId },
-    select: { id: true, status: true, wonAt: true },
+    select: {
+      id: true,
+      status: true,
+      wonAt: true,
+      nextAction: true,
+      nextActionAt: true,
+      lossReason: true,
+    },
   });
   if (!existing) return { ok: false, error: 'Lead introuvable' };
+
+  if (newStatus === 'LOST' && !existing.lossReason)
+    return { ok: false, error: 'Utilisez Modifier la fiche pour préciser le motif de perte.' };
+  if (!['WON', 'LOST'].includes(newStatus) && (!existing.nextAction || !existing.nextActionAt))
+    return { ok: false, error: 'Utilisez Modifier la fiche pour planifier la prochaine action.' };
 
   const wasWon = existing.status === 'WON';
   const becomesWon = newStatus === 'WON';
 
-  const wonAt =
-    becomesWon && !wasWon
-      ? new Date()
-      : !becomesWon && wasWon
-        ? null
-        : existing.wonAt;
+  const wonAt = becomesWon && !wasWon ? new Date() : !becomesWon && wasWon ? null : existing.wonAt;
 
   await prisma.lead.update({
     where: { id: leadId },
-    data: { status: newStatus, wonAt },
+    data: {
+      status: newStatus,
+      wonAt,
+      ...(['WON', 'LOST'].includes(newStatus) ? { nextAction: null, nextActionAt: null } : {}),
+    },
   });
 
   await logLeadEvent({

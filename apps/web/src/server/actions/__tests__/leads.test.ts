@@ -245,6 +245,7 @@ describe('updateLeadStatus', () => {
     leadFindFirst.mockResolvedValueOnce({
       id: 'lead-1',
       status: 'WON',
+    lossReason: 'NOT_INTERESTED',
       wonAt: prevWonAt,
     });
     leadUpdate.mockResolvedValueOnce({});
@@ -260,7 +261,7 @@ describe('updateLeadStatus', () => {
   it('Test 8 — CONTACTED → QUALIFIED : laisse wonAt inchangé', async () => {
     leadFindFirst.mockResolvedValueOnce({
       id: 'lead-1',
-      status: 'CONTACTED',
+      status: 'CONTACTED', nextAction: 'Rappel', nextActionAt: new Date('2026-09-22'),
       wonAt: null,
     });
     leadUpdate.mockResolvedValueOnce({});

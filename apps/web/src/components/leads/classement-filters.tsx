@@ -81,6 +81,17 @@ export function ClassementFilters({
           options={Object.entries(statuses).map(([value, label]) => ({ value, label }))}
         />
         <Select
+          name="travail"
+          label="Travail du jour"
+          all="Tous les leads"
+          value={params.travail}
+          options={[
+            { value: 'jour', label: 'Appels et relances dus (retards inclus)' },
+            { value: 'retard', label: 'Relances en retard' },
+            { value: 'planifier', label: 'Prochaine action à planifier' },
+          ]}
+        />
+        <Select
           name="tri"
           label="Trier par"
           value={params.tri ?? 'agence'}
@@ -90,6 +101,7 @@ export function ClassementFilters({
             { value: 'pointDeVente', label: 'Adresse du point de vente' },
             { value: 'commercial', label: 'Commercial chargé du suivi' },
             { value: 'recent', label: 'Plus récents' },
+            { value: 'relance', label: 'Relances les plus anciennes' },
           ]}
         />
       </div>

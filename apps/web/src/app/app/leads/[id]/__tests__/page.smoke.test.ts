@@ -9,7 +9,7 @@ import path from 'node:path';
  *  - validateRequest + redirect si pas user.
  *  - Scope multi-tenant via `tenantId: user.tenantId`.
  *  - notFound() si lead introuvable.
- *  - Wiring ReassignLeadButton + LeadStatusSelect (composants Task 1).
+ *  - Wiring ReassignLeadButton + LeadActivityForm (composants Task 1).
  *  - Lucide-react import cohérent (anti BUG-01).
  *
  * Pattern emprunté à `apps/web/src/app/invitation/[token]/__tests__/page.smoke.test.ts`.
@@ -40,11 +40,11 @@ describe('lead detail page smoke (Plan 09-03)', () => {
     expect(pageSrc).toMatch(/notFound\(\)/);
   });
 
-  it('renders ReassignLeadButton + LeadStatusSelect (Task 1 components)', () => {
+  it('renders ReassignLeadButton + LeadActivityForm (Task 1 components)', () => {
     expect(pageSrc).toMatch(/<ReassignLeadButton/);
-    expect(pageSrc).toMatch(/<LeadStatusSelect/);
+    expect(pageSrc).toMatch(/<LeadActivityForm/);
     expect(pageSrc).toMatch(/from '@\/components\/leads\/reassign-lead-button'/);
-    expect(pageSrc).toMatch(/from '@\/components\/leads\/lead-status-select'/);
+    expect(pageSrc).toMatch(/from '@\/components\/leads\/fiche-forms'/);
   });
 
   it('renders Breadcrumb (Phase 5 UX-10) with leads/ + prospectName path', () => {
