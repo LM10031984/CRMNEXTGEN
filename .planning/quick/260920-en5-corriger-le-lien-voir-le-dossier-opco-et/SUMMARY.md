@@ -1,0 +1,1 @@
+Lien de StepFacturation corrigé vers /envoyer/:id. Redirection permanente UUID ajoutée. Validation du motif par path-to-regexp utilisé par Next.js et typage application réussis. Déploiement par CI, puis vérification de l'ancienne URL signalée.
