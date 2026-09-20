@@ -109,3 +109,25 @@ it('rejeu idempotent sans écriture ni second journal', async () => {
   expect(await setSessionRegime({ ...input, apply: true })).toEqual({ ok: true, changed: false });
   expect(f.tx.auditLog.create).not.toHaveBeenCalled();
 });
+
+it('déclare le régime entreprise historique sans réécrire les prix déjà signés', async () => {
+  const employee = { ...session.participants[0], person: { ...session.participants[0]!.person, legalLinks: [{organizationId:'org',role:'SALARIE'}] } };
+  f.tx.trainingSession.findFirst.mockResolvedValue({ ...session, participants: [{...employee,id:'p1'}, {...employee,id:'p2'}] });
+  f.guard.mockRejectedValue(new Error('Convention signée'));
+  const preview = await setSessionRegime(input);
+  expect(preview.ok).toBe(true);
+  if (!preview.ok) throw new Error(preview.error);
+  expect(await setSessionRegime({...input,apply:true,confirmationKey:preview.confirmationKey})).toMatchObject({ok:true,changed:true});
+  expect(f.guard).not.toHaveBeenCalled();
+  expect(f.sync).not.toHaveBeenCalled();
+  expect(f.tx.sessionParticipant.updateMany).not.toHaveBeenCalled();
+  expect(f.tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({diff:expect.objectContaining({metadataOnly:true,participantsUpdated:0})})}));
+});
+
+it('garde le verrou si le forfait ou la ventilation change malgré un même total', async () => {
+  const employee = { ...session.participants[0], person: { ...session.participants[0]!.person, legalLinks: [{organizationId:'org',role:'SALARIE'}] } };
+  f.tx.trainingSession.findFirst.mockResolvedValue({ ...session, participants: [{...employee,id:'p1',priceHT:100}, {...employee,id:'p2',priceHT:140}] });
+  f.guard.mockRejectedValue(new Error('Convention signée'));
+  expect(await setSessionRegime(input)).toMatchObject({ok:false,error:'Convention signée'});
+  expect(f.tx.trainingSession.update).not.toHaveBeenCalled();
+});
