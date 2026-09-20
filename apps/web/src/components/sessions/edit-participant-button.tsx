@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Route } from 'next';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -96,7 +95,11 @@ export function EditParticipantButton({
   const champEnEvidence = ouvertParUrl && searchParams?.get(PARAM_CHAMP) === CHAMP_FINANCEUR;
 
   const [openLocal, setOpenLocal] = useState(false);
-  const open = openLocal || ouvertParUrl;
+  const [urlDismissed, setUrlDismissed] = useState(false);
+  const open = openLocal || (ouvertParUrl && !urlDismissed);
+  useEffect(() => {
+    if (!ouvertParUrl) setUrlDismissed(false);
+  }, [ouvertParUrl]);
 
   const [priceHT, setPriceHT] = useState<string>(String(currentPriceHT));
   const [status, setStatus] = useState<string>(currentStatus);
@@ -167,11 +170,23 @@ export function EditParticipantButton({
    */
   const fermer = useCallback(() => {
     setOpenLocal(false);
+    setUrlDismissed(true);
     setError(null);
     if (!ouvertParUrl) return;
     const qs = queryApresEdition(new URLSearchParams(searchParams?.toString() ?? ''));
-    router.replace((qs.length > 0 ? `${pathname}?${qs}` : pathname) as Route);
-  }, [ouvertParUrl, pathname, router, searchParams]);
+    // Navigation purement locale : fermer ne doit pas attendre le rechargement
+    // serveur de la fiche session. Next synchronise useSearchParams avec History.
+    window.history.replaceState(null, '', qs.length > 0 ? `${pathname}?${qs}` : pathname);
+  }, [ouvertParUrl, pathname, searchParams]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) fermer();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [open, busy, fermer]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -232,7 +247,7 @@ export function EditParticipantButton({
     <>
       <button
         type="button"
-        onClick={() => setOpenLocal(true)}
+        onClick={() => { setUrlDismissed(false); setOpenLocal(true); }}
         className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-muted text-muted-foreground"
         title="Modifier prix HT, statut et organisation commanditaire"
       >
@@ -242,6 +257,9 @@ export function EditParticipantButton({
 
       {open && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Modifier l’inscription"
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
           onClick={() => !busy && fermer()}
         >
@@ -361,7 +379,7 @@ export function EditParticipantButton({
 
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  Date de dépôt du dossier (AGEFICE / OPCO)
+                  Date de référence du budget AGEFICE
                 </label>
                 <input
                   type="date"
@@ -370,7 +388,7 @@ export function EditParticipantButton({
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Détermine l&apos;année à laquelle le budget AGEFICE est imputé. Vide = on prend la date de la session par défaut.
+                  Détermine l&apos;année du budget AGEFICE. Vide = date de la session. Ce champ ne déclare pas un dépôt : utilisez le bloc « Dépôts de financement » pour enregistrer qui a déposé le dossier et quand.
                 </p>
               </div>
               {error && (

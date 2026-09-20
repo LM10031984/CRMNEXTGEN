@@ -138,3 +138,17 @@ describe('SessionTabs — navigation via window.history.pushState', () => {
     expect(url).not.toContain('tab=');
   });
 });
+
+
+it('revient à Session après une entrée directe sur Avant sans reprendre l’ancien défaut serveur', () => {
+  setSearchParams('tab=avant');
+  const view = render(<SessionTabs defaultTab="avant" {...panels} />);
+  const spy = vi.spyOn(window.history, 'pushState').mockImplementation((_data, _unused, url) => {
+    setSearchParams(new URL(String(url), 'https://qualiof.test').search);
+  });
+  fireEvent.click(screen.getByRole('tab', { name: /^Session$/ }));
+  view.rerender(<SessionTabs defaultTab="avant" {...panels} />);
+  expect(isPanelVisible('PANEL_SESSION')).toBe(true);
+  expect(isPanelVisible('PANEL_AVANT')).toBe(false);
+  spy.mockRestore();
+});

@@ -70,6 +70,7 @@ export function SessionFundingSummary({
   companies,
   userEmail,
   canWrite,
+  canUploadSigned = false,
 }: {
   sessionId: string;
   tone: FundingTone;
@@ -77,6 +78,7 @@ export function SessionFundingSummary({
   companies: FundingCompanyRow[];
   userEmail: string;
   canWrite: boolean;
+  canUploadSigned?: boolean;
 }) {
   if (learners.length === 0 && companies.length === 0) return null;
   return (
@@ -111,6 +113,9 @@ export function SessionFundingSummary({
               <div>
                 <p className="text-sm font-medium">{company.sponsorName}</p>
                 <p className="text-xs text-muted-foreground">{company.detail}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Dossier salarié : convention d’entreprise signée et programme uniquement.
+                </p>
               </div>
               <StatusBadge tone={company.tone} />
             </div>
@@ -143,16 +148,26 @@ export function SessionFundingSummary({
                 );
               })}
               {(company.missingLearners.length > 0 || company.programmeMissing) && (
-                <p className="text-xs text-amber-800">
-                  Pièces à compléter :
-                  {company.missingLearners.length > 0
-                    ? ` convention signée (${company.missingLearners.join(', ')})`
-                    : ''}
-                  {company.programmeMissing
-                    ? `${company.missingLearners.length > 0 ? ' ;' : ''} programme de formation`
-                    : ''}
-                  .
-                </p>
+                <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-medium">À ajouter dans Qualiof avant de confirmer le dépôt</p>
+                  {company.missingLearners.length > 0 && (
+                    <>
+                      <p>
+                        Convention signée de {company.sponsorName} pour couvrir : {company.missingLearners.join(', ')}.
+                        Une convention commune à l’entreprise suffit pour ses salariés.
+                      </p>
+                      {canUploadSigned && <a href="#depot-pieces-signees" className="inline-block font-medium underline underline-offset-2">
+                        Déposer la convention d’entreprise signée
+                      </a>}
+                      {canUploadSigned
+                        ? <p>Dans « Déposer des pièces signées », choisissez « Convention entreprise / OPCO — commune aux salariés », puis {company.sponsorName}.</p>
+                        : <p>Un administrateur, gestionnaire ou commercial peut déposer la convention signée dans la session.</p>}
+                    </>
+                  )}
+                  {company.programmeMissing && (
+                    <p>Programme de formation manquant. <Link href={`/app/sessions/${sessionId}?tab=avant`} className="font-medium underline">Voir les documents avant formation</Link></p>
+                  )}
+                </div>
               )}
             </div>
             <CompanyDepositTracker

@@ -77,7 +77,7 @@ export function CompanyDepositTracker({
           {depositor ? ` par ${depositor}` : ''}
         </p>
       )}
-      {canWrite && !editing && (depositedAt || readyToDeposit) && (
+      {canWrite && !editing && (
         <button
           type="button"
           className="underline underline-offset-2"
@@ -144,8 +144,8 @@ export function CompanyDepositTracker({
           </p>
           {!readyToDeposit && (
             <p className="w-full text-amber-800">
-              Le dépôt ne peut pas être confirmé tant que les pièces obligatoires manquent. Une
-              déclaration existante peut toujours être corrigée ou annulée.
+              La déclaration sera disponible après ajout de la convention signée et du programme
+              dans Qualiof. Une déclaration existante peut toujours être corrigée ou annulée.
             </p>
           )}
         </div>

@@ -1851,6 +1851,7 @@ export default async function SessionDetailPage({
         companies={companyFundingRows}
         userEmail={user.email ?? ''}
         canWrite={canManageFunding}
+        canUploadSigned={canWrite}
       />
 
       {/* ════════════════════════════════════════════════════════════════
