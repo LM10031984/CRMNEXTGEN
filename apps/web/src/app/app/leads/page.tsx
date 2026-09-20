@@ -8,6 +8,9 @@ import { AutoAssignLeadsButton } from '@/components/leads/auto-assign-button';
 import { ProgrammesEnAttenteButton } from '@/components/diagnostic/programmes-en-attente-button';
 import { compterDiagnosticsEnAttente } from '@/lib/diagnostic/file-attente';
 import { RappelsDuJour } from '@/components/diagnostic/rappels-du-jour';
+import { Pagination } from '@/components/ui/pagination';
+import { ClassementFilters } from '@/components/leads/classement-filters';
+import { classerLeads, lireClassementParams, LEADS_PAGE_SIZE } from '@/lib/leads/classement';
 
 export const dynamic = 'force-dynamic';
 /**
@@ -49,37 +52,71 @@ const STATUS_LABEL: Record<string, string> = {
   TO_FOLLOWUP: 'À relancer',
 };
 
-export default async function LeadsPage() {
+export default async function LeadsPage({
+  searchParams = {},
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const { user } = await validateRequest();
   if (!user) return null;
 
-  const [leads, commercials, statusCounts, diagnosticsEnAttente] = await Promise.all([
+  const params = lireClassementParams(searchParams);
+  // Projection légère : les filtres portent sur TOUS les leads du tenant,
+  // puis seuls 50 résultats sont rendus. Aucun historique/document chargé.
+  const [allLeads, commercials, diagnosticsEnAttente] = await Promise.all([
     prisma.lead.findMany({
       where: { tenantId: user.tenantId },
-      include: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        status: true,
+        source: true,
+        createdAt: true,
+        ownerUserId: true,
+        lastAction: true,
         owner: { select: { firstName: true, lastName: true } },
         person: { select: { firstName: true, lastName: true } },
         interestedProduct: { select: { title: true } },
+        organization: {
+          select: {
+            id: true,
+            tenantId: true,
+            legalName: true,
+            brandName: true,
+            address: true,
+            representative: true,
+            contacts: {
+              where: { isPrimary: true },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 1,
+              select: { firstName: true, lastName: true, isPrimary: true },
+            },
+          },
+        },
       },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-      take: 200,
     }),
     prisma.user.findMany({
       where: { tenantId: user.tenantId, role: 'COMMERCIAL' },
       select: { id: true, firstName: true, lastName: true },
     }),
-    prisma.lead.groupBy({
-      by: ['status'],
-      where: { tenantId: user.tenantId },
-      _count: { _all: true },
-    }),
     compterDiagnosticsEnAttente(user.tenantId),
   ]);
 
-  const counter = (status: string) =>
-    statusCounts.find((c) => c.status === status)?._count._all ?? 0;
+  // Une ancienne référence mal rattachée ne doit pas exposer une agence d'un autre tenant.
+  const vue = classerLeads(
+    allLeads.map((lead) => ({
+      ...lead,
+      organization: lead.organization?.tenantId === user.tenantId ? lead.organization : null,
+    })),
+    params,
+  );
+  const leads = vue.rows;
+  const counter = (status: string) => vue.filtered.filter((l) => l.status === status).length;
 
-  const unassignedCount = leads.filter(
+  const unassignedCount = vue.filtered.filter(
     (l) => !l.ownerUserId && l.status !== 'WON' && l.status !== 'LOST',
   ).length;
 
@@ -87,7 +124,7 @@ export default async function LeadsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        subtitle="Pipeline commercial · auto-assignation aux commerciaux disponibles."
+        subtitle="Contacts classés par agence, responsable et point de vente."
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -98,19 +135,43 @@ export default async function LeadsPage() {
               Nouveau lead
             </Link>
             <ProgrammesEnAttenteButton enAttente={diagnosticsEnAttente} />
-            <AutoAssignLeadsButton unassignedCount={unassignedCount} />
+            <AutoAssignLeadsButton
+              unassignedCount={
+                allLeads.filter((l) => !l.ownerUserId && l.status !== 'WON' && l.status !== 'LOST')
+                  .length
+              }
+            />
           </div>
         }
       />
 
-      {/* J+1 du stand — en TÊTE, avant le pipeline : c'est ce qu'on ouvre à 9 h. */}
-      <RappelsDuJour leads={leads} />
+      <ClassementFilters
+        params={{ ...params, tri: vue.tri }}
+        options={vue.options}
+        statuses={STATUS_LABEL}
+      />
+
+      <div className="space-y-1 text-sm text-muted-foreground" aria-live="polite">
+        <p>
+          <strong className="text-foreground">
+            {vue.total} contact{vue.total === 1 ? '' : 's'}
+          </strong>
+          {` · ${vue.agences} agence${vue.agences === 1 ? '' : 's'} · ${vue.pointsDeVente} point${vue.pointsDeVente === 1 ? '' : 's'} de vente avec adresse · ${vue.sansAdresse} contact${vue.sansAdresse === 1 ? '' : 's'} sans adresse complète`}
+        </p>
+        <p className="text-xs">
+          Une adresse différente correspond à un point de vente distinct. Une ville seule reste «
+          Adresse à compléter ».
+        </p>
+      </div>
+
+      {/* Les rappels portent sur toute la sélection, pas seulement la page affichée. */}
+      <RappelsDuJour leads={vue.filtered} />
 
       {commercials.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 inline-flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Aucun utilisateur n'a le rôle <strong>COMMERCIAL</strong>. L'auto-assignation
-          ne pourra pas fonctionner — modifie les rôles dans les paramètres.
+          Aucun utilisateur n'a le rôle <strong>COMMERCIAL</strong>. L'auto-assignation ne pourra
+          pas fonctionner — modifie les rôles dans les paramètres.
         </div>
       )}
 
@@ -138,30 +199,35 @@ export default async function LeadsPage() {
         {leads.length === 0 ? (
           <div className="p-12 text-center space-y-2">
             <Megaphone className="h-10 w-10 text-muted-foreground mx-auto" />
-            <h3 className="font-semibold">Aucun lead pour l'instant</h3>
+            <h3 className="font-semibold">
+              {allLeads.length
+                ? 'Aucun contact ne correspond aux filtres'
+                : "Aucun lead pour l'instant"}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Les leads apparaîtront ici (formulaire public, salon, recommandation, LinkedIn).
+              {allLeads.length
+                ? 'Modifiez les filtres ou réinitialisez la recherche.'
+                : 'Les leads apparaîtront ici (formulaire public, salon, recommandation, LinkedIn).'}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left">
                   <Th>Statut</Th>
                   <Th>Contact</Th>
+                  <Th>Agence / point de vente</Th>
+                  <Th>Responsable d’agence</Th>
                   <Th>Dernière action</Th>
                   <Th>Source</Th>
-                  <Th>Intérêt</Th>
                   <Th>Commercial</Th>
                   <Th>Créé le</Th>
                 </tr>
               </thead>
               <tbody>
                 {leads.map((l) => {
-                  const contactName = l.person
-                    ? `${l.person.firstName} ${l.person.lastName}`.trim()
-                    : `${l.firstName ?? ''} ${l.lastName ?? ''}`.trim() || '—';
+                  const contactName = l.contactName;
                   return (
                     <tr
                       key={l.id}
@@ -179,9 +245,7 @@ export default async function LeadsPage() {
                         >
                           {contactName}
                         </Link>
-                        {l.email && (
-                          <div className="text-xs text-muted-foreground">{l.email}</div>
-                        )}
+                        {l.email && <div className="text-xs text-muted-foreground">{l.email}</div>}
                         {/* Le jeudi matin, cette liste est ouverte DEPUIS un
                             téléphone : l'appel doit partir en un tap. */}
                         {l.phone && (
@@ -193,16 +257,36 @@ export default async function LeadsPage() {
                             {l.phone}
                           </a>
                         )}
+                        {l.interestedProduct && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Intérêt : {l.interestedProduct.title}
+                          </div>
+                        )}
+                      </Td>
+                      <Td>
+                        {l.organization ? (
+                          <Link
+                            href={`/app/organisations/${l.organization.id}` as any}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {l.classement.agence}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">{l.classement.agence}</span>
+                        )}
+                        <div
+                          className={`text-xs mt-1 ${l.classement.adresseRenseignee ? 'text-muted-foreground' : 'text-amber-700'}`}
+                        >
+                          {l.classement.pointDeVente}
+                        </div>
+                      </Td>
+                      <Td>
+                        <span className="text-xs">{l.classement.responsable}</span>
                       </Td>
                       <Td>
                         <DerniereAction texte={l.lastAction} />
                       </Td>
                       <Td>{l.source ?? <span className="text-muted-foreground">—</span>}</Td>
-                      <Td>
-                        {l.interestedProduct?.title ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </Td>
                       <Td>
                         {l.owner ? (
                           <span className="inline-flex items-center gap-1.5 text-xs">
@@ -227,6 +311,13 @@ export default async function LeadsPage() {
           </div>
         )}
       </section>
+      <Pagination
+        total={vue.total}
+        page={vue.page}
+        pageSize={LEADS_PAGE_SIZE}
+        basePath="/app/leads"
+        searchParams={params}
+      />
     </div>
   );
 }
