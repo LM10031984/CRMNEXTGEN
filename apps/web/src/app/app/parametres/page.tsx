@@ -548,7 +548,7 @@ export default async function ParametresPage() {
         <SettingsSection
           icon={<Sparkles className={ICON_CLASS} aria-hidden="true" />}
           title={`OPCO référencés (${opcos.length})`}
-          description="Catalogue des financeurs alimentant le module Dossiers OPCO"
+          description="Catalogue des financeurs alimentant le module Dossiers de financement"
           allowEdit={false}
           readView={
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

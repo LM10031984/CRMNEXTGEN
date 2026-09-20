@@ -326,7 +326,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   ];
 
   const opcoChips = [
-    { label: 'Tous OPCO', href: hrefWith(sp, { opco: 'all' }), active: !sp.opco || sp.opco === 'all' },
+    { label: 'Tous financeurs', href: hrefWith(sp, { opco: 'all' }), active: !sp.opco || sp.opco === 'all' },
     ...opcos.map((o) => ({
       label: o,
       href: hrefWith(sp, { opco: o }),
@@ -337,9 +337,9 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   const statusChips = [
     { label: 'Tous statuts', href: hrefWith(sp, { status: 'all' }), active: !sp.status || sp.status === 'all' },
     { label: 'À facturer', href: hrefWith(sp, { status: 'a-facturer' }), active: sp.status === 'a-facturer' },
-    { label: 'Attente OPCO', href: hrefWith(sp, { status: 'attente-opco' }), active: sp.status === 'attente-opco' },
+    { label: 'Attente financeur', href: hrefWith(sp, { status: 'attente-opco' }), active: sp.status === 'attente-opco' },
     { label: 'Attente client', href: hrefWith(sp, { status: 'attente-client' }), active: sp.status === 'attente-client' },
-    { label: 'Complets', href: hrefWith(sp, { status: 'complet' }), active: sp.status === 'complet' },
+    { label: 'Suivi financier terminé', href: hrefWith(sp, { status: 'complet' }), active: sp.status === 'complet' },
   ];
 
   // US-008 : chips type de dossier (n'apparaît que si au moins 1 pré-inscription budget existe)
@@ -507,7 +507,41 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
           )}
         </td>
         <td className="px-3 py-2">
-          <div className="inline-flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {company ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="info">Portail OPCO</Badge>
+                <Badge variant={companyDeposit?.tone === 'success' ? 'success' : 'warning'}>
+                  {companyDeposit?.tone === 'success'
+                    ? 'Dépôt déclaré'
+                    : companyDeposit?.tone === 'warning'
+                      ? `Dépôt partiel ${companyDeposit.deposited}/${companyDeposit.total}`
+                      : 'Dépôt à déclarer'}
+                </Badge>
+                <Link
+                  href={`/app/sessions/${r.session.id}#depot-${r.sponsorOrgId}`}
+                  className="text-xs font-medium text-primary underline underline-offset-2"
+                >
+                  Pièces et dépôt du groupe
+                </Link>
+              </div>
+            ) : (
+              <>
+                <ComposeOpcoButton participantId={r.id} />
+                {agefice && <Badge variant={successfulAgefice ? 'success' : 'muted'}>
+                  {successfulAgefice ? 'Conforme et déposé' : 'Dépôt non confirmé'}
+                </Badge>}
+              </>
+            )}
+          </div>
+          {company && companyDeposit?.at && (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              {fmtDate.format(companyDeposit.at)} · {companyDeposit.by ?? 'auteur non renseigné'}
+            </p>
+          )}
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
             <DossierTimeline
               participantId={r.id}
               initial={{
@@ -529,37 +563,12 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                 amountHT={Number(r.priceHT)}
               />
             )}
-            {company ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info">Portail OPCO</Badge>
-                <Badge variant={companyDeposit?.tone === 'success' ? 'success' : 'warning'}>
-                  {companyDeposit?.tone === 'success'
-                    ? 'Dépôt déclaré'
-                    : companyDeposit?.tone === 'warning'
-                      ? `Dépôt partiel ${companyDeposit.deposited}/${companyDeposit.total}`
-                      : 'Dépôt à déclarer'}
-                </Badge>
-                <Link
-                  href={`/app/sessions/${r.session.id}#depot-${r.sponsorOrgId}`}
-                  className="text-xs font-medium text-primary underline underline-offset-2"
-                >
-                  Pièces et dépôt du groupe
-                </Link>
-              </div>
-            ) : (
-              <>
-                <ComposeOpcoButton participantId={r.id} />
-                {agefice && <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />}
-                <DossierReminderButton participantId={r.id} disabled={!r.invoiceSent || isComplete} />
-                {successfulAgefice && <Badge variant="success">Conforme et déposé</Badge>}
-              </>
-            )}
+            {!company && <DossierReminderButton participantId={r.id} disabled={!r.invoiceSent || isComplete} />}
+            {agefice && <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />}
           </div>
-          {company && companyDeposit?.at && (
-            <p className="mt-1 text-[11px] text-emerald-700">
-              {fmtDate.format(companyDeposit.at)} · {companyDeposit.by ?? 'auteur non renseigné'}
-            </p>
-          )}
+          <p className={`mt-1 text-xs ${lateLevel === 'alert' ? 'font-medium text-red-700' : lateLevel === 'warn' ? 'font-medium text-amber-800' : 'text-muted-foreground'}`}>
+            {isComplete ? 'Suivi financier terminé' : `Suivi financier en cours · ${daysWaiting} j d’attente`}
+          </p>
         </td>
       </tr>
     );
@@ -569,8 +578,8 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
     <DossierSelectionProvider>
     <div className="space-y-6">
       <PageHeader
-        title="Dossiers OPCO"
-        subtitle={`Suivi facturation & encaissement par inscription · ${fmtNb.format(totalShown)} dossier${totalShown > 1 ? 's' : ''} affiché${totalShown > 1 ? 's' : ''} sur ${fmtNb.format(totalAll)} au total`}
+        title="Dossiers de financement"
+        subtitle={`AGEFICE et OPCO · Dépôts et suivi financier par inscription · ${fmtNb.format(totalShown)} dossier${totalShown > 1 ? 's' : ''} affiché${totalShown > 1 ? 's' : ''} sur ${fmtNb.format(totalAll)} au total`}
       />
 
       {/* US-002 : Trésorerie globale en attente */}
@@ -588,7 +597,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                 {fmtEUR.format(treso)}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {fmtNb.format(tresoDossiers)} dossier{tresoDossiers > 1 ? 's' : ''} · à facturer + attente OPCO + attente client
+                {fmtNb.format(tresoDossiers)} dossier{tresoDossiers > 1 ? 's' : ''} · à facturer + attente financeur + attente client
               </div>
             </div>
           </div>
@@ -599,7 +608,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
               <div className="font-semibold tabular-nums">{fmtEUR.format(Number(kpiToInvoice._sum.priceHT ?? 0))}</div>
             </div>
             <div className="text-right">
-              <div className="text-muted-foreground">Attente OPCO</div>
+              <div className="text-muted-foreground">Attente financeur</div>
               <div className="font-semibold tabular-nums">{fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}</div>
             </div>
             <div className="text-right">
@@ -648,7 +657,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         />
         <KpiCard
           icon={AlertCircle}
-          label="Attente remboursement OPCO"
+          label="Attente remboursement financeur"
           value={fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}
           hint={`${fmtNb.format(kpiToReimburse._count.id)} dossier${kpiToReimburse._count.id > 1 ? 's' : ''}`}
           tone="info"
@@ -666,7 +675,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         />
         <KpiCard
           icon={FileCheck}
-          label="Dossiers complets"
+          label="Suivis financiers terminés"
           value={fmtNb.format(kpiComplete)}
           hint="facturé + remboursé + payé"
           tone="success"
@@ -696,6 +705,18 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         {typeChips && <FilterChips chips={typeChips} />}
       </div>
 
+      <section aria-label="Légende du suivi" className="rounded-xl border border-border bg-white p-4 text-xs space-y-2">
+        <p className="font-medium">Dépôt du dossier et suivi financier sont deux étapes distinctes.</p>
+        <p>Le badge « Déposé » confirme l’envoi AGEFICE ou la déclaration du dépôt sur le portail OPCO. Il ne signifie pas que le financement est accordé ou remboursé.</p>
+        <div className="flex flex-wrap gap-2" aria-label="Couleurs des lignes">
+          <span className="rounded border px-2 py-1">Sans couleur : 0 à 30 jours d’attente ou suivi financier terminé</span>
+          <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">Jaune : 31 à 60 jours d’attente financière</span>
+          <span className="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-800">Rouge : plus de 60 jours d’attente financière</span>
+        </div>
+        <p className="text-muted-foreground">Le délai part de la dernière étape financière renseignée (remboursement, accord ou facture), sinon de la fin de formation. La couleur de la ligne ne signale pas une pièce manquante.</p>
+        <p className="text-muted-foreground">Étapes financières : vert = fait · bleu = à faire · jaune = délai de l’étape dépassé · gris = étape suivante. Survolez une étape pour consulter sa date.</p>
+      </section>
+
       {/* Tableau */}
       <section className="rounded-2xl border border-border bg-white overflow-hidden -mx-4 sm:mx-0">
         <div className="overflow-x-auto">
@@ -705,38 +726,32 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                 <th className="px-3 py-2"><DossierSelectAllCheckbox allIds={allRowIds} /></th>
                 <SortableTh sortKey="date">Date</SortableTh>
                 <SortableTh sortKey="apprenant">Apprenant</SortableTh>
-                <Th>Groupe / Sponsor</Th>
+                <Th>Entreprise</Th>
                 <Th>Formation</Th>
                 <SortableTh sortKey="montant" className="text-right">Montant HT</SortableTh>
-                <SortableTh sortKey="opco">OPCO</SortableTh>
-                <Th className="text-center">
-                  <span className="inline-flex items-center gap-1">
-                    Pipeline
-                    <span className="text-[9px] font-normal normal-case text-muted-foreground">
-                      facture · valid. · remb. · paie.
-                    </span>
-                  </span>
-                </Th>
+                <SortableTh sortKey="opco">Financeur</SortableTh>
+                <Th>Dépôt du dossier</Th>
+                <Th>Suivi financier<span className="block text-[10px] font-normal normal-case text-muted-foreground">Facture · Accord · Remboursement · Paiement</span></Th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     Aucun dossier ne correspond aux filtres.
                   </td>
                 </tr>
               ) : groupedView ? (
                 <>
                   {groupsArr.map((g) => (
-                    <GroupRowExpander key={`${g.agg.sessionId}-${g.agg.sponsorOrgId}`} group={g.agg} colSpan={8}>
+                    <GroupRowExpander key={`${g.agg.sessionId}-${g.agg.sponsorOrgId}`} group={g.agg} colSpan={9}>
                       {g.rows.map((r, idx) => renderRow(r, idx))}
                     </GroupRowExpander>
                   ))}
                   {ungrouped.length > 0 && (
                     <>
                       <tr className="bg-muted/20 border-t-2 border-border">
-                        <td colSpan={8} className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <td colSpan={9} className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                           Dossiers sans sponsor (non groupés)
                         </td>
                       </tr>
@@ -755,7 +770,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                     Total filtré ({totalShown})
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtEUR.format(sumHT)}</td>
-                  <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground">
+                  <td colSpan={3} className="px-3 py-2 text-xs text-muted-foreground">
                     Encaissé&nbsp;: {fmtEUR.format(sumCollected)}
                   </td>
                 </tr>
@@ -767,7 +782,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
 
       {totalShown >= 500 && (
         <p className="text-xs text-muted-foreground italic">
-          Affichage limité à 500 dossiers. Affine les filtres (année, OPCO, statut) pour voir les autres.
+          Affichage limité à 500 dossiers. Affine les filtres (année, financeur, statut) pour voir les autres.
         </p>
       )}
       <DossierSelectionBar />

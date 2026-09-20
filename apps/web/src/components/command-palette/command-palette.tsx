@@ -49,7 +49,7 @@ const KIND_LABEL: Record<UniversalHit['kind'], string> = {
 const SHORTCUTS = [
   { label: 'Nouvelle session', icon: Plus, href: '/app/sessions/nouvelle', keywords: 'créer ajouter session formation' },
   { label: 'Pré-inscriptions à valider', icon: Inbox, href: '/app/inscriptions', keywords: 'préinscription valider apprenant inscription' },
-  { label: 'Dossiers OPCO', icon: ClipboardCheck, href: '/app/dossiers-opco', keywords: 'dossier opco agefice remboursement' },
+  { label: 'Dossiers de financement', icon: ClipboardCheck, href: '/app/dossiers-opco', keywords: 'dossier opco agefice remboursement' },
   { label: 'Factures', icon: Receipt, href: '/app/factures', keywords: 'facture facturation paiement' },
 ] as const;
 

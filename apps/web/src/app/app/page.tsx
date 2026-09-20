@@ -236,7 +236,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <ul className="space-y-2 text-sm text-amber-900">
               <AlertRow label="Sessions passées non facturées" count={stats.alerts.pastWithoutInvoice} href="/app/factures" />
               <AlertRow label="Sessions passées non clôturées" count={stats.alerts.sessionsToClose} href="/app/sessions?filter=completed" />
-              <AlertRow label="Dossiers OPCO sans validation" count={stats.alerts.opcoMissingApproval} href="/app/dossiers-opco" />
+              <AlertRow label="Dossiers de financement sans validation" count={stats.alerts.opcoMissingApproval} href="/app/dossiers-opco" />
               <AlertRow label="Apprenants à corriger" count={stats.counts.cleanupPersons} href="/app/apprenants?filter=cleanup" />
               <AlertRow label="Organisations à corriger" count={stats.counts.cleanupOrgs} href="/app/organisations?filter=cleanup" />
             </ul>

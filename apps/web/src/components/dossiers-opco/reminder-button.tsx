@@ -22,7 +22,7 @@ export function DossierReminderButton({ participantId, disabled }: Props) {
         return;
       }
       const dryRunNote = r.dryRun ? ' (mode test SMTP)' : '';
-      toast.success(`Relance ${r.reminderType === 'attente-opco' ? 'OPCO' : 'client'} envoyée à ${r.to}${dryRunNote}`);
+      toast.success(`Relance ${r.reminderType === 'attente-opco' ? 'financeur' : 'client'} envoyée à ${r.to}${dryRunNote}`);
     });
   }
 

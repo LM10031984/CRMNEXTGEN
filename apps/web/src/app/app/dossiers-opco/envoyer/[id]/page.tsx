@@ -45,7 +45,7 @@ export default async function ComposeOpcoPage({ params }: { params: Promise<{ id
       <div className="space-y-4">
         <div className="rounded-2xl border border-border bg-muted/30 p-6">
           <h1 className="text-xl font-semibold inline-flex items-center gap-2">
-            <Mail className="h-5 w-5 text-primary" /> Dossier OPCO — {STATUS_LABELS[sub.status]}
+            <Mail className="h-5 w-5 text-primary" /> Dossier {sub.agefice ? 'AGEFICE' : 'de financement'} — {STATUS_LABELS[sub.status]}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {sub.participant.person.firstName} {sub.participant.person.lastName.toUpperCase()} ·{' '}
@@ -77,7 +77,7 @@ export default async function ComposeOpcoPage({ params }: { params: Promise<{ id
   return (
     <div className="max-w-3xl mx-auto space-y-5">
       <h1 className="text-2xl font-semibold tracking-tight inline-flex items-center gap-2">
-        <Mail className="h-6 w-6 text-primary" /> Composer le dossier OPCO
+        <Mail className="h-6 w-6 text-primary" /> Préparer le dossier {sub.agefice ? 'AGEFICE' : 'de financement'}
       </h1>
 
       {sub.company && <DepositTracker participantId={sub.participantId} depositedAt={sub.participant.opcoDepositedAt?.toISOString() ?? null} depositedBy={sub.participant.opcoDepositedByEmail} userEmail={user.email} canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user.role)}/>}
@@ -119,7 +119,7 @@ const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Brouillon',
   SENT: 'Envoyé',
   ACK_RECEIVED: 'Accusé reçu',
-  APPROVED: 'Accord OPCO reçu',
+  APPROVED: 'Accord du financeur reçu',
   REJECTED: 'Refusé',
   REIMBURSED: 'Remboursé',
   CANCELED: 'Annulé',

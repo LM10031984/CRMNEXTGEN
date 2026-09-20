@@ -15,8 +15,8 @@ type Field = 'invoiceSent' | 'opcoApproved' | 'opcoReimbursed' | 'paymentReceive
 
 const ACTIONS: { field: Field; label: string; icon: typeof Receipt }[] = [
   { field: 'invoiceSent', label: 'Facturé', icon: Receipt },
-  { field: 'opcoApproved', label: 'Validé OPCO', icon: BadgeCheck },
-  { field: 'opcoReimbursed', label: 'Remboursé OPCO', icon: Banknote },
+  { field: 'opcoApproved', label: 'Accord financeur', icon: BadgeCheck },
+  { field: 'opcoReimbursed', label: 'Remboursé financeur', icon: Banknote },
   { field: 'paymentReceived', label: 'Payé client', icon: Wallet },
 ];
 
@@ -110,7 +110,7 @@ export function DossierSelectionBar() {
         type="button"
         onClick={() => runSetType('PREINSCRIPTION_BUDGET')}
         disabled={pending}
-        title="Marquer comme pré-inscription budget (réservation OPCO sans formation calée)"
+        title="Marquer comme pré-inscription budget (réservation de financement sans formation calée)"
         className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-xs font-medium hover:bg-amber-50 hover:text-amber-700 transition-colors disabled:opacity-50"
       >
         <Tag className="h-3 w-3" /> → Pré-inscription
