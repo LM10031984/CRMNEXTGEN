@@ -233,6 +233,7 @@ export async function updateOrganization(input: {
    * bloque la génération.
    */
   representative?: string | null;
+  crmManagers?: string[];
   /**
    * Champs AFFICHÉS sur la fiche mais qui n'étaient éditables nulle part
    * (constat Laurent du 02/09) : la fiche montrait « RCS — », « Type — » et une
@@ -259,7 +260,9 @@ export async function updateOrganization(input: {
   });
   if (!org) return { ok: false, error: 'Organisation introuvable.' };
 
+  if (input.crmManagers !== undefined && (!['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role) || !Array.isArray(input.crmManagers) || input.crmManagers.length > 50 || input.crmManagers.some(n => typeof n !== 'string' || n.length > 160))) return {ok: false, error: 'Responsables CRM invalides ou accès refusé.'};
   const data: Prisma.OrganizationUpdateInput = {};
+  if (input.crmManagers !== undefined) data.crmManagers = [...new Set(input.crmManagers.map(n => n.trim()).filter(Boolean))];
   if (input.legalName !== undefined && input.legalName.trim()) data.legalName = input.legalName.trim();
   if (input.legalForm !== undefined) data.legalForm = input.legalForm as any;
   if (input.siren !== undefined) data.siren = input.siren?.trim() || null;
@@ -303,6 +306,7 @@ export async function updateOrganization(input: {
   await prisma.organization.update({ where: { id: input.organizationId }, data });
   revalidatePath(`/app/organisations/${input.organizationId}`);
   revalidatePath('/app/organisations');
+  revalidatePath('/app/leads');
   return { ok: true };
 }
 

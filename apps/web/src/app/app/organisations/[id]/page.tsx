@@ -166,6 +166,7 @@ export default async function OrgDetailPage({
             // Champs affichés plus bas dans la fiche : ils doivent être
             // éditables ici, sinon on montre « RCS — » sans moyen de le remplir.
             representative: org.representative,
+            crmManagers: org.crmManagers,
             rcs: org.rcs,
             type: org.type,
             brandName: org.brandName,

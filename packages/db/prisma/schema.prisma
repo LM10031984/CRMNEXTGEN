@@ -247,6 +247,8 @@ model SensitiveData {
 }
 
 model Organization {
+  // Interlocuteurs commerciaux MLS, distincts du signataire contractuel.
+  crmManagers String[] @default([])
   id                      String               @id @default(uuid())
   tenantId                String
   legalName               String
@@ -908,6 +910,13 @@ enum LeadPriority {
 }
 
 model Lead {
+  jobTitle              String?
+  city                  String?
+  segments              String[]               @default([])
+  importKey             String?
+  importData            Json?
+  callCount             Int                    @default(0)
+  lossReason            String?
   id                    String                 @id @default(uuid())
   tenantId              String
   source                String? // "Formulaire", "Linkedin", "Salon", "Recommandation", etc.
@@ -959,9 +968,18 @@ model Lead {
   @@index([tenantId, status])
   @@index([tenantId, ownerUserId])
   @@index([tenantId, status, wonAt])
+  @@unique([tenantId, importKey])
+  @@index([tenantId, nextActionAt])
 }
 
 model LeadAction {
+  authorUserId String?
+  authorName   String?
+  outcome      String?
+  durationSeconds Int?
+  nextAction   String?
+  nextActionAt DateTime?
+  statusAfter  String?
   id         String   @id @default(uuid())
   leadId     String
   lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)

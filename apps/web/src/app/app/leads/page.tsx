@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { libelleStatut, STATUTS } from '@/lib/leads/suivi';
 import { Megaphone, User, AlertCircle, CheckCircle2, Plus, Phone } from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -40,18 +41,6 @@ const STATUS_VARIANT: Record<
   TO_FOLLOWUP: 'warning',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  NEW: 'Nouveau',
-  CONTACTED: 'Contacté',
-  QUALIFIED: 'Qualifié',
-  PROPOSAL_SENT: 'Proposition',
-  NEGOTIATION: 'Négo',
-  WON: 'Gagné',
-  LOST: 'Perdu',
-  ON_HOLD: 'En attente',
-  TO_FOLLOWUP: 'À relancer',
-};
-
 export default async function LeadsPage({
   searchParams = {},
 }: {
@@ -77,6 +66,9 @@ export default async function LeadsPage({
         createdAt: true,
         ownerUserId: true,
         lastAction: true,
+        callCount: true,
+        nextAction: true,
+        nextActionAt: true,
         owner: { select: { firstName: true, lastName: true } },
         person: { select: { firstName: true, lastName: true } },
         interestedProduct: { select: { title: true } },
@@ -88,6 +80,7 @@ export default async function LeadsPage({
             brandName: true,
             address: true,
             representative: true,
+            crmManagers: true,
             contacts: {
               where: { isPrimary: true },
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -126,7 +119,7 @@ export default async function LeadsPage({
         title="Leads"
         subtitle="Contacts classés par agence, responsable et point de vente."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href={'/app/leads/new' as any}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium"
@@ -134,6 +127,14 @@ export default async function LeadsPage({
               <Plus className="h-4 w-4" />
               Nouveau lead
             </Link>
+            {user.role === 'ADMIN' && (
+              <Link
+                href={'/app/leads/import' as any}
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+              >
+                Importer MLS
+              </Link>
+            )}
             <ProgrammesEnAttenteButton enAttente={diagnosticsEnAttente} />
             <AutoAssignLeadsButton
               unassignedCount={
@@ -148,7 +149,12 @@ export default async function LeadsPage({
       <ClassementFilters
         params={{ ...params, tri: vue.tri }}
         options={vue.options}
-        statuses={STATUS_LABEL}
+        statuses={{
+          ...STATUTS,
+          ...Object.fromEntries(
+            Array.from({ length: 7 }, (_, i) => [`CALL_${i + 1}`, `Appel ${i + 1}`]),
+          ),
+        }}
       />
 
       <div className="space-y-1 text-sm text-muted-foreground" aria-live="polite">
@@ -219,7 +225,7 @@ export default async function LeadsPage({
                   <Th>Contact</Th>
                   <Th>Agence / point de vente</Th>
                   <Th>Responsable d’agence</Th>
-                  <Th>Dernière action</Th>
+                  <Th>Dernière action / relance</Th>
                   <Th>Source</Th>
                   <Th>Commercial</Th>
                   <Th>Créé le</Th>
@@ -235,7 +241,7 @@ export default async function LeadsPage({
                     >
                       <Td>
                         <Badge variant={STATUS_VARIANT[l.status] ?? 'muted'}>
-                          {STATUS_LABEL[l.status] ?? l.status}
+                          {libelleStatut(l.status, l.callCount)}
                         </Badge>
                       </Td>
                       <Td>
@@ -245,6 +251,15 @@ export default async function LeadsPage({
                         >
                           {contactName}
                         </Link>
+                        <div>
+                          <Link
+                            href={`/app/leads/${l.id}` as any}
+                            className="text-xs text-primary underline"
+                            aria-label={`Ouvrir la fiche de ${contactName}`}
+                          >
+                            Ouvrir la fiche
+                          </Link>
+                        </div>
                         {l.email && <div className="text-xs text-muted-foreground">{l.email}</div>}
                         {/* Le jeudi matin, cette liste est ouverte DEPUIS un
                             téléphone : l'appel doit partir en un tap. */}
@@ -285,6 +300,12 @@ export default async function LeadsPage({
                       </Td>
                       <Td>
                         <DerniereAction texte={l.lastAction} />
+                        {!['WON', 'LOST'].includes(l.status) && (
+                          <div className="mt-1 text-xs text-amber-800">
+                            {l.nextAction || 'Prochaine action à planifier'}
+                            {l.nextActionAt && ` · ${fmtDate.format(l.nextActionAt)}`}
+                          </div>
+                        )}
                       </Td>
                       <Td>{l.source ?? <span className="text-muted-foreground">—</span>}</Td>
                       <Td>

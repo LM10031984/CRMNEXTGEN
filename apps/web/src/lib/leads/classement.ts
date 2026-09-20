@@ -23,6 +23,7 @@ const comparer = new Intl.Collator('fr', { sensitivity: 'base', numeric: true })
 export type OrganisationClassement = OrganisationRepresentee & {
   address: unknown;
   brandName?: string | null;
+  crmManagers?: string[];
 };
 
 export function classementOrganisation(org: OrganisationClassement | null) {
@@ -39,7 +40,12 @@ export function classementOrganisation(org: OrganisationClassement | null) {
   const agence = texte(org?.legalName) || 'Agence à rattacher';
   const agenceKey = org ? normaliserClassement(agence) || org.id : NON_RENSEIGNE;
   const responsable = org ? resoudreRepresentantEntreprise(org) : null;
-  const responsableNom = responsable?.ok ? texte(responsable.nom) : '';
+  const responsableNoms = org?.crmManagers?.length
+    ? org.crmManagers
+    : responsable?.ok
+      ? [texte(responsable.nom)]
+      : [];
+  const responsableNom = responsableNoms.join(' / ');
   // Une ville ou un secteur MLS seul ne prouve pas l'existence d'un établissement.
   const adresseRenseignee = Boolean(street && (city || postalCode));
   const adresse = [street, street2, [postalCode, city].filter(Boolean).join(' '), country]
@@ -58,6 +64,9 @@ export function classementOrganisation(org: OrganisationClassement | null) {
     city,
     adresse,
     responsable: responsableNom || 'Responsable à renseigner',
+    responsableOptions: responsableNoms.length
+      ? responsableNoms.map((n) => ({ value: normaliserClassement(n), label: n }))
+      : [{ value: NON_RENSEIGNE, label: 'Responsable à renseigner' }],
     responsableKey: responsableNom ? normaliserClassement(responsableNom) : NON_RENSEIGNE,
     pointDeVenteKey,
     adresseRenseignee,
@@ -74,6 +83,8 @@ export interface LeadClassable {
   source: string | null;
   status: string;
   createdAt: Date;
+  callCount?: number;
+  nextActionAt?: Date | null;
   ownerUserId: string | null;
   person: { firstName: string; lastName: string } | null;
   owner: { firstName: string; lastName: string } | null;
@@ -90,7 +101,8 @@ export type ClassementParams = Partial<
     | 'source'
     | 'statut'
     | 'tri'
-    | 'page',
+    | 'page'
+    | 'travail',
     string
   >
 >;
@@ -108,6 +120,7 @@ export function lireClassementParams(
     'statut',
     'tri',
     'page',
+    'travail',
   ] as const;
   return Object.fromEntries(
     keys.flatMap((key) => {
@@ -126,15 +139,39 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
       : `${lead.firstName ?? ''} ${lead.lastName ?? ''}`.trim() || 'Contact à renseigner',
   }));
   const query = normaliserClassement(params.q ?? '');
+  const today = new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const day = (date: Date) =>
+    new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
   const filtered = rows.filter((lead) => {
     const c = lead.classement;
     return (
+      (!params.travail ||
+        (!['WON', 'LOST'].includes(lead.status) &&
+          (params.travail === 'planifier'
+            ? !lead.nextActionAt
+            : !!lead.nextActionAt &&
+              (params.travail === 'retard'
+                ? day(lead.nextActionAt) < today
+                : day(lead.nextActionAt) <= today)))) &&
       (!params.agence || params.agence === c.agenceKey) &&
-      (!params.responsable || params.responsable === c.responsableKey) &&
+      (!params.responsable || c.responsableOptions.some((r) => r.value === params.responsable)) &&
       (!params.pointDeVente || params.pointDeVente === c.pointDeVenteKey) &&
       (!params.commercial || params.commercial === (lead.ownerUserId ?? NON_RENSEIGNE)) &&
       (!params.source || params.source === (texte(lead.source) || NON_RENSEIGNE)) &&
-      (!params.statut || params.statut === lead.status) &&
+      (!params.statut ||
+        params.statut === lead.status ||
+        (lead.status === 'CONTACTED' &&
+          params.statut === `CALL_${Math.min(lead.callCount ?? 0, 7)}`)) &&
       (!query ||
         normaliserClassement(
           [
@@ -151,15 +188,21 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
         ).includes(query))
     );
   });
-  const tri = ['agence', 'responsable', 'pointDeVente', 'commercial', 'recent'].includes(
+  const tri = ['agence', 'responsable', 'pointDeVente', 'commercial', 'recent', 'relance'].includes(
     params.tri ?? '',
   )
     ? params.tri!
-    : 'agence';
+    : params.travail
+      ? 'relance'
+      : 'agence';
   filtered.sort((a, b) => {
     const ca = a.classement;
     const cb = b.classement;
     let order = 0;
+    if (tri === 'relance')
+      order =
+        (a.nextActionAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+        (b.nextActionAt?.getTime() ?? Number.MAX_SAFE_INTEGER);
     if (tri === 'recent') order = b.createdAt.getTime() - a.createdAt.getTime();
     if (tri === 'responsable') order = comparer(ca.responsable, cb.responsable);
     if (tri === 'pointDeVente') order = comparer(ca.pointDeVente, cb.pointDeVente);
@@ -202,7 +245,9 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
     options: {
       agences: options(rows.map((l) => [l.classement.agenceKey, l.classement.agence])),
       responsables: options(
-        rows.map((l) => [l.classement.responsableKey, l.classement.responsable]),
+        rows.flatMap((l) =>
+          l.classement.responsableOptions.map((r) => [r.value, r.label] as [string, string]),
+        ),
       ),
       pointsDeVente: options(
         rows.map((l) => [

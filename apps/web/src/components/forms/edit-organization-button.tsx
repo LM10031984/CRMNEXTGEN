@@ -76,6 +76,7 @@ export function EditOrganizationButton({
     activityDescription?: string | null;
     // Affichés sur la fiche, mais éditables nulle part avant le 02/09.
     representative?: string | null;
+    crmManagers?: string[];
     rcs?: string | null;
     type?: string | null;
     brandName?: string | null;
@@ -139,6 +140,7 @@ export function EditOrganizationButton({
           defaultValue: current.representative,
           placeholder: 'Signe les conventions — ex : Olivier MARTIN, responsable d’agence',
         },
+        { name: 'crmManagers', label: 'Responsables du suivi CRM (un nom par ligne)', type: 'textarea', rows: 3, defaultValue: (current.crmManagers ?? []).join('\n') },
         { name: 'siret', label: 'SIRET', defaultValue: current.siret, placeholder: '14 chiffres' },
         { name: 'siren', label: 'SIREN', defaultValue: current.siren, placeholder: '9 chiffres' },
         { name: 'naf', label: 'Code NAF / APE', defaultValue: current.naf, placeholder: 'ex: 4619 B' },
@@ -198,6 +200,7 @@ export function EditOrganizationButton({
           network: values.network as string | null,
           activityDescription: values.activityDescription as string | null,
           representative: values.representative as string | null,
+          crmManagers: String(values.crmManagers ?? '').split('\n').map(s => s.trim()).filter(Boolean),
           rcs: values.rcs as string | null,
           type: values.type as string | null,
           brandName: values.brandName as string | null,
