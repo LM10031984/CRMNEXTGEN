@@ -78,3 +78,13 @@ describe('contenu générique — bloque la remise, jamais la régénération', 
     );
   });
 });
+
+
+it('session entreprise : le prix global remplace le tarif par apprenant', () => {
+  expect(getSessionCompleteness({ ...sessionSaine(), regime: 'ENTREPRISE', priceTotalHT: { toNumber: () => 2200 }, pricePerLearner: null }).generationBlockers.some(b => b.key === 'no_price')).toBe(false);
+  const result = getSessionCompleteness({ ...sessionSaine(), regime: 'ENTREPRISE', priceTotalHT: null, pricePerLearner: 1100 });
+  expect(result.generationBlockers.find(b => b.key === 'no_price')?.hint).toContain('prix global HT');
+});
+it('session individuelle : le prix global ne masque pas un tarif apprenant absent', () => {
+  expect(getSessionCompleteness({ ...sessionSaine(), regime: 'INDIVIDUEL', priceTotalHT: 2200, pricePerLearner: null }).generationBlockers.some(b => b.key === 'no_price')).toBe(true);
+});

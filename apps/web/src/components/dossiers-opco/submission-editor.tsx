@@ -10,6 +10,8 @@
  * - envoyer maintenant OU marquer comme déjà envoyé manuellement
  */
 
+import { UploadPieceButton } from './upload-piece-button';
+import { controlCompanyPieces } from '@/lib/opco/company-dossier';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -42,7 +44,7 @@ import {
 } from '@/lib/opco/pieces-dossier';
 import { vueDossierPret } from '@/lib/opco/etat-dossier';
 import { aideDestinataireDossier } from '@/lib/opco/destinataire-dossier';
-import { controlePiecesAgefice, type DossierStage } from '@/lib/opco/agefice-envoi';
+import { controlePiecesAgefice, PIECES_AGEFICE, type DossierStage } from '@/lib/opco/agefice-envoi';
 
 /**
  * Les libellés viennent du module du dossier — lot D. Cet écran en portait une
@@ -106,6 +108,8 @@ interface Props {
     sponsorOpcoCode: string | null;
     sponsorOrgId: string;
     agefice?: boolean;
+    company?: boolean;
+    sessionId?: string;
     stage?: DossierStage;
     deliveryState?: 'READY' | 'SENDING' | 'UNCERTAIN';
     lastError?: string | null;
@@ -213,7 +217,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
   }
 
   function send(force = false) {
-    if (locked || (strictAgefice && blocage)) return;
+    if (locked || ((strictAgefice || initial.company) && blocage)) return;
     if (!recipient.trim()) {
       toast.error('Email destinataire vide');
       return;
@@ -293,8 +297,10 @@ export function SubmissionEditor({ id, role, initial }: Props) {
       ? dossier.blocage
       : strictAgefice
         ? controlePiecesAgefice(attachments, stage)
-        : dossier.blocage;
+        : initial.company ? controlCompanyPieces(attachments) : dossier.blocage;
 
+  const required: readonly KindPieceDossier[] = strictAgefice ? PIECES_AGEFICE[stage] : initial.company ? ['CONVENTION', 'PROGRAMME'] : [];
+  const readyCount = required.filter(kind => attachments.some(a => a.kind === kind && a.included && a.key?.trim() && (!PORTE_UNE_MENTION.has(kind) || a.signe === true))).length;
   return (
     <div className="space-y-5">
       {/* Bandeau apprenant / sponsor */}
@@ -477,11 +483,24 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         </p>
       )}
 
+      {required.length > 0 && <section className="rounded-lg border p-3 space-y-3" aria-label="Pièces requises">
+        <p className="text-sm font-semibold">Dossier : {readyCount}/{required.length} pièces prêtes</p>
+        <ul className="space-y-2">{required.map(kind => {
+          const piece = attachments.find(a => a.kind === kind && a.key?.trim());
+          const state = !piece ? 'Manquante' : PORTE_UNE_MENTION.has(kind) && piece.signe !== true ? 'Signature manquante' : !piece.included ? 'Non sélectionnée' : 'Prête';
+          return <li key={kind} className="flex items-center justify-between gap-3 text-sm">
+            <span>{KIND_LABELS[kind]} <span className={state === 'Prête' ? 'text-emerald-700' : 'text-amber-700'}>— {state}</span></span>
+            {['CNI', 'RIB', 'CFP_ATTESTATION'].includes(kind) && <UploadPieceButton submissionId={id} kind={kind} label={KIND_LABELS[kind]} present={!!piece} disabled={pending || locked}/>}
+          </li>;
+        })}</ul>
+        {strictAgefice && <p className="text-xs text-muted-foreground">PDF, JPG ou PNG · 3 Mo maximum. CNI et RIB sont enregistrés sur la fiche apprenant ; la CFP sur son dossier AGEFICE. Les pièces jointes sont actualisées après le dépôt.</p>}
+        {initial.sessionId && <a href={`/app/sessions/${initial.sessionId}#depot-pieces-signees`} className="text-xs underline underline-offset-2">Déposer une convention ou une autre pièce signée</a>}
+      </section>}
       {/* Attachments */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1.5">
-            <Paperclip className="h-3.5 w-3.5" /> Pièces jointes ({includedCount}/
+            <Paperclip className="h-3.5 w-3.5" /> Fichiers sélectionnés ({includedCount}/
             {attachments.length})
           </label>
           <button
@@ -583,7 +602,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
             )}
             Sauvegarder brouillon
           </button>
-          {!strictAgefice && (
+          {!strictAgefice && !initial.company && (
             <button
               type="button"
               onClick={markSent}
@@ -599,7 +618,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
               ferait chercher une case à cocher qui n'existe pas. Et
               `sendOpcoSubmission` le refuserait de toute façon à tout autre
               qu'un ADMIN — un bouton visible pour un rôle refusé ment. */}
-          {!strictAgefice && dossier.forcagePossible && (
+          {!strictAgefice && !initial.company && dossier.forcagePossible && (
             <button
               type="button"
               onClick={() => send(true)}

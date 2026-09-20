@@ -1,3 +1,5 @@
+import { isCompanyDossier, isEmployeeStatus, selectDossierConvention } from '@/lib/opco/company-dossier';
+import { manualSignedKey } from '@/lib/opco/manual-signed-key';
 import { prisma } from '@qualiof/db';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import { missingFormationDocuments, parisDay, shouldAlertFormation } from './formation-rules';
@@ -23,17 +25,22 @@ export async function checkFormationDocuments(
       name: true,
       status: true,
       startDate: true,
+      endDate: true,
+      regime: true,
       participants: {
         where: { enrollmentStatus: { not: 'CANCELLED' } },
         select: {
           id: true,
           sponsorOrgId: true,
           personId: true,
+          participantType: true,
+          docStatus: true,
           person: {
             select: {
               firstName: true,
               lastName: true,
               ribKey: true,
+              legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } },
               sensitiveData: { select: { idDocumentUrl: true } },
             },
           },
@@ -49,6 +56,7 @@ export async function checkFormationDocuments(
           id: true,
           firstName: true,
           lastName: true,
+          professionalStatus: true,
           cniKey: true,
           ribKey: true,
           cfpKey: true,
@@ -61,6 +69,7 @@ export async function checkFormationDocuments(
     if (!shouldAlertFormation(session.startDate, session.status, now)) continue;
     const cases: Array<{ id: string; name: string; path: string; missing: string[] }> = [];
     for (const p of session.participants) {
+      const company = isCompanyDossier({ ...p, session });
       const conventions = await prisma.document.findMany({
         where: {
           tenantId: session.tenantId,
@@ -70,10 +79,18 @@ export async function checkFormationDocuments(
             groupConventionAnyShapeWhere(session.tenantId, session.id, p.sponsorOrgId),
           ],
         },
-        select: { id: true, participantId: true, signedPdfUrl: true },
+        select: { id: true, participantId: true, entityType: true, entityId: true, signedPdfUrl: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       });
-      const convention = conventions.find(d => d.participantId === p.id) ?? conventions[0];
+      const convention = selectDossierConvention(conventions, p.id, p.sponsorOrgId, company);
+      const programmes = company ? await prisma.document.findMany({
+        where: { tenantId: session.tenantId, sessionId: session.id, type: 'PROGRAMME', OR: [
+          { participantId: p.id },
+          { participantId: null, entityType: { not: 'organization' } },
+          { entityType: 'organization', entityId: p.sponsorOrgId },
+        ] },
+        select: { pdfUrl: true }, orderBy: { createdAt: 'desc' }, take: 1,
+      }) : [];
       cases.push({
         id: p.id,
         name: `${p.person.firstName} ${p.person.lastName}`,
@@ -82,7 +99,9 @@ export async function checkFormationDocuments(
           cni: Boolean(p.person.sensitiveData?.idDocumentUrl),
           rib: Boolean(p.person.ribKey),
           cfp: Boolean(p.sponsorOrg.ageficeProfile?.cfpAttestationKey),
-          convention: Boolean(convention?.signedPdfUrl?.trim()),
+          convention: Boolean(convention?.signedPdfUrl?.trim() || manualSignedKey(p.docStatus, 'CONVENTION', convention?.createdAt)),
+          company,
+          programme: Boolean(programmes[0]?.pdfUrl?.trim()),
         }),
       });
     }
@@ -96,6 +115,8 @@ export async function checkFormationDocuments(
           rib: Boolean(pe.ribKey),
           cfp: Boolean(pe.cfpKey),
           convention: false,
+          company: session.regime === 'ENTREPRISE' || isEmployeeStatus(pe.professionalStatus),
+          programme: false,
         }),
       });
     }

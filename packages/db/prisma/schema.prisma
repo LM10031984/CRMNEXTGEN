@@ -795,6 +795,10 @@ model SessionParticipant {
   financingRequestDate  DateTime?
   financingApprovalDate DateTime?
 
+  // Déclaration de dépôt sur un portail OPCO, distincte de l’accord et de l’envoi mail.
+  opcoDepositedAt DateTime?
+  opcoDepositedByEmail String?
+
   // Workflow facturation
   billingType   BillingType?
   paymentStatus PaymentStatus @default(PENDING)

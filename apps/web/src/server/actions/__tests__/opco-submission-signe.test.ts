@@ -631,3 +631,23 @@ it('un autre ancien brouillon déjà expédié bloque le même participant et la
   expect(updateManySubmission).not.toHaveBeenCalled();
   expect(sendMailMock).not.toHaveBeenCalled();
 });
+
+
+it('dossier entreprise : ne joint ni CNI, ni RIB, ni CFP ni formulaire AGEFICE', async () => {
+  const p = participant();
+  findFirstParticipant.mockResolvedValue({ ...p, session: { ...p.session, regime: 'ENTREPRISE' } });
+  await composeOpcoSubmission('part-1');
+  const kinds = piecesCreees().map(p => p.kind);
+  expect(kinds).toContain('CONVENTION');
+  expect(kinds).toContain('PROGRAMME');
+  expect(kinds).not.toContain('CNI');
+  expect(kinds).not.toContain('RIB');
+  expect(kinds).not.toContain('CFP_ATTESTATION');
+  expect(kinds).not.toContain('AGEFICE_PA_FORM');
+});
+it('ne renomme pas un justificatif image en PDF', async () => {
+  const p = participant();
+  findFirstParticipant.mockResolvedValue({ ...p, person: { ...p.person, ribKey: 'rib.png' } });
+  await composeOpcoSubmission('part-1');
+  expect(piecesCreees().find(p => p.kind === 'RIB')?.filename).toMatch(/\.png$/);
+});

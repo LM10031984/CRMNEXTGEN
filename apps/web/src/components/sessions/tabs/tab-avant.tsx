@@ -323,7 +323,7 @@ export function TabAvant({
           actions={
             group.participantId ? (
               <div className="flex flex-wrap items-center gap-2">
-                {canGenerate && group.items.some((item) => item.docType === 'AGEFICE') && (
+                {canGenerate && (
                   <ComposeOpcoButton participantId={group.participantId} />
                 )}
                 <LearnerPhaseActions

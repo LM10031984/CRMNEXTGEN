@@ -73,6 +73,8 @@ export interface SessionCompletenessInput {
   startDate: Date | null;
   endDate: Date | null;
   pricePerLearner: { toNumber(): number } | number | null;
+  regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null;
+  priceTotalHT?: { toNumber(): number } | number | null;
   locationId: string | null;
   /**
    * Le lieu lui-même, pour vérifier qu'il porte les mentions exigées par
@@ -133,15 +135,15 @@ export function getSessionCompleteness(
     });
   }
 
-  const priceNum =
-    typeof s.pricePerLearner === 'number'
-      ? s.pricePerLearner
-      : s.pricePerLearner?.toNumber?.() ?? 0;
-  if (!priceNum || priceNum <= 0) {
+  const price = s.regime === 'ENTREPRISE' ? s.priceTotalHT : s.pricePerLearner;
+  const priceNum = typeof price === 'number' ? price : price?.toNumber?.() ?? 0;
+  if (!Number.isFinite(priceNum) || priceNum <= 0) {
     blockers.push({
       key: 'no_price',
       label: 'Tarif non renseigné',
-      hint: 'Définir le prix HT par apprenant (champ Tarif sur la fiche session)',
+      hint: s.regime === 'ENTREPRISE'
+        ? 'Définir le prix global HT de la session entreprise'
+        : 'Définir le prix HT par apprenant (champ Tarif sur la fiche session)',
       fix: { href: '#section-logistique', label: 'Aller à la logistique' },
     });
   }

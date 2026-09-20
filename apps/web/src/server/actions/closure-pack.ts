@@ -142,6 +142,8 @@ export async function generateClosurePack(
     startDate: session.startDate,
     endDate: session.endDate,
     pricePerLearner: session.pricePerLearner,
+    regime: session.regime,
+    priceTotalHT: session.priceTotalHT,
     locationId: session.locationId,
     location: session.location,
     modality: session.modality,

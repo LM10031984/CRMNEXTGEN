@@ -1,3 +1,4 @@
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { manualSignedKey } from '@/lib/opco/manual-signed-key';
 import { DepotPiecesSignees } from '@/components/sessions/qualiopi-matrix/depot-pieces-signees';
 import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
@@ -291,6 +292,7 @@ export default async function SessionDetailPage({
             // ne l'offrait — et c'est la pièce que les AGEFICE réclament.
             signatureRequest: { select: { signers: true, auditTrailUrl: true } },
           },
+          orderBy: { createdAt: 'desc' },
         }),
         prisma.pedagogicalAsset.findMany({
           where: {
@@ -372,7 +374,7 @@ export default async function SessionDetailPage({
   for (const d of sessionDocs) {
     if (!d.participantId) continue;
     const m = docsByParticipant.get(d.participantId) ?? new Map();
-    m.set(d.type, d.id);
+    if (!m.has(d.type)) m.set(d.type, d.id);
     docsByParticipant.set(d.participantId, m);
   }
   // Convention ENTREPRISE : le document groupe est rattaché à l'organisation
@@ -387,8 +389,8 @@ export default async function SessionDetailPage({
   );
   for (const [participantId, docId] of groupConventionByParticipant) {
     const m = docsByParticipant.get(participantId) ?? new Map();
-    // Ne jamais écraser une convention individuelle déjà en place.
-    if (!m.has('CONVENTION')) m.set('CONVENTION', docId);
+    const covered = session.participants.find(p => p.id === participantId);
+    if (!m.has('CONVENTION') || (covered && isCompanyDossier({ ...covered, session }))) m.set('CONVENTION', docId);
     docsByParticipant.set(participantId, m);
   }
   for (const a of sessionAssets) {
@@ -928,6 +930,8 @@ export default async function SessionDetailPage({
     startDate: session.startDate,
     endDate: session.endDate,
     pricePerLearner: session.pricePerLearner,
+    regime: session.regime,
+    priceTotalHT: session.priceTotalHT,
     locationId: session.locationId,
     location: session.location,
     modality: session.modality,
@@ -1770,7 +1774,17 @@ export default async function SessionDetailPage({
       {canWrite && (
         <DepotPiecesSignees
           sessionId={session.id}
-          pieces={session.participants.flatMap((p) =>
+          companies={Array.from(new Set(session.participants.filter(p => isCompanyDossier({ ...p, session })).map(p => p.sponsorOrgId))).map(sponsorOrgId => ({
+            id: sponsorOrgId,
+            name: session.participants.find(p => p.sponsorOrgId === sponsorOrgId)!.sponsorOrg.legalName,
+            learners: session.participants.filter(p => p.sponsorOrgId === sponsorOrgId && isCompanyDossier({ ...p, session })).map(p => `${p.person.firstName} ${p.person.lastName}`),
+          }))}
+          pieces={[...sessionDocs.filter(d => d.type === 'CONVENTION' && d.entityType === 'organization').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).filter((d, i, docs) => !docs.slice(0, i).some(other => other.entityId === d.entityId)).filter(d => d.signedPdfUrl?.trim()).map(d => ({
+            label: 'Convention entreprise / OPCO',
+            apprenant: session.participants.find(p => p.sponsorOrgId === d.entityId)?.sponsorOrg.legalName ?? 'Entreprise',
+            source: d.signatureKind === 'E_SIGNATURE' ? 'DocuSeal' : 'Dépôt manuel',
+            href: `/api/documents/${d.id}`,
+          })), ...session.participants.flatMap((p) =>
             (['CONVENTION', 'AGEFICE', 'EMARGEMENT', 'ASSIDUITE'] as const).flatMap((type) => {
               const doc = sessionDocs.filter(d => d.participantId === p.id && d.type === type)
                 .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
@@ -1782,7 +1796,7 @@ export default async function SessionDetailPage({
                 href: `/api/sessions/${session.id}/apprenants/${p.id}/pieces-signees/${type}`,
               }];
             })
-          )}
+          )]}
           participants={session.participants.map((p) => ({
             id: p.id,
             fullName: `${p.person.firstName} ${p.person.lastName}`,

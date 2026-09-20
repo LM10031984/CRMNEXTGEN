@@ -1,5 +1,7 @@
 'use server';
 
+import { isCompanyDossier, controlCompanyPieces } from '@/lib/opco/company-dossier';
+
 import { revalidatePath } from 'next/cache';
 import { prisma, Prisma, type OpcoSubmissionStatus } from '@qualiof/db';
 import {
@@ -291,6 +293,9 @@ export async function sendOpcoSubmission(
         return await release(
           'Le destinataire diffère du point d’accueil actuel. Corrigez le point d’accueil ou le destinataire.',
         );
+    } else if (built.company) {
+      const blocked = controlCompanyPieces(attachments);
+      if (blocked) return await release(blocked);
     } else {
       const unsigned = piecesNonSignees(
         attachments.map((a) => ({ kind: a.kind, signe: a.signe === true })),
@@ -515,7 +520,8 @@ export async function getOpcoSubmission(id: string) {
     },
   });
   if (!sub) return null;
-  const agefice = estEligibleAgefice(sub.participant);
+  const company = isCompanyDossier(sub.participant);
+  const agefice = !company && estEligibleAgefice(sub.participant);
   const built = agefice
     ? await buildOpcoSubmission(
         sub.participantId,
@@ -534,6 +540,7 @@ export async function getOpcoSubmission(id: string) {
           ? ('SENDING' as const)
           : ('UNCERTAIN' as const),
     agefice,
+    company,
     department: built?.ok ? built.routing.department : null,
     pointAccueilId: built?.ok ? (built.routing.selected?.id ?? null) : null,
     pointAccueilOptions: built?.ok
