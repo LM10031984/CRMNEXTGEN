@@ -333,7 +333,7 @@ export function TabAvant({
                     href="#depots-financement"
                     className="inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-medium text-primary hover:bg-muted/40"
                   >
-                    Pièces et dépôt portail OPCO
+                    Voir le dépôt OPCO en haut de la session
                   </Link>
                 ) : canGenerate && (
                   <ComposeOpcoButton participantId={group.participantId} />

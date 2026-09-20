@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/server/actions/opco-deposit', () => ({ recordCompanyOpcoDeposit: vi.fn() }));
 
 import { CompanyDepositTracker } from '../company-deposit-tracker';
+afterEach(cleanup);
 
 describe('CompanyDepositTracker — correction d’un faux dépôt', () => {
   it('laisse annuler une déclaration existante quand les pièces sont désormais incomplètes', () => {
@@ -35,4 +36,19 @@ describe('CompanyDepositTracker — correction d’un faux dépôt', () => {
     ).toBe(true);
     expect(screen.getByText(/peut toujours être corrigée ou annulée/)).toBeTruthy();
   });
+});
+
+
+it('garde le bouton visible et explique le blocage, puis autorise la confirmation une fois les pièces ajoutées', () => {
+  const props = {
+    sessionId: 'session', sponsorOrgId: 'gcs',
+    members: [{ id: 'pierre', depositedAt: null, depositedBy: null }],
+    depositedAt: null, depositedBy: null, userEmail: 'laurent@start-academy.fr', canWrite: true,
+  };
+  const view = render(<CompanyDepositTracker {...props} readyToDeposit={false} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Déclarer le dépôt du groupe' }));
+  expect((screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText(/après ajout de la convention signée et du programme/)).toBeTruthy();
+  view.rerender(<CompanyDepositTracker {...props} readyToDeposit />);
+  expect((screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled).toBe(false);
 });

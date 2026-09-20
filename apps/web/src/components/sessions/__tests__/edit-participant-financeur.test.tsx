@@ -115,6 +115,7 @@ beforeEach(() => {
   cleanup();
   vi.clearAllMocks();
   poserUrl('');
+  vi.spyOn(window.history, 'replaceState').mockImplementation((_data, _unused, url) => replace(url));
   listerFinanceursPossibles.mockResolvedValue({
     ok: true,
     financeurs: [
@@ -325,4 +326,19 @@ describe('rôle insuffisant pour changer le financeur', () => {
     await waitFor(() => expect(screen.queryByLabelText(LIBELLE_FINANCEUR)).toBeNull());
     expect(screen.getByText(/Accès refusé/)).toBeTruthy();
   });
+});
+
+
+it('Annuler ferme immédiatement le formulaire ouvert par URL sans attendre la navigation serveur', async () => {
+  poserUrl(`tab=session&inscription=${PARTICIPANT_ID}&champ=financeur&retour=avant`);
+  monter();
+  await screen.findByLabelText(LIBELLE_FINANCEUR);
+  fireEvent.click(screen.getByRole('button', { name: /^Annuler$/ }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(updateParticipant).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledWith('/app/sessions/ses-0048?tab=avant');
+  fireEvent.click(screen.getByRole('button', { name: /Éditer/ }));
+  expect(await screen.findByRole('dialog')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
 });

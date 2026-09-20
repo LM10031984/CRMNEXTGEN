@@ -87,3 +87,13 @@ it('revérifie l’envoi DocuSeal avant de publier la convention commune', async
   expect((await uploadGroupConvention(data())).ok).toBe(false);
   expect(m.create).not.toHaveBeenCalled();
 });
+
+it('un salarié reste éligible au dépôt commun même si le même commanditaire porte aussi une inscription indépendante', async () => {
+  const session = { regime: null, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') };
+  m.participants.mockResolvedValue([
+    { id: 'pierre', sponsorOrgId: 'org', session, person: { legalLinks: [{ organizationId: 'org', role: 'SALARIE' }] } },
+    { id: 'independant', sponsorOrgId: 'org', session, person: { legalLinks: [{ organizationId: 'org', role: 'AGENT_COMMERCIAL' }] } },
+  ]);
+  expect(await uploadGroupConvention(data())).toEqual({ ok: true, covered: 1 });
+  expect(m.audit.mock.calls[0]![0].data.diff.coveredParticipantIds).toEqual(['pierre']);
+});

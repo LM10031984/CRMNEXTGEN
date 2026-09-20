@@ -38,7 +38,7 @@ interface Props {
 export function SessionTabs({ defaultTab, session, avant, apres, docs, agenda }: Props) {
   const sp = useSearchParams();
   // Onglet actif = URL si présente/valide, sinon le défaut serveur (deep-link).
-  const active = coerceTab(sp?.get('tab') ?? defaultTab);
+  const active = coerceTab(sp ? (sp.get('tab') ?? undefined) : defaultTab);
 
   function go(id: SessionTabId) {
     const params = new URLSearchParams(sp?.toString() ?? '');

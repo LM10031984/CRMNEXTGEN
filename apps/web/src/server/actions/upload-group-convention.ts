@@ -16,7 +16,7 @@ export async function uploadGroupConvention(
   const file = data.get('file');
   if (!(file instanceof File) || !file.size || file.size > 3 * 1024 * 1024)
     return { ok: false, error: 'Choisissez la convention signée au format PDF (3 Mo maximum).' };
-  const participants = await prisma.sessionParticipant.findMany({
+  const candidates = await prisma.sessionParticipant.findMany({
     where: {
       sessionId,
       sponsorOrgId,
@@ -25,7 +25,8 @@ export async function uploadGroupConvention(
     },
     include: { session: true, person: { include: { legalLinks: true } } },
   });
-  if (!participants.length || participants.some((p) => !isCompanyDossier(p)))
+  const participants = candidates.filter(isCompanyDossier);
+  if (!participants.length)
     return {
       ok: false,
       error: 'Cette entreprise n’a pas de groupe salarié éligible dans cette session.',
