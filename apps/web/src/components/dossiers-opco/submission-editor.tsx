@@ -299,10 +299,24 @@ export function SubmissionEditor({ id, role, initial }: Props) {
       ? dossier.blocage
       : strictAgefice
         ? controlePiecesAgefice(attachments, stage)
-        : initial.company ? controlCompanyPieces(attachments) : dossier.blocage;
+        : initial.company
+          ? controlCompanyPieces(attachments)
+          : dossier.blocage;
 
-  const required: readonly KindPieceDossier[] = strictAgefice ? PIECES_AGEFICE[stage] : initial.company ? ['CONVENTION', 'PROGRAMME'] : [];
-  const readyCount = required.filter(kind => attachments.some(a => a.kind === kind && a.included && a.key?.trim() && (!PORTE_UNE_MENTION.has(kind) || a.signe === true))).length;
+  const required: readonly KindPieceDossier[] = strictAgefice
+    ? PIECES_AGEFICE[stage]
+    : initial.company
+      ? ['CONVENTION', 'PROGRAMME']
+      : [];
+  const readyCount = required.filter((kind) =>
+    attachments.some(
+      (a) =>
+        a.kind === kind &&
+        a.included &&
+        a.key?.trim() &&
+        (!PORTE_UNE_MENTION.has(kind) || a.signe === true),
+    ),
+  ).length;
   return (
     <div className="space-y-5">
       {/* Bandeau apprenant / sponsor */}
@@ -320,7 +334,7 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         </p>
       )}
 
-      {strictAgefice && (
+      {strictAgefice && stage !== 'FIN_FORMATION' && (
         <div className="rounded-lg border border-border p-4 space-y-2">
           <label htmlFor="agefice-point-accueil" className="block text-sm font-medium">
             Point d’accueil AGEFICE
@@ -330,8 +344,23 @@ export function SubmissionEditor({ id, role, initial }: Props) {
               ? `Département de l’entreprise vérifié sur la CFP : ${initial.department}. Choisissez le point d’accueil qui traite ce dossier.`
               : 'Renseignez ici le code postal de l’entreprise vérifié sur l’attestation CFP pour retrouver les points d’accueil.'}
           </p>
-          {initial.department && <p className="text-xs text-muted-foreground">{initial.pointAccueilOptions?.length ?? 0} points proposés pour le département {initial.department}. Cette liste est filtrée ; elle ne représente pas tout l’annuaire national.</p>}
-          {initial.department && !editingPostalCode && <button type="button" onClick={() => setEditingPostalCode(true)} disabled={pending || locked} className="text-xs underline">Modifier le code postal CFP</button>}
+          {initial.department && (
+            <p className="text-xs text-muted-foreground">
+              {initial.pointAccueilOptions?.length ?? 0} points proposés pour le département{' '}
+              {initial.department}. Cette liste est filtrée ; elle ne représente pas tout l’annuaire
+              national.
+            </p>
+          )}
+          {initial.department && !editingPostalCode && (
+            <button
+              type="button"
+              onClick={() => setEditingPostalCode(true)}
+              disabled={pending || locked}
+              className="text-xs underline"
+            >
+              Modifier le code postal CFP
+            </button>
+          )}
           {(!initial.department || editingPostalCode) && (
             <div className="space-y-2">
               <label htmlFor="agefice-cfp-postal-code" className="block text-xs font-medium">
@@ -409,10 +438,17 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         <input
           type="email"
           value={recipient}
+          readOnly={initial.agefice && stage === 'FIN_FORMATION'}
           onChange={(e) => setRecipient(e.target.value)}
           placeholder="contact@agefice.fr"
           className="w-full px-3 py-2 border border-border rounded-md text-sm"
         />
+        {initial.agefice && stage === 'FIN_FORMATION' && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Même destinataire que la demande initiale confirmée.
+            {!recipient && ' Vérifiez d’abord le dépôt initial.'}
+          </p>
+        )}
         {/* ⚠ LA PHRASE EST COMPOSÉE PAR LE MODULE (D-D-1). Celle d'avant — « vérifie
             l'organisation sponsor (champ emailBilling) » — était périmée depuis
             le lot D (un dossier AGEFICE part au point d'accueil, pas au
@@ -453,6 +489,13 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         <label className="block text-xs font-medium text-muted-foreground mb-1">
           Corps du message (HTML)
         </label>
+        <iframe
+          title="Aperçu du mail avant envoi"
+          srcDoc={bodyHtml}
+          sandbox=""
+          referrerPolicy="no-referrer"
+          className="w-full min-h-48 rounded border bg-white mb-3"
+        />
         <textarea
           value={bodyHtml}
           onChange={(e) => setBodyHtml(e.target.value)}
@@ -487,19 +530,58 @@ export function SubmissionEditor({ id, role, initial }: Props) {
         </p>
       )}
 
-      {required.length > 0 && <section className="rounded-lg border p-3 space-y-3" aria-label="Pièces requises">
-        <p className="text-sm font-semibold">Dossier : {readyCount}/{required.length} pièces prêtes</p>
-        <ul className="space-y-2">{required.map(kind => {
-          const piece = attachments.find(a => a.kind === kind && a.key?.trim());
-          const state = !piece ? 'Manquante' : PORTE_UNE_MENTION.has(kind) && piece.signe !== true ? 'Signature manquante' : !piece.included ? 'Non sélectionnée' : 'Prête';
-          return <li key={kind} className="flex items-center justify-between gap-3 text-sm">
-            <span>{KIND_LABELS[kind]} <span className={state === 'Prête' ? 'text-emerald-700' : 'text-amber-700'}>— {state}</span></span>
-            {['CNI', 'RIB', 'CFP_ATTESTATION'].includes(kind) && <UploadPieceButton submissionId={id} kind={kind} label={KIND_LABELS[kind]} present={!!piece} disabled={pending || locked}/>}
-          </li>;
-        })}</ul>
-        {strictAgefice && <p className="text-xs text-muted-foreground">PDF, JPG ou PNG · 3 Mo maximum. CNI et RIB sont enregistrés sur la fiche apprenant ; la CFP sur son dossier AGEFICE. Les pièces jointes sont actualisées après le dépôt.</p>}
-        {initial.sessionId && <a href={`/app/sessions/${initial.sessionId}#depot-pieces-signees`} className="text-xs underline underline-offset-2">Déposer une convention ou une autre pièce signée</a>}
-      </section>}
+      {required.length > 0 && (
+        <section className="rounded-lg border p-3 space-y-3" aria-label="Pièces requises">
+          <p className="text-sm font-semibold">
+            Dossier : {readyCount}/{required.length} pièces prêtes
+          </p>
+          <ul className="space-y-2">
+            {required.map((kind) => {
+              const piece = attachments.find((a) => a.kind === kind && a.key?.trim());
+              const state = !piece
+                ? 'Manquante'
+                : PORTE_UNE_MENTION.has(kind) && piece.signe !== true
+                  ? 'Signature manquante'
+                  : !piece.included
+                    ? 'Non sélectionnée'
+                    : 'Prête';
+              return (
+                <li key={kind} className="flex items-center justify-between gap-3 text-sm">
+                  <span>
+                    {KIND_LABELS[kind]}{' '}
+                    <span className={state === 'Prête' ? 'text-emerald-700' : 'text-amber-700'}>
+                      — {state}
+                    </span>
+                  </span>
+                  {['CNI', 'RIB', 'CFP_ATTESTATION'].includes(kind) && (
+                    <UploadPieceButton
+                      submissionId={id}
+                      kind={kind}
+                      label={KIND_LABELS[kind]}
+                      present={!!piece}
+                      disabled={pending || locked}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {strictAgefice && (
+            <p className="text-xs text-muted-foreground">
+              PDF, JPG ou PNG · 3 Mo maximum. CNI et RIB sont enregistrés sur la fiche apprenant ;
+              la CFP sur son dossier AGEFICE. Les pièces jointes sont actualisées après le dépôt.
+            </p>
+          )}
+          {initial.sessionId && (
+            <a
+              href={`/app/sessions/${initial.sessionId}#depot-pieces-signees`}
+              className="text-xs underline underline-offset-2"
+            >
+              Déposer une convention ou une autre pièce signée
+            </a>
+          )}
+        </section>
+      )}
       {/* Attachments */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -543,6 +625,14 @@ export function SubmissionEditor({ id, role, initial }: Props) {
                     signent pas. Les marquer tous ferait chercher une signature
                     sur un RIB. Un `signe` inconnu (brouillon d'avant le lot D)
                     ne dit rien plutôt que de mentir. */}
+                <a
+                  href={`/api/dossiers-opco/${id}/pieces?kind=${encodeURIComponent(a.kind)}&filename=${encodeURIComponent(a.filename)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-xs"
+                >
+                  Consulter
+                </a>
                 {mentionSignature(a)}
                 {a.included ? (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

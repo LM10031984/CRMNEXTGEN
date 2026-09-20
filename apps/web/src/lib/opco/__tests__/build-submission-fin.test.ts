@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   documents: vi.fn(),
   invoices: vi.fn(),
   submission: vi.fn(),
+  initial: vi.fn(),
   updateMany: vi.fn(),
   mail: vi.fn(),
   download: vi.fn(),
@@ -20,7 +21,12 @@ vi.mock('@qualiof/db', () => {
     document: { findMany: m.documents },
     invoice: { findMany: m.invoices },
     opcoSubmission: {
-      findFirst: (a: any) => (a.where?.id?.not ? null : m.submission(a)),
+      findFirst: (a: any) =>
+        a.where?.stage === 'PRISE_EN_CHARGE'
+          ? m.initial(a)
+          : a.where?.id?.not
+            ? null
+            : m.submission(a),
       updateMany: m.updateMany,
     },
     auditLog: { create: m.audit },
@@ -99,6 +105,7 @@ function invoice(over: Record<string, unknown> = {}) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  m.initial.mockResolvedValue({ recipientEmail: 'original-point@example.test' });
   m.participant.mockResolvedValue(participant());
   m.participants.mockResolvedValue([]);
   m.documents.mockResolvedValue(documents());
@@ -349,5 +356,32 @@ describe('dossier de fin de formation — sources réelles', () => {
     expect((await sendOpcoSubmission('submission')).ok).toBe(false);
     expect(m.mail).not.toHaveBeenCalled();
     expect(m.updateMany.mock.calls.at(-1)![0].data.deliveryState).toBe('READY');
+  });
+});
+
+describe('destinataire de remboursement', () => {
+  it('reprend le point de l’envoi initial même si le profil a changé', async () => {
+    const built = await prepare();
+    expect(built.recipientEmail).toBe('original-point@example.test');
+    expect(m.initial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 'tenant',
+          participantId: 'participant',
+          stage: 'PRISE_EN_CHARGE',
+          sentAt: { not: null },
+          deliveryState: 'READY',
+          status: { in: ['SENT', 'ACK_RECEIVED', 'APPROVED', 'REIMBURSED'] },
+        }),
+      }),
+    );
+  });
+  it('bloque l’envoi si aucun destinataire initial confirmé n’existe', async () => {
+    m.initial.mockResolvedValue(null);
+    const built = await prepare();
+    expect(built.recipientEmail).toBeNull();
+    expect(built.avertissementDestinataire).toContain('envoi initial');
+    expect((await sendOpcoSubmission('submission')).ok).toBe(false);
+    expect(m.mail).not.toHaveBeenCalled();
   });
 });

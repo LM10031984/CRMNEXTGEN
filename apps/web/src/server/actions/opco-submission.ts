@@ -187,7 +187,11 @@ export async function refreshOpcoSubmissionDraft(
         deliveryState: 'READY',
         updatedAt: sub.updatedAt,
       },
-      data: { attachments: built.attachments as unknown as Prisma.InputJsonValue, lastError: null },
+      data: {
+        attachments: built.attachments as unknown as Prisma.InputJsonValue,
+        lastError: null,
+        ...(stage.data === 'FIN_FORMATION' ? { recipientEmail: built.recipientEmail } : {}),
+      },
     });
     if (updated.count)
       await tx.auditLog.create({
@@ -291,7 +295,9 @@ export async function sendOpcoSubmission(
         );
       if (sub.recipientEmail!.toLowerCase() !== built.recipientEmail.toLowerCase())
         return await release(
-          'Le destinataire diffère du point d’accueil actuel. Corrigez le point d’accueil ou le destinataire.',
+          stage.data === 'FIN_FORMATION'
+            ? 'Le remboursement doit être adressé au destinataire confirmé de l’envoi initial. Actualisez les pièces.'
+            : 'Le destinataire diffère du point d’accueil actuel. Corrigez le point d’accueil ou le destinataire.',
         );
     } else if (built.company) {
       const blocked = controlCompanyPieces(attachments);
@@ -522,15 +528,30 @@ export async function getOpcoSubmission(id: string) {
   if (!sub) return null;
   const company = isCompanyDossier(sub.participant);
   const agefice = !company && estEligibleAgefice(sub.participant);
-  const built = agefice
-    ? await buildOpcoSubmission(
-        sub.participantId,
-        user,
-        sub.stage === 'FIN_FORMATION' ? 'FIN_FORMATION' : 'PRISE_EN_CHARGE',
-      )
-    : null;
+  const built =
+    agefice || company
+      ? await buildOpcoSubmission(
+          sub.participantId,
+          user,
+          sub.stage === 'FIN_FORMATION' ? 'FIN_FORMATION' : 'PRISE_EN_CHARGE',
+        )
+      : null;
   return {
     ...sub,
+    // L'aperçu relit les pièces courantes, y compris le programme catalogue.
+    // Enregistrer/Envoyer persiste ensuite cet aperçu avant le contrôle serveur.
+    ...(sub.status === 'DRAFT' && sub.deliveryState === 'READY' && built?.ok
+      ? {
+          attachments: built.attachments.map((a) => ({
+            ...a,
+            included:
+              (sub.attachments as unknown as SubmissionAttachment[]).find(
+                (old) => old.kind === a.kind && old.key === a.key,
+              )?.included ?? a.included,
+          })),
+          ...(sub.stage === 'FIN_FORMATION' ? { recipientEmail: built.recipientEmail } : {}),
+        }
+      : {}),
     stage:
       sub.stage === 'FIN_FORMATION' ? ('FIN_FORMATION' as const) : ('PRISE_EN_CHARGE' as const),
     deliveryState:
@@ -566,26 +587,33 @@ export async function updateOpcoSubmissionDraft(
   if (!sub || sub.status !== 'DRAFT' || sub.deliveryState !== 'READY')
     return { ok: false, error: 'Ce dossier ne peut plus être modifié.' };
   const stored = sub.attachments as unknown as SubmissionAttachment[];
-  // Le client ne choisit que included : ni chemin stockage, ni preuve de signature.
+  // Le client ne choisit que included. L’aperçu courant peut contenir une
+  // nouvelle pièce arrivée depuis la création du brouillon : on la valide
+  // contre les sources serveur, jamais contre une clé fournie seule.
   const incoming = parsed.data.attachments;
-  if (
+  const matches = (source: SubmissionAttachment[]) =>
     incoming &&
-    (incoming.length !== stored.length ||
-      new Set(incoming.map((a) => a.kind + ':' + a.key)).size !== incoming.length ||
-      incoming.some(
-        (a) =>
-          !stored.some(
-            (b) =>
-              b.key === a.key &&
-              b.kind === a.kind &&
-              b.filename === a.filename &&
-              b.signe === a.signe,
-          ),
-      ))
-  )
-    return { ok: false, error: 'Pièces modifiées : actualisez le dossier.' };
+    incoming.length === source.length &&
+    new Set(incoming.map((a) => a.kind + ':' + a.key)).size === incoming.length &&
+    incoming.every((a) =>
+      source.some(
+        (b) =>
+          b.key === a.key && b.kind === a.kind && b.filename === a.filename && b.signe === a.signe,
+      ),
+    );
+  let source = stored;
+  if (incoming && !matches(source)) {
+    const built = await buildOpcoSubmission(
+      sub.participantId,
+      user,
+      sub.stage === 'FIN_FORMATION' ? 'FIN_FORMATION' : 'PRISE_EN_CHARGE',
+    );
+    if (!built.ok) return built;
+    source = built.attachments;
+    if (!matches(source)) return { ok: false, error: 'Pièces modifiées : actualisez le dossier.' };
+  }
   const attachments = incoming
-    ? stored.map((a) => ({
+    ? source.map((a) => ({
         ...a,
         included: incoming.find((b) => b.key === a.key && b.kind === a.kind)!.included,
       }))
@@ -698,6 +726,8 @@ export async function selectOpcoPointAccueil(
     return { ok: false, error: 'Brouillon indisponible' };
   const stage = DossierStageSchema.safeParse(sub.stage);
   if (!stage.success) return { ok: false, error: 'Étape invalide' };
+  if (stage.data === 'FIN_FORMATION')
+    return { ok: false, error: 'Le destinataire du remboursement est celui de l’envoi initial.' };
   const built = await buildOpcoSubmission(sub.participantId, user, stage.data);
   if (!built.ok) return built;
   const choice = built.routing.options.find((p) => p.id === pointAccueilId && !!p.email);
@@ -754,6 +784,8 @@ export async function confirmOpcoCfpPostalCode(
     return { ok: false, error: 'Brouillon indisponible' };
   const stage = DossierStageSchema.safeParse(sub.stage);
   if (!stage.success) return { ok: false, error: 'Étape inconnue' };
+  if (stage.data === 'FIN_FORMATION')
+    return { ok: false, error: 'Le destinataire du remboursement est celui de l’envoi initial.' };
   const built = await buildOpcoSubmission(sub.participantId, user, stage.data);
   if (!built.ok) return built;
   if (!built.agefice || !built.profileId)
