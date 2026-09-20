@@ -111,23 +111,110 @@ it('rejeu idempotent sans écriture ni second journal', async () => {
 });
 
 it('déclare le régime entreprise historique sans réécrire les prix déjà signés', async () => {
-  const employee = { ...session.participants[0], person: { ...session.participants[0]!.person, legalLinks: [{organizationId:'org',role:'SALARIE'}] } };
-  f.tx.trainingSession.findFirst.mockResolvedValue({ ...session, participants: [{...employee,id:'p1'}, {...employee,id:'p2'}] });
+  const employee = {
+    ...session.participants[0],
+    person: {
+      ...session.participants[0]!.person,
+      legalLinks: [{ organizationId: 'org', role: 'SALARIE' }],
+    },
+  };
+  f.tx.trainingSession.findFirst.mockResolvedValue({
+    ...session,
+    participants: [
+      { ...employee, id: 'p1' },
+      { ...employee, id: 'p2' },
+    ],
+  });
   f.guard.mockRejectedValue(new Error('Convention signée'));
   const preview = await setSessionRegime(input);
   expect(preview.ok).toBe(true);
   if (!preview.ok) throw new Error(preview.error);
-  expect(await setSessionRegime({...input,apply:true,confirmationKey:preview.confirmationKey})).toMatchObject({ok:true,changed:true});
+  expect(
+    await setSessionRegime({ ...input, apply: true, confirmationKey: preview.confirmationKey }),
+  ).toMatchObject({ ok: true, changed: true });
   expect(f.guard).not.toHaveBeenCalled();
   expect(f.sync).not.toHaveBeenCalled();
   expect(f.tx.sessionParticipant.updateMany).not.toHaveBeenCalled();
-  expect(f.tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({diff:expect.objectContaining({metadataOnly:true,participantsUpdated:0})})}));
+  expect(f.tx.auditLog.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        diff: expect.objectContaining({ metadataOnly: true, participantsUpdated: 0 }),
+      }),
+    }),
+  );
 });
 
 it('garde le verrou si le forfait ou la ventilation change malgré un même total', async () => {
-  const employee = { ...session.participants[0], person: { ...session.participants[0]!.person, legalLinks: [{organizationId:'org',role:'SALARIE'}] } };
-  f.tx.trainingSession.findFirst.mockResolvedValue({ ...session, participants: [{...employee,id:'p1',priceHT:100}, {...employee,id:'p2',priceHT:140}] });
+  const employee = {
+    ...session.participants[0],
+    person: {
+      ...session.participants[0]!.person,
+      legalLinks: [{ organizationId: 'org', role: 'SALARIE' }],
+    },
+  };
+  f.tx.trainingSession.findFirst.mockResolvedValue({
+    ...session,
+    participants: [
+      { ...employee, id: 'p1', priceHT: 100 },
+      { ...employee, id: 'p2', priceHT: 140 },
+    ],
+  });
   f.guard.mockRejectedValue(new Error('Convention signée'));
-  expect(await setSessionRegime(input)).toMatchObject({ok:false,error:'Convention signée'});
+  expect(await setSessionRegime(input)).toMatchObject({ ok: false, error: 'Convention signée' });
   expect(f.tx.trainingSession.update).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['total modifié', 300, 'SALARIE'],
+  ['activité indépendante', 240, 'AGENT_COMMERCIAL'],
+])('ne contourne pas une pièce signée : %s', async (_, priceHT, role) => {
+  const employee = {
+    ...session.participants[0],
+    person: { ...session.participants[0]!.person, legalLinks: [{ organizationId: 'org', role }] },
+  };
+  f.tx.trainingSession.findFirst.mockResolvedValue({
+    ...session,
+    participants: [
+      { ...employee, id: 'p1' },
+      { ...employee, id: 'p2' },
+    ],
+  });
+  f.guard.mockRejectedValue(new Error('Convention signée'));
+  expect(await setSessionRegime({ ...input, priceHT })).toMatchObject({
+    ok: false,
+    error: 'Convention signée',
+  });
+  expect(f.tx.trainingSession.update).not.toHaveBeenCalled();
+});
+
+it('rejette une déclaration historique dont les inscriptions changent entre revue et confirmation', async () => {
+  const employee = {
+    ...session.participants[0],
+    person: {
+      ...session.participants[0]!.person,
+      legalLinks: [{ organizationId: 'org', role: 'SALARIE' }],
+    },
+  };
+  const current = {
+    ...session,
+    participants: [
+      { ...employee, id: 'p1' },
+      { ...employee, id: 'p2' },
+    ],
+  };
+  f.tx.trainingSession.findFirst.mockResolvedValue(current);
+  const preview = await setSessionRegime(input);
+  if (!preview.ok) throw new Error(preview.error);
+  f.tx.trainingSession.findFirst.mockResolvedValue({
+    ...current,
+    participants: [
+      { ...employee, id: 'p1' },
+      { ...employee, id: 'p3' },
+    ],
+  });
+  expect(
+    await setSessionRegime({ ...input, apply: true, confirmationKey: preview.confirmationKey }),
+  ).toMatchObject({ ok: false, error: expect.stringContaining('changé') });
+  expect(f.tx.trainingSession.update).not.toHaveBeenCalled();
+  expect(f.tx.sessionParticipant.updateMany).not.toHaveBeenCalled();
 });

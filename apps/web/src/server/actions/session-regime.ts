@@ -25,9 +25,7 @@ const Input = z.object({
   apply: z.boolean().optional(),
   confirmationKey: z.string().optional(),
 });
-export async function setSessionRegime(
-  input: z.infer<typeof Input>,
-): Promise<
+export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
   | {
       ok: true;
       changed: boolean;
@@ -74,20 +72,33 @@ export async function setSessionRegime(
         }
         // Déclarer un forfait historique inchangé ne réécrit aucun engagement.
         // Limité au groupe déjà salarié, au même payeur et à une ventilation identique.
-        const shares = value.regime === 'ENTREPRISE'
-          ? allocateCompanyPrice(value.priceHT, session.participants.map(p => p.id))
-          : {};
-        const metadataOnly = session.regime === null && value.regime === 'ENTREPRISE'
-          && session.participants.length > 0 && payers.size === 1
-          && (session.priceTotalHT === null || Number(session.priceTotalHT) === value.priceHT)
-          && Math.round(Number(session.pricePerLearner) * 100) * session.participants.length === Math.round(value.priceHT * 100)
-          && session.participants.every(p =>
-            Number(p.priceHT) === shares[p.id]
-            && estEmployeurDeLApprenant(legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, {
-              ...session, regime: value.regime,
-            })?.role),
+        const shares =
+          value.regime === 'ENTREPRISE'
+            ? allocateCompanyPrice(
+                value.priceHT,
+                session.participants.map((p) => p.id),
+              )
+            : {};
+        const metadataOnly =
+          session.regime === null &&
+          value.regime === 'ENTREPRISE' &&
+          session.participants.length > 0 &&
+          payers.size === 1 &&
+          (session.priceTotalHT === null || Number(session.priceTotalHT) === value.priceHT) &&
+          Math.round(Number(session.pricePerLearner) * 100) * session.participants.length ===
+            Math.round(value.priceHT * 100) &&
+          session.participants.every(
+            (p) =>
+              Number(p.priceHT) === shares[p.id] &&
+              estEmployeurDeLApprenant(
+                legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, {
+                  ...session,
+                  regime: value.regime,
+                })?.role,
+              ),
           );
-        if (!metadataOnly) await assertCompanyPriceEditable(tx, { ...session, regime: 'ENTREPRISE' });
+        if (!metadataOnly)
+          await assertCompanyPriceEditable(tx, { ...session, regime: 'ENTREPRISE' });
         const before = {
           regime: session.regime,
           priceTotalHT: session.priceTotalHT?.toString() ?? null,

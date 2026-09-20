@@ -52,7 +52,9 @@ export function SessionRegimeEditor({
         setError(undefined);
       }
     } catch {
-      setError('Enregistrement non confirmé. Rechargez la page pour vérifier le régime avant de réessayer.');
+      setError(
+        'Enregistrement non confirmé. Rechargez la page pour vérifier le régime avant de réessayer.',
+      );
     } finally {
       saving.current = false;
       setPending(false);
@@ -61,7 +63,17 @@ export function SessionRegimeEditor({
   return (
     <div className="text-sm">
       {!open ? (
-        <button type="button" className="text-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="text-primary"
+          onClick={() => {
+            setChosen(regime ?? '');
+            setAmount(price === null ? '' : String(price));
+            setKey(undefined);
+            setError(undefined);
+            setOpen(true);
+          }}
+        >
           {regime === 'ENTREPRISE'
             ? `Entreprise · ${price?.toLocaleString('fr-FR')} € HT au total`
             : regime === 'INDIVIDUEL'
