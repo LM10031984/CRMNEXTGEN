@@ -50,6 +50,15 @@ describe('sessions/[id] page — smoke (BUG-01 + ui-e1)', () => {
     expect(pageSrc).toMatch(/<NextActionHero/);
   });
 
+  it('affiche directement le suivi des dépôts de financement', () => {
+    expect(pageSrc).toMatch(/<SessionFundingSummary/);
+    expect(pageSrc).toMatch(/sessionOpcoSubmissions/);
+  });
+
+  it('intègre les envois après-formation dans l’onglet Après', () => {
+    expect(pageSrc).toMatch(/afterTrainingDelivery=\{<AfterTrainingDelivery/);
+  });
+
   it('onglets remplis : <TabAvant> + <TabApres> + <TabTousDocuments> (Phase 15 Lot 2)', () => {
     // Lot 2 : le <DocsButton>/<DocDockDrawer> est SUPPRIMÉ ; ses actions
     // uniques (dispatchGenerate*) sont réembarquées dans <TabAvant>.

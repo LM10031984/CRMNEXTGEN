@@ -12,6 +12,10 @@ export function formationDaysUntil(start: Date, now: Date): number {
   return Math.round((Date.parse(parisDay(start)) - Date.parse(parisDay(now))) / 86_400_000);
 }
 
+export function formationDaysAfter(end: Date, now: Date): number {
+  return Math.round((Date.parse(parisDay(now)) - Date.parse(parisDay(end))) / 86_400_000);
+}
+
 export function missingFormationDocuments(input: {
   cni: boolean;
   rib: boolean;
@@ -19,17 +23,35 @@ export function missingFormationDocuments(input: {
   convention: boolean;
   company?: boolean;
   programme?: boolean;
+  ageficeForm?: boolean;
 }): string[] {
-  if (input.company) return [
-    !input.convention && 'convention signée',
-    !input.programme && 'programme de formation',
-  ].filter((s): s is string => Boolean(s));
+  if (input.company)
+    return [
+      !input.convention && 'convention signée',
+      !input.programme && 'programme de formation',
+    ].filter((s): s is string => Boolean(s));
   return [
     !input.cni && 'CNI',
     !input.rib && 'RIB',
     !input.cfp && 'attestation CFP',
     !input.convention && 'convention signée',
+    !input.ageficeForm && 'formulaire AGEFICE signé',
+    !input.programme && 'programme de formation',
   ].filter((s): s is string => Boolean(s));
+}
+
+export function missingReimbursementDocuments(input: {
+  rib: boolean;
+  attendance: boolean;
+  assiduity: boolean;
+  paidInvoice: boolean;
+}): string[] {
+  return [
+    !input.rib && 'RIB',
+    !input.attendance && 'émargement signé',
+    !input.assiduity && 'assiduité signée',
+    !input.paidInvoice && 'facture payée permettant l’édition acquittée',
+  ].filter((piece): piece is string => Boolean(piece));
 }
 
 export function shouldAlertFormation(
@@ -43,6 +65,12 @@ export function shouldAlertFormation(
     !['CANCELLED', 'COMPLETED'].includes(status) &&
     days >= 0 &&
     days <= 21 &&
-    (!lastSentAt || now.getTime() - lastSentAt.getTime() >= 7 * 86_400_000)
+    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
+  );
+}
+
+export function shouldAlertReimbursement(end: Date, now: Date, lastSentAt?: Date | null): boolean {
+  return (
+    formationDaysAfter(end, now) >= 1 && (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
   );
 }

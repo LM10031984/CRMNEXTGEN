@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formationDaysAfter,
   formationDaysUntil,
   missingFormationDocuments,
+  missingReimbursementDocuments,
+  shouldAlertReimbursement,
   shouldAlertFormation,
 } from '../formation-rules';
 
@@ -27,12 +30,71 @@ describe('formation deadlines', () => {
     expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-09-12T12:00:00Z'))).toBe(false);
     expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-09-11T12:00:00Z'))).toBe(true);
   });
+  it('repeats after seven Paris calendar days even when DST made the interval one hour shorter', () => {
+    expect(
+      shouldAlertFormation(
+        new Date('2026-04-05T10:00:00+02:00'),
+        'OPEN',
+        new Date('2026-03-30T00:15:00+02:00'),
+        new Date('2026-03-23T23:45:00+01:00'),
+      ),
+    ).toBe(true);
+  });
   it('names each missing piece and accepts a complete dossier', () => {
     expect(
-      missingFormationDocuments({ cni: false, rib: true, cfp: false, convention: false }),
-    ).toEqual(['CNI', 'attestation CFP', 'convention signée']);
+      missingFormationDocuments({
+        cni: false,
+        rib: true,
+        cfp: false,
+        convention: false,
+        ageficeForm: false,
+        programme: false,
+      }),
+    ).toEqual([
+      'CNI',
+      'attestation CFP',
+      'convention signée',
+      'formulaire AGEFICE signé',
+      'programme de formation',
+    ]);
     expect(
-      missingFormationDocuments({ cni: true, rib: true, cfp: true, convention: true }),
+      missingFormationDocuments({
+        cni: true,
+        rib: true,
+        cfp: true,
+        convention: true,
+        ageficeForm: true,
+        programme: true,
+      }),
     ).toEqual([]);
+  });
+
+  it('compares Paris calendar days after the end across the spring DST change', () => {
+    expect(
+      formationDaysAfter(
+        new Date('2026-03-29T00:00:00+01:00'),
+        new Date('2026-03-30T00:30:00+02:00'),
+      ),
+    ).toBe(1);
+  });
+
+  it('starts reimbursement reminders at J+1 and repeats only after seven calendar days', () => {
+    const end = new Date('2026-09-17T15:00:00+02:00');
+    const now = new Date('2026-09-18T08:00:00+02:00');
+    expect(shouldAlertReimbursement(end, now)).toBe(true);
+    expect(shouldAlertReimbursement(end, now, new Date('2026-09-12T08:00:00+02:00'))).toBe(false);
+    expect(shouldAlertReimbursement(end, now, new Date('2026-09-11T08:00:00+02:00'))).toBe(true);
+    expect(shouldAlertReimbursement(new Date('2026-09-18T15:00:00+02:00'), now)).toBe(false);
+  });
+
+  it('names the four reimbursement pieces from their current state', () => {
+    expect(
+      missingReimbursementDocuments({
+        rib: true,
+        attendance: false,
+        assiduity: false,
+        paidInvoice: true,
+      }),
+    ).toEqual(['émargement signé', 'assiduité signée']);
   });
 });

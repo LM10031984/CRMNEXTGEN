@@ -103,15 +103,20 @@ export async function flushFormationEventAlerts(): Promise<void> {
     where: {
       id: { startsWith: PREFIX },
       status: 'queued',
-      NOT: { relatedEntity: { contains: '"kind":"missing"' } },
+      OR: [
+        { relatedEntity: { contains: '"kind":"session"' } },
+        { relatedEntity: { contains: '"kind":"enrollment"' } },
+      ],
     },
     select: { id: true, relatedEntity: true },
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
   for (const row of pending) {
-    if (JSON.parse(row.relatedEntity ?? '{}').kind !== 'missing')
-      await deliverFormationAlert(row.id);
+    const kind = JSON.parse(row.relatedEntity ?? '{}').kind;
+    // Ces deux événements sont immuables. Tous les rappels métier doivent être
+    // recalculés par leur checker avant livraison pour ne jamais envoyer un état périmé.
+    if (kind === 'session' || kind === 'enrollment') await deliverFormationAlert(row.id);
   }
 }
 

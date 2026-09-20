@@ -109,6 +109,7 @@ import {
   type VueSignature,
 } from '@/lib/sessions/bloc-signature-vue';
 import { contributionFromExtractedData } from '@/lib/enrollment/agefice-rights';
+import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
 import { SessionTabs } from '@/components/sessions/tabs/session-tabs';
 import { coerceTab } from '@/components/sessions/tabs/session-tabs-config';
 // Phase 15 Lot 2 — onglets remplis (réembarquement + suppression des doublons).
@@ -125,9 +126,16 @@ import {
   expandGroupConventions,
 } from '@/lib/docs/convention-coverage';
 import { TabApres } from '@/components/sessions/tabs/tab-apres';
+import { AfterTrainingDelivery } from '@/components/sessions/after-training-delivery';
 import { TabTousDocuments } from '@/components/sessions/tabs/tab-tous-documents';
 import { TabAgenda } from '@/components/sessions/tabs/tab-agenda';
 import { analyzeSessionDocuments } from '@/lib/docs/session-document-analysis';
+import { SessionFundingSummary } from '@/components/sessions/session-funding-summary';
+import {
+  aggregateFundingTone,
+  companyDepositState,
+  isSuccessfulInitialSubmission,
+} from '@/lib/opco/session-funding-status';
 
 // Vercel Pro — rendu PDF synchrone via doc-engine Railway (Phase 21 APP-01)
 export const maxDuration = 300;
@@ -203,7 +211,7 @@ export default async function SessionDetailPage({
                   // de savoir QUELLE casquette relie l'apprenant à son
                   // commanditaire — et donc si celui-ci est son employeur.
                   organizationId: true,
-                  organization: { select: { opcoCode: true } },
+                  organization: { select: { opcoCode: true, ageficeProfile: { select: { id: true } } } },
                 },
               },
             },
@@ -963,7 +971,7 @@ export default async function SessionDetailPage({
   // ─── Données complémentaires pour la timeline 5 étapes ─────────────────
   // SessionSlot : pour step 3 "Pendant la formation" (créneaux + émargements signés)
   // Invoices détaillées : pour step 5 (table compacte CA / facturé / encaissé)
-  const [sessionSlotsAgg, timelineInvoices, latestOpcoSubmission] = await Promise.all([
+  const [sessionSlotsAgg, timelineInvoices, sessionOpcoSubmissions] = await Promise.all([
     prisma.sessionSlot.findMany({
       where: { sessionId: session.id, session: { tenantId: user.tenantId } },
       select: {
@@ -994,12 +1002,16 @@ export default async function SessionDetailPage({
       },
       orderBy: [{ issueDate: 'desc' }, { number: 'desc' }],
     }),
-    prisma.opcoSubmission.findFirst({
+    prisma.opcoSubmission.findMany({
       where: { tenantId: user.tenantId, participant: { sessionId: session.id } },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true, participantId: true, stage: true, status: true,
+        deliveryState: true, sentAt: true, createdAt: true,
+      },
     }),
   ]);
+  const latestOpcoSubmission = sessionOpcoSubmissions[0] ?? null;
 
   const totalSlots = sessionSlotsAgg.length;
   const signedSlots = sessionSlotsAgg.filter((s) => s.attendances.length > 0).length;
@@ -1257,6 +1269,73 @@ export default async function SessionDetailPage({
     closure: closureStatus,
   });
   const canWrite = ['ADMIN', 'MANAGER', 'COMMERCIAL'].includes(user.role);
+  const canManageFunding = ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user.role);
+
+  const activeParticipants = session.participants.filter((p) => p.enrollmentStatus !== 'CANCELLED');
+  const companyFundingRows = (() => {
+    const groups = new Map<string, typeof activeParticipants>();
+    for (const participant of activeParticipants) {
+      if (!isCompanyDossier({ ...participant, session })) continue;
+      const members = groups.get(participant.sponsorOrgId) ?? [];
+      members.push(participant);
+      groups.set(participant.sponsorOrgId, members);
+    }
+    return [...groups.entries()].map(([sponsorOrgId, members]) => {
+      const tone = companyDepositState(members);
+      const deposited = members.filter((member) => member.opcoDepositedAt !== null);
+      const declarations = new Set(deposited.map((member) =>
+        `${member.opcoDepositedAt!.toISOString().slice(0, 10)} · ${member.opcoDepositedByEmail ?? 'auteur non renseigné'}`
+      ));
+      return {
+        sponsorOrgId,
+        sponsorName: members[0]!.sponsorOrg.brandName ?? members[0]!.sponsorOrg.legalName,
+        tone,
+        detail: tone === 'success'
+          ? `${members.length} salarié${members.length > 1 ? 's' : ''} couvert${members.length > 1 ? 's' : ''} · ${[...declarations].join(' ; ')}`
+          : tone === 'warning'
+            ? `${deposited.length}/${members.length} salariés déclarés : le groupe doit être vérifié`
+            : `${members.length} salarié${members.length > 1 ? 's' : ''} actif${members.length > 1 ? 's' : ''} · dépôt portail non déclaré`,
+        members: members.map((member) => ({
+          id: member.id,
+          depositedAt: member.opcoDepositedAt?.toISOString() ?? null,
+          depositedBy: member.opcoDepositedByEmail,
+        })),
+        depositedAt: tone === 'success' ? members[0]!.opcoDepositedAt?.toISOString() ?? null : null,
+        depositedBy: tone === 'success' ? members[0]!.opcoDepositedByEmail : null,
+      };
+    });
+  })();
+  const ageficeFundingRows = activeParticipants.flatMap((participant) => {
+    if (
+      isCompanyDossier({ ...participant, session }) ||
+      !estEligibleAgefice({ ...participant, session })
+    ) return [];
+    const submissions = sessionOpcoSubmissions.filter((submission) =>
+      submission.participantId === participant.id && submission.stage === 'PRISE_EN_CHARGE'
+    );
+    const successful = submissions.find(isSuccessfulInitialSubmission);
+    const latest = submissions[0] ?? null;
+    const tone = successful ? 'success' as const : latest ? 'warning' as const : 'neutral' as const;
+    return [{
+      participantId: participant.id,
+      name: `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`,
+      sponsorName: participant.sponsorOrg.brandName ?? participant.sponsorOrg.legalName,
+      kind: 'AGEFICE' as const,
+      tone,
+      submissionId: (successful ?? latest)?.id ?? null,
+      detail: successful
+        ? `email initial envoyé le ${successful.sentAt!.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
+        : latest?.deliveryState === 'UNCERTAIN' ? 'envoi à vérifier dans la messagerie'
+        : latest?.status === 'REJECTED' ? 'dossier refusé, aucun dépôt valide en cours'
+        : latest?.status === 'CANCELED' ? 'dossier annulé, aucun dépôt valide en cours'
+        : latest ? 'dossier préparé mais envoi initial non confirmé'
+        : 'aucun envoi initial confirmé',
+    }];
+  });
+  const fundingTone = aggregateFundingTone([
+    ...companyFundingRows.map((row) => row.tone),
+    ...ageficeFundingRows.map((row) => row.tone),
+  ]);
 
   // Dossiers déposés AILLEURS (autre session, ou aucune) qu'on peut rattacher
   // à celle-ci. Sans cette liste, un dossier déposé sur le mauvais lien — ou né
@@ -1759,6 +1838,15 @@ export default async function SessionDetailPage({
         }
       />
 
+      <SessionFundingSummary
+        sessionId={session.id}
+        tone={fundingTone}
+        learners={ageficeFundingRows}
+        companies={companyFundingRows}
+        userEmail={user.email ?? ''}
+        canWrite={canManageFunding}
+      />
+
       {/* ════════════════════════════════════════════════════════════════
           Phase 15 Lot 1 — Coquille à 5 onglets (?tab=).
           ENVELOPPEMENT SEULEMENT : les blocs métier EXISTANTS sont regroupés
@@ -1987,6 +2075,7 @@ export default async function SessionDetailPage({
             pendantGroups={pendantGroups}
             apresGroups={apresGroups}
             vueSignature={vueSignatureApres}
+            afterTrainingDelivery={<AfterTrainingDelivery sessionId={session.id} />}
             batch={
               latestBatch
                 ? {

@@ -99,7 +99,7 @@ function participant(over: Record<string, unknown> = {}) {
       code: 'SES-0112',
       startDate: new Date('2026-10-01'),
       endDate: new Date('2026-10-03'),
-      product: { title: 'IA immobilier', durationHours: 21 },
+      product: { id: 'product-1', title: 'IA immobilier', durationHours: 21 },
     },
     ...over,
   };
@@ -136,6 +136,7 @@ function documents(over: { conventionSignee?: boolean; ageficeSignee?: boolean }
     },
     {
       id: 'doc-prog',
+      sessionId: 'sess-1',
       type: 'PROGRAMME',
       participantId: null,
       entityType: 'session',
@@ -473,6 +474,7 @@ describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
     findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
     findManyDocuments
       .mockResolvedValueOnce(documents())
+      .mockResolvedValueOnce(documents())
       .mockResolvedValueOnce([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
     const r = await sendOpcoSubmission('sub-1');
     expect(r.ok).toBe(true);
@@ -485,6 +487,7 @@ describe('sendOpcoSubmission — ce que l’envoi laisse derrière lui', () => {
   beforeEach(() => {
     findFirstSubmission.mockResolvedValue(submission(PJ_SIGNEES));
     findManyDocuments
+      .mockResolvedValueOnce(documents())
       .mockResolvedValueOnce(documents())
       .mockResolvedValueOnce([{ id: 'doc-conv' }, { id: 'doc-agefice' }]);
   });
@@ -632,12 +635,11 @@ it('un autre ancien brouillon déjà expédié bloque le même participant et la
   expect(sendMailMock).not.toHaveBeenCalled();
 });
 
-
 it('dossier entreprise : ne joint ni CNI, ni RIB, ni CFP ni formulaire AGEFICE', async () => {
   const p = participant();
   findFirstParticipant.mockResolvedValue({ ...p, session: { ...p.session, regime: 'ENTREPRISE' } });
   await composeOpcoSubmission('part-1');
-  const kinds = piecesCreees().map(p => p.kind);
+  const kinds = piecesCreees().map((p) => p.kind);
   expect(kinds).toContain('CONVENTION');
   expect(kinds).toContain('PROGRAMME');
   expect(kinds).not.toContain('CNI');
@@ -649,5 +651,5 @@ it('ne renomme pas un justificatif image en PDF', async () => {
   const p = participant();
   findFirstParticipant.mockResolvedValue({ ...p, person: { ...p.person, ribKey: 'rib.png' } });
   await composeOpcoSubmission('part-1');
-  expect(piecesCreees().find(p => p.kind === 'RIB')?.filename).toMatch(/\.png$/);
+  expect(piecesCreees().find((p) => p.kind === 'RIB')?.filename).toMatch(/\.png$/);
 });

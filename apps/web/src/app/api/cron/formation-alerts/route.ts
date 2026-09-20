@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { flushFormationEventAlerts } from '@/lib/alertes/formation-notifier';
-import { checkFormationDocuments } from '@/lib/alertes/formation-check';
+import {
+  checkFormationDocuments,
+  checkReimbursementReminders,
+} from '@/lib/alertes/formation-check';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -11,5 +14,6 @@ export async function GET(request: Request) {
     return new NextResponse('Unauthorized', { status: 401 });
   await flushFormationEventAlerts();
   const examined = await checkFormationDocuments();
-  return NextResponse.json({ ok: true, examined });
+  const reimbursements = await checkReimbursementReminders();
+  return NextResponse.json({ ok: true, examined, reimbursements });
 }

@@ -1,3 +1,5 @@
+import { formationDaysAfter } from '@/lib/alertes/formation-rules';
+import { resolveProgrammeDocument } from './programme';
 import { isCompanyDossier, selectDossierConvention } from './company-dossier';
 import { manualSignedKey } from './manual-signed-key';
 import { prisma } from '@qualiof/db';
@@ -119,15 +121,6 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
           participantId: participant.id,
           type: { in: ['CONVENTION', 'AGEFICE', 'EMARGEMENT', 'ASSIDUITE'] },
         },
-        {
-          sessionId: participant.session.id,
-          type: 'PROGRAMME',
-          OR: [
-            { participantId: participant.id },
-            { participantId: null, entityType: { not: 'organization' } },
-            { entityType: 'organization', entityId: participant.sponsorOrgId },
-          ],
-        },
         // Convention GROUPE (revue Codex PR #13) : pour un salarié couvert par
         // la convention de son entreprise, le document n'a PAS de participantId.
         // Sans cette branche, le dossier OPCO déclarait « CONVENTION manquante »
@@ -176,11 +169,20 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
   });
 
   const conventionDocs = docs.filter((d) => d.type === 'CONVENTION');
-  const conventionDoc = selectDossierConvention(conventionDocs, participant.id, participant.sponsorOrgId, company);
+  const conventionDoc = selectDossierConvention(
+    conventionDocs,
+    participant.id,
+    participant.sponsorOrgId,
+    company,
+  );
   const ageficeDoc = docs.find((d) => d.type === 'AGEFICE');
-  const programmeDoc =
-    docs.find((d) => d.type === 'PROGRAMME' && d.participantId === participant.id) ??
-    docs.find((d) => d.type === 'PROGRAMME');
+  const programmeDoc = await resolveProgrammeDocument({
+    tenantId: user.tenantId,
+    sessionId: participant.session.id,
+    productId: participant.session.productId ?? participant.session.product.id,
+    participantId: participant.id,
+    sponsorOrgId: participant.sponsorOrgId,
+  });
 
   const conventionScan = manualSignedKey(
     participant.docStatus,
@@ -301,7 +303,26 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
     emailBilling: participant.sponsorOrg.emailBilling,
     email: participant.sponsorOrg.email,
   });
-  const recipientEmail = destinataire.email;
+  let recipientEmail = destinataire.email;
+  let avertissementDestinataire = destinataire.motif;
+  if (agefice && stage === 'FIN_FORMATION') {
+    const initial = await prisma.opcoSubmission.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        participantId: participant.id,
+        stage: 'PRISE_EN_CHARGE',
+        sentAt: { not: null },
+        deliveryState: 'READY',
+        status: { in: ['SENT', 'ACK_RECEIVED', 'APPROVED', 'REIMBURSED'] },
+      },
+      orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+      select: { recipientEmail: true },
+    });
+    recipientEmail = initial?.recipientEmail?.trim() || null;
+    avertissementDestinataire = recipientEmail
+      ? null
+      : 'Aucun envoi initial confirmé avec un destinataire. Vérifiez le dépôt initial avant de préparer le remboursement.';
+  }
 
   // Subject + body défaut
   const opcoCode = participant.sponsorOrg.opcoCode ?? 'OPCO';
@@ -338,7 +359,7 @@ ${
 
   let invoiceId: string | null = null;
   if (stage === 'FIN_FORMATION') {
-    if (participant.session.endDate > new Date())
+    if (formationDaysAfter(participant.session.endDate, new Date()) < 1)
       return {
         ok: false as const,
         error: 'La formation doit être terminée avant de préparer son dossier de fin.',
@@ -438,6 +459,6 @@ ${
     bodyHtml,
     attachments,
     missing,
-    avertissementDestinataire: destinataire.motif,
+    avertissementDestinataire,
   };
 }

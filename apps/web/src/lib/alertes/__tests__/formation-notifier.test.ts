@@ -3,12 +3,17 @@ const m = vi.hoisted(() => ({
   upsert: vi.fn(),
   updateMany: vi.fn(),
   findUniqueOrThrow: vi.fn(),
+  findMany: vi.fn(),
   update: vi.fn(),
   sendMail: vi.fn(),
 }));
 vi.mock('@qualiof/db', () => ({ prisma: { emailMessage: m } }));
 vi.mock('@/lib/mailer', () => ({ sendMail: m.sendMail }));
-import { deliverFormationAlert, queueFormationAlert } from '../formation-notifier';
+import {
+  deliverFormationAlert,
+  flushFormationEventAlerts,
+  queueFormationAlert,
+} from '../formation-notifier';
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.APP_URL = 'https://qualiof.example';
@@ -72,5 +77,29 @@ describe('formation durable delivery', () => {
     m.sendMail.mockResolvedValue({ ok: false, error: 'timeout' });
     await deliverFormationAlert('id');
     expect(m.update).toHaveBeenCalledWith({ where: { id: 'id' }, data: { status: 'uncertain' } });
+  });
+
+  it('flushes only immutable session and registration events, never stale reminders', async () => {
+    m.findMany.mockResolvedValue([
+      { id: 'session-event', relatedEntity: JSON.stringify({ kind: 'session' }) },
+      { id: 'registration-event', relatedEntity: JSON.stringify({ kind: 'enrollment' }) },
+      { id: 'j21', relatedEntity: JSON.stringify({ kind: 'not-deposited' }) },
+      { id: 'jplus1', relatedEntity: JSON.stringify({ kind: 'reimbursement' }) },
+    ]);
+    m.sendMail.mockResolvedValue({ ok: true });
+    await flushFormationEventAlerts();
+    expect(m.findMany.mock.calls[0]![0]).toMatchObject({
+      where: {
+        OR: [
+          { relatedEntity: { contains: '"kind":"session"' } },
+          { relatedEntity: { contains: '"kind":"enrollment"' } },
+        ],
+      },
+      take: 100,
+    });
+    expect(m.findUniqueOrThrow.mock.calls.map((call) => call[0].where.id)).toEqual([
+      'session-event',
+      'registration-event',
+    ]);
   });
 });
