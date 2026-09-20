@@ -51,6 +51,13 @@ const nextConfig = {
   // Audit 2026-05-12 BUG-03 — voir CLAUDE.md > Routes (convention naming).
   async redirects() {
     return [
+      // Anciens liens « Voir le dossier OPCO » : la préparation vit sous /envoyer.
+      // Borner aux UUID évite d'intercepter /envoyer ou une future page statique.
+      {
+        source: '/app/dossiers-opco/:id([0-9a-fA-F-]{36})',
+        destination: '/app/dossiers-opco/envoyer/:id',
+        permanent: true,
+      },
       // Chaîne diagnostic (lot B) — la route canonique du R1 commercial est
       // /app/diagnostics au PLURIEL. On rattrape le singulier tapé à la main.
       // Attention au voisinage : /diagnostic (sans /app) est la page publique

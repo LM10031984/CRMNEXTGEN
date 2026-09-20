@@ -121,7 +121,7 @@ export function StepFacturation({
       action={
         opcoSubmissionId ? (
           <Link
-            href={`/app/dossiers-opco/${opcoSubmissionId}` as Route}
+            href={`/app/dossiers-opco/envoyer/${opcoSubmissionId}` as Route}
             className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
           >
             <Wallet className="h-4 w-4" /> Voir le dossier OPCO
