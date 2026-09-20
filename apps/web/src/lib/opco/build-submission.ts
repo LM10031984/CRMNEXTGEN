@@ -1,3 +1,4 @@
+import { isCompanyDossier, selectDossierConvention } from './company-dossier';
 import { manualSignedKey } from './manual-signed-key';
 import { prisma } from '@qualiof/db';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
@@ -15,6 +16,7 @@ import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
 import { resolveDossierPointAccueil } from './point-accueil';
 import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { messageAgefice, validerNir, type DossierStage } from './agefice-envoi';
+const mediaExt = (key: string) => /\.(png|jpe?g)$/i.exec(key)?.[1]?.toLowerCase() ?? 'pdf';
 const ATTACHMENT_LABELS = LIBELLES_PIECE_DOSSIER;
 const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',
@@ -45,7 +47,8 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
 
   if (participant.session.status === 'CANCELLED' || participant.enrollmentStatus === 'CANCELLED')
     return { ok: false as const, error: 'La session ou l’inscription est annulée.' };
-  const agefice = estEligibleAgefice(participant);
+  const company = isCompanyDossier(participant);
+  const agefice = !company && estEligibleAgefice(participant);
   if (stage === 'FIN_FORMATION' && !agefice)
     return { ok: false as const, error: 'La fin de formation est réservée aux dossiers AGEFICE.' };
   const profiles = participant.person.legalLinks.filter(
@@ -63,46 +66,48 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
   const attachments: SubmissionAttachment[] = [];
   const missing: SubmissionAttachment['kind'][] = [];
 
-  // CNI : SensitiveData
-  if (participant.person.sensitiveData?.idDocumentUrl) {
-    attachments.push({
-      key: participant.person.sensitiveData.idDocumentUrl,
-      filename: `CNI_${participant.person.lastName}_${participant.person.firstName}.pdf`,
-      kind: 'CNI',
-      included: true,
-      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
-      signe: false,
-    });
-  } else {
-    missing.push('CNI');
-  }
+  if (!company) {
+    // CNI : SensitiveData
+    if (participant.person.sensitiveData?.idDocumentUrl) {
+      attachments.push({
+        key: participant.person.sensitiveData.idDocumentUrl,
+        filename: `CNI_${participant.person.lastName}_${participant.person.firstName}.${mediaExt(participant.person.sensitiveData.idDocumentUrl)}`,
+        kind: 'CNI',
+        included: true,
+        // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+        signe: false,
+      });
+    } else {
+      missing.push('CNI');
+    }
 
-  // RIB : Person.ribKey
-  if (participant.person.ribKey) {
-    attachments.push({
-      key: participant.person.ribKey,
-      filename: `RIB_${participant.person.lastName}_${participant.person.firstName}.pdf`,
-      kind: 'RIB',
-      included: true,
-      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
-      signe: false,
-    });
-  } else {
-    missing.push('RIB');
-  }
+    // RIB : Person.ribKey
+    if (participant.person.ribKey) {
+      attachments.push({
+        key: participant.person.ribKey,
+        filename: `RIB_${participant.person.lastName}_${participant.person.firstName}.${mediaExt(participant.person.ribKey)}`,
+        kind: 'RIB',
+        included: true,
+        // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+        signe: false,
+      });
+    } else {
+      missing.push('RIB');
+    }
 
-  // CFP attestation : AgeficeProfile.cfpAttestationKey (lié au sponsor)
-  if (profile?.cfpAttestationKey) {
-    attachments.push({
-      key: profile.cfpAttestationKey,
-      filename: `Attestation_CFP_${participant.person.lastName}.pdf`,
-      kind: 'CFP_ATTESTATION',
-      included: true,
-      // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
-      signe: false,
-    });
-  } else {
-    missing.push('CFP_ATTESTATION');
+    // CFP attestation : AgeficeProfile.cfpAttestationKey (lié au sponsor)
+    if (profile?.cfpAttestationKey) {
+      attachments.push({
+        key: profile.cfpAttestationKey,
+        filename: `Attestation_CFP_${participant.person.lastName}.${mediaExt(profile.cfpAttestationKey)}`,
+        kind: 'CFP_ATTESTATION',
+        included: true,
+        // Ne se signe pas : dire `false` serait faux, dire `true` le serait aussi.
+        signe: false,
+      });
+    } else {
+      missing.push('CFP_ATTESTATION');
+    }
   }
 
   // Documents générés (Convention, Programme, PDF AGEFICE)
@@ -171,10 +176,7 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
   });
 
   const conventionDocs = docs.filter((d) => d.type === 'CONVENTION');
-  // Priorité à la convention individuelle quand les deux coexistent
-  // (transition : une individuelle émise avant la bascule en groupe).
-  const conventionDoc =
-    conventionDocs.find((d) => d.participantId === participant.id) ?? conventionDocs[0];
+  const conventionDoc = selectDossierConvention(conventionDocs, participant.id, participant.sponsorOrgId, company);
   const ageficeDoc = docs.find((d) => d.type === 'AGEFICE');
   const programmeDoc =
     docs.find((d) => d.type === 'PROGRAMME' && d.participantId === participant.id) ??
@@ -215,22 +217,24 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
     missing.push('PROGRAMME');
   }
 
-  const ageficeScan = manualSignedKey(participant.docStatus, 'AGEFICE', ageficeDoc?.createdAt);
-  if (ageficeDoc || ageficeScan) {
-    const version = ageficeDoc?.signedPdfUrl?.trim()
-      ? versionAJoindre(ageficeDoc)
-      : ageficeScan
-        ? { key: ageficeScan, signe: true }
-        : versionAJoindre(ageficeDoc!);
-    attachments.push({
-      key: version.key,
-      filename: `AGEFICE_PA_${participant.person.lastName}.pdf`,
-      kind: 'AGEFICE_PA_FORM',
-      included: true,
-      signe: version.signe,
-    });
-  } else {
-    missing.push('AGEFICE_PA_FORM');
+  if (!company) {
+    const ageficeScan = manualSignedKey(participant.docStatus, 'AGEFICE', ageficeDoc?.createdAt);
+    if (ageficeDoc || ageficeScan) {
+      const version = ageficeDoc?.signedPdfUrl?.trim()
+        ? versionAJoindre(ageficeDoc)
+        : ageficeScan
+          ? { key: ageficeScan, signe: true }
+          : versionAJoindre(ageficeDoc!);
+      attachments.push({
+        key: version.key,
+        filename: `AGEFICE_PA_${participant.person.lastName}.pdf`,
+        kind: 'AGEFICE_PA_FORM',
+        included: true,
+        signe: version.signe,
+      });
+    } else {
+      missing.push('AGEFICE_PA_FORM');
+    }
   }
 
   // ── Les CERTIFICATS de signature — règle métier n°3 ─────────────────────
@@ -242,7 +246,7 @@ export async function buildOpcoSubmission(participantId: string, user: User, sta
   // L'ORDRE suit celui des pièces du dossier (convention, puis AGEFICE) : c'est
   // l'ordre dans lequel un instructeur les dépile.
   const certificatsVus = new Set<string>();
-  for (const source of [conventionDoc, ageficeDoc]) {
+  for (const source of [conventionDoc, ...(company ? [] : [ageficeDoc])]) {
     if (!source?.signedPdfUrl?.trim()) continue;
     const demande = source?.signatureRequest ?? null;
     const cle = (demande?.auditTrailUrl ?? '').trim();
@@ -423,6 +427,7 @@ ${
     ok: true as const,
     participant,
     agefice,
+    company,
     profileId: profile?.id ?? null,
     routing,
     invoiceId,

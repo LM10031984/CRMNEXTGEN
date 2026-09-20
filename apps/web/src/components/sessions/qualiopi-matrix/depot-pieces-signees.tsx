@@ -1,13 +1,16 @@
 'use client';
 
+import type { ConventionCompany } from './group-convention-upload';
 import { SignedDocDropZone, type DropZoneParticipant } from './signed-doc-drop-zone';
 
 export function DepotPiecesSignees({
   sessionId,
   participants,
   pieces = [],
+  companies = [],
 }: {
   sessionId: string;
+  companies?: ConventionCompany[];
   participants: DropZoneParticipant[];
   pieces?: Array<{ label: string; apprenant: string; href: string; source: string }>;
 }) {
@@ -19,12 +22,14 @@ export function DepotPiecesSignees({
     >
       <SignedDocDropZone
         sessionId={sessionId}
+        companies={companies}
         participants={participants}
         docType="CONVENTION"
         defaultOpen={false}
         titre="Déposer des pièces signées"
         docTypeOptions={[
-          { value: 'CONVENTION', label: 'Convention signée' },
+          { value: 'CONVENTION', label: 'Convention individuelle signée' },
+          { value: 'CONVENTION_GROUPE', label: 'Convention entreprise / OPCO — commune aux salariés' },
           { value: 'AGEFICE', label: 'Demande de prise en charge AGEFICE signée' },
           { value: 'EMARGEMENT', label: 'Émargement signé' },
           { value: 'ASSIDUITE', label: 'Attestation d’assiduité signée' },

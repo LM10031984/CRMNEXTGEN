@@ -99,3 +99,36 @@ it('ne réutilise pas la signature d’une ancienne convention quand la dernièr
   await checkFormationDocuments(now);
   expect(m.queue.mock.calls[0]![0].lines.join(' ')).toContain('convention signée');
 });
+
+
+it('salarié : convention signée et programme suffisent sans CNI, RIB ni CFP', async () => {
+  const s = session();
+  m.sessions.mockResolvedValue([{ ...s, regime: 'ENTREPRISE', endDate: s.startDate, participants: [{ ...s.participants[0], person: { firstName: 'Jean', lastName: 'Martin', ribKey: null, sensitiveData: null, legalLinks: [] }, sponsorOrg: { ageficeProfile: null } }] }]);
+  m.document.mockResolvedValueOnce([{ participantId: 'p', signedPdfUrl: 'signed.pdf' }]).mockResolvedValueOnce([{ pdfUrl: 'programme.pdf' }]);
+  await checkFormationDocuments(now);
+  expect(m.queue).not.toHaveBeenCalled();
+});
+it('salarié : une alerte ne réclame que le programme absent', async () => {
+  const s = session();
+  m.sessions.mockResolvedValue([{ ...s, regime: 'ENTREPRISE', endDate: s.startDate }]);
+  m.document.mockResolvedValueOnce([{ participantId: 'p', signedPdfUrl: 'signed.pdf' }]).mockResolvedValueOnce([]);
+  await checkFormationDocuments(now);
+  const text = m.queue.mock.calls[0]![0].lines.join(' ');
+  expect(text).toContain('programme de formation');
+  expect(text).not.toMatch(/CNI|RIB|CFP/);
+});
+it('reconnaît une convention manuelle valide sans document généré', async () => {
+  const s = session();
+  m.sessions.mockResolvedValue([{ ...s, participants: [{ ...s.participants[0], docStatus: { CONVENTION: { state: 'MANUAL_OK', uploadedSignedPdfKey: 'scan.pdf', uploadedSignedAt: '2026-09-18T10:00:00Z' } } }] }]);
+  m.document.mockResolvedValue([]);
+  await checkFormationDocuments(now);
+  expect(m.queue).not.toHaveBeenCalled();
+});
+it('préinscription salariée : aucune demande de justificatifs personnels', async () => {
+  const s = session();
+  m.sessions.mockResolvedValue([{ ...s, participants: [], preEnrollments: [{ id: 'pe', firstName: 'Jean', lastName: 'Martin', professionalStatus: 'Salarié' }] }]);
+  await checkFormationDocuments(now);
+  const text = m.queue.mock.calls[0]![0].lines.join(' ');
+  expect(text).toContain('convention signée, programme de formation');
+  expect(text).not.toMatch(/CNI|RIB|CFP/);
+});

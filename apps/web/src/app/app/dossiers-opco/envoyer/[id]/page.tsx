@@ -5,6 +5,7 @@
  * d'éditer subject/body/PJ puis d'envoyer (SMTP) ou de marquer envoyé manuel.
  */
 
+import { DepositTracker } from '@/components/dossiers-opco/deposit-tracker';
 import { redirect } from 'next/navigation';
 import { Mail } from 'lucide-react';
 import { validateRequest } from '@/lib/auth';
@@ -71,6 +72,7 @@ export default async function ComposeOpcoPage({ params }: { params: Promise<{ id
         <Mail className="h-6 w-6 text-primary" /> Composer le dossier OPCO
       </h1>
 
+      {sub.company && <DepositTracker participantId={sub.participantId} depositedAt={sub.participant.opcoDepositedAt?.toISOString() ?? null} depositedBy={sub.participant.opcoDepositedByEmail} userEmail={user.email} canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user.role)}/>}
       <SubmissionEditor
         id={sub.id}
         // Le RBAC décidé une fois, côté serveur : c'est lui qui fait exister
@@ -91,6 +93,8 @@ export default async function ComposeOpcoPage({ params }: { params: Promise<{ id
           sponsorOpcoCode: sub.sponsorOrg.opcoCode,
           sponsorOrgId: sub.sponsorOrg.id,
           agefice: sub.agefice,
+          company: sub.company,
+          sessionId: sub.participant.sessionId,
           stage: sub.stage,
           deliveryState: sub.deliveryState,
           lastError: sub.lastError,

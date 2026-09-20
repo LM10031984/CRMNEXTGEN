@@ -37,6 +37,7 @@ const selectOpcoPointAccueil = vi.fn(
   async (..._a: unknown[]): Promise<{ ok: boolean; error?: string }> => ({ ok: true }),
 );
 
+vi.mock('@/server/actions/opco-upload-piece', () => ({ uploadOpcoPiece: vi.fn() }));
 vi.mock('@/server/actions/opco-submission', () => ({
   sendOpcoSubmission: (...a: unknown[]) => sendOpcoSubmission(...a),
   updateOpcoSubmissionDraft: (...a: unknown[]) => updateOpcoSubmissionDraft(...a),
@@ -491,4 +492,13 @@ describe('D-D-1 — ce qu’on lit sous un destinataire vide', () => {
     render(editeur({ recipientEmail: 'formation@cci-nice.fr' }));
     expect(screen.queryByRole('link', { name: 'Ouvrir la fiche organisation' })).toBeNull();
   });
+});
+
+
+it('affiche les six exigences et les boutons de dépôt même sans destinataire', () => {
+  render(editeur({ agefice: true, recipientEmail: '', attachments: [] }));
+  expect(screen.getByText('Dossier : 0/6 pièces prêtes')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ajouter Carte d’identité' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ajouter RIB' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ajouter Attestation CFP URSSAF' })).toBeTruthy();
 });

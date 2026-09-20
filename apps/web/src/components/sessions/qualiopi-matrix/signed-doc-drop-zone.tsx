@@ -18,6 +18,7 @@
  * (la modale par cellule) : un seul chemin d'écriture des PDF signés.
  */
 
+import { GroupConventionUpload, type ConventionCompany } from './group-convention-upload';
 import { useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -65,6 +66,7 @@ export interface SignedDocDropZoneProps {
    * rattaché, et pourquoi cette zone ne concerne que le papier. Rendu tel quel.
    */
   aide?: ReactNode;
+  companies?: ConventionCompany[];
 }
 
 type Row = { file: File; participantId: string | null };
@@ -77,6 +79,7 @@ export function SignedDocDropZone({
   docTypeOptions,
   titre,
   aide,
+  companies = [],
 }: SignedDocDropZoneProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [rows, setRows] = useState<Row[]>([]);
@@ -218,7 +221,7 @@ export function SignedDocDropZone({
 
       {open && (
         <div className="border-t border-border px-4 py-4 space-y-4">
-          {aide}
+          {selectedDocType !== 'CONVENTION_GROUPE' && aide}
 
           {docTypeOptions && (
             <div>
@@ -228,7 +231,7 @@ export function SignedDocDropZone({
               <select
                 id="drop-zone-doctype"
                 value={selectedDocType}
-                onChange={(e) => setSelectedDocType(e.target.value)}
+                onChange={(e) => { setSelectedDocType(e.target.value); setRows([]); setSplitMode(false); }}
                 disabled={pending}
                 className="rounded-md border border-border px-2 py-1.5 text-sm"
               >
@@ -241,6 +244,7 @@ export function SignedDocDropZone({
             </div>
           )}
 
+          {selectedDocType === 'CONVENTION_GROUPE' ? <GroupConventionUpload sessionId={sessionId} companies={companies}/> : <>
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -440,6 +444,7 @@ export function SignedDocDropZone({
               </div>
             </>
           )}
+          </>}
         </div>
       )}
     </section>

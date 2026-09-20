@@ -17,7 +17,13 @@ export function missingFormationDocuments(input: {
   rib: boolean;
   cfp: boolean;
   convention: boolean;
+  company?: boolean;
+  programme?: boolean;
 }): string[] {
+  if (input.company) return [
+    !input.convention && 'convention signée',
+    !input.programme && 'programme de formation',
+  ].filter((s): s is string => Boolean(s));
   return [
     !input.cni && 'CNI',
     !input.rib && 'RIB',

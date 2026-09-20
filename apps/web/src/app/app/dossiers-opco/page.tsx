@@ -1,3 +1,5 @@
+import { DepositTracker } from '@/components/dossiers-opco/deposit-tracker';
+import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import Link from 'next/link';
 import { ClipboardCheck, FileCheck, Wallet, AlertCircle, TrendingUp, Briefcase, Download } from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
@@ -130,6 +132,10 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
       select: {
         id: true,
         personId: true,
+        sponsorOrgId: true,
+        participantType: true,
+        opcoDepositedAt: true,
+        opcoDepositedByEmail: true,
         priceHT: true,
         amountCollected: true,
         invoiceSent: true,
@@ -143,12 +149,12 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
         financingMode: true,
         financingRequestDate: true,
         dossierType: true,
-        person: { select: { firstName: true, lastName: true } },
+        person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true } } } },
         sponsorOrg: {
           select: { id: true, legalName: true, opcoCode: true, network: true },
         },
         session: {
-          select: { id: true, code: true, name: true, startDate: true, endDate: true },
+          select: { id: true, code: true, name: true, startDate: true, endDate: true, regime: true },
         },
       },
     }),
@@ -474,6 +480,7 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
               disabled={!r.invoiceSent || isComplete}
             />
           </div>
+          {isCompanyDossier(r) && <DepositTracker participantId={r.id} depositedAt={r.opcoDepositedAt?.toISOString() ?? null} depositedBy={r.opcoDepositedByEmail} userEmail={user!.email} canWrite={['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'].includes(user!.role)}/>}
         </td>
       </tr>
     );
