@@ -86,6 +86,8 @@ interface Props {
   packCta?: React.ReactNode;
   pendantBlock?: React.ReactNode;
   closureBlock?: React.ReactNode;
+  /** Envois explicites de fin de formation (facture/certificat/attestations). */
+  afterTrainingDelivery?: React.ReactNode;
   /**
    * Blocs NOMINATIFS des phases « pendant » et « après » (Laurent 2026-09-10).
    * L'onglet n'en avait aucun : il n'affichait que les documents de niveau
@@ -130,6 +132,7 @@ export function TabApres({
   packCta,
   pendantBlock,
   closureBlock,
+  afterTrainingDelivery,
   pendantGroups = [],
   apresGroups = [],
   vueSignature,
@@ -378,6 +381,7 @@ export function TabApres({
 
       {/* Bloc pack détaillé (slot serveur). */}
       {closureBlock}
+      {afterTrainingDelivery}
 
       {/* Par apprenant — la ligne du nom porte SES actions de phase
           (Laurent 2026-09-10 : « ici un bouton par apprenant »). */}
