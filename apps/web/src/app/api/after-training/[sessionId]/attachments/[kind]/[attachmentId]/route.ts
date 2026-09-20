@@ -66,7 +66,14 @@ export async function GET(
             select: { sponsorOrgId: true },
           })
         : null;
-      const directIndividual = invoice.participantId != null && invoice.participant?.sessionId === sessionId;
+      const groupedShapeIsSafe = groupedIds.length === 0 ||
+        (groupedIds.length === 1 && groupedIds[0] === invoice.participantId);
+      const directIndividual =
+        invoice.participantId != null &&
+        invoice.participant?.sessionId === sessionId &&
+        invoice.participant.sponsorOrgId === invoice.payerOrgId &&
+        (invoice.sessionId == null || invoice.sessionId === sessionId) &&
+        groupedShapeIsSafe;
       const safeSingleGrouped =
         invoice.participantId == null &&
         groupedIds.length === 1 &&

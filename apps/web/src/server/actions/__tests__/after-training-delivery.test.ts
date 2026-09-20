@@ -107,7 +107,7 @@ beforeEach(() => {
   }]);
   mocks.invoiceFindMany.mockResolvedValue([{
     id: 'invoice-1', number: 'FAC-0001', status: 'ISSUED', participantId,
-    participantIds: null, sessionId: null, pdfUrl: 'private/FAC-0001.pdf', hashSha256: 'invoice-hash',
+    participantIds: null, sessionId: null, payerOrgId: 'org-1', pdfUrl: 'private/FAC-0001.pdf', hashSha256: 'invoice-hash',
     createdAt: new Date(), payerOrg: { legalName: 'Alice EI', brandName: null },
     participant: { person: { firstName: 'Alice', lastName: 'Martin' } },
   }]);
@@ -162,6 +162,45 @@ describe('after-training delivery', () => {
     }]);
     const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
     expect(delivery.blockers.join(' ')).toContain('ne correspond pas au payeur ou à la session');
+    expect(delivery.attachments.some((attachment) => attachment.kind === 'invoice')).toBe(false);
+  });
+
+  it('blocks a nominal single-participant invoice tied to the old payer', async () => {
+    mocks.invoiceFindMany.mockResolvedValue([{
+      id: 'invoice-old-payer', number: 'FAC-OLD', status: 'ISSUED', participantId,
+      participantIds: [participantId], sessionId, payerOrgId: 'old-sponsor',
+      pdfUrl: 'private/old.pdf', hashSha256: 'old-hash', createdAt: new Date(),
+      payerOrg: { legalName: 'Ancien payeur', brandName: null },
+      participant: { person: { firstName: 'Alice', lastName: 'Martin' } },
+    }]);
+    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+    expect(delivery.blockers.join(' ')).toContain('ne correspond pas au payeur ou à la session');
+    expect(delivery.attachments.some((attachment) => attachment.kind === 'invoice')).toBe(false);
+  });
+
+  it('blocks a nominal invoice explicitly tied to another session', async () => {
+    mocks.invoiceFindMany.mockResolvedValue([{
+      id: 'invoice-other-session', number: 'FAC-OTHER', status: 'ISSUED', participantId,
+      participantIds: [participantId], sessionId: 'other-session', payerOrgId: 'org-1',
+      pdfUrl: 'private/other.pdf', hashSha256: 'other-hash', createdAt: new Date(),
+      payerOrg: { legalName: 'Alice EI', brandName: null },
+      participant: { person: { firstName: 'Alice', lastName: 'Martin' } },
+    }]);
+    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+    expect(delivery.blockers.join(' ')).toContain('ne correspond pas au payeur ou à la session');
+    expect(delivery.attachments.some((attachment) => attachment.kind === 'invoice')).toBe(false);
+  });
+
+  it('blocks a multi-person participantIds array even when participantId is nominal', async () => {
+    mocks.invoiceFindMany.mockResolvedValue([{
+      id: 'invoice-direct-multi', number: 'FAC-MULTI', status: 'ISSUED', participantId,
+      participantIds: [participantId, 'another-participant'], sessionId, payerOrgId: 'org-1',
+      pdfUrl: 'private/multi.pdf', hashSha256: 'multi-hash', createdAt: new Date(),
+      payerOrg: { legalName: 'Alice EI', brandName: null },
+      participant: { person: { firstName: 'Alice', lastName: 'Martin' } },
+    }]);
+    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+    expect(delivery.blockers.join(' ')).toContain('plusieurs apprenants');
     expect(delivery.attachments.some((attachment) => attachment.kind === 'invoice')).toBe(false);
   });
 

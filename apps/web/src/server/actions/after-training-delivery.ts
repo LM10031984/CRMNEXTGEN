@@ -270,11 +270,14 @@ async function resolveDeliveries(
     });
     const unsafeGroupedInvoices = activeInvoicesConcerningLearner.filter((invoice) => {
       const grouped = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
-      return invoice.participantId !== participantId && (
-        grouped.length !== 1 ||
-        grouped[0] !== participantId ||
+      const groupedShapeIsSafe = grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
+      const sourceIdentifiesLearner = invoice.participantId === participantId || (grouped.length === 1 && grouped[0] === participantId);
+      const sessionIsSafe = invoice.sessionId === session.id || (invoice.sessionId == null && invoice.participantId === participantId);
+      return (
+        !groupedShapeIsSafe ||
+        !sourceIdentifiesLearner ||
         invoice.payerOrgId !== participant.sponsorOrgId ||
-        invoice.sessionId !== session.id
+        !sessionIsSafe
       );
     });
     if (unsafeGroupedInvoices.some((invoice) => Array.isArray(invoice.participantIds) && (invoice.participantIds as string[]).length > 1)) {
@@ -284,10 +287,12 @@ async function resolveDeliveries(
       blockers.push(`Une facture concernant ${learnerName} ne correspond pas au payeur ou à la session de cette inscription.`);
     }
     const matchingInvoices = activeInvoicesConcerningLearner.filter((invoice) => {
-      if (invoice.participantId === participantId) return true;
       const grouped = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
-      return grouped.length === 1 && grouped[0] === participantId &&
-        invoice.payerOrgId === participant.sponsorOrgId && invoice.sessionId === session.id;
+      const groupedShapeIsSafe = grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
+      const sourceIdentifiesLearner = invoice.participantId === participantId || (grouped.length === 1 && grouped[0] === participantId);
+      const sessionIsSafe = invoice.sessionId === session.id || (invoice.sessionId == null && invoice.participantId === participantId);
+      return groupedShapeIsSafe && sourceIdentifiesLearner &&
+        invoice.payerOrgId === participant.sponsorOrgId && sessionIsSafe;
     });
     if (matchingInvoices.length === 0) blockers.push(`Facture ordinaire émise manquante pour ${learnerName}.`);
     if (matchingInvoices.length > 1) blockers.push(`Plusieurs factures ordinaires actives concernent ${learnerName} : choisissez/corrigez la pièce comptable avant l’envoi.`);

@@ -664,6 +664,8 @@ Cf. Phase 12 Plan 02 (`apps/web/src/lib/templates-catalog.ts` — 27 templates Q
 
 ### Quick Tasks Completed
 
+20/09/2026 — Cycle financement et après-formation finalisé (programme catalogue, dépôts session, J−21/J+1, envois individuels/entreprise). Revue complète validée, PR109 en validation avant production. [Recette et suivi](quick/260920-fqx-suivi-des-d-p-ts-par-entreprise-et-appre/SUMMARY.md).
+
 18/09/2026 — Envois AGEFICE initial/final et alertes formation implémentés, déploiement applicatif en attente. [Résumé et activation](quick/260918-pux-envois-agefice-et-alertes-formation/SUMMARY.md). Référentiel officiel audité ; seule couverture PTA83 corrigée en production.
 
 | # | Description | Date | Commit | Directory |
