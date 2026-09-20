@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { requireRole } from '@/lib/rbac';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
-import { refusalForSessionPayer } from '@/lib/sessions/session-regime';
+import { allocateCompanyPrice, refusalForSessionPayer } from '@/lib/sessions/session-regime';
+import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
 import {
   assertCompanyPriceEditable,
   synchronizeCompanyPriceTx,
@@ -24,9 +25,7 @@ const Input = z.object({
   apply: z.boolean().optional(),
   confirmationKey: z.string().optional(),
 });
-export async function setSessionRegime(
-  input: z.infer<typeof Input>,
-): Promise<
+export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
   | {
       ok: true;
       changed: boolean;
@@ -53,7 +52,7 @@ export async function setSessionRegime(
           session.regime === 'ENTREPRISE' ? session.priceTotalHT : session.pricePerLearner;
         if (session.regime === value.regime && Number(oldPrice) === value.priceHT)
           return { ok: true as const, changed: false };
-        await assertCompanyPriceEditable(tx, { ...session, regime: 'ENTREPRISE' });
+
         const payers = new Set(session.participants.map((p) => p.sponsorOrgId));
         if (value.regime === 'ENTREPRISE' && payers.size > 1)
           throw new Error(
@@ -71,6 +70,35 @@ export async function setSessionRegime(
           });
           if (refusal) throw new Error(refusal);
         }
+        // Déclarer un forfait historique inchangé ne réécrit aucun engagement.
+        // Limité au groupe déjà salarié, au même payeur et à une ventilation identique.
+        const shares =
+          value.regime === 'ENTREPRISE'
+            ? allocateCompanyPrice(
+                value.priceHT,
+                session.participants.map((p) => p.id),
+              )
+            : {};
+        const metadataOnly =
+          session.regime === null &&
+          value.regime === 'ENTREPRISE' &&
+          session.participants.length > 0 &&
+          payers.size === 1 &&
+          (session.priceTotalHT === null || Number(session.priceTotalHT) === value.priceHT) &&
+          Math.round(Number(session.pricePerLearner) * 100) * session.participants.length ===
+            Math.round(value.priceHT * 100) &&
+          session.participants.every(
+            (p) =>
+              Number(p.priceHT) === shares[p.id] &&
+              estEmployeurDeLApprenant(
+                legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, {
+                  ...session,
+                  regime: value.regime,
+                })?.role,
+              ),
+          );
+        if (!metadataOnly)
+          await assertCompanyPriceEditable(tx, { ...session, regime: 'ENTREPRISE' });
         const before = {
           regime: session.regime,
           priceTotalHT: session.priceTotalHT?.toString() ?? null,
@@ -112,9 +140,9 @@ export async function setSessionRegime(
           );
         const updated = await tx.trainingSession.update({ where: { id: session.id }, data: after });
         let changed = 0;
-        if (value.regime === 'ENTREPRISE')
+        if (value.regime === 'ENTREPRISE' && !metadataOnly)
           changed = await synchronizeCompanyPriceTx(tx, updated, user.id);
-        else
+        else if (value.regime === 'INDIVIDUEL')
           for (const p of session.participants) {
             if (Number(p.priceHT) === value.priceHT) continue;
             changed += (
@@ -136,7 +164,7 @@ export async function setSessionRegime(
             entity: 'TrainingSession',
             entityId: session.id,
             action: 'sessions.setRegime',
-            diff: { before, after, participantsUpdated: changed },
+            diff: { before, after, participantsUpdated: changed, metadataOnly },
           },
         });
         return { ok: true as const, changed: true };

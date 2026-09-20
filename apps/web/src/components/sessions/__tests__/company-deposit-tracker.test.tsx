@@ -38,17 +38,116 @@ describe('CompanyDepositTracker — correction d’un faux dépôt', () => {
   });
 });
 
-
 it('garde le bouton visible et explique le blocage, puis autorise la confirmation une fois les pièces ajoutées', () => {
   const props = {
-    sessionId: 'session', sponsorOrgId: 'gcs',
+    sessionId: 'session',
+    sponsorOrgId: 'gcs',
     members: [{ id: 'pierre', depositedAt: null, depositedBy: null }],
-    depositedAt: null, depositedBy: null, userEmail: 'laurent@start-academy.fr', canWrite: true,
+    depositedAt: null,
+    depositedBy: null,
+    userEmail: 'laurent@start-academy.fr',
+    canWrite: true,
   };
   const view = render(<CompanyDepositTracker {...props} readyToDeposit={false} />);
   fireEvent.click(screen.getByRole('button', { name: 'Déclarer le dépôt du groupe' }));
-  expect((screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   expect(screen.getByText(/après ajout de la convention signée et du programme/)).toBeTruthy();
   view.rerender(<CompanyDepositTracker {...props} readyToDeposit />);
-  expect((screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
+it('bloque les clics répétés pendant la requête puis ferme le formulaire avec une confirmation visible', async () => {
+  const { act, waitFor } = await import('@testing-library/react');
+  const { recordCompanyOpcoDeposit } = await import('@/server/actions/opco-deposit');
+  let finish!: (value: { ok: boolean }) => void;
+  vi.mocked(recordCompanyOpcoDeposit).mockClear();
+  vi.mocked(recordCompanyOpcoDeposit).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(
+    <CompanyDepositTracker
+      sessionId="s"
+      sponsorOrgId="o"
+      members={[{ id: 'p', depositedAt: null, depositedBy: null }]}
+      depositedAt={null}
+      depositedBy={null}
+      userEmail="laurent@start-academy.fr"
+      canWrite
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Déclarer le dépôt du groupe' }));
+  const confirm = screen.getByRole('button', { name: /Confirmer pour/ });
+  fireEvent.click(confirm);
+  expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole('button', { name: /Enregistrement en cours/ })).toBeTruthy();
+  fireEvent.click(confirm);
+  expect(recordCompanyOpcoDeposit).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ ok: true }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: /Confirmer pour/ })).toBeNull());
+  expect(screen.getByRole('status').textContent).toContain('Dépôt OPCO enregistré');
+});
+
+it('affiche une erreur persistante près du bouton et permet de réessayer', async () => {
+  const { waitFor } = await import('@testing-library/react');
+  const { recordCompanyOpcoDeposit } = await import('@/server/actions/opco-deposit');
+  vi.mocked(recordCompanyOpcoDeposit).mockResolvedValueOnce({
+    ok: false,
+    error: 'Le groupe a changé.',
+  });
+  render(
+    <CompanyDepositTracker
+      sessionId="s"
+      sponsorOrgId="o"
+      members={[{ id: 'p', depositedAt: null, depositedBy: null }]}
+      depositedAt={null}
+      depositedBy={null}
+      userEmail="laurent@start-academy.fr"
+      canWrite
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Déclarer le dépôt du groupe' }));
+  fireEvent.click(screen.getByRole('button', { name: /Confirmer pour/ }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toContain('Le groupe a changé.'),
+  );
+  expect(
+    (screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
+it('récupère les valeurs de la déclaration actualisée après fermeture sans enregistrer', () => {
+  const props = {
+    sessionId: 's',
+    sponsorOrgId: 'o',
+    members: [{ id: 'p', depositedAt: null, depositedBy: null }],
+    depositedAt: null,
+    depositedBy: null,
+    userEmail: 'laurent@start-academy.fr',
+    canWrite: true,
+  };
+  const view = render(<CompanyDepositTracker {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Déclarer le dépôt du groupe' }));
+  fireEvent.change(screen.getByLabelText('Déposé par'), {
+    target: { value: 'jean-guy@start-academy.fr' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+  view.rerender(
+    <CompanyDepositTracker
+      {...props}
+      depositedAt="2026-09-10T12:00:00.000Z"
+      depositedBy="formation@start-academy.fr"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Corriger la déclaration du groupe' }));
+  expect((screen.getByLabelText('Déposé par') as HTMLSelectElement).value).toBe(
+    'formation@start-academy.fr',
+  );
+  expect((screen.getByLabelText('Date du dépôt') as HTMLInputElement).value).toBe('2026-09-10');
 });

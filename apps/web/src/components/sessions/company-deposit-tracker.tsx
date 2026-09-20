@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { recordCompanyOpcoDeposit } from '@/server/actions/opco-deposit';
@@ -37,39 +37,59 @@ export function CompanyDepositTracker({
     depositedBy ?? (DEPOSITORS.some((depositor) => depositor.email === userEmail) ? userEmail : ''),
   );
   const [date, setDate] = useState(depositedAt?.slice(0, 10) ?? parisDay(new Date()));
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
+  const saving = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
   const depositor = DEPOSITORS.find((person) => person.email === depositedBy)?.name ?? depositedBy;
 
-  function save(clear = false) {
-    startTransition(async () => {
-      try {
-        const result = await recordCompanyOpcoDeposit({
-          sessionId,
-          sponsorOrgId,
-          expectedMembers: members,
-          email: clear ? null : email,
-          date: clear ? null : date,
-        });
-        if (!result.ok) {
-          toast.error(result.error);
-          return;
-        }
-        toast.success(
-          clear
-            ? 'Déclaration de dépôt annulée pour le groupe'
-            : 'Dépôt OPCO enregistré pour le groupe',
-        );
-        setEditing(false);
-        router.refresh();
-      } catch {
-        toast.error('Enregistrement impossible. Rechargez la page avant de réessayer.');
+  async function save(clear = false) {
+    // React 18 transitions do not track the lifetime of async server actions.
+    if (saving.current) return;
+    saving.current = true;
+    setPending(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await recordCompanyOpcoDeposit({
+        sessionId,
+        sponsorOrgId,
+        expectedMembers: members,
+        email: clear ? null : email,
+        date: clear ? null : date,
+      });
+      if (!result.ok) {
+        const message = result.error ?? 'Le dépôt n’a pas pu être enregistré.';
+        setError(message);
+        toast.error(message);
+        return;
       }
-    });
+      const message = clear
+        ? 'Déclaration de dépôt annulée pour le groupe'
+        : `Dépôt OPCO enregistré pour ${members.length} salarié${members.length > 1 ? 's' : ''}.`;
+      setSuccess(message);
+      setEditing(false);
+      toast.success(message);
+      router.refresh();
+    } catch {
+      const message =
+        'Enregistrement non confirmé. Rechargez la page pour vérifier le dépôt avant de réessayer.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      saving.current = false;
+      setPending(false);
+    }
   }
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-2 text-xs" aria-busy={pending}>
+      {success && (
+        <p role="status" className="text-emerald-700">
+          {success}
+        </p>
+      )}
       {depositedAt && (
         <p className="text-emerald-700">
           Déposé le{' '}
@@ -81,7 +101,16 @@ export function CompanyDepositTracker({
         <button
           type="button"
           className="underline underline-offset-2"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setEmail(
+              depositedBy ??
+                (DEPOSITORS.some((person) => person.email === userEmail) ? userEmail : ''),
+            );
+            setDate(depositedAt?.slice(0, 10) ?? parisDay(new Date()));
+            setError(null);
+            setSuccess(null);
+            setEditing(true);
+          }}
         >
           {depositedAt ? 'Corriger la déclaration du groupe' : 'Déclarer le dépôt du groupe'}
         </button>
@@ -123,7 +152,9 @@ export function CompanyDepositTracker({
             disabled={pending || !email || !date || !readyToDeposit}
             onClick={() => save()}
           >
-            Confirmer pour {members.length} salarié{members.length > 1 ? 's' : ''}
+            {pending
+              ? 'Enregistrement en cours…'
+              : `Confirmer pour ${members.length} salarié${members.length > 1 ? 's' : ''}`}
           </button>
           {depositedAt && (
             <button
@@ -138,6 +169,11 @@ export function CompanyDepositTracker({
           <button type="button" disabled={pending} onClick={() => setEditing(false)}>
             Fermer
           </button>
+          {error && (
+            <p role="alert" className="w-full text-red-700">
+              {error}
+            </p>
+          )}
           <p className="w-full text-muted-foreground">
             À utiliser après le dépôt sur le portail OPCO. Cette déclaration ne vaut pas accord de
             financement.

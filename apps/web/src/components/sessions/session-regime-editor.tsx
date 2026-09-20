@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { setSessionRegime } from '@/server/actions/session-regime';
 import type { SessionRegime } from '@/lib/sessions/session-regime';
@@ -19,9 +19,14 @@ export function SessionRegimeEditor({
   const [amount, setAmount] = useState(price === null ? '' : String(price));
   const [key, setKey] = useState<string>();
   const [error, setError] = useState<string>();
-  const [pending, startTransition] = useTransition();
-  const submit = () =>
-    startTransition(async () => {
+  const [pending, setPending] = useState(false);
+  const saving = useRef(false);
+  const submit = async () => {
+    if (saving.current) return;
+    saving.current = true;
+    setPending(true);
+    setError(undefined);
+    try {
       if (!chosen) {
         setError('Choisissez le régime de la session.');
         return;
@@ -46,11 +51,29 @@ export function SessionRegimeEditor({
         setKey(result.confirmationKey);
         setError(undefined);
       }
-    });
+    } catch {
+      setError(
+        'Enregistrement non confirmé. Rechargez la page pour vérifier le régime avant de réessayer.',
+      );
+    } finally {
+      saving.current = false;
+      setPending(false);
+    }
+  };
   return (
     <div className="text-sm">
       {!open ? (
-        <button type="button" className="text-primary" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="text-primary"
+          onClick={() => {
+            setChosen(regime ?? '');
+            setAmount(price === null ? '' : String(price));
+            setKey(undefined);
+            setError(undefined);
+            setOpen(true);
+          }}
+        >
           {regime === 'ENTREPRISE'
             ? `Entreprise · ${price?.toLocaleString('fr-FR')} € HT au total`
             : regime === 'INDIVIDUEL'
@@ -107,6 +130,7 @@ export function SessionRegimeEditor({
             </button>
             <button
               type="button"
+              disabled={pending}
               onClick={() => {
                 setOpen(false);
                 setKey(undefined);
