@@ -31,8 +31,8 @@ interface Step {
 
 const STEPS: Step[] = [
   { field: 'invoiceSent', label: 'Facture émise', icon: Receipt },
-  { field: 'opcoApproved', label: 'Validation OPCO', icon: BadgeCheck, slaDays: 14 },
-  { field: 'opcoReimbursed', label: 'Remboursement OPCO', icon: Banknote, slaDays: 30 },
+  { field: 'opcoApproved', label: 'Accord du financeur', icon: BadgeCheck, slaDays: 14 },
+  { field: 'opcoReimbursed', label: 'Remboursement du financeur', icon: Banknote, slaDays: 30 },
   { field: 'paymentReceived', label: 'Paiement client', icon: Wallet, slaDays: 30 },
 ];
 
@@ -144,7 +144,7 @@ export function DossierTimeline({ participantId, initial }: Props) {
         const tip = isDone
           ? `${step.label} — fait${date ? ` le ${dateFmt.format(date)} (il y a ${daysSince(date)}j)` : ''}`
           : isActive
-            ? `${step.label} — à faire${prevDoneDate ? ` (étape précédente il y a ${daysFromPrev}j${isAlert ? ' ⚠️ SLA dépassé' : ''})` : ''}`
+            ? `${step.label} — à faire${prevDoneDate ? ` (étape précédente il y a ${daysFromPrev}j${isAlert ? ' ⚠️ délai prévu dépassé' : ''})` : ''}`
             : `${step.label} — étape suivante`;
 
         return (
@@ -154,6 +154,7 @@ export function DossierTimeline({ participantId, initial }: Props) {
               onClick={() => toggle(step.field)}
               disabled={pendingField !== null}
               title={tip}
+              aria-label={tip}
               className={cn(
                 'relative inline-flex items-center justify-center h-7 w-7 rounded-full transition-colors',
                 isDone && 'bg-emerald-500 text-white hover:bg-emerald-600',

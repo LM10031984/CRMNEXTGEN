@@ -99,9 +99,9 @@ export const NAV: NavSection[] = [
         icon: BarChart3,
         allowedRoles: ['ADMIN', 'MANAGER'],
       },
-      // Dossiers OPCO : ADMIN/MANAGER/COMMERCIAL/COMPTABLE/LECTEUR (FORMATEUR exclu)
+      // Dossiers de financement : ADMIN/MANAGER/COMMERCIAL/COMPTABLE/LECTEUR (FORMATEUR exclu)
       {
-        label: 'Dossiers OPCO',
+        label: 'Dossiers de financement',
         href: '/app/dossiers-opco',
         icon: ClipboardCheck,
         allowedRoles: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE', 'LECTEUR'],
