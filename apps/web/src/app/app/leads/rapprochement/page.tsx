@@ -17,6 +17,12 @@ export default async function MlsEnrichmentPage() {
         Rapprocher les fiches existantes avec le fichier MLS
       </h1>
       <MlsEnrichmentForm />
+      <Link
+        className="block text-sm text-primary underline"
+        href={'/app/leads/doublons-mls' as any}
+      >
+        Vérifier les doublons liés aux mobiles Excel
+      </Link>
     </div>
   );
 }

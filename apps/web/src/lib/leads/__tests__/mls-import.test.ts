@@ -36,6 +36,9 @@ describe('import MLS', () => {
       ],
     });
     expect(mlsPhone(33612345678)).toBe('+33612345678');
+    expect(mlsPhone(612345678)).toBe('+33612345678');
+    expect(mlsPhone('712345678')).toBe('+33712345678');
+    expect(mlsPhone('+39123456789')).toBe('+39123456789');
     expect(mlsKey(' Côte   d’Azur ')).toBe('cote d azur');
   });
   it('ne choisit pas arbitrairement entre deux téléphones divergents', () => {
@@ -105,6 +108,24 @@ describe('import MLS', () => {
     );
     expect(planMls(p, [], []).create).toHaveLength(0);
     expect(planMls(p, [], []).ignored).toHaveLength(2);
+  });
+  it('ne crée pas deux fiches quand Excel a retiré le zéro du mobile', () => {
+    const p = parseMls(
+      fixture([alice, ['Autre agence', 'Alice', 'Martin', '', 612345678, 'Nice', 'Agent']]),
+    );
+    expect(planMls(p, [], []).create).toHaveLength(0);
+    expect(planMls(p, [], []).ignored).toHaveLength(2);
+    const existing = [
+      {
+        id: 'existing',
+        importKey: null,
+        firstName: 'Alice',
+        lastName: 'Martin',
+        email: null,
+        phone: '612345678',
+      },
+    ];
+    expect(planMls(parseMls(fixture([alice])), existing, []).create).toHaveLength(0);
   });
   it('ne choisit pas un point de vente quand plusieurs adresses existent', () => {
     const p = parseMls(fixture([alice]));

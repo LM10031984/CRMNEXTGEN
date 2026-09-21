@@ -4,6 +4,8 @@ export function normaliserTelephone(value: unknown): string {
     .trim()
     .replace(/[^\d+]/g, '');
   if (phone.startsWith('00')) phone = '+' + phone.slice(2);
+  // Colonne mobile MLS française : Excel numérique supprime le zéro initial.
+  if (/^[67]\d{8}$/.test(phone)) phone = '+33' + phone;
   if (/^0\d{9}$/.test(phone)) phone = '+33' + phone.slice(1);
   if (/^33\d{9}$/.test(phone)) phone = '+' + phone;
   return phone;
