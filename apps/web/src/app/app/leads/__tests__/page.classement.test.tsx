@@ -43,7 +43,8 @@ function record(id: number, city = 'Nice', tenantId = 'tenant-a') {
       tenantId,
       legalName: 'Agence Azur',
       brandName: null,
-      representative: 'Alice Martin',
+      representative: 'Signataire différent',
+      crmManagers: ['Alice Martin'],
       contacts: [],
       address: { street: '12 rue de la Paix', city },
     },
@@ -104,7 +105,7 @@ describe('liste CRM classée', () => {
     const next = screen.getByRole('link', { name: /Suiv/ });
     expect(next.getAttribute('href')).toContain('page=6');
     expect(next.getAttribute('href')).toContain('source=MLS_COTE_D_AZUR');
-    expect(screen.getByText('251 contacts')).toBeTruthy();
+    expect(screen.getByText('251 contacts dans la base')).toBeTruthy();
   });
   it('conserve le rappel d’un contact situé après la première page', async () => {
     const leads = Array.from({ length: 80 }, (_, i) => record(i));

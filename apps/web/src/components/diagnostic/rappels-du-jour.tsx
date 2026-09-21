@@ -25,6 +25,9 @@ export interface LeadARappeler {
   lastName: string | null;
   phone: string | null;
   lastAction: string | null;
+  status?: string;
+  nextActionAt?: Date | null;
+  nextAction?: string | null;
 }
 
 /** Ce qui suit le dernier tiret cadratin de la ligne de suivi : l'axe du diagnostic. */
@@ -34,7 +37,19 @@ function axeDepuisSuivi(lastAction: string | null): string | null {
 }
 
 export function RappelsDuJour({ leads }: { leads: LeadARappeler[] }) {
-  const aRappeler = leads.filter((l) => estARappelerMaintenant(l.lastAction));
+  const day = (d: Date) =>
+    new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  const today = day(new Date());
+  const aRappeler = leads.filter(
+    (l) =>
+      !['WON', 'LOST'].includes(l.status ?? '') &&
+      (l.nextActionAt ? day(l.nextActionAt) <= today : estARappelerMaintenant(l.lastAction)),
+  );
   if (aRappeler.length === 0) return null;
 
   return (
@@ -44,18 +59,20 @@ export function RappelsDuJour({ leads }: { leads: LeadARappeler[] }) {
         <h2 className="text-sm font-semibold">
           À rappeler aujourd'hui
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {aRappeler.length} prospect{aRappeler.length > 1 ? 's' : ''} vous {aRappeler.length > 1 ? 'ont' : 'a'} demandé
-            un appel cette semaine
+            {aRappeler.length} contact{aRappeler.length > 1 ? 's' : ''} à suivre
           </span>
         </h2>
       </div>
 
       <ul className="divide-y divide-border/60 rounded-lg border border-border bg-white">
-        {aRappeler.map((l) => {
+        {aRappeler.slice(0, 10).map((l) => {
           const nom = `${l.firstName ?? ''} ${l.lastName ?? ''}`.trim() || 'Prospect';
-          const axe = axeDepuisSuivi(l.lastAction);
+          const axe = l.nextAction || axeDepuisSuivi(l.lastAction);
           return (
-            <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+            <li
+              key={l.id}
+              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+            >
               <div className="min-w-0">
                 <Link
                   href={`/app/leads/${l.id}` as any}
@@ -85,6 +102,11 @@ export function RappelsDuJour({ leads }: { leads: LeadARappeler[] }) {
         })}
       </ul>
 
+      {aRappeler.length > 10 && (
+        <Link className="mt-2 block text-sm text-primary underline" href="/app/leads?travail=jour">
+          Voir les relances à traiter
+        </Link>
+      )}
       <p className="mt-2 text-xs text-muted-foreground">
         Le script d'appel est sur chaque fiche — ouvrez-la avant de composer.
       </p>

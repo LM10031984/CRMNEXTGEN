@@ -79,14 +79,8 @@ export default async function LeadsPage({
             legalName: true,
             brandName: true,
             address: true,
-            representative: true,
             crmManagers: true,
-            contacts: {
-              where: { isPrimary: true },
-              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-              take: 1,
-              select: { firstName: true, lastName: true, isPrimary: true },
-            },
+            network: true,
           },
         },
       },
@@ -107,6 +101,10 @@ export default async function LeadsPage({
     params,
   );
   const leads = vue.rows;
+  const aTraiter = classerLeads(allLeads, { travail: 'jour' }).total;
+  const aPlanifier = allLeads.filter(
+    (l) => !['WON', 'LOST'].includes(l.status) && !l.nextActionAt,
+  ).length;
   const counter = (status: string) => vue.filtered.filter((l) => l.status === status).length;
 
   const unassignedCount = vue.filtered.filter(
@@ -135,6 +133,14 @@ export default async function LeadsPage({
                 Importer MLS
               </Link>
             )}
+            {user.role === 'ADMIN' && (
+              <Link
+                href={'/app/leads/rapprochement' as any}
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+              >
+                Rapprocher MLS
+              </Link>
+            )}
             <ProgrammesEnAttenteButton enAttente={diagnosticsEnAttente} />
             <AutoAssignLeadsButton
               unassignedCount={
@@ -146,32 +152,53 @@ export default async function LeadsPage({
         }
       />
 
-      <ClassementFilters
-        params={{ ...params, tri: vue.tri }}
-        options={vue.options}
-        statuses={{
-          ...STATUTS,
-          ...Object.fromEntries(
-            Array.from({ length: 7 }, (_, i) => [`CALL_${i + 1}`, `Appel ${i + 1}`]),
-          ),
-        }}
-      />
-
+      <nav aria-label="Travail du jour" className="flex flex-wrap gap-3 text-sm">
+        <Link
+          href="/app/leads?travail=jour"
+          className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 font-medium"
+        >
+          À traiter aujourd’hui : {aTraiter} (retards inclus)
+        </Link>
+        <Link href="/app/leads?travail=planifier" className="rounded-lg border px-4 py-3">
+          Prochaine action à planifier : {aPlanifier}
+        </Link>
+      </nav>
+      <RappelsDuJour leads={allLeads} />
+      <details
+        open={Object.keys(params).some((key) => !['page', 'tri'].includes(key))}
+        className="rounded-xl border p-3"
+      >
+        <summary className="cursor-pointer text-sm font-medium">
+          Filtres agence, responsable, point de vente et recherche
+        </summary>
+        <ClassementFilters
+          params={{ ...params, tri: vue.tri }}
+          options={vue.options}
+          statuses={{
+            ...STATUTS,
+            ...Object.fromEntries(
+              Array.from({ length: 7 }, (_, i) => [`CALL_${i + 1}`, `Appel ${i + 1}`]),
+            ),
+          }}
+        />
+      </details>
       <div className="space-y-1 text-sm text-muted-foreground" aria-live="polite">
         <p>
           <strong className="text-foreground">
-            {vue.total} contact{vue.total === 1 ? '' : 's'}
+            {vue.totalBase} contact{vue.totalBase === 1 ? '' : 's'} dans la base
           </strong>
-          {` · ${vue.agences} agence${vue.agences === 1 ? '' : 's'} · ${vue.pointsDeVente} point${vue.pointsDeVente === 1 ? '' : 's'} de vente avec adresse · ${vue.sansAdresse} contact${vue.sansAdresse === 1 ? '' : 's'} sans adresse complète`}
+          {` · ${vue.agencesBase} agence${vue.agencesBase === 1 ? '' : 's'} · ${vue.pointsDeVenteBase} point${vue.pointsDeVenteBase === 1 ? '' : 's'} de vente avec adresse`}
+        </p>
+        <p>
+          {vue.total} contact{vue.total === 1 ? '' : 's'} dans la sélection · {vue.agences} agence
+          {vue.agences === 1 ? '' : 's'} · {vue.sansAdresse} contact
+          {vue.sansAdresse === 1 ? '' : 's'} sans adresse complète
         </p>
         <p className="text-xs">
           Une adresse différente correspond à un point de vente distinct. Une ville seule reste «
           Adresse à compléter ».
         </p>
       </div>
-
-      {/* Les rappels portent sur toute la sélection, pas seulement la page affichée. */}
-      <RappelsDuJour leads={vue.filtered} />
 
       {commercials.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 inline-flex items-center gap-2">

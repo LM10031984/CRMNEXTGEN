@@ -11,7 +11,8 @@ import {
 const org = (overrides: Partial<OrganisationClassement> = {}): OrganisationClassement => ({
   id: 'agence-1',
   legalName: 'Agence Azur',
-  representative: 'Alice Martin',
+  representative: 'Signataire distinct',
+  crmManagers: ['Alice Martin'],
   contacts: [],
   address: { street: '12 rue de la Paix', postalCode: '06000', city: 'Nice' },
   ...overrides,
@@ -33,6 +34,51 @@ const lead = (id: string, overrides: Partial<LeadClassable> = {}): LeadClassable
 });
 
 describe('classement des agences et points de vente', () => {
+  it('regroupe l’enseigne et ses alias réseau tout en séparant les réseaux sans agence identifiée', () => {
+    const result = classerLeads(
+      [
+        lead('a', { organization: org({ legalName: 'C21 Immo d’Azur' }) }),
+        lead('b', { organization: org({ id: 'b', legalName: 'Century 21 Immo d’Azur' }) }),
+        lead('c', {
+          organization: org({
+            id: 'c',
+            legalName: 'SAS AZUR CONSEIL',
+            brandName: 'Immo d’Azur',
+            network: 'Century 21',
+          }),
+        }),
+        lead('d', { organization: org({ id: 'd', legalName: 'Orpi', address: null }) }),
+        lead('e', { organization: org({ id: 'e', legalName: 'Orpi', address: null }) }),
+      ],
+      {},
+    );
+    expect(result.agences).toBe(3);
+    expect(classerLeads(result.filtered, { q: 'C21 Immo' }).total).toBe(3);
+    expect(classerLeads(result.filtered, { q: 'SAS AZUR' }).total).toBe(1);
+  });
+  it('trouve le même téléphone en format national ou international', () => {
+    const rows = [lead('a', { phone: '+33 6 01 02 03 04' })];
+    for (const q of ['0601020304', '06 01 02 03 04', '+33601020304', '0033601020304'])
+      expect(classerLeads(rows, { q }).total).toBe(1);
+    expect(classerLeads(rows, { q: '0609999999' }).total).toBe(0);
+  });
+  it('garde les compteurs globaux et le tri récent indépendants des filtres', () => {
+    const rows = [
+      lead('ancien', {
+        createdAt: new Date('2026-01-01'),
+        organization: org({ legalName: 'AAA' }),
+      }),
+      lead('récent', {
+        createdAt: new Date('2026-02-01'),
+        organization: org({ legalName: 'ZZZ' }),
+      }),
+    ];
+    expect(classerLeads(rows, {}).rows[0]?.id).toBe('récent');
+    const filtered = classerLeads(rows, { q: 'ZZZ' });
+    expect(filtered.total).toBe(1);
+    expect(filtered.totalBase).toBe(2);
+    expect(filtered.agencesBase).toBe(2);
+  });
   it('sépare deux adresses de la même agence, même dans la même ville et avec le même responsable', () => {
     const result = classerLeads(
       [
@@ -118,20 +164,16 @@ describe('classement des agences et points de vente', () => {
     expect(result.agences).toBe(0);
     expect(result.rows[0]!.classement.responsable).toBe('Responsable à renseigner');
   });
-  it('réutilise le responsable explicite puis le contact principal, indépendamment du commercial', () => {
-    const organization = org({
-      contacts: [{ firstName: 'Jean', lastName: 'Dupont', isPrimary: true }],
-    });
-    expect(classementOrganisation(organization).responsable).toBe('Alice Martin');
-    expect(classementOrganisation({ ...organization, representative: null }).responsable).toBe(
-      'Jean DUPONT',
-    );
+  it('utilise uniquement les responsables CRM dédiés, indépendamment des signataires', () => {
+    expect(classementOrganisation(org()).responsable).toBe('Alice Martin');
     expect(
-      classementOrganisation({
-        ...organization,
-        representative: null,
-        contacts: [{ firstName: 'Paul', lastName: 'Durand', isPrimary: false }],
-      }).responsableKey,
+      classementOrganisation(
+        org({
+          crmManagers: [],
+          representative: 'Signataire',
+          contacts: [{ firstName: 'Jean', lastName: 'Dupont', isPrimary: true }],
+        }),
+      ).responsableKey,
     ).toBe(NON_RENSEIGNE);
   });
   it('combine agence, responsable, point de vente, commercial, source, statut et recherche sans accents', () => {
@@ -181,18 +223,18 @@ describe('classement des agences et points de vente', () => {
   it('offre un tri stable par agence, responsable, adresse, commercial ou date', () => {
     const records = [
       lead('b', {
-        organization: org({ legalName: 'Zèbre', representative: 'Albert' }),
+        organization: org({ legalName: 'Zèbre', crmManagers: ['Albert'] }),
         createdAt: new Date('2026-01-01'),
       }),
       lead('a', {
-        organization: org({ legalName: 'Azur', representative: 'Zoé' }),
+        organization: org({ legalName: 'Azur', crmManagers: ['Zoé'] }),
         createdAt: new Date('2026-02-01'),
       }),
     ];
     expect(classerLeads(records, {}).rows.map((l) => l.id)).toEqual(['a', 'b']);
     expect(classerLeads(records, { tri: 'responsable' }).rows.map((l) => l.id)).toEqual(['b', 'a']);
     expect(classerLeads(records, { tri: 'recent' }).rows.map((l) => l.id)).toEqual(['a', 'b']);
-    expect(classerLeads(records, { tri: 'inconnu' }).tri).toBe('agence');
+    expect(classerLeads(records, { tri: 'inconnu' }).tri).toBe('recent');
   });
   it('ignore les paramètres répétés ou inconnus', () => {
     expect(lireClassementParams({ agence: ['A', 'B'], q: ' Nice ', inconnu: 'x' })).toEqual({

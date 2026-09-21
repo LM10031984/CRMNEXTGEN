@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
+import { normaliserTelephone } from './coordonnees';
 
 export const MLS_SOURCE = 'MLS_COTE_D_AZUR';
 export const mlsText = (v: unknown) =>
@@ -14,13 +15,7 @@ export const mlsKey = (v: unknown) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 export const mlsEmail = (v: unknown) => mlsText(v).toLowerCase();
-export function mlsPhone(v: unknown) {
-  let p = mlsText(v).replace(/[^\d+]/g, '');
-  if (p.startsWith('00')) p = '+' + p.slice(2);
-  if (/^0\d{9}$/.test(p)) p = '+33' + p.slice(1);
-  if (/^33\d{9}$/.test(p)) p = '+' + p;
-  return p;
-}
+export const mlsPhone = normaliserTelephone;
 export const hash = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
 export interface MlsRow {
   agency: string;

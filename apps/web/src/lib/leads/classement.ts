@@ -1,7 +1,11 @@
 import {
-  resoudreRepresentantEntreprise,
-  type OrganisationRepresentee,
-} from '@/lib/signature/representant';
+  cleEnseigne,
+  enseigneGenerique,
+  enseigneOrganisation,
+  normaliserTelephone,
+} from './coordonnees';
+
+import { estARappelerMaintenant } from '@/lib/diagnostic/priorite';
 
 export const NON_RENSEIGNE = '__missing__';
 export const LEADS_PAGE_SIZE = 50;
@@ -20,10 +24,15 @@ const texte = (value: unknown): string =>
   typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 const comparer = new Intl.Collator('fr', { sensitivity: 'base', numeric: true }).compare;
 
-export type OrganisationClassement = OrganisationRepresentee & {
+export type OrganisationClassement = {
+  id: string;
+  legalName: string;
+  representative?: string | null;
+  contacts?: { firstName: string; lastName: string; isPrimary: boolean }[];
   address: unknown;
   brandName?: string | null;
   crmManagers?: string[];
+  network?: string | null;
 };
 
 export function classementOrganisation(org: OrganisationClassement | null) {
@@ -37,14 +46,14 @@ export function classementOrganisation(org: OrganisationClassement | null) {
   const postalCode = texte(address.postalCode);
   const country = texte(address.country);
   const countryKey = normaliserClassement(country);
-  const agence = texte(org?.legalName) || 'Agence à rattacher';
-  const agenceKey = org ? normaliserClassement(agence) || org.id : NON_RENSEIGNE;
-  const responsable = org ? resoudreRepresentantEntreprise(org) : null;
-  const responsableNoms = org?.crmManagers?.length
-    ? org.crmManagers
-    : responsable?.ok
-      ? [texte(responsable.nom)]
-      : [];
+  const agence = (org && enseigneOrganisation(org)) || 'Agence à rattacher';
+  // Un réseau seul n’identifie pas une agence : deux « Orpi » restent distincts.
+  const agenceKey = org
+    ? enseigneGenerique(agence)
+      ? `org:${org.id}`
+      : cleEnseigne(agence) || org.id
+    : NON_RENSEIGNE;
+  const responsableNoms = [...new Set((org?.crmManagers ?? []).map(texte).filter(Boolean))];
   const responsableNom = responsableNoms.join(' / ');
   // Une ville ou un secteur MLS seul ne prouve pas l'existence d'un établissement.
   const adresseRenseignee = Boolean(street && (city || postalCode));
@@ -85,6 +94,7 @@ export interface LeadClassable {
   createdAt: Date;
   callCount?: number;
   nextActionAt?: Date | null;
+  lastAction?: string | null;
   ownerUserId: string | null;
   person: { firstName: string; lastName: string } | null;
   owner: { firstName: string; lastName: string } | null;
@@ -139,6 +149,9 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
       : `${lead.firstName ?? ''} ${lead.lastName ?? ''}`.trim() || 'Contact à renseigner',
   }));
   const query = normaliserClassement(params.q ?? '');
+  const phoneQuery = /^[+\d\s().-]+$/.test(params.q ?? '')
+    ? normaliserTelephone(params.q).replace(/\D/g, '')
+    : '';
   const today = new Intl.DateTimeFormat('fr-CA', {
     timeZone: 'Europe/Paris',
     year: 'numeric',
@@ -159,10 +172,11 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
         (!['WON', 'LOST'].includes(lead.status) &&
           (params.travail === 'planifier'
             ? !lead.nextActionAt
-            : !!lead.nextActionAt &&
-              (params.travail === 'retard'
+            : lead.nextActionAt
+              ? params.travail === 'retard'
                 ? day(lead.nextActionAt) < today
-                : day(lead.nextActionAt) <= today)))) &&
+                : day(lead.nextActionAt) <= today
+              : params.travail === 'jour' && estARappelerMaintenant(lead.lastAction ?? null)))) &&
       (!params.agence || params.agence === c.agenceKey) &&
       (!params.responsable || c.responsableOptions.some((r) => r.value === params.responsable)) &&
       (!params.pointDeVente || params.pointDeVente === c.pointDeVenteKey) &&
@@ -182,10 +196,16 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
             c.responsable,
             c.adresse,
             lead.organization?.brandName,
+            lead.organization?.legalName,
+            lead.organization?.network,
           ]
             .filter(Boolean)
             .join(' '),
-        ).includes(query))
+        ).includes(query) ||
+        (!!phoneQuery &&
+          phoneQuery.length >= 6 &&
+          normaliserTelephone(lead.phone).replace(/\D/g, '').includes(phoneQuery)) ||
+        cleEnseigne(c.agence).includes(cleEnseigne(params.q ?? '')))
     );
   });
   const tri = ['agence', 'responsable', 'pointDeVente', 'commercial', 'recent', 'relance'].includes(
@@ -194,7 +214,7 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
     ? params.tri!
     : params.travail
       ? 'relance'
-      : 'agence';
+      : 'recent';
   filtered.sort((a, b) => {
     const ca = a.classement;
     const cb = b.classement;
@@ -236,6 +256,12 @@ export function classerLeads<T extends LeadClassable>(leads: T[], params: Classe
     page,
     tri,
     total: filtered.length,
+    totalBase: rows.length,
+    agencesBase: new Set(rows.map((l) => l.classement.agenceKey).filter((k) => k !== NON_RENSEIGNE))
+      .size,
+    pointsDeVenteBase: new Set(
+      rows.map((l) => l.classement.pointDeVenteKey).filter((k) => k !== NON_RENSEIGNE),
+    ).size,
     agences: new Set(filtered.map((l) => l.classement.agenceKey).filter((k) => k !== NON_RENSEIGNE))
       .size,
     pointsDeVente: new Set(
