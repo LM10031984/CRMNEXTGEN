@@ -96,6 +96,14 @@ const CAS: Cas[] = [
     stagiaires: [STAGIAIRES_7[4], STAGIAIRES_12[11]],
     lieu: 'Société de démonstration des professionnels de l’immobilier — 245 boulevard de la Démonstration, bâtiment C, 06800 Cagnes-sur-Mer',
   },
+  {
+    nom: '3 jours, libellés les plus longs',
+    titre: 'L’intelligence artificielle au service des conseillers immobiliers : prospection, communication et relation client (72 heures)',
+    debut: new Date(2026, 10, 2),
+    jours: 3,
+    stagiaires: [STAGIAIRES_7[4], STAGIAIRES_12[11]],
+    lieu: 'Société de démonstration des professionnels de l’immobilier — 245 boulevard de la Démonstration, bâtiment C, 06800 Cagnes-sur-Mer',
+  },
   // Le balayage : chaque durée de 1 à 12 jours, avec le nom le plus long.
   ...Array.from({ length: 12 }, (_, i) => ({
     nom: `balayage ${i + 1} jour${i > 0 ? 's' : ''}`,
@@ -163,7 +171,8 @@ for (const cas of CAS) {
           `${qui} : TAMPON ORPHELIN — la dernière page (${nbPages}/${nbPages}) ne porte pas la ligne du ${avantDernier}`,
         );
       }
-      if (jours.length <= 2) assert.equal(nbPages, 1, `${qui} : ${nbPages} pages pour ${jours.length} jour(s)`);
+      // 3 jours compris depuis que la certification est À CÔTÉ du tampon (21/09).
+      if (jours.length <= 3) assert.equal(nbPages, 1, `${qui} : ${nbPages} pages pour ${jours.length} jour(s)`);
     } catch (erreur) {
       echecs.push((erreur as Error).message);
     }

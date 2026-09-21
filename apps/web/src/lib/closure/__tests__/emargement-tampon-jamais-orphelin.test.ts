@@ -88,6 +88,21 @@ describe('émargement — le tampon voyage avec les lignes qu’il certifie', ()
     expect(lignes[2]).toContain('break-before: avoid');
   });
 
+  it('« Certifié exact » est À CÔTÉ du tampon, dans le même conteneur — jamais séparés', () => {
+    // Décision du 21/09 : ~10 mm gagnés, une session de 3 jours tient sur une
+    // page. Deux inline-block frères : le texte, puis signature + tampon.
+    const final = corps(renderEmargementHtml(ctx(new Date(2026, 8, 28), new Date(2026, 8, 29)))).at(-1)!;
+    const iTexte = final.indexOf('Certifié exact');
+    const iTampon = final.indexOf('alt="Tampon Start Academy"');
+    expect(iTexte).toBeGreaterThan(-1);
+    expect(iTampon).toBeGreaterThan(iTexte);
+    const entreLesDeux = final.slice(iTexte, iTampon);
+    // Un seul passage de colonne entre le texte et les images, et aucun retour
+    // à un bloc pleine largeur qui les remettrait l'un au-dessus de l'autre.
+    expect(entreLesDeux).toMatch(/<\/div><div style="display: inline-block; vertical-align: bottom;/);
+    expect(entreLesDeux).not.toMatch(/<\/td>|<\/tr>|<\/tbody>/);
+  });
+
   it('les cases à signer gardent leurs 18 mm — on resserre les marges, pas la place du stylo', () => {
     const html = renderEmargementHtml(ctx(new Date(2026, 8, 28), new Date(2026, 8, 29)));
     expect((html.match(/<td style="height: 18mm;">/g) ?? []).length).toBe(4);

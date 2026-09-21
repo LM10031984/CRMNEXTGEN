@@ -176,15 +176,22 @@ ${renderBrandHeader()}
           <!-- Certification Qualiopi OBLIGATOIRE (Laurent 2026-06-16) : "Certifié exact
                par [formateur]", "Fait à [lieu EXACT de formation], le [date fin]" + tampon
                (signature-pedago = Laurent Marx). Sans lieu exact, l'émargement n'est pas valide. -->
-          <div style="margin-top: 2mm; padding-top: 3px; border-top: 1px solid #CBD5E1;">
-            <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 2px 0; line-height: 1.25;">
-              Certifié exact par ${escapeHtml(trainer)}, formateur.
-            </p>
-            <p style="font-size: 10pt; margin: 0; line-height: 1.25;">
-              Fait à <strong>${escapeHtml(villeCertif)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
-            </p>
-            <div style="margin-top: 2px; line-height: 0;">
-              ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="display: inline-block; vertical-align: bottom; height: 20mm; margin-right: 14mm;" />` : ''}
+          <!-- « Certifié exact / Fait à » À CÔTÉ de la signature et du tampon, plus
+               au-dessus (décision Laurent, 21/09/2026) : ~10 mm gagnés, ce qui fait
+               tenir une session de 3 jours sur UNE page par stagiaire. La règle ne
+               change pas : texte, signature et tampon vivent dans le même groupe
+               insécable, jamais séparés. Toujours des inline-block, jamais de flex
+               (WeasyPrint). Le texte est aligné en bas, à hauteur du tampon. -->
+          <div style="margin-top: 2mm; padding-top: 3px; border-top: 1px solid #CBD5E1; font-size: 0;">
+            <div style="display: inline-block; vertical-align: bottom; width: 52%; padding-bottom: 3mm;">
+              <p style="font-size: 10.5pt; font-weight: 700; color: ${BRAND_DARK}; margin: 0 0 2px 0; line-height: 1.25;">
+                Certifié exact par ${escapeHtml(trainer)}, formateur.
+              </p>
+              <p style="font-size: 10pt; margin: 0; line-height: 1.25;">
+                Fait à <strong>${escapeHtml(villeCertif)}</strong>, le <strong>${escapeHtml(dateCertif)}</strong>.
+              </p>
+            </div><div style="display: inline-block; vertical-align: bottom; width: 48%; text-align: right; line-height: 0;">
+              ${signatureDataUrl ? `<img src="${signatureDataUrl}" alt="Signature ${escapeHtml(trainer)}" style="display: inline-block; vertical-align: bottom; height: 20mm; margin-right: 10mm;" />` : ''}
               ${stampDataUrl ? `<img src="${stampDataUrl}" alt="Tampon Start Academy" style="display: inline-block; vertical-align: bottom; height: 26mm;" />` : ''}
             </div>
           </div>

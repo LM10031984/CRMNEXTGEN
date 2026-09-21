@@ -48,11 +48,21 @@ signer (18 mm), l'espace formateur (12 mm) et le tampon (26 mm) sont intacts.
 
 Contrôle visuel fait sur SES-0111 (nom le plus long), 3 jours et 9 jours.
 
+## Décision du 21/09 (soir) — la certification à côté du tampon
+
+Laurent a tranché : « Certifié exact / Fait à » passe À CÔTÉ de la signature et du tampon, plus
+au-dessus. ~10 mm gagnés. Même règle : texte, signature et tampon dans le même groupe insécable.
+
+| Cas | Résultat |
+|---|---|
+| Balayage 3 jours | **1 page** (2 avant) |
+| 3 jours, libellés les plus longs (titre, lieu, nom) | **1 page** |
+| SES-0111, 2 jours | 1 page, inchangé |
+| 4 jours et plus | 2 pages, tampon avec ≥ 2 lignes, en-tête répété |
+
+Contrôle visuel refait sur le cas « 3 jours, libellés les plus longs ».
+
 ## Non fait, et pourquoi
 
-**3 jours tient encore sur 2 pages.** Déficit mesuré : entre 3 et 4 mm après resserrement. Je
-n'ai pas couru après des millimètres fragiles (un lieu sur trois lignes les reprendrait). Le seul
-gain robuste — ~10 mm — serait de placer « Certifié exact / Fait à » À CÔTÉ du tampon plutôt
-qu'au-dessus : c'est un choix de mise en page d'un document Qualiopi, laissé à Laurent.
-
-**Non joué sur le déploiement** : il faut régénérer l'émargement de SES-0111 en production.
+**Non joué sur le déploiement** : Laurent régénère lui-même l'émargement de SES-0111 après fusion
+(tampon avec les signatures, une page par stagiaire).
