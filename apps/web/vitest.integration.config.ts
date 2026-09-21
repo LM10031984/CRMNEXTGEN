@@ -7,6 +7,10 @@ export default defineConfig({
   test: {
     ...base.test,
     setupFiles: [],
+    // Shared PostgreSQL tables: fixture inserts/deletes in unrelated files can
+    // conflict with SERIALIZABLE predicate locks. Concurrency tests still run
+    // their simultaneous calls explicitly inside each file.
+    fileParallelism: false,
     exclude: [],
     include: [
       'scripts/__tests__/dedupe.merge.test.ts',
