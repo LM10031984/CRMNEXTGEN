@@ -1,9 +1,6 @@
-import {
-  legalLinkAtSession,
-  type PeriodLink,
-  type SessionPeriod,
-} from '@/lib/persons/legal-link-period';
-import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
+import { type PeriodLink, type SessionPeriod } from '@/lib/persons/legal-link-period';
+import { isEmployeeOfSponsor } from '@/lib/sessions/employee-of-sponsor';
+export { isEmployeeStatus } from '@/lib/sessions/employee-of-sponsor';
 
 /** Le dossier de cette inscription, pas une autre activité de la personne. */
 export function isCompanyDossier(p: {
@@ -13,19 +10,7 @@ export function isCompanyDossier(p: {
   person?: { legalLinks?: PeriodLink[] };
 }): boolean {
   if (p.session?.regime) return p.session.regime === 'ENTREPRISE';
-  const role = legalLinkAtSession(p.person?.legalLinks ?? [], p.sponsorOrgId, p.session)?.role;
-  if (role) return estEmployeurDeLApprenant(role);
-  return isEmployeeStatus(p.participantType);
-}
-
-export function isEmployeeStatus(status?: string | null): boolean {
-  return ['salarie', 'alternant', 'stagiaire'].includes(
-    (status ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase(),
-  );
+  return isEmployeeOfSponsor(p);
 }
 
 export function controlCompanyPieces(

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { prisma, type Prisma } from '@qualiof/db';
 import { sendMail } from '@/lib/mailer';
+import { loadOfConfig } from '@/lib/of-config';
 
-export const FORMATION_ALERT_RECIPIENT = 'formation@start-academy.fr';
 const PREFIX = 'formation-alert:';
 type QueueDb = Pick<Prisma.TransactionClient, 'emailMessage'>;
 const escapeHtml = (value: string) =>
@@ -35,8 +35,8 @@ export async function queueFormationAlert(
     create: {
       id,
       tenantId: input.tenantId,
-      fromEmail: process.env.MAIL_FROM ?? FORMATION_ALERT_RECIPIENT,
-      toEmails: [FORMATION_ALERT_RECIPIENT],
+      fromEmail: process.env.MAIL_FROM ?? '',
+      toEmails: [],
       subject: input.subject,
       bodyHtml,
       status: 'queued',
@@ -56,19 +56,30 @@ export async function queueFormationAlert(
 }
 
 /** Atomic claim; ambiguous SMTP outcome remains uncertain, never automatically resent. */
-export async function deliverFormationAlert(id: string): Promise<void> {
+export async function deliverFormationAlert(id: string): Promise<boolean> {
   const base = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
-  if (!base || !/^https?:\/\//.test(base)) return; // durable queue waits for URL configuration
+  if (!base || !/^https?:\/\//.test(base)) return false;
   const claim = await prisma.emailMessage.updateMany({
     where: { id, status: 'queued' },
     data: { status: 'sending' },
   });
-  if (!claim.count) return;
+  if (!claim.count) return false;
   const mail = await prisma.emailMessage.findUniqueOrThrow({ where: { id } });
   try {
+    const of = await loadOfConfig(mail.tenantId);
+    const recipient = process.env.FORMATION_ALERT_RECIPIENT?.trim() || of.email || of.emailFrom;
+    if (!recipient || !of.emailFrom) {
+      await prisma.emailMessage.update({ where: { id }, data: { status: 'queued' } });
+      return false;
+    }
+    await prisma.emailMessage.update({
+      where: { id },
+      data: { fromEmail: of.emailFrom, toEmails: [recipient] },
+    });
     const metadata = JSON.parse(mail.relatedEntity ?? '{}') as { sessionId?: string };
     const result = await sendMail({
-      to: FORMATION_ALERT_RECIPIENT,
+      from: `${of.name} <${of.emailFrom}>`,
+      to: recipient,
       subject: mail.subject,
       html: mail.bodyHtml.replace(
         'href="/app/',
@@ -91,14 +102,16 @@ export async function deliverFormationAlert(id: string): Promise<void> {
     });
     if (!result.ok)
       console.error('[formation-alert] résultat SMTP incertain, contrôle manuel requis', id);
+    return result.ok && !result.dryRun && !result.suppressed;
   } catch {
     // Includes a crash after SMTP acceptance: do not risk a duplicate.
     await prisma.emailMessage.update({ where: { id }, data: { status: 'uncertain' } });
     console.error('[formation-alert] livraison interrompue, contrôle manuel requis', id);
+    return false;
   }
 }
 
-export async function flushFormationEventAlerts(): Promise<void> {
+export async function flushFormationEventAlerts(): Promise<number> {
   const pending = await prisma.emailMessage.findMany({
     where: {
       id: { startsWith: PREFIX },
@@ -112,12 +125,19 @@ export async function flushFormationEventAlerts(): Promise<void> {
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
+  let sent = 0;
   for (const row of pending) {
-    const kind = JSON.parse(row.relatedEntity ?? '{}').kind;
-    // Ces deux événements sont immuables. Tous les rappels métier doivent être
-    // recalculés par leur checker avant livraison pour ne jamais envoyer un état périmé.
-    if (kind === 'session' || kind === 'enrollment') await deliverFormationAlert(row.id);
+    try {
+      const kind = JSON.parse(row.relatedEntity ?? '{}').kind;
+      // Ces deux événements sont immuables. Tous les rappels métier doivent être
+      // recalculés par leur checker avant livraison pour ne jamais envoyer un état périmé.
+      if ((kind === 'session' || kind === 'enrollment') && (await deliverFormationAlert(row.id)))
+        sent++;
+    } catch {
+      console.error('[formation-alert] événement ignoré après erreur', row.id);
+    }
   }
+  return sent;
 }
 
 export async function queueSessionCreatedAlert(

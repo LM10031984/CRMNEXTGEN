@@ -8,6 +8,15 @@ const m = vi.hoisted(() => ({
   sendMail: vi.fn(),
 }));
 vi.mock('@qualiof/db', () => ({ prisma: { emailMessage: m } }));
+vi.mock('@/lib/of-config', () => ({
+  loadOfConfig: vi
+    .fn()
+    .mockResolvedValue({
+      name: 'OF test',
+      email: 'suivi@example.test',
+      emailFrom: 'documents@example.test',
+    }),
+}));
 vi.mock('@/lib/mailer', () => ({ sendMail: m.sendMail }));
 import {
   deliverFormationAlert,
@@ -38,7 +47,7 @@ describe('formation durable delivery', () => {
     const data = m.upsert.mock.calls[0]![0].create;
     expect(data.bodyHtml).toContain('&lt;script&gt;');
     expect(data.documentIds).toBeUndefined();
-    expect(data.toEmails).toEqual(['formation@start-academy.fr']);
+    expect(data.toEmails).toEqual([]);
   });
   it.each([
     { ok: true, dryRun: true },
@@ -56,7 +65,7 @@ describe('formation durable delivery', () => {
     m.sendMail.mockResolvedValue({ ok: true });
     await Promise.all([deliverFormationAlert('id'), deliverFormationAlert('id')]);
     expect(m.sendMail).toHaveBeenCalledTimes(1);
-    expect(m.update.mock.calls[0]![0].data.status).toBe('sent');
+    expect(m.update.mock.calls.at(-1)![0].data.status).toBe('sent');
   });
   it('replays a queued dry-run once delivery is enabled', async () => {
     m.sendMail
@@ -64,7 +73,10 @@ describe('formation durable delivery', () => {
       .mockResolvedValueOnce({ ok: true });
     await deliverFormationAlert('id');
     await deliverFormationAlert('id');
-    expect(m.update.mock.calls.map((call) => call[0].data.status)).toEqual(['queued', 'sent']);
+    expect(m.update.mock.calls.map((call) => call[0].data.status).filter(Boolean)).toEqual([
+      'queued',
+      'sent',
+    ]);
   });
   it('keeps the event queued if the application URL is not configured', async () => {
     delete process.env.APP_URL;

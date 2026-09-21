@@ -27,10 +27,10 @@ describe('formation deadlines', () => {
       expect(shouldAlertFormation(new Date(start), 'OPEN', now)).toBe(false);
     expect(shouldAlertFormation(now, 'CANCELLED', now)).toBe(false);
   });
-  it('waits a full seven days between actual sends', () => {
+  it('waits until the next Paris calendar day', () => {
     const now = new Date('2026-10-18T12:00:00Z');
-    expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-10-12T12:00:00Z'))).toBe(false);
-    expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-10-11T12:00:00Z'))).toBe(true);
+    expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-10-18T08:00:00Z'))).toBe(false);
+    expect(shouldAlertFormation(now, 'OPEN', now, new Date('2026-10-17T12:00:00Z'))).toBe(true);
   });
   it('repeats after seven Paris calendar days even when DST made the interval one hour shorter', () => {
     expect(
@@ -80,12 +80,12 @@ describe('formation deadlines', () => {
     ).toBe(1);
   });
 
-  it('starts reimbursement reminders at J+1 and repeats only after seven calendar days', () => {
+  it('starts reimbursement reminders at J+1 and repeats once per calendar day', () => {
     const end = new Date('2026-10-17T15:00:00+02:00');
     const now = new Date('2026-10-18T08:00:00+02:00');
     expect(shouldAlertReimbursement(end, now)).toBe(true);
-    expect(shouldAlertReimbursement(end, now, new Date('2026-10-12T08:00:00+02:00'))).toBe(false);
-    expect(shouldAlertReimbursement(end, now, new Date('2026-10-11T08:00:00+02:00'))).toBe(true);
+    expect(shouldAlertReimbursement(end, now, new Date('2026-10-18T07:00:00+02:00'))).toBe(false);
+    expect(shouldAlertReimbursement(end, now, new Date('2026-10-17T08:00:00+02:00'))).toBe(true);
     expect(shouldAlertReimbursement(new Date('2026-10-18T15:00:00+02:00'), now)).toBe(false);
   });
 
@@ -114,6 +114,15 @@ it('applique une borne commune configurable en jours Paris', () => {
   expect(() => formationAlertsStartDate()).toThrow('date valide');
 });
 
-it.each(['opcoApproved','opcoReimbursed','validationOpco','remboursementOpco'])('respecte aussi le marqueur historique %s', field => {
-  expect(reimbursementReminderClosed({financingStatus:'NOT_STARTED',opcoSubmissions:[],[field]:true})).toBe(true);
-});
+it.each(['opcoApproved', 'opcoReimbursed', 'validationOpco', 'remboursementOpco'])(
+  'respecte aussi le marqueur historique %s',
+  (field) => {
+    expect(
+      reimbursementReminderClosed({
+        financingStatus: 'NOT_STARTED',
+        opcoSubmissions: [],
+        [field]: true,
+      }),
+    ).toBe(true);
+  },
+);

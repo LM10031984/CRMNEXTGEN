@@ -131,6 +131,20 @@ it('déclare le régime entreprise historique sans réécrire les prix déjà si
   if (!preview.ok) throw new Error(preview.error);
   expect(
     await setSessionRegime({ ...input, apply: true, confirmationKey: preview.confirmationKey }),
+  ).toMatchObject({ ok: false, error: expect.stringContaining('forfait total') });
+  expect(preview.preview).toMatchObject({
+    participants: 2,
+    previousUnitPrice: 120,
+    expectedTotal: 240,
+    requiresLumpSumConfirmation: true,
+  });
+  expect(
+    await setSessionRegime({
+      ...input,
+      apply: true,
+      confirmationKey: preview.confirmationKey,
+      signedContractIsLumpSum: true,
+    }),
   ).toMatchObject({ ok: true, changed: true });
   expect(f.guard).not.toHaveBeenCalled();
   expect(f.sync).not.toHaveBeenCalled();

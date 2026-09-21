@@ -1,3 +1,4 @@
+import { isEmployeeOfSponsor } from '@/lib/sessions/employee-of-sponsor';
 import { sessionTotalHT, sessionUsesCompanyAgreement } from '@/lib/sessions/session-regime';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
@@ -34,7 +35,7 @@ import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { loadOfConfig } from '@/lib/of-config';
 import { resolveConventionDate } from './convention-date';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { isPersonneMoralePayeur, releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
+import { isPersonneMoralePayeur, releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import { groupConventionAnyShapeWhere } from '@/lib/docs/convention-coverage';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 import {
@@ -405,9 +406,7 @@ export async function generateConventionEntrepriseCore(
   // seulement si AUCUN inscrit de ce commanditaire n'est son salarié —
   // c'est-à-dire le vrai cas de l'auto-entrepreneur qui se forme lui-même.
   const salaries = participants.filter((p) =>
-    estEmployeurDeLApprenant(
-      legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.role ?? null,
-    ),
+    isEmployeeOfSponsor(p),
   );
   if (requiresContratIndividuel(org.legalForm) && salaries.length === 0) {
     return {

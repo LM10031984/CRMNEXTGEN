@@ -24,7 +24,9 @@ describe('estEligibleAgefice', () => {
     expect(
       estEligibleAgefice({
         sponsorOrg: { opcoCode: null },
-        person: { legalLinks: [{ role: 'EI_SELF', organization: { ageficeProfile: { id: 'ap-1' } } }] },
+        person: {
+          legalLinks: [{ role: 'EI_SELF', organization: { ageficeProfile: { id: 'ap-1' } } }],
+        },
       }),
     ).toBe(true);
   });
@@ -35,7 +37,9 @@ describe('estEligibleAgefice', () => {
       estEligibleAgefice({
         sponsorOrg: { opcoCode: null },
         person: {
-          legalLinks: [{ role: 'AGENT_COMMERCIAL', organization: { ageficeProfile: { id: 'ap-2' } } }],
+          legalLinks: [
+            { role: 'AGENT_COMMERCIAL', organization: { ageficeProfile: { id: 'ap-2' } } },
+          ],
         },
       }),
     ).toBe(true);
@@ -75,28 +79,84 @@ describe('estEligibleAgefice', () => {
 });
 
 it('session déclarée : une EI annexe ne rend pas le salarié éligible chez son payeur', () => {
-  const p = { sponsorOrgId: 'sas', sponsorOrg: { opcoCode: 'OPCO_EP' }, session: { regime: 'ENTREPRISE' as const, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') }, person: { legalLinks: [{ organizationId: 'sas', role: 'SALARIE', startDate: new Date('2026-02-01') }, { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } }] } };
+  const p = {
+    sponsorOrgId: 'sas',
+    sponsorOrg: { opcoCode: 'OPCO_EP' },
+    session: {
+      regime: 'ENTREPRISE' as const,
+      startDate: new Date('2026-11-20'),
+      endDate: new Date('2026-11-20'),
+    },
+    person: {
+      legalLinks: [
+        { organizationId: 'sas', role: 'SALARIE', startDate: new Date('2026-02-01') },
+        { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } },
+      ],
+    },
+  };
   expect(estEligibleAgefice(p)).toBe(false);
 });
 it('le même payeur peut porter le dossier TNS en janvier puis un salarié sans AGEFICE', () => {
-  const p = { sponsorOrgId: 'org', sponsorOrg: { opcoCode: 'OPCO_EP', ageficeProfile: {} }, session: { regime: 'ENTREPRISE' as const, startDate: new Date('2026-01-20'), endDate: new Date('2026-01-20') }, person: { legalLinks: [{ organizationId: 'org', role: 'DIRIGEANT', endDate: new Date('2026-01-31') }, { organizationId: 'org', role: 'SALARIE', startDate: new Date('2026-02-01') }] } };
+  const p = {
+    sponsorOrgId: 'org',
+    sponsorOrg: { opcoCode: 'OPCO_EP', ageficeProfile: {} },
+    session: {
+      regime: 'ENTREPRISE' as const,
+      startDate: new Date('2026-01-20'),
+      endDate: new Date('2026-01-20'),
+    },
+    person: {
+      legalLinks: [
+        { organizationId: 'org', role: 'DIRIGEANT', endDate: new Date('2026-01-31') },
+        { organizationId: 'org', role: 'SALARIE', startDate: new Date('2026-02-01') },
+      ],
+    },
+  };
   expect(estEligibleAgefice(p)).toBe(true);
-  expect(estEligibleAgefice({ ...p, session: { ...p.session, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') } })).toBe(false);
+  expect(
+    estEligibleAgefice({
+      ...p,
+      session: { ...p.session, startDate: new Date('2026-11-20'), endDate: new Date('2026-11-20') },
+    }),
+  ).toBe(false);
   expect(estEligibleAgefice({ ...p, financingMode: 'AUTOFINANCEMENT' })).toBe(false);
 });
 
 it('session historique : le rôle chez le payeur prime sur une EI annexe, selon la date', () => {
   const p = {
-    sponsorOrgId: 'agence', sponsorOrg: { opcoCode: 'OPCO_EP' },
+    sponsorOrgId: 'agence',
+    sponsorOrg: { opcoCode: 'OPCO_EP' },
     session: { regime: null, startDate: '2026-11-20', endDate: '2026-11-20' },
-    person: { legalLinks: [
-      { organizationId: 'agence', role: 'AGENT_COMMERCIAL', endDate: '2026-04-30' },
-      { organizationId: 'agence', role: 'SALARIE', startDate: '2026-05-01' },
-      { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } },
-    ] },
+    person: {
+      legalLinks: [
+        { organizationId: 'agence', role: 'AGENT_COMMERCIAL', endDate: '2026-04-30' },
+        { organizationId: 'agence', role: 'SALARIE', startDate: '2026-05-01' },
+        { organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } },
+      ],
+    },
   };
   expect(estEligibleAgefice(p)).toBe(false);
   expect(filterAgeficeCandidates([p])).toEqual([]);
-  expect(estEligibleAgefice({ ...p, session: { ...p.session, startDate: '2026-01-20', endDate: '2026-01-20' } })).toBe(true);
-  expect(estEligibleAgefice({ ...p, sponsorOrgId: 'ei', sponsorOrg: { opcoCode: 'AGEFICE' } })).toBe(true);
+  expect(
+    estEligibleAgefice({
+      ...p,
+      session: { ...p.session, startDate: '2026-01-20', endDate: '2026-01-20' },
+    }),
+  ).toBe(true);
+  expect(
+    estEligibleAgefice({ ...p, sponsorOrgId: 'ei', sponsorOrg: { opcoCode: 'AGEFICE' } }),
+  ).toBe(true);
+});
+
+it('exclut le salarié sans rattachement et l’autofinancé ayant une EI annexe', () => {
+  const p = {
+    sponsorOrgId: 'agence',
+    sponsorOrg: { opcoCode: 'AGEFICE' },
+    person: {
+      legalLinks: [{ organizationId: 'ei', role: 'EI_SELF', organization: { ageficeProfile: {} } }],
+    },
+  };
+  expect(estEligibleAgefice({ ...p, participantType: 'Salarié' })).toBe(false);
+  expect(filterAgeficeCandidates([{ ...p, participantType: 'Salarié' }])).toEqual([]);
+  expect(estEligibleAgefice({ ...p, financingMode: 'AUTOFINANCEMENT' })).toBe(false);
 });

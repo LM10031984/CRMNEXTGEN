@@ -90,6 +90,10 @@ async function loadSessions(where: Prisma.TrainingSessionWhereInput) {
       regime: true,
       startDate: true,
       endDate: true,
+      preEnrollments: {
+        where: { convertedAt: null, status: { in: ['SUBMITTED', 'EXTRACTED', 'VALIDATED'] } },
+        select: { firstName: true, lastName: true },
+      },
       participants: {
         where: { enrollmentStatus: { not: 'CANCELLED' } },
         select: participantSelect,
@@ -125,43 +129,33 @@ function ageficeProfile(participant: LoadedParticipant, session: LoadedSession) 
   return profiles.length === 1 ? profiles[0]!.organization.ageficeProfile : null;
 }
 
-async function previousDelivery(tenantId: string, key: string) {
-  return prisma.emailMessage.findFirst({
-    where: {
-      tenantId,
-      status: 'sent',
-      relatedEntity: { contains: key },
-      id: { startsWith: 'formation-alert:' },
-    },
-    orderBy: { sentAt: 'desc' },
-    select: { sentAt: true },
-  });
-}
+export type FormationAlertMetrics = { sent: number; errors: number };
 
-async function emitCurrentAlert(input: {
-  tenantId: string;
-  sessionId: string;
-  key: string;
-  subject: string;
-  lines: string[];
-  path: string;
-  previousSentAt: Date | null;
-}) {
+async function sendSessionDigest(
+  session: LoadedSession,
+  now: Date,
+  lines: string[],
+  metrics?: FormationAlertMetrics,
+) {
+  if (!lines.length) return;
   const id = await queueFormationAlert({
-    tenantId: input.tenantId,
-    key: `${input.key}:${input.previousSentAt?.toISOString() ?? 'first'}`,
-    sessionId: input.sessionId,
-    subject: input.subject,
-    lines: input.lines,
-    path: input.path,
+    tenantId: session.tenantId,
+    sessionId: session.id,
+    key: `digest:${session.id}:${parisDay(now)}`,
+    subject: `Suivi formation : ${session.name} — ${parisDay(now)}`,
+    lines,
+    path: `/app/sessions/${session.id}`,
   });
-  await deliverFormationAlert(id);
+  if (await deliverFormationAlert(id)) {
+    if (metrics) metrics.sent++;
+  }
 }
 
 /** Recalcule pièces et dépôt à chaque passage ; aucune relance en attente n'est envoyée à l'aveugle. */
 export async function checkFormationDocuments(
   now = new Date(),
   onlySessionId?: string,
+  metrics?: FormationAlertMetrics,
 ): Promise<number> {
   const sessions = await loadSessions({
     ...(onlySessionId ? { id: onlySessionId } : {}),
@@ -176,6 +170,7 @@ export async function checkFormationDocuments(
   let examined = 0;
   for (const session of sessions) {
     try {
+      const lines: string[] = [];
       if (!shouldAlertFormation(session.startDate, session.status, now)) continue;
       const companyGroups = new Map<string, LoadedParticipant[]>();
       for (const participant of session.participants) {
@@ -185,7 +180,14 @@ export async function checkFormationDocuments(
           companyGroups.set(participant.sponsorOrgId, group);
           continue;
         }
-        if (!estEligibleAgefice({ ...participant, session })) continue;
+        const agefice = estEligibleAgefice({ ...participant, session });
+        // Un dépôt confirmé clôt le rappel initial, même si les pièces ont été archivées ailleurs.
+        if (
+          agefice &&
+          (participant.opcoSubmissions.some(isSuccessfulInitialSubmission) ||
+            reimbursementReminderClosed(participant))
+        )
+          continue;
         examined++;
         const conventions = await prisma.document.findMany({
           where: {
@@ -212,16 +214,18 @@ export async function checkFormationDocuments(
           participant.sponsorOrgId,
           false,
         );
-        const ageficeForms = await prisma.document.findMany({
-          where: {
-            tenantId: session.tenantId,
-            participantId: participant.id,
-            type: 'AGEFICE',
-          },
-          select: { id: true, signedPdfUrl: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        });
+        const ageficeForms = agefice
+          ? await prisma.document.findMany({
+              where: {
+                tenantId: session.tenantId,
+                participantId: participant.id,
+                type: 'AGEFICE',
+              },
+              select: { id: true, signedPdfUrl: true, createdAt: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            })
+          : [];
         const programme = await resolveProgrammeDocument({
           tenantId: session.tenantId,
           sessionId: session.id,
@@ -230,6 +234,7 @@ export async function checkFormationDocuments(
           sponsorOrgId: participant.sponsorOrgId,
         });
         const missing = missingFormationDocuments({
+          company: !agefice,
           cni: Boolean(participant.person.sensitiveData?.idDocumentUrl),
           rib: Boolean(participant.person.ribKey),
           cfp: Boolean(ageficeProfile(participant, session)?.cfpAttestationKey),
@@ -237,31 +242,14 @@ export async function checkFormationDocuments(
           ageficeForm: signedDocument(participant, 'AGEFICE', ageficeForms[0]),
           programme: Boolean(programme),
         });
-        const deposited = participant.opcoSubmissions.some(isSuccessfulInitialSubmission);
-        if (!missing.length && deposited) continue;
-        const kind = missing.length ? 'missing' : 'not-deposited';
-        const key = `${kind}:${session.id}:${participant.id}:${parisDay(session.startDate)}`;
-        const previous = await previousDelivery(session.tenantId, key);
-        if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt))
-          continue;
-        const name = participantName(participant);
-        await emitCurrentAlert({
-          tenantId: session.tenantId,
-          sessionId: session.id,
-          key,
-          previousSentAt: previous?.sentAt ?? null,
-          subject: missing.length
-            ? `Dossier incomplet : ${name} — ${session.name}`
-            : `Dossier complet non déposé : ${name} — ${session.name}`,
-          lines: [
-            `${name} — ${session.name}`,
-            `Début de formation : ${session.startDate.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`,
+        if (!missing.length && !agefice) continue;
+        lines.push(
+          `${participantName(participant)} : ${
             missing.length
-              ? `Pièces à compléter : ${missing.join(', ')}.`
-              : 'Le dossier est complet ; un envoi AGEFICE initial confirmé reste à effectuer.',
-          ],
-          path: `/app/sessions/${session.id}`,
-        });
+              ? `pièces à compléter : ${missing.join(', ')}.`
+              : 'dossier complet non déposé ; un envoi AGEFICE initial confirmé reste à effectuer.'
+          }`,
+        );
       }
 
       for (const [sponsorOrgId, members] of companyGroups) {
@@ -309,30 +297,24 @@ export async function checkFormationDocuments(
         }
         const deposited = companyDepositState(members) === 'success';
         if (!missingByMember.length && deposited) continue;
-        const kind = missingByMember.length ? 'missing-company' : 'not-deposited-company';
-        const key = `${kind}:${session.id}:${sponsorOrgId}:${parisDay(session.startDate)}`;
-        const previous = await previousDelivery(session.tenantId, key);
-        if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt))
-          continue;
         const employer = representative.sponsorOrg.legalName;
-        await emitCurrentAlert({
-          tenantId: session.tenantId,
-          sessionId: session.id,
-          key,
-          previousSentAt: previous?.sentAt ?? null,
-          subject: missingByMember.length
-            ? `Dossier entreprise incomplet : ${employer} — ${session.name}`
-            : `Dossier entreprise complet non déposé : ${employer} — ${session.name}`,
-          lines: [
-            `${employer} — ${members.length} apprenant${members.length > 1 ? 's' : ''} — ${session.name}`,
+        lines.push(
+          `${employer} — ${members.length} apprenant(s) : ${
             missingByMember.length
-              ? `Pièces à compléter : ${missingByMember.join(' ; ')}.`
-              : 'Le dossier est complet ; la déclaration de dépôt par un déposant habilité reste à terminer pour tous les apprenants actifs.',
-          ],
-          path: `/app/sessions/${session.id}`,
-        });
+              ? `pièces à compléter : ${missingByMember.join(' ; ')}.`
+              : 'dossier complet ; la déclaration de dépôt par un déposant habilité reste à terminer pour tous les apprenants actifs.'
+          }`,
+        );
       }
+      for (const pre of session.preEnrollments) {
+        examined++;
+        lines.push(
+          `Préinscription ${[pre.firstName, pre.lastName].filter(Boolean).join(' ') || 'sans nom'} : dossier à valider et convertir dans les inscriptions.`,
+        );
+      }
+      await sendSessionDigest(session, now, lines, metrics);
     } catch {
+      if (metrics) metrics.errors++;
       console.error('[formation-alert] session ignorée après erreur de qualification', session.id);
     }
   }
@@ -360,6 +342,7 @@ function paidInvoice(invoice: {
 export async function checkReimbursementReminders(
   now = new Date(),
   onlySessionId?: string,
+  metrics?: FormationAlertMetrics,
 ): Promise<number> {
   const sessions = await loadSessions({
     ...(onlySessionId ? { id: onlySessionId } : {}),
@@ -369,6 +352,7 @@ export async function checkReimbursementReminders(
   let examined = 0;
   for (const session of sessions) {
     try {
+      const lines: string[] = [];
       if (['CANCELLED', 'COMPLETED'].includes(session.status)) continue;
       if (!shouldAlertReimbursement(session.endDate, now)) continue;
       for (const participant of session.participants) {
@@ -376,7 +360,7 @@ export async function checkReimbursementReminders(
         if (isCompanyDossier({ ...participant, session })) continue;
         if (!estEligibleAgefice({ ...participant, session })) continue;
         const initial = participant.opcoSubmissions.find(isSuccessfulInitialSubmission);
-        if (!initial?.recipientEmail) continue;
+        if (!initial) continue;
         if (
           participant.opcoSubmissions.some(
             (submission) =>
@@ -427,27 +411,22 @@ export async function checkReimbursementReminders(
           assiduity: signedDocument(participant, 'ASSIDUITE', assiduity),
           paidInvoice: invoices.length === 1 && paidInvoice(invoices[0]!),
         });
-        const key = `reimbursement:${session.id}:${participant.id}:${parisDay(session.endDate)}`;
-        const previous = await previousDelivery(session.tenantId, key);
-        if (!shouldAlertReimbursement(session.endDate, now, previous?.sentAt)) continue;
-        const name = participantName(participant);
-        await emitCurrentAlert({
-          tenantId: session.tenantId,
-          sessionId: session.id,
-          key,
-          previousSentAt: previous?.sentAt ?? null,
-          subject: `Remboursement AGEFICE à préparer : ${name} — ${session.name}`,
-          lines: [
-            `${name} — ${session.name}`,
-            `Destinataire confirmé lors de l’envoi initial : ${initial.recipientEmail}.`,
+        lines.push(
+          `Remboursement AGEFICE — ${participantName(participant)} : ${
             missing.length
-              ? `Pièces à préparer : ${missing.join(', ')}.`
-              : 'Le RIB et les pièces signées sont prêts ; éditez la facture acquittée puis préparez l’envoi explicite.',
-          ],
-          path: `/app/sessions/${session.id}`,
-        });
+              ? `pièces à préparer : ${missing.join(', ')}.`
+              : 'pièces prêtes ; préparez l’envoi explicite de la demande de remboursement.'
+          }`,
+        );
+        lines.push(
+          initial.recipientEmail
+            ? `Destinataire confirmé lors de l’envoi initial : ${initial.recipientEmail}.`
+            : 'Envoi initial déclaré hors QualiOF : confirmer le destinataire avant l’envoi du solde.',
+        );
       }
+      await sendSessionDigest(session, now, lines, metrics);
     } catch {
+      if (metrics) metrics.errors++;
       console.error(
         '[formation-alert] remboursement ignoré après erreur de qualification',
         session.id,

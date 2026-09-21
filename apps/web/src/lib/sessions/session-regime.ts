@@ -3,7 +3,8 @@ import {
   type PeriodLink,
   type SessionPeriod,
 } from '@/lib/persons/legal-link-period';
-import { releveDeLaConvention, estEmployeurDeLApprenant } from './payer-rule';
+import { releveDeLaConvention } from './payer-rule';
+import { isEmployeeOfSponsor } from './employee-of-sponsor';
 
 export type SessionRegime = 'ENTREPRISE' | 'INDIVIDUEL';
 export type SessionPrice = { regime?: SessionRegime | null; priceTotalHT?: unknown };
@@ -74,7 +75,14 @@ export function sessionFunding(input: {
   const link = legalLinkAtSession(input.links, input.sponsorOrgId, input.session);
   if (!link) return null;
   const code = input.sponsorOpcoCode?.trim() || null;
-  if (estEmployeurDeLApprenant(link.role)) return code === 'AGEFICE' ? null : code;
+  if (
+    isEmployeeOfSponsor({
+      sponsorOrgId: input.sponsorOrgId,
+      session: input.session,
+      person: { legalLinks: input.links },
+    })
+  )
+    return code === 'AGEFICE' ? null : code;
   if (
     ['EI_SELF', 'AGENT_COMMERCIAL', 'DIRIGEANT'].includes(link.role) &&
     input.sponsorAgeficeProfile != null
