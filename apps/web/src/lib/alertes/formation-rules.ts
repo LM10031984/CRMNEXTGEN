@@ -1,4 +1,20 @@
 /** Calendar days in Paris: DST must not shift the J-21 boundary. */
+export function formationAlertsStartDate(): string {
+  const value = process.env.FORMATION_ALERTS_START_DATE ?? '2026-10-01';
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    !Number.isFinite(Date.parse(value)) ||
+    new Date(value).toISOString().slice(0, 10) !== value
+  )
+    throw new Error('FORMATION_ALERTS_START_DATE doit être une date valide YYYY-MM-DD.');
+  return value;
+}
+
+/** Une borne commune aux deux contrôles, explicite et configurable au déploiement. */
+export function afterFormationAlertStart(date: Date): boolean {
+  return parisDay(date) >= formationAlertsStartDate();
+}
+
 export function parisDay(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Paris',
@@ -62,6 +78,7 @@ export function shouldAlertFormation(
 ): boolean {
   const days = formationDaysUntil(start, now);
   return (
+    afterFormationAlertStart(start) &&
     !['CANCELLED', 'COMPLETED'].includes(status) &&
     days >= 0 &&
     days <= 21 &&
@@ -71,6 +88,19 @@ export function shouldAlertFormation(
 
 export function shouldAlertReimbursement(end: Date, now: Date, lastSentAt?: Date | null): boolean {
   return (
-    formationDaysAfter(end, now) >= 1 && (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
+    afterFormationAlertStart(end) &&
+    formationDaysAfter(end, now) >= 1 &&
+    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
+  );
+}
+
+export function reimbursementReminderClosed(participant: {
+  financingStatus?: string;
+  opcoSubmissions: readonly { status: string }[];
+}): boolean {
+  const closed = ['APPROVED', 'REIMBURSED'];
+  return (
+    closed.includes(participant.financingStatus ?? '') ||
+    participant.opcoSubmissions.some((s) => closed.includes(s.status))
   );
 }

@@ -24,7 +24,7 @@ vi.mock('../formation-notifier', () => ({
 }));
 import { checkFormationDocuments, checkReimbursementReminders } from '../formation-check';
 
-const now = new Date('2026-09-18T12:00:00Z');
+const now = new Date('2026-10-18T12:00:00Z');
 function participant(overrides: Record<string, unknown> = {}) {
   return {
     id: 'p1',
@@ -67,8 +67,8 @@ function session(participants = [participant()]) {
     name: 'Formation',
     status: 'OPEN',
     regime: 'INDIVIDUEL',
-    startDate: new Date('2026-09-20T08:00:00+02:00'),
-    endDate: new Date('2026-09-22T17:00:00+02:00'),
+    startDate: new Date('2026-10-20T08:00:00+02:00'),
+    endDate: new Date('2026-10-22T17:00:00+02:00'),
     participants,
     preEnrollments: [],
   };
@@ -96,7 +96,7 @@ beforeEach(() => {
     {
       id: 'invoice',
       status: 'PAID',
-      paidAt: new Date('2026-09-17'),
+      paidAt: new Date('2026-10-17'),
       amountPaid: 1200,
       amountTTC: 1200,
       creditNotes: [],
@@ -157,7 +157,7 @@ describe('J-21 funding alerts', () => {
               stage: 'PRISE_EN_CHARGE',
               status: 'SENT',
               deliveryState: 'READY',
-              sentAt: new Date('2026-09-15'),
+              sentAt: new Date('2026-10-15'),
               recipientEmail: 'pa@example.fr',
             },
           ],
@@ -292,7 +292,7 @@ describe('J+1 reimbursement reminders', () => {
           stage: 'PRISE_EN_CHARGE',
           status: 'SENT',
           deliveryState: 'READY',
-          sentAt: new Date('2026-09-10'),
+          sentAt: new Date('2026-10-10'),
           recipientEmail: 'nouveau@example.fr',
         },
         {
@@ -300,7 +300,7 @@ describe('J+1 reimbursement reminders', () => {
           stage: 'PRISE_EN_CHARGE',
           status: 'SENT',
           deliveryState: 'READY',
-          sentAt: new Date('2026-09-01'),
+          sentAt: new Date('2026-10-01'),
           recipientEmail: 'ancien@example.fr',
         },
       ],
@@ -308,8 +308,8 @@ describe('J+1 reimbursement reminders', () => {
     m.sessions.mockResolvedValue([
       {
         ...session([p]),
-        startDate: new Date('2026-09-15T08:00:00+02:00'),
-        endDate: new Date('2026-09-17T17:00:00+02:00'),
+        startDate: new Date('2026-10-15T08:00:00+02:00'),
+        endDate: new Date('2026-10-17T17:00:00+02:00'),
       },
     ]);
     await checkReimbursementReminders(now);
@@ -326,7 +326,7 @@ describe('J+1 reimbursement reminders', () => {
           stage: 'PRISE_EN_CHARGE',
           status: 'SENT',
           deliveryState: 'READY',
-          sentAt: new Date('2026-09-10'),
+          sentAt: new Date('2026-10-10'),
           recipientEmail: 'point-accueil@example.fr',
         },
       ],
@@ -334,8 +334,8 @@ describe('J+1 reimbursement reminders', () => {
     m.sessions.mockResolvedValue([
       {
         ...session([p]),
-        startDate: new Date('2026-09-15T08:00:00+02:00'),
-        endDate: new Date('2026-09-17T17:00:00+02:00'),
+        startDate: new Date('2026-10-15T08:00:00+02:00'),
+        endDate: new Date('2026-10-17T17:00:00+02:00'),
       },
     ]);
     m.documents.mockResolvedValue([]);
@@ -356,14 +356,14 @@ describe('J+1 reimbursement reminders', () => {
           stage: 'PRISE_EN_CHARGE',
           status: 'SENT',
           deliveryState: 'READY',
-          sentAt: new Date('2026-09-10'),
+          sentAt: new Date('2026-10-10'),
           recipientEmail: 'point-accueil@example.fr',
         },
         {
           stage: 'FIN_FORMATION',
           status: 'SENT',
           deliveryState: 'READY',
-          sentAt: new Date('2026-09-18'),
+          sentAt: new Date('2026-10-18'),
           recipientEmail: 'point-accueil@example.fr',
         },
       ],
@@ -371,11 +371,64 @@ describe('J+1 reimbursement reminders', () => {
     m.sessions.mockResolvedValue([
       {
         ...session([p]),
-        startDate: new Date('2026-09-15T08:00:00+02:00'),
-        endDate: new Date('2026-09-17T17:00:00+02:00'),
+        startDate: new Date('2026-10-15T08:00:00+02:00'),
+        endDate: new Date('2026-10-17T17:00:00+02:00'),
       },
     ]);
     await checkReimbursementReminders(now);
     expect(m.queue).not.toHaveBeenCalled();
+  });
+});
+
+describe('borne des notifications et reprise par session', () => {
+  it('ignore les sessions antérieures au 1er octobre même si elles entrent dans J-21', async () => {
+    m.sessions.mockResolvedValue([
+      { ...session(), startDate: new Date('2026-09-30'), endDate: new Date('2026-09-30') },
+    ]);
+    await checkFormationDocuments(new Date('2026-09-20'));
+    await checkReimbursementReminders(new Date('2026-10-20'));
+    expect(m.queue).not.toHaveBeenCalled();
+  });
+  it.each(['APPROVED', 'REIMBURSED'])('ne rappelle pas un dossier déjà %s', async (status) => {
+    const initial = {
+      stage: 'PRISE_EN_CHARGE',
+      status: 'SENT',
+      deliveryState: 'READY',
+      sentAt: new Date('2026-10-01'),
+      recipientEmail: 'pa@example.fr',
+    };
+    m.sessions.mockResolvedValue([
+      {
+        ...session([participant({ financingStatus: status, opcoSubmissions: [initial] })]),
+        endDate: new Date('2026-10-02'),
+      },
+    ]);
+    await checkReimbursementReminders(new Date('2026-10-20'));
+    expect(m.queue).not.toHaveBeenCalled();
+    m.sessions.mockResolvedValue([
+      {
+        ...session([participant({ opcoSubmissions: [{ ...initial, status }] })]),
+        endDate: new Date('2026-10-02'),
+      },
+    ]);
+    await checkReimbursementReminders(new Date('2026-10-20'));
+    expect(m.queue).not.toHaveBeenCalled();
+  });
+  it('ignore les sessions terminées pour les rappels de remboursement', async () => {
+    m.sessions.mockResolvedValue([
+      { ...session(), status: 'COMPLETED', endDate: new Date('2026-10-02') },
+    ]);
+    await checkReimbursementReminders(new Date('2026-10-20'));
+    expect(m.queue).not.toHaveBeenCalled();
+  });
+  it('continue après une erreur dans une session', async () => {
+    m.sessions.mockResolvedValue([
+      { ...session(), id: 'bad' },
+      { ...session(), id: 'good' },
+    ]);
+    m.documents.mockRejectedValueOnce(new Error('erreur locale à la session'));
+    await checkFormationDocuments(now);
+    expect(m.queue).toHaveBeenCalledOnce();
+    expect(m.queue.mock.calls[0]![0].sessionId).toBe('good');
   });
 });
