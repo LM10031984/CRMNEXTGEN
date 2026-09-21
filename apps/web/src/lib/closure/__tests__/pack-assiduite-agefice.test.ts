@@ -23,7 +23,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * `sponsorOrg?.opcoCode === 'AGEFICE'` fait virer ROUGE « agent commercial ».
  */
 
-vi.mock('@qualiof/db', () => ({
+// Mock PARTIEL (21/09) : `prisma` est doublé, mais les vraies exportations du
+// module restent — `document-engagement` valide désormais le type demandé
+// contre la VRAIE énumération `DocType`. Un double qui inventerait sa propre
+// liste de types masquerait précisément l'écart qui a fait tomber la prod.
+vi.mock('@qualiof/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@qualiof/db')>()),
   prisma: {
     trainingSession: { findFirst: vi.fn() },
     document: { findMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },

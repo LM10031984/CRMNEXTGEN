@@ -30,6 +30,8 @@ interface Props {
   flags?: CellFlagSets;
   /** Lot 0 · 0.3 — combien, pour l'avertissement au téléchargement du pack. */
   stubCount?: number;
+  /** Batchs ayant une génération en vol — panneau « en cours » de la matrice. */
+  batchIdsEnCours?: readonly string[];
 }
 
 export function TabTousDocuments({
@@ -42,6 +44,7 @@ export function TabTousDocuments({
   zipBatchId,
   flags,
   stubCount = 0,
+  batchIdsEnCours,
 }: Props) {
   return (
     <div className="pt-4 space-y-4">
@@ -95,6 +98,7 @@ export function TabTousDocuments({
         productDocs={productDocs}
         sessionDocs={sessionDocs}
         flags={flags}
+        batchIdsEnCours={batchIdsEnCours}
       />
     </div>
   );

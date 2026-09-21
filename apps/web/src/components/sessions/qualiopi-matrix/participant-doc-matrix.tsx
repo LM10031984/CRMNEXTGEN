@@ -34,6 +34,7 @@
 
 import { Users } from 'lucide-react';
 import { deriveCellState, type CellState, type CellFlagSets } from '@/lib/derive-cell-state';
+import { GenerationEnCoursPanel } from './generation-en-cours-panel';
 import { MATRIX_DOC_TYPES, DOC_TYPE_LABELS } from '@/lib/doc-scope';
 import { MatrixClientShell } from './matrix-client-shell';
 
@@ -52,6 +53,12 @@ export interface MatrixParticipant {
    * + C.2b-1). Absent = comportement d'avant, aucun `NA` dérivé du régime.
    */
   docTypesHorsRegime?: ReadonlySet<string>;
+  /**
+   * Ce que la génération impose aux cellules de cette inscription
+   * (`etatGenerationParParticipant`) : colonnes « en cours » et colonnes « en
+   * échec ». Ni les unes ni les autres n'offrent de lien vers le document.
+   */
+  generation?: { enCours?: ReadonlySet<string>; enEchec?: ReadonlySet<string> };
   /** Map docType → Document.id (entityType='participant', match entityId). */
   participantDocs: Map<string, { id: string }>;
   /** Map kind → PedagogicalAsset.id (participantId match). */
@@ -71,6 +78,12 @@ export interface ParticipantDocMatrixProps {
    * qu'elle affichait avant.
    */
   flags?: CellFlagSets;
+  /**
+   * Batchs ayant au moins un job en file ou en cours (prod, 21/09). Monte le
+   * panneau qui suit la génération et redessine la matrice à la fin — sans lui,
+   * les cellules « en cours » le resteraient jusqu'au prochain rechargement.
+   */
+  batchIdsEnCours?: readonly string[];
 }
 
 export function ParticipantDocMatrix({
@@ -81,6 +94,7 @@ export function ParticipantDocMatrix({
   productDocs,
   sessionDocs,
   flags,
+  batchIdsEnCours,
 }: ParticipantDocMatrixProps) {
   // D-11 — RBAC matrice : ADMIN/MANAGER write, autres lecture seule.
   const readOnly = !['ADMIN', 'MANAGER'].includes(userRole);
@@ -114,6 +128,7 @@ export function ParticipantDocMatrix({
         // Le 8ᵉ paramètre, livré en C.1 et que PERSONNE ne passait : sans lui,
         // `NA` n'apparaissait jamais et le régime restait invisible à l'écran.
         p.docTypesHorsRegime,
+        p.generation,
       );
       return { docType, state };
     });
@@ -165,6 +180,7 @@ export function ParticipantDocMatrix({
         </div>
       ) : (
         <>
+          <GenerationEnCoursPanel sessionId={sessionId} batchIds={batchIdsEnCours ?? []} />
           <MatrixClientShell
             sessionId={sessionId}
             readOnly={readOnly}
@@ -179,6 +195,8 @@ export function ParticipantDocMatrix({
               <span>● Prêt</span>
               <span>⚠ Sans preuve</span>
               <span>✗ Manquant</span>
+              <span>◌ Génération en cours</span>
+              <span>⟳ Génération à relancer</span>
               <span>— Non applicable</span>
             </p>
           </div>

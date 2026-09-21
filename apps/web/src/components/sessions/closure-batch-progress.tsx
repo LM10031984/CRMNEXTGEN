@@ -10,7 +10,7 @@
  *   - Boutons "Télécharger zip", "Régénérer les erreurs"
  */
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { Download, RefreshCw, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +40,13 @@ const CLOSURE_KIND_TO_MATRIX_DOC_TYPE: Record<string, string> = {
 interface Props {
   batchId: string;
   sessionId: string;
+  /**
+   * Appelé UNE fois quand le batch quitte PENDING/RUNNING — terminé, partiel ou
+   * en échec. C'est ce qui permet à la matrice de se redessiner seule : le
+   * worker remplace les documents (nouveaux identifiants), l'écran doit les
+   * reprendre sans qu'on ait à recharger (prod, 21/09).
+   */
+  onSettled?: () => void;
 }
 
 const STATUS_BADGE: Record<
@@ -66,10 +73,17 @@ function jobIcon(status: ClosureBatchStatusJob['status']) {
   }
 }
 
-export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) {
+export function ClosureBatchProgress({ batchId, sessionId: _sessionId, onSettled }: Props) {
   const [batch, setBatch] = useState<ClosureBatchStatusPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, startRetry] = useTransition();
+
+  // En ref : un parent qui repasse une nouvelle fonction à chaque rendu ne doit
+  // pas relancer le polling (l'effet ne dépend que de `batchId`).
+  const onSettledRef = useRef(onSettled);
+  useEffect(() => {
+    onSettledRef.current = onSettled;
+  }, [onSettled]);
 
   useEffect(() => {
     let active = true;
@@ -86,6 +100,9 @@ export function ClosureBatchProgress({ batchId, sessionId: _sessionId }: Props) 
       setError(null);
       if (r.batch.status === 'PENDING' || r.batch.status === 'RUNNING') {
         timer = setTimeout(tick, 2000);
+      } else {
+        // Le polling s'arrête ici : `onSettled` ne peut donc partir qu'une fois.
+        onSettledRef.current?.();
       }
     }
     tick();

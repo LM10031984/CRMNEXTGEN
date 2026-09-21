@@ -220,6 +220,17 @@ export function MatrixRow({
                 >
                   <DocStatusBadge state="MANUAL_OK" warning={warning} label={label} hasUploadedPdf stale={stale} />
                 </a>
+              ) : cell.state === 'GENERATING' ? (
+                // Génération en vol : la pastille tourne, et il n'y a AUCUN
+                // lien. Le worker va remplacer le document (nouvel id) — tout
+                // lien offert maintenant finirait en 404 (prod, 21/09).
+                <DocStatusBadge state="RUNNING" label={label} />
+              ) : cell.state === 'GENERATION_FAILED' ? (
+                // La génération demandée n'a pas abouti (job en vol depuis trop
+                // longtemps). Toujours AUCUN lien : resservir l'ancien document,
+                // ce serait laisser croire que c'est le nouveau (décision du
+                // 21/09). « Relancer » est rendu par DocCellMenu, juste après.
+                <DocStatusBadge state="FAILED" label={label} />
               ) : (
                 <DocStatusBadge
                   state={cell.state}

@@ -27,7 +27,7 @@
  * isolée dans `getDocumentEngagement`.
  */
 
-import { prisma } from '@qualiof/db';
+import { DocType, prisma } from '@qualiof/db';
 import { groupConventionAnyShapeWhere } from './convention-coverage';
 
 /**
@@ -276,11 +276,25 @@ export async function getParticipantDocEngagement(
   participantId: string,
   docType: string,
 ): Promise<{ documentId: string; engagement: DocumentEngagement } | null> {
-  const nominatif = await prisma.document.findFirst({
-    where: { tenantId, participantId, type: docType as never },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
+  // La matrice envoie le nom de la COLONNE cliquée. Pour les documents de
+  // clôture, ce nom vient de `ClosureDocKind` / `PedagogicalAssetKind` —
+  // `SATISFACTION_CHAUD`, `QCM`, `DEROULE_PEDA`, `GRILLE_OBS`… — et n'existe
+  // pas dans `DocType`. Le `type: docType as never` d'avant laissait la chaîne
+  // filer jusqu'à Prisma, qui la refuse À L'EXÉCUTION : toute la page tombait
+  // en 500 (production, 21/09 — « Invalid value for argument `type` »). Un
+  // `as never` avait transformé une erreur de compilation en panne de prod.
+  //
+  // Un kind absent de `DocType` n'a, par construction, aucune ligne `Document`
+  // à protéger : on ne pose pas la question à la base.
+  const estDocType = Object.prototype.hasOwnProperty.call(DocType, docType);
+
+  const nominatif = estDocType
+    ? await prisma.document.findFirst({
+        where: { tenantId, participantId, type: docType as DocType },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    : null;
 
   let documentId = nominatif?.id ?? null;
 

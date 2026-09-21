@@ -24,6 +24,12 @@ import { render, screen, cleanup } from '@testing-library/react';
 
 import type { MatrixClientShellProps } from '../matrix-client-shell';
 
+// Même raison que pour le shell ci-dessous : le panneau « génération en cours »
+// (21/09) embarque `ClosureBatchProgress`, qui importe des server actions et
+// donc l'authentification. Il a son propre test ; ici il ne rend rien, comme
+// en production quand aucun job n'est en vol.
+vi.mock('../generation-en-cours-panel', () => ({ GenerationEnCoursPanel: () => null }));
+
 vi.mock('../matrix-client-shell', () => ({
   MatrixClientShell: ({ rows, columns }: MatrixClientShellProps) => (
     <ul>

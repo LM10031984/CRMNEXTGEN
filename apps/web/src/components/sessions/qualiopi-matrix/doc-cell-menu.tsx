@@ -55,7 +55,7 @@ export interface CellPdfRef {
 export interface DocCellMenuProps {
   participantId: string;
   docType: string;
-  state: 'GENERATED' | 'MANUAL_OK' | 'MISSING' | 'NA';
+  state: 'GENERATED' | 'MANUAL_OK' | 'GENERATING' | 'GENERATION_FAILED' | 'MISSING' | 'NA';
   pdfRef?: CellPdfRef;
   /**
    * Lot 0 · 0.2 — une donnée que ce document PORTE a changé depuis sa
@@ -109,6 +109,12 @@ export function DocCellMenu({
   // NA → pas de menu (cellule décorative — UI-SPEC table).
   if (state === 'NA') return null;
 
+  // Génération en vol → pas de menu non plus. Ouvrir ou télécharger viserait
+  // un identifiant sur le point de disparaître, et « Régénérer » empilerait un
+  // second job sur le premier. La cellule redevient actionnable d'elle-même
+  // dès que le job est terminé.
+  if (state === 'GENERATING') return null;
+
   if (readOnly) {
     return (
       <button
@@ -156,7 +162,7 @@ export function DocCellMenu({
         if (res.documentId) {
           toast.success(`Document généré pour ${participantName}`);
         } else {
-          toast.success('Génération lancée — résultat dans ~2 min');
+          toast.success('Génération lancée — la cellule s’ouvrira d’elle-même une fois le document prêt');
         }
         router.refresh();
       } else {
@@ -231,6 +237,27 @@ export function DocCellMenu({
       : unverifiable && !engaged
         ? 'Re-générer — rendre vérifiable'
         : 'Re-générer';
+
+  // Génération échouée → UN geste, et un seul : « Relancer ». Pas de menu —
+  // ouvrir ou télécharger viserait l'ancien document, que cet état existe
+  // précisément pour ne pas resservir. Le bouton passe par `handleRegen`, donc
+  // par le même point de contrôle serveur : un document engagé redemande sa
+  // confirmation et son motif, relance ou pas.
+  if (state === 'GENERATION_FAILED') {
+    return (
+      <button
+        type="button"
+        onClick={handleRegen}
+        disabled={pending}
+        aria-label={`Relancer la génération — ${docLabel} de ${participantName}`}
+        title="La génération n’a pas abouti. Relancer."
+        className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-60"
+      >
+        <RefreshCw className={pending ? 'h-3 w-3 animate-spin' : 'h-3 w-3'} aria-hidden="true" />
+        Relancer
+      </button>
+    );
+  }
 
   const showGenerate = state === 'MISSING';
   const showRegenerate = state === 'GENERATED';

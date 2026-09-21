@@ -35,6 +35,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { formatFunderCode } from '@/lib/funder-codes';
 import { PED_KIND_TO_DOC_TYPE } from '@/lib/doc-scope';
+import {
+  DELAI_JOB_FANTOME_MS,
+  etatGenerationParParticipant,
+} from '@/lib/docs/generation-en-cours';
 import { SessionParticipantsList } from '@/components/sessions/session-participants-list';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
@@ -657,6 +661,54 @@ export default async function SessionDetailPage({
     avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
   );
 
+  // Les générations EN VOL (prod, 21/09). Une régénération par la file rend la
+  // main avant que le worker ait écrit ; or il remplace le document par
+  // `deleteMany + create`, donc l'identifiant affiché va mourir. Tant qu'un job
+  // est en file ou en cours, la cellule est « en cours » et n'offre aucun lien
+  // — sinon le clic tombe sur un 404 « jusqu'à ce qu'on recharge ».
+  //
+  // Un job en vol depuis plus de `DELAI_JOB_FANTOME_MS` (worker arrêté) devient
+  // un ÉCHEC avec « Relancer » : ni « en cours » à vie, ni retour au lien de
+  // l'ancien document (décision Laurent). D'où l'absence de borne d'âge ici.
+  const selectionJob = {
+    participantId: true,
+    kind: true,
+    status: true,
+    createdAt: true,
+    batchId: true,
+  } as const;
+  const jobsEnVol = await prisma.closureJob.findMany({
+    where: {
+      batch: { tenantId: user.tenantId, sessionId: session.id },
+      status: { in: ['QUEUED', 'PROCESSING'] },
+    },
+    select: selectionJob,
+  });
+  // Seul le DERNIER job d'une cellule décide : « Relancer » crée un autre job,
+  // il ne touche pas au fantôme. On relit donc tout ce qui a suivi le plus
+  // ancien job en vol — seconde requête seulement quand il y en a un, c'est-à-
+  // dire presque jamais.
+  const jobsAJuger =
+    jobsEnVol.length === 0
+      ? []
+      : await prisma.closureJob.findMany({
+          where: {
+            batch: { tenantId: user.tenantId, sessionId: session.id },
+            createdAt: { gte: new Date(Math.min(...jobsEnVol.map((j) => j.createdAt.getTime()))) },
+          },
+          select: selectionJob,
+        });
+  const maintenantGeneration = new Date();
+  const etatGeneration = etatGenerationParParticipant(jobsAJuger, maintenantGeneration);
+  // Le panneau ne suit que les batchs qui ont encore un job FRAIS : suivre un
+  // fantôme, ce serait afficher « génération en cours » pour toujours.
+  const seuilFraicheur = maintenantGeneration.getTime() - DELAI_JOB_FANTOME_MS;
+  const batchIdsEnCours = [
+    ...new Set(
+      jobsEnVol.filter((j) => j.createdAt.getTime() >= seuilFraicheur).map((j) => j.batchId),
+    ),
+  ];
+
   // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
   const matrixParticipants = session.participants.map((p) => {
     const regime = regimeParParticipant.get(p.id);
@@ -671,6 +723,7 @@ export default async function SessionDetailPage({
       docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
       isAgefice: regime?.enRegime.has('AGEFICE') ?? false,
       docTypesHorsRegime: regime?.sansObjet,
+      generation: etatGeneration.get(p.id),
       participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
       pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
     };
@@ -2354,6 +2407,7 @@ export default async function SessionDetailPage({
             productDocs={productDocsMap}
             sessionDocs={sessionDocsMap}
             flags={matrixFlags}
+            batchIdsEnCours={batchIdsEnCours}
             stubCount={stubAssetIds.size}
             zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
           />

@@ -21,6 +21,7 @@
 import {
   Check,
   AlertTriangle,
+  RefreshCwOff,
   X,
   Minus,
   Loader2,
@@ -33,7 +34,7 @@ import type { DocStatusState as DocStatusStateType } from '@qualiof/shared';
 
 export interface DocStatusBadgeProps {
   /** État courant. NA = doc non applicable pour ce participant. RUNNING = transient. */
-  state: DocStatusStateType | 'NA' | 'RUNNING';
+  state: DocStatusStateType | 'NA' | 'RUNNING' | 'FAILED';
   /** Présent uniquement quand state==='MANUAL_OK' coché sans upload (D-01 dérogatoire). */
   warning?: 'no_proof';
   /** Label long du DocType utilisé dans aria-label + title (cf. DOC_TYPE_LABELS). */
@@ -119,6 +120,24 @@ export function DocStatusBadge({
         className={cn(BASE_CLS, 'bg-sky-50 text-sky-700 border border-sky-200')}
       >
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (state === 'FAILED') {
+    // La dernière génération demandée n'a pas abouti. Ambre et non rouge : le
+    // rouge dit « pièce manquante », ici la pièce existe peut-être — c'est sa
+    // RÉGÉNÉRATION qui a échoué, et l'action attendue est « Relancer ».
+    // Icône PROPRE à cet état : le triangle ambre est déjà « signé sans
+    // preuve », et deux sens sous une seule image, c'est un sens de trop.
+    const ariaLabel = `${label} : la génération n’a pas abouti`;
+    return (
+      <span
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        className={cn(BASE_CLS, 'bg-amber-50 text-amber-800 border border-amber-300')}
+      >
+        <RefreshCwOff className="h-3 w-3" aria-hidden="true" />
       </span>
     );
   }
