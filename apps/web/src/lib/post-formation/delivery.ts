@@ -23,9 +23,7 @@ export type AfterTrainingDeliveryPreview = {
   attachments: AfterTrainingAttachment[];
   blockers: string[];
   fingerprint: string;
-  prepareInvoiceId?: string;
   invoiceUrl?: string;
-  canPrepareInvoice?: boolean;
   from?: string;
   state: 'ready' | 'sent' | 'uncertain';
   sentAt: string | null;

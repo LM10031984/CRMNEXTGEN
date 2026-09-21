@@ -48,6 +48,7 @@ export function missingFormationDocuments(input: {
     ].filter((s): s is string => Boolean(s));
   return [
     !input.cni && 'CNI',
+    !input.rib && 'RIB',
     !input.cfp && 'attestation CFP',
     !input.convention && 'convention signée',
     !input.ageficeForm && 'formulaire AGEFICE signé',
@@ -62,6 +63,7 @@ export function missingReimbursementDocuments(input: {
   paidInvoice: boolean;
 }): string[] {
   return [
+    !input.rib && 'RIB',
     !input.attendance && 'émargement signé',
     !input.assiduity && 'assiduité signée',
     !input.paidInvoice && 'facture payée permettant l’édition acquittée',

@@ -106,7 +106,7 @@ beforeEach(() => {
 });
 
 describe('J-21 funding alerts', () => {
-  it('requires five AGEFICE pieces, including signed form and shared programme', async () => {
+  it('requires six AGEFICE pieces, including signed form and shared programme', async () => {
     m.sessions.mockResolvedValue([session()]);
     m.documents.mockResolvedValue([]);
     m.programme.mockResolvedValue(null);
@@ -125,6 +125,16 @@ describe('J-21 funding alerts', () => {
     expect(m.documents.mock.calls.every((call) => call[0].where.tenantId === 'tenant-1')).toBe(
       true,
     );
+  });
+
+  it('signale le RIB manquant dans le digest J-21 même si les autres pièces sont présentes', async () => {
+    m.sessions.mockResolvedValue([
+      session([participant({ person: { ...participant().person, ribKey: null } })]),
+    ]);
+    await checkFormationDocuments(now);
+    const text = m.queue.mock.calls[0]![0].lines.join(' ');
+    expect(text).toContain('RIB');
+    expect(text).not.toContain('complet non déposé');
   });
 
   it('alerts when a complete AGEFICE dossier has no real successful initial send', async () => {
@@ -344,7 +354,7 @@ describe('J+1 reimbursement reminders', () => {
     const alert = m.queue.mock.calls[0]![0];
     expect(alert.lines.join(' ')).toContain('point-accueil@example.fr');
     expect(alert.lines.join(' ')).toContain(
-      'émargement signé, assiduité signée, facture payée permettant l’édition acquittée',
+      'RIB, émargement signé, assiduité signée, facture payée permettant l’édition acquittée',
     );
     expect(m.invoices.mock.calls[0]![0].where.tenantId).toBe('tenant-1');
   });

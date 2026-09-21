@@ -494,10 +494,16 @@ describe('D-D-1 — ce qu’on lit sous un destinataire vide', () => {
   });
 });
 
-it('affiche les cinq exigences et les boutons de dépôt même sans destinataire', () => {
+it('affiche les six exigences et les boutons de dépôt même sans destinataire', () => {
   render(editeur({ agefice: true, recipientEmail: '', attachments: [] }));
-  expect(screen.getByText('Dossier : 0/5 pièces prêtes')).toBeTruthy();
+  expect(screen.getByText('Dossier : 0/6 pièces prêtes')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Ajouter Carte d’identité' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Ajouter RIB' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Ajouter RIB' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Ajouter Attestation CFP URSSAF' })).toBeTruthy();
+});
+
+it('permet de déposer le RIB obligatoire dans le dossier de solde', () => {
+  render(editeur({ agefice: true, stage: 'FIN_FORMATION', attachments: [] }));
+  expect(screen.getByText('Dossier : 0/4 pièces prêtes')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ajouter RIB' })).toBeTruthy();
 });

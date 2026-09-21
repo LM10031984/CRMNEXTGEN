@@ -194,31 +194,50 @@ beforeEach(() => {
 });
 
 describe('after-training delivery', () => {
-  it('blocks an unpaid invoice and never falls back to the ordinary PDF', async () => {
-    const invoices = await mocks.invoiceFindMany();
-    mocks.invoiceFindMany.mockResolvedValue([
-      { ...invoices[0], status: 'ISSUED', paidAt: null, amountPaid: 0 },
-    ]);
-    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
-    expect(delivery.blockers.join(' ')).toContain('règlement constaté');
-    expect(delivery.attachments.some((a) => a.kind === 'invoice')).toBe(false);
-    expect(
-      (
-        await sendAfterTrainingDelivery({
-          sessionId,
-          deliveryKey: delivery.key,
-          fingerprint: delivery.fingerprint,
-        })
-      ).ok,
-    ).toBe(false);
-    expect(mocks.sendMail).not.toHaveBeenCalled();
-  });
+  it.each(['ISSUED', 'PARTIAL', 'OVERDUE', 'PAID'])(
+    'envoie la facture ordinaire et le certificat sans condition de paiement (%s)',
+    async (status) => {
+      const invoices = await mocks.invoiceFindMany();
+      mocks.invoiceFindMany.mockResolvedValue([
+        { ...invoices[0], status, paidAt: null, amountPaid: 0 },
+      ]);
+      const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+      expect(delivery.blockers).toEqual([]);
+      expect(delivery.attachments.find((a) => a.kind === 'invoice')?.label).toBe(
+        'Facture FAC-0001',
+      );
+      expect(delivery.text).toContain('votre facture ainsi que votre certificat');
+      expect(delivery.text).not.toContain('acquittée');
+      expect(
+        (
+          await sendAfterTrainingDelivery({
+            sessionId,
+            deliveryKey: delivery.key,
+            fingerprint: delivery.fingerprint,
+          })
+        ).ok,
+      ).toBe(true);
+      expect(mocks.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: expect.arrayContaining([
+            expect.objectContaining({
+              filename: 'Facture-FAC-0001-Alice-EI.pdf',
+              content: Buffer.from('private/FAC-0001.pdf'),
+            }),
+          ]),
+        }),
+      );
+      expect(
+        mocks.downloadFile.mock.calls.some((call) => String(call[1]).includes('acquittee')),
+      ).toBe(false);
+    },
+  );
 
-  it('requires preparation when the paid invoice PDF is missing', async () => {
+  it('bloque un PDF ordinaire illisible sans proposer de préparer une acquittée', async () => {
     mocks.downloadFile.mockRejectedValue(new Error('Not found'));
     const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
-    expect(delivery.prepareInvoiceId).toBe('invoice-1');
-    expect(delivery.blockers.join(' ')).toContain('Générez la facture acquittée');
+    expect(delivery).not.toHaveProperty('prepareInvoiceId');
+    expect(delivery.blockers.join(' ')).toContain('facture ordinaire émise est illisible');
     expect(mocks.sendMail).not.toHaveBeenCalled();
   });
 
@@ -244,10 +263,10 @@ describe('after-training delivery', () => {
     );
   });
 
-  it('blocks when the acquitted bytes change between preview and attachment download', async () => {
+  it('blocks when the ordinary invoice bytes change between preview and attachment download', async () => {
     const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
     mocks.downloadFile
-      .mockResolvedValueOnce(Buffer.from('factures/FAC-0001-acquittee.pdf'))
+      .mockResolvedValueOnce(Buffer.from('private/FAC-0001.pdf'))
       .mockResolvedValueOnce(Buffer.from('modified invoice'));
     expect(
       (
@@ -261,13 +280,13 @@ describe('after-training delivery', () => {
     expect(mocks.sendMail).not.toHaveBeenCalled();
   });
 
-  it('previews only the acquitted invoice and individual certificate to person.email', async () => {
+  it('previews the ordinary invoice and individual certificate to person.email', async () => {
     const result = await getAfterTrainingPreview(sessionId);
     expect(result.ok).toBe(true);
     const delivery = result.deliveries?.[0];
     expect(delivery?.recipientEmail).toBe('alice@example.test');
     expect(delivery?.attachments.map((item) => item.label)).toEqual([
-      'Facture FAC-0001 (acquittée)',
+      'Facture FAC-0001',
       'Certificat de réalisation — Alice Martin',
     ]);
     expect(JSON.stringify(delivery)).not.toContain('private/FAC-0001.pdf');
@@ -394,7 +413,7 @@ describe('after-training delivery', () => {
     });
     expect(result).toEqual({ ok: true });
     expect(new Set(mocks.downloadFile.mock.calls.map((call) => call[1]))).toEqual(
-      new Set(['factures/FAC-0001-acquittee.pdf', 'private/certificate.pdf']),
+      new Set(['private/FAC-0001.pdf', 'private/certificate.pdf']),
     );
     expect(mocks.sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -402,7 +421,7 @@ describe('after-training delivery', () => {
         to: 'alice@example.test',
         attachments: expect.arrayContaining([
           expect.objectContaining({
-            filename: expect.stringContaining('Facture-acquittee-FAC-0001'),
+            filename: expect.stringContaining('Facture-FAC-0001'),
           }),
           expect.objectContaining({
             filename: expect.stringContaining('Certificat-de-realisation'),

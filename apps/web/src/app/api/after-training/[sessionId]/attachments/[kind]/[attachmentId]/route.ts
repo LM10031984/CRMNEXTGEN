@@ -1,4 +1,3 @@
-import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { requireRole, ForbiddenError, UnauthorizedError } from '@/lib/rbac';
@@ -50,8 +49,6 @@ export async function GET(
     const invoice = await prisma.invoice.findFirst({
       where: { id: attachmentId, tenantId: user.tenantId },
       include: {
-        payments: { select: { source: true } },
-        creditNotes: { select: { id: true } },
         payerOrg: { select: { brandName: true, legalName: true } },
         participant: {
           select: {
@@ -91,16 +88,9 @@ export async function GET(
         groupedIds.length === 1 &&
         invoice.sessionId === sessionId &&
         singleGroupedParticipant?.sponsorOrgId === invoice.payerOrgId;
-      if (
-        (directIndividual || safeSingleGrouped) &&
-        invoice.status === 'PAID' &&
-        invoice.paidAt &&
-        Number(invoice.amountPaid) >= Number(invoice.amountTTC) &&
-        invoice.creditNotes.length === 0 &&
-        !invoice.payments.some((p) => p.source === 'OPCO_SYNC')
-      ) {
-        sourceKey = acquittedInvoiceKey(invoice.number);
-        filename = invoiceDownloadFilename(invoice, { acquittee: true });
+      if (directIndividual || safeSingleGrouped) {
+        sourceKey = invoice.pdfUrl;
+        filename = invoiceDownloadFilename(invoice);
       }
     }
   }
