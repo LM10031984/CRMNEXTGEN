@@ -225,6 +225,12 @@ export function MatrixRow({
                 // lien. Le worker va remplacer le document (nouvel id) — tout
                 // lien offert maintenant finirait en 404 (prod, 21/09).
                 <DocStatusBadge state="RUNNING" label={label} />
+              ) : cell.state === 'GENERATION_FAILED' ? (
+                // La génération demandée n'a pas abouti (job en vol depuis trop
+                // longtemps). Toujours AUCUN lien : resservir l'ancien document,
+                // ce serait laisser croire que c'est le nouveau (décision du
+                // 21/09). « Relancer » est rendu par DocCellMenu, juste après.
+                <DocStatusBadge state="FAILED" label={label} />
               ) : (
                 <DocStatusBadge
                   state={cell.state}

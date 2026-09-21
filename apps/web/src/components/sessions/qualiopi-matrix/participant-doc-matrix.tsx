@@ -54,11 +54,11 @@ export interface MatrixParticipant {
    */
   docTypesHorsRegime?: ReadonlySet<string>;
   /**
-   * Colonnes dont la génération est EN VOL pour cette inscription (job en file
-   * ou en cours) — `docTypesEnCoursParParticipant`. Ces cellules n'offrent
-   * aucun lien : l'identifiant du document est sur le point de changer.
+   * Ce que la génération impose aux cellules de cette inscription
+   * (`etatGenerationParParticipant`) : colonnes « en cours » et colonnes « en
+   * échec ». Ni les unes ni les autres n'offrent de lien vers le document.
    */
-  docTypesEnCours?: ReadonlySet<string>;
+  generation?: { enCours?: ReadonlySet<string>; enEchec?: ReadonlySet<string> };
   /** Map docType → Document.id (entityType='participant', match entityId). */
   participantDocs: Map<string, { id: string }>;
   /** Map kind → PedagogicalAsset.id (participantId match). */
@@ -128,7 +128,7 @@ export function ParticipantDocMatrix({
         // Le 8ᵉ paramètre, livré en C.1 et que PERSONNE ne passait : sans lui,
         // `NA` n'apparaissait jamais et le régime restait invisible à l'écran.
         p.docTypesHorsRegime,
-        p.docTypesEnCours,
+        p.generation,
       );
       return { docType, state };
     });
@@ -195,6 +195,8 @@ export function ParticipantDocMatrix({
               <span>● Prêt</span>
               <span>⚠ Sans preuve</span>
               <span>✗ Manquant</span>
+              <span>◌ Génération en cours</span>
+              <span>⟳ Génération à relancer</span>
               <span>— Non applicable</span>
             </p>
           </div>

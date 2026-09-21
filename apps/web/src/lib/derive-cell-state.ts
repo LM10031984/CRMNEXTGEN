@@ -54,6 +54,15 @@ export type CellState =
    * condition d'affichage qu'on oublierait un jour.
    */
   | { state: 'GENERATING' }
+  /**
+   * La dernière génération demandée n'a PAS abouti (job en vol depuis trop
+   * longtemps — worker arrêté). Pas de `pdfRef` non plus, et pour une raison
+   * différente : l'ancien document existe peut-être encore, mais le conseiller
+   * a demandé qu'il soit refait. Le lui resservir, c'est lui laisser croire
+   * qu'il tient la nouvelle version (décision Laurent, 21/09). La cellule dit
+   * « échec » et propose « Relancer ».
+   */
+  | { state: 'GENERATION_FAILED' }
   | { state: 'MISSING' }
   | { state: 'NA' };
 
@@ -121,14 +130,16 @@ export function deriveCellState(
   flags?: CellFlagSets,
   docTypesHorsRegime?: ReadonlySet<string>,
   /**
-   * Colonnes dont la génération est en vol pour CETTE inscription
-   * (`docTypesEnCoursParParticipant`). Passe AVANT tout le reste, preuve signée
-   * comprise : tous les liens de la cellule suivent l'identifiant du document,
-   * et c'est lui qui va changer. Optionnel — sans lui, comportement d'avant.
+   * Ce que la génération impose à CETTE inscription (`etatGenerationParParticipant`).
+   * Passe AVANT tout le reste, preuve signée comprise : tous les liens de la
+   * cellule suivent l'identifiant du document, et c'est lui qui change.
+   * « En cours » l'emporte sur « échec » : une relance fraîche efface l'échec
+   * affiché. Optionnel — sans lui, comportement d'avant.
    */
-  docTypesEnCours?: ReadonlySet<string>,
+  generation?: { enCours?: ReadonlySet<string>; enEchec?: ReadonlySet<string> },
 ): CellState {
-  if (docTypesEnCours?.has(docType)) return { state: 'GENERATING' };
+  if (generation?.enCours?.has(docType)) return { state: 'GENERATING' };
+  if (generation?.enEchec?.has(docType)) return { state: 'GENERATION_FAILED' };
 
   const manual = participant.docStatus?.[docType];
 
