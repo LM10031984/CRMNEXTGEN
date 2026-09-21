@@ -1,7 +1,13 @@
 /**
  * Sortir l'URL de PRODUCTION du `.env` racine — migration d'un poste.
  *
- *   pnpm --filter @qualiof/db run env:separer-prod
+ *   pnpm --filter @qualiof/db run env:separer-prod                 # ce checkout
+ *   pnpm --filter @qualiof/db run env:separer-prod -- <racine>     # un AUTRE worktree
+ *
+ * L'argument existe parce qu'un worktree resté sur une vieille branche n'a pas
+ * ce script : on migre alors son `.env` depuis un checkout à jour, en lui
+ * désignant la racine. `.env`, `.env.local` et `.env.prod` sont lus et écrits
+ * DANS cette racine, jamais ailleurs.
  *
  * POURQUOI (21/09/2026)
  *
@@ -117,7 +123,13 @@ function urlLocaleDuPoste(racine: string): string {
 }
 
 function executer(): void {
-  const racine = path.resolve(__dirname, '../../..');
+  const argument = process.argv.slice(2).find((a) => a !== '--');
+  const racine = argument ? path.resolve(argument) : path.resolve(__dirname, '../../..');
+  if (argument && !existsSync(path.join(racine, 'pnpm-workspace.yaml'))) {
+    console.error(`❌ ${racine} n’est pas la racine d’un checkout QualiOF (pnpm-workspace.yaml absent). Rien n’a été écrit.`);
+    process.exit(1);
+  }
+  console.log(`Racine migrée : ${racine}`);
   const fichierEnv = path.join(racine, '.env');
   const fichierProd = path.join(racine, '.env.prod');
 
