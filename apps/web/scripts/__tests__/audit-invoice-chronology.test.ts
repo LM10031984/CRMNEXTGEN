@@ -106,6 +106,70 @@ describe('auditSequence', () => {
     expect(rapport.counted).toBe(2);
   });
 
+  // ── Le plancher du 21/09/2026 : post-dater n'est pas rompre ──────────────
+  //
+  // `resolveInvoiceIssueDate` date une facture de `max(jour d'établissement,
+  // fin de formation)`. Une session à venir produit donc une pièce datée en
+  // AVANT. Le numéro, lui, est pris au clic : comparer sur `issueDate` faisait
+  // « reculer » tout ce qui suivait, et le cron criait au loup.
+  //
+  // Test de puissance (joué le 21/09/2026) : rétablir la comparaison sur
+  // `issueDate` (`diffInDays(precedent.issueDate, issueDate) > 0`) fait virer
+  // au ROUGE les trois premiers tests de ce bloc. Le quatrième reste vert —
+  // c'est lui qui interdit de « corriger » en relâchant aussi l'antidatage.
+
+  it('ne signale rien quand la pièce suivante est établie après une facture post-datée', () => {
+    // Le cas courant : SES-0111 facturée le 21/09 pour une fin au 29/09, puis
+    // une facture ordinaire le lendemain. Rien d'anormal.
+    const rapport = auditSequence('FAC', 'factures', [
+      ligne('FAC-000100', '2026-09-29T00:00:00Z', '2026-09-21T05:27:00Z'),
+      ligne('FAC-000101', '2026-09-22T00:00:00Z', '2026-09-22T09:00:00Z'),
+    ]);
+
+    expect(rapport.breaks).toEqual([]);
+    expect(rapport.counted).toBe(2);
+  });
+
+  it('ne signale rien entre deux factures post-datées sur des sessions qui finissent dans le désordre', () => {
+    // Deux sessions à venir facturées le même jour : la seconde finit AVANT la
+    // première. Les deux pièces sont entrées au registre le 21/09.
+    const rapport = auditSequence('FAC', 'factures', [
+      ligne('FAC-000100', '2026-09-29T00:00:00Z', '2026-09-21T05:27:00Z'),
+      ligne('FAC-000101', '2026-09-25T00:00:00Z', '2026-09-21T05:30:00Z'),
+    ]);
+
+    expect(rapport.breaks).toEqual([]);
+  });
+
+  it('ne signale rien sur toute une salve post-datée, quel que soit l’ordre des fins', () => {
+    // Les 7 factures de SES-0111, plus une huitième sur une autre session.
+    const salve = [
+      ligne('FAC-000100', '2026-09-29T00:00:00Z', '2026-09-21T05:27:00Z'),
+      ligne('FAC-000101', '2026-09-29T00:00:00Z', '2026-09-21T05:27:00Z'),
+      ligne('FAC-000102', '2026-10-15T00:00:00Z', '2026-09-21T05:28:00Z'),
+      ligne('FAC-000103', '2026-09-25T00:00:00Z', '2026-09-21T05:29:00Z'),
+    ];
+
+    expect(auditSequence('FAC', 'factures', salve).breaks).toEqual([]);
+  });
+
+  it('continue de signaler l’ANTIDATAGE, même derrière une facture post-datée', () => {
+    // La garde ne relâche que dans un sens. Ici la pièce suivante est datée de
+    // juin : c'est elle qui rompt la chronologie, et elle doit rester visible.
+    const rapport = auditSequence('FAC', 'factures', [
+      ligne('FAC-000100', '2026-09-29T00:00:00Z', '2026-09-21T05:27:00Z'),
+      ligne('FAC-000101', '2026-06-12T00:00:00Z', '2026-09-22T09:00:00Z'),
+    ]);
+
+    expect(rapport.breaks).toHaveLength(1);
+    const rupture = rapport.breaks[0]!;
+    expect(rupture.number).toBe('FAC-000101');
+    // Le rapport garde les VRAIES dates d'émission : c'est ce que lit le comptable.
+    expect(rupture.previousIssueDate.toISOString()).toBe('2026-09-29T00:00:00.000Z');
+    expect(rupture.backwardDays).toBe(109); // 12/06 → 29/09
+    expect(rupture.antidatedDays).toBe(102); // 12/06 → 22/09 (établissement réel)
+  });
+
   it('tient deux chaînes distinctes pour les avoirs et les factures', () => {
     const avoirs = auditSequence('AVO', 'avoirs', [ligne('AVO-000001', '2026-01-05T00:00:00Z')]);
     const factures = auditSequence('FAC', 'factures', [ligne('FAC-000009', '2026-08-01T00:00:00Z')]);

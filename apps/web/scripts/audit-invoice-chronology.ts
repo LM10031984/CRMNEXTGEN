@@ -17,12 +17,21 @@
  * septembre une session de juin produisait FAC-000021 daté du 12 juin juste
  * après FAC-000020 daté du 3 septembre.
  *
- * ⚠ CETTE CAUSE EST ÉTEINTE. Le lot B (10/09/2026) a corrigé la règle : une
- * facture se date désormais du jour où on l'établit, la période de formation
- * étant portée par les lignes. Aucune pièce émise après le lot B ne peut plus
- * produire de rupture. Ce script garde tout son sens pour autant : il mesure le
- * PARC, dont les 5 ruptures antérieures subsistent — le lot C (réécriture de
- * l'historique) a été FERMÉ le 10/09/2026, pas reporté (spec §7 et §8).
+ * Le lot B (10/09/2026) a éteint CETTE cause : une facture se date du jour où
+ * on l'établit, la période de formation étant portée par les lignes. Ce script
+ * garde tout son sens pour autant : il mesure le PARC, dont les 5 ruptures
+ * antérieures subsistent — le lot C (réécriture de l'historique) a été FERMÉ
+ * le 10/09/2026, pas reporté (spec §7 et §8).
+ *
+ * ⚠ MISE À JOUR DU 21/09/2026 — une SECONDE cause est apparue, et elle est
+ * légitime. Le plancher `émission = max(jour d'établissement, fin de
+ * formation)` fait porter une date FUTURE aux factures d'une session à venir
+ * (cas réel : SES-0111, 7 factures établies le 21/09 et datées du 29/09).
+ * Comparées sur leur date d'émission, elles faisaient « reculer » toute pièce
+ * établie ensuite : le cron signalait une rupture là où il n'y avait qu'une
+ * pièce régulière. La comparaison porte donc désormais sur la date d'ENTRÉE AU
+ * REGISTRE — voir `dateAuRegistre`, qui dit aussi pourquoi l'antidatage, lui,
+ * continue d'être signalé.
  *
  * ── La règle qui commande tout le reste ──────────────────────────────────
  *
@@ -124,13 +133,42 @@ export function diffInDays(later: Date, earlier: Date): number {
 }
 
 /**
+ * La date à laquelle la pièce a PRIS SA PLACE dans le registre.
+ *
+ * POURQUOI ELLE N'EST PAS TOUJOURS `issueDate` (décision Laurent, 21/09/2026)
+ *
+ * Depuis le plancher du 21/09 (`resolveInvoiceIssueDate` :
+ * `émission = max(jour d'établissement, fin de formation)`), une facture émise
+ * pour une session À VENIR porte une date FUTURE. Exemple réel, SES-0111 : 7
+ * factures établies le 21/09 et datées du 29/09.
+ *
+ * Or le NUMÉRO, lui, est attribué au moment du clic. Comparer ces pièces sur
+ * leur date d'émission fait « reculer » toute facture établie ensuite — et le
+ * cron criait au loup sur une pièce parfaitement régulière.
+ *
+ * On compare donc sur `min(issueDate, createdAt)` : pour une pièce post-datée,
+ * c'est son jour d'établissement — celui qui a réellement commandé le numéro.
+ *
+ * ⚠ CE RELÂCHEMENT NE VAUT QUE DANS UN SENS. Une pièce ANTIDATÉE (datée en
+ * arrière de son établissement, cas « juin facturé en septembre ») garde sa
+ * date d'émission : c'est elle qui rompt la chronologie, et elle doit continuer
+ * d'être signalée. Post-dater ne rompt rien, antidater si.
+ */
+export function dateAuRegistre(row: { issueDate: Date; createdAt: Date }): Date {
+  return row.issueDate.getTime() > row.createdAt.getTime() ? row.createdAt : row.issueDate;
+}
+
+/**
  * Le cœur : trie par `seq` croissant, parcourt la chaîne, renvoie les reculs.
  *
- * Deux règles qui évitent les ruptures imaginaires :
+ * Trois règles qui évitent les ruptures imaginaires :
  *  - une pièce sans `issueDate` est mise de côté et la comparaison ENJAMBE
  *    (le suivant se compare au dernier numéro inférieur PORTANT une date) ;
  *  - la comparaison se fait en jours calendaires, donc deux pièces du même
- *    jour émises à des heures différentes ne sont pas une rupture.
+ *    jour émises à des heures différentes ne sont pas une rupture ;
+ *  - elle porte sur la date d'ENTRÉE AU REGISTRE et non sur `issueDate` (cf.
+ *    `dateAuRegistre`) : une facture post-datée sur une session à venir ne
+ *    fait pas reculer celles qui la suivent. L'antidatage, lui, reste signalé.
  *
  * Le curseur avance à chaque pièce datée, y compris après une rupture :
  * l'invariante porte sur des couples CONSÉCUTIFS, pas sur un maximum courant.
@@ -157,7 +195,7 @@ export function auditSequence(
   const withoutIssueDate: string[] = [];
   const breaks: ChronologyBreak[] = [];
   let counted = 0;
-  let precedent: { number: string; issueDate: Date } | null = null;
+  let precedent: { number: string; issueDate: Date; registre: Date } | null = null;
 
   for (const { row } of ordonnables) {
     const issueDate = row.issueDate;
@@ -166,10 +204,18 @@ export function auditSequence(
       continue;
     }
     counted++;
+    const registre = dateAuRegistre({ issueDate, createdAt: row.createdAt });
 
     if (precedent !== null) {
+      // La comparaison porte sur la date d'ENTRÉE AU REGISTRE (cf.
+      // `dateAuRegistre`) : une pièce post-datée sur une session à venir ne
+      // fait pas reculer celles qui la suivent. Le rapport, lui, continue
+      // d'afficher les vraies dates d'émission — c'est ce que lit le
+      // comptable. Les deux restent cohérents : `createdAt` ne décroît jamais
+      // le long d'une séquence, donc tout recul au registre est AUSSI un
+      // recul d'`issueDate`, et `backwardDays` reste > 0.
       const backwardDays = diffInDays(precedent.issueDate, issueDate);
-      if (backwardDays > 0) {
+      if (diffInDays(precedent.registre, registre) > 0) {
         breaks.push({
           number: row.number,
           issueDate,
@@ -183,7 +229,7 @@ export function auditSequence(
       }
     }
 
-    precedent = { number: row.number, issueDate };
+    precedent = { number: row.number, issueDate, registre };
   }
 
   return { prefix, label, counted, withoutIssueDate, malformed, breaks };
