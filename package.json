@@ -19,7 +19,7 @@
     "db:studio": "pnpm --filter @qualiof/db run db:studio:local",
     "db:reset": "pnpm --filter @qualiof/db run db:reset:local",
     "import:smartof": "pnpm --filter @qualiof/web exec tsx scripts/import-smartof.ts",
-    "db:smoke:cloud": "dotenv -e .env -- pnpm --filter @qualiof/web exec tsx scripts/db-smoke-cloud.ts",
+    "db:smoke:cloud": "dotenv -e .env.prod -e .env -- pnpm --filter @qualiof/web exec tsx scripts/db-smoke-cloud.ts",
     "db:deploy": "pnpm --filter @qualiof/db run db:deploy:local",
     "db:deploy:prod": "pnpm --filter @qualiof/db run db:deploy:prod",
     "db:seed:prod": "pnpm --filter @qualiof/db run db:seed:prod",

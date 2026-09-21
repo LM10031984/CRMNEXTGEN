@@ -3,10 +3,16 @@
  *
  * POURQUOI CE FICHIER EXISTE
  *
- * `.env` à la racine porte l'URL Supabase de **production**. Or la quasi-totalité
- * des scripts `db:*` et `import:*` de ce paquet la chargent (`dotenv -e ../../.env`),
- * et `prisma/seed.ts` la charge même en dur. Conséquence : `pnpm db:reset` tapé par
- * réflexe détruisait la base de production, et `pnpm db:seed` y écrivait.
+ * `.env` à la racine A LONGTEMPS porté l'URL Supabase de **production**, et la
+ * quasi-totalité des scripts `db:*` et `import:*` de ce paquet le chargeaient
+ * (`dotenv -e ../../.env`) ; `prisma/seed.ts` le chargeait même en dur.
+ * Conséquence : `pnpm db:reset` tapé par réflexe détruisait la base de production,
+ * et `pnpm db:seed` y écrivait.
+ *
+ * Depuis le 21/09/2026 la production vit dans `.env.prod`, que seuls désignent
+ * les scripts qui la visent volontairement. CE GARDE-FOU RESTE NÉCESSAIRE : un
+ * poste qui n'a pas encore déplacé ses URL garde l'ancien `.env`, et `.env.prod`
+ * absent est ignoré en silence par dotenv — le script retombe alors sur `.env`.
  *
  * Le garde-fou est posé au niveau du CODE, pas du script, parce qu'il existe
  * plusieurs chemins d'appel pour la même opération — `pnpm db:seed`,
@@ -97,8 +103,9 @@ export function assertCibleAutorisee(operation: string): void {
     `\n❌ ${operation} REFUSÉ — ${cible.motif}.\n\n` +
       `   Cible  : ${url ? masquer(url) : '(DATABASE_URL absente)'}\n` +
       `   Base   : ${cible.base} sur ${cible.hote}\n\n` +
-      `   Ce dépôt porte l'URL de PRODUCTION dans le .env racine. Les scripts en\n` +
-      `   « :local » chargent .env.local en priorité et visent votre base de dev :\n\n` +
+      `   La production vit dans .env.prod (ou, sur un poste pas encore migré, dans\n` +
+      `   le .env racine). Les scripts en « :local » chargent .env.local en priorité\n` +
+      `   et visent votre base de dev :\n\n` +
       `     pnpm --filter @qualiof/db run db:seed:local\n` +
       `     pnpm --filter @qualiof/db run db:deploy:local\n` +
       `     pnpm --filter @qualiof/db run db:migrate:local\n\n` +
