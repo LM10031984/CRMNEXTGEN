@@ -1523,6 +1523,8 @@ model OpcoSubmission {
   // Deux envois indépendants par inscription, avec verrou de remise SMTP.
   stage              String               @default("PRISE_EN_CHARGE")
   deliveryState      String               @default("READY")
+  deliveryMethod     String               @default("EMAIL")
+  externalSender     String?
   sendingStartedAt   DateTime?
   lastError          String?
   // Email destinataire (resolu au moment de l'envoi : sponsor.emailBilling || sponsor.email)
@@ -2083,6 +2085,7 @@ model TenantEmailSettings {
   preinscriptionRemindersEnabled Boolean  @default(false)
   opcoRemindersEnabled           Boolean  @default(false)
   opcoSubmissionsEnabled         Boolean  @default(false)
+  learnerDocumentsEnabled        Boolean  @default(false)
   internalNotificationsEnabled   Boolean  @default(false)
   userInvitationsEnabled         Boolean  @default(false)
   diagnosticProgramsEnabled      Boolean  @default(false)

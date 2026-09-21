@@ -61,33 +61,39 @@ export const CATEGORY_FIELDS: Array<{
   {
     field: 'invoiceRemindersEnabled',
     category: 'invoice_reminder',
-    hint: 'Destinataire : le payeur de la facture. ⚠ Peut toucher un apprenant (règle payeur : l\'auto-entrepreneur est son propre payeur).',
+    hint: "Destinataire : le payeur de la facture. ⚠ Peut toucher un apprenant (règle payeur : l'auto-entrepreneur est son propre payeur).",
     warn: true,
   },
   {
     field: 'preinscriptionRemindersEnabled',
     category: 'preinscription_reminder',
-    hint: 'Destinataire : le candidat qui n\'a pas complété son formulaire de pré-inscription.',
+    hint: "Destinataire : le candidat qui n'a pas complété son formulaire de pré-inscription.",
   },
   {
     field: 'opcoRemindersEnabled',
     category: 'opco_reminder',
-    hint: 'Destinataire : l\'OPCO / le sponsor en attente (remboursement ou paiement).',
+    hint: "Destinataire : l'OPCO / le sponsor en attente (remboursement ou paiement).",
   },
   {
     field: 'opcoSubmissionsEnabled',
     category: 'opco_submission',
-    hint: 'Destinataire : l\'OPCO — envoi du dossier de prise en charge avec pièces jointes.',
+    hint: "Destinataire : l'OPCO — envoi du dossier de prise en charge avec pièces jointes.",
+  },
+
+  {
+    field: 'learnerDocumentsEnabled',
+    category: 'learner_documents',
+    hint: 'Envoi explicite aux apprenants et aux responsables d’entreprise après formation.',
   },
   {
     field: 'internalNotificationsEnabled',
     category: 'internal_notification',
-    hint: 'Destinataires : les membres de l\'équipe (pack fin de formation terminé, lead assigné).',
+    hint: "Destinataires : les membres de l'équipe (pack fin de formation terminé, lead assigné).",
   },
   {
     field: 'userInvitationsEnabled',
     category: 'user_invitation',
-    hint: 'Destinataires : les nouveaux membres invités (lien d\'activation / reset mot de passe).',
+    hint: "Destinataires : les nouveaux membres invités (lien d'activation / reset mot de passe).",
   },
   {
     field: 'diagnosticProgramsEnabled',
@@ -97,22 +103,22 @@ export const CATEGORY_FIELDS: Array<{
   {
     field: 'newLeadAlertsEnabled',
     category: 'new_lead',
-    hint: 'Destinataires : le commercial assigné — ou tous les commerciaux et managers si le lead n\'est à personne. Inclut la relance « ce lead dort depuis 24 h ».',
+    hint: "Destinataires : le commercial assigné — ou tous les commerciaux et managers si le lead n'est à personne. Inclut la relance « ce lead dort depuis 24 h ».",
   },
   {
     field: 'preEnrollmentAlertsEnabled',
     category: 'preenrollment_submitted',
-    hint: 'Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l\'écran de validation.',
+    hint: "Destinataires : les ADMIN, à chaque dossier de pré-inscription déposé — avec le lien direct vers l'écran de validation.",
   },
   {
     field: 'proposalSendEnabled',
     category: 'proposal_sent',
-    hint: 'Destinataire : le client, quand le commercial clique « Envoyer par email » sur une proposition. Jamais automatique — décochée, le bouton le dit au lieu d\'envoyer.',
+    hint: "Destinataire : le client, quand le commercial clique « Envoyer par email » sur une proposition. Jamais automatique — décochée, le bouton le dit au lieu d'envoyer.",
   },
   {
     field: 'signatureEmailsEnabled',
     category: 'signature',
-    hint: 'Destinataire : le signataire dont c\'est le tour (responsable de l\'organisation, stagiaire, ou vous). Demandes de signature, relances J+3/J+7 et envoi de l\'exemplaire signé. Décochée, aucun signataire n\'est prévenu — le lien reste copiable depuis la fiche session.',
+    hint: "Destinataire : le signataire dont c'est le tour (responsable de l'organisation, stagiaire, ou vous). Demandes de signature, relances J+3/J+7 et envoi de l'exemplaire signé. Décochée, aucun signataire n'est prévenu — le lien reste copiable depuis la fiche session.",
   },
 ];
 
@@ -127,6 +133,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
       preinscriptionRemindersEnabled: initial.preinscriptionRemindersEnabled,
       opcoRemindersEnabled: initial.opcoRemindersEnabled,
       opcoSubmissionsEnabled: initial.opcoSubmissionsEnabled,
+      learnerDocumentsEnabled: initial.learnerDocumentsEnabled ?? false,
       internalNotificationsEnabled: initial.internalNotificationsEnabled,
       userInvitationsEnabled: initial.userInvitationsEnabled,
       diagnosticProgramsEnabled: initial.diagnosticProgramsEnabled,
@@ -140,9 +147,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
   const emailsEnabled = watch('emailsEnabled');
 
   function toggleSession(id: string) {
-    setTestSessionIds((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+    setTestSessionIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   }
 
   const selectedSessions = sessions.filter((s) => testSessionIds.includes(s.id));
@@ -161,7 +166,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
     startTransition(async () => {
       const res = await updateEmailSettings(parsed.data);
       if (res.ok) {
-        toast.success('Réglages d\'envoi d\'emails enregistrés');
+        toast.success("Réglages d'envoi d'emails enregistrés");
         onSaved?.();
       } else {
         toast.error(res.error || 'Erreur lors de la mise à jour');
@@ -182,9 +187,8 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
           <span>
             <span className="block text-sm font-medium">Activer les envois d&apos;emails</span>
             <span className="block text-[11px] text-muted-foreground mt-0.5">
-              OFF : seules les sessions de test ci-dessous peuvent recevoir des emails, dans
-              les catégories cochées. ON : toutes les catégories cochées envoient pour tout
-              le parc.
+              OFF : seules les sessions de test ci-dessous peuvent recevoir des emails, dans les
+              catégories cochées. ON : toutes les catégories cochées envoient pour tout le parc.
             </span>
           </span>
         </label>
@@ -208,9 +212,7 @@ export function EmailSettingsForm({ initial, sessions, onSaved, onCancel }: Prop
               className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
             />
             <span>
-              <span className="block text-sm font-medium">
-                {EMAIL_CATEGORY_LABELS[category]}
-              </span>
+              <span className="block text-sm font-medium">{EMAIL_CATEGORY_LABELS[category]}</span>
               <span
                 className={`block text-[11px] mt-0.5 ${warn ? 'text-amber-700' : 'text-muted-foreground'}`}
               >

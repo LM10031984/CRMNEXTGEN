@@ -1,11 +1,34 @@
 import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { manualSignedKey } from '@/lib/opco/manual-signed-key';
 import { DepotPiecesSignees } from '@/components/sessions/qualiopi-matrix/depot-pieces-signees';
-import { legalLinkAtSession, type SessionPeriod, type PeriodLink } from '@/lib/persons/legal-link-period';
+import {
+  legalLinkAtSession,
+  type SessionPeriod,
+  type PeriodLink,
+} from '@/lib/persons/legal-link-period';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Clock, Euro, Users, Briefcase, ClipboardCheck, Check, Minus, Package, FileText, AlertCircle, Plus, ExternalLink, ClipboardList, MapPin, ListChecks, StickyNote, SmilePlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock,
+  Euro,
+  Users,
+  Briefcase,
+  ClipboardCheck,
+  Check,
+  Minus,
+  Package,
+  FileText,
+  AlertCircle,
+  Plus,
+  ExternalLink,
+  ClipboardList,
+  MapPin,
+  ListChecks,
+  StickyNote,
+  SmilePlus,
+} from 'lucide-react';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -153,15 +176,17 @@ const SOLO_FORMS = ['EI', 'EIRL', 'AUTO_ENTREPRENEUR'];
  * au hasard : dans l'immobilier un apprenant en porte souvent deux (son EI et
  * son enseigne).
  */
-function releveDeLaConventionPour(p: {
-  sponsorOrgId: string;
-  sponsorOrg: { legalForm: string };
-  person: { legalLinks: PeriodLink[] };
-}, session: SessionPeriod & { regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null }): boolean {
+function releveDeLaConventionPour(
+  p: {
+    sponsorOrgId: string;
+    sponsorOrg: { legalForm: string };
+    person: { legalLinks: PeriodLink[] };
+  },
+  session: SessionPeriod & { regime?: 'ENTREPRISE' | 'INDIVIDUEL' | null },
+): boolean {
   return sessionUsesCompanyAgreement(session, {
     sponsorLegalForm: p.sponsorOrg.legalForm,
-    roleChezSponsor:
-      legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role ?? null,
+    roleChezSponsor: legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, session)?.role ?? null,
   });
 }
 
@@ -207,12 +232,16 @@ export default async function SessionDetailPage({
               // de faire disparaître un dossier de l'écran.
               legalLinks: {
                 select: {
-                  role: true, startDate: true, endDate: true,
+                  role: true,
+                  startDate: true,
+                  endDate: true,
                   // Ajouté le 02/09 : sans l'id de l'organisation, impossible
                   // de savoir QUELLE casquette relie l'apprenant à son
                   // commanditaire — et donc si celui-ci est son employeur.
                   organizationId: true,
-                  organization: { select: { opcoCode: true, ageficeProfile: { select: { id: true } } } },
+                  organization: {
+                    select: { opcoCode: true, ageficeProfile: { select: { id: true } } },
+                  },
                 },
               },
             },
@@ -223,7 +252,8 @@ export default async function SessionDetailPage({
               legalName: true,
               brandName: true,
               legalForm: true,
-              opcoCode: true, ageficeProfile: { select: { id: true } },
+              opcoCode: true,
+              ageficeProfile: { select: { id: true } },
               // Garde-fous AVANT génération des documents d'entreprise (28/08) :
               // le représentant signe la convention et porte le recueil du
               // besoin ; à défaut, le contact principal en tient lieu.
@@ -252,109 +282,114 @@ export default async function SessionDetailPage({
 
   // Documents Qualiopi déjà générés pour cette session, indexés par participant + type
   const sessionParticipantIds = session.participants.map((p) => p.id);
-  const [sessionDocs, sessionAssets, sessionInvoices, productAssets, sessionSharedDocs] = sessionParticipantIds.length
-    ? await Promise.all([
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            sessionId: session.id,
-            OR: [
-              { participantId: { in: sessionParticipantIds } },
-              // Convention ENTREPRISE (quick 260817-mm0) : UN document couvre
-              // tout le groupe d'un commanditaire, donc participantId=null.
-              // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
-              // afficherait « convention manquante » alors qu'elle existe.
-              // Quick 260821-md8 : les DEUX formes de stockage sont chargées —
-              // `organization` (appli) et `session` (scripts `_gen-*`, présente
-              // en production sur SES-0107 / SES-0108). Bornée au type
-              // CONVENTION : les autres documents de niveau session (check-list,
-              // grille, satisfaction) sont chargés par `sessionSharedDocs`.
-              { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
-            ],
-          },
-          select: {
-            id: true,
-            type: true,
-            participantId: true,
-            entityType: true,
-            entityId: true,
-            // Lot C.2b-2 — l'état de SIGNATURE de la pièce, pas seulement son
-            // existence. `status` distingue « parti » de « prêt à partir » ;
-            // `signedPdfUrl` dit qu'une preuve existe déjà (webhook C.3 comme
-            // scan du lot A) ; `signatureRequestId` porte l'annulation, qui
-            // s'applique à la DEMANDE et non au document. Aucune requête de
-            // plus : ce `findMany` charge déjà les documents participants ET
-            // les conventions de groupe, toutes formes de stockage confondues.
-            status: true,
-            signedPdfUrl: true,
-            createdAt: true,
-            signatureKind: true,
-            signatureRequestId: true,
-            // Lot C.3 (D-C3-1) — les SIGNATAIRES de la demande en cours. Sans
-            // eux, une pièce partie affiche « En attente de signature » même
-            // une fois le client passé : pas de date, et surtout aucun lien
-            // « Signer maintenant » pour l'organisme, dont c'est le tour.
-            // JOINTURE, pas une requête de plus : ce `findMany` charge déjà
-            // tous les documents de la session.
-            // `auditTrailUrl` (lot D, D-C3-5) voyage sur la MÊME jointure : le
-            // certificat était produit et stocké depuis C.3, mais aucun écran
-            // ne l'offrait — et c'est la pièce que les AGEFICE réclament.
-            signatureRequest: { select: { signers: true, auditTrailUrl: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-        }),
-        prisma.pedagogicalAsset.findMany({
-          where: {
-            tenantId: user.tenantId,
-            sessionId: session.id,
-            pdfUrl: { not: null },
-            OR: [
-              { participantId: { in: sessionParticipantIds } },
-              // Analyse des besoins d'ENTREPRISE (28/08) : UN asset couvre tout
-              // le groupe, donc `participantId = null`. Sans ce OR, les 8
-              // salariés d'ASSALIT affichent « analyse manquante » alors que le
-              // document exigé — celui de la structure — existe.
-              { participantId: null },
-            ],
-          },
-          select: { id: true, kind: true, participantId: true },
-        }),
-        prisma.invoice.findMany({
-          where: {
-            tenantId: user.tenantId,
-            OR: [
-              { participantId: { in: sessionParticipantIds } },
-              { sessionId: session.id },
-            ],
-          },
-          select: { id: true, number: true, participantId: true, participantIds: true },
-        }),
-        // Assets produit partagés par tous les apprenants : Programme + Déroulé
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            entityType: 'product',
-            entityId: session.product?.id,
-            type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] },
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, type: true },
-        }),
-        // Assets niveau session partagés par tous les apprenants :
-        // grille observation consolidée (C3.i11), check-list formation (C4.i17),
-        // bilan satisfaction session (ind. 30 — ajouté A5 pour le rendu carte).
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            entityType: 'session',
-            entityId: session.id,
-            type: { in: ['GRILLE_OBS_SESSION', 'CHECKLIST_FORMATION', 'SATISFACTION_SESSION', 'PROGRAMME'] },
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, type: true },
-        }),
-      ])
-    : [[], [], [], [], []];
+  const [sessionDocs, sessionAssets, sessionInvoices, productAssets, sessionSharedDocs] =
+    sessionParticipantIds.length
+      ? await Promise.all([
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              sessionId: session.id,
+              OR: [
+                { participantId: { in: sessionParticipantIds } },
+                // Convention ENTREPRISE (quick 260817-mm0) : UN document couvre
+                // tout le groupe d'un commanditaire, donc participantId=null.
+                // Sans ce OR elle n'est pas chargée et chaque salarié du groupe
+                // afficherait « convention manquante » alors qu'elle existe.
+                // Quick 260821-md8 : les DEUX formes de stockage sont chargées —
+                // `organization` (appli) et `session` (scripts `_gen-*`, présente
+                // en production sur SES-0107 / SES-0108). Bornée au type
+                // CONVENTION : les autres documents de niveau session (check-list,
+                // grille, satisfaction) sont chargés par `sessionSharedDocs`.
+                { entityType: { in: [...GROUP_CONVENTION_ENTITY_TYPES] }, type: 'CONVENTION' },
+              ],
+            },
+            select: {
+              id: true,
+              type: true,
+              participantId: true,
+              entityType: true,
+              entityId: true,
+              // Lot C.2b-2 — l'état de SIGNATURE de la pièce, pas seulement son
+              // existence. `status` distingue « parti » de « prêt à partir » ;
+              // `signedPdfUrl` dit qu'une preuve existe déjà (webhook C.3 comme
+              // scan du lot A) ; `signatureRequestId` porte l'annulation, qui
+              // s'applique à la DEMANDE et non au document. Aucune requête de
+              // plus : ce `findMany` charge déjà les documents participants ET
+              // les conventions de groupe, toutes formes de stockage confondues.
+              status: true,
+              signedPdfUrl: true,
+              createdAt: true,
+              signatureKind: true,
+              signatureRequestId: true,
+              // Lot C.3 (D-C3-1) — les SIGNATAIRES de la demande en cours. Sans
+              // eux, une pièce partie affiche « En attente de signature » même
+              // une fois le client passé : pas de date, et surtout aucun lien
+              // « Signer maintenant » pour l'organisme, dont c'est le tour.
+              // JOINTURE, pas une requête de plus : ce `findMany` charge déjà
+              // tous les documents de la session.
+              // `auditTrailUrl` (lot D, D-C3-5) voyage sur la MÊME jointure : le
+              // certificat était produit et stocké depuis C.3, mais aucun écran
+              // ne l'offrait — et c'est la pièce que les AGEFICE réclament.
+              signatureRequest: { select: { signers: true, auditTrailUrl: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          }),
+          prisma.pedagogicalAsset.findMany({
+            where: {
+              tenantId: user.tenantId,
+              sessionId: session.id,
+              pdfUrl: { not: null },
+              OR: [
+                { participantId: { in: sessionParticipantIds } },
+                // Analyse des besoins d'ENTREPRISE (28/08) : UN asset couvre tout
+                // le groupe, donc `participantId = null`. Sans ce OR, les 8
+                // salariés d'ASSALIT affichent « analyse manquante » alors que le
+                // document exigé — celui de la structure — existe.
+                { participantId: null },
+              ],
+            },
+            select: { id: true, kind: true, participantId: true },
+          }),
+          prisma.invoice.findMany({
+            where: {
+              tenantId: user.tenantId,
+              OR: [{ participantId: { in: sessionParticipantIds } }, { sessionId: session.id }],
+            },
+            select: { id: true, number: true, participantId: true, participantIds: true },
+          }),
+          // Assets produit partagés par tous les apprenants : Programme + Déroulé
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              entityType: 'product',
+              entityId: session.product?.id,
+              type: { in: ['PROGRAMME', 'DEROULE_PEDAGOGIQUE'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, type: true },
+          }),
+          // Assets niveau session partagés par tous les apprenants :
+          // grille observation consolidée (C3.i11), check-list formation (C4.i17),
+          // bilan satisfaction session (ind. 30 — ajouté A5 pour le rendu carte).
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              entityType: 'session',
+              entityId: session.id,
+              type: {
+                in: [
+                  'GRILLE_OBS_SESSION',
+                  'CHECKLIST_FORMATION',
+                  'SATISFACTION_SESSION',
+                  'PROGRAMME',
+                ],
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, type: true },
+          }),
+        ])
+      : [[], [], [], [], []];
 
   // Index des assets produit par type — 1 lien partagé pour toutes les lignes
   // de la matrice (programme + déroulé sont identiques pour tous les inscrits).
@@ -371,8 +406,7 @@ export default async function SessionDetailPage({
   }
   // Le programme DE SESSION prime sur celui du catalogue : quand un tarif a été
   // négocié, c'est lui qui porte le bon montant et qui part au dossier OPCO.
-  const programmeDocId =
-    sessionSharedDocByType.get('PROGRAMME') ?? programmeProductDocId;
+  const programmeDocId = sessionSharedDocByType.get('PROGRAMME') ?? programmeProductDocId;
   const grilleSessionDocId = sessionSharedDocByType.get('GRILLE_OBS_SESSION');
   const checklistDocId = sessionSharedDocByType.get('CHECKLIST_FORMATION');
   const satisfactionSessionDocId = sessionSharedDocByType.get('SATISFACTION_SESSION');
@@ -398,8 +432,9 @@ export default async function SessionDetailPage({
   );
   for (const [participantId, docId] of groupConventionByParticipant) {
     const m = docsByParticipant.get(participantId) ?? new Map();
-    const covered = session.participants.find(p => p.id === participantId);
-    if (!m.has('CONVENTION') || (covered && isCompanyDossier({ ...covered, session }))) m.set('CONVENTION', docId);
+    const covered = session.participants.find((p) => p.id === participantId);
+    if (!m.has('CONVENTION') || (covered && isCompanyDossier({ ...covered, session })))
+      m.set('CONVENTION', docId);
     docsByParticipant.set(participantId, m);
   }
   for (const a of sessionAssets) {
@@ -448,38 +483,39 @@ export default async function SessionDetailPage({
   //   - productDocs     : Document.entityType='product'     (1 PDF / N statuts — Bug P0)
   //   - sessionDocs     : Document.entityType='session'     (session-only)
   //   - pedagogicalAssets : PedagogicalAsset per participant
-  const [participantDocsRaw, productDocsRaw, sessionDocsRaw, pedAssetsRaw] = sessionParticipantIds.length
-    ? await Promise.all([
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            entityType: 'participant',
-            entityId: { in: sessionParticipantIds },
-          },
-          select: { id: true, type: true, entityId: true },
-        }),
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            entityType: 'product',
-            entityId: session.productId ?? '',
-          },
-          select: { id: true, type: true },
-        }),
-        prisma.document.findMany({
-          where: {
-            tenantId: user.tenantId,
-            entityType: 'session',
-            entityId: session.id,
-          },
-          select: { id: true, type: true },
-        }),
-        prisma.pedagogicalAsset.findMany({
-          where: { tenantId: user.tenantId, sessionId: session.id },
-          select: { id: true, participantId: true, kind: true },
-        }),
-      ])
-    : [[], [], [], []];
+  const [participantDocsRaw, productDocsRaw, sessionDocsRaw, pedAssetsRaw] =
+    sessionParticipantIds.length
+      ? await Promise.all([
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              entityType: 'participant',
+              entityId: { in: sessionParticipantIds },
+            },
+            select: { id: true, type: true, entityId: true },
+          }),
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              entityType: 'product',
+              entityId: session.productId ?? '',
+            },
+            select: { id: true, type: true },
+          }),
+          prisma.document.findMany({
+            where: {
+              tenantId: user.tenantId,
+              entityType: 'session',
+              entityId: session.id,
+            },
+            select: { id: true, type: true },
+          }),
+          prisma.pedagogicalAsset.findMany({
+            where: { tenantId: user.tenantId, sessionId: session.id },
+            select: { id: true, participantId: true, kind: true },
+          }),
+        ])
+      : [[], [], [], []];
 
   // Map<docType, {id}> pour productDocs / sessionDocs.
   const productDocsMap = new Map<string, { id: string }>(
@@ -543,7 +579,11 @@ export default async function SessionDetailPage({
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
     sponsorOpcoCode: p.sponsorOrg.opcoCode,
-    liens: p.person.legalLinks, session, financingMode: p.financingMode, participantType: p.participantType, sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
+    liens: p.person.legalLinks,
+    session,
+    financingMode: p.financingMode,
+    participantType: p.participantType,
+    sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
   }));
   const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
   const regimeParParticipant = new Map(
@@ -866,7 +906,9 @@ export default async function SessionDetailPage({
     },
   });
 
-  const eiCount = session.participants.filter((p) => SOLO_FORMS.includes(p.sponsorOrg.legalForm)).length;
+  const eiCount = session.participants.filter((p) =>
+    SOLO_FORMS.includes(p.sponsorOrg.legalForm),
+  ).length;
   const start = new Date(session.startDate);
   const end = new Date(session.endDate);
 
@@ -874,8 +916,21 @@ export default async function SessionDetailPage({
   // docs partagés produit/session : Programme, Déroulé, Grille session,
   // Check-list). Affiché à la fois dans la liste des inscrits (badge ligne)
   // ET dans le header de la matrice repliable (résumé agrégé).
-  const PERSONAL_DOC_TYPES = ['CONVENTION', 'AGEFICE', 'ATTESTATION_FIN', 'CERTIFICAT_REALISATION'] as const;
-  const PERSONAL_ASSET_KINDS = ['ANALYSE_BESOIN', 'POSITIONNEMENT', 'EMARGEMENT', 'GRILLE_OBS', 'QCM', 'SATISFACTION_CHAUD', 'SATISFACTION_FROID'] as const;
+  const PERSONAL_DOC_TYPES = [
+    'CONVENTION',
+    'AGEFICE',
+    'ATTESTATION_FIN',
+    'CERTIFICAT_REALISATION',
+  ] as const;
+  const PERSONAL_ASSET_KINDS = [
+    'ANALYSE_BESOIN',
+    'POSITIONNEMENT',
+    'EMARGEMENT',
+    'GRILLE_OBS',
+    'QCM',
+    'SATISFACTION_CHAUD',
+    'SATISFACTION_FROID',
+  ] as const;
   const PERSONAL_DOC_TOTAL = PERSONAL_DOC_TYPES.length + PERSONAL_ASSET_KINDS.length; // 11
   const docCompletionByParticipant = new Map<string, number>();
   for (const p of session.participants) {
@@ -905,21 +960,39 @@ export default async function SessionDetailPage({
     SATISFACTION_CHAUD: 'Satisfactions chaud',
     SATISFACTION_FROID: 'Satisfactions froid',
   };
-  const docCountByType: Array<{ type: string; label: string; count: number; total: number; pct: number }> = [];
+  const docCountByType: Array<{
+    type: string;
+    label: string;
+    count: number;
+    total: number;
+    pct: number;
+  }> = [];
   const totalP = session.participants.length;
   for (const t of PERSONAL_DOC_TYPES) {
     let count = 0;
     for (const p of session.participants) {
       if (docsByParticipant.get(p.id)?.has(t)) count++;
     }
-    docCountByType.push({ type: t, label: DOC_LABEL_BY_TYPE[t] ?? t, count, total: totalP, pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0 });
+    docCountByType.push({
+      type: t,
+      label: DOC_LABEL_BY_TYPE[t] ?? t,
+      count,
+      total: totalP,
+      pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0,
+    });
   }
   for (const k of PERSONAL_ASSET_KINDS) {
     let count = 0;
     for (const p of session.participants) {
       if (assetsByParticipant.get(p.id)?.has(k)) count++;
     }
-    docCountByType.push({ type: k, label: DOC_LABEL_BY_TYPE[k] ?? k, count, total: totalP, pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0 });
+    docCountByType.push({
+      type: k,
+      label: DOC_LABEL_BY_TYPE[k] ?? k,
+      count,
+      total: totalP,
+      pct: totalP > 0 ? Math.round((count / totalP) * 100) : 0,
+    });
   }
   // Top manquants : <100% triés par count croissant (premier = manque le plus)
   const docsMissingMost = docCountByType
@@ -1007,8 +1080,17 @@ export default async function SessionDetailPage({
       where: { tenantId: user.tenantId, participant: { sessionId: session.id } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: {
-        id: true, participantId: true, stage: true, status: true,
-        deliveryState: true, sentAt: true, createdAt: true,
+        id: true,
+        participantId: true,
+        stage: true,
+        status: true,
+        deliveryState: true,
+        sentAt: true,
+        createdAt: true,
+        updatedAt: true,
+        deliveryMethod: true,
+        externalSender: true,
+        recipientEmail: true,
       },
     }),
   ]);
@@ -1032,8 +1114,11 @@ export default async function SessionDetailPage({
     ? `${primaryTrainer.person.firstName} ${primaryTrainer.person.lastName}`
     : null;
   const coTrainerCount = session.trainers.filter((t) => !t.isPrimary).length;
-  const pricePerLearnerNum = session.pricePerLearner === null ? null : Number(session.pricePerLearner);
-  const caTotalHT = session.regime ? sessionTotalHT(session, session.participants) : (pricePerLearnerNum ?? 0) * session.participants.length;
+  const pricePerLearnerNum =
+    session.pricePerLearner === null ? null : Number(session.pricePerLearner);
+  const caTotalHT = session.regime
+    ? sessionTotalHT(session, session.participants)
+    : (pricePerLearnerNum ?? 0) * session.participants.length;
 
   // ── Inscriptions publiques par session (spec 2026-08-28) ──────────────
   // Demandes reçues via le lien public et pas encore traitées : elles
@@ -1093,10 +1178,7 @@ export default async function SessionDetailPage({
     participantCount: session.participants.length,
     pendingRequestCount: pendingEnrollmentCount,
   });
-  const enrollmentUrl = session.publicToken
-    ? buildPublicEnrollmentUrl(session.publicToken)
-    : null;
-
+  const enrollmentUrl = session.publicToken ? buildPublicEnrollmentUrl(session.publicToken) : null;
 
   const timelineInvoiceRows = timelineInvoices.map((inv) => ({
     id: inv.id,
@@ -1105,10 +1187,9 @@ export default async function SessionDetailPage({
     amountTTC: Number(inv.amountTTC),
     amountPaid: Number(inv.amountPaid),
     issueDate: inv.issueDate,
-    beneficiary:
-      inv.participant?.person
-        ? `${inv.participant.person.firstName} ${inv.participant.person.lastName}`
-        : (inv.payerOrg?.legalName ?? '—'),
+    beneficiary: inv.participant?.person
+      ? `${inv.participant.person.firstName} ${inv.participant.person.lastName}`
+      : (inv.payerOrg?.legalName ?? '—'),
     isCreditNote: inv.status === 'CREDIT_NOTE',
   }));
 
@@ -1286,27 +1367,41 @@ export default async function SessionDetailPage({
       const portal = companyPortalGroups.get(sponsorOrgId);
       const tone = companyDepositState(members);
       const deposited = members.filter((member) => member.opcoDepositedAt !== null);
-      const declarations = new Set(deposited.map((member) =>
-        `${member.opcoDepositedAt!.toISOString().slice(0, 10)} · ${member.opcoDepositedByEmail ?? 'auteur non renseigné'}`
-      ));
+      const declarations = new Set(
+        deposited.map(
+          (member) =>
+            `${member.opcoDepositedAt!.toISOString().slice(0, 10)} · ${member.opcoDepositedByEmail ?? 'auteur non renseigné'}`,
+        ),
+      );
       return {
         sponsorOrgId,
         sponsorName: members[0]!.sponsorOrg.brandName ?? members[0]!.sponsorOrg.legalName,
         tone,
-        detail: tone === 'success'
-          ? `${members.length} salarié${members.length > 1 ? 's' : ''} couvert${members.length > 1 ? 's' : ''} · ${[...declarations].join(' ; ')}`
-          : tone === 'warning'
-            ? `${deposited.length}/${members.length} salariés déclarés : le groupe doit être vérifié`
-            : `${members.length} salarié${members.length > 1 ? 's' : ''} actif${members.length > 1 ? 's' : ''} · dépôt portail non déclaré`,
+        detail:
+          tone === 'success'
+            ? `${members.length} salarié${members.length > 1 ? 's' : ''} couvert${members.length > 1 ? 's' : ''} · ${[...declarations].join(' ; ')}`
+            : tone === 'warning'
+              ? `${deposited.length}/${members.length} salariés déclarés : le groupe doit être vérifié`
+              : `${members.length} salarié${members.length > 1 ? 's' : ''} actif${members.length > 1 ? 's' : ''} · dépôt portail non déclaré`,
         members: members.map((member) => ({
           id: member.id,
           depositedAt: member.opcoDepositedAt?.toISOString() ?? null,
           depositedBy: member.opcoDepositedByEmail,
         })),
-        depositedAt: tone === 'success' ? members[0]!.opcoDepositedAt?.toISOString() ?? null : null,
+        depositedAt:
+          tone === 'success' ? (members[0]!.opcoDepositedAt?.toISOString() ?? null) : null,
         depositedBy: tone === 'success' ? members[0]!.opcoDepositedByEmail : null,
-        pieces: portal?.pieces.map(({ participantId, kind, label }) => ({ participantId, kind, label })) ?? [],
-        missingLearners: portal?.missingLearners ?? members.map((member) => `${member.person.firstName} ${member.person.lastName.toUpperCase()}`),
+        pieces:
+          portal?.pieces.map(({ participantId, kind, label }) => ({
+            participantId,
+            kind,
+            label,
+          })) ?? [],
+        missingLearners:
+          portal?.missingLearners ??
+          members.map(
+            (member) => `${member.person.firstName} ${member.person.lastName.toUpperCase()}`,
+          ),
         programmeMissing: portal?.programmeMissing ?? true,
       };
     });
@@ -1315,28 +1410,62 @@ export default async function SessionDetailPage({
     if (
       isCompanyDossier({ ...participant, session }) ||
       !estEligibleAgefice({ ...participant, session })
-    ) return [];
-    const submissions = sessionOpcoSubmissions.filter((submission) =>
-      submission.participantId === participant.id && submission.stage === 'PRISE_EN_CHARGE'
+    )
+      return [];
+    const submissions = sessionOpcoSubmissions.filter(
+      (submission) =>
+        submission.participantId === participant.id && submission.stage === 'PRISE_EN_CHARGE',
     );
     const successful = submissions.find(isSuccessfulInitialSubmission);
     const latest = submissions[0] ?? null;
-    const tone = successful ? 'success' as const : latest ? 'warning' as const : 'neutral' as const;
-    return [{
-      participantId: participant.id,
-      name: `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`,
-      sponsorName: participant.sponsorOrg.brandName ?? participant.sponsorOrg.legalName,
-      kind: 'AGEFICE' as const,
-      tone,
-      submissionId: (successful ?? latest)?.id ?? null,
-      detail: successful
-        ? `email initial envoyé le ${successful.sentAt!.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
-        : latest?.deliveryState === 'UNCERTAIN' ? 'envoi à vérifier dans la messagerie'
-        : latest?.status === 'REJECTED' ? 'dossier refusé, aucun dépôt valide en cours'
-        : latest?.status === 'CANCELED' ? 'dossier annulé, aucun dépôt valide en cours'
-        : latest ? 'dossier préparé mais envoi initial non confirmé'
-        : 'aucun envoi initial confirmé',
-    }];
+    const final = sessionOpcoSubmissions.find(
+      (s) =>
+        s.participantId === participant.id &&
+        s.stage === 'FIN_FORMATION' &&
+        s.sentAt &&
+        s.deliveryState === 'READY' &&
+        ['SENT', 'ACK_RECEIVED', 'APPROVED', 'REIMBURSED'].includes(s.status),
+    );
+    const snapshot = (s: typeof successful) =>
+      s
+        ? {
+            id: s.id,
+            updatedAt: s.updatedAt.toISOString(),
+            sentAt: s.sentAt?.toISOString() ?? null,
+            deliveryMethod: s.deliveryMethod,
+            externalSender: s.externalSender,
+            recipientEmail: s.recipientEmail,
+          }
+        : null;
+
+    const tone = successful
+      ? ('success' as const)
+      : latest
+        ? ('warning' as const)
+        : ('neutral' as const);
+    return [
+      {
+        participantId: participant.id,
+        name: `${participant.person.firstName} ${participant.person.lastName.toUpperCase()}`,
+        sponsorName: participant.sponsorOrg.brandName ?? participant.sponsorOrg.legalName,
+        kind: 'AGEFICE' as const,
+        initialDeposit: snapshot(successful),
+        finalDeposit: snapshot(final),
+        tone,
+        submissionId: (successful ?? latest)?.id ?? null,
+        detail: successful
+          ? `${successful.deliveryMethod === 'EXTERNAL' ? 'envoyé hors QualiOF' : 'email initial envoyé'} le ${successful.sentAt!.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`
+          : latest?.deliveryState === 'UNCERTAIN'
+            ? 'envoi à vérifier dans la messagerie'
+            : latest?.status === 'REJECTED'
+              ? 'dossier refusé, aucun dépôt valide en cours'
+              : latest?.status === 'CANCELED'
+                ? 'dossier annulé, aucun dépôt valide en cours'
+                : latest
+                  ? 'dossier préparé mais envoi initial non confirmé'
+                  : 'aucun envoi initial confirmé',
+      },
+    ];
   });
   const fundingTone = aggregateFundingTone([
     ...companyFundingRows.map((row) => row.tone),
@@ -1407,31 +1536,29 @@ export default async function SessionDetailPage({
     >();
     for (const p of session.participants) {
       if (!releveDeLaConventionPour(p, session)) continue;
-      const g =
-        map.get(p.sponsorOrgId) ??
-        {
-          sponsorOrgId: p.sponsorOrgId,
-          sponsorName: p.sponsorOrg.legalName,
-          participantCount: 0,
-          // Couverture lue via le helper partagé (28/08) : il reconnaît les
-          // DEUX formes de convention groupe (`organization` écrite par
-          // l'appli, `session` produite par les scripts `_gen-*`). Le filtre
-          // maison sur `entityType === 'organization'` manquait la seconde,
-          // présente en production sur SES-0107 / SES-0108.
-          hasConvention: groupConventionByParticipant.has(p.id),
-          conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
-          analyseAssetId: analyseEntrepriseAssetId,
-          representant: (p.sponsorOrg.representative ?? '').trim() || null,
-          // Date proposée = la règle (J-15 ouvrés, plafonnée au jour même).
-          // Affichée dans le panneau, modifiable avant de générer : aucune
-          // règle ne connaît la date réellement négociée avec le client.
-          dateSignatureParDefaut: resolveConventionDateIso(
-            session.startDate.toISOString().slice(0, 10),
-            new Date().toISOString().slice(0, 10),
-          ),
-          // Rempli plus bas, une fois tous les salariés du groupe connus.
-          blocages: [] as BlocageDocEntreprise[],
-        };
+      const g = map.get(p.sponsorOrgId) ?? {
+        sponsorOrgId: p.sponsorOrgId,
+        sponsorName: p.sponsorOrg.legalName,
+        participantCount: 0,
+        // Couverture lue via le helper partagé (28/08) : il reconnaît les
+        // DEUX formes de convention groupe (`organization` écrite par
+        // l'appli, `session` produite par les scripts `_gen-*`). Le filtre
+        // maison sur `entityType === 'organization'` manquait la seconde,
+        // présente en production sur SES-0107 / SES-0108.
+        hasConvention: groupConventionByParticipant.has(p.id),
+        conventionDocId: groupConventionByParticipant.get(p.id) ?? null,
+        analyseAssetId: analyseEntrepriseAssetId,
+        representant: (p.sponsorOrg.representative ?? '').trim() || null,
+        // Date proposée = la règle (J-15 ouvrés, plafonnée au jour même).
+        // Affichée dans le panneau, modifiable avant de générer : aucune
+        // règle ne connaît la date réellement négociée avec le client.
+        dateSignatureParDefaut: resolveConventionDateIso(
+          session.startDate.toISOString().slice(0, 10),
+          new Date().toISOString().slice(0, 10),
+        ),
+        // Rempli plus bas, une fois tous les salariés du groupe connus.
+        blocages: [] as BlocageDocEntreprise[],
+      };
       g.participantCount += 1;
       map.set(p.sponsorOrgId, g);
     }
@@ -1461,8 +1588,7 @@ export default async function SessionDetailPage({
     // Entreprises multi-apprenants d'abord (pattern OPTIMMO), puis par nom.
     return [...map.values()].sort(
       (a, b) =>
-        b.participantCount - a.participantCount ||
-        a.sponsorName.localeCompare(b.sponsorName, 'fr'),
+        b.participantCount - a.participantCount || a.sponsorName.localeCompare(b.sponsorName, 'fr'),
     );
   })();
   // Volet 2 (12/08) : émission de factures — miroir du RBAC des server
@@ -1480,9 +1606,11 @@ export default async function SessionDetailPage({
       }
     >();
     for (const p of session.participants) {
-      const g =
-        map.get(p.sponsorOrgId) ??
-        { sponsorOrgId: p.sponsorOrgId, sponsorName: p.sponsorOrg.legalName, participants: [] };
+      const g = map.get(p.sponsorOrgId) ?? {
+        sponsorOrgId: p.sponsorOrgId,
+        sponsorName: p.sponsorOrg.legalName,
+        participants: [],
+      };
       g.participants.push({
         id: p.id,
         label: `${p.person.firstName} ${p.person.lastName}`,
@@ -1548,7 +1676,7 @@ export default async function SessionDetailPage({
               displayClassName="block min-w-0"
             />
           ) : (
-            session.name ?? '(session sans nom)'
+            (session.name ?? '(session sans nom)')
           )
         }
         code={session.code}
@@ -1559,8 +1687,23 @@ export default async function SessionDetailPage({
         pricePerLearner={pricePerLearnerNum}
         priceSlot={
           canEdit ? (
-            <div className="space-y-1">{!session.regime && <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />}<SessionRegimeEditor sessionId={session.id} regime={session.regime} price={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum} /></div>
-          ) : session.regime === 'ENTREPRISE' ? <span>{Number(session.priceTotalHT).toLocaleString('fr-FR')} € HT au total</span> : undefined
+            <div className="space-y-1">
+              {!session.regime && (
+                <SessionPriceInline sessionId={session.id} value={pricePerLearnerNum} />
+              )}
+              <SessionRegimeEditor
+                sessionId={session.id}
+                regime={session.regime}
+                price={
+                  session.regime === 'ENTREPRISE'
+                    ? Number(session.priceTotalHT)
+                    : pricePerLearnerNum
+                }
+              />
+            </div>
+          ) : session.regime === 'ENTREPRISE' ? (
+            <span>{Number(session.priceTotalHT).toLocaleString('fr-FR')} € HT au total</span>
+          ) : undefined
         }
         locationLabel={locationLabel}
         participantsCount={session.participants.length}
@@ -1619,7 +1762,10 @@ export default async function SessionDetailPage({
                 {session.trainers.length === 0 ? (
                   <div className="space-y-3 py-2">
                     <p className="text-sm text-orange-700">
-                      <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                      <AlertCircle
+                        className="inline h-4 w-4 mr-1 align-text-bottom"
+                        aria-hidden="true"
+                      />
                       Aucun formateur rattaché. Indispensable pour générer les docs Qualiopi.
                     </p>
                     <SessionTrainerPicker sessionId={session.id} setAsPrimary />
@@ -1654,7 +1800,9 @@ export default async function SessionDetailPage({
                       ))}
                     </ul>
                     <div className="mt-3 pt-3 border-t border-border">
-                      <p className="text-xs text-muted-foreground mb-2">Ajouter un autre formateur :</p>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Ajouter un autre formateur :
+                      </p>
                       <SessionTrainerPicker sessionId={session.id} setAsPrimary={false} />
                     </div>
                   </>
@@ -1684,9 +1832,11 @@ export default async function SessionDetailPage({
                         {session.location.name}
                       </div>
                       {(() => {
-                        const addr = session.location.address as
-                          | { street?: string; postalCode?: string; city?: string }
-                          | null;
+                        const addr = session.location.address as {
+                          street?: string;
+                          postalCode?: string;
+                          city?: string;
+                        } | null;
                         if (!addr) return null;
                         return (
                           <div className="text-muted-foreground text-xs mt-1">
@@ -1698,7 +1848,9 @@ export default async function SessionDetailPage({
                       })()}
                     </div>
                     <div className="pt-2 border-t border-border/60">
-                      <p className="text-xs text-muted-foreground mb-2">Changer pour un autre lieu :</p>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Changer pour un autre lieu :
+                      </p>
                       <SessionLocationPicker
                         sessionId={session.id}
                         currentLocation={session.location}
@@ -1708,7 +1860,10 @@ export default async function SessionDetailPage({
                 ) : (
                   <div className="space-y-3 py-2">
                     <p className="text-sm text-orange-700">
-                      <AlertCircle className="inline h-4 w-4 mr-1 align-text-bottom" aria-hidden="true" />
+                      <AlertCircle
+                        className="inline h-4 w-4 mr-1 align-text-bottom"
+                        aria-hidden="true"
+                      />
                       {session.modality === 'DISTANCIEL'
                         ? 'Aucun lieu défini (distanciel — facultatif).'
                         : 'Aucun lieu défini. Indispensable en présentiel.'}
@@ -1764,9 +1919,7 @@ export default async function SessionDetailPage({
                 à l'unité. Sans cette affordance bulk visible, ces 2 docs
                 deviennent un trou conformité Qualiopi. Conditionné : on évite
                 le doublon quand sessionStage l'élit déjà en actionPrimary. */}
-            {canWrite
-              && session.participants.length > 0
-              && stage.cta?.kind !== 'generate_pack' && (
+            {canWrite && session.participants.length > 0 && stage.cta?.kind !== 'generate_pack' && (
               <GenerateClosurePackButton
                 sessionId={session.id}
                 participantCount={session.participants.length}
@@ -1815,7 +1968,9 @@ export default async function SessionDetailPage({
               sessionCode={session.code}
               sourceStartDate={session.startDate}
               sourceRegime={session.regime}
-              sourcePrice={session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum}
+              sourcePrice={
+                session.regime === 'ENTREPRISE' ? Number(session.priceTotalHT) : pricePerLearnerNum
+              }
             />
             <DeleteSessionButton
               sessionId={session.id}
@@ -1869,29 +2024,65 @@ export default async function SessionDetailPage({
       {canWrite && (
         <DepotPiecesSignees
           sessionId={session.id}
-          companies={Array.from(new Set(session.participants.filter(p => isCompanyDossier({ ...p, session })).map(p => p.sponsorOrgId))).map(sponsorOrgId => ({
+          companies={Array.from(
+            new Set(
+              session.participants
+                .filter((p) => isCompanyDossier({ ...p, session }))
+                .map((p) => p.sponsorOrgId),
+            ),
+          ).map((sponsorOrgId) => ({
             id: sponsorOrgId,
-            name: session.participants.find(p => p.sponsorOrgId === sponsorOrgId)!.sponsorOrg.legalName,
-            learners: session.participants.filter(p => p.sponsorOrgId === sponsorOrgId && isCompanyDossier({ ...p, session })).map(p => `${p.person.firstName} ${p.person.lastName}`),
+            name: session.participants.find((p) => p.sponsorOrgId === sponsorOrgId)!.sponsorOrg
+              .legalName,
+            learners: session.participants
+              .filter((p) => p.sponsorOrgId === sponsorOrgId && isCompanyDossier({ ...p, session }))
+              .map((p) => `${p.person.firstName} ${p.person.lastName}`),
           }))}
-          pieces={[...sessionDocs.filter(d => d.type === 'CONVENTION' && d.entityType === 'organization').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).filter((d, i, docs) => !docs.slice(0, i).some(other => other.entityId === d.entityId)).filter(d => d.signedPdfUrl?.trim()).map(d => ({
-            label: 'Convention entreprise / OPCO',
-            apprenant: session.participants.find(p => p.sponsorOrgId === d.entityId)?.sponsorOrg.legalName ?? 'Entreprise',
-            source: d.signatureKind === 'E_SIGNATURE' ? 'DocuSeal' : 'Dépôt manuel',
-            href: `/api/documents/${d.id}`,
-          })), ...session.participants.flatMap((p) =>
-            (['CONVENTION', 'AGEFICE', 'EMARGEMENT', 'ASSIDUITE'] as const).flatMap((type) => {
-              const doc = sessionDocs.filter(d => d.participantId === p.id && d.type === type)
-                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-              if (!doc?.signedPdfUrl?.trim() && !manualSignedKey(p.docStatus, type, doc?.createdAt)) return [];
-              return [{
-                label: { CONVENTION: 'Convention', AGEFICE: 'Prise en charge AGEFICE', EMARGEMENT: 'Émargement', ASSIDUITE: 'Assiduité' }[type],
-                apprenant: `${p.person.firstName} ${p.person.lastName}`,
-                source: doc?.signedPdfUrl && doc.signatureKind === 'E_SIGNATURE' ? 'DocuSeal' : 'Dépôt manuel',
-                href: `/api/sessions/${session.id}/apprenants/${p.id}/pieces-signees/${type}`,
-              }];
-            })
-          )]}
+          pieces={[
+            ...sessionDocs
+              .filter((d) => d.type === 'CONVENTION' && d.entityType === 'organization')
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              .filter(
+                (d, i, docs) => !docs.slice(0, i).some((other) => other.entityId === d.entityId),
+              )
+              .filter((d) => d.signedPdfUrl?.trim())
+              .map((d) => ({
+                label: 'Convention entreprise / OPCO',
+                apprenant:
+                  session.participants.find((p) => p.sponsorOrgId === d.entityId)?.sponsorOrg
+                    .legalName ?? 'Entreprise',
+                source: d.signatureKind === 'E_SIGNATURE' ? 'DocuSeal' : 'Dépôt manuel',
+                href: `/api/documents/${d.id}`,
+              })),
+            ...session.participants.flatMap((p) =>
+              (['CONVENTION', 'AGEFICE', 'EMARGEMENT', 'ASSIDUITE'] as const).flatMap((type) => {
+                const doc = sessionDocs
+                  .filter((d) => d.participantId === p.id && d.type === type)
+                  .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+                if (
+                  !doc?.signedPdfUrl?.trim() &&
+                  !manualSignedKey(p.docStatus, type, doc?.createdAt)
+                )
+                  return [];
+                return [
+                  {
+                    label: {
+                      CONVENTION: 'Convention',
+                      AGEFICE: 'Prise en charge AGEFICE',
+                      EMARGEMENT: 'Émargement',
+                      ASSIDUITE: 'Assiduité',
+                    }[type],
+                    apprenant: `${p.person.firstName} ${p.person.lastName}`,
+                    source:
+                      doc?.signedPdfUrl && doc.signatureKind === 'E_SIGNATURE'
+                        ? 'DocuSeal'
+                        : 'Dépôt manuel',
+                    href: `/api/sessions/${session.id}/apprenants/${p.id}/pieces-signees/${type}`,
+                  },
+                ];
+              }),
+            ),
+          ]}
           participants={session.participants.map((p) => ({
             id: p.id,
             fullName: `${p.person.firstName} ${p.person.lastName}`,
@@ -1921,7 +2112,10 @@ export default async function SessionDetailPage({
                 rapide sans ouvrir la modale Modifier. Discrets.
                 Anchor #section-status : cible du CTA sessionStage "Marquer comme
                 terminée" quand endDate < now et status pré-COMPLETED. */}
-            <div id="section-status" className="flex items-center gap-2 flex-wrap text-xs scroll-mt-20">
+            <div
+              id="section-status"
+              className="flex items-center gap-2 flex-wrap text-xs scroll-mt-20"
+            >
               <SessionStatusSelect sessionId={session.id} currentStatus={session.status} />
               <SessionDatesEditor
                 sessionId={session.id}
@@ -1947,9 +2141,17 @@ export default async function SessionDetailPage({
             >
               <div id="step-1" className="scroll-mt-20" />
               <StepCreation
-                state={stage.stagesState[1] === 'active' ? 'active' : stage.stagesState[1] === 'done' ? 'done' : 'todo'}
+                state={
+                  stage.stagesState[1] === 'active'
+                    ? 'active'
+                    : stage.stagesState[1] === 'done'
+                      ? 'done'
+                      : 'todo'
+                }
                 expanded={stage.stagesState[1] === 'active'}
-                blockerMessage={stage.status === 'blocked' && stage.current === 1 ? stage.blocker : undefined}
+                blockerMessage={
+                  stage.status === 'blocked' && stage.current === 1 ? stage.blocker : undefined
+                }
                 productId={session.product?.id ?? null}
                 productLabel={productLabel}
                 productCode={productCode}
@@ -1967,7 +2169,7 @@ export default async function SessionDetailPage({
                   <>
                     {canEdit && (
                       <EditSessionDetailsDialog
-                declaredRegime={!!session.regime}
+                        declaredRegime={!!session.regime}
                         sessionId={session.id}
                         produits={programmesSelectionnables}
                         initial={{
@@ -1979,7 +2181,9 @@ export default async function SessionDetailPage({
                           capacityMax: session.capacityMax,
                           modality: session.modality,
                           pricePerLearner:
-                            session.pricePerLearner === null ? null : Number(session.pricePerLearner),
+                            session.pricePerLearner === null
+                              ? null
+                              : Number(session.pricePerLearner),
                           language: session.language,
                           internalNotes: session.internalNotes,
                         }}
@@ -1989,7 +2193,9 @@ export default async function SessionDetailPage({
                       <AddParticipantDialog
                         regime={session.regime}
                         sessionId={session.id}
-                        defaultPrice={session.pricePerLearner === null ? null : Number(session.pricePerLearner)}
+                        defaultPrice={
+                          session.pricePerLearner === null ? null : Number(session.pricePerLearner)
+                        }
                         excludePersonIds={session.participants.map((p) => p.personId)}
                       />
                     )}
@@ -2044,7 +2250,9 @@ export default async function SessionDetailPage({
               isActive={stage.stagesState[2] === 'active'}
               expanded={stage.stagesState[2] === 'active'}
               programmePdfHref={programmeDocId ? `/api/documents/${programmeDocId}` : undefined}
-              deroulePdfHref={derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined}
+              deroulePdfHref={
+                derouleProductDocId ? `/api/documents/${derouleProductDocId}` : undefined
+              }
               checklistPdfHref={checklistDocId ? `/api/documents/${checklistDocId}` : undefined}
             />
 
@@ -2052,10 +2260,7 @@ export default async function SessionDetailPage({
                 (règle 12/08 : jamais une par salarié). Ne s'affiche que si la
                 session compte au moins un commanditaire personne morale. */}
             {canWrite && (
-              <ConventionEntreprisePanel
-                sessionId={session.id}
-                groupes={conventionGroupes}
-              />
+              <ConventionEntreprisePanel sessionId={session.id} groupes={conventionGroupes} />
             )}
 
             {/* Phase 15 Lot 2 — actions par doc/stagiaire réembarquées depuis le
@@ -2107,7 +2312,13 @@ export default async function SessionDetailPage({
               <>
                 <div id="step-3" className="scroll-mt-20" />
                 <StepPendantFormation
-                  state={stage.stagesState[3] === 'active' ? 'active' : stage.stagesState[3] === 'done' ? 'done' : 'inactive'}
+                  state={
+                    stage.stagesState[3] === 'active'
+                      ? 'active'
+                      : stage.stagesState[3] === 'done'
+                        ? 'done'
+                        : 'inactive'
+                  }
                   expanded={stage.stagesState[3] === 'active'}
                   participantsCount={session.participants.length}
                   emargementsGenerated={closureStatus.emargements}
@@ -2166,7 +2377,13 @@ export default async function SessionDetailPage({
 
       <div id="step-5" className="scroll-mt-20" />
       <StepFacturation
-        state={stage.stagesState[5] === 'active' ? 'active' : stage.stagesState[5] === 'done' ? 'done' : 'todo'}
+        state={
+          stage.stagesState[5] === 'active'
+            ? 'active'
+            : stage.stagesState[5] === 'done'
+              ? 'done'
+              : 'todo'
+        }
         expanded={stage.stagesState[5] === 'active'}
         invoices={timelineInvoiceRows}
         caTotalHT={caTotalHT}

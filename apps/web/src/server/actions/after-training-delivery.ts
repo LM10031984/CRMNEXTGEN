@@ -1,5 +1,7 @@
 'use server';
 
+import { createHash } from 'node:crypto';
+import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { requireRole, ForbiddenError, UnauthorizedError } from '@/lib/rbac';
@@ -66,16 +68,17 @@ function emailContents(input: {
   learnerNames: string[];
   companyName?: string;
   individual: boolean;
+  signature: string;
 }) {
   const names = input.learnerNames.join(', ');
   const subject = input.individual
     ? `Documents de fin de formation — ${input.formationTitle}`
     : `Attestations de fin de formation — ${input.companyName ?? input.formationTitle}`;
   const detail = input.individual
-    ? 'Vous trouverez en pièces jointes votre facture ainsi que votre certificat de réalisation.'
+    ? 'Vous trouverez en pièces jointes votre facture acquittée ainsi que votre certificat de réalisation.'
     : `Vous trouverez en pièces jointes une attestation individuelle pour chaque salarié concerné : ${names}.`;
-  const text = `Bonjour ${input.recipientName},\n\n${detail}\n\nFormation : ${input.formationTitle} (${input.sessionCode}).\n\nCordialement,\nL’équipe formation`;
-  const html = `<p>Bonjour ${escapeEmailHtml(input.recipientName)},</p><p>${escapeEmailHtml(detail)}</p><p><strong>Formation :</strong> ${escapeEmailHtml(input.formationTitle)} (${escapeEmailHtml(input.sessionCode)}).</p><p>Cordialement,<br>L’équipe formation</p>`;
+  const text = `Bonjour ${input.recipientName},\n\n${detail}\n\nFormation : ${input.formationTitle} (${input.sessionCode}).\n\nCordialement,\n${input.signature}`;
+  const html = `<p>Bonjour ${escapeEmailHtml(input.recipientName)},</p><p>${escapeEmailHtml(detail)}</p><p><strong>Formation :</strong> ${escapeEmailHtml(input.formationTitle)} (${escapeEmailHtml(input.sessionCode)}).</p><p>Cordialement,<br>${escapeEmailHtml(input.signature)}</p>`;
   return { subject, text, html };
 }
 
@@ -129,7 +132,10 @@ async function resolveDeliveries(
   });
   if (!session) return { ok: false, error: 'Session introuvable.' };
   if (session.status === 'CANCELLED') {
-    return { ok: false, error: 'Cette session est annulée : aucun document de fin ne peut être envoyé.' };
+    return {
+      ok: false,
+      error: 'Cette session est annulée : aucun document de fin ne peut être envoyé.',
+    };
   }
 
   // The whole end date belongs to the training. Paris calendar days avoid
@@ -148,11 +154,9 @@ async function resolveDeliveries(
   try {
     participantsWithRole = session.participants.map((participant) => ({
       participant,
-      roleChezSponsor: legalLinkAtSession(
-        participant.person.legalLinks,
-        participant.sponsorOrgId,
-        session,
-      )?.role ?? null,
+      roleChezSponsor:
+        legalLinkAtSession(participant.person.legalLinks, participant.sponsorOrgId, session)
+          ?.role ?? null,
     }));
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -168,6 +172,8 @@ async function resolveDeliveries(
       roleChezSponsor,
     })),
   );
+  const of = await loadOfConfig(tenantId);
+  const signature = [of.contact?.prenom, of.contact?.nom].filter(Boolean).join(' ') || of.name;
   const participantIds = session.participants.map((participant) => participant.id);
   const [documents, invoices, messageStates] = await Promise.all([
     prisma.document.findMany({
@@ -193,6 +199,8 @@ async function resolveDeliveries(
         OR: [{ sessionId }, { participantId: { in: participantIds } }],
       },
       include: {
+        payments: { select: { source: true } },
+        creditNotes: { select: { id: true } },
         payerOrg: { select: { brandName: true, legalName: true } },
         participant: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
@@ -214,31 +222,33 @@ async function resolveDeliveries(
     const uncertain = messageStates.find(
       (message) => message.relatedEntity?.startsWith(snapshotPrefix) && message.status === 'queued',
     );
-    if (uncertain) return {
-      state: 'uncertain' as const,
-      sentAt: null,
-      uncertainSince: uncertain.createdAt.toISOString(),
-      canRecover: false,
-      changedSinceLastSend: false,
-      previousSentAt: null,
-    };
+    if (uncertain)
+      return {
+        state: 'uncertain' as const,
+        sentAt: null,
+        uncertainSince: uncertain.createdAt.toISOString(),
+        canRecover: false,
+        changedSinceLastSend: false,
+        previousSentAt: null,
+      };
     const exactSent = messageStates.find(
       (message) => message.relatedEntity === exact && message.status === 'sent',
     );
-    if (exactSent) return {
-      state: 'sent' as const,
-      sentAt: exactSent.sentAt?.toISOString() ?? null,
-      uncertainSince: null,
-      canRecover: false,
-      changedSinceLastSend: false,
-      previousSentAt: null,
-    };
+    if (exactSent)
+      return {
+        state: 'sent' as const,
+        sentAt: exactSent.sentAt?.toISOString() ?? null,
+        uncertainSince: null,
+        canRecover: false,
+        changedSinceLastSend: false,
+        previousSentAt: null,
+      };
     const previous = messageStates.find(
       (message) => message.relatedEntity?.startsWith(snapshotPrefix) && message.status === 'sent',
     );
     return {
-      state: 'ready' as const,
-      sentAt: null,
+      state: previous ? ('sent' as const) : ('ready' as const),
+      sentAt: previous?.sentAt?.toISOString() ?? null,
       uncertainSince: null,
       canRecover: false,
       changedSinceLastSend: Boolean(previous),
@@ -256,12 +266,16 @@ async function resolveDeliveries(
     if (!recipientEmail) blockers.push(`Email manquant sur la fiche apprenant de ${learnerName}.`);
 
     const certificate = latestDocument(
-      documents.filter((doc) => doc.participantId === participantId && doc.type === 'CERTIFICAT_REALISATION'),
+      documents.filter(
+        (doc) => doc.participantId === participantId && doc.type === 'CERTIFICAT_REALISATION',
+      ),
       `Certificat de réalisation de ${learnerName}`,
       blockers,
     );
     const activeInvoicesConcerningLearner = invoices.filter((invoice) => {
-      const grouped = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
+      const grouped = Array.isArray(invoice.participantIds)
+        ? (invoice.participantIds as string[])
+        : [];
       return (
         ACTIVE_INVOICE_STATUSES.has(invoice.status) &&
         Boolean(invoice.pdfUrl) &&
@@ -269,10 +283,17 @@ async function resolveDeliveries(
       );
     });
     const unsafeGroupedInvoices = activeInvoicesConcerningLearner.filter((invoice) => {
-      const grouped = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
-      const groupedShapeIsSafe = grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
-      const sourceIdentifiesLearner = invoice.participantId === participantId || (grouped.length === 1 && grouped[0] === participantId);
-      const sessionIsSafe = invoice.sessionId === session.id || (invoice.sessionId == null && invoice.participantId === participantId);
+      const grouped = Array.isArray(invoice.participantIds)
+        ? (invoice.participantIds as string[])
+        : [];
+      const groupedShapeIsSafe =
+        grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
+      const sourceIdentifiesLearner =
+        invoice.participantId === participantId ||
+        (grouped.length === 1 && grouped[0] === participantId);
+      const sessionIsSafe =
+        invoice.sessionId === session.id ||
+        (invoice.sessionId == null && invoice.participantId === participantId);
       return (
         !groupedShapeIsSafe ||
         !sourceIdentifiesLearner ||
@@ -280,35 +301,88 @@ async function resolveDeliveries(
         !sessionIsSafe
       );
     });
-    if (unsafeGroupedInvoices.some((invoice) => Array.isArray(invoice.participantIds) && (invoice.participantIds as string[]).length > 1)) {
-      blockers.push(`Une facture groupée concernant plusieurs apprenants inclut ${learnerName}. Elle ne peut pas être jointe à un envoi individuel.`);
+    if (
+      unsafeGroupedInvoices.some(
+        (invoice) =>
+          Array.isArray(invoice.participantIds) && (invoice.participantIds as string[]).length > 1,
+      )
+    ) {
+      blockers.push(
+        `Une facture groupée concernant plusieurs apprenants inclut ${learnerName}. Elle ne peut pas être jointe à un envoi individuel.`,
+      );
     }
-    if (unsafeGroupedInvoices.some((invoice) => !Array.isArray(invoice.participantIds) || (invoice.participantIds as string[]).length <= 1)) {
-      blockers.push(`Une facture concernant ${learnerName} ne correspond pas au payeur ou à la session de cette inscription.`);
+    if (
+      unsafeGroupedInvoices.some(
+        (invoice) =>
+          !Array.isArray(invoice.participantIds) ||
+          (invoice.participantIds as string[]).length <= 1,
+      )
+    ) {
+      blockers.push(
+        `Une facture concernant ${learnerName} ne correspond pas au payeur ou à la session de cette inscription.`,
+      );
     }
     const matchingInvoices = activeInvoicesConcerningLearner.filter((invoice) => {
-      const grouped = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
-      const groupedShapeIsSafe = grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
-      const sourceIdentifiesLearner = invoice.participantId === participantId || (grouped.length === 1 && grouped[0] === participantId);
-      const sessionIsSafe = invoice.sessionId === session.id || (invoice.sessionId == null && invoice.participantId === participantId);
-      return groupedShapeIsSafe && sourceIdentifiesLearner &&
-        invoice.payerOrgId === participant.sponsorOrgId && sessionIsSafe;
+      const grouped = Array.isArray(invoice.participantIds)
+        ? (invoice.participantIds as string[])
+        : [];
+      const groupedShapeIsSafe =
+        grouped.length === 0 || (grouped.length === 1 && grouped[0] === participantId);
+      const sourceIdentifiesLearner =
+        invoice.participantId === participantId ||
+        (grouped.length === 1 && grouped[0] === participantId);
+      const sessionIsSafe =
+        invoice.sessionId === session.id ||
+        (invoice.sessionId == null && invoice.participantId === participantId);
+      return (
+        groupedShapeIsSafe &&
+        sourceIdentifiesLearner &&
+        invoice.payerOrgId === participant.sponsorOrgId &&
+        sessionIsSafe
+      );
     });
-    if (matchingInvoices.length === 0) blockers.push(`Facture ordinaire émise manquante pour ${learnerName}.`);
-    if (matchingInvoices.length > 1) blockers.push(`Plusieurs factures ordinaires actives concernent ${learnerName} : choisissez/corrigez la pièce comptable avant l’envoi.`);
+    if (matchingInvoices.length === 0)
+      blockers.push(`Facture ordinaire émise manquante pour ${learnerName}.`);
+    if (matchingInvoices.length > 1)
+      blockers.push(
+        `Plusieurs factures ordinaires actives concernent ${learnerName} : choisissez/corrigez la pièce comptable avant l’envoi.`,
+      );
     const invoice = matchingInvoices.length === 1 ? matchingInvoices[0]! : null;
 
     const attachments: AfterTrainingAttachment[] = [];
+    let prepareInvoiceId: string | undefined;
     if (invoice?.pdfUrl) {
-      attachments.push({
-        kind: 'invoice',
-        id: invoice.id,
-        label: `Facture ${invoice.number} (édition ordinaire)`,
-        filename: invoiceDownloadFilename(invoice),
-        href: `/api/after-training/${sessionId}/attachments/invoice/${invoice.id}`,
-        sourceKey: invoice.pdfUrl,
-        sourceHash: invoice.hashSha256,
-      });
+      const paid =
+        invoice.status === 'PAID' &&
+        invoice.paidAt &&
+        Number(invoice.amountPaid) >= Number(invoice.amountTTC) &&
+        !invoice.creditNotes.length &&
+        !invoice.payments.some((p) => p.source === 'OPCO_SYNC');
+      if (!paid)
+        blockers.push(
+          'Facture non soldée par un règlement constaté : renseignez le paiement avant l’envoi de la facture acquittée.',
+        );
+      else {
+        const sourceKey = acquittedInvoiceKey(invoice.number);
+        let sourceHash: string | null = null;
+        try {
+          sourceHash = createHash('sha256')
+            .update(await downloadFile(DOCS_BUCKET, sourceKey))
+            .digest('hex');
+        } catch {
+          prepareInvoiceId = invoice.id;
+          blockers.push('Générez la facture acquittée pour pouvoir la consulter et la joindre.');
+        }
+        attachments.push({
+          kind: 'invoice',
+          id: invoice.id,
+          label: `Facture ${invoice.number} (acquittée)`,
+          filename: invoiceDownloadFilename(invoice, { acquittee: true }),
+          href: `/api/after-training/${sessionId}/attachments/invoice/${invoice.id}`,
+          sourceKey,
+          sourceHash,
+        });
+      }
     }
     if (certificate) {
       const key = certificate.signedPdfUrl ?? certificate.pdfUrl;
@@ -335,6 +409,7 @@ async function resolveDeliveries(
       sessionCode: session.code,
       learnerNames: [learnerName],
       individual: true,
+      signature,
     });
     const fingerprint = fingerprintAfterTrainingDelivery({
       sessionId,
@@ -347,6 +422,9 @@ async function resolveDeliveries(
     deliveries.push({
       key,
       kind: 'individual',
+      prepareInvoiceId,
+      invoiceUrl: invoice ? `/app/factures/${invoice.id}` : undefined,
+      from: `${of.name} <${of.emailFrom}>`,
       title: learnerName,
       recipientName: learnerName,
       recipientEmail,
@@ -360,7 +438,9 @@ async function resolveDeliveries(
   }
 
   for (const group of partition.groups) {
-    const members = group.participantIds.map((id) => session.participants.find((item) => item.id === id)!);
+    const members = group.participantIds.map(
+      (id) => session.participants.find((item) => item.id === id)!,
+    );
     const org = members[0]!.sponsorOrg;
     const blockers: string[] = [];
     const rep = resoudreRepresentantEntreprise(org);
@@ -378,7 +458,9 @@ async function resolveDeliveries(
     for (const member of members) {
       const learnerName = `${member.person.firstName} ${member.person.lastName}`.trim();
       const attestation = latestDocument(
-        documents.filter((doc) => doc.participantId === member.id && doc.type === 'ATTESTATION_FIN'),
+        documents.filter(
+          (doc) => doc.participantId === member.id && doc.type === 'ATTESTATION_FIN',
+        ),
         `Attestation de fin de formation de ${learnerName}`,
         blockers,
       );
@@ -401,7 +483,9 @@ async function resolveDeliveries(
       });
     }
     const key = `company:${group.sponsorOrgId}`;
-    const learnerNames = members.map((member) => `${member.person.firstName} ${member.person.lastName}`.trim());
+    const learnerNames = members.map((member) =>
+      `${member.person.firstName} ${member.person.lastName}`.trim(),
+    );
     const mail = emailContents({
       recipientName,
       companyName: org.legalName,
@@ -409,11 +493,20 @@ async function resolveDeliveries(
       sessionCode: session.code,
       learnerNames,
       individual: false,
+      signature,
     });
-    const fingerprint = fingerprintAfterTrainingDelivery({ sessionId, key, recipientEmail, subject: mail.subject, attachments, participantIds: group.participantIds });
+    const fingerprint = fingerprintAfterTrainingDelivery({
+      sessionId,
+      key,
+      recipientEmail,
+      subject: mail.subject,
+      attachments,
+      participantIds: group.participantIds,
+    });
     deliveries.push({
       key,
       kind: 'company',
+      from: `${of.name} <${of.emailFrom}>`,
       title: org.legalName,
       recipientName,
       recipientEmail,
@@ -442,6 +535,7 @@ export async function getAfterTrainingPreview(sessionId: string): Promise<Previe
         ...result,
         deliveries: result.deliveries.map((delivery) => ({
           ...stripAfterTrainingStorageKeys(delivery),
+          canPrepareInvoice: ['ADMIN', 'MANAGER', 'COMPTABLE'].includes(user.role),
           canRecover: ['ADMIN', 'MANAGER'].includes(user.role) && delivery.state === 'uncertain',
         })),
       }
@@ -452,6 +546,7 @@ export async function sendAfterTrainingDelivery(input: {
   sessionId: string;
   deliveryKey: string;
   fingerprint: string;
+  messageText?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   let user;
   try {
@@ -463,45 +558,86 @@ export async function sendAfterTrainingDelivery(input: {
   }
   const preview = await resolveDeliveries(user.tenantId, input.sessionId);
   if (!preview.ok) return { ok: false, error: preview.error };
-  if (!preview.sessionEnded) return { ok: false, error: 'L’envoi est disponible uniquement après la fin de la session.' };
+  if (!preview.sessionEnded)
+    return { ok: false, error: 'L’envoi est disponible uniquement après la fin de la session.' };
   const delivery = preview.deliveries?.find((item) => item.key === input.deliveryKey);
   if (!delivery) return { ok: false, error: 'Envoi introuvable dans cette session.' };
   if (delivery.fingerprint !== input.fingerprint) {
-    return { ok: false, error: 'Le destinataire ou une pièce a changé depuis l’aperçu. Rechargez et contrôlez le nouvel aperçu.' };
+    return {
+      ok: false,
+      error:
+        'Le destinataire ou une pièce a changé depuis l’aperçu. Rechargez et contrôlez le nouvel aperçu.',
+    };
   }
   if (delivery.blockers.length > 0 || !delivery.recipientEmail) {
     return { ok: false, error: delivery.blockers.join(' ') || 'Destinataire manquant.' };
   }
-  if (delivery.state === 'sent') return { ok: false, error: 'Cet envoi a déjà été confirmé par le serveur SMTP.' };
-  if (delivery.state === 'uncertain') return { ok: false, error: 'Un envoi précédent est dans un état incertain. Vérifiez la boîte d’envoi avant toute reprise manuelle.' };
+  if (delivery.state === 'sent')
+    return { ok: false, error: 'Cet envoi a déjà été confirmé par le serveur SMTP.' };
+  if (delivery.state === 'uncertain')
+    return {
+      ok: false,
+      error:
+        'Un envoi précédent est dans un état incertain. Vérifiez la boîte d’envoi avant toute reprise manuelle.',
+    };
+  if (input.messageText !== undefined) {
+    if (!input.messageText.trim() || input.messageText.length > 10000)
+      return { ok: false, error: 'Le message doit contenir entre 1 et 10 000 caractères.' };
+    delivery.text = input.messageText.trim();
+    delivery.html = delivery.text
+      .split('\n\n')
+      .map((p) => `<p>${escapeEmailHtml(p).replaceAll('\n', '<br>')}</p>`)
+      .join('');
+  }
 
   let attachments;
   try {
     attachments = await Promise.all(
-      delivery.attachments.map(async (attachment) => ({
-        filename: attachment.filename,
-        content: await downloadFile(DOCS_BUCKET, attachment.sourceKey!),
-        contentType: 'application/pdf',
-      })),
+      delivery.attachments.map(async (attachment) => {
+        const content = await downloadFile(DOCS_BUCKET, attachment.sourceKey!);
+        if (
+          attachment.kind === 'invoice' &&
+          createHash('sha256').update(content).digest('hex') !== attachment.sourceHash
+        )
+          throw new Error('La facture acquittée a changé. Contrôlez le nouvel aperçu.');
+        return { filename: attachment.filename, content, contentType: 'application/pdf' };
+      }),
     );
   } catch (error) {
-    return { ok: false, error: `Une pièce n’est pas lisible dans le stockage : ${error instanceof Error ? error.message : String(error)}` };
+    return {
+      ok: false,
+      error: `Une pièce n’est pas lisible dans le stockage : ${error instanceof Error ? error.message : String(error)}`,
+    };
   }
 
   const relatedBase = afterTrainingRelatedEntity(input.sessionId, delivery.key);
   const relatedPrefix = `${relatedBase}:snapshot:`;
-  const relatedEntity = afterTrainingRelatedEntity(input.sessionId, delivery.key, delivery.fingerprint);
+  const relatedEntity = afterTrainingRelatedEntity(
+    input.sessionId,
+    delivery.key,
+    delivery.fingerprint,
+  );
   const of = await loadOfConfig(user.tenantId);
-  const from = `${of.name} <formation@start-academy.fr>`;
+  if (!of.emailFrom)
+    return { ok: false, error: 'Renseignez l’expéditeur dans les paramètres de l’organisme.' };
+  const from = `${of.name} <${of.emailFrom}>`;
   const claimed = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${user.tenantId}:${relatedBase}`}))`;
     const uncertain = await tx.emailMessage.findFirst({
-      where: { tenantId: user.tenantId, relatedEntity: { startsWith: relatedPrefix }, status: 'queued' },
+      where: {
+        tenantId: user.tenantId,
+        relatedEntity: { startsWith: relatedPrefix },
+        status: 'queued',
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (uncertain) return null;
     const exactSent = await tx.emailMessage.findFirst({
-      where: { tenantId: user.tenantId, relatedEntity, status: 'sent' },
+      where: {
+        tenantId: user.tenantId,
+        relatedEntity: { startsWith: relatedPrefix },
+        status: 'sent',
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (exactSent) return null;
@@ -530,13 +666,16 @@ export async function sendAfterTrainingDelivery(input: {
           fingerprint: delivery.fingerprint,
           participantIds: delivery.participantIds ?? [],
           attachmentIds: delivery.attachments.map((attachment) => attachment.id),
-          documentIds: delivery.attachments.filter((attachment) => attachment.kind === 'document').map((attachment) => attachment.id),
+          documentIds: delivery.attachments
+            .filter((attachment) => attachment.kind === 'document')
+            .map((attachment) => attachment.id),
         },
       },
     });
     return message;
   });
-  if (!claimed) return { ok: false, error: 'Cet envoi est déjà parti ou en cours. Rechargez son état.' };
+  if (!claimed)
+    return { ok: false, error: 'Cet envoi est déjà parti ou en cours. Rechargez son état.' };
 
   // Re-read after the durable claim. Membership, destination and current files
   // must still be exactly the ones confirmed in the preview.
@@ -544,7 +683,11 @@ export async function sendAfterTrainingDelivery(input: {
   const claimedDelivery = afterClaim.deliveries?.find((item) => item.key === delivery.key);
   if (!claimedDelivery || claimedDelivery.fingerprint !== input.fingerprint) {
     await prisma.emailMessage.update({ where: { id: claimed.id }, data: { status: 'bounced' } });
-    return { ok: false, error: 'Le groupe, le destinataire ou une pièce a changé pendant la préparation. Aucun email n’a été envoyé ; rechargez l’aperçu.' };
+    return {
+      ok: false,
+      error:
+        'Le groupe, le destinataire ou une pièce a changé pendant la préparation. Aucun email n’a été envoyé ; rechargez l’aperçu.',
+    };
   }
 
   const result = await sendMail({
@@ -556,7 +699,7 @@ export async function sendAfterTrainingDelivery(input: {
     attachments,
     context: {
       tenantId: user.tenantId,
-      category: 'opco_submission',
+      category: 'learner_documents',
       sessionId: input.sessionId,
       relatedEntity,
       // The claimed EmailMessage becomes the single durable trace after success.
@@ -565,15 +708,24 @@ export async function sendAfterTrainingDelivery(input: {
   });
   if (result.dryRun || result.suppressed) {
     await prisma.emailMessage.update({ where: { id: claimed.id }, data: { status: 'bounced' } });
-    return { ok: false, error: 'Envoi non effectué : SMTP est en mode test ou la catégorie d’email est désactivée.' };
+    return {
+      ok: false,
+      error: 'Envoi non effectué : SMTP est en mode test ou la catégorie d’email est désactivée.',
+    };
   }
   if (!result.ok || !result.messageId) {
     // Keep queued: SMTP failures can be ambiguous after DATA; never retry automatically.
-    return { ok: false, error: 'Le résultat SMTP est incertain. Vérifiez la boîte d’envoi avant toute reprise manuelle.' };
+    return {
+      ok: false,
+      error:
+        'Le résultat SMTP est incertain. Vérifiez la boîte d’envoi avant toute reprise manuelle.',
+    };
   }
 
   const participantIds = delivery.participantIds ?? [];
-  const documentIds = delivery.attachments.filter((attachment) => attachment.kind === 'document').map((attachment) => attachment.id);
+  const documentIds = delivery.attachments
+    .filter((attachment) => attachment.kind === 'document')
+    .map((attachment) => attachment.id);
   await prisma.$transaction(async (tx) => {
     await tx.emailMessage.update({
       where: { id: claimed.id },
@@ -586,7 +738,12 @@ export async function sendAfterTrainingDelivery(input: {
       });
     } else {
       await tx.sessionParticipant.updateMany({
-        where: { id: { in: participantIds }, sessionId: input.sessionId, session: { tenantId: user.tenantId }, enrollmentStatus: { not: 'CANCELLED' } },
+        where: {
+          id: { in: participantIds },
+          sessionId: input.sessionId,
+          session: { tenantId: user.tenantId },
+          enrollmentStatus: { not: 'CANCELLED' },
+        },
         data: { closingDocsSent: true },
       });
     }
@@ -627,12 +784,20 @@ export async function recoverUncertainAfterTrainingDelivery(input: {
   const relatedEntity = afterTrainingRelatedEntity(input.sessionId, input.deliveryKey);
   const relatedPrefix = `${relatedEntity}:snapshot:`;
   const message = await prisma.emailMessage.findFirst({
-    where: { tenantId: user.tenantId, relatedEntity: { startsWith: relatedPrefix }, status: 'queued' },
+    where: {
+      tenantId: user.tenantId,
+      relatedEntity: { startsWith: relatedPrefix },
+      status: 'queued',
+    },
     orderBy: { createdAt: 'desc' },
   });
   if (!message) return { ok: false, error: 'Aucun envoi incertain à reprendre.' };
   if (Date.now() - message.createdAt.getTime() < UNCERTAIN_RECOVERY_DELAY_MS) {
-    return { ok: false, error: 'Attendez 10 minutes puis vérifiez la boîte formation@ avant de libérer une nouvelle tentative.' };
+    return {
+      ok: false,
+      error:
+        'Attendez 10 minutes puis vérifiez la boîte d’envoi de l’organisme avant de libérer une nouvelle tentative.',
+    };
   }
   const fingerprint = message.relatedEntity?.split(':snapshot:')[1] ?? null;
   const claimLogs = await prisma.auditLog.findMany({
@@ -650,20 +815,29 @@ export async function recoverUncertainAfterTrainingDelivery(input: {
     return diff?.deliveryKey === input.deliveryKey && diff?.fingerprint === fingerprint;
   });
   const diff = (claim?.diff ?? {}) as Record<string, unknown>;
-  const participantIds = Array.isArray(diff.participantIds) ? diff.participantIds.filter((id): id is string => typeof id === 'string') : [];
-  const documentIds = Array.isArray(diff.documentIds) ? diff.documentIds.filter((id): id is string => typeof id === 'string') : [];
+  const participantIds = Array.isArray(diff.participantIds)
+    ? diff.participantIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const documentIds = Array.isArray(diff.documentIds)
+    ? diff.documentIds.filter((id): id is string => typeof id === 'string')
+    : [];
 
   await prisma.$transaction(async (tx) => {
     const released = await tx.emailMessage.updateMany({
       where: { id: message.id, tenantId: user.tenantId, status: 'queued' },
-      data: input.resolution === 'sent'
-        ? { status: 'sent', sentAt: new Date(), documentIds }
-        : { status: 'bounced' },
+      data:
+        input.resolution === 'sent'
+          ? { status: 'sent', sentAt: new Date(), documentIds }
+          : { status: 'bounced' },
     });
     if (released.count === 0) return;
     if (input.resolution === 'sent' && participantIds.length > 0) {
       await tx.sessionParticipant.updateMany({
-        where: { id: { in: participantIds }, sessionId: input.sessionId, session: { tenantId: user.tenantId } },
+        where: {
+          id: { in: participantIds },
+          sessionId: input.sessionId,
+          session: { tenantId: user.tenantId },
+        },
         data: { closingDocsSent: true },
       });
     }
@@ -673,13 +847,33 @@ export async function recoverUncertainAfterTrainingDelivery(input: {
         userId: user.id,
         entity: 'TrainingSession',
         entityId: input.sessionId,
-        action: input.resolution === 'sent'
-          ? 'after_training.uncertain_confirmed_sent'
-          : 'after_training.uncertain_released',
-        diff: { deliveryKey: input.deliveryKey, fingerprint, previousMessageId: message.id, checkedMailbox: true },
+        action:
+          input.resolution === 'sent'
+            ? 'after_training.uncertain_confirmed_sent'
+            : 'after_training.uncertain_released',
+        diff: {
+          deliveryKey: input.deliveryKey,
+          fingerprint,
+          previousMessageId: message.id,
+          checkedMailbox: true,
+        },
       },
     });
   });
   revalidatePath(`/app/sessions/${input.sessionId}`);
   return { ok: true };
+}
+
+export async function prepareAfterTrainingInvoice(
+  sessionId: string,
+  invoiceId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
+  const preview = await resolveDeliveries(user.tenantId, sessionId);
+  if (!preview.deliveries?.some((d) => d.prepareInvoiceId === invoiceId))
+    return { ok: false, error: 'Facture acquittée à préparer introuvable dans cette session.' };
+  const { generateAcquittedInvoicePdf } = await import('./invoices');
+  const result = await generateAcquittedInvoicePdf({ invoiceId });
+  if (result.ok) revalidatePath(`/app/sessions/${sessionId}`);
+  return result;
 }

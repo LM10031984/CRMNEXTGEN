@@ -1,5 +1,6 @@
 import { Wallet, AlertTriangle, Check, Clock, Euro } from 'lucide-react';
 import Link from 'next/link';
+import { isSuccessfulInitialSubmission } from '@/lib/opco/session-funding-status';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -65,6 +66,19 @@ export default async function AuditTresoPage({
       opcoReimbursed: true,
       paymentReceived: true,
       factureEnvoyee: true,
+      opcoDepositedAt: true,
+      opcoDepositedByEmail: true,
+      opcoSubmissions: {
+        orderBy: { sentAt: 'desc' },
+        select: {
+          stage: true,
+          status: true,
+          deliveryState: true,
+          sentAt: true,
+          deliveryMethod: true,
+          externalSender: true,
+        },
+      },
       person: { select: { firstName: true, lastName: true } },
       sponsorOrg: { select: { legalName: true, opcoCode: true } },
       session: {
@@ -99,6 +113,9 @@ export default async function AuditTresoPage({
     opcoCode: string | null;
     formateurNom: string;
     priceHT: number;
+    depositedAt: Date | null;
+    depositedBy: string | null;
+    depositMethod: string | null;
     statutOpco: StatutOpco;
     statutEncaissement: StatutEncaissement;
     missing: string[];
@@ -122,6 +139,7 @@ export default async function AuditTresoPage({
       opcoReimbursed: p.opcoReimbursed,
       paymentReceived: p.paymentReceived,
     };
+    const deposit = p.opcoSubmissions.find(isSuccessfulInitialSubmission);
     const trainer = p.session.trainers[0]?.person;
     return {
       id: p.id,
@@ -136,6 +154,15 @@ export default async function AuditTresoPage({
       opcoCode: p.sponsorOrg?.opcoCode ?? null,
       formateurNom: trainer ? `${trainer.firstName} ${trainer.lastName}` : '—',
       priceHT: Number(p.priceHT ?? 0),
+      depositedAt: deposit?.sentAt ?? p.opcoDepositedAt,
+      depositedBy: deposit?.externalSender ?? p.opcoDepositedByEmail,
+      depositMethod: deposit
+        ? deposit.deliveryMethod === 'EXTERNAL'
+          ? 'Hors QualiOF'
+          : 'QualiOF'
+        : p.opcoDepositedAt
+          ? 'Portail OPCO'
+          : null,
       statutOpco: computeStatutOpco(flags, today),
       statutEncaissement: computeStatutEncaissement(flags, today),
       missing: listMissingDocs(flags),
@@ -249,7 +276,7 @@ export default async function AuditTresoPage({
             key={s}
             href={
               annee
-                ? `/app/audit-treso?annee=${annee}&statut=${s}` as const
+                ? (`/app/audit-treso?annee=${annee}&statut=${s}` as const)
                 : (`/app/audit-treso?statut=${s}` as const)
             }
             className={`px-3 py-1 rounded-full border text-xs ${statut === s ? 'border-primary bg-primary-50 text-primary' : 'border-border hover:bg-muted/50'}`}
@@ -268,6 +295,7 @@ export default async function AuditTresoPage({
               <th className="text-left px-3 py-2 font-semibold">Apprenant</th>
               <th className="text-left px-3 py-2 font-semibold">OPCO</th>
               <th className="text-right px-3 py-2 font-semibold">Montant</th>
+              <th className="text-left px-3 py-2 font-semibold">Dépôt initial</th>
               <th className="text-left px-3 py-2 font-semibold">Statut Qualiopi</th>
               <th className="text-left px-3 py-2 font-semibold">Statut encaissement</th>
               <th className="text-left px-3 py-2 font-semibold">Docs manquants</th>
@@ -276,7 +304,7 @@ export default async function AuditTresoPage({
           <tbody className="divide-y divide-border/60">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                <td colSpan={8} className="text-center py-12 text-muted-foreground">
                   Aucune inscription pour ce filtre.
                 </td>
               </tr>
@@ -306,6 +334,19 @@ export default async function AuditTresoPage({
                   </td>
                   <td className="px-3 py-2 align-top text-right font-medium">
                     {fmtEUR(r.priceHT)}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {r.depositedAt ? (
+                      <>
+                        <span>{fmtDate(r.depositedAt)}</span>
+                        <p className="text-xs text-muted-foreground">
+                          {r.depositMethod}
+                          {r.depositedBy ? ` · ${r.depositedBy}` : ''}
+                        </p>
+                      </>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="px-3 py-2 align-top">
                     <span className="inline-flex items-center text-xs">

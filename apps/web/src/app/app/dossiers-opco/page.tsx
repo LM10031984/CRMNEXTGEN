@@ -1,8 +1,20 @@
+import { afterFormationAlertStart } from '@/lib/alertes/formation-rules';
 import { isCompanyDossier } from '@/lib/opco/company-dossier';
 import { estEligibleAgefice } from '@/lib/agefice/eligibilite';
-import { companyDepositState, isSuccessfulInitialSubmission } from '@/lib/opco/session-funding-status';
+import {
+  companyDepositState,
+  isSuccessfulInitialSubmission,
+} from '@/lib/opco/session-funding-status';
 import Link from 'next/link';
-import { ClipboardCheck, FileCheck, Wallet, AlertCircle, TrendingUp, Briefcase, Download } from 'lucide-react';
+import {
+  ClipboardCheck,
+  FileCheck,
+  Wallet,
+  AlertCircle,
+  TrendingUp,
+  Briefcase,
+  Download,
+} from 'lucide-react';
 import { prisma, Prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
@@ -25,9 +37,17 @@ import { ComposeOpcoButton } from '@/components/dossiers-opco/compose-opco-butto
 
 export const dynamic = 'force-dynamic';
 
-const fmtEUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const fmtEUR = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
 const fmtNb = new Intl.NumberFormat('fr-FR');
-const fmtDate = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = new Intl.DateTimeFormat('fr-FR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
 
 type FilterStatus = 'all' | 'a-facturer' | 'attente-opco' | 'attente-client' | 'complet';
 type FilterType = 'all' | 'formation' | 'preinscription_budget';
@@ -102,11 +122,11 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
 
   // Tri (US-004) : par défaut date desc. Cycle asc → desc → reset.
   const sortKey: SortKey | null =
-    sp.sort && ['date', 'apprenant', 'montant', 'opco'].includes(sp.sort)
-      ? sp.sort
-      : null;
+    sp.sort && ['date', 'apprenant', 'montant', 'opco'].includes(sp.sort) ? sp.sort : null;
   const sortDir: SortDir = sp.dir === 'asc' ? 'asc' : 'desc';
-  let orderBy: Prisma.SessionParticipantOrderByWithRelationInput | Prisma.SessionParticipantOrderByWithRelationInput[];
+  let orderBy:
+    | Prisma.SessionParticipantOrderByWithRelationInput
+    | Prisma.SessionParticipantOrderByWithRelationInput[];
   switch (sortKey) {
     case 'apprenant':
       orderBy = [{ person: { lastName: sortDir } }, { person: { firstName: sortDir } }];
@@ -125,71 +145,108 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   }
 
   // Fetch
-  const [rows, totalAll, kpiToInvoice, kpiToReimburse, kpiToCollect, kpiComplete] = await Promise.all([
-    prisma.sessionParticipant.findMany({
-      where,
-      orderBy,
-      take: 500,
-      select: {
-        id: true,
-        personId: true,
-        sponsorOrgId: true,
-        participantType: true,
-        opcoDepositedAt: true,
-        opcoDepositedByEmail: true,
-        priceHT: true,
-        amountCollected: true,
-        invoiceSent: true,
-        opcoApproved: true,
-        opcoReimbursed: true,
-        paymentReceived: true,
-        invoiceSentAt: true,
-        opcoApprovedAt: true,
-        opcoReimbursedAt: true,
-        paymentReceivedAt: true,
-        financingMode: true,
-        financingRequestDate: true,
-        dossierType: true,
-        person: { select: { firstName: true, lastName: true, legalLinks: { select: { organizationId: true, role: true, startDate: true, endDate: true, organization: { select: { ageficeProfile: { select: { id: true } } } } } } } },
-        sponsorOrg: {
-          select: { id: true, legalName: true, opcoCode: true, network: true, ageficeProfile: { select: { id: true } } },
+  const [rows, totalAll, kpiToInvoice, kpiToReimburse, kpiToCollect, kpiComplete] =
+    await Promise.all([
+      prisma.sessionParticipant.findMany({
+        where,
+        orderBy,
+        take: 500,
+        select: {
+          id: true,
+          personId: true,
+          sponsorOrgId: true,
+          participantType: true,
+          opcoDepositedAt: true,
+          opcoDepositedByEmail: true,
+          priceHT: true,
+          amountCollected: true,
+          invoiceSent: true,
+          opcoApproved: true,
+          opcoReimbursed: true,
+          paymentReceived: true,
+          invoiceSentAt: true,
+          opcoApprovedAt: true,
+          opcoReimbursedAt: true,
+          paymentReceivedAt: true,
+          financingMode: true,
+          financingStatus: true,
+          financingRequestDate: true,
+          dossierType: true,
+          person: {
+            select: {
+              firstName: true,
+              lastName: true,
+              legalLinks: {
+                select: {
+                  organizationId: true,
+                  role: true,
+                  startDate: true,
+                  endDate: true,
+                  organization: { select: { ageficeProfile: { select: { id: true } } } },
+                },
+              },
+            },
+          },
+          sponsorOrg: {
+            select: {
+              id: true,
+              legalName: true,
+              opcoCode: true,
+              network: true,
+              ageficeProfile: { select: { id: true } },
+            },
+          },
+          session: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              startDate: true,
+              endDate: true,
+              regime: true,
+            },
+          },
+          opcoSubmissions: {
+            where: { stage: 'PRISE_EN_CHARGE' },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 10,
+            select: {
+              id: true,
+              stage: true,
+              status: true,
+              deliveryState: true,
+              sentAt: true,
+              deliveryMethod: true,
+              externalSender: true,
+            },
+          },
         },
-        session: {
-          select: { id: true, code: true, name: true, startDate: true, endDate: true, regime: true },
+      }),
+      prisma.sessionParticipant.count({ where: { session: { tenantId: user.tenantId } } }),
+      prisma.sessionParticipant.aggregate({
+        where: { session: { tenantId: user.tenantId }, invoiceSent: false },
+        _sum: { priceHT: true },
+        _count: { id: true },
+      }),
+      prisma.sessionParticipant.aggregate({
+        where: { session: { tenantId: user.tenantId }, invoiceSent: true, opcoReimbursed: false },
+        _sum: { priceHT: true },
+        _count: { id: true },
+      }),
+      prisma.sessionParticipant.aggregate({
+        where: { session: { tenantId: user.tenantId }, invoiceSent: true, paymentReceived: false },
+        _sum: { priceHT: true },
+        _count: { id: true },
+      }),
+      prisma.sessionParticipant.count({
+        where: {
+          session: { tenantId: user.tenantId },
+          invoiceSent: true,
+          opcoReimbursed: true,
+          paymentReceived: true,
         },
-        opcoSubmissions: {
-          where: { stage: 'PRISE_EN_CHARGE' },
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: 10,
-          select: { id: true, stage: true, status: true, deliveryState: true, sentAt: true },
-        },
-      },
-    }),
-    prisma.sessionParticipant.count({ where: { session: { tenantId: user.tenantId } } }),
-    prisma.sessionParticipant.aggregate({
-      where: { session: { tenantId: user.tenantId }, invoiceSent: false },
-      _sum: { priceHT: true },
-      _count: { id: true },
-    }),
-    prisma.sessionParticipant.aggregate({
-      where: { session: { tenantId: user.tenantId }, invoiceSent: true, opcoReimbursed: false },
-      _sum: { priceHT: true },
-      _count: { id: true },
-    }),
-    prisma.sessionParticipant.aggregate({
-      where: { session: { tenantId: user.tenantId }, invoiceSent: true, paymentReceived: false },
-      _sum: { priceHT: true },
-      _count: { id: true },
-    }),
-    prisma.sessionParticipant.count({
-      where: {
-        session: { tenantId: user.tenantId },
-        invoiceSent: true,
-        opcoReimbursed: true,
-        paymentReceived: true,
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   // US-008 : nombre de dossiers de pré-inscription budget pour la chip filtre
   const preinscriptionBudgetCount = await prisma.sessionParticipant.count({
@@ -203,31 +260,47 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
     new Map(
       rows
         .filter((row) => isCompanyDossier(row))
-        .map((row) => [`${row.session.id}:${row.sponsorOrgId}`, { sessionId: row.session.id, sponsorOrgId: row.sponsorOrgId }]),
+        .map((row) => [
+          `${row.session.id}:${row.sponsorOrgId}`,
+          { sessionId: row.session.id, sponsorOrgId: row.sponsorOrgId },
+        ]),
     ).values(),
   );
-  const companyDepositMembers = companyRefs.length > 0
-    ? await prisma.sessionParticipant.findMany({
-        where: {
-          session: { tenantId: user.tenantId },
-          enrollmentStatus: { not: 'CANCELLED' },
-          OR: companyRefs,
-        },
-        select: {
-          sessionId: true, sponsorOrgId: true, participantType: true,
-          opcoDepositedAt: true, opcoDepositedByEmail: true,
-          session: { select: { startDate: true, endDate: true, regime: true } },
-          person: { select: { legalLinks: { select: { role: true, organizationId: true, startDate: true, endDate: true } } } },
-        },
-      })
-    : [];
-  const companyDepositByGroup = new Map<string, {
-    tone: 'neutral' | 'warning' | 'success';
-    deposited: number;
-    total: number;
-    at: Date | null;
-    by: string | null;
-  }>();
+  const companyDepositMembers =
+    companyRefs.length > 0
+      ? await prisma.sessionParticipant.findMany({
+          where: {
+            session: { tenantId: user.tenantId },
+            enrollmentStatus: { not: 'CANCELLED' },
+            OR: companyRefs,
+          },
+          select: {
+            sessionId: true,
+            sponsorOrgId: true,
+            participantType: true,
+            opcoDepositedAt: true,
+            opcoDepositedByEmail: true,
+            session: { select: { startDate: true, endDate: true, regime: true } },
+            person: {
+              select: {
+                legalLinks: {
+                  select: { role: true, organizationId: true, startDate: true, endDate: true },
+                },
+              },
+            },
+          },
+        })
+      : [];
+  const companyDepositByGroup = new Map<
+    string,
+    {
+      tone: 'neutral' | 'warning' | 'success';
+      deposited: number;
+      total: number;
+      at: Date | null;
+      by: string | null;
+    }
+  >();
   for (const ref of companyRefs) {
     const members = companyDepositMembers.filter(
       (member) =>
@@ -241,8 +314,8 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
       tone,
       deposited: deposited.length,
       total: members.length,
-      at: tone === 'success' ? members[0]?.opcoDepositedAt ?? null : null,
-      by: tone === 'success' ? members[0]?.opcoDepositedByEmail ?? null : null,
+      at: tone === 'success' ? (members[0]?.opcoDepositedAt ?? null) : null,
+      by: tone === 'success' ? (members[0]?.opcoDepositedByEmail ?? null) : null,
     });
   }
 
@@ -312,12 +385,18 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
     select: { startDate: true },
     distinct: ['startDate'],
   });
-  const years = Array.from(new Set(yearsRaw.map((s) => s.startDate.getUTCFullYear()))).sort((a, b) => b - a);
+  const years = Array.from(new Set(yearsRaw.map((s) => s.startDate.getUTCFullYear()))).sort(
+    (a, b) => b - a,
+  );
 
   const opcos = ['AGEFICE', 'OPCO_EP', 'ATLAS', 'CPF', 'FI-FPL', 'OPCOMMERCE'];
 
   const yearChips = [
-    { label: 'Toutes années', href: hrefWith(sp, { year: 'all' }), active: !sp.year || sp.year === 'all' },
+    {
+      label: 'Toutes années',
+      href: hrefWith(sp, { year: 'all' }),
+      active: !sp.year || sp.year === 'all',
+    },
     ...years.map((y) => ({
       label: String(y),
       href: hrefWith(sp, { year: String(y) }),
@@ -326,7 +405,11 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   ];
 
   const opcoChips = [
-    { label: 'Tous financeurs', href: hrefWith(sp, { opco: 'all' }), active: !sp.opco || sp.opco === 'all' },
+    {
+      label: 'Tous financeurs',
+      href: hrefWith(sp, { opco: 'all' }),
+      active: !sp.opco || sp.opco === 'all',
+    },
     ...opcos.map((o) => ({
       label: o,
       href: hrefWith(sp, { opco: o }),
@@ -335,19 +418,47 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
   ];
 
   const statusChips = [
-    { label: 'Tous statuts', href: hrefWith(sp, { status: 'all' }), active: !sp.status || sp.status === 'all' },
-    { label: 'À facturer', href: hrefWith(sp, { status: 'a-facturer' }), active: sp.status === 'a-facturer' },
-    { label: 'Attente financeur', href: hrefWith(sp, { status: 'attente-opco' }), active: sp.status === 'attente-opco' },
-    { label: 'Attente client', href: hrefWith(sp, { status: 'attente-client' }), active: sp.status === 'attente-client' },
-    { label: 'Suivi financier terminé', href: hrefWith(sp, { status: 'complet' }), active: sp.status === 'complet' },
+    {
+      label: 'Tous statuts',
+      href: hrefWith(sp, { status: 'all' }),
+      active: !sp.status || sp.status === 'all',
+    },
+    {
+      label: 'À facturer',
+      href: hrefWith(sp, { status: 'a-facturer' }),
+      active: sp.status === 'a-facturer',
+    },
+    {
+      label: 'Attente financeur',
+      href: hrefWith(sp, { status: 'attente-opco' }),
+      active: sp.status === 'attente-opco',
+    },
+    {
+      label: 'Attente client',
+      href: hrefWith(sp, { status: 'attente-client' }),
+      active: sp.status === 'attente-client',
+    },
+    {
+      label: 'Suivi financier terminé',
+      href: hrefWith(sp, { status: 'complet' }),
+      active: sp.status === 'complet',
+    },
   ];
 
   // US-008 : chips type de dossier (n'apparaît que si au moins 1 pré-inscription budget existe)
   const typeChips =
     preinscriptionBudgetCount > 0
       ? [
-          { label: 'Tous types', href: hrefWith(sp, { type: 'all' }), active: !sp.type || sp.type === 'all' },
-          { label: 'Formations', href: hrefWith(sp, { type: 'formation' }), active: sp.type === 'formation' },
+          {
+            label: 'Tous types',
+            href: hrefWith(sp, { type: 'all' }),
+            active: !sp.type || sp.type === 'all',
+          },
+          {
+            label: 'Formations',
+            href: hrefWith(sp, { type: 'formation' }),
+            active: sp.type === 'formation',
+          },
           {
             label: `Pré-inscription budget (${preinscriptionBudgetCount})`,
             href: hrefWith(sp, { type: 'preinscription_budget' }),
@@ -428,24 +539,32 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
     const successfulAgefice = agefice
       ? r.opcoSubmissions.find(isSuccessfulInitialSubmission)
       : null;
-    const isComplete =
-      r.invoiceSent && r.opcoApproved && r.opcoReimbursed && r.paymentReceived;
+    const neutralHistory =
+      r.opcoApproved ||
+      r.opcoReimbursed ||
+      ['APPROVED', 'REIMBURSED'].includes(r.financingStatus) ||
+      !afterFormationAlertStart(r.session.startDate);
+    const depositedAt = successfulAgefice?.sentAt ?? r.opcoDepositedAt;
+    const isComplete = r.invoiceSent && r.opcoApproved && r.opcoReimbursed && r.paymentReceived;
     let daysWaiting = 0;
     if (!isComplete) {
       const refDate =
-        r.opcoReimbursedAt ?? r.opcoApprovedAt ?? r.invoiceSentAt ?? r.session.endDate;
+        agefice && !r.opcoApproved
+          ? depositedAt
+          : (r.opcoReimbursedAt ?? r.opcoApprovedAt ?? r.invoiceSentAt ?? r.session.endDate);
       daysWaiting = Math.max(
         0,
-        Math.floor((Date.now() - refDate.getTime()) / 86400000),
+        Math.floor((Date.now() - (refDate?.getTime() ?? Date.now())) / 86400000),
       );
     }
-    const lateLevel: 'none' | 'warn' | 'alert' = isComplete
-      ? 'none'
-      : daysWaiting > 60
-        ? 'alert'
-        : daysWaiting > 30
-          ? 'warn'
-          : 'none';
+    const lateLevel: 'none' | 'warn' | 'alert' =
+      isComplete || neutralHistory
+        ? 'none'
+        : daysWaiting > 60
+          ? 'alert'
+          : daysWaiting > 30
+            ? 'warn'
+            : 'none';
     const rowBg =
       lateLevel === 'alert'
         ? 'bg-red-50 hover:bg-red-100'
@@ -454,19 +573,21 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
           : `hover:bg-muted/30 ${idx % 2 === 1 ? 'bg-muted/10' : ''}`;
     const ageficeBudget = budgetByPerson.get(r.personId);
     return (
-      <tr
-        key={r.id}
-        className={`border-b border-border last:border-0 transition-colors ${rowBg}`}
-      >
+      <tr key={r.id} className={`border-b border-border last:border-0 transition-colors ${rowBg}`}>
         <td className="px-3 py-2">{company ? null : <DossierRowCheckbox id={r.id} />}</td>
         <td className="px-3 py-2 whitespace-nowrap text-xs">
-          <Link href={`/app/sessions/${r.session.id}`} className="text-foreground hover:text-primary">
+          <Link
+            href={`/app/sessions/${r.session.id}`}
+            className="text-foreground hover:text-primary"
+          >
             {fmtDate.format(r.session.startDate)}
           </Link>
         </td>
         <td className="px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium">{r.person.firstName} {r.person.lastName}</span>
+            <span className="font-medium">
+              {r.person.firstName} {r.person.lastName}
+            </span>
             {r.dossierType === 'PREINSCRIPTION_BUDGET' && (
               <Badge variant="warning" className="text-[10px] inline-flex items-center gap-1">
                 <Wallet className="h-2.5 w-2.5" />
@@ -527,10 +648,36 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
               </div>
             ) : (
               <>
-                <ComposeOpcoButton participantId={r.id} />
-                {agefice && <Badge variant={successfulAgefice ? 'success' : 'muted'}>
-                  {successfulAgefice ? 'Conforme et déposé' : 'Dépôt non confirmé'}
-                </Badge>}
+                {!successfulAgefice && !neutralHistory && (
+                  <ComposeOpcoButton participantId={r.id} />
+                )}
+                {agefice && (
+                  <Badge variant={successfulAgefice ? 'success' : 'muted'}>
+                    {successfulAgefice
+                      ? successfulAgefice.deliveryMethod === 'EXTERNAL'
+                        ? 'Envoyé hors QualiOF'
+                        : 'Dépôt confirmé'
+                      : neutralHistory
+                        ? 'Historique — dépôt non renseigné'
+                        : 'Dépôt non confirmé'}
+                  </Badge>
+                )}
+                {agefice && (
+                  <Link
+                    className="text-xs text-primary underline"
+                    href={`/app/sessions/${r.session.id}#depots-financement`}
+                  >
+                    Déclarer / consulter les envois
+                  </Link>
+                )}
+                {successfulAgefice?.sentAt && (
+                  <span className="text-xs">
+                    {fmtDate.format(successfulAgefice.sentAt)}
+                    {successfulAgefice.externalSender
+                      ? ` · ${successfulAgefice.externalSender}`
+                      : ''}
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -544,6 +691,9 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
           <div className="flex flex-wrap items-center gap-2">
             <DossierTimeline
               participantId={r.id}
+              agefice={agefice}
+              depositedAt={depositedAt}
+              alertsEnabled={!neutralHistory}
               initial={{
                 invoiceSent: r.invoiceSent,
                 opcoApproved: r.opcoApproved,
@@ -563,11 +713,17 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
                 amountHT={Number(r.priceHT)}
               />
             )}
-            {!company && <DossierReminderButton participantId={r.id} disabled={!r.invoiceSent || isComplete} />}
+            {!company && (
+              <DossierReminderButton participantId={r.id} disabled={!r.invoiceSent || isComplete} />
+            )}
             {agefice && <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION" />}
           </div>
-          <p className={`mt-1 text-xs ${lateLevel === 'alert' ? 'font-medium text-red-700' : lateLevel === 'warn' ? 'font-medium text-amber-800' : 'text-muted-foreground'}`}>
-            {isComplete ? 'Suivi financier terminé' : `Suivi financier en cours · ${daysWaiting} j d’attente`}
+          <p
+            className={`mt-1 text-xs ${lateLevel === 'alert' ? 'font-medium text-red-700' : lateLevel === 'warn' ? 'font-medium text-amber-800' : 'text-muted-foreground'}`}
+          >
+            {isComplete
+              ? 'Suivi financier terminé'
+              : `Suivi financier en cours · ${daysWaiting} j d’attente`}
           </p>
         </td>
       </tr>
@@ -576,217 +732,273 @@ export default async function DossiersOpcoPage({ searchParams }: { searchParams:
 
   return (
     <DossierSelectionProvider>
-    <div className="space-y-6">
-      <PageHeader
-        title="Dossiers de financement"
-        subtitle={`AGEFICE et OPCO · Dépôts et suivi financier par inscription · ${fmtNb.format(totalShown)} dossier${totalShown > 1 ? 's' : ''} affiché${totalShown > 1 ? 's' : ''} sur ${fmtNb.format(totalAll)} au total`}
-      />
+      <div className="space-y-6">
+        <PageHeader
+          title="Dossiers de financement"
+          subtitle={`AGEFICE et OPCO · Dépôts et suivi financier par inscription · ${fmtNb.format(totalShown)} dossier${totalShown > 1 ? 's' : ''} affiché${totalShown > 1 ? 's' : ''} sur ${fmtNb.format(totalAll)} au total`}
+        />
 
-      {/* US-002 : Trésorerie globale en attente */}
-      <section className="rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50/80 to-white p-5">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary text-white p-2.5">
-              <Briefcase className="h-5 w-5" />
+        {/* US-002 : Trésorerie globale en attente */}
+        <section className="rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50/80 to-white p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary text-white p-2.5">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Trésorerie en attente
+                </div>
+                <div className="text-3xl font-bold tabular-nums text-primary-900 mt-0.5">
+                  {fmtEUR.format(treso)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {fmtNb.format(tresoDossiers)} dossier{tresoDossiers > 1 ? 's' : ''} · à facturer +
+                  attente financeur + attente client
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Trésorerie en attente
+            {/* grid-cols-3 OK même mobile : 3 KPI compacts (libellé court + montant tabular-nums) */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="text-right">
+                <div className="text-muted-foreground">À facturer</div>
+                <div className="font-semibold tabular-nums">
+                  {fmtEUR.format(Number(kpiToInvoice._sum.priceHT ?? 0))}
+                </div>
               </div>
-              <div className="text-3xl font-bold tabular-nums text-primary-900 mt-0.5">
-                {fmtEUR.format(treso)}
+              <div className="text-right">
+                <div className="text-muted-foreground">Attente financeur</div>
+                <div className="font-semibold tabular-nums">
+                  {fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {fmtNb.format(tresoDossiers)} dossier{tresoDossiers > 1 ? 's' : ''} · à facturer + attente financeur + attente client
+              <div className="text-right">
+                <div className="text-muted-foreground">Attente client</div>
+                <div className="font-semibold tabular-nums">
+                  {fmtEUR.format(Number(kpiToCollect._sum.priceHT ?? 0))}
+                </div>
               </div>
             </div>
           </div>
-          {/* grid-cols-3 OK même mobile : 3 KPI compacts (libellé court + montant tabular-nums) */}
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div className="text-right">
-              <div className="text-muted-foreground">À facturer</div>
-              <div className="font-semibold tabular-nums">{fmtEUR.format(Number(kpiToInvoice._sum.priceHT ?? 0))}</div>
+
+          {/* US-014 : objectif CA mensuel + barre progression */}
+          {monthlyTarget > 0 && (
+            <div className="mt-4 pt-4 border-t border-primary-200/50">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <div className="text-muted-foreground">
+                  <strong className="text-foreground">
+                    Objectif{' '}
+                    {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                  </strong>
+                  {' · '}encaissé ce mois
+                </div>
+                <div className="tabular-nums">
+                  <strong className="text-foreground">{fmtEUR.format(monthlyCollected)}</strong>
+                  <span className="text-muted-foreground"> / {fmtEUR.format(monthlyTarget)}</span>
+                  <span
+                    className={`ml-2 font-semibold ${monthlyPct >= 100 ? 'text-emerald-700' : monthlyPct >= 70 ? 'text-amber-700' : 'text-muted-foreground'}`}
+                  >
+                    {monthlyPct}%
+                  </span>
+                </div>
+              </div>
+              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className={`h-full transition-all ${monthlyPct >= 100 ? 'bg-emerald-500' : monthlyPct >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
+                  style={{ width: `${monthlyPct}%` }}
+                />
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-muted-foreground">Attente financeur</div>
-              <div className="font-semibold tabular-nums">{fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-muted-foreground">Attente client</div>
-              <div className="font-semibold tabular-nums">{fmtEUR.format(Number(kpiToCollect._sum.priceHT ?? 0))}</div>
-            </div>
-          </div>
+          )}
+        </section>
+
+        {/* KPI globaux */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard
+            icon={Wallet}
+            label="À facturer"
+            value={fmtEUR.format(Number(kpiToInvoice._sum.priceHT ?? 0))}
+            hint={`${fmtNb.format(kpiToInvoice._count.id)} dossier${kpiToInvoice._count.id > 1 ? 's' : ''}`}
+            tone="warning"
+            href={hrefWith(sp, { status: 'a-facturer' })}
+            active={sp.status === 'a-facturer'}
+          />
+          <KpiCard
+            icon={AlertCircle}
+            label="Attente remboursement financeur"
+            value={fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}
+            hint={`${fmtNb.format(kpiToReimburse._count.id)} dossier${kpiToReimburse._count.id > 1 ? 's' : ''}`}
+            tone="info"
+            href={hrefWith(sp, { status: 'attente-opco' })}
+            active={sp.status === 'attente-opco'}
+          />
+          <KpiCard
+            icon={TrendingUp}
+            label="Attente paiement client"
+            value={fmtEUR.format(Number(kpiToCollect._sum.priceHT ?? 0))}
+            hint={`${fmtNb.format(kpiToCollect._count.id)} dossier${kpiToCollect._count.id > 1 ? 's' : ''}`}
+            tone="info"
+            href={hrefWith(sp, { status: 'attente-client' })}
+            active={sp.status === 'attente-client'}
+          />
+          <KpiCard
+            icon={FileCheck}
+            label="Suivis financiers terminés"
+            value={fmtNb.format(kpiComplete)}
+            hint="facturé + remboursé + payé"
+            tone="success"
+            href={hrefWith(sp, { status: 'complet' })}
+            active={sp.status === 'complet'}
+          />
+        </section>
+
+        {/* Recherche full-text + Toggle mode + Export CSV */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <DossiersOpcoSearchInput />
+          <GroupModeToggle />
+          <a
+            href={exportUrl}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
+            title="Télécharger la vue filtrée en CSV (Excel)"
+          >
+            <Download className="h-4 w-4" /> Exporter CSV
+          </a>
         </div>
 
-        {/* US-014 : objectif CA mensuel + barre progression */}
-        {monthlyTarget > 0 && (
-          <div className="mt-4 pt-4 border-t border-primary-200/50">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <div className="text-muted-foreground">
-                <strong className="text-foreground">Objectif {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</strong>
-                {' · '}encaissé ce mois
-              </div>
-              <div className="tabular-nums">
-                <strong className="text-foreground">{fmtEUR.format(monthlyCollected)}</strong>
-                <span className="text-muted-foreground"> / {fmtEUR.format(monthlyTarget)}</span>
-                <span className={`ml-2 font-semibold ${monthlyPct >= 100 ? 'text-emerald-700' : monthlyPct >= 70 ? 'text-amber-700' : 'text-muted-foreground'}`}>
-                  {monthlyPct}%
-                </span>
-              </div>
-            </div>
-            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-              <div
-                className={`h-full transition-all ${monthlyPct >= 100 ? 'bg-emerald-500' : monthlyPct >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
-                style={{ width: `${monthlyPct}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </section>
+        {/* Filtres */}
+        <div className="space-y-2.5">
+          <FilterChips chips={yearChips} />
+          <FilterChips chips={opcoChips} />
+          <FilterChips chips={statusChips} />
+          {typeChips && <FilterChips chips={typeChips} />}
+        </div>
 
-      {/* KPI globaux */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          icon={Wallet}
-          label="À facturer"
-          value={fmtEUR.format(Number(kpiToInvoice._sum.priceHT ?? 0))}
-          hint={`${fmtNb.format(kpiToInvoice._count.id)} dossier${kpiToInvoice._count.id > 1 ? 's' : ''}`}
-          tone="warning"
-          href={hrefWith(sp, { status: 'a-facturer' })}
-          active={sp.status === 'a-facturer'}
-        />
-        <KpiCard
-          icon={AlertCircle}
-          label="Attente remboursement financeur"
-          value={fmtEUR.format(Number(kpiToReimburse._sum.priceHT ?? 0))}
-          hint={`${fmtNb.format(kpiToReimburse._count.id)} dossier${kpiToReimburse._count.id > 1 ? 's' : ''}`}
-          tone="info"
-          href={hrefWith(sp, { status: 'attente-opco' })}
-          active={sp.status === 'attente-opco'}
-        />
-        <KpiCard
-          icon={TrendingUp}
-          label="Attente paiement client"
-          value={fmtEUR.format(Number(kpiToCollect._sum.priceHT ?? 0))}
-          hint={`${fmtNb.format(kpiToCollect._count.id)} dossier${kpiToCollect._count.id > 1 ? 's' : ''}`}
-          tone="info"
-          href={hrefWith(sp, { status: 'attente-client' })}
-          active={sp.status === 'attente-client'}
-        />
-        <KpiCard
-          icon={FileCheck}
-          label="Suivis financiers terminés"
-          value={fmtNb.format(kpiComplete)}
-          hint="facturé + remboursé + payé"
-          tone="success"
-          href={hrefWith(sp, { status: 'complet' })}
-          active={sp.status === 'complet'}
-        />
-      </section>
-
-      {/* Recherche full-text + Toggle mode + Export CSV */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <DossiersOpcoSearchInput />
-        <GroupModeToggle />
-        <a
-          href={exportUrl}
-          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border bg-white text-sm font-medium hover:bg-muted/40 transition-colors"
-          title="Télécharger la vue filtrée en CSV (Excel)"
+        <section
+          aria-label="Légende du suivi"
+          className="rounded-xl border border-border bg-white p-4 text-xs space-y-2"
         >
-          <Download className="h-4 w-4" /> Exporter CSV
-        </a>
-      </div>
+          <p className="font-medium">
+            Dépôt du dossier et suivi financier sont deux étapes distinctes.
+          </p>
+          <p>
+            Le badge « Déposé » confirme l’envoi AGEFICE ou la déclaration du dépôt sur le portail
+            OPCO. Il ne signifie pas que le financement est accordé ou remboursé.
+          </p>
+          <div className="flex flex-wrap gap-2" aria-label="Couleurs des lignes">
+            <span className="rounded border px-2 py-1">
+              Sans couleur : 0 à 30 jours d’attente ou suivi financier terminé
+            </span>
+            <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
+              Jaune : 31 à 60 jours d’attente financière
+            </span>
+            <span className="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-800">
+              Rouge : plus de 60 jours d’attente financière
+            </span>
+          </div>
+          <p className="text-muted-foreground">
+            Le délai part de la dernière étape financière renseignée (remboursement, accord ou
+            facture), sinon de la fin de formation. La couleur de la ligne ne signale pas une pièce
+            manquante.
+          </p>
+          <p className="text-muted-foreground">
+            Étapes financières : vert = fait · bleu = à faire · jaune = délai de l’étape dépassé ·
+            gris = étape suivante. Survolez une étape pour consulter sa date.
+          </p>
+        </section>
 
-      {/* Filtres */}
-      <div className="space-y-2.5">
-        <FilterChips chips={yearChips} />
-        <FilterChips chips={opcoChips} />
-        <FilterChips chips={statusChips} />
-        {typeChips && <FilterChips chips={typeChips} />}
-      </div>
-
-      <section aria-label="Légende du suivi" className="rounded-xl border border-border bg-white p-4 text-xs space-y-2">
-        <p className="font-medium">Dépôt du dossier et suivi financier sont deux étapes distinctes.</p>
-        <p>Le badge « Déposé » confirme l’envoi AGEFICE ou la déclaration du dépôt sur le portail OPCO. Il ne signifie pas que le financement est accordé ou remboursé.</p>
-        <div className="flex flex-wrap gap-2" aria-label="Couleurs des lignes">
-          <span className="rounded border px-2 py-1">Sans couleur : 0 à 30 jours d’attente ou suivi financier terminé</span>
-          <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">Jaune : 31 à 60 jours d’attente financière</span>
-          <span className="rounded border border-red-200 bg-red-50 px-2 py-1 text-red-800">Rouge : plus de 60 jours d’attente financière</span>
-        </div>
-        <p className="text-muted-foreground">Le délai part de la dernière étape financière renseignée (remboursement, accord ou facture), sinon de la fin de formation. La couleur de la ligne ne signale pas une pièce manquante.</p>
-        <p className="text-muted-foreground">Étapes financières : vert = fait · bleu = à faire · jaune = délai de l’étape dépassé · gris = étape suivante. Survolez une étape pour consulter sa date.</p>
-      </section>
-
-      {/* Tableau */}
-      <section className="rounded-2xl border border-border bg-white overflow-hidden -mx-4 sm:mx-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-3 py-2"><DossierSelectAllCheckbox allIds={allRowIds} /></th>
-                <SortableTh sortKey="date">Date</SortableTh>
-                <SortableTh sortKey="apprenant">Apprenant</SortableTh>
-                <Th>Entreprise</Th>
-                <Th>Formation</Th>
-                <SortableTh sortKey="montant" className="text-right">Montant HT</SortableTh>
-                <SortableTh sortKey="opco">Financeur</SortableTh>
-                <Th>Dépôt du dossier</Th>
-                <Th>Suivi financier<span className="block text-[10px] font-normal normal-case text-muted-foreground">Facture · Accord · Remboursement · Paiement</span></Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    Aucun dossier ne correspond aux filtres.
-                  </td>
+        {/* Tableau */}
+        <section className="rounded-2xl border border-border bg-white overflow-hidden -mx-4 sm:mx-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="px-3 py-2">
+                    <DossierSelectAllCheckbox allIds={allRowIds} />
+                  </th>
+                  <SortableTh sortKey="date">Date</SortableTh>
+                  <SortableTh sortKey="apprenant">Apprenant</SortableTh>
+                  <Th>Entreprise</Th>
+                  <Th>Formation</Th>
+                  <SortableTh sortKey="montant" className="text-right">
+                    Montant HT
+                  </SortableTh>
+                  <SortableTh sortKey="opco">Financeur</SortableTh>
+                  <Th>Dépôt du dossier</Th>
+                  <Th>
+                    Suivi financier
+                    <span className="block text-[10px] font-normal normal-case text-muted-foreground">
+                      Facture · Accord · Remboursement · Paiement
+                    </span>
+                  </Th>
                 </tr>
-              ) : groupedView ? (
-                <>
-                  {groupsArr.map((g) => (
-                    <GroupRowExpander key={`${g.agg.sessionId}-${g.agg.sponsorOrgId}`} group={g.agg} colSpan={9}>
-                      {g.rows.map((r, idx) => renderRow(r, idx))}
-                    </GroupRowExpander>
-                  ))}
-                  {ungrouped.length > 0 && (
-                    <>
-                      <tr className="bg-muted/20 border-t-2 border-border">
-                        <td colSpan={9} className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Dossiers sans sponsor (non groupés)
-                        </td>
-                      </tr>
-                      {ungrouped.map((r, idx) => renderRow(r, idx))}
-                    </>
-                  )}
-                </>
-              ) : (
-                rows.map((r, idx) => renderRow(r, idx))
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-4 py-12 text-center text-sm text-muted-foreground"
+                    >
+                      Aucun dossier ne correspond aux filtres.
+                    </td>
+                  </tr>
+                ) : groupedView ? (
+                  <>
+                    {groupsArr.map((g) => (
+                      <GroupRowExpander
+                        key={`${g.agg.sessionId}-${g.agg.sponsorOrgId}`}
+                        group={g.agg}
+                        colSpan={9}
+                      >
+                        {g.rows.map((r, idx) => renderRow(r, idx))}
+                      </GroupRowExpander>
+                    ))}
+                    {ungrouped.length > 0 && (
+                      <>
+                        <tr className="bg-muted/20 border-t-2 border-border">
+                          <td
+                            colSpan={9}
+                            className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                          >
+                            Dossiers sans sponsor (non groupés)
+                          </td>
+                        </tr>
+                        {ungrouped.map((r, idx) => renderRow(r, idx))}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  rows.map((r, idx) => renderRow(r, idx))
+                )}
+              </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-muted/40 font-medium">
+                    <td
+                      colSpan={5}
+                      className="px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground"
+                    >
+                      Total filtré ({totalShown})
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtEUR.format(sumHT)}</td>
+                    <td colSpan={3} className="px-3 py-2 text-xs text-muted-foreground">
+                      Encaissé&nbsp;: {fmtEUR.format(sumCollected)}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr className="bg-muted/40 font-medium">
-                  <td colSpan={5} className="px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    Total filtré ({totalShown})
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtEUR.format(sumHT)}</td>
-                  <td colSpan={3} className="px-3 py-2 text-xs text-muted-foreground">
-                    Encaissé&nbsp;: {fmtEUR.format(sumCollected)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </section>
+            </table>
+          </div>
+        </section>
 
-      {totalShown >= 500 && (
-        <p className="text-xs text-muted-foreground italic">
-          Affichage limité à 500 dossiers. Affine les filtres (année, financeur, statut) pour voir les autres.
-        </p>
-      )}
-      <DossierSelectionBar />
-    </div>
+        {totalShown >= 500 && (
+          <p className="text-xs text-muted-foreground italic">
+            Affichage limité à 500 dossiers. Affine les filtres (année, financeur, statut) pour voir
+            les autres.
+          </p>
+        )}
+        <DossierSelectionBar />
+      </div>
     </DossierSelectionProvider>
   );
 }
@@ -828,8 +1040,16 @@ function KpiCard({
           ? 'border-sky-200 bg-sky-50/50'
           : 'border-border bg-white';
   const iconClass =
-    tone === 'success' ? 'text-emerald-700' : tone === 'warning' ? 'text-amber-700' : tone === 'info' ? 'text-sky-700' : 'text-primary';
-  const interactive = href ? 'cursor-pointer hover:shadow-sm hover:border-primary/40 transition-all' : '';
+    tone === 'success'
+      ? 'text-emerald-700'
+      : tone === 'warning'
+        ? 'text-amber-700'
+        : tone === 'info'
+          ? 'text-sky-700'
+          : 'text-primary';
+  const interactive = href
+    ? 'cursor-pointer hover:shadow-sm hover:border-primary/40 transition-all'
+    : '';
   const activeRing = active ? 'ring-2 ring-primary' : '';
   const inner = (
     <div className={`rounded-2xl border p-5 ${toneClass} ${interactive} ${activeRing}`}>
@@ -843,7 +1063,10 @@ function KpiCard({
   return href ? <Link href={href as any}>{inner}</Link> : inner;
 }
 
-function hrefWith(current: SP, patch: Partial<SP> & { year?: string; opco?: string; status?: string; type?: string }): string {
+function hrefWith(
+  current: SP,
+  patch: Partial<SP> & { year?: string; opco?: string; status?: string; type?: string },
+): string {
   const merged: SP = { ...current, ...patch } as SP;
   const params = new URLSearchParams();
   if (merged.year && merged.year !== 'all') params.set('year', merged.year);

@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock('@/server/actions/opco-deposit', () => ({ recordCompanyOpcoDeposit: vi.fn() }));
+vi.mock('@/server/actions/opco-deposit', () => ({
+  recordCompanyOpcoDeposit: vi.fn(),
+  listOpcoDepositors: vi.fn().mockResolvedValue([]),
+}));
 
 import { CompanyDepositTracker } from '../company-deposit-tracker';
 afterEach(cleanup);
@@ -33,7 +36,7 @@ describe('CompanyDepositTracker — correction d’un faux dépôt', () => {
     expect(screen.getByRole('button', { name: 'Annuler la déclaration' })).toBeTruthy();
     expect(
       (screen.getByRole('button', { name: /Confirmer pour/ }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    ).toBe(false);
     expect(screen.getByText(/peut toujours être corrigée ou annulée/)).toBeTruthy();
   });
 });
@@ -141,6 +144,13 @@ it('récupère les valeurs de la déclaration actualisée après fermeture sans 
   view.rerender(
     <CompanyDepositTracker
       {...props}
+      members={[
+        {
+          id: 'p',
+          depositedAt: '2026-09-10T12:00:00.000Z',
+          depositedBy: 'formation@start-academy.fr',
+        },
+      ]}
       depositedAt="2026-09-10T12:00:00.000Z"
       depositedBy="formation@start-academy.fr"
     />,

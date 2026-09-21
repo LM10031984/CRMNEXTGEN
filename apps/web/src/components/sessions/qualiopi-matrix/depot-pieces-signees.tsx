@@ -25,11 +25,14 @@ export function DepotPiecesSignees({
         companies={companies}
         participants={participants}
         docType="CONVENTION"
-        defaultOpen={false}
+        defaultOpen={true}
         titre="Déposer des pièces signées"
         docTypeOptions={[
           { value: 'CONVENTION', label: 'Convention individuelle signée' },
-          { value: 'CONVENTION_GROUPE', label: 'Convention entreprise / OPCO — commune aux salariés' },
+          {
+            value: 'CONVENTION_GROUPE',
+            label: 'Convention entreprise / OPCO — commune aux salariés',
+          },
           { value: 'AGEFICE', label: 'Demande de prise en charge AGEFICE signée' },
           { value: 'EMARGEMENT', label: 'Émargement signé' },
           { value: 'ASSIDUITE', label: 'Attestation d’assiduité signée' },

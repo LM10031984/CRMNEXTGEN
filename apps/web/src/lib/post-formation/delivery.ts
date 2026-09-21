@@ -23,6 +23,10 @@ export type AfterTrainingDeliveryPreview = {
   attachments: AfterTrainingAttachment[];
   blockers: string[];
   fingerprint: string;
+  prepareInvoiceId?: string;
+  invoiceUrl?: string;
+  canPrepareInvoice?: boolean;
+  from?: string;
   state: 'ready' | 'sent' | 'uncertain';
   sentAt: string | null;
   uncertainSince: string | null;
@@ -78,7 +82,9 @@ export function stripAfterTrainingStorageKeys(
   const { participantIds: _participantIds, ...publicDelivery } = delivery;
   return {
     ...publicDelivery,
-    attachments: delivery.attachments.map(({ sourceKey: _key, sourceHash: _hash, ...safe }) => safe),
+    attachments: delivery.attachments.map(
+      ({ sourceKey: _key, sourceHash: _hash, ...safe }) => safe,
+    ),
   };
 }
 
@@ -102,7 +108,10 @@ export function afterTrainingRelatedEntity(
 
 function parisDay(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).format(date);
 }
 

@@ -15,7 +15,7 @@ describe('Dossiers OPCO — séparation portail entreprise / email AGEFICE', () 
     expect(source).toContain(
       'agefice && <ComposeOpcoButton participantId={r.id} stage="FIN_FORMATION"',
     );
-    expect(source).toContain('Conforme et déposé');
+    expect(source).toContain('Dépôt confirmé');
     expect(source).toContain('find(isSuccessfulInitialSubmission)');
   });
 });
