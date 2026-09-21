@@ -73,12 +73,58 @@
  *  · `docs/comptabilite/note-chronologie-factures-2026.md` (la note opposable)
  *  · `docs/comptabilite/audit-chronologie-2026-09-10.txt` (l'inventaire brut)
  *
- * Le paramètre `now` ne subsiste que pour injecter une horloge en test. Aucun
- * appelant de production ne le passe : `resolveInvoiceIssueDate()` au point
- * d'appel doit se lire « il y a une règle ici, va la lire ».
+ * ── Le plancher ajouté le 21/09/2026 ────────────────────────────────────
+ *
+ * Le lot B avait raison sur le principe — la pièce se date du jour où on
+ * l'établit — mais il laissait passer ce qu'aucune règle comptable n'admet :
+ * facturer une prestation QUI N'A PAS ENCORE EU LIEU. Le 21/09, Laurent
+ * prépare les documents formateur de SES-0111 (« Du surfeur au pilote »,
+ * 28→29/09) et émet les 7 factures du groupe : elles sortent datées du 21,
+ * pour une formation qui se termine huit jours plus tard.
+ *
+ * La date d'émission reçoit donc un PLANCHER : la fin de la formation.
+ *
+ *     émission = max(jour d'établissement, fin de formation)
+ *
+ * Les deux cas se lisent séparément :
+ *  · formation TERMINÉE (le cas courant) — le plancher est déjà passé, la
+ *    règle du lot B s'applique inchangée : la pièce porte le jour du clic, et
+ *    la numérotation reste chronologique. Facturer en septembre une session de
+ *    juin donne toujours une facture datée de septembre ;
+ *  · formation À VENIR — la pièce porte la date de fin PRÉVUE, jamais un jour
+ *    où la prestation n'était pas rendue.
+ *
+ * ⚠ CE QUE CE PLANCHER COÛTE, ET QUI DOIT ÊTRE SU. Il rouvre, de l'autre
+ * côté, la faille que le lot B avait fermée : une pièce datée en avant peut
+ * précéder en numéro une pièce datée plus tôt. Émettre aujourd'hui pour une
+ * session qui finit le 29 (FAC-39 au 29/09), puis demain pour une session de
+ * juin (FAC-40 au 22/09), redonne une rupture de chronologie. La parade n'est
+ * PAS de rétablir l'ancienne règle — on ne facture pas avant d'avoir livré —
+ * mais de ne pas émettre avant la fin : un garde-fou à l'émission (avertir, ou
+ * refuser) est le chantier qui suit, et la note comptable doit être reprise en
+ * conséquence.
+ *
+ * ── Trace ───────────────────────────────────────────────────────────────
+ *
+ *  · `.planning/specs/2026-09-10-datation-numerotation-factures.md` (§2, §3, §7)
+ *  · `docs/comptabilite/note-chronologie-factures-2026.md` (la note opposable)
+ *  · `docs/comptabilite/audit-chronologie-2026-09-10.txt` (l'inventaire brut)
+ *
+ * Les deux champs sont nommés plutôt que positionnels : la date passée en
+ * premier argument a déjà désigné DEUX choses différentes dans l'histoire de
+ * cette fonction (la fin de prestation jusqu'au 10/09, l'horloge de test
+ * ensuite). Un objet interdit qu'un appelant se trompe de sens sans que le
+ * compilateur le voie.
  */
-export function resolveInvoiceIssueDate(now: Date = new Date()): Date {
-  return now;
+export function resolveInvoiceIssueDate(
+  input: { finDeFormation?: Date | null; now?: Date } = {},
+): Date {
+  const now = input.now ?? new Date();
+  const fin = input.finDeFormation ?? null;
+  // Sans date de fin connue, il n'y a pas de plancher à appliquer : on rend le
+  // jour d'établissement, comme le lot B.
+  if (fin === null) return now;
+  return fin.getTime() > now.getTime() ? fin : now;
 }
 
 /**
