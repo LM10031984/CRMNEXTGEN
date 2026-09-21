@@ -49,7 +49,7 @@ beforeAll(async () => {
     },
   });
   state.actor.id = u.id;
-  otherTenant = (await prisma.tenant.create({ data: { name: 'Autre tenant test' } })).id;
+  otherTenant = (await prisma.tenant.create({ data: { name: 'TEST-Autre tenant MLS' } })).id;
 });
 afterAll(async () => {
   for (const tenantId of [state.actor.tenantId, otherTenant]) {
