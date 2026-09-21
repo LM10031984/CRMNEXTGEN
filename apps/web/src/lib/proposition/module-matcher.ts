@@ -51,7 +51,11 @@ import type { ProposalModule } from '@qualiof/shared';
 
 import type { DiagnosticAlert } from '@/lib/diagnostic-r1/ratios';
 
-import { arbitrageRefusant, type ArbitrageRattachement } from './arbitrages-rattachement';
+import {
+  arbitrageConfirmant,
+  arbitrageRefusant,
+  type ArbitrageRattachement,
+} from './arbitrages-rattachement';
 import { direLesAppuis } from './appuis';
 import {
   IA_PATTERN,
@@ -631,6 +635,28 @@ export function suggestModules(input: ModuleMatchInput): ModuleMatchOutput {
     // part). Un module retiré en silence est un module que le commercial
     // rajoute à la main la semaine suivante.
     const refusesIci: ArbitrageRattachement[] = [];
+    /**
+     * D-27 au moteur, variante CIBLÉE (16/09/2026).
+     *
+     * Un rapprochement qui ne tient que par UN mot n'a pas de second témoin :
+     * si ce mot se trompe de sens, rien ne le rattrape. Relevé du 16/09 :
+     * 245 rapprochements sur 276 sortaient en `lexique`, et 87 % tenaient sur
+     * un seul mot — le « filet de sécurité » était devenu le chemin principal,
+     * ce qui est exactement le critère de réouverture écrit le 11/09.
+     *
+     * DEUX EXCEPTIONS, et elles disent la même chose : la règle punit ce qui
+     * est DEVINÉ, pas ce qui a été DÉCIDÉ.
+     *   • un `diagnosticSignal` du catalogue est une étiquette posée à la main ;
+     *   • un arbitrage CONFIRMÉ a été jugé sur le fond par un humain.
+     * Les écarter reviendrait à sanctionner les deux seuls endroits du système
+     * où quelqu'un a pris la peine d'être explicite.
+     *
+     * Coût mesuré AVANT d'appliquer, sur DIAG-R001 : 6 journées → 5, un besoin
+     * qui se déclare non couvert, 1 008 € de droits non consommés en plus.
+     * C'est le prix de la vérité — une proposition fausse ne couvrait rien,
+     * elle le cachait.
+     */
+    const tombesD27: { title: string; terme: string }[] = [];
     const scored = library
       .map((m) => {
         const arbitrage = arbitrageRefusant(need.code, m.sourceRef);
@@ -640,6 +666,11 @@ export function suggestModules(input: ModuleMatchInput): ModuleMatchOutput {
         }
         const s = scoreModule(m, need, weights);
         if (!s) return null;
+        const confirme = arbitrageConfirmant(need.code, m.sourceRef) !== null;
+        if (!confirme && s.source === 'lexique' && s.terms.length < 2) {
+          tombesD27.push({ title: m.title, terme: s.terms[0] ?? '' });
+          return null;
+        }
         const candidate: ModuleCandidate = {
           moduleId: m.moduleId,
           title: m.title,
@@ -657,6 +688,19 @@ export function suggestModules(input: ModuleMatchInput): ModuleMatchOutput {
         return candidate;
       })
       .filter((c): c is ModuleCandidate => c !== null);
+
+    if (tombesD27.length > 0) {
+      const exemples = tombesD27
+        .slice(0, 3)
+        .map((x) => `« ${x.title} » (le seul mot « ${x.terme} »)`)
+        .join(', ');
+      notices.push(
+        `${tombesD27.length} module(s) écarté(s) de « ${need.label} » : leur rapprochement ne tenait ` +
+          `que par UN mot de leur intitulé, sans signal du catalogue (D-27). Un appui unique n'a pas ` +
+          `de second témoin — ${exemples}${tombesD27.length > 3 ? ', …' : ''}. Si ce besoin se retrouve ` +
+          `sans réponse, c'est qu'il n'a pas de contenu : c'est la vérité, pas une régression.`,
+      );
+    }
 
     for (const a of refusesIci) {
       notices.push(

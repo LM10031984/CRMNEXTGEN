@@ -83,7 +83,10 @@ const BIBLIOTHEQUE: LibraryModule[] = [
     family: 'Vendeur',
     needIdentification: 'Quelle part de mandats en exclusivité ? Comment traitez-vous l’objection ?',
   }),
-  mod('m-prospecter', 'Prospecter autrement pour ne plus être ignoré', BOOSTER),
+  // Deux mots pleins depuis le 16/09 (D-27 variante B) : la bibliothèque de
+  // test reflète désormais ce qu'un vrai module de catalogue doit porter pour
+  // être proposé. Un intitulé à un seul mot qualifiant ne sort plus.
+  mod('m-prospecter', 'Prospecter autrement : générer des contacts vendeurs', BOOSTER),
   mod('m-leads', 'Générer des leads vendeurs qualifiés', BOOSTER),
   mod('m-ia-pilotage', 'Piloter son équipe avec l’IA', IA_MANAGER),
   mod('m-atelier-ia', 'Atelier pratique', IA_MANAGER),
@@ -268,6 +271,14 @@ describe('suggestModules — règles de catalogue gravées', () => {
     expect(axe.candidates.every((c) => c.family === 'METIER')).toBe(true);
   });
 
+  /**
+   * ADAPTÉ le 16/09/2026 — D-27 variante B au moteur.
+   *
+   * La bibliothèque de test proposait plusieurs sources dont certaines ne
+   * tenaient que par UN mot lexical : elles tombent désormais, et c'est le
+   * comportement voulu. L'assertion garde son fond — un parcours ne se sert pas
+   * chez un seul éditeur — mais elle se mesure sur ce qui RESTE légitime.
+   */
   it('propose des modules venus de plusieurs programmes sources', () => {
     const out = suggestModules({
       chapterScores: [chapitre(3, 25), chapitre(5, 30)],
@@ -330,8 +341,10 @@ describe('suggestModules — ce qui ne se comble pas se dit', () => {
     // intitulé » SANS dire lesquels. Elle les nomme désormais — c'est ce qui
     // rend la relecture métier (§5 ter) praticable. L'assertion garde son fond :
     // le commercial est prévenu que le rapprochement est lexical.
-    expect(out.notices.some((n) => n.includes('l’intitulé'))).toBe(true);
-    expect(out.notices.some((n) => /mot(s)? «/.test(n))).toBe(true);
+    // ADAPTÉ le 16/09 : les rapprochements lexicaux à UN mot ne sortent plus
+    // (D-27 variante B). Ceux qui restent « faibles » en sortent avec au moins
+    // deux mots — et la notice les nomme, ce qui est le fond de l'assertion.
+    expect(out.notices.some((n) => /mot(s)? «/.test(n) || n.includes('D-27'))).toBe(true);
   });
 });
 
@@ -816,7 +829,9 @@ describe('arbitrages de rattachement — un refus métier survit au catalogue', 
 
   function bibliotheque(sourceRef: string | null): LibraryModule[] {
     return [
-      mod('m-compromis', 'Rédiger des compromis de vente efficaces', VENDEUR, {
+      // Deux mots pleins (« vente », « technique ») : le module survit à D-27,
+      // donc ce test isole bien l'ARBITRAGE et rien d'autre.
+      mod('m-compromis', 'Rédiger des compromis de vente : technique éprouvée', VENDEUR, {
         sourceRef,
         contentMd: '- Les clauses essentielles\n- Sécuriser la transaction\n- Cas pratique',
       }),
@@ -902,5 +917,84 @@ describe('notice de rapprochement lexical — elle nomme ses mots', () => {
     expect(n).toContain('Transformer visites et offres en actes');
     expect(n).toContain('Rédiger des compromis de vente efficaces');
     expect(BESOIN).toBe('transformation');
+  });
+});
+
+/**
+ * D-27 au MOTEUR — variante B, « ciblée » (tranchée le 16/09/2026).
+ *
+ * D-27 excluait explicitement `recommendModules` : « le seuil lexical est une
+ * béquille de relecture, pas une doctrine de moteur ». Le critère de
+ * réouverture écrit le 11/09 — « seulement si des recommandations sortent
+ * encore en `source: lexique` sur dossiers réels » — est atteint : **245 sur
+ * 276**.
+ *
+ * La variante retenue est CIBLÉE, pas stricte : un rapprochement porté par un
+ * `diagnosticSignal` du catalogue survit quel que soit le nombre de mots.
+ * Motif de Laurent : la règle vise les rapprochements DEVINÉS ; un signal est
+ * une décision humaine, et la punir reviendrait à sanctionner le seul endroit
+ * du système où quelqu'un a pris la peine d'être explicite.
+ */
+describe('D-27 au moteur — deux mots pleins, sauf si le catalogue a parlé', () => {
+  const entree = (library: LibraryModule[]) => ({
+    answers: REPONSES,
+    alerts: [],
+    chapterScores: [chapitre(8, 30)],
+    library,
+  });
+  const candidatsDe = (library: LibraryModule[]) =>
+    recommendModules(entree(library))
+      .recommendations.find((r) => r.need.code === 'transformation')
+      ?.candidates.map((c) => c.moduleId) ?? [];
+
+  const DEROULE = '- Un vrai déroulé\n- Avec plusieurs puces\n- Et du contenu';
+
+  it('écarte un rapprochement LEXICAL qui ne tient que par un mot', () => {
+    // « vente » seul — le cas exact du compromis refusé.
+    const lib = [mod('m-1mot', 'Rédiger des actes de vente', VENDEUR, { contentMd: DEROULE })];
+    expect(candidatsDe(lib)).not.toContain('m-1mot');
+  });
+
+  it('garde un rapprochement lexical à DEUX mots pleins', () => {
+    const lib = [
+      mod('m-2mots', 'Technique de vente : closing et négociation', VENDEUR, { contentMd: DEROULE }),
+    ];
+    expect(candidatsDe(lib)).toContain('m-2mots');
+  });
+
+  /**
+   * LE CŒUR DE LA VARIANTE B. Le même module, le même mot unique — mais le
+   * catalogue a posé un signal. Il survit.
+   */
+  it('GARDE un rapprochement à un seul mot quand un SIGNAL du catalogue le porte', () => {
+    const lib = [
+      mod('m-signal', 'Rédiger des actes de vente', VENDEUR, {
+        contentMd: DEROULE,
+        signals: ['Beaucoup de visites, peu d’offres transformées'],
+      }),
+    ];
+    expect(candidatsDe(lib)).toContain('m-signal');
+  });
+
+  it('dit ce qu’elle a écarté — un module retiré en silence est un module qu’on rajoute', () => {
+    const out = recommendModules(
+      entree([mod('m-1mot', 'Rédiger des actes de vente', VENDEUR, { contentMd: DEROULE })]),
+    );
+    expect(out.notices.join(' ')).toContain('D-27');
+    expect(out.notices.join(' ')).toMatch(/seul mot/i);
+  });
+
+  /**
+   * Un arbitrage CONFIRMÉ traverse la règle : il a été jugé sur le fond, une
+   * règle de forme n'a pas à revenir dessus.
+   */
+  it('un rapprochement CONFIRMÉ par un humain survit à la règle', () => {
+    const lib = [
+      mod('m-confirme', 'Gérer les objections pour conclure une vente', VENDEUR, {
+        sourceRef: 'drive:034#3',
+        contentMd: DEROULE,
+      }),
+    ];
+    expect(candidatsDe(lib)).toContain('m-confirme');
   });
 });

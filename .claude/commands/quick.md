@@ -411,7 +411,25 @@ mot « conventionnées », pas le chiffre.
 
 Le coût des deux erreurs n'est pas le même, et c'est ce qui tranche : demander
 coûte une phrase, étendre coûte un aller-retour et une correction déjà
-commitée. C'est aussi pourquoi l'extension ne se rattrape pas « en expliquant »
+commitée.
+
+### Et la règle ne protège pas celui qui l'écrit
+
+**16/09/2026, dans le document qui INVOQUAIT §4 quater.** Un relevé d'homonymes
+annonçait sa population : « 298 modules composables × **24 besoins** ». Le 24
+n'avait pas été relevé, il avait été **supposé** — `PROGRAMME_NEEDS` en compte
+**neuf**. Et ce ne sont pas non plus les **34 douleurs** du barème, qui forment
+une troisième population.
+
+Trois populations dans le même dossier, et c'est la mauvaise qui a été écrite —
+par celui qui citait la règle deux paragraphes plus haut.
+
+> **Connaître la règle ne suffit pas : il faut relever le chiffre.** Un compte
+> qu'on n'a pas lu dans une sortie de programme est un compte supposé, même
+> quand il est plausible — surtout quand il est plausible.
+
+Le correctif tient en une habitude : **tout chiffre de population s'imprime par
+le code qui le compte**, jamais retapé dans le texte qui le commente. C'est aussi pourquoi l'extension ne se rattrape pas « en expliquant »
 — elle se rattrape en n'ayant pas eu lieu.
 
 **Le signe qui doit alerter** : se dire « c'est la même chose ailleurs ».
