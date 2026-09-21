@@ -3,7 +3,8 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { requireRole } from '@/lib/rbac';
 import { buildOpcoSubmission } from '@/lib/opco/build-submission';
-import { controlCompanyPieces, DEPOSITORS, isCompanyDossier } from '@/lib/opco/company-dossier';
+import { controlCompanyPieces, isCompanyDossier } from '@/lib/opco/company-dossier';
+import { z } from 'zod';
 import { parisDay } from '@/lib/alertes/formation-rules';
 
 export async function recordOpcoDeposit(input: {
@@ -17,11 +18,24 @@ export async function recordOpcoDeposit(input: {
   const clearing = input.email === null && input.date === null;
   if (
     !clearing &&
-    (!DEPOSITORS.some((p) => p.email === input.email) ||
+    (!z.string().email().safeParse(input.email).success ||
       !input.date ||
       !/^\d{4}-\d{2}-\d{2}$/.test(input.date))
   )
     return { ok: false, error: 'Choisissez la personne et la date du dépôt.' };
+  if (
+    !clearing &&
+    !(await prisma.user.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        email: { equals: input.email!, mode: 'insensitive' },
+        disabledAt: null,
+        role: { in: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'] },
+      },
+      select: { id: true },
+    }))
+  )
+    return { ok: false, error: 'Choisissez un membre actif et habilité de votre organisme.' };
   const date = clearing ? null : new Date(`${input.date}T12:00:00.000Z`);
   if (
     date &&
@@ -92,16 +106,30 @@ export async function recordCompanyOpcoDeposit(input: {
   email: string | null;
   date: string | null;
   expectedMembers: ExpectedCompanyMember[];
+  correctionOnly?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE']);
   const clearing = input.email === null && input.date === null;
   if (
     !clearing &&
-    (!DEPOSITORS.some((person) => person.email === input.email) ||
+    (!z.string().email().safeParse(input.email).success ||
       !input.date ||
       !/^\d{4}-\d{2}-\d{2}$/.test(input.date))
   )
     return { ok: false, error: 'Choisissez la personne et la date du dépôt.' };
+  if (
+    !clearing &&
+    !(await prisma.user.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        email: { equals: input.email!, mode: 'insensitive' },
+        disabledAt: null,
+        role: { in: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'] },
+      },
+      select: { id: true },
+    }))
+  )
+    return { ok: false, error: 'Choisissez un membre actif et habilité de votre organisme.' };
   const date = clearing ? null : new Date(`${input.date}T12:00:00.000Z`);
   if (
     date &&
@@ -116,6 +144,8 @@ export async function recordCompanyOpcoDeposit(input: {
   if (expected.size !== input.expectedMembers.length)
     return { ok: false, error: 'Le groupe contient une inscription en double. Rechargez la page.' };
 
+  if (input.correctionOnly && !input.expectedMembers.some((m) => m.depositedAt))
+    return { ok: false, error: 'Aucun dépôt existant à corriger.' };
   for (const member of input.expectedMembers) {
     const built = await buildOpcoSubmission(member.id, user, 'PRISE_EN_CHARGE');
     if (!built.ok) return built;
@@ -125,7 +155,7 @@ export async function recordCompanyOpcoDeposit(input: {
       built.participant.sponsorOrgId !== input.sponsorOrgId
     )
       return { ok: false, error: 'Ce dossier entreprise ne correspond pas à la session.' };
-    if (!clearing) {
+    if (!clearing && !input.correctionOnly) {
       const blocked = controlCompanyPieces(built.attachments);
       if (blocked) return { ok: false, error: `Dossier salarié incomplet — ${blocked}` };
     }
@@ -173,6 +203,7 @@ export async function recordCompanyOpcoDeposit(input: {
         return false;
 
       for (const member of current) {
+        if (!clearing && input.correctionOnly && !member.opcoDepositedAt) continue;
         const updated = await tx.sessionParticipant.updateMany({
           where: {
             id: member.id,
@@ -196,7 +227,10 @@ export async function recordCompanyOpcoDeposit(input: {
           action: clearing ? 'opco.company_deposit_cleared' : 'opco.company_deposit_recorded',
           diff: {
             sessionId: input.sessionId,
-            participantIds: current.map((member) => member.id),
+            participantIds: current
+              .filter((member) => clearing || !input.correctionOnly || member.opcoDepositedAt)
+              .map((member) => member.id),
+            correctionOnly: input.correctionOnly === true,
             after: { at: date?.toISOString() ?? null, by: clearing ? null : input.email },
           },
         },
@@ -215,4 +249,18 @@ export async function recordCompanyOpcoDeposit(input: {
   revalidatePath('/app/dossiers-opco', 'layout');
   revalidatePath(`/app/sessions/${input.sessionId}`);
   return { ok: true };
+}
+
+export async function listOpcoDepositors(): Promise<Array<{ email: string; name: string }>> {
+  const user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE']);
+  const people = await prisma.user.findMany({
+    where: {
+      tenantId: user.tenantId,
+      disabledAt: null,
+      role: { in: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'] },
+    },
+    select: { email: true, firstName: true, lastName: true },
+    orderBy: { firstName: 'asc' },
+  });
+  return people.map((p) => ({ email: p.email, name: `${p.firstName} ${p.lastName}`.trim() }));
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({
   role: vi.fn(),
+  user: vi.fn(),
   build: vi.fn(),
   findMany: vi.fn(),
   update: vi.fn(),
@@ -14,7 +15,9 @@ vi.mock('@qualiof/db', () => {
     sessionParticipant: { findMany: m.findMany, updateMany: m.update },
     auditLog: { create: m.audit },
   };
-  return { prisma: { $transaction: (fn: (tx: unknown) => unknown) => fn(tx) } };
+  return {
+    prisma: { user: { findFirst: m.user }, $transaction: (fn: (tx: unknown) => unknown) => fn(tx) },
+  };
 });
 import { recordCompanyOpcoDeposit, recordOpcoDeposit } from '../opco-deposit';
 const input = {
@@ -41,6 +44,9 @@ const built = () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   m.role.mockResolvedValue({ id: 'actual-user', tenantId: 'tenant' });
+  m.user.mockImplementation(async ({ where }) =>
+    where.email.equals === 'unknown@example.com' ? null : { id: 'team-member' },
+  );
   m.build.mockResolvedValue(built());
   m.findMany.mockResolvedValue([
     { id: 'p', participantType: 'salarie', opcoDepositedAt: null, opcoDepositedByEmail: null },
@@ -80,6 +86,38 @@ describe('déclaration OPCO groupée par entreprise', () => {
         }),
       }),
     );
+  });
+
+  it('corrige uniquement les membres déjà déclarés quand les pièces du groupe sont incomplètes', async () => {
+    const at = new Date('2026-01-08T12:00:00Z');
+    m.build.mockResolvedValue({ ...built(), attachments: [] });
+    m.findMany.mockResolvedValue([
+      {
+        id: 'p',
+        participantType: 'Salarié',
+        opcoDepositedAt: at,
+        opcoDepositedByEmail: input.email,
+      },
+      { id: 'p2', participantType: 'Salarié', opcoDepositedAt: null, opcoDepositedByEmail: null },
+    ]);
+    expect(
+      await recordCompanyOpcoDeposit({
+        ...groupInput,
+        correctionOnly: true,
+        expectedMembers: [
+          { id: 'p', depositedAt: at.toISOString(), depositedBy: input.email },
+          { id: 'p2', depositedAt: null, depositedBy: null },
+        ],
+      }),
+    ).toEqual({ ok: true });
+    expect(m.update).toHaveBeenCalledTimes(1);
+    expect(m.update.mock.calls[0]![0].where.id).toBe('p');
+    expect(m.audit.mock.calls[0]![0].data.diff.participantIds).toEqual(['p']);
+    expect(m.user.mock.calls[0]![0].where).toMatchObject({
+      tenantId: 'tenant',
+      disabledAt: null,
+      role: { in: ['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE'] },
+    });
   });
 
   it('refuse si un salarié a été ajouté depuis l’affichage', async () => {

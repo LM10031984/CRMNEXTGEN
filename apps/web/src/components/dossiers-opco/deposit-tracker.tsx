@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { recordOpcoDeposit } from '@/server/actions/opco-deposit';
-import { DEPOSITORS } from '@/lib/opco/company-dossier';
+import { DepositorField } from '@/components/dossiers-opco/depositor-field';
 import { parisDay } from '@/lib/alertes/formation-rules';
 
 export function DepositTracker({
@@ -20,13 +20,11 @@ export function DepositTracker({
   canWrite: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [email, setEmail] = useState(
-    depositedBy ?? (DEPOSITORS.some((d) => d.email === userEmail) ? userEmail : ''),
-  );
+  const [email, setEmail] = useState(depositedBy ?? userEmail);
   const [date, setDate] = useState(depositedAt?.slice(0, 10) ?? parisDay(new Date()));
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  const depositor = DEPOSITORS.find((d) => d.email === depositedBy)?.name ?? depositedBy;
+  const depositor = depositedBy;
   function save(clear = false) {
     startTransition(async () => {
       try {
@@ -68,21 +66,7 @@ export function DepositTracker({
       {canWrite && editing && (
         <div className="flex flex-wrap items-center gap-2">
           <label>
-            Déposé par{' '}
-            <select
-              aria-label="Déposé par"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="border rounded p-1"
-              disabled={pending}
-            >
-              <option value="">Choisir…</option>
-              {DEPOSITORS.map((d) => (
-                <option key={d.email} value={d.email}>
-                  {d.name} — {d.email}
-                </option>
-              ))}
-            </select>
+            Déposé par <DepositorField value={email} onChange={setEmail} disabled={pending} />
           </label>
           <label>
             Date du dépôt{' '}

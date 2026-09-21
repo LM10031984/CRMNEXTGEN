@@ -24,12 +24,6 @@ export function controlCompanyPieces(
   return missing.length ? `Pièces à compléter : ${missing.join(', ')}.` : null;
 }
 
-export const DEPOSITORS = [
-  { email: 'formation@start-academy.fr', name: 'Béatrice Blanc' },
-  { email: 'laurent@start-academy.fr', name: 'Laurent' },
-  { email: 'jean-guy@start-academy.fr', name: 'Jean-Guy' },
-] as const;
-
 /** Documents triés du plus récent au plus ancien ; la convention entreprise couvre le groupe. */
 export function selectDossierConvention<
   T extends { participantId?: string | null; entityType?: string; entityId?: string },

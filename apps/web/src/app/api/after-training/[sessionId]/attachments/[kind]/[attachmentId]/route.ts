@@ -1,3 +1,4 @@
+import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { NextResponse } from 'next/server';
 import { prisma } from '@qualiof/db';
 import { requireRole, ForbiddenError, UnauthorizedError } from '@/lib/rbac';
@@ -13,7 +14,8 @@ export async function GET(
   try {
     user = await requireRole(['ADMIN', 'MANAGER', 'COMMERCIAL', 'COMPTABLE']);
   } catch (error) {
-    if (error instanceof UnauthorizedError) return new NextResponse('Unauthorized', { status: 401 });
+    if (error instanceof UnauthorizedError)
+      return new NextResponse('Unauthorized', { status: 401 });
     if (error instanceof ForbiddenError) return new NextResponse('Forbidden', { status: 403 });
     throw error;
   }
@@ -48,6 +50,8 @@ export async function GET(
     const invoice = await prisma.invoice.findFirst({
       where: { id: attachmentId, tenantId: user.tenantId },
       include: {
+        payments: { select: { source: true } },
+        creditNotes: { select: { id: true } },
         payerOrg: { select: { brandName: true, legalName: true } },
         participant: {
           select: {
@@ -58,15 +62,23 @@ export async function GET(
         },
       },
     });
-    if (invoice && invoice.pdfUrl && ['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(invoice.status)) {
-      const groupedIds = Array.isArray(invoice.participantIds) ? (invoice.participantIds as string[]) : [];
-      const singleGroupedParticipant = groupedIds.length === 1
-        ? await prisma.sessionParticipant.findFirst({
-            where: { id: groupedIds[0], sessionId, session: { tenantId: user.tenantId } },
-            select: { sponsorOrgId: true },
-          })
-        : null;
-      const groupedShapeIsSafe = groupedIds.length === 0 ||
+    if (
+      invoice &&
+      invoice.pdfUrl &&
+      ['ISSUED', 'PAID', 'PARTIAL', 'OVERDUE'].includes(invoice.status)
+    ) {
+      const groupedIds = Array.isArray(invoice.participantIds)
+        ? (invoice.participantIds as string[])
+        : [];
+      const singleGroupedParticipant =
+        groupedIds.length === 1
+          ? await prisma.sessionParticipant.findFirst({
+              where: { id: groupedIds[0], sessionId, session: { tenantId: user.tenantId } },
+              select: { sponsorOrgId: true },
+            })
+          : null;
+      const groupedShapeIsSafe =
+        groupedIds.length === 0 ||
         (groupedIds.length === 1 && groupedIds[0] === invoice.participantId);
       const directIndividual =
         invoice.participantId != null &&
@@ -79,9 +91,16 @@ export async function GET(
         groupedIds.length === 1 &&
         invoice.sessionId === sessionId &&
         singleGroupedParticipant?.sponsorOrgId === invoice.payerOrgId;
-      if (directIndividual || safeSingleGrouped) {
-        sourceKey = invoice.pdfUrl;
-        filename = invoiceDownloadFilename(invoice);
+      if (
+        (directIndividual || safeSingleGrouped) &&
+        invoice.status === 'PAID' &&
+        invoice.paidAt &&
+        Number(invoice.amountPaid) >= Number(invoice.amountTTC) &&
+        invoice.creditNotes.length === 0 &&
+        !invoice.payments.some((p) => p.source === 'OPCO_SYNC')
+      ) {
+        sourceKey = acquittedInvoiceKey(invoice.number);
+        filename = invoiceDownloadFilename(invoice, { acquittee: true });
       }
     }
   }

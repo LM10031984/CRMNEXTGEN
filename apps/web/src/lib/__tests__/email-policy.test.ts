@@ -71,6 +71,7 @@ const ALL_CATEGORIES: Array<{ category: EmailCategory; field: string }> = [
   { category: 'preinscription_reminder', field: 'preinscriptionRemindersEnabled' },
   { category: 'opco_reminder', field: 'opcoRemindersEnabled' },
   { category: 'opco_submission', field: 'opcoSubmissionsEnabled' },
+  { category: 'learner_documents', field: 'learnerDocumentsEnabled' },
   { category: 'internal_notification', field: 'internalNotificationsEnabled' },
   { category: 'user_invitation', field: 'userInvitationsEnabled' },
 ];
@@ -89,25 +90,31 @@ describe('resolveEmailPolicy — matrice fail-closed', () => {
 
   it('2. catégorie décochée + interrupteur ON → suppress/category-off', () => {
     const settings = makeSettings({ emailsEnabled: true, invoiceRemindersEnabled: false });
-    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual({
-      decision: 'suppress',
-      reason: 'category-off',
-    });
+    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual(
+      {
+        decision: 'suppress',
+        reason: 'category-off',
+      },
+    );
   });
 
   it('3. catégorie cochée + interrupteur ON → send', () => {
     const settings = makeSettings({ emailsEnabled: true, invoiceRemindersEnabled: true });
-    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual({
-      decision: 'send',
-    });
+    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual(
+      {
+        decision: 'send',
+      },
+    );
   });
 
   it('4. catégorie cochée + interrupteur OFF + sessionId absent (null) → suppress/master-off', () => {
     const settings = makeSettings({ invoiceRemindersEnabled: true, testSessionIds: ['ses-test'] });
-    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual({
-      decision: 'suppress',
-      reason: 'master-off',
-    });
+    expect(resolveEmailPolicy(settings, { category: 'invoice_reminder', sessionId: null })).toEqual(
+      {
+        decision: 'suppress',
+        reason: 'master-off',
+      },
+    );
   });
 
   it('5. catégorie cochée + interrupteur OFF + sessionId undefined → suppress/master-off', () => {
@@ -250,7 +257,7 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
     });
   });
 
-  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 11 catégories = les clés des DEUX maps', () => {
+  it('T1.2 — EXHAUSTIVITÉ : la liste littérale des 12 catégories = les clés des DEUX maps', () => {
     // Écrite à la main. Le libellé manquant est le défaut le plus discret :
     // l'écran afficherait `undefined` sans que rien ne casse.
     //
@@ -269,6 +276,7 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
       'preenrollment_submitted',
       'proposal_sent',
       'signature',
+      'learner_documents',
     ];
     expect(new Set(Object.keys(EMAIL_CATEGORY_FIELD))).toEqual(new Set(attendues));
     expect(new Set(Object.keys(EMAIL_CATEGORY_LABELS))).toEqual(new Set(attendues));
@@ -291,7 +299,14 @@ describe('catégorie « signature » — décochable, fail-closed', () => {
 
 describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)', () => {
   const savedEnv: Record<string, string | undefined> = {};
-  const ENV_KEYS = ['MAIL_DRY_RUN', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'];
+  const ENV_KEYS = [
+    'MAIL_DRY_RUN',
+    'SMTP_HOST',
+    'SMTP_PORT',
+    'SMTP_USER',
+    'SMTP_PASS',
+    'MAIL_FROM',
+  ];
 
   beforeEach(() => {
     for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
@@ -313,7 +328,11 @@ describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)
     to: 'apprenant@example.com',
     subject: 'Relance facture FAC-000001',
     html: '<p>Bonjour</p>',
-    context: { tenantId: 'tenant-1', category: 'invoice_reminder' as EmailCategory, sessionId: null },
+    context: {
+      tenantId: 'tenant-1',
+      category: 'invoice_reminder' as EmailCategory,
+      sessionId: null,
+    },
   };
 
   it('B1. MAIL_DRY_RUN env actif → { ok:true, dryRun:true } SANS lecture BDD', async () => {
@@ -484,4 +503,22 @@ describe('sendMail — chokepoint 2 couches (env plomberie → réglages tenant)
     expect(res.suppressed).toBeUndefined();
     expect(smtpSendMail).toHaveBeenCalledTimes(1);
   });
+});
+
+it('isole les documents apprenants du commutateur des soumissions OPCO', () => {
+  expect(
+    resolveEmailPolicy(makeSettings({ emailsEnabled: true, opcoSubmissionsEnabled: true }), {
+      category: 'learner_documents',
+    }),
+  ).toEqual({ decision: 'suppress', reason: 'category-off' });
+  expect(
+    resolveEmailPolicy(
+      makeSettings({
+        emailsEnabled: true,
+        opcoSubmissionsEnabled: false,
+        learnerDocumentsEnabled: true,
+      }),
+      { category: 'learner_documents' },
+    ),
+  ).toEqual({ decision: 'send' });
 });

@@ -1,4 +1,8 @@
 import Link from 'next/link';
+import {
+  ExternalDepositTracker,
+  type ExternalDepositSnapshot,
+} from '@/components/dossiers-opco/external-deposit-tracker';
 import { CheckCircle2, CircleDashed, Download, ExternalLink, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { FundingTone } from '@/lib/opco/session-funding-status';
@@ -12,6 +16,8 @@ export interface FundingLearnerRow {
   name: string;
   sponsorName: string;
   kind: 'AGEFICE';
+  initialDeposit?: ExternalDepositSnapshot | null;
+  finalDeposit?: ExternalDepositSnapshot | null;
   tone: FundingTone;
   submissionId: string | null;
   detail: string;
@@ -153,19 +159,41 @@ export function SessionFundingSummary({
                   {company.missingLearners.length > 0 && (
                     <>
                       <p>
-                        Convention signée de {company.sponsorName} pour couvrir : {company.missingLearners.join(', ')}.
-                        Une convention commune à l’entreprise suffit pour ses salariés.
+                        Convention signée de {company.sponsorName} pour couvrir :{' '}
+                        {company.missingLearners.join(', ')}. Une convention commune à l’entreprise
+                        suffit pour ses salariés.
                       </p>
-                      {canUploadSigned && <a href="#depot-pieces-signees" className="inline-block font-medium underline underline-offset-2">
-                        Déposer la convention d’entreprise signée
-                      </a>}
-                      {canUploadSigned
-                        ? <p>Dans « Déposer des pièces signées », choisissez « Convention entreprise / OPCO — commune aux salariés », puis {company.sponsorName}.</p>
-                        : <p>Un administrateur, gestionnaire ou commercial peut déposer la convention signée dans la session.</p>}
+                      {canUploadSigned && (
+                        <a
+                          href="#depot-pieces-signees"
+                          className="inline-block font-medium underline underline-offset-2"
+                        >
+                          Déposer la convention d’entreprise signée
+                        </a>
+                      )}
+                      {canUploadSigned ? (
+                        <p>
+                          Dans « Déposer des pièces signées », choisissez « Convention entreprise /
+                          OPCO — commune aux salariés », puis {company.sponsorName}.
+                        </p>
+                      ) : (
+                        <p>
+                          Un administrateur, gestionnaire ou commercial peut déposer la convention
+                          signée dans la session.
+                        </p>
+                      )}
                     </>
                   )}
                   {company.programmeMissing && (
-                    <p>Programme de formation manquant. <Link href={`/app/sessions/${sessionId}?tab=avant`} className="font-medium underline">Voir les documents avant formation</Link></p>
+                    <p>
+                      Programme de formation manquant.{' '}
+                      <Link
+                        href={`/app/sessions/${sessionId}?tab=avant`}
+                        className="font-medium underline"
+                      >
+                        Voir les documents avant formation
+                      </Link>
+                    </p>
                   )}
                 </div>
               )}
@@ -194,9 +222,23 @@ export function SessionFundingSummary({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <ExternalDepositTracker
+                participantId={learner.participantId}
+                stage="PRISE_EN_CHARGE"
+                current={learner.initialDeposit ?? null}
+                canWrite={canWrite}
+                userName={userEmail}
+              />
+              <ExternalDepositTracker
+                participantId={learner.participantId}
+                stage="FIN_FORMATION"
+                current={learner.finalDeposit ?? null}
+                canWrite={canWrite}
+                userName={userEmail}
+              />
               <StatusBadge
                 tone={learner.tone}
-                label={learner.tone === 'success' ? 'Conforme et déposé' : undefined}
+                label={learner.tone === 'success' ? 'Dépôt confirmé' : undefined}
               />
               {learner.submissionId && (
                 <Link

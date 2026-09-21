@@ -76,6 +76,7 @@ export default async function ParametresPage() {
     preinscriptionRemindersEnabled: emailSettings?.preinscriptionRemindersEnabled ?? false,
     opcoRemindersEnabled: emailSettings?.opcoRemindersEnabled ?? false,
     opcoSubmissionsEnabled: emailSettings?.opcoSubmissionsEnabled ?? false,
+    learnerDocumentsEnabled: emailSettings?.learnerDocumentsEnabled ?? false,
     internalNotificationsEnabled: emailSettings?.internalNotificationsEnabled ?? false,
     userInvitationsEnabled: emailSettings?.userInvitationsEnabled ?? false,
     diagnosticProgramsEnabled: emailSettings?.diagnosticProgramsEnabled ?? false,
@@ -124,10 +125,7 @@ export default async function ParametresPage() {
   if (!tenant) {
     return (
       <div className="space-y-6 max-w-5xl">
-        <PageHeader
-          title="Paramètres"
-          subtitle="Configuration de votre organisme de formation"
-        />
+        <PageHeader title="Paramètres" subtitle="Configuration de votre organisme de formation" />
         <p className="text-sm text-red-600">Tenant introuvable.</p>
       </div>
     );
@@ -150,10 +148,7 @@ export default async function ParametresPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <PageHeader
-        title="Paramètres"
-        subtitle="Configuration de votre organisme de formation"
-      />
+      <PageHeader title="Paramètres" subtitle="Configuration de votre organisme de formation" />
 
       <div className="grid grid-cols-1 gap-6">
         {/* ─── 1. Organisme — Identité légale (SET-01) ──────────────────── */}
@@ -170,7 +165,8 @@ export default async function ParametresPage() {
               <Field label="Forme juridique" value={tenant.legalForm} />
             </dl>
           }
-          editView={<OfIdentityForm
+          editView={
+            <OfIdentityForm
               initial={{
                 name: tenant.name,
                 siret: tenant.siret,
@@ -178,7 +174,8 @@ export default async function ParametresPage() {
                 rcs: tenant.rcs,
                 legalForm: tenant.legalForm,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 2. Adresse & mentions légales (SET-02 texte) ─────────────── */}
@@ -195,9 +192,7 @@ export default async function ParametresPage() {
                     ? [
                         address.street,
                         address.street2,
-                        [address.postalCode, address.city]
-                          .filter(Boolean)
-                          .join(' '),
+                        [address.postalCode, address.city].filter(Boolean).join(' '),
                         address.country,
                       ]
                         .filter(Boolean)
@@ -215,12 +210,14 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={<OfAddressForm
+          editView={
+            <OfAddressForm
               initial={{
                 address: address ?? null,
                 legalMentions: tenant.legalMentions,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 3. Logo & signatures (SET-02 assets) ──────────────────── */}
@@ -230,30 +227,27 @@ export default async function ParametresPage() {
           description="Affichés en en-tête / pied des documents Qualiopi générés"
           readView={
             <div className="text-sm text-muted-foreground">
-              Cliquer sur <strong>Modifier</strong> pour gérer le logo et les
-              signatures.
-              {(tenant.logoPath ||
-                tenant.signaturePedagoPath ||
-                tenant.signatureDirigeantPath) && (
+              Cliquer sur <strong>Modifier</strong> pour gérer le logo et les signatures.
+              {(tenant.logoPath || tenant.signaturePedagoPath || tenant.signatureDirigeantPath) && (
                 <ul className="mt-2 text-xs space-y-0.5">
                   {tenant.logoPath && <li>• Logo personnalisé actif</li>}
                   {tenant.signaturePedagoPath && (
                     <li>• Signature responsable pédagogique personnalisée</li>
                   )}
-                  {tenant.signatureDirigeantPath && (
-                    <li>• Signature dirigeant personnalisée</li>
-                  )}
+                  {tenant.signatureDirigeantPath && <li>• Signature dirigeant personnalisée</li>}
                 </ul>
               )}
             </div>
           }
-          editView={<OfAssetsForm
+          editView={
+            <OfAssetsForm
               initial={{
                 logoPath: tenant.logoPath,
                 signaturePedagoPath: tenant.signaturePedagoPath,
                 signatureDirigeantPath: tenant.signatureDirigeantPath,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 4. Numérotation factures (SET-03 préfixe) ─────────────── */}
@@ -269,19 +263,21 @@ export default async function ParametresPage() {
                 value={
                   invoiceCount > 0
                     ? `${invoiceCount} facture${invoiceCount > 1 ? 's' : ''}`
-                    : 'Aucune facture émise pour l\'instant'
+                    : "Aucune facture émise pour l'instant"
                 }
               />
             </dl>
           }
-          editView={<OfInvoicingForm
+          editView={
+            <OfInvoicingForm
               initial={{
                 invoicePrefix,
                 iban: tenant.iban,
                 bic: tenant.bic,
               }}
               invoiceCount={invoiceCount}
-            />}
+            />
+          }
         />
 
         {/* ─── 4bis. Facturation — Relances et avoirs (Phase 11 Plan 11-04) ─ */}
@@ -293,11 +289,7 @@ export default async function ParametresPage() {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
               <Field
                 label="Préfixe avoirs"
-                value={
-                  <span className="font-mono">
-                    {tenant.creditNotePrefix ?? 'AVO'}
-                  </span>
-                }
+                value={<span className="font-mono">{tenant.creditNotePrefix ?? 'AVO'}</span>}
               />
               <Field
                 label="Délais de relance (jours)"
@@ -312,15 +304,16 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={<InvoiceSettingsForm
+          editView={
+            <InvoiceSettingsForm
               initial={{
-                invoiceReminderDays:
-                  tenant.invoiceReminderDays?.length
-                    ? tenant.invoiceReminderDays
-                    : [30, 45],
+                invoiceReminderDays: tenant.invoiceReminderDays?.length
+                  ? tenant.invoiceReminderDays
+                  : [30, 45],
                 creditNotePrefix: tenant.creditNotePrefix,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 4bis-2. Envois d'emails (Phase 22 Plan 22-11 — D-06) ────── */}
@@ -346,7 +339,9 @@ export default async function ParametresPage() {
                 <Field
                   label="Catégories autorisées"
                   value={
-                    enabledCategories.length > 0 ? enabledCategories.join(', ') : (
+                    enabledCategories.length > 0 ? (
+                      enabledCategories.join(', ')
+                    ) : (
                       <span className="text-muted-foreground italic">
                         Aucune — tout est décoché (défaut)
                       </span>
@@ -364,10 +359,9 @@ export default async function ParametresPage() {
               </dl>
             </div>
           }
-          editView={<EmailSettingsForm
-              initial={emailSettingsInitial}
-              sessions={selectableSessions}
-            />}
+          editView={
+            <EmailSettingsForm initial={emailSettingsInitial} sessions={selectableSessions} />
+          }
         />
 
         {/* ─── 4ter. Documents légaux statiques (BUG-15) ───────────── */}
@@ -394,7 +388,8 @@ export default async function ParametresPage() {
                 value={
                   tenant.reglementInterieurMarkdown ? (
                     <span className="text-emerald-600">
-                      ✓ {tenant.reglementInterieurMarkdown.length.toLocaleString('fr-FR')} caractères
+                      ✓ {tenant.reglementInterieurMarkdown.length.toLocaleString('fr-FR')}{' '}
+                      caractères
                     </span>
                   ) : (
                     <span className="text-orange-600 italic">Non rédigé</span>
@@ -403,12 +398,14 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={<LegalDocsForm
+          editView={
+            <LegalDocsForm
               initial={{
                 cgvMarkdown: tenant.cgvMarkdown ?? null,
                 reglementInterieurMarkdown: tenant.reglementInterieurMarkdown ?? null,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 5. Coordonnées bancaires (SET-03 RIB) ─────────────────── */}
@@ -419,9 +416,13 @@ export default async function ParametresPage() {
           readView={
             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
               <div className="sm:col-span-2">
-                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">IBAN</dt>
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                  IBAN
+                </dt>
                 <dd className="font-mono text-sm mt-0.5">
-                  {tenant.iban ? formatIban(tenant.iban) : (
+                  {tenant.iban ? (
+                    formatIban(tenant.iban)
+                  ) : (
                     <span className="text-muted-foreground italic">à renseigner</span>
                   )}
                 </dd>
@@ -432,13 +433,15 @@ export default async function ParametresPage() {
               />
             </dl>
           }
-          editView={<OfBankingForm
+          editView={
+            <OfBankingForm
               initial={{
                 invoicePrefix,
                 iban: tenant.iban,
                 bic: tenant.bic,
               }}
-            />}
+            />
+          }
         />
 
         {/* ─── 6. Email expéditeur (SET-03 email) ────────────────────── */}
@@ -452,10 +455,7 @@ export default async function ParametresPage() {
                 label="Adresse d'envoi"
                 value={
                   tenant.emailFrom ? (
-                    <a
-                      href={`mailto:${tenant.emailFrom}`}
-                      className="text-primary hover:underline"
-                    >
+                    <a href={`mailto:${tenant.emailFrom}`} className="text-primary hover:underline">
                       {tenant.emailFrom}
                     </a>
                   ) : null
@@ -466,9 +466,7 @@ export default async function ParametresPage() {
               </p>
             </dl>
           }
-          editView={<OfEmailForm
-              initial={{ emailFrom: tenant.emailFrom }}
-            />}
+          editView={<OfEmailForm initial={{ emailFrom: tenant.emailFrom }} />}
         />
 
         {/* ─── 7. Signataire (spec signature 2026-09-04, D-1) ─────────── */}
@@ -498,9 +496,7 @@ export default async function ParametresPage() {
                     : "L'organisme signe après le client"
                 }
               />
-              {!signatory.ok && (
-                <p className="text-[11px] text-red-600">{signatory.error}</p>
-              )}
+              {!signatory.ok && <p className="text-[11px] text-red-600">{signatory.error}</p>}
               <p className="text-[11px] text-muted-foreground">
                 Signature électronique :{' '}
                 {signatureStatus.available
@@ -510,7 +506,8 @@ export default async function ParametresPage() {
               </p>
             </dl>
           }
-          editView={<OfSignatoryForm
+          editView={
+            <OfSignatoryForm
               initial={{
                 signatoryName: tenant.signatoryName,
                 signatoryEmail: tenant.signatoryEmail,
@@ -519,7 +516,8 @@ export default async function ParametresPage() {
               }}
               fallbackName={ofConfig.resp.nom ? `${ofConfig.resp.prenom} ${ofConfig.resp.nom}` : ''}
               fallbackEmail={ofConfig.resp.email}
-            />}
+            />
+          }
         />
 
         {/* ─── Sections legacy read-only ──────────────────────────────── */}
@@ -560,8 +558,7 @@ export default async function ParametresPage() {
                   <div className="min-w-0">
                     <div className="font-medium">{o.name}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {o.type}{' '}
-                      {o.averageDelayDays ? `· délai ${o.averageDelayDays}j` : ''}
+                      {o.type} {o.averageDelayDays ? `· délai ${o.averageDelayDays}j` : ''}
                       {o.yearlyCapPerPerson
                         ? ` · plafond ${Number(o.yearlyCapPerPerson).toFixed(0)}€/an`
                         : ''}
@@ -628,13 +625,7 @@ export default async function ParametresPage() {
   );
 }
 
-function Field({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   const isEmpty =
     value === null ||
     value === undefined ||
@@ -646,11 +637,7 @@ function Field({
         {label}
       </dt>
       <dd className="mt-0.5">
-        {isEmpty ? (
-          <span className="text-muted-foreground italic">à renseigner</span>
-        ) : (
-          value
-        )}
+        {isEmpty ? <span className="text-muted-foreground italic">à renseigner</span> : value}
       </dd>
     </div>
   );

@@ -50,6 +50,9 @@ interface DossierState {
 interface Props {
   participantId: string;
   initial: DossierState;
+  agefice?: boolean;
+  depositedAt?: Date | string | null;
+  alertsEnabled?: boolean;
 }
 
 const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' });
@@ -58,7 +61,13 @@ function daysSince(d: Date): number {
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
-export function DossierTimeline({ participantId, initial }: Props) {
+export function DossierTimeline({
+  participantId,
+  initial,
+  agefice = false,
+  depositedAt = null,
+  alertsEnabled = true,
+}: Props) {
   const [state, setState] = useState<DossierState>(() => ({
     ...initial,
     invoiceSentAt: initial.invoiceSentAt ? new Date(initial.invoiceSentAt) : null,
@@ -117,18 +126,19 @@ export function DossierTimeline({ participantId, initial }: Props) {
 
   // Détermine la prochaine étape "active" : la 1ère non-faite après l'étape
   // faite la plus avancée. Permet d'afficher un visuel "à faire en priorité".
-  const firstPendingIdx = STEPS.findIndex((s) => !state[s.field]);
+  const steps = agefice ? [STEPS[1]!, STEPS[0]!, STEPS[2]!, STEPS[3]!] : STEPS;
+  const firstPendingIdx = steps.findIndex((s) => !state[s.field]);
   const lastDoneIdx = (() => {
     let lastIdx = -1;
-    for (let i = 0; i < STEPS.length; i++) {
-      if (state[STEPS[i]!.field]) lastIdx = i;
+    for (let i = 0; i < steps.length; i++) {
+      if (state[steps[i]!.field]) lastIdx = i;
     }
     return lastIdx;
   })();
 
   return (
     <div className="inline-flex items-center gap-0">
-      {STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const isDone = state[step.field];
         const isActive = idx === firstPendingIdx;
         const isPending = !isDone && !isActive;
@@ -136,15 +146,28 @@ export function DossierTimeline({ participantId, initial }: Props) {
         const Icon = step.icon;
 
         // SLA : si actif et l'étape précédente est faite depuis plus que slaDays
-        const prevDoneDate = idx > 0 ? dateOf(STEPS[idx - 1]!.field) : null;
+        const prevDoneDate =
+          agefice && step.field === 'opcoApproved'
+            ? depositedAt
+              ? new Date(depositedAt)
+              : null
+            : idx > 0
+              ? dateOf(steps[idx - 1]!.field)
+              : null;
         const daysFromPrev = prevDoneDate ? daysSince(prevDoneDate) : 0;
-        const isAlert = isActive && step.slaDays != null && daysFromPrev > step.slaDays;
+        const isAlert =
+          alertsEnabled &&
+          !state.opcoApproved &&
+          !state.opcoReimbursed &&
+          isActive &&
+          step.slaDays != null &&
+          daysFromPrev > step.slaDays;
 
         const date = dateOf(step.field);
         const tip = isDone
           ? `${step.label} — fait${date ? ` le ${dateFmt.format(date)} (il y a ${daysSince(date)}j)` : ''}`
           : isActive
-            ? `${step.label} — à faire${prevDoneDate ? ` (étape précédente il y a ${daysFromPrev}j${isAlert ? ' ⚠️ délai prévu dépassé' : ''})` : ''}`
+            ? `${step.label} — à faire${prevDoneDate ? ` (${agefice && step.field === 'opcoApproved' ? 'dépôt' : 'étape précédente'} il y a ${daysFromPrev}j${isAlert ? ' ⚠️ délai prévu dépassé' : ''})` : ''}`
             : `${step.label} — étape suivante`;
 
         return (
@@ -158,8 +181,12 @@ export function DossierTimeline({ participantId, initial }: Props) {
               className={cn(
                 'relative inline-flex items-center justify-center h-7 w-7 rounded-full transition-colors',
                 isDone && 'bg-emerald-500 text-white hover:bg-emerald-600',
-                isActive && !isAlert && 'bg-blue-100 text-blue-700 hover:bg-blue-200 ring-2 ring-blue-300',
-                isActive && isAlert && 'bg-amber-100 text-amber-700 hover:bg-amber-200 ring-2 ring-amber-400',
+                isActive &&
+                  !isAlert &&
+                  'bg-blue-100 text-blue-700 hover:bg-blue-200 ring-2 ring-blue-300',
+                isActive &&
+                  isAlert &&
+                  'bg-amber-100 text-amber-700 hover:bg-amber-200 ring-2 ring-amber-400',
                 isPending && 'bg-slate-100 text-slate-400 hover:bg-slate-200',
                 pendingField !== null && 'cursor-wait',
               )}
@@ -172,7 +199,7 @@ export function DossierTimeline({ participantId, initial }: Props) {
                 <Icon className="h-3.5 w-3.5" />
               )}
             </button>
-            {idx < STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div
                 className={cn(
                   'h-0.5 w-3',

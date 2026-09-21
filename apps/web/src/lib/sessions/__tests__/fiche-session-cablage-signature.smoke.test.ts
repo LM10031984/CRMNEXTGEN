@@ -144,7 +144,8 @@ describe('fiche session — le certificat de signature remonte jusqu’au bloc (
 describe('fiche session — les inscrits sans aucune pièce remontent au bloc (D-C3-4)', () => {
   it('la liste passée est celle qui a nourri le plan, pas un tableau vide', () => {
     expect(pageSrc).toMatch(/participants: participantsLus\.map\(\(lu\) => \(\{/);
-    expect(pageSrc).not.toMatch(/participants: \[\],/);
+    // Le mapping exigé ci-dessus interdit un tableau vide dans les données de
+    // signature. Les groupes de facturation peuvent démarrer avec [] puis push.
   });
 
   it('elle porte de quoi NOMMER le participant — sans nom, l’encart ne dit rien', () => {

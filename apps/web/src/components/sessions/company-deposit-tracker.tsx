@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { recordCompanyOpcoDeposit } from '@/server/actions/opco-deposit';
-import { DEPOSITORS } from '@/lib/opco/company-dossier';
+import { DepositorField } from '@/components/dossiers-opco/depositor-field';
 import { parisDay } from '@/lib/alertes/formation-rules';
 
 export interface CompanyDepositMemberSnapshot {
@@ -32,17 +32,17 @@ export function CompanyDepositTracker({
   canWrite: boolean;
   readyToDeposit?: boolean;
 }) {
+  const correctedCount = members.filter((member) => member.depositedAt !== null).length;
+  const hasDeposit = members.some((member) => member.depositedAt !== null);
   const [editing, setEditing] = useState(false);
-  const [email, setEmail] = useState(
-    depositedBy ?? (DEPOSITORS.some((depositor) => depositor.email === userEmail) ? userEmail : ''),
-  );
+  const [email, setEmail] = useState(depositedBy ?? userEmail);
   const [date, setDate] = useState(depositedAt?.slice(0, 10) ?? parisDay(new Date()));
   const [pending, setPending] = useState(false);
   const saving = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
-  const depositor = DEPOSITORS.find((person) => person.email === depositedBy)?.name ?? depositedBy;
+  const depositor = depositedBy;
 
   async function save(clear = false) {
     // React 18 transitions do not track the lifetime of async server actions.
@@ -56,6 +56,7 @@ export function CompanyDepositTracker({
         sessionId,
         sponsorOrgId,
         expectedMembers: members,
+        correctionOnly: !clear && hasDeposit && !readyToDeposit,
         email: clear ? null : email,
         date: clear ? null : date,
       });
@@ -67,7 +68,9 @@ export function CompanyDepositTracker({
       }
       const message = clear
         ? 'Déclaration de dépôt annulée pour le groupe'
-        : `Dépôt OPCO enregistré pour ${members.length} salarié${members.length > 1 ? 's' : ''}.`;
+        : !readyToDeposit && hasDeposit
+          ? 'Déclarations existantes corrigées'
+          : `Dépôt OPCO enregistré pour ${members.length} salarié${members.length > 1 ? 's' : ''}.`;
       setSuccess(message);
       setEditing(false);
       toast.success(message);
@@ -102,37 +105,20 @@ export function CompanyDepositTracker({
           type="button"
           className="underline underline-offset-2"
           onClick={() => {
-            setEmail(
-              depositedBy ??
-                (DEPOSITORS.some((person) => person.email === userEmail) ? userEmail : ''),
-            );
+            setEmail(depositedBy ?? userEmail);
             setDate(depositedAt?.slice(0, 10) ?? parisDay(new Date()));
             setError(null);
             setSuccess(null);
             setEditing(true);
           }}
         >
-          {depositedAt ? 'Corriger la déclaration du groupe' : 'Déclarer le dépôt du groupe'}
+          {hasDeposit ? 'Corriger la déclaration du groupe' : 'Déclarer le dépôt du groupe'}
         </button>
       )}
       {canWrite && editing && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background p-2">
           <label>
-            Déposé par{' '}
-            <select
-              aria-label="Déposé par"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="rounded border p-1"
-              disabled={pending}
-            >
-              <option value="">Choisir…</option>
-              {DEPOSITORS.map((person) => (
-                <option key={person.email} value={person.email}>
-                  {person.name} — {person.email}
-                </option>
-              ))}
-            </select>
+            Déposé par <DepositorField value={email} onChange={setEmail} disabled={pending} />
           </label>
           <label>
             Date{' '}
@@ -149,14 +135,14 @@ export function CompanyDepositTracker({
           <button
             type="button"
             className="rounded bg-primary px-2 py-1 text-primary-foreground"
-            disabled={pending || !email || !date || !readyToDeposit}
+            disabled={pending || !email || !date || (!readyToDeposit && !hasDeposit)}
             onClick={() => save()}
           >
             {pending
               ? 'Enregistrement en cours…'
-              : `Confirmer pour ${members.length} salarié${members.length > 1 ? 's' : ''}`}
+              : `Confirmer pour ${!readyToDeposit && hasDeposit ? correctedCount : members.length} salarié${members.length > 1 ? 's' : ''}`}
           </button>
-          {depositedAt && (
+          {hasDeposit && (
             <button
               type="button"
               className="underline"

@@ -54,11 +54,7 @@ export const tenantIdentitySchema = z.object({
 /** SET-02 — Adresse + mentions légales (logo & signatures = Plan 07-03). */
 export const tenantAddressSchema = z.object({
   address: addressSchema.nullable().optional(),
-  legalMentions: z
-    .string()
-    .max(2000, 'Maximum 2000 caractères')
-    .nullable()
-    .optional(),
+  legalMentions: z.string().max(2000, 'Maximum 2000 caractères').nullable().optional(),
 });
 
 /**
@@ -114,11 +110,7 @@ export const tenantEmailSchema = z.object({
  * Limites larges (50 000 chars) car ces docs peuvent être longs.
  */
 export const tenantLegalDocsSchema = z.object({
-  cgvMarkdown: z
-    .string()
-    .max(50000, 'Maximum 50000 caractères')
-    .nullable()
-    .optional(),
+  cgvMarkdown: z.string().max(50000, 'Maximum 50000 caractères').nullable().optional(),
   reglementInterieurMarkdown: z
     .string()
     .max(50000, 'Maximum 50000 caractères')
@@ -140,6 +132,7 @@ export const EmailSettingsSchema = z.object({
   preinscriptionRemindersEnabled: z.boolean().default(false),
   opcoRemindersEnabled: z.boolean().default(false),
   opcoSubmissionsEnabled: z.boolean().default(false),
+  learnerDocumentsEnabled: z.boolean().default(false),
   internalNotificationsEnabled: z.boolean().default(false),
   userInvitationsEnabled: z.boolean().default(false),
   diagnosticProgramsEnabled: z.boolean().default(false),

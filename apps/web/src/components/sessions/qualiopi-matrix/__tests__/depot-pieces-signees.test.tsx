@@ -18,7 +18,6 @@ it('offre les quatre types et une affectation individuelle avant enregistrement'
     />,
   );
   expect(screen.getByText(/DocuSeal se rangent automatiquement/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Déposer des pièces signées' }));
   const type = screen.getByLabelText('Type de document') as HTMLSelectElement;
   expect(Array.from(type.options).map((o) => o.value)).toEqual([
     'CONVENTION',
@@ -56,11 +55,22 @@ it('permet de consulter le PDF signé dans un nouvel onglet', () => {
   expect(link.getAttribute('target')).toBe('_blank');
 });
 
-
 it('propose la convention commune sans affectation à un salarié', () => {
-  render(<DepotPiecesSignees sessionId="s" participants={[{id:'a',fullName:'Hedi AMMAR'},{id:'b',fullName:'Marie-Claire TOURNEBOEUF'}]} companies={[{id:'org',name:'Agence',learners:['Hedi AMMAR','Marie-Claire TOURNEBOEUF']}]}/>);
-  fireEvent.click(screen.getByRole('button', { name: 'Déposer des pièces signées' }));
-  fireEvent.change(screen.getByLabelText('Type de document'), { target: { value: 'CONVENTION_GROUPE' } });
+  render(
+    <DepotPiecesSignees
+      sessionId="s"
+      participants={[
+        { id: 'a', fullName: 'Hedi AMMAR' },
+        { id: 'b', fullName: 'Marie-Claire TOURNEBOEUF' },
+      ]}
+      companies={[
+        { id: 'org', name: 'Agence', learners: ['Hedi AMMAR', 'Marie-Claire TOURNEBOEUF'] },
+      ]}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Type de document'), {
+    target: { value: 'CONVENTION_GROUPE' },
+  });
   expect((screen.getByLabelText('Entreprise concernée') as HTMLSelectElement).value).toBe('org');
   expect(screen.getByText(/Salariés couverts : Hedi AMMAR, Marie-Claire TOURNEBOEUF/)).toBeTruthy();
   expect(screen.queryByText('Déposez les PDF signés, un fichier par apprenant.')).toBeNull();

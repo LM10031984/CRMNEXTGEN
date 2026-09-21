@@ -21,6 +21,7 @@ export type EmailCategory =
   | 'preinscription_reminder'
   | 'opco_reminder'
   | 'opco_submission'
+  | 'learner_documents'
   | 'internal_notification'
   | 'user_invitation'
   | 'diagnostic_program'
@@ -40,6 +41,7 @@ export interface EmailPolicySettings {
   preinscriptionRemindersEnabled: boolean;
   opcoRemindersEnabled: boolean;
   opcoSubmissionsEnabled: boolean;
+  learnerDocumentsEnabled?: boolean;
   internalNotificationsEnabled: boolean;
   userInvitationsEnabled: boolean;
   diagnosticProgramsEnabled: boolean;
@@ -61,11 +63,15 @@ export interface EmailPolicyDecision {
 }
 
 /** Map catégorie → champ boolean des réglages. */
-export const EMAIL_CATEGORY_FIELD: Record<EmailCategory, keyof Omit<EmailPolicySettings, 'testSessionIds'>> = {
+export const EMAIL_CATEGORY_FIELD: Record<
+  EmailCategory,
+  keyof Omit<EmailPolicySettings, 'testSessionIds'>
+> = {
   invoice_reminder: 'invoiceRemindersEnabled',
   preinscription_reminder: 'preinscriptionRemindersEnabled',
   opco_reminder: 'opcoRemindersEnabled',
   opco_submission: 'opcoSubmissionsEnabled',
+  learner_documents: 'learnerDocumentsEnabled',
   internal_notification: 'internalNotificationsEnabled',
   user_invitation: 'userInvitationsEnabled',
   diagnostic_program: 'diagnosticProgramsEnabled',
@@ -81,6 +87,7 @@ export const EMAIL_CATEGORY_LABELS: Record<EmailCategory, string> = {
   preinscription_reminder: 'Rappels pré-inscription',
   opco_reminder: 'Relances dossiers OPCO',
   opco_submission: 'Envoi dossiers OPCO',
+  learner_documents: 'Documents de fin de formation (apprenants et entreprises)',
   internal_notification: 'Notifications internes (équipe)',
   user_invitation: 'Invitations utilisateurs',
   diagnostic_program: 'Programme du diagnostic express (stand)',

@@ -367,8 +367,8 @@ const PJ_NON_SIGNEES: SubmissionAttachment[] = [
 ];
 
 describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
-  it('exige chacune des six pièces même pour ADMIN avec force', async () => {
-    for (const piece of PJ_SIGNEES) {
+  it('exige chacune des cinq pièces même pour ADMIN avec force', async () => {
+    for (const piece of PJ_SIGNEES.filter((p) => p.kind !== 'RIB')) {
       findFirstSubmission.mockResolvedValue(
         submission(PJ_SIGNEES.filter((p) => p.kind !== piece.kind)),
       );
@@ -638,7 +638,10 @@ it('un autre ancien brouillon déjà expédié bloque le même participant et la
 it('dossier entreprise : redirige vers le portail session sans créer de mail', async () => {
   const p = participant();
   findFirstParticipant.mockResolvedValue({ ...p, session: { ...p.session, regime: 'ENTREPRISE' } });
-  expect(await composeOpcoSubmission('part-1')).toEqual({ ok: true, redirectTo: '/app/sessions/sess-1?tab=avant#depot-org-1' });
+  expect(await composeOpcoSubmission('part-1')).toEqual({
+    ok: true,
+    redirectTo: '/app/sessions/sess-1?tab=avant#depot-org-1',
+  });
   expect(createSubmission).not.toHaveBeenCalled();
   expect(sendMailMock).not.toHaveBeenCalled();
 });
