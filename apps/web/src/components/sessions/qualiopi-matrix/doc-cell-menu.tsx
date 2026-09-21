@@ -55,7 +55,7 @@ export interface CellPdfRef {
 export interface DocCellMenuProps {
   participantId: string;
   docType: string;
-  state: 'GENERATED' | 'MANUAL_OK' | 'MISSING' | 'NA';
+  state: 'GENERATED' | 'MANUAL_OK' | 'GENERATING' | 'MISSING' | 'NA';
   pdfRef?: CellPdfRef;
   /**
    * Lot 0 · 0.2 — une donnée que ce document PORTE a changé depuis sa
@@ -109,6 +109,12 @@ export function DocCellMenu({
   // NA → pas de menu (cellule décorative — UI-SPEC table).
   if (state === 'NA') return null;
 
+  // Génération en vol → pas de menu non plus. Ouvrir ou télécharger viserait
+  // un identifiant sur le point de disparaître, et « Régénérer » empilerait un
+  // second job sur le premier. La cellule redevient actionnable d'elle-même
+  // dès que le job est terminé.
+  if (state === 'GENERATING') return null;
+
   if (readOnly) {
     return (
       <button
@@ -156,7 +162,7 @@ export function DocCellMenu({
         if (res.documentId) {
           toast.success(`Document généré pour ${participantName}`);
         } else {
-          toast.success('Génération lancée — résultat dans ~2 min');
+          toast.success('Génération lancée — la cellule s’ouvrira d’elle-même une fois le document prêt');
         }
         router.refresh();
       } else {

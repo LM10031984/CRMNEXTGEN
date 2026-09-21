@@ -44,6 +44,16 @@ export type CellState =
       engaged?: boolean;
     }
   | { state: 'MANUAL_OK'; pdfRef?: CellPdfRef; warning?: 'no_proof' }
+  /**
+   * Une génération est EN VOL pour cette cellule (job en file ou en cours).
+   *
+   * Pas de `pdfRef`, et c'est voulu : le worker remplace le document par
+   * `deleteMany + create`, donc l'identifiant qu'on connaît va mourir. Offrir
+   * un lien maintenant, c'est promettre un 404 (production, 21/09). L'absence
+   * du champ fait porter l'interdiction par le TYPAGE plutôt que par une
+   * condition d'affichage qu'on oublierait un jour.
+   */
+  | { state: 'GENERATING' }
   | { state: 'MISSING' }
   | { state: 'NA' };
 
@@ -110,7 +120,16 @@ export function deriveCellState(
   pedagogicalAssets: Map<string, { id: string }>,
   flags?: CellFlagSets,
   docTypesHorsRegime?: ReadonlySet<string>,
+  /**
+   * Colonnes dont la génération est en vol pour CETTE inscription
+   * (`docTypesEnCoursParParticipant`). Passe AVANT tout le reste, preuve signée
+   * comprise : tous les liens de la cellule suivent l'identifiant du document,
+   * et c'est lui qui va changer. Optionnel — sans lui, comportement d'avant.
+   */
+  docTypesEnCours?: ReadonlySet<string>,
 ): CellState {
+  if (docTypesEnCours?.has(docType)) return { state: 'GENERATING' };
+
   const manual = participant.docStatus?.[docType];
 
   // Cas dérogatoire D-01 : coché OK sans upload → pastille orange "preuve manquante"

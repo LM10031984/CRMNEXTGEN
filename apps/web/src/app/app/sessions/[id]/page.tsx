@@ -35,6 +35,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { formatFunderCode } from '@/lib/funder-codes';
 import { PED_KIND_TO_DOC_TYPE } from '@/lib/doc-scope';
+import {
+  DELAI_JOB_FANTOME_MS,
+  docTypesEnCoursParParticipant,
+} from '@/lib/docs/generation-en-cours';
 import { SessionParticipantsList } from '@/components/sessions/session-participants-list';
 import { GenerateClosurePackButton } from '@/components/sessions/generate-closure-pack-button';
 import { SessionCompletenessBadge } from '@/components/sessions/session-completeness-badge';
@@ -657,6 +661,24 @@ export default async function SessionDetailPage({
     avertissementsRegimeAvant.filter((a) => a.docType === 'AGEFICE').map((a) => a.participantId),
   );
 
+  // Les générations EN VOL (prod, 21/09). Une régénération par la file rend la
+  // main avant que le worker ait écrit ; or il remplace le document par
+  // `deleteMany + create`, donc l'identifiant affiché va mourir. Tant qu'un job
+  // est en file ou en cours, la cellule est « en cours » et n'offre aucun lien
+  // — sinon le clic tombe sur un 404 « jusqu'à ce qu'on recharge ». La borne
+  // `DELAI_JOB_FANTOME_MS` est dans la requête ET dans le module pur : un worker
+  // mort ne doit pas verrouiller l'écran à vie.
+  const jobsEnVol = await prisma.closureJob.findMany({
+    where: {
+      batch: { tenantId: user.tenantId, sessionId: session.id },
+      status: { in: ['QUEUED', 'PROCESSING'] },
+      createdAt: { gte: new Date(Date.now() - DELAI_JOB_FANTOME_MS) },
+    },
+    select: { participantId: true, kind: true, status: true, createdAt: true, batchId: true },
+  });
+  const docTypesEnCours = docTypesEnCoursParParticipant(jobsEnVol, new Date());
+  const batchIdsEnCours = [...new Set(jobsEnVol.map((j) => j.batchId))];
+
   // Construit le tableau matrixParticipants pour ParticipantDocMatrix.
   const matrixParticipants = session.participants.map((p) => {
     const regime = regimeParParticipant.get(p.id);
@@ -671,6 +693,7 @@ export default async function SessionDetailPage({
       docStatus: (p.docStatus as Record<string, unknown> | null) ?? null,
       isAgefice: regime?.enRegime.has('AGEFICE') ?? false,
       docTypesHorsRegime: regime?.sansObjet,
+      docTypesEnCours: docTypesEnCours.get(p.id),
       participantDocs: participantDocsByPid.get(p.id) ?? new Map<string, { id: string }>(),
       pedagogicalAssets: pedAssetsByPid.get(p.id) ?? new Map<string, { id: string }>(),
     };
@@ -2354,6 +2377,7 @@ export default async function SessionDetailPage({
             productDocs={productDocsMap}
             sessionDocs={sessionDocsMap}
             flags={matrixFlags}
+            batchIdsEnCours={batchIdsEnCours}
             stubCount={stubAssetIds.size}
             zipBatchId={latestBatch && latestBatch.doneDocs > 0 ? latestBatch.id : null}
           />
