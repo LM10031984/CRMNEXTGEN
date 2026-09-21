@@ -94,7 +94,7 @@ export function ClassementFilters({
         <Select
           name="tri"
           label="Trier par"
-          value={params.tri ?? 'agence'}
+          value={params.tri ?? 'recent'}
           options={[
             { value: 'agence', label: 'Agence, point de vente, responsable' },
             { value: 'responsable', label: 'Responsable d’agence' },

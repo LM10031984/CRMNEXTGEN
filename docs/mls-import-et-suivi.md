@@ -32,3 +32,11 @@ Les fichiers réels et rapports contenant des contacts restent hors Git (dépôt
 `20260920190000_mls_lead_followup` ajoute uniquement des colonnes et index ; aucun statut ni historique n’est réécrit. Un retour à l’ancienne version applicative est possible en conservant ces colonnes. Une suppression des colonnes ne doit être envisagée qu’après export de leurs données ; ne pas lancer de rollback destructif automatique.
 
 Ce lot concerne l’import et les fiches commerciales. Il n’ajoute pas le portail partenaire MLS, le partage externe, la conversion en apprenant ni le Kanban du chantier global.
+
+## Rapprochement des fiches déjà présentes
+
+`/app/leads/rapprochement` et `apps/web/scripts/enrich-mls.ts` partagent le même service administrateur, en prévisualisation par défaut. Il rapproche email/mobile normalisés et identité complète, refuse les coordonnées partagées, les fiches multiples et les points de vente ambigus. L’application du plan contrôlé ne crée aucun lead, utilisateur ou apprenant et n’envoie rien. Elle complète les champs commerciaux vides et les segments MLS, sans écraser les coordonnées, notes, statuts, appels ou le commercial assigné. Elle conserve les adresses existantes. Une enseigne/raison sociale peut être reliée via le nom commercial ; les responsables CRM déjà renseignés restent inchangés. Le journal contient les valeurs avant/après et les agences créées. Une modification concurrente invalide l’aperçu.
+
+Le classement utilise le nom commercial et le réseau renseignés, avec les alias C21/Century 21 et KW/Keller Williams. Un simple réseau comme « Orpi » n’est pas une agence identifiable : les organisations restent séparées. Les signataires contractuels ne servent plus de responsables CRM par défaut.
+
+Le tri initial est « Plus récents », la recherche reconnaît les numéros français nationaux et internationaux, les totaux de base restent visibles avec ceux de la sélection. Les rappels du jour et le lien de planification précèdent les filtres repliables sur mobile.
