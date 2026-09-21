@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   participantUpdateMany: vi.fn(),
   auditCreate: vi.fn(),
   auditFindMany: vi.fn(),
-  queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
   transaction: vi.fn(),
   downloadFile: vi.fn(),
   sendMail: vi.fn(),
@@ -145,6 +145,14 @@ beforeEach(() => {
       signedPdfUrl: null,
       hashSha256: 'cert-hash',
     },
+    {
+      id: 'attestation-1',
+      participantId,
+      type: 'ATTESTATION_FIN',
+      pdfUrl: 'private/attestation.pdf',
+      signedPdfUrl: null,
+      hashSha256: 'attestation-hash',
+    },
   ]);
   mocks.invoiceFindMany.mockResolvedValue([
     {
@@ -178,7 +186,7 @@ beforeEach(() => {
   mocks.auditFindMany.mockResolvedValue([]);
   mocks.messageCreate.mockResolvedValue({ id: 'message-1' });
   const tx = {
-    $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
     emailMessage: {
       findFirst: mocks.messageFindFirst,
       create: mocks.messageCreate,
@@ -206,7 +214,9 @@ describe('after-training delivery', () => {
       expect(delivery.attachments.find((a) => a.kind === 'invoice')?.label).toBe(
         'Facture FAC-0001',
       );
-      expect(delivery.text).toContain('votre facture ainsi que votre certificat');
+      expect(delivery.text).toContain('votre facture');
+      expect(delivery.text).toContain('votre certificat de réalisation');
+      expect(delivery.text).toContain('votre attestation de fin de formation');
       expect(delivery.text).not.toContain('acquittée');
       expect(
         (
@@ -280,7 +290,7 @@ describe('after-training delivery', () => {
     expect(mocks.sendMail).not.toHaveBeenCalled();
   });
 
-  it('previews the ordinary invoice and individual certificate to person.email', async () => {
+  it('previews the ordinary invoice, certificate and end-of-training attestation to person.email', async () => {
     const result = await getAfterTrainingPreview(sessionId);
     expect(result.ok).toBe(true);
     const delivery = result.deliveries?.[0];
@@ -288,9 +298,70 @@ describe('after-training delivery', () => {
     expect(delivery?.attachments.map((item) => item.label)).toEqual([
       'Facture FAC-0001',
       'Certificat de réalisation — Alice Martin',
+      'Attestation de fin de formation — Alice Martin',
     ]);
     expect(JSON.stringify(delivery)).not.toContain('private/FAC-0001.pdf');
     expect(delivery?.from).toContain('formation@example.test');
+  });
+
+  it('bloque l’envoi si l’attestation de fin de formation manque', async () => {
+    const documents = await mocks.documentFindMany();
+    mocks.documentFindMany.mockResolvedValue(
+      documents.filter((doc: { type: string }) => doc.type !== 'ATTESTATION_FIN'),
+    );
+    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+    expect(delivery.blockers).toContain(
+      'Attestation de fin de formation de Alice Martin manquant.',
+    );
+    expect(
+      (
+        await sendAfterTrainingDelivery({
+          sessionId,
+          deliveryKey: delivery.key,
+          fingerprint: delivery.fingerprint,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(mocks.sendMail).not.toHaveBeenCalled();
+  });
+
+  it('joint uniquement la dernière attestation de cet apprenant, signée si disponible', async () => {
+    const documents = await mocks.documentFindMany();
+    const newest = {
+      id: 'attestation-new',
+      participantId,
+      type: 'ATTESTATION_FIN',
+      pdfUrl: 'private/attestation-new.pdf',
+      signedPdfUrl: 'private/attestation-signed.pdf',
+      hashSha256: 'attestation-new-hash',
+    };
+    mocks.documentFindMany.mockResolvedValue([
+      { ...newest, id: 'attestation-other', participantId: 'another-participant' },
+      newest,
+      ...documents,
+    ]);
+    const delivery = (await getAfterTrainingPreview(sessionId)).deliveries![0]!;
+    expect(delivery.attachments.map((item) => item.id)).toEqual([
+      'invoice-1',
+      'certificate-1',
+      'attestation-new',
+    ]);
+    expect(
+      (
+        await sendAfterTrainingDelivery({
+          sessionId,
+          deliveryKey: delivery.key,
+          fingerprint: delivery.fingerprint,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(mocks.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: expect.arrayContaining([
+          expect.objectContaining({ content: Buffer.from('private/attestation-signed.pdf') }),
+        ]),
+      }),
+    );
   });
 
   it('blocks a multi-learner group invoice from an individual email', async () => {
@@ -413,7 +484,7 @@ describe('after-training delivery', () => {
     });
     expect(result).toEqual({ ok: true });
     expect(new Set(mocks.downloadFile.mock.calls.map((call) => call[1]))).toEqual(
-      new Set(['private/FAC-0001.pdf', 'private/certificate.pdf']),
+      new Set(['private/FAC-0001.pdf', 'private/certificate.pdf', 'private/attestation.pdf']),
     );
     expect(mocks.sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -426,12 +497,16 @@ describe('after-training delivery', () => {
           expect.objectContaining({
             filename: expect.stringContaining('Certificat-de-realisation'),
           }),
+          expect.objectContaining({ content: Buffer.from('private/attestation.pdf') }),
         ]),
       }),
     );
     expect(mocks.messageUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'sent', documentIds: ['certificate-1'] }),
+        data: expect.objectContaining({
+          status: 'sent',
+          documentIds: ['certificate-1', 'attestation-1'],
+        }),
       }),
     );
   });

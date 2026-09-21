@@ -74,7 +74,7 @@ function emailContents(input: {
     ? `Documents de fin de formation — ${input.formationTitle}`
     : `Attestations de fin de formation — ${input.companyName ?? input.formationTitle}`;
   const detail = input.individual
-    ? 'Vous trouverez en pièces jointes votre facture ainsi que votre certificat de réalisation.'
+    ? 'Vous trouverez en pièces jointes votre facture, votre certificat de réalisation et votre attestation de fin de formation.'
     : `Vous trouverez en pièces jointes une attestation individuelle pour chaque salarié concerné : ${names}.`;
   const text = `Bonjour ${input.recipientName},\n\n${detail}\n\nFormation : ${input.formationTitle} (${input.sessionCode}).\n\nCordialement,\n${input.signature}`;
   const html = `<p>Bonjour ${escapeEmailHtml(input.recipientName)},</p><p>${escapeEmailHtml(detail)}</p><p><strong>Formation :</strong> ${escapeEmailHtml(input.formationTitle)} (${escapeEmailHtml(input.sessionCode)}).</p><p>Cordialement,<br>${escapeEmailHtml(input.signature)}</p>`;
@@ -269,6 +269,13 @@ async function resolveDeliveries(
       `Certificat de réalisation de ${learnerName}`,
       blockers,
     );
+    const attestation = latestDocument(
+      documents.filter(
+        (doc) => doc.participantId === participantId && doc.type === 'ATTESTATION_FIN',
+      ),
+      `Attestation de fin de formation de ${learnerName}`,
+      blockers,
+    );
     const activeInvoicesConcerningLearner = invoices.filter((invoice) => {
       const grouped = Array.isArray(invoice.participantIds)
         ? (invoice.participantIds as string[])
@@ -371,22 +378,26 @@ async function resolveDeliveries(
         sourceHash,
       });
     }
-    if (certificate) {
-      const key = certificate.signedPdfUrl ?? certificate.pdfUrl;
+    for (const { document, label } of [
+      { document: certificate, label: `Certificat de réalisation — ${learnerName}` },
+      { document: attestation, label: `Attestation de fin de formation — ${learnerName}` },
+    ]) {
+      if (!document) continue;
+      const key = document.signedPdfUrl ?? document.pdfUrl;
       attachments.push({
         kind: 'document',
-        id: certificate.id,
-        label: `Certificat de réalisation — ${learnerName}`,
+        id: document.id,
+        label,
         filename: buildDownloadFilename({
-          docType: certificate.type,
+          docType: document.type,
           firstName: participant.person.firstName,
           lastName: participant.person.lastName,
           sessionCode: session.code,
           ext: extFromStorageKey(key),
         }),
-        href: `/api/after-training/${sessionId}/attachments/document/${certificate.id}`,
+        href: `/api/after-training/${sessionId}/attachments/document/${document.id}`,
         sourceKey: key,
-        sourceHash: certificate.hashSha256,
+        sourceHash: document.hashSha256,
       });
     }
     const key = `individual:${participantId}`;
@@ -607,7 +618,8 @@ export async function sendAfterTrainingDelivery(input: {
     return { ok: false, error: 'Renseignez l’expéditeur dans les paramètres de l’organisme.' };
   const from = `${of.name} <${of.emailFrom}>`;
   const claimed = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`${user.tenantId}:${relatedBase}`}))`;
+    // PostgreSQL returns void for this lock: execute it without deserializing a result.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${user.tenantId}:${relatedBase}`}))`;
     const uncertain = await tx.emailMessage.findFirst({
       where: {
         tenantId: user.tenantId,
