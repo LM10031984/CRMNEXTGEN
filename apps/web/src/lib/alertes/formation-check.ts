@@ -14,6 +14,8 @@ import {
   parisDay,
   shouldAlertFormation,
   shouldAlertReimbursement,
+  formationAlertsStartDate,
+  reimbursementReminderClosed,
 } from './formation-rules';
 import { deliverFormationAlert, queueFormationAlert } from './formation-notifier';
 
@@ -25,6 +27,11 @@ const participantSelect = {
   sponsorOrgId: true,
   participantType: true,
   financingMode: true,
+  financingStatus: true,
+  opcoApproved: true,
+  opcoReimbursed: true,
+  validationOpco: true,
+  remboursementOpco: true,
   enrollmentStatus: true,
   opcoDepositedAt: true,
   opcoDepositedByEmail: true,
@@ -160,165 +167,173 @@ export async function checkFormationDocuments(
     ...(onlySessionId ? { id: onlySessionId } : {}),
     status: { notIn: ['CANCELLED', 'COMPLETED'] },
     startDate: {
-      gte: new Date(now.getTime() - 86_400_000),
+      gte: new Date(
+        Math.max(Date.parse(formationAlertsStartDate()) - 86_400_000, now.getTime() - 86_400_000),
+      ),
       lte: new Date(now.getTime() + 22 * 86_400_000),
     },
   });
   let examined = 0;
   for (const session of sessions) {
-    if (!shouldAlertFormation(session.startDate, session.status, now)) continue;
-    const companyGroups = new Map<string, LoadedParticipant[]>();
-    for (const participant of session.participants) {
-      if (isCompanyDossier({ ...participant, session })) {
-        const group = companyGroups.get(participant.sponsorOrgId) ?? [];
-        group.push(participant);
-        companyGroups.set(participant.sponsorOrgId, group);
-        continue;
-      }
-      if (!estEligibleAgefice({ ...participant, session })) continue;
-      examined++;
-      const conventions = await prisma.document.findMany({
-        where: {
-          tenantId: session.tenantId,
-          type: 'CONVENTION',
-          OR: [
-            { participantId: participant.id },
-            groupConventionAnyShapeWhere(session.tenantId, session.id, participant.sponsorOrgId),
-          ],
-        },
-        select: {
-          id: true,
-          participantId: true,
-          entityType: true,
-          entityId: true,
-          signedPdfUrl: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-      const convention = selectDossierConvention(
-        conventions,
-        participant.id,
-        participant.sponsorOrgId,
-        false,
-      );
-      const ageficeForms = await prisma.document.findMany({
-        where: {
-          tenantId: session.tenantId,
-          participantId: participant.id,
-          type: 'AGEFICE',
-        },
-        select: { id: true, signedPdfUrl: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-      });
-      const programme = await resolveProgrammeDocument({
-        tenantId: session.tenantId,
-        sessionId: session.id,
-        productId: session.productId,
-        participantId: participant.id,
-        sponsorOrgId: participant.sponsorOrgId,
-      });
-      const missing = missingFormationDocuments({
-        cni: Boolean(participant.person.sensitiveData?.idDocumentUrl),
-        rib: Boolean(participant.person.ribKey),
-        cfp: Boolean(ageficeProfile(participant, session)?.cfpAttestationKey),
-        convention: signedDocument(participant, 'CONVENTION', convention),
-        ageficeForm: signedDocument(participant, 'AGEFICE', ageficeForms[0]),
-        programme: Boolean(programme),
-      });
-      const deposited = participant.opcoSubmissions.some(isSuccessfulInitialSubmission);
-      if (!missing.length && deposited) continue;
-      const kind = missing.length ? 'missing' : 'not-deposited';
-      const key = `${kind}:${session.id}:${participant.id}:${parisDay(session.startDate)}`;
-      const previous = await previousDelivery(session.tenantId, key);
-      if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt)) continue;
-      const name = participantName(participant);
-      await emitCurrentAlert({
-        tenantId: session.tenantId,
-        sessionId: session.id,
-        key,
-        previousSentAt: previous?.sentAt ?? null,
-        subject: missing.length
-          ? `Dossier incomplet : ${name} — ${session.name}`
-          : `Dossier complet non déposé : ${name} — ${session.name}`,
-        lines: [
-          `${name} — ${session.name}`,
-          `Début de formation : ${session.startDate.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`,
-          missing.length
-            ? `Pièces à compléter : ${missing.join(', ')}.`
-            : 'Le dossier est complet ; un envoi AGEFICE initial confirmé reste à effectuer.',
-        ],
-        path: `/app/sessions/${session.id}`,
-      });
-    }
-
-    for (const [sponsorOrgId, members] of companyGroups) {
-      examined++;
-      const representative = members[0]!;
-      const conventions = await prisma.document.findMany({
-        where: {
-          tenantId: session.tenantId,
-          type: 'CONVENTION',
-          OR: [
-            ...members.map((member) => ({ participantId: member.id })),
-            groupConventionAnyShapeWhere(session.tenantId, session.id, sponsorOrgId),
-          ],
-        },
-        select: {
-          id: true,
-          participantId: true,
-          entityType: true,
-          entityId: true,
-          signedPdfUrl: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-      const missingByMember: string[] = [];
-      for (const member of members) {
-        const convention = selectDossierConvention(conventions, member.id, sponsorOrgId, true);
+    try {
+      if (!shouldAlertFormation(session.startDate, session.status, now)) continue;
+      const companyGroups = new Map<string, LoadedParticipant[]>();
+      for (const participant of session.participants) {
+        if (isCompanyDossier({ ...participant, session })) {
+          const group = companyGroups.get(participant.sponsorOrgId) ?? [];
+          group.push(participant);
+          companyGroups.set(participant.sponsorOrgId, group);
+          continue;
+        }
+        if (!estEligibleAgefice({ ...participant, session })) continue;
+        examined++;
+        const conventions = await prisma.document.findMany({
+          where: {
+            tenantId: session.tenantId,
+            type: 'CONVENTION',
+            OR: [
+              { participantId: participant.id },
+              groupConventionAnyShapeWhere(session.tenantId, session.id, participant.sponsorOrgId),
+            ],
+          },
+          select: {
+            id: true,
+            participantId: true,
+            entityType: true,
+            entityId: true,
+            signedPdfUrl: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        const convention = selectDossierConvention(
+          conventions,
+          participant.id,
+          participant.sponsorOrgId,
+          false,
+        );
+        const ageficeForms = await prisma.document.findMany({
+          where: {
+            tenantId: session.tenantId,
+            participantId: participant.id,
+            type: 'AGEFICE',
+          },
+          select: { id: true, signedPdfUrl: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        });
         const programme = await resolveProgrammeDocument({
           tenantId: session.tenantId,
           sessionId: session.id,
           productId: session.productId,
-          participantId: member.id,
-          sponsorOrgId,
+          participantId: participant.id,
+          sponsorOrgId: participant.sponsorOrgId,
         });
         const missing = missingFormationDocuments({
-          cni: true,
-          rib: true,
-          cfp: true,
-          convention: signedDocument(member, 'CONVENTION', convention),
-          company: true,
+          cni: Boolean(participant.person.sensitiveData?.idDocumentUrl),
+          rib: Boolean(participant.person.ribKey),
+          cfp: Boolean(ageficeProfile(participant, session)?.cfpAttestationKey),
+          convention: signedDocument(participant, 'CONVENTION', convention),
+          ageficeForm: signedDocument(participant, 'AGEFICE', ageficeForms[0]),
           programme: Boolean(programme),
         });
-        if (missing.length)
-          missingByMember.push(`${participantName(member)} : ${missing.join(', ')}`);
+        const deposited = participant.opcoSubmissions.some(isSuccessfulInitialSubmission);
+        if (!missing.length && deposited) continue;
+        const kind = missing.length ? 'missing' : 'not-deposited';
+        const key = `${kind}:${session.id}:${participant.id}:${parisDay(session.startDate)}`;
+        const previous = await previousDelivery(session.tenantId, key);
+        if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt))
+          continue;
+        const name = participantName(participant);
+        await emitCurrentAlert({
+          tenantId: session.tenantId,
+          sessionId: session.id,
+          key,
+          previousSentAt: previous?.sentAt ?? null,
+          subject: missing.length
+            ? `Dossier incomplet : ${name} — ${session.name}`
+            : `Dossier complet non déposé : ${name} — ${session.name}`,
+          lines: [
+            `${name} — ${session.name}`,
+            `Début de formation : ${session.startDate.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`,
+            missing.length
+              ? `Pièces à compléter : ${missing.join(', ')}.`
+              : 'Le dossier est complet ; un envoi AGEFICE initial confirmé reste à effectuer.',
+          ],
+          path: `/app/sessions/${session.id}`,
+        });
       }
-      const deposited = companyDepositState(members) === 'success';
-      if (!missingByMember.length && deposited) continue;
-      const kind = missingByMember.length ? 'missing-company' : 'not-deposited-company';
-      const key = `${kind}:${session.id}:${sponsorOrgId}:${parisDay(session.startDate)}`;
-      const previous = await previousDelivery(session.tenantId, key);
-      if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt)) continue;
-      const employer = representative.sponsorOrg.legalName;
-      await emitCurrentAlert({
-        tenantId: session.tenantId,
-        sessionId: session.id,
-        key,
-        previousSentAt: previous?.sentAt ?? null,
-        subject: missingByMember.length
-          ? `Dossier entreprise incomplet : ${employer} — ${session.name}`
-          : `Dossier entreprise complet non déposé : ${employer} — ${session.name}`,
-        lines: [
-          `${employer} — ${members.length} apprenant${members.length > 1 ? 's' : ''} — ${session.name}`,
-          missingByMember.length
-            ? `Pièces à compléter : ${missingByMember.join(' ; ')}.`
-            : 'Le dossier est complet ; la déclaration de dépôt par un déposant habilité reste à terminer pour tous les apprenants actifs.',
-        ],
-        path: `/app/sessions/${session.id}`,
-      });
+
+      for (const [sponsorOrgId, members] of companyGroups) {
+        examined++;
+        const representative = members[0]!;
+        const conventions = await prisma.document.findMany({
+          where: {
+            tenantId: session.tenantId,
+            type: 'CONVENTION',
+            OR: [
+              ...members.map((member) => ({ participantId: member.id })),
+              groupConventionAnyShapeWhere(session.tenantId, session.id, sponsorOrgId),
+            ],
+          },
+          select: {
+            id: true,
+            participantId: true,
+            entityType: true,
+            entityId: true,
+            signedPdfUrl: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        const missingByMember: string[] = [];
+        for (const member of members) {
+          const convention = selectDossierConvention(conventions, member.id, sponsorOrgId, true);
+          const programme = await resolveProgrammeDocument({
+            tenantId: session.tenantId,
+            sessionId: session.id,
+            productId: session.productId,
+            participantId: member.id,
+            sponsorOrgId,
+          });
+          const missing = missingFormationDocuments({
+            cni: true,
+            rib: true,
+            cfp: true,
+            convention: signedDocument(member, 'CONVENTION', convention),
+            company: true,
+            programme: Boolean(programme),
+          });
+          if (missing.length)
+            missingByMember.push(`${participantName(member)} : ${missing.join(', ')}`);
+        }
+        const deposited = companyDepositState(members) === 'success';
+        if (!missingByMember.length && deposited) continue;
+        const kind = missingByMember.length ? 'missing-company' : 'not-deposited-company';
+        const key = `${kind}:${session.id}:${sponsorOrgId}:${parisDay(session.startDate)}`;
+        const previous = await previousDelivery(session.tenantId, key);
+        if (!shouldAlertFormation(session.startDate, session.status, now, previous?.sentAt))
+          continue;
+        const employer = representative.sponsorOrg.legalName;
+        await emitCurrentAlert({
+          tenantId: session.tenantId,
+          sessionId: session.id,
+          key,
+          previousSentAt: previous?.sentAt ?? null,
+          subject: missingByMember.length
+            ? `Dossier entreprise incomplet : ${employer} — ${session.name}`
+            : `Dossier entreprise complet non déposé : ${employer} — ${session.name}`,
+          lines: [
+            `${employer} — ${members.length} apprenant${members.length > 1 ? 's' : ''} — ${session.name}`,
+            missingByMember.length
+              ? `Pièces à compléter : ${missingByMember.join(' ; ')}.`
+              : 'Le dossier est complet ; la déclaration de dépôt par un déposant habilité reste à terminer pour tous les apprenants actifs.',
+          ],
+          path: `/app/sessions/${session.id}`,
+        });
+      }
+    } catch {
+      console.error('[formation-alert] session ignorée après erreur de qualification', session.id);
     }
   }
   return examined;
@@ -348,86 +363,95 @@ export async function checkReimbursementReminders(
 ): Promise<number> {
   const sessions = await loadSessions({
     ...(onlySessionId ? { id: onlySessionId } : {}),
-    status: { not: 'CANCELLED' },
-    endDate: { lt: now },
+    status: { notIn: ['CANCELLED', 'COMPLETED'] },
+    endDate: { gte: new Date(Date.parse(formationAlertsStartDate()) - 86_400_000), lt: now },
   });
   let examined = 0;
   for (const session of sessions) {
-    if (!shouldAlertReimbursement(session.endDate, now)) continue;
-    for (const participant of session.participants) {
-      if (isCompanyDossier({ ...participant, session })) continue;
-      if (!estEligibleAgefice({ ...participant, session })) continue;
-      const initial = participant.opcoSubmissions.find(isSuccessfulInitialSubmission);
-      if (!initial?.recipientEmail) continue;
-      if (
-        participant.opcoSubmissions.some(
-          (submission) =>
-            submission.stage === 'FIN_FORMATION' &&
-            submission.deliveryState === 'READY' &&
-            submission.sentAt !== null &&
-            ['SENT', 'ACK_RECEIVED', 'APPROVED', 'REIMBURSED'].includes(submission.status),
+    try {
+      if (['CANCELLED', 'COMPLETED'].includes(session.status)) continue;
+      if (!shouldAlertReimbursement(session.endDate, now)) continue;
+      for (const participant of session.participants) {
+        if (reimbursementReminderClosed(participant)) continue;
+        if (isCompanyDossier({ ...participant, session })) continue;
+        if (!estEligibleAgefice({ ...participant, session })) continue;
+        const initial = participant.opcoSubmissions.find(isSuccessfulInitialSubmission);
+        if (!initial?.recipientEmail) continue;
+        if (
+          participant.opcoSubmissions.some(
+            (submission) =>
+              submission.stage === 'FIN_FORMATION' &&
+              submission.deliveryState === 'READY' &&
+              submission.sentAt !== null &&
+              ['SENT', 'ACK_RECEIVED', 'APPROVED', 'REIMBURSED'].includes(submission.status),
+          )
         )
-      )
-        continue;
-      examined++;
-      const docs = await prisma.document.findMany({
-        where: {
+          continue;
+        examined++;
+        const docs = await prisma.document.findMany({
+          where: {
+            tenantId: session.tenantId,
+            participantId: participant.id,
+            type: { in: ['EMARGEMENT', 'ASSIDUITE'] },
+          },
+          select: { type: true, signedPdfUrl: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        const attendance = docs.find((doc) => doc.type === 'EMARGEMENT');
+        const assiduity = docs.find((doc) => doc.type === 'ASSIDUITE');
+        const invoices = await prisma.invoice.findMany({
+          where: {
+            tenantId: session.tenantId,
+            status: { notIn: ['DRAFT', 'CANCELLED', 'CREDIT_NOTE'] },
+            OR: [
+              { participantId: participant.id },
+              {
+                sessionId: session.id,
+                payerOrgId: participant.sponsorOrgId,
+                participantIds: { array_contains: [participant.id] },
+              },
+            ],
+          },
+          select: {
+            status: true,
+            paidAt: true,
+            amountPaid: true,
+            amountTTC: true,
+            payments: { select: { source: true } },
+            creditNotes: { select: { id: true } },
+          },
+        });
+        const missing = missingReimbursementDocuments({
+          rib: Boolean(participant.person.ribKey),
+          attendance: signedDocument(participant, 'EMARGEMENT', attendance),
+          assiduity: signedDocument(participant, 'ASSIDUITE', assiduity),
+          paidInvoice: invoices.length === 1 && paidInvoice(invoices[0]!),
+        });
+        const key = `reimbursement:${session.id}:${participant.id}:${parisDay(session.endDate)}`;
+        const previous = await previousDelivery(session.tenantId, key);
+        if (!shouldAlertReimbursement(session.endDate, now, previous?.sentAt)) continue;
+        const name = participantName(participant);
+        await emitCurrentAlert({
           tenantId: session.tenantId,
-          participantId: participant.id,
-          type: { in: ['EMARGEMENT', 'ASSIDUITE'] },
-        },
-        select: { type: true, signedPdfUrl: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      const attendance = docs.find((doc) => doc.type === 'EMARGEMENT');
-      const assiduity = docs.find((doc) => doc.type === 'ASSIDUITE');
-      const invoices = await prisma.invoice.findMany({
-        where: {
-          tenantId: session.tenantId,
-          status: { notIn: ['DRAFT', 'CANCELLED', 'CREDIT_NOTE'] },
-          OR: [
-            { participantId: participant.id },
-            {
-              sessionId: session.id,
-              payerOrgId: participant.sponsorOrgId,
-              participantIds: { array_contains: [participant.id] },
-            },
+          sessionId: session.id,
+          key,
+          previousSentAt: previous?.sentAt ?? null,
+          subject: `Remboursement AGEFICE à préparer : ${name} — ${session.name}`,
+          lines: [
+            `${name} — ${session.name}`,
+            `Destinataire confirmé lors de l’envoi initial : ${initial.recipientEmail}.`,
+            missing.length
+              ? `Pièces à préparer : ${missing.join(', ')}.`
+              : 'Le RIB et les pièces signées sont prêts ; éditez la facture acquittée puis préparez l’envoi explicite.',
           ],
-        },
-        select: {
-          status: true,
-          paidAt: true,
-          amountPaid: true,
-          amountTTC: true,
-          payments: { select: { source: true } },
-          creditNotes: { select: { id: true } },
-        },
-      });
-      const missing = missingReimbursementDocuments({
-        rib: Boolean(participant.person.ribKey),
-        attendance: signedDocument(participant, 'EMARGEMENT', attendance),
-        assiduity: signedDocument(participant, 'ASSIDUITE', assiduity),
-        paidInvoice: invoices.length === 1 && paidInvoice(invoices[0]!),
-      });
-      const key = `reimbursement:${session.id}:${participant.id}:${parisDay(session.endDate)}`;
-      const previous = await previousDelivery(session.tenantId, key);
-      if (!shouldAlertReimbursement(session.endDate, now, previous?.sentAt)) continue;
-      const name = participantName(participant);
-      await emitCurrentAlert({
-        tenantId: session.tenantId,
-        sessionId: session.id,
-        key,
-        previousSentAt: previous?.sentAt ?? null,
-        subject: `Remboursement AGEFICE à préparer : ${name} — ${session.name}`,
-        lines: [
-          `${name} — ${session.name}`,
-          `Destinataire confirmé lors de l’envoi initial : ${initial.recipientEmail}.`,
-          missing.length
-            ? `Pièces à préparer : ${missing.join(', ')}.`
-            : 'Le RIB et les pièces signées sont prêts ; éditez la facture acquittée puis préparez l’envoi explicite.',
-        ],
-        path: `/app/sessions/${session.id}`,
-      });
+          path: `/app/sessions/${session.id}`,
+        });
+      }
+    } catch {
+      console.error(
+        '[formation-alert] remboursement ignoré après erreur de qualification',
+        session.id,
+      );
     }
   }
   return examined;
