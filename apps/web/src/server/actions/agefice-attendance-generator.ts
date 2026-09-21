@@ -225,7 +225,22 @@ export async function generateAgeficeAttendanceForParticipant(
     sommeLettres,
     modeReglement,
     dateReglement,
-    dateDelivrance: new Date(),
+    // Date de signature de l'OF = DERNIER JOUR DE LA FORMATION, jamais la date
+    // d'édition (Laurent, 21/09/2026). Une assiduité éditée le 21/09 pour une
+    // formation close le 11/06 attestait d'une assiduité trois mois après les
+    // faits, et la rééditer le lendemain en changeait la date : deux pièces
+    // contradictoires dans le dossier que l'AGEFICE confronte justement aux
+    // dates de la convention. Le modèle de référence (attestation Kristin KING,
+    // formation du 01/06 au 11/06) porte bien « Le : 11/06/2026 ».
+    //
+    // Même règle, même motif que `attestation-template.ts` et
+    // `certificat-template.ts`, qui datent déjà de `sessionEndDate` : l'assiduité
+    // était la dernière pièce signée à rester sur l'horloge.
+    //
+    // Éditée par anticipation, la pièce porte la date de fin PRÉVUE : elle ne
+    // peut pas attester d'une assiduité avant le dernier jour. Si cette date
+    // bouge, le PDF change de hash et l'idempotence le régénère.
+    dateDelivrance: participant.session.endDate,
   };
 
   let pdfBuffer: Buffer;
