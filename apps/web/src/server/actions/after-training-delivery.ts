@@ -1,7 +1,6 @@
 'use server';
 
 import { createHash } from 'node:crypto';
-import { acquittedInvoiceKey } from '@/lib/invoice-storage';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { requireRole, ForbiddenError, UnauthorizedError } from '@/lib/rbac';
@@ -75,7 +74,7 @@ function emailContents(input: {
     ? `Documents de fin de formation — ${input.formationTitle}`
     : `Attestations de fin de formation — ${input.companyName ?? input.formationTitle}`;
   const detail = input.individual
-    ? 'Vous trouverez en pièces jointes votre facture acquittée ainsi que votre certificat de réalisation.'
+    ? 'Vous trouverez en pièces jointes votre facture ainsi que votre certificat de réalisation.'
     : `Vous trouverez en pièces jointes une attestation individuelle pour chaque salarié concerné : ${names}.`;
   const text = `Bonjour ${input.recipientName},\n\n${detail}\n\nFormation : ${input.formationTitle} (${input.sessionCode}).\n\nCordialement,\n${input.signature}`;
   const html = `<p>Bonjour ${escapeEmailHtml(input.recipientName)},</p><p>${escapeEmailHtml(detail)}</p><p><strong>Formation :</strong> ${escapeEmailHtml(input.formationTitle)} (${escapeEmailHtml(input.sessionCode)}).</p><p>Cordialement,<br>${escapeEmailHtml(input.signature)}</p>`;
@@ -199,8 +198,6 @@ async function resolveDeliveries(
         OR: [{ sessionId }, { participantId: { in: participantIds } }],
       },
       include: {
-        payments: { select: { source: true } },
-        creditNotes: { select: { id: true } },
         payerOrg: { select: { brandName: true, legalName: true } },
         participant: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
@@ -350,39 +347,29 @@ async function resolveDeliveries(
     const invoice = matchingInvoices.length === 1 ? matchingInvoices[0]! : null;
 
     const attachments: AfterTrainingAttachment[] = [];
-    let prepareInvoiceId: string | undefined;
     if (invoice?.pdfUrl) {
-      const paid =
-        invoice.status === 'PAID' &&
-        invoice.paidAt &&
-        Number(invoice.amountPaid) >= Number(invoice.amountTTC) &&
-        !invoice.creditNotes.length &&
-        !invoice.payments.some((p) => p.source === 'OPCO_SYNC');
-      if (!paid)
+      // L'apprenant reçoit la facture ordinaire pour pouvoir la régler.
+      // La facture acquittée reste réservée au dossier de solde AGEFICE.
+      const sourceKey = invoice.pdfUrl;
+      let sourceHash: string | null = null;
+      try {
+        sourceHash = createHash('sha256')
+          .update(await downloadFile(DOCS_BUCKET, sourceKey))
+          .digest('hex');
+      } catch {
         blockers.push(
-          'Facture non soldée par un règlement constaté : renseignez le paiement avant l’envoi de la facture acquittée.',
+          'La facture ordinaire émise est illisible. Vérifiez son PDF depuis la fiche facture.',
         );
-      else {
-        const sourceKey = acquittedInvoiceKey(invoice.number);
-        let sourceHash: string | null = null;
-        try {
-          sourceHash = createHash('sha256')
-            .update(await downloadFile(DOCS_BUCKET, sourceKey))
-            .digest('hex');
-        } catch {
-          prepareInvoiceId = invoice.id;
-          blockers.push('Générez la facture acquittée pour pouvoir la consulter et la joindre.');
-        }
-        attachments.push({
-          kind: 'invoice',
-          id: invoice.id,
-          label: `Facture ${invoice.number} (acquittée)`,
-          filename: invoiceDownloadFilename(invoice, { acquittee: true }),
-          href: `/api/after-training/${sessionId}/attachments/invoice/${invoice.id}`,
-          sourceKey,
-          sourceHash,
-        });
       }
+      attachments.push({
+        kind: 'invoice',
+        id: invoice.id,
+        label: `Facture ${invoice.number}`,
+        filename: invoiceDownloadFilename(invoice),
+        href: `/api/after-training/${sessionId}/attachments/invoice/${invoice.id}`,
+        sourceKey,
+        sourceHash,
+      });
     }
     if (certificate) {
       const key = certificate.signedPdfUrl ?? certificate.pdfUrl;
@@ -422,7 +409,6 @@ async function resolveDeliveries(
     deliveries.push({
       key,
       kind: 'individual',
-      prepareInvoiceId,
       invoiceUrl: invoice ? `/app/factures/${invoice.id}` : undefined,
       from: `${of.name} <${of.emailFrom}>`,
       title: learnerName,
@@ -535,7 +521,6 @@ export async function getAfterTrainingPreview(sessionId: string): Promise<Previe
         ...result,
         deliveries: result.deliveries.map((delivery) => ({
           ...stripAfterTrainingStorageKeys(delivery),
-          canPrepareInvoice: ['ADMIN', 'MANAGER', 'COMPTABLE'].includes(user.role),
           canRecover: ['ADMIN', 'MANAGER'].includes(user.role) && delivery.state === 'uncertain',
         })),
       }
@@ -599,7 +584,7 @@ export async function sendAfterTrainingDelivery(input: {
           attachment.kind === 'invoice' &&
           createHash('sha256').update(content).digest('hex') !== attachment.sourceHash
         )
-          throw new Error('La facture acquittée a changé. Contrôlez le nouvel aperçu.');
+          throw new Error('La facture a changé. Contrôlez le nouvel aperçu.');
         return { filename: attachment.filename, content, contentType: 'application/pdf' };
       }),
     );
@@ -862,18 +847,4 @@ export async function recoverUncertainAfterTrainingDelivery(input: {
   });
   revalidatePath(`/app/sessions/${input.sessionId}`);
   return { ok: true };
-}
-
-export async function prepareAfterTrainingInvoice(
-  sessionId: string,
-  invoiceId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireRole(['ADMIN', 'MANAGER', 'COMPTABLE']);
-  const preview = await resolveDeliveries(user.tenantId, sessionId);
-  if (!preview.deliveries?.some((d) => d.prepareInvoiceId === invoiceId))
-    return { ok: false, error: 'Facture acquittée à préparer introuvable dans cette session.' };
-  const { generateAcquittedInvoicePdf } = await import('./invoices');
-  const result = await generateAcquittedInvoicePdf({ invoiceId });
-  if (result.ok) revalidatePath(`/app/sessions/${sessionId}`);
-  return result;
 }

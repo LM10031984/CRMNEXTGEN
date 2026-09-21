@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { controlePiecesAgefice, messageAgefice, validerNir } from '../agefice-envoi';
+import {
+  controlePiecesAgefice,
+  messageAgefice,
+  validerNir,
+  PIECES_AGEFICE,
+} from '../agefice-envoi';
 
 describe('envois AGEFICE', () => {
   it('reprend le message initial et la signature fixe', () => {
@@ -28,23 +33,20 @@ describe('envois AGEFICE', () => {
     'AGEFICE_PA_FORM',
     'PROGRAMME',
   ].map((kind) => ({ kind, key: kind, included: true, signe: true }));
-  it.each(initial.filter((p) => p.kind !== 'RIB').map((p) => p.kind))(
-    'bloque la pièce absente ou décochée %s',
-    (kind) => {
-      expect(
-        controlePiecesAgefice(
-          initial.filter((p) => p.kind !== kind),
-          'PRISE_EN_CHARGE',
-        ),
-      ).not.toBeNull();
-      expect(
-        controlePiecesAgefice(
-          initial.map((p) => ({ ...p, included: p.kind !== kind })),
-          'PRISE_EN_CHARGE',
-        ),
-      ).not.toBeNull();
-    },
-  );
+  it.each(initial.map((p) => p.kind))('bloque la pièce absente ou décochée %s', (kind) => {
+    expect(
+      controlePiecesAgefice(
+        initial.filter((p) => p.kind !== kind),
+        'PRISE_EN_CHARGE',
+      ),
+    ).not.toBeNull();
+    expect(
+      controlePiecesAgefice(
+        initial.map((p) => ({ ...p, included: p.kind !== kind })),
+        'PRISE_EN_CHARGE',
+      ),
+    ).not.toBeNull();
+  });
   it('bloque signatures inconnues, mais ne demande aucune signature au RIB', () => {
     expect(controlePiecesAgefice(initial, 'PRISE_EN_CHARGE')).toBeNull();
     expect(
@@ -60,7 +62,23 @@ describe('envois AGEFICE', () => {
       ),
     ).toContain('sign');
   });
-  it('exige les trois pièces de fin et leurs signatures', () => {
+  it('exige exactement six pièces initiales et quatre finales, RIB inclus', () => {
+    expect(PIECES_AGEFICE.PRISE_EN_CHARGE).toEqual([
+      'CNI',
+      'CFP_ATTESTATION',
+      'RIB',
+      'CONVENTION',
+      'AGEFICE_PA_FORM',
+      'PROGRAMME',
+    ]);
+    expect(PIECES_AGEFICE.FIN_FORMATION).toEqual([
+      'RIB',
+      'EMARGEMENT',
+      'ASSIDUITE',
+      'FACTURE_ACQUITTEE',
+    ]);
+  });
+  it('exige les quatre pièces de fin et leurs signatures', () => {
     const end = ['RIB', 'EMARGEMENT', 'ASSIDUITE', 'FACTURE_ACQUITTEE'].map((kind) => ({
       kind,
       key: kind,
@@ -68,12 +86,26 @@ describe('envois AGEFICE', () => {
       signe: true,
     }));
     expect(controlePiecesAgefice(end, 'FIN_FORMATION')).toBeNull();
+    for (const piece of end) {
+      expect(
+        controlePiecesAgefice(
+          end.filter((p) => p.kind !== piece.kind),
+          'FIN_FORMATION',
+        ),
+      ).toContain('Pièces manquantes');
+      expect(
+        controlePiecesAgefice(
+          end.map((p) => ({ ...p, included: p.kind !== piece.kind })),
+          'FIN_FORMATION',
+        ),
+      ).toContain('Pièces manquantes');
+    }
     expect(
       controlePiecesAgefice(
         end.filter((p) => p.kind !== 'RIB'),
         'FIN_FORMATION',
       ),
-    ).toBeNull();
+    ).toContain('RIB');
     expect(
       controlePiecesAgefice(
         end.map((p) => ({ ...p, signe: false })),

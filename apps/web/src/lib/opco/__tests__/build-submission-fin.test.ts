@@ -325,6 +325,10 @@ describe('dossier de fin de formation — sources réelles', () => {
   });
 
   it.each([
+    [
+      'émise mais non réglée',
+      { status: 'ISSUED', paidAt: null, amountPaid: 0, pdfUrl: 'ordinary.pdf' },
+    ],
     ['non payée', { status: 'SENT' }],
     ['date de paiement absente', { paidAt: null }],
     ['paiement partiel', { amountPaid: 119 }],
@@ -336,6 +340,19 @@ describe('dossier de fin de formation — sources réelles', () => {
     expect(built.missing).toContain('FACTURE_ACQUITTEE');
     expect(built.invoiceId).toBeNull();
     expect((await sendOpcoSubmission('submission')).ok).toBe(false);
+    expect(m.mail).not.toHaveBeenCalled();
+  });
+
+  it('refuse le dossier de solde sans RIB même lorsque les pièces signées et l’acquittée sont présentes', async () => {
+    m.participant.mockResolvedValue({
+      ...participant(),
+      person: { ...participant().person, ribKey: null },
+    });
+    const built = await prepare();
+    expect(built.missing).toEqual(['RIB']);
+    const result = await sendOpcoSubmission('submission');
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('RIB');
     expect(m.mail).not.toHaveBeenCalled();
   });
 

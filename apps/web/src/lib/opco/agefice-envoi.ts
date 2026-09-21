@@ -3,8 +3,8 @@ import { LIBELLES_PIECE_DOSSIER, type KindPieceDossier } from './pieces-dossier'
 export type DossierStage = 'PRISE_EN_CHARGE' | 'FIN_FORMATION';
 export const FORMATION_EMAIL = 'formation@start-academy.fr';
 export const PIECES_AGEFICE: Record<DossierStage, readonly KindPieceDossier[]> = {
-  PRISE_EN_CHARGE: ['CNI', 'CFP_ATTESTATION', 'CONVENTION', 'AGEFICE_PA_FORM', 'PROGRAMME'],
-  FIN_FORMATION: ['EMARGEMENT', 'ASSIDUITE', 'FACTURE_ACQUITTEE'],
+  PRISE_EN_CHARGE: ['CNI', 'CFP_ATTESTATION', 'RIB', 'CONVENTION', 'AGEFICE_PA_FORM', 'PROGRAMME'],
+  FIN_FORMATION: ['RIB', 'EMARGEMENT', 'ASSIDUITE', 'FACTURE_ACQUITTEE'],
 };
 export function controlePiecesAgefice(
   attachments: readonly { kind: string; key?: string; included: boolean; signe?: boolean }[],

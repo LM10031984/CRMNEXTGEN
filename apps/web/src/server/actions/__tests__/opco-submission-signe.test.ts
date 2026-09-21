@@ -367,8 +367,8 @@ const PJ_NON_SIGNEES: SubmissionAttachment[] = [
 ];
 
 describe('sendOpcoSubmission — jamais d’envoi partiel silencieux', () => {
-  it('exige chacune des cinq pièces même pour ADMIN avec force', async () => {
-    for (const piece of PJ_SIGNEES.filter((p) => p.kind !== 'RIB')) {
+  it('exige chacune des six pièces, RIB inclus, même pour ADMIN avec force', async () => {
+    for (const piece of PJ_SIGNEES) {
       findFirstSubmission.mockResolvedValue(
         submission(PJ_SIGNEES.filter((p) => p.kind !== piece.kind)),
       );

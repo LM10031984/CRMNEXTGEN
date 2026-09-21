@@ -99,6 +99,26 @@ describe('formation deadlines', () => {
       }),
     ).toEqual(['émargement signé', 'assiduité signée']);
   });
+  it('réclame le RIB manquant pour les deux étapes AGEFICE, sans le réclamer aux salariés', () => {
+    const initial = {
+      cni: true,
+      rib: false,
+      cfp: true,
+      convention: true,
+      ageficeForm: true,
+      programme: true,
+    };
+    expect(missingFormationDocuments(initial)).toEqual(['RIB']);
+    expect(missingFormationDocuments({ ...initial, company: true })).toEqual([]);
+    expect(
+      missingReimbursementDocuments({
+        rib: false,
+        attendance: true,
+        assiduity: true,
+        paidInvoice: true,
+      }),
+    ).toEqual(['RIB']);
+  });
 });
 
 afterEach(() => vi.unstubAllEnvs());

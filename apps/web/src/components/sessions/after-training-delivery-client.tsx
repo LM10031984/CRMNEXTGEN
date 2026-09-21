@@ -6,7 +6,6 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Mail, Paperclip } f
 import { toast } from 'sonner';
 import type { AfterTrainingDeliveryPreview } from '@/lib/post-formation/delivery';
 import {
-  prepareAfterTrainingInvoice,
   recoverUncertainAfterTrainingDelivery,
   sendAfterTrainingDelivery,
 } from '@/server/actions/after-training-delivery';
@@ -165,35 +164,12 @@ export function AfterTrainingDeliveryClient(props: {
                   <Paperclip className="h-3.5 w-3.5" /> Pièces jointes (
                   {delivery.attachments.length})
                 </p>
-                {delivery.prepareInvoiceId && delivery.canPrepareInvoice && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    className="my-2 text-sm text-primary underline"
-                    onClick={() =>
-                      startTransition(async () => {
-                        try {
-                          const result = await prepareAfterTrainingInvoice(
-                            props.sessionId,
-                            delivery.prepareInvoiceId!,
-                          );
-                          if (!result.ok) toast.error(result.error);
-                          else router.refresh();
-                        } catch {
-                          toast.error('Préparation impossible. Rechargez la page.');
-                        }
-                      })
-                    }
-                  >
-                    Préparer la facture acquittée
-                  </button>
-                )}
                 {delivery.invoiceUrl && (
                   <a
                     href={delivery.invoiceUrl}
                     className="my-2 block text-sm text-primary underline"
                   >
-                    Consulter la facture et son règlement
+                    Consulter la facture
                   </a>
                 )}
                 <ul className="mt-2 space-y-2">
