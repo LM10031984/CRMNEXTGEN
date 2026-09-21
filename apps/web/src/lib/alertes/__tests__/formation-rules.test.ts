@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formationAlertsStartDate,
+  reimbursementReminderClosed,
   formationDaysAfter,
   formationDaysUntil,
   missingFormationDocuments,
@@ -111,4 +112,8 @@ it('applique une borne commune configurable en jours Paris', () => {
   expect(shouldAlertFormation(new Date('2026-10-31'), 'OPEN', new Date('2026-10-20'))).toBe(false);
   vi.stubEnv('FORMATION_ALERTS_START_DATE', '2026-02-31');
   expect(() => formationAlertsStartDate()).toThrow('date valide');
+});
+
+it.each(['opcoApproved','opcoReimbursed','validationOpco','remboursementOpco'])('respecte aussi le marqueur historique %s', field => {
+  expect(reimbursementReminderClosed({financingStatus:'NOT_STARTED',opcoSubmissions:[],[field]:true})).toBe(true);
 });

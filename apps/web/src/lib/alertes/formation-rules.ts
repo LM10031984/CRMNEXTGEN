@@ -96,10 +96,18 @@ export function shouldAlertReimbursement(end: Date, now: Date, lastSentAt?: Date
 
 export function reimbursementReminderClosed(participant: {
   financingStatus?: string;
+  opcoApproved?: boolean;
+  opcoReimbursed?: boolean;
+  validationOpco?: boolean;
+  remboursementOpco?: boolean;
   opcoSubmissions: readonly { status: string }[];
 }): boolean {
   const closed = ['APPROVED', 'REIMBURSED'];
   return (
+    participant.opcoApproved === true ||
+    participant.opcoReimbursed === true ||
+    participant.validationOpco === true ||
+    participant.remboursementOpco === true ||
     closed.includes(participant.financingStatus ?? '') ||
     participant.opcoSubmissions.some((s) => closed.includes(s.status))
   );
