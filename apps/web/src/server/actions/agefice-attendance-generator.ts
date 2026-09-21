@@ -24,6 +24,7 @@ import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
+import { villeLieuFormation } from '@/lib/locations/format-lieu';
 import {
   renderAgeficeAttendanceHtml,
   type AgeficeAttendanceTemplateData,
@@ -90,6 +91,9 @@ export async function generateAgeficeAttendanceForParticipant(
       session: {
         include: {
           product: { select: { title: true, durationHours: true, priceHT: true } },
+          // « Fait à » doit porter la ville où la formation s'est RÉELLEMENT
+          // tenue, pas le siège de l'OF (cf. `lieuDelivrance` plus bas).
+          location: true,
           trainers: {
             include: {
               person: { select: { firstName: true, lastName: true } },
@@ -203,7 +207,15 @@ export async function generateAgeficeAttendanceForParticipant(
     ofDreetsVille,
     ofResponsablePrenomNom,
     ofResponsableQualite,
-    ofLieuDelivrance: of.addressVille || '',
+    // « Fait à … » = la ville où la formation s'est TENUE, pas le siège de l'OF
+    // (décision Laurent, 21/09/2026). Le siège ne sert plus que de repli, quand
+    // la session n'a pas de lieu renseigné. Même source unique que l'émargement
+    // et la convention : `villeLieuFormation`, jamais une composition maison —
+    // trois copies divergentes avaient valu un refus AGEFICE le 28/08/2026.
+    lieuDelivrance: villeLieuFormation(
+      participant.session.location,
+      of.addressVille || '',
+    ),
     // Format Kristin : "M./Mme NOM Prénom" (civilité + NOM en majuscules + Prénom).
     // Si pas de civilité saisie, on omet (pas de fallback générique).
     stagiaireNomPrenom: [

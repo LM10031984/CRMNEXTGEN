@@ -106,7 +106,7 @@ function assiduiteData(signatureTags: boolean): AgeficeAttendanceTemplateData {
     formationDateDebut: new Date('2026-10-07T00:00:00Z'), formationDateFin: new Date('2026-12-16T00:00:00Z'),
     formateurNomQualite: 'Laurent MARX, formateur', nombreParticipants: 5,
     ofRaisonSociale: 'START ACADEMY', ofNumeroDeclaration: 'RNQ-0001', ofDreetsVille: 'Nice',
-    ofResponsablePrenomNom: 'Laurent MARX', ofResponsableQualite: 'PDG', ofLieuDelivrance: 'Cagnes-sur-Mer',
+    ofResponsablePrenomNom: 'Laurent MARX', ofResponsableQualite: 'PDG', lieuDelivrance: 'Cagnes-sur-Mer',
     stagiaireNomPrenom: 'Sophie AUGUSTIN', entrepriseRaisonSociale: 'EXPERTA (TEST QualiOF)',
     prevuePresIndividuel: 0, prevuePresCollectif: 88, prevueFoadSync: 0, prevueFoadAsync: 0,
     realiseePresIndividuel: 0, realiseePresCollectif: 88, realiseeFoadSync: 0, realiseeFoadAsync: 0,

@@ -24,7 +24,7 @@ for (const long of [false, true]) {
       nombreParticipants: 2,
       ofRaisonSociale: 'Organisme de formation de démonstration', ofNumeroDeclaration: 'DEMONSTRATION',
       ofDreetsVille: 'Provence-Alpes-Côte d’Azur', ofResponsablePrenomNom: 'Camille EXEMPLE',
-      ofResponsableQualite: 'Directrice', ofLieuDelivrance: 'Cagnes-sur-Mer',
+      ofResponsableQualite: 'Directrice', lieuDelivrance: 'Cagnes-sur-Mer',
       stagiaireNomPrenom: long ? 'Alexandra EXEMPLE-DE-DEMONSTRATION' : 'Alex EXEMPLE',
       entrepriseRaisonSociale: long ? 'Société de démonstration des professionnels de l’immobilier' : 'Entreprise Exemple',
       prevuePresIndividuel: 0, prevuePresCollectif: 72, prevueFoadSync: 0, prevueFoadAsync: 0,

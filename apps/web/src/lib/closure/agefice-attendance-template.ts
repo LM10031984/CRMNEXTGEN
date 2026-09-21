@@ -35,7 +35,7 @@ export interface AgeficeAttendanceTemplateData {
   ofDreetsVille: string;
   ofResponsablePrenomNom: string;
   ofResponsableQualite: string;
-  ofLieuDelivrance: string;
+  lieuDelivrance: string;
 
   stagiaireNomPrenom: string;
   entrepriseRaisonSociale: string | null;
@@ -371,7 +371,7 @@ export function renderAgeficeAttendanceHtml(d: AgeficeAttendanceTemplateData): s
 
   <div class="signature">
     <div class="fait-le">
-      Fait à : <span class="val">${escapeHtml(d.ofLieuDelivrance)}</span>,
+      Fait à : <span class="val">${escapeHtml(d.lieuDelivrance)}</span>,
       le <span class="val">${fmtDateFr(d.dateDelivrance)}</span>
     </div>
     <div class="blocks">
