@@ -73,13 +73,15 @@ beforeEach(() => {
  * Une émission, telle que `invoices.ts` la joue : numéro d'abord, puis les deux
  * dates ancrées sur le même instant de clic.
  *
- * `sessionEndDate` est passée en paramètre et volontairement INUTILISÉE : elle
- * est là pour documenter que la fin de prestation n'entre plus dans le calcul.
- * C'est précisément ce que le lot B a retiré.
+ * `sessionEndDate` redevient UTILE le 21/09/2026 — non pour dater la pièce dans
+ * le passé, ce que le lot B a retiré, mais comme PLANCHER : on ne facture pas
+ * une prestation qui n'a pas encore eu lieu. Tant que la formation est
+ * terminée au moment du clic, le plancher est déjà franchi et cette invariante
+ * se joue exactement comme au lot B.
  */
-async function emettre(clic: Date, _sessionEndDate: Date): Promise<Piece> {
+async function emettre(clic: Date, sessionEndDate: Date): Promise<Piece> {
   const number = await getNextInvoiceNumber(TENANT);
-  const emission = resolveInvoiceIssueDate(clic);
+  const emission = resolveInvoiceIssueDate({ now: clic, finDeFormation: sessionEndDate });
   const piece: Piece = {
     number,
     issueDate: emission,
@@ -113,11 +115,28 @@ describe('Invariante §4 — les numéros et les dates d’émission montent ens
     }
   });
 
-  it('la fin de prestation n’entre plus dans la date : la session de juin est datée de septembre', async () => {
+  it('la fin de prestation ne tire plus la date vers le passé : juin facturé en septembre reste septembre', async () => {
     const p = await emettre(new Date('2026-09-07T09:00:00Z'), new Date('2026-06-12T17:30:00Z'));
 
     expect(p.issueDate).toEqual(new Date('2026-09-07T09:00:00Z'));
     expect(p.issueDate.getUTCMonth()).toBe(8); // septembre, pas juin
+  });
+
+  it('⚠ le plancher du 21/09 peut rompre l’invariante quand on facture AVANT la fin', async () => {
+    // Ce test ne célèbre pas un défaut : il le rend visible et mesurable.
+    // Émettre pour une session à venir date la pièce en avant ; la suivante,
+    // émise le lendemain pour une session déjà close, porte le jour du clic et
+    // se retrouve donc ANTÉRIEURE avec un numéro SUPÉRIEUR.
+    const avenir = await emettre(new Date('2026-09-21T05:27:00Z'), new Date('2026-09-29T00:00:00Z'));
+    const passee = await emettre(new Date('2026-09-22T09:00:00Z'), new Date('2026-06-12T17:30:00Z'));
+
+    expect(avenir.issueDate).toEqual(new Date('2026-09-29T00:00:00Z'));
+    expect(passee.number > avenir.number).toBe(true);
+    expect(passee.issueDate.getTime()).toBeLessThan(avenir.issueDate.getTime());
+
+    // La parade n'est pas de rétablir l'ancienne règle — on ne facture pas
+    // avant d'avoir livré — mais de ne pas ÉMETTRE avant la fin de formation.
+    // Ce garde-fou est le chantier qui suit ; ce test tombera quand il sera là.
   });
 
   it('deux pièces émises le même jour ne se contredisent pas', async () => {

@@ -267,7 +267,9 @@ export async function createInvoiceFromParticipant(
   });
 
   // Les DEUX dates de la pièce partent du même instant (cf. `invoice-dates.ts`).
-  const emission = resolveInvoiceIssueDate();
+  // Le plancher du 21/09/2026 : jamais avant la fin de la formation — on ne
+  // facture pas une prestation qui n'a pas encore eu lieu.
+  const emission = resolveInvoiceIssueDate({ finDeFormation: participant.session.endDate });
 
   // Création atomique : numéro + invoice + lignes + parties figées.
   // La transaction rend un COUPLE plutôt que d'affecter une variable
@@ -291,12 +293,12 @@ export async function createInvoiceFromParticipant(
         deliveryAddressJson:
           (deliveryAddressJson(delivery) as Prisma.InputJsonValue | null) ?? Prisma.JsonNull,
         ...nestedInvoiceWrites(lines, [seller, buyer, delivery]),
-        // La pièce se date du JOUR OÙ ON L'ÉTABLIT, pas de la fin de la
-        // prestation (lot B du 10/09/2026 — l'histoire de la décision du 13/08
-        // et de sa révision est dans `resolveInvoiceIssueDate`). La période
-        // réelle de formation, elle, est portée par les LIGNES
-        // (`buildTrainingLines`) et par le bloc désignation du gabarit.
-        // L'échéance court depuis cette même émission.
+        // La pièce se date du JOUR OÙ ON L'ÉTABLIT, sans jamais descendre
+        // sous la FIN DE LA FORMATION (lot B du 10/09/2026, puis plancher du
+        // 21/09/2026 — l'histoire des trois décisions est dans
+        // `resolveInvoiceIssueDate`). La période réelle de formation, elle,
+        // est portée par les LIGNES (`buildTrainingLines`) et par le bloc
+        // désignation du gabarit. L'échéance court depuis cette même émission.
         issueDate: emission,
         dueDate: resolveInvoiceDueDate(dueDays, emission),
         notes: input.notes ?? null,
@@ -551,8 +553,9 @@ export async function createInvoiceForSponsorGroup(input: {
     reglement: { iban: of.iban || null, bic: of.bic || null },
   });
 
-  // Idem facture individuelle : les deux dates partent du même instant.
-  const emission = resolveInvoiceIssueDate();
+  // Idem facture individuelle : les deux dates partent du même instant, et
+  // l'émission ne descend jamais sous la fin de la formation.
+  const emission = resolveInvoiceIssueDate({ finDeFormation: session.endDate });
 
   let invoice;
   try { invoice = await prisma.$transaction(async (tx) => {
