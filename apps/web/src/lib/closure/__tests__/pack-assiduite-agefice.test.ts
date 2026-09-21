@@ -82,7 +82,9 @@ const sessionFindFirst = prisma.trainingSession.findFirst as unknown as ReturnTy
 const documentFindMany = prisma.document.findMany as unknown as ReturnType<typeof vi.fn>;
 const assetFindMany = prisma.pedagogicalAsset.findMany as unknown as ReturnType<typeof vi.fn>;
 const batchCreate = prisma.closureBatch.create as unknown as ReturnType<typeof vi.fn>;
-const participantFindMany = prisma.sessionParticipant.findMany as unknown as ReturnType<typeof vi.fn>;
+const participantFindMany = prisma.sessionParticipant.findMany as unknown as ReturnType<
+  typeof vi.fn
+>;
 const requireRoleMock = requireRole as unknown as ReturnType<typeof vi.fn>;
 
 const TEST_USER = {
@@ -133,7 +135,7 @@ describe('pack de fin de formation — attestation d’assiduité AGEFICE', () =
   it("génère l'attestation d'assiduité, et plus seulement la demande de prise en charge", async () => {
     sessionFindFirst.mockResolvedValueOnce(buildSession([TNS]));
     // La requête d'éligibilité rend le stagiaire AGEFICE.
-    participantFindMany.mockResolvedValue([{ id: TNS }]);
+    participantFindMany.mockResolvedValue([{ id: TNS, sponsorOrg: { opcoCode: 'AGEFICE' } }]);
 
     const r = await generateClosurePack(SESSION_ID);
 
@@ -147,7 +149,7 @@ describe('pack de fin de formation — attestation d’assiduité AGEFICE', () =
     // Son payeur n'a pas d'OPCO : la règle étroite du pack le laissait de côté,
     // alors que la fiche session le comptait parmi les éligibles.
     sessionFindFirst.mockResolvedValueOnce(buildSession([TNS]));
-    participantFindMany.mockResolvedValue([{ id: TNS }]);
+    participantFindMany.mockResolvedValue([{ id: TNS, sponsorOrg: { opcoCode: 'AGEFICE' } }]);
 
     await generateClosurePack(SESSION_ID);
 
@@ -167,7 +169,7 @@ describe('pack de fin de formation — attestation d’assiduité AGEFICE', () =
 
   it('ne traite que les éligibles quand la session en mêle plusieurs', async () => {
     sessionFindFirst.mockResolvedValueOnce(buildSession([TNS, SALARIE]));
-    participantFindMany.mockResolvedValue([{ id: TNS }]);
+    participantFindMany.mockResolvedValue([{ id: TNS, sponsorOrg: { opcoCode: 'AGEFICE' } }]);
 
     await generateClosurePack(SESSION_ID);
 

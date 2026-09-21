@@ -48,7 +48,6 @@ export function missingFormationDocuments(input: {
     ].filter((s): s is string => Boolean(s));
   return [
     !input.cni && 'CNI',
-    !input.rib && 'RIB',
     !input.cfp && 'attestation CFP',
     !input.convention && 'convention signée',
     !input.ageficeForm && 'formulaire AGEFICE signé',
@@ -63,7 +62,6 @@ export function missingReimbursementDocuments(input: {
   paidInvoice: boolean;
 }): string[] {
   return [
-    !input.rib && 'RIB',
     !input.attendance && 'émargement signé',
     !input.assiduity && 'assiduité signée',
     !input.paidInvoice && 'facture payée permettant l’édition acquittée',
@@ -82,7 +80,7 @@ export function shouldAlertFormation(
     !['CANCELLED', 'COMPLETED'].includes(status) &&
     days >= 0 &&
     days <= 21 &&
-    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
+    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 1)
   );
 }
 
@@ -90,7 +88,7 @@ export function shouldAlertReimbursement(end: Date, now: Date, lastSentAt?: Date
   return (
     afterFormationAlertStart(end) &&
     formationDaysAfter(end, now) >= 1 &&
-    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 7)
+    (!lastSentAt || formationDaysAfter(lastSentAt, now) >= 1)
   );
 }
 

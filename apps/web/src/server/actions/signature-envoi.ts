@@ -203,7 +203,7 @@ async function chargerContexte(
         orderBy: [{ person: { lastName: 'asc' } }, { person: { firstName: 'asc' } }],
         select: {
           id: true,
-          sponsorOrgId: true, financingMode: true,
+          sponsorOrgId: true, financingMode: true, participantType: true,
           person: {
             select: {
               id: true,
@@ -254,7 +254,7 @@ async function chargerContexte(
     sponsorOrgId: p.sponsorOrgId ?? null,
     sponsorOrgLabel: p.sponsorOrg?.brandName ?? p.sponsorOrg?.legalName ?? null,
     sponsorOpcoCode: p.sponsorOrg?.opcoCode ?? null,
-    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, participantType: p.participantType, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile,
   }));
   const reglesParCode = await chargerReglesSignature(codesFinanceursDe(lus));
 

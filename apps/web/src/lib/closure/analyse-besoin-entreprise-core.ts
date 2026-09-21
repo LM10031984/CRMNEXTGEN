@@ -1,3 +1,4 @@
+import { isEmployeeOfSponsor } from '@/lib/sessions/employee-of-sponsor';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 /**
  * Analyse des besoins au nom de l'ENTREPRISE — cœur SANS auth.
@@ -35,7 +36,7 @@ import { renderHtmlToPdfWeasy } from '@/lib/pdf-render';
 import { loadOfConfig } from '@/lib/of-config';
 import { subtractBusinessDaysISO } from '@/lib/business-days';
 import { requiresContratIndividuel } from '@/lib/legal-forms';
-import { releveDeLaConvention, estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
+import { releveDeLaConvention } from '@/lib/sessions/payer-rule';
 import { formatLieuFormation } from '@/lib/locations/format-lieu';
 import { generateAnalyseBesoinEntrepriseContent } from './ollama-generators';
 import {
@@ -120,9 +121,7 @@ export async function generateAnalyseBesoinEntrepriseCore(
   // celui de chaque stagiaire. On ne refuse donc que si aucun inscrit de ce
   // commanditaire n'y est salarié, c'est-à-dire le vrai auto-payeur.
   const aUnSalarie = participants.some((p) =>
-    estEmployeurDeLApprenant(
-      legalLinkAtSession(p.person?.legalLinks ?? [], sponsorOrgId, p.session)?.role ?? null,
-    ),
+    isEmployeeOfSponsor(p),
   );
   if (requiresContratIndividuel(org.legalForm) && !aUnSalarie) {
     return {

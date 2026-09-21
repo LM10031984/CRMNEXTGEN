@@ -18,6 +18,13 @@ export function SessionRegimeEditor({
   const [chosen, setChosen] = useState<SessionRegime | ''>(regime ?? '');
   const [amount, setAmount] = useState(price === null ? '' : String(price));
   const [key, setKey] = useState<string>();
+  const [preview, setPreview] = useState<{
+    participants: number;
+    previousUnitPrice: number;
+    expectedTotal: number;
+    requiresLumpSumConfirmation: boolean;
+  }>();
+  const [lumpSumConfirmed, setLumpSumConfirmed] = useState(false);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const saving = useRef(false);
@@ -37,6 +44,7 @@ export function SessionRegimeEditor({
         priceHT: Number(amount.replace(',', '.')),
         apply: !!key,
         confirmationKey: key,
+        signedContractIsLumpSum: lumpSumConfirmed,
       });
       if (!result.ok) {
         setError(result.error);
@@ -49,6 +57,8 @@ export function SessionRegimeEditor({
         router.refresh();
       } else {
         setKey(result.confirmationKey);
+        setPreview(result.preview);
+        setLumpSumConfirmed(false);
         setError(undefined);
       }
     } catch {
@@ -70,6 +80,8 @@ export function SessionRegimeEditor({
             setChosen(regime ?? '');
             setAmount(price === null ? '' : String(price));
             setKey(undefined);
+            setPreview(undefined);
+            setLumpSumConfirmed(false);
             setError(undefined);
             setOpen(true);
           }}
@@ -114,6 +126,30 @@ export function SessionRegimeEditor({
               {amount} € HT à cette session ? Les documents existants ne sont pas régénérés.
             </p>
           )}
+          {key && preview && (
+            <div className="space-y-2 rounded bg-slate-50 p-3">
+              <p>
+                {preview.participants} inscrit(s) actif(s) ×{' '}
+                {preview.previousUnitPrice.toLocaleString('fr-FR')} € ={' '}
+                {preview.expectedTotal.toLocaleString('fr-FR')} € HT attendus selon le tarif actuel.
+                Les inscriptions annulées sont exclues.
+              </p>
+              {preview.requiresLumpSumConfirmation && (
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={lumpSumConfirmed}
+                    onChange={(e) => setLumpSumConfirmed(e.target.checked)}
+                    disabled={pending}
+                  />
+                  <span>
+                    J’ai vérifié la convention signée : elle prévoit bien un forfait total, et non
+                    un prix par stagiaire.
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
           {error && (
             <p role="alert" className="text-red-700">
               {error}
@@ -121,7 +157,9 @@ export function SessionRegimeEditor({
           )}
           <div className="flex gap-3">
             <button
-              disabled={pending}
+              disabled={
+                pending || (!!key && !!preview?.requiresLumpSumConfirmation && !lumpSumConfirmed)
+              }
               type="button"
               onClick={submit}
               className="font-medium text-primary"

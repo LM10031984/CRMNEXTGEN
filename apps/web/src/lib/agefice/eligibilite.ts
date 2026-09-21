@@ -1,6 +1,6 @@
 import { sessionFunding, type SessionRegime } from '@/lib/sessions/session-regime';
-import { legalLinkAtSession, type PeriodLink, type SessionPeriod } from '@/lib/persons/legal-link-period';
-import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
+import { type PeriodLink, type SessionPeriod } from '@/lib/persons/legal-link-period';
+import { isEmployeeOfSponsor, isEmployeeStatus } from '@/lib/sessions/employee-of-sponsor';
 /**
  * Qui relève de l'AGEFICE ? — SOURCE UNIQUE.
  *
@@ -54,11 +54,17 @@ export const OU_AGEFICE: Prisma.SessionParticipantWhereInput[] = [
 /** Forme minimale d'un participant déjà chargé, vu par la règle. */
 export interface ParticipantAgeficeLike {
   sponsorOrgId?: string;
+  participantType?: string | null;
   financingMode?: string | null;
   session?: SessionPeriod & { regime?: SessionRegime | null };
   sponsorOrg?: { opcoCode?: string | null; ageficeProfile?: unknown } | null;
   person?: {
-    legalLinks?: (Partial<PeriodLink> & { role: string; organization?: { id?: string; ageficeProfile?: unknown } | null })[] | null;
+    legalLinks?:
+      | (Partial<PeriodLink> & {
+          role: string;
+          organization?: { id?: string; ageficeProfile?: unknown } | null;
+        })[]
+      | null;
   } | null;
 }
 
@@ -68,15 +74,33 @@ export interface ParticipantAgeficeLike {
  * plus. Le résultat doit rester identique à celui de `OU_AGEFICE`.
  */
 export function estEligibleAgefice(p: ParticipantAgeficeLike): boolean {
+  if (p.financingMode && p.financingMode !== 'OPCO') return false;
+  if (p.sponsorOrgId) {
+    if (
+      isEmployeeOfSponsor({
+        ...p,
+        sponsorOrgId: p.sponsorOrgId,
+        person: {
+          legalLinks: (p.person?.legalLinks ?? []).filter(
+            (l): l is PeriodLink => !!l.organizationId,
+          ),
+        },
+      })
+    )
+      return false;
+  } else if (isEmployeeStatus(p.participantType)) return false;
   if (p.session?.regime) {
     if (!p.sponsorOrgId) return false;
-    return sessionFunding({ sponsorOrgId: p.sponsorOrgId, sponsorOpcoCode: p.sponsorOrg?.opcoCode, sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile, links: (p.person?.legalLinks ?? []).filter((l): l is PeriodLink => !!l.organizationId), session: p.session, financingMode: p.financingMode }) === 'AGEFICE';
-  }
-  // Une activité indépendante annexe ne finance pas l'inscription salariée.
-  if (p.session && p.sponsorOrgId) {
-    const links = (p.person?.legalLinks ?? []).filter((l): l is PeriodLink => !!l.organizationId);
-    const role = legalLinkAtSession(links, p.sponsorOrgId, p.session)?.role;
-    if (role && estEmployeurDeLApprenant(role)) return false;
+    return (
+      sessionFunding({
+        sponsorOrgId: p.sponsorOrgId,
+        sponsorOpcoCode: p.sponsorOrg?.opcoCode,
+        sponsorAgeficeProfile: p.sponsorOrg?.ageficeProfile,
+        links: (p.person?.legalLinks ?? []).filter((l): l is PeriodLink => !!l.organizationId),
+        session: p.session,
+        financingMode: p.financingMode,
+      }) === 'AGEFICE'
+    );
   }
   if (p.sponsorOrg?.opcoCode === 'AGEFICE') return true;
   return (p.person?.legalLinks ?? []).some(
@@ -88,15 +112,29 @@ export function estEligibleAgefice(p: ParticipantAgeficeLike): boolean {
 
 /** Projection identique pour le compteur, les lots et les générateurs. */
 export const AGEFICE_PARTICIPANT_SELECT = {
-  id: true, sponsorOrgId: true, financingMode: true,
+  id: true,
+  sponsorOrgId: true,
+  financingMode: true,
+  participantType: true,
   session: { select: { regime: true, startDate: true, endDate: true } },
   sponsorOrg: { select: { opcoCode: true, ageficeProfile: { select: { id: true } } } },
-  person: { select: { firstName: true, lastName: true, legalLinks: { select: {
-    organizationId: true, role: true, startDate: true, endDate: true,
-    organization: { select: { ageficeProfile: { select: { id: true } } } },
-  } } } },
+  person: {
+    select: {
+      firstName: true,
+      lastName: true,
+      legalLinks: {
+        select: {
+          organizationId: true,
+          role: true,
+          startDate: true,
+          endDate: true,
+          organization: { select: { ageficeProfile: { select: { id: true } } } },
+        },
+      },
+    },
+  },
 } as const;
 /** Le SQL sélectionne des candidats ; le rôle à la date de session décide. */
 export function filterAgeficeCandidates<T extends ParticipantAgeficeLike>(candidates: T[]): T[] {
-  return candidates.filter((p) => !p.session || estEligibleAgefice(p));
+  return candidates.filter(estEligibleAgefice);
 }

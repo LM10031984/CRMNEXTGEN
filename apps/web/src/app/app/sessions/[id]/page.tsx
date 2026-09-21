@@ -543,7 +543,7 @@ export default async function SessionDetailPage({
     sponsorOrgId: p.sponsorOrg.id,
     sponsorOrgLabel: p.sponsorOrg.brandName ?? p.sponsorOrg.legalName,
     sponsorOpcoCode: p.sponsorOrg.opcoCode,
-    liens: p.person.legalLinks, session, financingMode: p.financingMode, sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
+    liens: p.person.legalLinks, session, financingMode: p.financingMode, participantType: p.participantType, sponsorAgeficeProfile: p.sponsorOrg.ageficeProfile,
   }));
   const reglesSignature = await chargerReglesSignature(codesFinanceursDe(participantsLus));
   const regimeParParticipant = new Map(

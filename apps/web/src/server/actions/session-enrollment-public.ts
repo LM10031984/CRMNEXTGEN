@@ -16,7 +16,6 @@ import {
   queueEnrollmentSubmittedAlert,
   flushFormationEventAlerts,
 } from '@/lib/alertes/formation-notifier';
-import { checkFormationDocuments } from '@/lib/alertes/formation-check';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { prisma } from '@qualiof/db';
@@ -231,9 +230,6 @@ export async function submitSessionEnrollmentRequest(
   });
   await flushFormationEventAlerts().catch(() =>
     console.error('[formation-alert] livraison différée au cron'),
-  );
-  await checkFormationDocuments(new Date(), session.id).catch(() =>
-    console.error('[formation-alert] contrôle différé au cron'),
   );
   revalidatePath('/app/inscriptions');
   revalidatePath(`/app/sessions/${session.id}`);

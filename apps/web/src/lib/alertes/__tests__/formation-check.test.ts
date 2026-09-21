@@ -106,7 +106,7 @@ beforeEach(() => {
 });
 
 describe('J-21 funding alerts', () => {
-  it('requires all six AGEFICE pieces, including signed form and shared programme', async () => {
+  it('requires five AGEFICE pieces, including signed form and shared programme', async () => {
     m.sessions.mockResolvedValue([session()]);
     m.documents.mockResolvedValue([]);
     m.programme.mockResolvedValue(null);
@@ -144,7 +144,7 @@ describe('J-21 funding alerts', () => {
       ]),
     ]);
     await checkFormationDocuments(now);
-    expect(m.queue.mock.calls[0]![0].subject).toContain('complet non déposé');
+    expect(m.queue.mock.calls[0]![0].lines.join(' ')).toContain('complet non déposé');
     expect(m.queue.mock.calls[0]![0].lines.join(' ')).toContain('envoi AGEFICE initial confirmé');
   });
 
@@ -207,7 +207,7 @@ describe('J-21 funding alerts', () => {
     await checkFormationDocuments(now);
     expect(m.queue).toHaveBeenCalledTimes(1);
     const alert = m.queue.mock.calls[0]![0];
-    expect(alert.subject).toContain('ACME');
+    expect(alert.lines.join(' ')).toContain('ACME');
     expect(alert.lines.join(' ')).toContain('déclaration de dépôt par un déposant');
     expect(alert.lines.join(' ')).not.toMatch(/CNI|RIB|CFP|AGEFICE signé/);
   });
@@ -344,7 +344,7 @@ describe('J+1 reimbursement reminders', () => {
     const alert = m.queue.mock.calls[0]![0];
     expect(alert.lines.join(' ')).toContain('point-accueil@example.fr');
     expect(alert.lines.join(' ')).toContain(
-      'RIB, émargement signé, assiduité signée, facture payée permettant l’édition acquittée',
+      'émargement signé, assiduité signée, facture payée permettant l’édition acquittée',
     );
     expect(m.invoices.mock.calls[0]![0].where.tenantId).toBe('tenant-1');
   });
@@ -431,4 +431,30 @@ describe('borne des notifications et reprise par session', () => {
     expect(m.queue).toHaveBeenCalledOnce();
     expect(m.queue.mock.calls[0]![0].sessionId).toBe('good');
   });
+});
+
+it('regroupe les dossiers et préinscriptions en un seul digest quotidien par session', async () => {
+  m.sessions.mockResolvedValue([
+    {
+      ...session([participant(), participant({ id: 'p2' })]),
+      preEnrollments: [{ firstName: 'Alice', lastName: 'Test' }],
+    },
+  ]);
+  m.deliver.mockResolvedValue(true);
+  const metrics = { sent: 0, errors: 0 };
+  await checkFormationDocuments(now, undefined, metrics);
+  expect(m.queue).toHaveBeenCalledOnce();
+  expect(m.queue.mock.calls[0]![0].key).toBe('digest:s1:2026-10-18');
+  expect(m.queue.mock.calls[0]![0].lines).toHaveLength(3);
+  expect(metrics).toEqual({ sent: 1, errors: 0 });
+});
+it('alerte sur convention et programme pour un autofinancé, sans réclamer les pièces AGEFICE', async () => {
+  m.sessions.mockResolvedValue([session([participant({ financingMode: 'AUTOFINANCEMENT' })])]);
+  m.documents.mockResolvedValue([]);
+  m.programme.mockResolvedValue(null);
+  await checkFormationDocuments(now);
+  expect(m.queue.mock.calls[0]![0].lines.join(' ')).toContain(
+    'convention signée, programme de formation',
+  );
+  expect(m.queue.mock.calls[0]![0].lines.join(' ')).not.toMatch(/CNI|CFP|RIB|AGEFICE/);
 });

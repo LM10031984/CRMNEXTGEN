@@ -4,7 +4,6 @@ import {
   queueEnrollmentSubmittedAlert,
   flushFormationEventAlerts,
 } from '@/lib/alertes/formation-notifier';
-import { checkFormationDocuments } from '@/lib/alertes/formation-check';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@qualiof/db';
 import { validateRequest } from '@/lib/auth';
@@ -114,10 +113,6 @@ export async function submitPreEnrollmentForm(
   await flushFormationEventAlerts().catch(() =>
     console.error('[formation-alert] livraison différée au cron'),
   );
-  if (pe.intendedSessionId)
-    await checkFormationDocuments(new Date(), pe.intendedSessionId).catch(() =>
-      console.error('[formation-alert] contrôle différé au cron'),
-    );
   revalidatePath('/app/inscriptions');
 
   // Déclenche l'extraction IA en background (fire-and-forget)

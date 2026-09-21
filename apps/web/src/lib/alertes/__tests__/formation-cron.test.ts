@@ -9,7 +9,11 @@ import { GET } from '@/app/api/cron/formation-alerts/route';
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = 'cron-test';
-  m.check.mockResolvedValue(2);
+  m.flush.mockResolvedValue(0);
+  m.check.mockImplementation(async (_now, _id, metrics) => {
+    metrics.sent += 1;
+    return 2;
+  });
   m.reimbursements.mockResolvedValue(1);
 });
 describe('formation cron authorization', () => {
@@ -31,7 +35,13 @@ describe('formation cron authorization', () => {
         headers: { authorization: 'Bearer cron-test' },
       }),
     );
-    expect(await result.json()).toEqual({ ok: true, examined: 2, reimbursements: 1 });
+    expect(await result.json()).toEqual({
+      ok: true,
+      examined: 2,
+      reimbursements: 1,
+      sent: 1,
+      errors: 0,
+    });
     expect(m.flush).toHaveBeenCalledOnce();
     expect(m.check).toHaveBeenCalledOnce();
     expect(m.reimbursements).toHaveBeenCalledOnce();

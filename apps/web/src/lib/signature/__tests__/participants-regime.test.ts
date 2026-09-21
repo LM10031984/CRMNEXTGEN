@@ -164,10 +164,10 @@ describe('participantPourEnvoi — le mapper que la page et le moteur partagent'
     expect(p.sponsorOrgLabel).toBe('Imagimmo');
   });
 
-  it('`aLienEiSelfHorsSponsor` est vrai SEULEMENT si l’EI n’est pas le commanditaire', () => {
+  it('ignore l’EI annexe d’un salarié du commanditaire', () => {
     expect(participantPourEnvoi(florent(), REGLES).signauxDossierPropre).toEqual({
-      aLienEiSelfHorsSponsor: true,
-      reglesAutresOrgs: [REGLE_AGEFICE],
+      aLienEiSelfHorsSponsor: false,
+      reglesAutresOrgs: [],
     });
     // Le TNS « propre » : son EI EST le commanditaire, donc aucun signal.
     expect(participantPourEnvoi(tns(), REGLES).signauxDossierPropre).toEqual({
@@ -176,7 +176,7 @@ describe('participantPourEnvoi — le mapper que la page et le moteur partagent'
     });
   });
 
-  it('`reglesAutresOrgs` n’embarque que les règles CONNUES des autres organisations', () => {
+  it('ignore aussi les autres organisations lorsque le commanditaire emploie l’apprenant', () => {
     const avecOrgInconnue: ParticipantLu = {
       ...florent(),
       liens: [
@@ -185,8 +185,8 @@ describe('participantPourEnvoi — le mapper que la page et le moteur partagent'
       ],
     };
     expect(participantPourEnvoi(avecOrgInconnue, REGLES).signauxDossierPropre).toEqual({
-      aLienEiSelfHorsSponsor: true,
-      reglesAutresOrgs: [REGLE_AGEFICE],
+      aLienEiSelfHorsSponsor: false,
+      reglesAutresOrgs: [],
     });
   });
 });
@@ -203,18 +203,13 @@ describe('Florent HAUSSWIRTH — le régime remplace la dérivation élargie BUG
     expect(docTypesEnRegime(p.regle)).toEqual(new Set(['CONVENTION']));
   });
 
-  it('porte un avertissement NOMMÉ, qui ne planifie aucun envoi AGEFICE', () => {
+  it('ne crée ni avertissement d’EI annexe ni envoi AGEFICE pour une inscription salariée', () => {
     const plan = planifierEnvoi({
       scope: 'BEFORE',
       participants: [participantPourEnvoi(florent(), REGLES)],
     });
 
-    expect(plan.avertissements).toHaveLength(1);
-    expect(plan.avertissements[0]?.docType).toBe('AGEFICE');
-    expect(plan.avertissements[0]?.participantId).toBe('part-florent');
-    expect(plan.avertissements[0]?.message).toContain('Florent HAUSSWIRTH');
-    expect(plan.avertissements[0]?.message).toContain("rien n'a été envoyé");
-    // L'avertissement ne DÉCLENCHE rien : seule la convention est planifiée.
+    expect(plan.avertissements).toEqual([]);
     expect(plan.envois.map((e) => e.docType)).toEqual(['CONVENTION']);
     expect(plan.blocages).toEqual([]);
   });

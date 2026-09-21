@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { requireRole } from '@/lib/rbac';
 import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
 import { allocateCompanyPrice, refusalForSessionPayer } from '@/lib/sessions/session-regime';
-import { estEmployeurDeLApprenant } from '@/lib/sessions/payer-rule';
+import { isEmployeeOfSponsor } from '@/lib/sessions/employee-of-sponsor';
 import {
   assertCompanyPriceEditable,
   synchronizeCompanyPriceTx,
@@ -24,13 +24,21 @@ const Input = z.object({
     .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 0.00001, 'Deux décimales maximum.'),
   apply: z.boolean().optional(),
   confirmationKey: z.string().optional(),
+  signedContractIsLumpSum: z.boolean().optional(),
 });
 export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
   | {
       ok: true;
       changed: boolean;
       confirmationKey?: string;
-      preview?: { regime: string; priceHT: number; participants: number };
+      preview?: {
+        regime: string;
+        priceHT: number;
+        participants: number;
+        previousUnitPrice: number;
+        expectedTotal: number;
+        requiresLumpSumConfirmation: boolean;
+      };
     }
   | { ok: false; error: string }
 > {
@@ -43,6 +51,7 @@ export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
           where: { id: value.sessionId, tenantId: user.tenantId },
           include: {
             participants: {
+              where: { enrollmentStatus: { not: 'CANCELLED' } },
               include: { sponsorOrg: true, person: { include: { legalLinks: true } } },
             },
           },
@@ -90,12 +99,7 @@ export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
           session.participants.every(
             (p) =>
               Number(p.priceHT) === shares[p.id] &&
-              estEmployeurDeLApprenant(
-                legalLinkAtSession(p.person.legalLinks, p.sponsorOrgId, {
-                  ...session,
-                  regime: value.regime,
-                })?.role,
-              ),
+              isEmployeeOfSponsor({ ...p, session: { ...session, regime: value.regime } }),
           );
         if (!metadataOnly)
           await assertCompanyPriceEditable(tx, { ...session, regime: 'ENTREPRISE' });
@@ -132,11 +136,20 @@ export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
           regime: value.regime,
           priceHT: value.priceHT,
           participants: session.participants.length,
+          previousUnitPrice: Number(session.pricePerLearner ?? 0),
+          expectedTotal:
+            (Math.round(Number(session.pricePerLearner ?? 0) * 100) * session.participants.length) /
+            100,
+          requiresLumpSumConfirmation: metadataOnly,
         };
         if (!value.apply) return { ok: true as const, changed: false, confirmationKey, preview };
         if (value.confirmationKey !== confirmationKey)
           throw new Error(
             'La session a changé depuis la prévisualisation. Vérifiez à nouveau avant de confirmer.',
+          );
+        if (metadataOnly && value.signedContractIsLumpSum !== true)
+          throw new Error(
+            'Vérifiez la convention signée et confirmez qu’elle prévoit bien un forfait total. Un prix par stagiaire ne peut pas être requalifié en forfait.',
           );
         const updated = await tx.trainingSession.update({ where: { id: session.id }, data: after });
         let changed = 0;
@@ -164,7 +177,13 @@ export async function setSessionRegime(input: z.infer<typeof Input>): Promise<
             entity: 'TrainingSession',
             entityId: session.id,
             action: 'sessions.setRegime',
-            diff: { before, after, participantsUpdated: changed, metadataOnly },
+            diff: {
+              before,
+              after,
+              participantsUpdated: changed,
+              metadataOnly,
+              signedContractIsLumpSum: value.signedContractIsLumpSum === true,
+            },
           },
         });
         return { ok: true as const, changed: true };
