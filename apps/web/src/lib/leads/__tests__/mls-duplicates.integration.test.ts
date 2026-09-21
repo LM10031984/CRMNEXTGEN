@@ -1,5 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
+// Seul le choix du client est substitué : requêtes, contraintes et transactions
+// utilisent réellement PostgreSQL, via une URL de test explicitement vérifiée.
+// Sans ce bloc, `prisma` suit DATABASE_URL — l'URL MÉTIER, qui sur un poste de
+// développement désigne la production (audit du 21/09). Le remplacement vaut
+// aussi pour le CODE TESTÉ, qui importe le même `prisma`.
+vi.mock('@qualiof/db', async (original) => {
+  const { assertTestTarget } =
+    await import('../../../../../../packages/db/scripts/assert-test-target');
+  assertTestTarget({ databaseUrl: process.env.TEST_DATABASE_URL });
+  const actual = await original<typeof import('@qualiof/db')>();
+  return { ...actual, prisma: actual.createPrismaClientForUrl(process.env.TEST_DATABASE_URL!) };
+});
 import { prisma } from '@qualiof/db';
 import { assertTestDatabaseContent } from '../../../../../../packages/db/scripts/assert-test-target';
 import { listMlsDuplicates, mergeMlsDuplicate } from '../mls-duplicates-service';

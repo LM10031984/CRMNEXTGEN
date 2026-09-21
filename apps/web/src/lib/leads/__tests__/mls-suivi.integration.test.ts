@@ -1,6 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import * as XLSX from 'xlsx';
+import { assertTestDatabaseContent } from '../../../../../../packages/db/scripts/assert-test-target';
+// Seul le choix du client est substitué : requêtes, contraintes et transactions
+// utilisent réellement PostgreSQL, via une URL de test explicitement vérifiée.
+// Sans ce bloc, `prisma` suit DATABASE_URL — l'URL MÉTIER, qui sur un poste de
+// développement désigne la production (audit du 21/09). Le remplacement vaut
+// aussi pour le CODE TESTÉ, qui importe le même `prisma`.
+vi.mock('@qualiof/db', async (original) => {
+  const { assertTestTarget } =
+    await import('../../../../../../packages/db/scripts/assert-test-target');
+  assertTestTarget({ databaseUrl: process.env.TEST_DATABASE_URL });
+  const actual = await original<typeof import('@qualiof/db')>();
+  return { ...actual, prisma: actual.createPrismaClientForUrl(process.env.TEST_DATABASE_URL!) };
+});
 import { prisma } from '@qualiof/db';
 const state = vi.hoisted(() => ({
   actor: { id: '', tenantId: '', firstName: 'Alice', lastName: 'Admin', role: 'ADMIN' },
@@ -36,6 +49,7 @@ const makeFile = () => {
   return XLSX.write(b, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 };
 beforeAll(async () => {
+  await assertTestDatabaseContent(prisma, process.env.TEST_DATABASE_URL);
   const t = await prisma.tenant.create({ data: { name: 'Test import MLS' } });
   state.actor.tenantId = t.id;
   const u = await prisma.user.create({
