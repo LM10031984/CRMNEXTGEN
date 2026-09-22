@@ -25,6 +25,10 @@ export interface DispatchGenerateDocInput {
   docType: DispatchableDocType;
   participantId?: string;
   force?: boolean;
+  /** L'utilisateur a vu l'avertissement et veut remplacer quand même. */
+  confirmEngaged?: boolean;
+  /** Pourquoi, en toutes lettres — exigé sur un engagement prouvé, tracé en audit. */
+  motif?: string;
 }
 
 export interface DispatchResult {
@@ -33,6 +37,14 @@ export interface DispatchResult {
   docId?: string;
   resourceKind?: 'asset' | 'document';
   enqueued?: boolean;
+  /**
+   * Refus de remplacement : le texte à montrer AVANT de réessayer. Même
+   * protocole que `regenerateParticipantDoc` (matrice Qualiopi) — l'appelant
+   * redemande avec `confirmEngaged`, puis avec `motif` si on le lui réclame.
+   */
+  warning?: string;
+  requiresConfirmation?: boolean;
+  requiresMotif?: boolean;
 }
 
 /** Item exposé par <DocDockDrawer> et construit par `buildDocDockItems`. */

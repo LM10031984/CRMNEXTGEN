@@ -56,12 +56,49 @@ export interface EngagementFacts {
   conventionSigned: boolean;
   /** `docStatus[docType].state === 'MANUAL_OK'` — preuve signée téléversée ou cochée. */
   manuallyValidated: boolean;
+  /**
+   * Le document PORTE un exemplaire signé : `signedPdfUrl` rempli — scan
+   * déposé (`persistSignedScan`) ou retour d'e-signature DocuSeal.
+   *
+   * TROU FERMÉ LE 21/09/2026. Ce fait n'était pas lu : une pièce signée
+   * ÉLECTRONIQUEMENT ne touche pas `docStatus`, donc elle ressortait « libre »
+   * et se laissait écraser sans un mot. Une assiduité signée par l'apprenant
+   * pouvait disparaître d'un clic sur « Régénérer ».
+   *
+   * `null` = aucun exemplaire signé. Sinon l'objet, dont la date PEUT être
+   * nulle : c'est la PRÉSENCE de l'exemplaire qui engage, pas sa date. Déduire
+   * le fait d'une date aurait laissé passer un scan déposé sans `signedAt`.
+   */
+  signedCopy: { at: Date | null } | null;
 }
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' });
 
 function dateOuPas(d: Date | null): string {
   return d ? ` le ${fmtDate.format(d)}` : '';
+}
+
+/**
+ * Les clés de stockage sous lesquelles ce document a PU être joint à un dossier.
+ *
+ * DEUX, pas une : `versionAJoindre` joint `signedPdfUrl ?? pdfUrl`, donc un
+ * dossier de solde porte la clé SIGNÉE dès qu'elle existe. Une seule clé
+ * cherchée, et la pièce signée déjà partie passait pour libre (21/09/2026).
+ */
+function clesDuDocument(doc: { pdfUrl: string; signedPdfUrl: string | null }): string[] {
+  return [doc.pdfUrl, doc.signedPdfUrl].filter(
+    (k): k is string => typeof k === 'string' && k.trim() !== '',
+  );
+}
+
+/** L'exemplaire signé attaché au document, s'il y en a un. Voir `EngagementFacts.signedCopy`. */
+function exemplaireSigne(doc: {
+  signedPdfUrl: string | null;
+  signedAt: Date | null;
+}): { at: Date | null } | null {
+  return typeof doc.signedPdfUrl === 'string' && doc.signedPdfUrl.trim() !== ''
+    ? { at: doc.signedAt }
+    : null;
 }
 
 export function classifyDocumentEngagement(facts: EngagementFacts): DocumentEngagement {
@@ -78,6 +115,9 @@ export function classifyDocumentEngagement(facts: EngagementFacts): DocumentEnga
   }
   if (facts.manuallyValidated) {
     reasons.push('une preuve signée a été téléversée ou cochée');
+  }
+  if (facts.signedCopy !== null) {
+    reasons.push(`un exemplaire signé est attaché${dateOuPas(facts.signedCopy.at)}`);
   }
 
   if (reasons.length > 0) return { level: 'ENGAGED', reasons };
@@ -119,7 +159,15 @@ export async function getDocumentEngagement(
 ): Promise<DocumentEngagement | null> {
   const doc = await prisma.document.findFirst({
     where: { id: documentId, tenantId },
-    select: { id: true, type: true, createdAt: true, pdfUrl: true, participantId: true },
+    select: {
+      id: true,
+      type: true,
+      createdAt: true,
+      pdfUrl: true,
+      signedPdfUrl: true,
+      signedAt: true,
+      participantId: true,
+    },
   });
   if (!doc) return null;
 
@@ -145,8 +193,17 @@ export async function getDocumentEngagement(
 
   // Une pièce jointe de dossier est identifiée par sa CLÉ de stockage : c'est
   // le seul rattachement fiable (le dossier ne référence pas les ids Document).
+  //
+  // ⚠ DEUX clés à chercher, pas une (trou fermé le 21/09/2026). Un dossier
+  // joint la version SIGNÉE quand elle existe (`versionAJoindre` :
+  // `signedPdfUrl ?? pdfUrl`). Ne chercher que `pdfUrl` faisait passer pour
+  // « libre » une pièce signée partie dans un dossier de solde — exactement le
+  // cas qu'il fallait protéger.
   const submissionsWithDoc = submissions
-    .filter((s) => attachmentKeys(s.attachments).includes(doc.pdfUrl))
+    .filter((s) => {
+      const cles = attachmentKeys(s.attachments);
+      return clesDuDocument(doc).some((k) => cles.includes(k));
+    })
     .map((s) => ({ status: s.status as string, sentAt: s.sentAt }));
 
   const docStatus = (participant?.docStatus ?? null) as Record<string, unknown> | null;
@@ -159,6 +216,7 @@ export async function getDocumentEngagement(
     submissionsWithDoc,
     conventionSigned: participant?.conventionSigned === true,
     manuallyValidated: entry?.state === 'MANUAL_OK',
+    signedCopy: exemplaireSigne(doc),
   });
 }
 
@@ -168,6 +226,13 @@ export interface DocumentForEngagement {
   type: string;
   createdAt: Date;
   pdfUrl: string;
+  /**
+   * REQUIS, et volontairement : le rendre optionnel aurait laissé les
+   * appelants l'oublier en silence, ce qui était exactement le défaut du
+   * 21/09/2026. `tsc` sert ici de filet d'exhaustivité.
+   */
+  signedPdfUrl: string | null;
+  signedAt: Date | null;
   participantId: string | null;
 }
 
@@ -228,14 +293,15 @@ export async function findEngagedDocumentIds(
           .filter((e) => Array.isArray(e.documentIds) && (e.documentIds as unknown[]).includes(doc.id))
           .map((e) => ({ sentAt: e.sentAt })),
         submissionsWithDoc: submissions
-          .filter(
-            (sub) =>
-              sub.participantId === doc.participantId &&
-              attachmentKeys(sub.attachments).includes(doc.pdfUrl),
-          )
+          .filter((sub) => {
+            if (sub.participantId !== doc.participantId) return false;
+            const cles = attachmentKeys(sub.attachments);
+            return clesDuDocument(doc).some((k) => cles.includes(k));
+          })
           .map((sub) => ({ status: sub.status as string, sentAt: sub.sentAt })),
         conventionSigned: participant?.conventionSigned === true,
         manuallyValidated: entry?.state === 'MANUAL_OK',
+        signedCopy: exemplaireSigne(doc),
       });
 
       if (verdict.level === 'ENGAGED') engaged.add(doc.id);

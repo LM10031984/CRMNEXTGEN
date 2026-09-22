@@ -19,7 +19,9 @@ import { legalLinkAtSession } from '@/lib/persons/legal-link-period';
  */
 
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@qualiof/db';
+import { DocType, prisma } from '@qualiof/db';
+import { checkDocumentReplacement, auditTrailFor } from '@/lib/docs/replacement-guard';
+import { logDocumentEvent } from '@/lib/document-audit';
 import { requireRole, UnauthorizedError, ForbiddenError } from '@/lib/rbac';
 import { generateProgrammeForSessionOrProductCore } from '@/lib/closure/programme-core';
 import { generateDerouleForProduct } from './deroule-product-generator';
@@ -35,6 +37,28 @@ import type {
   DispatchGenerateDocInput,
   DispatchResult,
 } from '@/lib/sessions/dispatch-doc-types';
+
+/**
+ * Le `DocType` de la ligne `Document` nominative produite par chaque dispatch —
+ * `null` quand il n'y en a pas.
+ *
+ * `Record` complet, donc `tsc` exige une entrée pour chaque type dispatchable :
+ * ajouter un document par stagiaire sans décider s'il est protégeable devient
+ * une erreur de compilation, pas un trou silencieux.
+ *
+ * Les trois premiers sont partagés (produit ou session), pas nominatifs.
+ * `ANALYSE_BESOIN` n'est pas un `DocType` — c'est un asset pédagogique.
+ */
+const DOC_TYPE_PAR_DISPATCH: Record<DispatchableDocType, DocType | null> = {
+  PROGRAMME: null,
+  DEROULE: null,
+  CHECKLIST: null,
+  ANALYSE_BESOIN: null,
+  CONVENTION: DocType.CONVENTION,
+  CONVOCATION: DocType.CONVOCATION,
+  AGEFICE: DocType.AGEFICE,
+  ASSIDUITE_AGEFICE: DocType.ASSIDUITE,
+};
 
 export async function dispatchGenerateDoc(
   input: DispatchGenerateDocInput,
@@ -55,6 +79,47 @@ export async function dispatchGenerateDoc(
     select: { id: true, productId: true, pricePerLearner: true },
   });
   if (!session) return { ok: false, error: 'Session introuvable' };
+
+  // ── Ne jamais écraser une pièce engagée sans le dire (21/09/2026) ────────
+  //
+  // Ce chemin-ci n'était pas gardé. Le bouton « Régénérer » de l'onglet Après
+  // passe par ici avec `force: true` et AUCUNE confirmation : une assiduité
+  // déjà signée par l'apprenant, ou déjà partie dans un dossier de solde, se
+  // laissait remplacer d'un clic — alors que l'écran promettait juste à côté
+  // que « les documents déjà signés ou envoyés sont conservés ».
+  //
+  // Même protocole que la matrice Qualiopi : refus nommé, puis confirmation,
+  // puis motif écrit si l'engagement est PROUVÉ. La pièce signée, elle, n'est
+  // de toute façon plus détruite (`supprimerDocumentsRemplacables`) : cette
+  // garde-ci demande l'autorisation, l'autre rend la faute impossible.
+  const docTypeNominatif = DOC_TYPE_PAR_DISPATCH[input.docType];
+  if (docTypeNominatif && input.participantId) {
+    const verdict = await checkDocumentReplacement({
+      tenantId: user.tenantId,
+      participantId: input.participantId,
+      docType: docTypeNominatif,
+      mode: 'unitaire',
+      action: 'regenerate',
+      confirmEngaged: input.confirmEngaged,
+      motif: input.motif,
+    });
+    if (!verdict.allowed) {
+      return {
+        ok: false,
+        warning: verdict.warning,
+        ...(verdict.refusal === 'motif_requis'
+          ? { requiresMotif: true }
+          : { requiresConfirmation: true }),
+      };
+    }
+    await logDocumentEvent({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      targetEntityId: input.participantId,
+      action: 'documents.regenerate',
+      diff: { docKind: docTypeNominatif, via: 'dispatch', ...auditTrailFor(verdict) },
+    });
+  }
 
   try {
     switch (input.docType) {

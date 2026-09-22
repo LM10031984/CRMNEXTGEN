@@ -25,6 +25,7 @@ import { validateRequest } from '@/lib/auth';
 import { uploadFile, DOCS_BUCKET } from '@/lib/storage';
 import { loadOfConfig } from '@/lib/of-config';
 import { villeLieuFormation } from '@/lib/locations/format-lieu';
+import { supprimerDocumentsRemplacables } from '@/lib/docs/exemplaire-signe';
 import {
   renderAgeficeAttendanceHtml,
   type AgeficeAttendanceTemplateData,
@@ -108,8 +109,12 @@ export async function generateAgeficeAttendanceForParticipant(
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.regime && isCompanyDossier(participant)) return { ok: false, error: 'Cette inscription est salariée : aucun dossier AGEFICE à générer.' };
   if (participant.session.regime && !estEligibleAgefice(participant)) return { ok: false, error: `${participant.person.firstName} ${participant.person.lastName} : aucun financement AGEFICE actif chez le commanditaire aux dates de la session. Corrigez les périodes dans la fiche apprenant ou le commanditaire dans la fiche inscription.` };
-  await prisma.document.deleteMany({
-    where: { tenantId: user.tenantId, type: 'ASSIDUITE', participantId },
+  // Jamais l'exemplaire signé : il reste à côté de la pièce neuve, et le
+  // dossier de solde déjà envoyé continue de pointer dessus.
+  await supprimerDocumentsRemplacables(prisma, {
+    tenantId: user.tenantId,
+    type: 'ASSIDUITE',
+    participantId,
   });
   if (!participant.session.product) return { ok: false, error: 'Produit manquant' };
 

@@ -39,6 +39,7 @@ import { closureKindsForPhase, phaseLabel, type DocPhase } from '@/lib/docs/doc-
 import type { PhaseParticipantGroup } from '@/lib/sessions/participant-phase-items';
 import { generateClosurePack } from '@/server/actions/closure-pack';
 import { dispatchGenerateDoc } from '@/server/actions/dispatch-generate-doc';
+import { dispatchGenerateDocAvecConfirmation } from '@/lib/sessions/dispatch-avec-confirmation';
 import { generateDerouleForProduct } from '@/server/actions/deroule-product-generator';
 import { generateGrilleObsSessionForSession } from '@/server/actions/generate-grille-obs-session';
 import { generateChecklistForSession } from '@/server/actions/generate-checklist-formation';
@@ -275,6 +276,10 @@ export function TabApres({
           }
         }
         if (assiduiteExistante) {
+          // Traitement de MASSE : ici l'écran promet « les documents déjà
+          // signés ou envoyés sont conservés ». On ne réclame donc pas de
+          // motif au milieu d'un lot — on saute, et on le DIT, exactement
+          // comme le pack de clôture le fait avec `skippedEngaged`.
           const r = await dispatchGenerateDoc({
             sessionId,
             docType: 'ASSIDUITE_AGEFICE',
@@ -282,7 +287,11 @@ export function TabApres({
             force: true,
           });
           if (r.ok) refaits += 1;
-          else toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+          else if (r.requiresConfirmation || r.requiresMotif) {
+            toast.warning(
+              `${group.fullName} — attestation d'assiduité conservée : déjà signée ou envoyée.`,
+            );
+          } else toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
         }
         if (refaits > 0) {
           toast.success(
@@ -309,17 +318,20 @@ export function TabApres({
     setBusyParticipant(participantId);
     startTransition(async () => {
       try {
-        const r = await dispatchGenerateDoc({
+        // Passe par le protocole de remplacement : une assiduité déjà signée
+        // ou partie dans un dossier de solde n'est plus écrasée en silence.
+        const r = await dispatchGenerateDocAvecConfirmation({
           sessionId,
           docType: 'ASSIDUITE_AGEFICE',
           participantId,
           force,
         });
+        if (r === null) return; // l'utilisateur a renoncé — pas une erreur
         if (r.ok) {
           toast.success(`${fullName} — attestation d'assiduité ${force ? 'régénérée' : 'générée'}`);
           router.refresh();
         } else {
-          toast.error(r.error ?? "Erreur attestation d'assiduité AGEFICE");
+          toast.error(r.error ?? r.warning ?? "Erreur attestation d'assiduité AGEFICE");
         }
       } finally {
         setBusyParticipant(null);

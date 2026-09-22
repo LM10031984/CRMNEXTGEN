@@ -26,6 +26,7 @@ function facts(o: Partial<EngagementFacts> = {}): EngagementFacts {
     submissionsWithDoc: [],
     conventionSigned: false,
     manuallyValidated: false,
+    signedCopy: null,
     ...o,
   };
 }

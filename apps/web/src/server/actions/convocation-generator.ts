@@ -23,6 +23,7 @@ import {
   type ConvocationData,
 } from '@/lib/convocation-template';
 import { loadOfConfig } from '@/lib/of-config';
+import { supprimerDocumentsRemplacables } from '@/lib/docs/exemplaire-signe';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -42,8 +43,12 @@ export async function generateConvocationForParticipant(
   // Idempotence inconditionnelle : on supprime toujours l'ancien Document du
   // même type avant de recréer (anti-doublons). Le paramètre `force` reste
   // accepté dans la signature pour compat appelants mais ne conditionne plus rien.
-  await prisma.document.deleteMany({
-    where: { tenantId: user.tenantId, type: 'CONVOCATION', participantId },
+  // JAMAIS l'exemplaire signé, en revanche : une convocation scannée est une
+  // preuve de convocation, elle ne se remplace pas par une régénération.
+  await supprimerDocumentsRemplacables(prisma, {
+    tenantId: user.tenantId,
+    type: 'CONVOCATION',
+    participantId,
   });
 
   const participant = await prisma.sessionParticipant.findFirst({
