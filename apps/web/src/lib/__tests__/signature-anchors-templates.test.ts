@@ -146,7 +146,7 @@ function attendanceData(
     ofDreetsVille: 'Nice',
     ofResponsablePrenomNom: 'Laurent MARX',
     ofResponsableQualite: 'Gérant',
-    ofLieuDelivrance: 'Cagnes-sur-Mer',
+    lieuDelivrance: 'Cagnes-sur-Mer',
     stagiaireNomPrenom: 'Sophie AUGUSTIN',
     entrepriseRaisonSociale: 'EXPERTA',
     prevuePresIndividuel: 0,

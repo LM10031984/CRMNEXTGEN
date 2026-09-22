@@ -21,14 +21,22 @@ const m = vi.hoisted(() => ({
   enqueueClosureJob: vi.fn(),
 }));
 
-vi.mock('@qualiof/db', () => ({
-  prisma: {
-    trainingSession: { findFirst: m.sessionFindFirst },
-    sessionParticipant: { findFirst: m.participantFindFirst },
-    closureBatch: { create: m.closureBatchCreate },
-    closureJob: { create: m.closureJobCreate },
-  },
-}));
+// Le double garde les VRAIES exportations du module : `dispatchGenerateDoc`
+// importe désormais `DocType` (garde de remplacement), et un double partiel
+// ferait tomber le fichier entier sur « No "DocType" export is defined ».
+// Même correctif que les trois tests repris le 21/09 (PR #126).
+vi.mock('@qualiof/db', async () => {
+  const actual = await vi.importActual<typeof import('@qualiof/db')>('@qualiof/db');
+  return {
+    ...actual,
+    prisma: {
+      trainingSession: { findFirst: m.sessionFindFirst },
+      sessionParticipant: { findFirst: m.participantFindFirst },
+      closureBatch: { create: m.closureBatchCreate },
+      closureJob: { create: m.closureJobCreate },
+    },
+  };
+});
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 

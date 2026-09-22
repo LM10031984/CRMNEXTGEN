@@ -35,6 +35,7 @@ import {
   dispatchGenerateDoc,
   dispatchGenerateMissing,
 } from '@/server/actions/dispatch-generate-doc';
+import { dispatchGenerateDocAvecConfirmation } from '@/lib/sessions/dispatch-avec-confirmation';
 import { docCompletion } from '@/lib/sessions/doc-completion';
 import { LearnerPhaseActions } from '../learner-phase-actions';
 import { ComposeOpcoButton } from '@/components/dossiers-opco/compose-opco-button';
@@ -159,12 +160,16 @@ export function TabAvant({
     setBusy(item.key, true);
     startTransition(async () => {
       try {
-        const r = await dispatchGenerateDoc({
+        // Chemin UNITAIRE : un humain est devant l'écran. Une convention ou
+        // une demande AGEFICE déjà signée n'est plus écrasée en silence — le
+        // serveur nomme l'engagement, on confirme, puis on écrit pourquoi.
+        const r = await dispatchGenerateDocAvecConfirmation({
           sessionId,
           docType: item.docType,
           participantId: item.participantId,
           force,
         });
+        if (r === null) return; // renoncement, pas une erreur
         if (r.ok) {
           toast.success(
             r.enqueued

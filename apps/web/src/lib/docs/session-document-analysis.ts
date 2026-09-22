@@ -48,7 +48,15 @@ export async function analyzeSessionDocuments(
           ...(productId ? [{ entityType: 'product', entityId: productId }] : []),
         ],
       },
-      select: { ...DOCUMENT_VERDICT_SELECT, createdAt: true, pdfUrl: true },
+      // `signedPdfUrl`/`signedAt` : l'engagement les lit depuis le 21/09/2026
+      // — un exemplaire signé engage, et un dossier joint la clé signée.
+      select: {
+        ...DOCUMENT_VERDICT_SELECT,
+        createdAt: true,
+        pdfUrl: true,
+        signedPdfUrl: true,
+        signedAt: true,
+      },
     });
     if (documents.length === 0) return { stale: new Set(), unverifiable: new Set(), engaged: new Set() };
 

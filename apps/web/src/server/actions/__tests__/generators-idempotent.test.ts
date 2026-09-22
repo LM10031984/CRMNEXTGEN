@@ -8,6 +8,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * MÊME SANS `force` (anti-doublons). Le where (tenantId + type + participantId)
  * scelle le bon type de document.
  *
+ * ⚠ « INCONDITIONNELLE » A ÉTÉ NUANCÉ LE 21/09/2026. La suppression reste
+ * inconditionnelle quant au `force` — c'est ce que ce fichier protège — mais
+ * elle épargne désormais les lignes portant un EXEMPLAIRE SIGNÉ
+ * (`signedPdfUrl`). Régénérer emportait le scan de l'apprenant et le retour
+ * d'e-signature, alors que l'écran promettait le contraire. Trois générateurs
+ * sur quatre passent par `supprimerDocumentsRemplacables` ; la convention
+ * individuelle (`convention-core.ts`) reste à reprendre, d'où le `where` nu
+ * attendu au Test 1.
+ *
  * Stratégie : `findFirst` renvoie null → le generator supprime puis retourne
  * `{ ok: false, error: 'Inscription introuvable' }`. L'essentiel est que la
  * suppression a déjà eu lieu, sans avoir passé `force`.
@@ -84,6 +93,8 @@ import { generateConvocationForParticipant } from '../convocation-generator';
 import { generateAgeficeForParticipant } from '../agefice-generator';
 import { generateAgeficeAttendanceForParticipant } from '../agefice-attendance-generator';
 
+import { SANS_EXEMPLAIRE_SIGNE } from '@/lib/docs/exemplaire-signe';
+
 const documentDeleteMany = prisma.document.deleteMany as unknown as ReturnType<typeof vi.fn>;
 
 const PARTICIPANT_ID = 'part-1';
@@ -109,7 +120,13 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
 
     expect(documentDeleteMany).toHaveBeenCalledTimes(1);
     expect(documentDeleteMany).toHaveBeenCalledWith({
-      where: { tenantId: TENANT_ID, type: 'CONVOCATION', participantId: PARTICIPANT_ID },
+      where: {
+        tenantId: TENANT_ID,
+        type: 'CONVOCATION',
+        participantId: PARTICIPANT_ID,
+        // L'exemplaire signé est ÉPARGNÉ — il reste à côté de la pièce neuve.
+        AND: [SANS_EXEMPLAIRE_SIGNE],
+      },
     });
   });
 
@@ -119,7 +136,13 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
 
     expect(documentDeleteMany).toHaveBeenCalledTimes(1);
     expect(documentDeleteMany).toHaveBeenCalledWith({
-      where: { tenantId: TENANT_ID, type: 'AGEFICE', participantId: PARTICIPANT_ID },
+      where: {
+        tenantId: TENANT_ID,
+        type: 'AGEFICE',
+        participantId: PARTICIPANT_ID,
+        // L'exemplaire signé est ÉPARGNÉ — il reste à côté de la pièce neuve.
+        AND: [SANS_EXEMPLAIRE_SIGNE],
+      },
     });
   });
 
@@ -129,7 +152,13 @@ describe('generators — deleteMany Document inconditionnelle (Task 2)', () => {
 
     expect(documentDeleteMany).toHaveBeenCalledTimes(1);
     expect(documentDeleteMany).toHaveBeenCalledWith({
-      where: { tenantId: TENANT_ID, type: 'ASSIDUITE', participantId: PARTICIPANT_ID },
+      where: {
+        tenantId: TENANT_ID,
+        type: 'ASSIDUITE',
+        participantId: PARTICIPANT_ID,
+        // L'exemplaire signé est ÉPARGNÉ — il reste à côté de la pièce neuve.
+        AND: [SANS_EXEMPLAIRE_SIGNE],
+      },
     });
   });
 });

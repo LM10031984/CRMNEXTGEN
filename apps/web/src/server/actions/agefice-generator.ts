@@ -25,6 +25,7 @@ import { isCanonicalExperience } from '@/lib/agefice-options';
 import { formatLieuFormation, fallbackLieuOf } from '@/lib/locations/format-lieu';
 import { ageficeFormationEnEntreprise } from '@/lib/locations/agefice-context';
 import { computeDocumentFingerprint } from '@/lib/docs/document-source';
+import { supprimerDocumentsRemplacables } from '@/lib/docs/exemplaire-signe';
 
 // Heuristique civilité depuis Person.civility (texte libre import legacy)
 function inferCivilite(civility: string | null | undefined): 'MR' | 'MME' | null {
@@ -133,12 +134,12 @@ export async function generateAgeficeForParticipant(
   if (!participant) return { ok: false, error: 'Inscription introuvable' };
   if (!participant.session.regime && isCompanyDossier(participant)) return { ok: false, error: 'Cette inscription est salariée : aucun dossier AGEFICE à générer.' };
   if (participant.session.regime && !estEligibleAgefice(participant)) return { ok: false, error: `${participant.person.firstName} ${participant.person.lastName} : aucun financement AGEFICE actif chez le commanditaire aux dates de la session. Corrigez les périodes dans la fiche apprenant ou le commanditaire dans la fiche inscription.` };
-  await prisma.document.deleteMany({
-    where: {
-      tenantId: user.tenantId,
-      type: 'AGEFICE',
-      participantId,
-    },
+  // Jamais l'exemplaire signé : une demande de prise en charge signée par le
+  // chef d'entreprise reste attachée, la pièce neuve vient à côté.
+  await supprimerDocumentsRemplacables(prisma, {
+    tenantId: user.tenantId,
+    type: 'AGEFICE',
+    participantId,
   });
 
   const warnings: string[] = [];
